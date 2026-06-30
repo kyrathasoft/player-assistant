@@ -51,7 +51,7 @@ namespace PlayerAssistant
             lstSearchResults = new ListBox();
             btnSearch = new Button();
             lblSearchCharacterCnt = new Label();
-            txtSearch = new TextBox();
+            txtSearch = new SearchTextBox();
             lblSearchPrompt = new Label();
             menuStrip.SuspendLayout();
             statusStrip.SuspendLayout();
@@ -293,6 +293,7 @@ namespace PlayerAssistant
             txtSearch.TextChanged += TxtSearch_TextChanged;
             txtSearch.KeyDown += TxtSearch_KeyDown;
             txtSearch.KeyPress += TxtSearch_KeyPress;
+            txtSearch.EnterPressed += TxtSearch_EnterPressed;
             // 
             // lblSearchPrompt
             // 
@@ -354,7 +355,7 @@ namespace PlayerAssistant
         private RadioButton rdoRPOL;
         private RadioButton rdoSearchDefault;
         private Label lblSearchCharacterCnt;
-        private TextBox txtSearch;
+        private SearchTextBox txtSearch;
         private Label lblSearchPrompt;
     }
 }

@@ -95,4 +95,17 @@
     </Compile>
   </ItemGroup>
 
+  <Target Name="CopyKeywordIndexToPublish" AfterTargets="Publish">
+    <Copy
+      SourceFiles="$(OutputPath)keyword-index.json"
+      DestinationFiles="$(PublishDir)keyword-index.json"
+      Condition="Exists('$(OutputPath)keyword-index.json')" />
+  </Target>
+
+  <Target Name="CopyPlaywrightRuntimeToPublish" AfterTargets="Publish">
+    <Exec
+      Command="if exist &quot;$(OutputPath).playwright&quot; xcopy &quot;$(OutputPath).playwright&quot; &quot;$(PublishDir).playwright\&quot; /E /I /Y /H &gt;nul"
+      Condition="Exists('$(OutputPath).playwright')" />
+  </Target>
+
 </Project>

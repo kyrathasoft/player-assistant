@@ -34,3 +34,47 @@ System.Net.Http.HttpRequestException: RPoL request to 'https://rpol.net/game.php
    at PlayerAssistant.HtmlUtility.GetHyperlinksFromUrlAsync(Uri uri, CancellationToken cancellationToken)
    at PlayerAssistant.HtmlUtility.GetHyperlinksFromUrlAsync(String url, CancellationToken cancellationToken)
    at PlayerAssistant.Form1.LoadGameForumChapterPrefixesAsync()
+[2026-06-30T14:58:31.7238797-05:00] game forum startup
+System.Net.Http.HttpRequestException: RPoL request to 'https://rpol.net/game.php?gi=80170' failed with status 403 .
+   at PlayerAssistant.RpolAuthUtility.EnsureSuccessfulResponse(Uri uri, IResponse response)
+   at PlayerAssistant.RpolAuthUtility.GetPageHtmlAsync(IBrowserContext context, Uri uri, CancellationToken cancellationToken)
+   at PlayerAssistant.RpolAuthUtility.GetPageHtmlAsync(IBrowserContext context, Uri uri, CancellationToken cancellationToken)
+   at PlayerAssistant.RpolAuthUtility.GetHtmlFromUrlAsync(Uri uri, CancellationToken cancellationToken)
+   at PlayerAssistant.HtmlUtility.GetHtmlFromUrlAsync(Uri uri, CancellationToken cancellationToken)
+   at PlayerAssistant.HtmlUtility.GetHyperlinksFromUrlAsync(Uri uri, CancellationToken cancellationToken)
+   at PlayerAssistant.HtmlUtility.GetHyperlinksFromUrlAsync(String url, CancellationToken cancellationToken)
+   at PlayerAssistant.Form1.LoadGameForumChapterPrefixesAsync()
+[2026-06-30T14:58:31.7604534-05:00] keyword crawler
+System.Net.Http.HttpRequestException: RPoL request to 'https://rpol.net/game.php?gi=80170' failed with status 403 .
+   at PlayerAssistant.RpolAuthUtility.EnsureSuccessfulResponse(Uri uri, IResponse response)
+   at PlayerAssistant.RpolAuthUtility.GetPageHtmlAsync(IBrowserContext context, Uri uri, CancellationToken cancellationToken)
+   at PlayerAssistant.RpolAuthUtility.GetPageHtmlAsync(IBrowserContext context, Uri uri, CancellationToken cancellationToken)
+   at PlayerAssistant.RpolAuthUtility.GetHtmlFromUrlAsync(Uri uri, CancellationToken cancellationToken)
+   at PlayerAssistant.HtmlUtility.GetHtmlFromUrlAsync(Uri uri, CancellationToken cancellationToken)
+   at PlayerAssistant.HtmlUtility.GetHyperlinksFromUrlAsync(Uri uri, CancellationToken cancellationToken)
+   at PlayerAssistant.HtmlUtility.GetHyperlinksFromUrlAsync(String url, CancellationToken cancellationToken)
+   at PlayerAssistant.KeywordIndexCrawler.DiscoverRpolUrlsAsync(CancellationToken cancellationToken)
+   at PlayerAssistant.KeywordIndexCrawler.BuildIndexAsync(IProgress`1 progress, CancellationToken cancellationToken)
+   at PlayerAssistant.Form1.<>c__DisplayClass108_0.<<StartKeywordIndexCrawler>b__0>d.MoveNext()
+[2026-06-30T15:37:20.3428671-05:00] game forum startup
+System.Net.Http.HttpRequestException: RPoL request to 'https://rpol.net/game.php?gi=80170' failed with status 403 .
+   at PlayerAssistant.RpolAuthUtility.EnsureSuccessfulResponse(Uri uri, IResponse response)
+   at PlayerAssistant.RpolAuthUtility.GetPageHtmlAsync(IBrowserContext context, Uri uri, CancellationToken cancellationToken)
+   at PlayerAssistant.RpolAuthUtility.GetPageHtmlAsync(IBrowserContext context, Uri uri, CancellationToken cancellationToken)
+   at PlayerAssistant.RpolAuthUtility.GetHtmlFromUrlAsync(Uri uri, CancellationToken cancellationToken)
+   at PlayerAssistant.HtmlUtility.GetHtmlFromUrlAsync(Uri uri, CancellationToken cancellationToken)
+   at PlayerAssistant.HtmlUtility.GetHyperlinksFromUrlAsync(Uri uri, CancellationToken cancellationToken)
+   at PlayerAssistant.HtmlUtility.GetHyperlinksFromUrlAsync(String url, CancellationToken cancellationToken)
+   at PlayerAssistant.Form1.LoadGameForumChapterPrefixesAsync()
+[2026-06-30T15:37:20.3816928-05:00] keyword crawler
+System.Net.Http.HttpRequestException: RPoL request to 'https://rpol.net/game.php?gi=80170' failed with status 403 .
+   at PlayerAssistant.RpolAuthUtility.EnsureSuccessfulResponse(Uri uri, IResponse response)
+   at PlayerAssistant.RpolAuthUtility.GetPageHtmlAsync(IBrowserContext context, Uri uri, CancellationToken cancellationToken)
+   at PlayerAssistant.RpolAuthUtility.GetPageHtmlAsync(IBrowserContext context, Uri uri, CancellationToken cancellationToken)
+   at PlayerAssistant.RpolAuthUtility.GetHtmlFromUrlAsync(Uri uri, CancellationToken cancellationToken)
+   at PlayerAssistant.HtmlUtility.GetHtmlFromUrlAsync(Uri uri, CancellationToken cancellationToken)
+   at PlayerAssistant.HtmlUtility.GetHyperlinksFromUrlAsync(Uri uri, CancellationToken cancellationToken)
+   at PlayerAssistant.HtmlUtility.GetHyperlinksFromUrlAsync(String url, CancellationToken cancellationToken)
+   at PlayerAssistant.KeywordIndexCrawler.DiscoverRpolUrlsAsync(CancellationToken cancellationToken)
+   at PlayerAssistant.KeywordIndexCrawler.BuildIndexAsync(IProgress`1 progress, CancellationToken cancellationToken)
+   at PlayerAssistant.Form1.<>c__DisplayClass110_0.<<StartKeywordIndexCrawler>b__0>d.MoveNext()

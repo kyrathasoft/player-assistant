@@ -1394,6 +1394,16 @@ namespace PlayerAssistant
             }
         }
 
+        private void TxtSearch_EnterPressed(object? sender, EventArgs e)
+        {
+            if (!btnSearch.Enabled)
+            {
+                return;
+            }
+
+            btnSearch.PerformClick();
+        }
+
         private void TxtSearch_KeyPress(object? sender, KeyPressEventArgs e)
         {
             if (e.KeyChar != ' ')
@@ -1416,14 +1426,11 @@ namespace PlayerAssistant
 
         private void TxtSearch_KeyDown(object? sender, KeyEventArgs e)
         {
-            if (e.KeyCode != Keys.Enter || !btnSearch.Enabled)
+            if (e.KeyCode == Keys.Enter)
             {
-                return;
+                e.Handled = true;
+                e.SuppressKeyPress = true;
             }
-
-            e.Handled = true;
-            e.SuppressKeyPress = true;
-            BtnSearch_Click(btnSearch, EventArgs.Empty);
         }
 
         private void UpdateSearchButtonEnabledState()
