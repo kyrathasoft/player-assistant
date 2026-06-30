@@ -34,7 +34,13 @@ namespace PlayerAssistant
 
             if (TryReadEncryptedEnvelope(document.RootElement, out var envelope))
             {
-                return DecryptSettings(envelope);
+                var decryptedSettings = DecryptSettings(envelope);
+                if (string.Equals(envelope.Format, LegacyEncryptedFormat, StringComparison.Ordinal))
+                {
+                    SaveEncryptedSettings(settingsPath, decryptedSettings);
+                }
+
+                return decryptedSettings;
             }
 
             var plaintextSettings = JsonSerializer.Deserialize<Dictionary<string, string>>(
@@ -137,7 +143,7 @@ namespace PlayerAssistant
             catch (CryptographicException ex)
             {
                 throw new InvalidOperationException(
-                    "Unable to decrypt settings.local.json. The file was likely encrypted for a different Windows user profile.",
+                    "Unable to decrypt settings.local.json. The legacy dpapi-current-user format is tied to the original Windows user profile and cannot be decrypted on a different machine. Replace it with plaintext once or with an app-protected-v1 file.",
                     ex);
             }
         }

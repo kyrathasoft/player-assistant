@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("player-assistant")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+a0031db5df426736689602a1e9e4f3266589f8a4")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+05e0d716f7d02bd472b88804b32cb986edbca0d2")]
 [assembly: System.Reflection.AssemblyProductAttribute("player-assistant")]
 [assembly: System.Reflection.AssemblyTitleAttribute("player-assistant")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]

@@ -2,6 +2,7 @@ using PlayerAssistant;
 using System.Drawing;
 using System.Drawing.Imaging;
 using System.Reflection;
+using System.Security.Cryptography;
 using System.Windows.Forms;
 
 var requestedTestFilter = args.Length > 0 ? string.Join(" ", args).Trim() : string.Empty;
@@ -23,10 +24,13 @@ var tests = new (string Name, Action Test)[]
     ("keyword search falls back to The-prefixed term", KeywordSearchFallsBackToThePrefixedTerm),
     ("keyword search keeps quoted phrases together", KeywordSearchKeepsQuotedPhrasesTogether),
     ("keyword search accepts url source metadata", KeywordSearchAcceptsUrlSourceMetadata),
+    ("keyword search filters rpol hero metadata-only hits", KeywordSearchFiltersRpolHeroMetadataOnlyHits),
+    ("search enter triggers click when enabled", SearchEnterTriggersClickWhenEnabled),
     ("keyword search offers online fallback on local miss", KeywordSearchOffersOnlineFallbackOnLocalMiss),
     ("keyword search rpol scope excludes obsidian-only whiteheart", KeywordSearchRpolScopeExcludesObsidianOnlyWhiteheart),
     ("keyword search rpol scope excludes obsidian-only whiteheart stiffwhiskers", KeywordSearchRpolScopeExcludesObsidianOnlyWhiteheartStiffwhiskers),
     ("hero image paths follow listing markdown table", HeroImagePathsFollowListingMarkdownTable),
+    ("legacy local settings migrate to portable encryption", LegacyLocalSettingsMigrateToPortableEncryption),
     ("local settings are encrypted on load", LocalSettingsAreEncryptedOnLoad)
 };
 
@@ -256,84 +260,61 @@ static void KeywordSearchFallsBackToThePrefixedTerm()
 {
     RunOnStaThread(() =>
     {
-        var indexPath = Path.Combine(AppContext.BaseDirectory, "keyword-index.json");
-        var backupPath = indexPath + ".test-backup";
-        var hadOriginalIndex = File.Exists(indexPath);
-
-        try
-        {
-            if (hadOriginalIndex)
+        WithTemporaryKeywordIndex(
+            """
             {
-                File.Copy(indexPath, backupPath, overwrite: true);
-            }
-
-            File.WriteAllText(
-                indexPath,
-                """
-                {
-                  "index_metadata": {
-                    "total_words_indexed": 0
-                  },
-                  "words": {
-                    "The": {
-                      "total_occurrences": 1,
-                      "matches": [
-                        {
-                          "url": "https://example.test/the",
-                          "count": 1,
-                          "last_indexed": "2026-06-28T00:00:00.0000000+00:00"
-                        }
-                      ]
-                    },
-                    "The Coal": {
-                      "total_occurrences": 1,
-                      "matches": [
-                        {
-                          "url": "https://example.test/the-coal",
-                          "count": 1,
-                          "last_indexed": "2026-06-28T00:00:00.0000000+00:00"
-                        }
-                      ]
-                    },
-                    "The Hills": {
-                      "total_occurrences": 1,
-                      "matches": [
-                        {
-                          "url": "https://example.test/the-hills",
-                          "count": 1,
-                          "last_indexed": "2026-06-28T00:00:00.0000000+00:00"
-                        }
-                      ]
+              "index_metadata": {
+                "total_words_indexed": 0
+              },
+              "words": {
+                "The": {
+                  "total_occurrences": 1,
+                  "matches": [
+                    {
+                      "url": "https://example.test/the",
+                      "count": 1,
+                      "last_indexed": "2026-06-28T00:00:00.0000000+00:00"
                     }
-                  }
+                  ]
+                },
+                "The Coal": {
+                  "total_occurrences": 1,
+                  "matches": [
+                    {
+                      "url": "https://example.test/the-coal",
+                      "count": 1,
+                      "last_indexed": "2026-06-28T00:00:00.0000000+00:00"
+                    }
+                  ]
+                },
+                "The Hills": {
+                  "total_occurrences": 1,
+                  "matches": [
+                    {
+                      "url": "https://example.test/the-hills",
+                      "count": 1,
+                      "last_indexed": "2026-06-28T00:00:00.0000000+00:00"
+                    }
+                  ]
                 }
-                """);
-
-            using var form = new Form1(suppressHeroImagesForThisRun: true);
-            var txtSearch = GetControl<TextBox>(form, "txtSearch");
-            var lstSearchResults = GetControl<ListBox>(form, "lstSearchResults");
-
-            txtSearch.Text = "The Coal Hills";
-            InvokePrivateAsync(form, "PerformSearchAsync").GetAwaiter().GetResult();
-
-            var results = lstSearchResults.Items.Cast<object>().Select(item => item?.ToString()).ToArray();
-            AssertEqual(3, results.Length, "expected three search results from the exact and fallback lookups");
-            AssertContains(string.Join("\n", results), "https://example.test/the");
-            AssertContains(string.Join("\n", results), "https://example.test/the-coal");
-            AssertContains(string.Join("\n", results), "https://example.test/the-hills");
-        }
-        finally
-        {
-            if (File.Exists(indexPath))
-            {
-                File.Delete(indexPath);
+              }
             }
-
-            if (hadOriginalIndex)
+            """,
+            () =>
             {
-                File.Move(backupPath, indexPath, overwrite: true);
-            }
-        }
+                using var form = new Form1(suppressHeroImagesForThisRun: true);
+                var txtSearch = GetControl<TextBox>(form, "txtSearch");
+                var lstSearchResults = GetControl<ListBox>(form, "lstSearchResults");
+
+                txtSearch.Text = "The Coal Hills";
+                InvokePrivateAsync(form, "PerformSearchAsync").GetAwaiter().GetResult();
+
+                var results = lstSearchResults.Items.Cast<object>().Select(item => item?.ToString()).ToArray();
+                AssertEqual(3, results.Length, "expected three search results from the exact and fallback lookups");
+                AssertContains(string.Join("\n", results), "https://example.test/the");
+                AssertContains(string.Join("\n", results), "https://example.test/the-coal");
+                AssertContains(string.Join("\n", results), "https://example.test/the-hills");
+            });
     });
 }
 
@@ -341,95 +322,72 @@ static void KeywordSearchKeepsQuotedPhrasesTogether()
 {
     RunOnStaThread(() =>
     {
-        var indexPath = Path.Combine(AppContext.BaseDirectory, "keyword-index.json");
-        var backupPath = indexPath + ".test-backup";
-        var hadOriginalIndex = File.Exists(indexPath);
-
-        try
-        {
-            if (hadOriginalIndex)
+        WithTemporaryKeywordIndex(
+            """
             {
-                File.Copy(indexPath, backupPath, overwrite: true);
-            }
-
-            File.WriteAllText(
-                indexPath,
-                """
-                {
-                  "index_metadata": {
-                    "total_words_indexed": 0
-                  },
-                  "words": {
-                    "one": {
-                      "total_occurrences": 1,
-                      "matches": [
-                        {
-                          "url": "https://example.test/one",
-                          "count": 1,
-                          "last_indexed": "2026-06-29T00:00:00.0000000+00:00"
-                        }
-                      ]
-                    },
-                    "two": {
-                      "total_occurrences": 1,
-                      "matches": [
-                        {
-                          "url": "https://example.test/two",
-                          "count": 1,
-                          "last_indexed": "2026-06-29T00:00:00.0000000+00:00"
-                        }
-                      ]
-                    },
-                    "one two": {
-                      "total_occurrences": 1,
-                      "matches": [
-                        {
-                          "url": "https://example.test/one-two",
-                          "count": 1,
-                          "last_indexed": "2026-06-29T00:00:00.0000000+00:00"
-                        }
-                      ]
-                    },
-                    "three": {
-                      "total_occurrences": 1,
-                      "matches": [
-                        {
-                          "url": "https://example.test/three",
-                          "count": 1,
-                          "last_indexed": "2026-06-29T00:00:00.0000000+00:00"
-                        }
-                      ]
+              "index_metadata": {
+                "total_words_indexed": 0
+              },
+              "words": {
+                "one": {
+                  "total_occurrences": 1,
+                  "matches": [
+                    {
+                      "url": "https://example.test/one",
+                      "count": 1,
+                      "last_indexed": "2026-06-29T00:00:00.0000000+00:00"
                     }
-                  }
+                  ]
+                },
+                "two": {
+                  "total_occurrences": 1,
+                  "matches": [
+                    {
+                      "url": "https://example.test/two",
+                      "count": 1,
+                      "last_indexed": "2026-06-29T00:00:00.0000000+00:00"
+                    }
+                  ]
+                },
+                "one two": {
+                  "total_occurrences": 1,
+                  "matches": [
+                    {
+                      "url": "https://example.test/one-two",
+                      "count": 1,
+                      "last_indexed": "2026-06-29T00:00:00.0000000+00:00"
+                    }
+                  ]
+                },
+                "three": {
+                  "total_occurrences": 1,
+                  "matches": [
+                    {
+                      "url": "https://example.test/three",
+                      "count": 1,
+                      "last_indexed": "2026-06-29T00:00:00.0000000+00:00"
+                    }
+                  ]
                 }
-                """);
-
-            using var form = new Form1(suppressHeroImagesForThisRun: true);
-            var txtSearch = GetControl<TextBox>(form, "txtSearch");
-            var lstSearchResults = GetControl<ListBox>(form, "lstSearchResults");
-
-            txtSearch.Text = "\"one two\" three";
-            InvokePrivateAsync(form, "PerformSearchAsync").GetAwaiter().GetResult();
-
-            var results = lstSearchResults.Items.Cast<object>().Select(item => item?.ToString()).ToArray();
-            AssertEqual(2, results.Length, "expected one quoted-phrase result plus one standalone result");
-            AssertContains(string.Join("\n", results), "https://example.test/one-two");
-            AssertContains(string.Join("\n", results), "https://example.test/three");
-            AssertFalse(results.Contains("https://example.test/one", StringComparer.Ordinal), "quoted phrase should not be split into a standalone 'one' lookup");
-            AssertFalse(results.Contains("https://example.test/two", StringComparer.Ordinal), "quoted phrase should not be split into a standalone 'two' lookup");
-        }
-        finally
-        {
-            if (File.Exists(indexPath))
-            {
-                File.Delete(indexPath);
+              }
             }
-
-            if (hadOriginalIndex)
+            """,
+            () =>
             {
-                File.Move(backupPath, indexPath, overwrite: true);
-            }
-        }
+                using var form = new Form1(suppressHeroImagesForThisRun: true);
+                var txtSearch = GetControl<TextBox>(form, "txtSearch");
+                var lstSearchResults = GetControl<ListBox>(form, "lstSearchResults");
+
+                txtSearch.Text = "\"one two\" three";
+                InvokePrivateAsync(form, "PerformSearchAsync").GetAwaiter().GetResult();
+
+                var results = lstSearchResults.Items.Cast<object>().Select(item => item?.ToString()).ToArray();
+                AssertEqual(2, results.Length, "expected one quoted-phrase result plus one standalone result");
+                AssertContains(string.Join("\n", results), "https://example.test/one-two");
+                AssertContains(string.Join("\n", results), "https://example.test/three");
+                AssertFalse(results.Contains("https://example.test/one", StringComparer.Ordinal), "quoted phrase should not be split into a standalone 'one' lookup");
+                AssertFalse(results.Contains("https://example.test/two", StringComparer.Ordinal), "quoted phrase should not be split into a standalone 'two' lookup");
+            });
     });
 }
 
@@ -437,76 +395,174 @@ static void KeywordSearchAcceptsUrlSourceMetadata()
 {
     RunOnStaThread(() =>
     {
-        var indexPath = Path.Combine(AppContext.BaseDirectory, "keyword-index.json");
-        var backupPath = indexPath + ".test-backup";
-        var hadOriginalIndex = File.Exists(indexPath);
-
-        try
-        {
-            if (hadOriginalIndex)
+        WithTemporaryKeywordIndex(
+            """
             {
-                File.Copy(indexPath, backupPath, overwrite: true);
-            }
-
-            File.WriteAllText(
-                indexPath,
-                """
-                {
-                  "index_metadata": {
-                    "total_words_indexed": 0
-                  },
-                  "urls": {
-                    "https://example.test/rpol-entry": {
-                      "source": "RPOL"
-                    },
-                    "https://example.test/obsidian-entry": {
-                      "source": "Obsidian wiki"
-                    }
-                  },
-                  "words": {
-                    "entry": {
-                      "total_occurrences": 2,
-                      "matches": [
-                        {
-                          "url": "https://example.test/rpol-entry",
-                          "count": 1,
-                          "last_indexed": "2026-06-29T00:00:00.0000000+00:00"
-                        },
-                        {
-                          "url": "https://example.test/obsidian-entry",
-                          "count": 1,
-                          "last_indexed": "2026-06-29T00:00:00.0000000+00:00"
-                        }
-                      ]
-                    }
-                  }
+              "index_metadata": {
+                "total_words_indexed": 0
+              },
+              "urls": {
+                "https://example.test/rpol-entry": {
+                  "source": "RPOL"
+                },
+                "https://example.test/obsidian-entry": {
+                  "source": "Obsidian wiki"
                 }
-                """);
-
-            using var form = new Form1(suppressHeroImagesForThisRun: true);
-            var txtSearch = GetControl<TextBox>(form, "txtSearch");
-            var lstSearchResults = GetControl<ListBox>(form, "lstSearchResults");
-
-            txtSearch.Text = "entry";
-            InvokePrivateAsync(form, "PerformSearchAsync").GetAwaiter().GetResult();
-
-            var results = lstSearchResults.Items.Cast<object>().Select(item => item?.ToString()).ToArray();
-            AssertEqual(2, results.Length, "expected both matches to be returned when url source metadata is present");
-            AssertContains(string.Join("\n", results), "https://example.test/rpol-entry");
-            AssertContains(string.Join("\n", results), "https://example.test/obsidian-entry");
-        }
-        finally
-        {
-            if (File.Exists(indexPath))
-            {
-                File.Delete(indexPath);
+              },
+              "words": {
+                "entry": {
+                  "total_occurrences": 2,
+                  "matches": [
+                    {
+                      "url": "https://example.test/rpol-entry",
+                      "count": 1,
+                      "last_indexed": "2026-06-29T00:00:00.0000000+00:00"
+                    },
+                    {
+                      "url": "https://example.test/obsidian-entry",
+                      "count": 1,
+                      "last_indexed": "2026-06-29T00:00:00.0000000+00:00"
+                    }
+                  ]
+                }
+              }
             }
-
-            if (hadOriginalIndex)
+            """,
+            () =>
             {
-                File.Move(backupPath, indexPath, overwrite: true);
+                using var form = new Form1(suppressHeroImagesForThisRun: true);
+                var txtSearch = GetControl<TextBox>(form, "txtSearch");
+                var lstSearchResults = GetControl<ListBox>(form, "lstSearchResults");
+
+                txtSearch.Text = "entry";
+                InvokePrivateAsync(form, "PerformSearchAsync").GetAwaiter().GetResult();
+
+                var results = lstSearchResults.Items.Cast<object>().Select(item => item?.ToString()).ToArray();
+                AssertEqual(2, results.Length, "expected both matches to be returned when url source metadata is present");
+                AssertContains(string.Join("\n", results), "https://example.test/rpol-entry");
+                AssertContains(string.Join("\n", results), "https://example.test/obsidian-entry");
+            });
+    });
+}
+
+static void KeywordSearchFiltersRpolHeroMetadataOnlyHits()
+{
+    RunOnStaThread(() =>
+    {
+        WithTemporaryKeywordIndex(
+            """
+            {
+              "index_metadata": {
+                "total_words_indexed": 0
+              },
+              "words": {
+                "Kelpie Lawfuller": {
+                  "total_occurrences": 3,
+                  "matches": [
+                    {
+                      "url": "https://rpol.net/display.cgi?gi=80170&ti=11",
+                      "count": 1,
+                      "last_indexed": "2026-06-30T00:00:00.0000000+00:00"
+                    },
+                    {
+                      "url": "https://rpol.net/display.cgi?gi=80170&ti=12",
+                      "count": 1,
+                      "last_indexed": "2026-06-30T00:00:00.0000000+00:00"
+                    },
+                    {
+                      "url": "https://publish.obsidian.md/scarlethorizons/PCs/Kelpie+Lawfuller",
+                      "count": 1,
+                      "last_indexed": "2026-06-30T00:00:00.0000000+00:00"
+                    }
+                  ]
+                }
+              }
             }
-        }
+            """,
+            () =>
+            {
+                using var form = new Form1(suppressHeroImagesForThisRun: true);
+                var txtSearch = GetControl<TextBox>(form, "txtSearch");
+                var lstSearchResults = GetControl<ListBox>(form, "lstSearchResults");
+                var bodyCheckCount = 0;
+
+                SetPrivateField(
+                    form,
+                    "_playerCharacterListingMarkdown",
+                    """
+                    | Name | Character | Notes | Hero |
+                    | --- | --- | --- | --- |
+                    | Kelpie Lawfuller | [[Kelpie Lawfuller]] | active | ![[kelpie-token.webp]] |
+                    """);
+                SetPrivateField(
+                    form,
+                    "_rpolHeroNameBodyMatchProvider",
+                    (Func<string, string, CancellationToken, Task<bool>>)((url, term, _) =>
+                    {
+                        bodyCheckCount++;
+                        AssertEqual("Kelpie Lawfuller", term, "unexpected hero term passed to RPOL body filter");
+                        return Task.FromResult(url.Contains("ti=12", StringComparison.Ordinal));
+                    }));
+
+                txtSearch.Text = "\"Kelpie Lawfuller\"";
+                InvokePrivateAsync(form, "PerformSearchAsync").GetAwaiter().GetResult();
+
+                var results = lstSearchResults.Items.Cast<object>().Select(item => item?.ToString()).ToArray();
+                AssertEqual(2, results.Length, "expected one RPOL body hit and one Obsidian hit");
+                AssertEqual(2, bodyCheckCount, "expected both RPOL matches to be checked against post bodies");
+                AssertContains(string.Join("\n", results), "https://rpol.net/display.cgi?gi=80170&ti=12&msgpage=&show=all");
+                AssertContains(string.Join("\n", results), "https://publish.obsidian.md/scarlethorizons/PCs/Kelpie+Lawfuller");
+                AssertFalse(
+                    results.Contains("https://rpol.net/display.cgi?gi=80170&ti=11&msgpage=&show=all", StringComparer.Ordinal),
+                    "metadata-only RPOL hit should be excluded for hero-name searches");
+            });
+    });
+}
+
+static void SearchEnterTriggersClickWhenEnabled()
+{
+    RunOnStaThread(() =>
+    {
+        WithTemporaryKeywordIndex(
+            """
+            {
+              "index_metadata": {
+                "total_words_indexed": 0
+              },
+              "words": {
+                "entry": {
+                  "total_occurrences": 1,
+                  "matches": [
+                    {
+                      "url": "https://example.test/entry",
+                      "count": 1,
+                      "last_indexed": "2026-06-30T00:00:00.0000000+00:00"
+                    }
+                  ]
+                }
+              }
+            }
+            """,
+            () =>
+            {
+                using var form = new Form1(suppressHeroImagesForThisRun: true);
+                var txtSearch = GetControl<TextBox>(form, "txtSearch");
+                var btnSearch = GetControl<Button>(form, "btnSearch");
+                var lstSearchResults = GetControl<ListBox>(form, "lstSearchResults");
+
+                txtSearch.Text = "entry";
+                AssertTrue(btnSearch.Enabled, "expected search button to be enabled for a valid search term");
+
+                InvokePrivateMethod(
+                    form,
+                    "TxtSearch_KeyDown",
+                    txtSearch,
+                    new KeyEventArgs(Keys.Enter));
+
+                var results = lstSearchResults.Items.Cast<object>().Select(item => item?.ToString()).ToArray();
+                AssertEqual(1, results.Length, "expected Enter to trigger the existing search click path");
+                AssertContains(string.Join("\n", results), "https://example.test/entry");
+            });
     });
 }
 
@@ -514,88 +570,65 @@ static void KeywordSearchOffersOnlineFallbackOnLocalMiss()
 {
     RunOnStaThread(() =>
     {
-        var indexPath = Path.Combine(AppContext.BaseDirectory, "keyword-index.json");
-        var backupPath = indexPath + ".test-backup";
-        var hadOriginalIndex = File.Exists(indexPath);
-
-        try
-        {
-            if (hadOriginalIndex)
+        WithTemporaryKeywordIndex(
+            """
             {
-                File.Copy(indexPath, backupPath, overwrite: true);
+              "index_metadata": {
+                "total_words_indexed": 0
+              },
+              "words": {}
             }
+            """,
+            () =>
+            {
+                using var form = new Form1(suppressHeroImagesForThisRun: true);
+                var txtSearch = GetControl<TextBox>(form, "txtSearch");
+                var lstSearchResults = GetControl<ListBox>(form, "lstSearchResults");
+                var promptCallCount = 0;
+                var onlineSearchCallCount = 0;
+                var onlineSearchCompletedCallCount = 0;
 
-            File.WriteAllText(
-                indexPath,
-                """
-                {
-                  "index_metadata": {
-                    "total_words_indexed": 0
-                  },
-                  "words": {}
-                }
-                """);
-
-            using var form = new Form1(suppressHeroImagesForThisRun: true);
-            var txtSearch = GetControl<TextBox>(form, "txtSearch");
-            var lstSearchResults = GetControl<ListBox>(form, "lstSearchResults");
-            var promptCallCount = 0;
-            var onlineSearchCallCount = 0;
-            var onlineSearchCompletedCallCount = 0;
-
-            SetPrivateField(
-                form,
-                "_showLocalIndexMissPrompt",
-                (Func<string[], DialogResult>)(terms =>
-                {
-                    promptCallCount++;
-                    AssertEqual("not indexed locally", terms[0], "unexpected prompt term");
-                    return DialogResult.Yes;
-                }));
-            SetPrivateField(
-                form,
-                "_onlineSearchProvider",
-                (Func<string[], CancellationToken, Task<string[]>>)((terms, _) =>
-                {
-                    onlineSearchCallCount++;
-                    AssertEqual("not indexed locally", terms[0], "unexpected online search term");
-                    return Task.FromResult(new[]
+                SetPrivateField(
+                    form,
+                    "_showLocalIndexMissPrompt",
+                    (Func<string[], DialogResult>)(terms =>
                     {
-                        "https://example.test/online-result"
-                    });
-                }));
-            SetPrivateField(
-                form,
-                "_showOnlineSearchCompletedMessage",
-                (Action<string[], int>)((terms, resultCount) =>
-                {
-                    onlineSearchCompletedCallCount++;
-                    AssertEqual("not indexed locally", terms[0], "unexpected completed-message term");
-                    AssertEqual(1, resultCount, "unexpected completed-message result count");
-                }));
+                        promptCallCount++;
+                        AssertEqual("not indexed locally", terms[0], "unexpected prompt term");
+                        return DialogResult.Yes;
+                    }));
+                SetPrivateField(
+                    form,
+                    "_onlineSearchProvider",
+                    (Func<string[], CancellationToken, Task<string[]>>)((terms, _) =>
+                    {
+                        onlineSearchCallCount++;
+                        AssertEqual("not indexed locally", terms[0], "unexpected online search term");
+                        return Task.FromResult(new[]
+                        {
+                            "https://example.test/online-result"
+                        });
+                    }));
+                SetPrivateField(
+                    form,
+                    "_showOnlineSearchCompletedMessage",
+                    (Action<string[], int>)((terms, resultCount) =>
+                    {
+                        onlineSearchCompletedCallCount++;
+                        AssertEqual("not indexed locally", terms[0], "unexpected completed-message term");
+                        AssertEqual(1, resultCount, "unexpected completed-message result count");
+                    }));
 
-            txtSearch.Text = "\"not indexed locally\"";
-            InvokePrivateAsync(form, "PerformSearchAsync").GetAwaiter().GetResult();
+                txtSearch.Text = "\"not indexed locally\"";
+                InvokePrivateAsync(form, "PerformSearchAsync").GetAwaiter().GetResult();
 
-            var results = lstSearchResults.Items.Cast<object>().Select(item => item?.ToString()).ToArray();
-            AssertEqual(1, promptCallCount, "expected the local-index miss prompt to be shown once");
-            AssertEqual(1, onlineSearchCallCount, "expected online search to run once");
-            AssertEqual(1, onlineSearchCompletedCallCount, "expected the online-search completion message to be shown once");
-            AssertEqual(1, results.Length, "expected online fallback to populate one result");
-            AssertContains(string.Join("\n", results), "https://example.test/online-result");
-        }
-        finally
-        {
-            if (File.Exists(indexPath))
-            {
-                File.Delete(indexPath);
-            }
-
-            if (hadOriginalIndex)
-            {
-                File.Move(backupPath, indexPath, overwrite: true);
-            }
-        }
+                var results = lstSearchResults.Items.Cast<object>().Select(item => item?.ToString()).ToArray();
+                AssertEqual(1, promptCallCount, "expected the local-index miss prompt to be shown once");
+                AssertEqual(1, onlineSearchCallCount, "expected online search to run once");
+                AssertEqual(1, onlineSearchCompletedCallCount, "expected the online-search completion message to be shown once");
+                AssertEqual(1, results.Length, "expected online fallback to populate one result");
+                AssertContains(string.Join("\n", results), "https://example.test/online-result");
+            });
     });
 }
 
@@ -661,8 +694,8 @@ static void HeroImagePathsFollowListingMarkdownTable()
         listingMarkdown,
         pcsDirectory);
 
-    var paths = ((string[])result)
-        .Select(Path.GetFileName)
+    var paths = ((string[])result!)
+        .Select(path => Path.GetFileName(path) ?? string.Empty)
         .ToArray();
 
     AssertEqual(1, paths.Length, "expected only heroes listed in the markdown table to be selected");
@@ -698,6 +731,40 @@ static void LocalSettingsAreEncryptedOnLoad()
             "IsEncryptedSettingsFile",
             localSettingsPath)!,
         "expected the local settings file to be encrypted after load");
+}
+
+static void LegacyLocalSettingsMigrateToPortableEncryption()
+{
+    using var directory = TemporaryDirectory.Create();
+    var localSettingsPath = Path.Combine(directory.Path, "settings.local.json");
+    var plaintext = """
+        {
+          "RPOL user name": "example-user",
+          "RPOL password": "example-password"
+        }
+        """;
+    var plaintextBytes = System.Text.Encoding.UTF8.GetBytes(plaintext);
+    var protectedBytes = ProtectedData.Protect(plaintextBytes, optionalEntropy: null, DataProtectionScope.CurrentUser);
+    var legacyEnvelope = """
+        {
+          "format": "dpapi-current-user",
+          "payload": "__PAYLOAD__"
+        }
+        """.Replace("__PAYLOAD__", Convert.ToBase64String(protectedBytes), StringComparison.Ordinal);
+
+    File.WriteAllText(localSettingsPath, legacyEnvelope);
+
+    var settings = (Dictionary<string, string>)InvokeStaticMethod(
+        typeof(PlayerAssistant.Form1).Assembly.GetType("PlayerAssistant.LocalSettingsUtility")
+            ?? throw new InvalidOperationException("Unable to find LocalSettingsUtility type."),
+        "LoadSettings",
+        localSettingsPath)!;
+
+    AssertEqual("example-user", settings["RPOL user name"], "unexpected user name after migrating legacy encrypted settings");
+    AssertEqual("example-password", settings["RPOL password"], "unexpected password after migrating legacy encrypted settings");
+    AssertTrue(
+        File.ReadAllText(localSettingsPath).Contains("\"format\": \"app-protected-v1\"", StringComparison.Ordinal),
+        "expected legacy encrypted settings to be rewritten using the portable app-protected-v1 format");
 }
 
 static void AssertTrue(bool actual, string message)
@@ -795,6 +862,17 @@ static object? InvokeStaticMethod(Type type, string methodName, params object[] 
     return method.Invoke(null, args);
 }
 
+static object? InvokePrivateMethod(object instance, string methodName, params object[] args)
+{
+    var method = instance.GetType().GetMethod(methodName, BindingFlags.Instance | BindingFlags.NonPublic);
+    if (method is null)
+    {
+        throw new InvalidOperationException($"Unable to find method '{methodName}'.");
+    }
+
+    return method.Invoke(instance, args);
+}
+
 static void SetPrivateField(object instance, string fieldName, object? value)
 {
     var field = instance.GetType().GetField(fieldName, BindingFlags.Instance | BindingFlags.NonPublic);
@@ -804,6 +882,53 @@ static void SetPrivateField(object instance, string fieldName, object? value)
     }
 
     field.SetValue(instance, value);
+}
+
+static void WithTemporaryKeywordIndex(string json, Action action)
+{
+    var indexPath = GetPlayerAssistantIndexPath();
+    var backupPath = indexPath + ".test-backup";
+    var hadOriginalIndex = File.Exists(indexPath);
+
+    try
+    {
+        Directory.CreateDirectory(Path.GetDirectoryName(indexPath)!);
+        if (hadOriginalIndex)
+        {
+            File.Copy(indexPath, backupPath, overwrite: true);
+        }
+
+        File.WriteAllText(indexPath, json);
+        action();
+    }
+    finally
+    {
+        if (File.Exists(indexPath))
+        {
+            File.Delete(indexPath);
+        }
+
+        if (hadOriginalIndex)
+        {
+            if (!File.Exists(backupPath))
+            {
+                throw new FileNotFoundException($"Expected backup file '{backupPath}' to exist for restore.", backupPath);
+            }
+
+            File.Move(backupPath, indexPath, overwrite: true);
+        }
+    }
+}
+
+static string GetPlayerAssistantIndexPath()
+{
+    var assemblyDirectory = Path.GetDirectoryName(typeof(Form1).Assembly.Location);
+    if (string.IsNullOrWhiteSpace(assemblyDirectory))
+    {
+        throw new InvalidOperationException("Unable to resolve the player-assistant assembly directory.");
+    }
+
+    return Path.Combine(assemblyDirectory, "keyword-index.json");
 }
 
 static void WriteVisiblePng(string filePath)

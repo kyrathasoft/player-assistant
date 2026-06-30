@@ -12,3 +12,25 @@ System.UnauthorizedAccessException: Access to the path is denied.
    at PlayerAssistant.KeywordIndexCrawler.KeywordIndexState.UpsertKeywordMatchAsync(String term, KeywordIndexMatch match, Boolean isNewKeyword, IProgress`1 progress, Int32 currentKeywordNumber, Int32 completedKeywordCount, Int32 totalKeywordCount, CancellationToken cancellationToken, Int32 processedUrlCount, String currentUrl, Int32 totalUrlCount, Int32 totalRpolUrlCount, Int32 totalObsidianUrlCount)
    at PlayerAssistant.KeywordIndexCrawler.BuildIndexAsync(IProgress`1 progress, CancellationToken cancellationToken)
    at PlayerAssistant.Form1.<>c__DisplayClass103_0.<<StartKeywordIndexCrawler>b__0>d.MoveNext()
+[2026-06-30T14:22:11.6758481-05:00] keyword crawler
+System.Net.Http.HttpRequestException: RPoL request to 'https://rpol.net/game.php?gi=80170' failed with status 403 .
+   at PlayerAssistant.RpolAuthUtility.EnsureSuccessfulResponse(Uri uri, IResponse response)
+   at PlayerAssistant.RpolAuthUtility.GetPageHtmlAsync(IBrowserContext context, Uri uri, CancellationToken cancellationToken)
+   at PlayerAssistant.RpolAuthUtility.GetPageHtmlAsync(IBrowserContext context, Uri uri, CancellationToken cancellationToken)
+   at PlayerAssistant.RpolAuthUtility.GetHtmlFromUrlAsync(Uri uri, CancellationToken cancellationToken)
+   at PlayerAssistant.HtmlUtility.GetHtmlFromUrlAsync(Uri uri, CancellationToken cancellationToken)
+   at PlayerAssistant.HtmlUtility.GetHyperlinksFromUrlAsync(Uri uri, CancellationToken cancellationToken)
+   at PlayerAssistant.HtmlUtility.GetHyperlinksFromUrlAsync(String url, CancellationToken cancellationToken)
+   at PlayerAssistant.KeywordIndexCrawler.DiscoverRpolUrlsAsync(CancellationToken cancellationToken)
+   at PlayerAssistant.KeywordIndexCrawler.BuildIndexAsync(IProgress`1 progress, CancellationToken cancellationToken)
+   at PlayerAssistant.Form1.<>c__DisplayClass107_0.<<StartKeywordIndexCrawler>b__0>d.MoveNext()
+[2026-06-30T14:22:11.7075984-05:00] game forum startup
+System.Net.Http.HttpRequestException: RPoL request to 'https://rpol.net/game.php?gi=80170' failed with status 403 .
+   at PlayerAssistant.RpolAuthUtility.EnsureSuccessfulResponse(Uri uri, IResponse response)
+   at PlayerAssistant.RpolAuthUtility.GetPageHtmlAsync(IBrowserContext context, Uri uri, CancellationToken cancellationToken)
+   at PlayerAssistant.RpolAuthUtility.GetPageHtmlAsync(IBrowserContext context, Uri uri, CancellationToken cancellationToken)
+   at PlayerAssistant.RpolAuthUtility.GetHtmlFromUrlAsync(Uri uri, CancellationToken cancellationToken)
+   at PlayerAssistant.HtmlUtility.GetHtmlFromUrlAsync(Uri uri, CancellationToken cancellationToken)
+   at PlayerAssistant.HtmlUtility.GetHyperlinksFromUrlAsync(Uri uri, CancellationToken cancellationToken)
+   at PlayerAssistant.HtmlUtility.GetHyperlinksFromUrlAsync(String url, CancellationToken cancellationToken)
+   at PlayerAssistant.Form1.LoadGameForumChapterPrefixesAsync()

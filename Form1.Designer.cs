@@ -291,6 +291,7 @@ namespace PlayerAssistant
             txtSearch.Size = new Size(425, 25);
             txtSearch.TabIndex = 1;
             txtSearch.TextChanged += TxtSearch_TextChanged;
+            txtSearch.KeyDown += TxtSearch_KeyDown;
             txtSearch.KeyPress += TxtSearch_KeyPress;
             // 
             // lblSearchPrompt

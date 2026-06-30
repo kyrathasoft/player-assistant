@@ -139,6 +139,7 @@ namespace PlayerAssistant
         private Func<string[], DialogResult> _showLocalIndexMissPrompt = _ => DialogResult.No;
         private Action<string[], int> _showOnlineSearchCompletedMessage = static (_, _) => { };
         private Func<string[], CancellationToken, Task<string[]>> _onlineSearchProvider = static (_, _) => Task.FromResult(Array.Empty<string>());
+        private Func<string, string, CancellationToken, Task<bool>> _rpolHeroNameBodyMatchProvider = static (_, _, _) => Task.FromResult(false);
 
         public Form1(bool suppressHeroImagesForThisRun = false)
         {
@@ -146,6 +147,7 @@ namespace PlayerAssistant
             _showLocalIndexMissPrompt = ShowLocalIndexMissPrompt;
             _showOnlineSearchCompletedMessage = ShowOnlineSearchCompletedMessage;
             _onlineSearchProvider = SearchOnlineForTermsAsync;
+            _rpolHeroNameBodyMatchProvider = DoesRpolPostBodyContainSearchTermAsync;
             InitializeComponent();
             _baseTitleText = Text;
             InitializeRegionalMapPanel();
@@ -925,7 +927,7 @@ namespace PlayerAssistant
 
             for (var i = 0; i < searchTerms.Length; i++)
             {
-                var searchOutcome = SearchIndexFileForTerm(searchTerms[i], i + 1, searchTerms.Length);
+                var searchOutcome = await SearchIndexFileForTermAsync(searchTerms[i], i + 1, searchTerms.Length, CancellationToken.None);
                 localMatchesFound |= searchOutcome == LocalIndexSearchOutcome.FoundMatches;
                 localIndexUnavailable |= searchOutcome == LocalIndexSearchOutcome.IndexUnavailable;
             }
@@ -958,9 +960,13 @@ namespace PlayerAssistant
                 $"Search results: {lstSearchResults.Items.Count} URL{(lstSearchResults.Items.Count == 1 ? string.Empty : "s")} found.");
         }
 
-        private LocalIndexSearchOutcome SearchIndexFileForTerm(string term, int searchTermNumber, int totalSearchTerms)
+        private async Task<LocalIndexSearchOutcome> SearchIndexFileForTermAsync(
+            string term,
+            int searchTermNumber,
+            int totalSearchTerms,
+            CancellationToken cancellationToken)
         {
-            var indexPath = Path.Combine(AppContext.BaseDirectory, KeywordIndexFileName);
+            var indexPath = GetKeywordIndexPath();
             if (!File.Exists(indexPath))
             {
                 SetStatusBarMessage($"Keyword index unavailable: {indexPath}");
@@ -988,6 +994,7 @@ namespace PlayerAssistant
                 }
 
                 var foundMatch = false;
+                var isHeroNameSearchTerm = IsHeroNameSearchTerm(term);
 
                 foreach (var matchElement in matchesElement.EnumerateArray())
                 {
@@ -1002,8 +1009,16 @@ namespace PlayerAssistant
                         continue;
                     }
 
+                    var normalizedUrl = NormalizeSearchResultUrl(url);
+                    if (isHeroNameSearchTerm
+                        && IsRpolSearchResultUrl(normalizedUrl)
+                        && !await _rpolHeroNameBodyMatchProvider(normalizedUrl, term, cancellationToken))
+                    {
+                        continue;
+                    }
+
                     foundMatch = true;
-                    AddSearchResultUrl(url);
+                    AddSearchResultUrl(normalizedUrl);
                 }
 
                 return foundMatch
@@ -1110,11 +1125,58 @@ namespace PlayerAssistant
         private async Task<string[]> SearchRpolOnlineAsync(string[] searchTerms, CancellationToken cancellationToken)
         {
             var hyperlinks = await HtmlUtility.GetRpolGameHyperlinksAsync(cancellationToken);
+            var normalizedHeroSearchTerms = searchTerms
+                .Where(IsHeroNameSearchTerm)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToArray();
 
-            return hyperlinks
+            var matchingUrls = hyperlinks
                 .Where(hyperlink => searchTerms.Any(term => SearchTextMatches(hyperlink.Text, term) || SearchTextMatches(hyperlink.Url, term)))
                 .Select(hyperlink => NormalizeSearchResultUrl(hyperlink.Url))
                 .Where(url => !string.IsNullOrWhiteSpace(url))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToArray();
+
+            if (normalizedHeroSearchTerms.Length == 0)
+            {
+                return matchingUrls;
+            }
+
+            var filteredUrls = new List<string>();
+
+            foreach (var url in matchingUrls)
+            {
+                if (!IsRpolSearchResultUrl(url))
+                {
+                    filteredUrls.Add(url);
+                    continue;
+                }
+
+                var matchedHeroTerm = false;
+                var includeUrl = true;
+
+                foreach (var heroTerm in normalizedHeroSearchTerms)
+                {
+                    if (!SearchTextMatches(url, heroTerm))
+                    {
+                        continue;
+                    }
+
+                    matchedHeroTerm = true;
+                    if (!await _rpolHeroNameBodyMatchProvider(url, heroTerm, cancellationToken))
+                    {
+                        includeUrl = false;
+                        break;
+                    }
+                }
+
+                if (!matchedHeroTerm || includeUrl)
+                {
+                    filteredUrls.Add(url);
+                }
+            }
+
+            return filteredUrls
                 .Distinct(StringComparer.OrdinalIgnoreCase)
                 .ToArray();
         }
@@ -1170,6 +1232,85 @@ namespace PlayerAssistant
             return isRpolThreadUrl
                 ? RpolThreadPostUtility.GetShowAllThreadUrl(uri.ToString())
                 : uri.ToString();
+        }
+
+        private bool IsHeroNameSearchTerm(string term)
+        {
+            if (string.IsNullOrWhiteSpace(term))
+            {
+                return false;
+            }
+
+            return GetHeroNamesForSearch().Contains(term.Trim(), StringComparer.OrdinalIgnoreCase);
+        }
+
+        private IEnumerable<string> GetHeroNamesForSearch()
+        {
+            var listingMarkdown = GetPlayerCharacterListingMarkdownForSearch();
+            if (string.IsNullOrWhiteSpace(listingMarkdown))
+            {
+                return [];
+            }
+
+            return PlayerCharacterAssetUtility.GetHeroRows(listingMarkdown)
+                .Select(row => row.Name.Trim())
+                .Where(name => !string.IsNullOrWhiteSpace(name))
+                .Distinct(StringComparer.OrdinalIgnoreCase);
+        }
+
+        private string GetPlayerCharacterListingMarkdownForSearch()
+        {
+            if (!string.IsNullOrWhiteSpace(_playerCharacterListingMarkdown))
+            {
+                return _playerCharacterListingMarkdown;
+            }
+
+            var cachedListingMarkdownPath = Path.Combine(
+                GetReleaseDirectory(),
+                PlayerCharactersDirectoryName,
+                "player-characters-listing.md");
+
+            return File.Exists(cachedListingMarkdownPath)
+                ? ReadTextFileShared(cachedListingMarkdownPath)
+                : string.Empty;
+        }
+
+        private static async Task<bool> DoesRpolPostBodyContainSearchTermAsync(
+            string url,
+            string term,
+            CancellationToken cancellationToken)
+        {
+            var html = await GameForumUtility.GetRpolHtmlWithRateLimitAsync(url, cancellationToken);
+            return RpolThreadPostUtility.GetThreadPostsFromHtml(html)
+                .Any(post => SearchTextMatches(post.BodyText, term));
+        }
+
+        private static bool IsRpolSearchResultUrl(string url)
+        {
+            return Uri.TryCreate(url, UriKind.Absolute, out var uri)
+                && RpolAuthUtility.IsRpolUri(uri);
+        }
+
+        private static string GetKeywordIndexPath()
+        {
+            return Path.Combine(GetApplicationExecutableDirectory(), KeywordIndexFileName);
+        }
+
+        private static string GetApplicationExecutableDirectory()
+        {
+#pragma warning disable IL3000
+            var assemblyLocation = typeof(Form1).Assembly.Location;
+#pragma warning restore IL3000
+            if (!string.IsNullOrWhiteSpace(assemblyLocation))
+            {
+                var assemblyDirectory = Path.GetDirectoryName(Path.GetFullPath(assemblyLocation));
+                if (!string.IsNullOrWhiteSpace(assemblyDirectory))
+                {
+                    return assemblyDirectory;
+                }
+            }
+
+            return GetReleaseDirectory();
         }
 
         private void AddSearchResultUrl(string url)
@@ -1271,6 +1412,18 @@ namespace PlayerAssistant
             {
                 e.Handled = true;
             }
+        }
+
+        private void TxtSearch_KeyDown(object? sender, KeyEventArgs e)
+        {
+            if (e.KeyCode != Keys.Enter || !btnSearch.Enabled)
+            {
+                return;
+            }
+
+            e.Handled = true;
+            e.SuppressKeyPress = true;
+            BtnSearch_Click(btnSearch, EventArgs.Empty);
         }
 
         private void UpdateSearchButtonEnabledState()

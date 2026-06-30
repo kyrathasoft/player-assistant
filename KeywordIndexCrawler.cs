@@ -32,7 +32,7 @@ namespace PlayerAssistant
                 StringComparer.OrdinalIgnoreCase);
 
             var failures = new ConcurrentBag<string>();
-            var outputPath = Path.Combine(AppContext.BaseDirectory, OutputFileName);
+            var outputPath = Path.Combine(GetApplicationExecutableDirectory(), OutputFileName);
             var outputFileExistedAtStartup = File.Exists(outputPath);
             var existingDocument = await LoadExistingDocumentAsync(outputPath, cancellationToken).ConfigureAwait(false);
             var indexedTerms = GetIndexedTerms(existingDocument);
@@ -342,6 +342,23 @@ namespace PlayerAssistant
             return text.Length == 0
                 ? 0
                 : text.Split(' ', StringSplitOptions.RemoveEmptyEntries).Length;
+        }
+
+        private static string GetApplicationExecutableDirectory()
+        {
+#pragma warning disable IL3000
+            var assemblyLocation = typeof(KeywordIndexCrawler).Assembly.Location;
+#pragma warning restore IL3000
+            if (!string.IsNullOrWhiteSpace(assemblyLocation))
+            {
+                var assemblyDirectory = Path.GetDirectoryName(Path.GetFullPath(assemblyLocation));
+                if (!string.IsNullOrWhiteSpace(assemblyDirectory))
+                {
+                    return assemblyDirectory;
+                }
+            }
+
+            return Path.GetFullPath(AppContext.BaseDirectory);
         }
 
         private static bool TryNormalizeRpolUrl(string url, Uri baseUri, out string normalizedUrl)

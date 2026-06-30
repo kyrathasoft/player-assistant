@@ -1,0 +1,30 @@
+[2026-06-30T14:46:49.0071230-05:00] game forum startup
+Microsoft.Playwright.PlaywrightException: Driver not found: C:\repos\player-assistant\.playwright\node\win32_x64\node.exe
+   at Microsoft.Playwright.Helpers.Driver.GetExecutablePath() in /_/src/Playwright/Helpers/Driver.cs:line 96
+   at Microsoft.Playwright.Transport.StdIOTransport.GetProcess(String driverArgs) in /_/src/Playwright/Transport/StdIOTransport.cs:line 109
+   at Microsoft.Playwright.Transport.StdIOTransport..ctor() in /_/src/Playwright/Transport/StdIOTransport.cs:line 45
+   at Microsoft.Playwright.Playwright.CreateAsync() in /_/src/Playwright/Playwright.cs:line 42
+   at PlayerAssistant.RpolAuthUtility.WaitForPlaywrightAsync[T](Task`1 task, String operationDescription, CancellationToken cancellationToken)
+   at PlayerAssistant.RpolAuthUtility.CreateAuthenticatedSessionAsync(CancellationToken cancellationToken)
+   at PlayerAssistant.RpolAuthUtility.GetAuthenticatedContextAsync(CancellationToken cancellationToken)
+   at PlayerAssistant.RpolAuthUtility.GetHtmlFromUrlAsync(Uri uri, CancellationToken cancellationToken)
+   at PlayerAssistant.HtmlUtility.GetHtmlFromUrlAsync(Uri uri, CancellationToken cancellationToken)
+   at PlayerAssistant.HtmlUtility.GetHyperlinksFromUrlAsync(Uri uri, CancellationToken cancellationToken)
+   at PlayerAssistant.HtmlUtility.GetHyperlinksFromUrlAsync(String url, CancellationToken cancellationToken)
+   at PlayerAssistant.Form1.LoadGameForumChapterPrefixesAsync()
+[2026-06-30T14:46:49.0922504-05:00] keyword crawler
+Microsoft.Playwright.PlaywrightException: Driver not found: C:\repos\player-assistant\.playwright\node\win32_x64\node.exe
+   at Microsoft.Playwright.Helpers.Driver.GetExecutablePath() in /_/src/Playwright/Helpers/Driver.cs:line 96
+   at Microsoft.Playwright.Transport.StdIOTransport.GetProcess(String driverArgs) in /_/src/Playwright/Transport/StdIOTransport.cs:line 109
+   at Microsoft.Playwright.Transport.StdIOTransport..ctor() in /_/src/Playwright/Transport/StdIOTransport.cs:line 45
+   at Microsoft.Playwright.Playwright.CreateAsync() in /_/src/Playwright/Playwright.cs:line 42
+   at PlayerAssistant.RpolAuthUtility.WaitForPlaywrightAsync[T](Task`1 task, String operationDescription, CancellationToken cancellationToken)
+   at PlayerAssistant.RpolAuthUtility.CreateAuthenticatedSessionAsync(CancellationToken cancellationToken)
+   at PlayerAssistant.RpolAuthUtility.GetAuthenticatedContextAsync(CancellationToken cancellationToken)
+   at PlayerAssistant.RpolAuthUtility.GetHtmlFromUrlAsync(Uri uri, CancellationToken cancellationToken)
+   at PlayerAssistant.HtmlUtility.GetHtmlFromUrlAsync(Uri uri, CancellationToken cancellationToken)
+   at PlayerAssistant.HtmlUtility.GetHyperlinksFromUrlAsync(Uri uri, CancellationToken cancellationToken)
+   at PlayerAssistant.HtmlUtility.GetHyperlinksFromUrlAsync(String url, CancellationToken cancellationToken)
+   at PlayerAssistant.KeywordIndexCrawler.DiscoverRpolUrlsAsync(CancellationToken cancellationToken)
+   at PlayerAssistant.KeywordIndexCrawler.BuildIndexAsync(IProgress`1 progress, CancellationToken cancellationToken)
+   at PlayerAssistant.Form1.<>c__DisplayClass108_0.<<StartKeywordIndexCrawler>b__0>d.MoveNext()
