@@ -1,0 +1,14 @@
+[2026-06-29T17:59:54.3643203-05:00] keyword crawler
+System.UnauthorizedAccessException: Access to the path is denied.
+   at System.IO.FileSystem.MoveFile(String sourceFullPath, String destFullPath, Boolean overwrite)
+   at PlayerAssistant.KeywordIndexCrawler.KeywordIndexState.SaveLockedAsync(CancellationToken cancellationToken)
+   at PlayerAssistant.KeywordIndexCrawler.KeywordIndexState.UpsertKeywordMatchAsync(String term, KeywordIndexMatch match, Boolean isNewKeyword, IProgress`1 progress, Int32 currentKeywordNumber, Int32 completedKeywordCount, Int32 totalKeywordCount, CancellationToken cancellationToken, Int32 processedUrlCount, String currentUrl, Int32 totalUrlCount, Int32 totalRpolUrlCount, Int32 totalObsidianUrlCount)
+   at PlayerAssistant.KeywordIndexCrawler.BuildIndexAsync(IProgress`1 progress, CancellationToken cancellationToken)
+   at PlayerAssistant.Form1.<>c__DisplayClass103_0.<<StartKeywordIndexCrawler>b__0>d.MoveNext()
+[2026-06-29T18:31:56.8802874-05:00] keyword crawler
+System.UnauthorizedAccessException: Access to the path is denied.
+   at System.IO.FileSystem.MoveFile(String sourceFullPath, String destFullPath, Boolean overwrite)
+   at PlayerAssistant.KeywordIndexCrawler.KeywordIndexState.SaveLockedAsync(CancellationToken cancellationToken)
+   at PlayerAssistant.KeywordIndexCrawler.KeywordIndexState.UpsertKeywordMatchAsync(String term, KeywordIndexMatch match, Boolean isNewKeyword, IProgress`1 progress, Int32 currentKeywordNumber, Int32 completedKeywordCount, Int32 totalKeywordCount, CancellationToken cancellationToken, Int32 processedUrlCount, String currentUrl, Int32 totalUrlCount, Int32 totalRpolUrlCount, Int32 totalObsidianUrlCount)
+   at PlayerAssistant.KeywordIndexCrawler.BuildIndexAsync(IProgress`1 progress, CancellationToken cancellationToken)
+   at PlayerAssistant.Form1.<>c__DisplayClass103_0.<<StartKeywordIndexCrawler>b__0>d.MoveNext()

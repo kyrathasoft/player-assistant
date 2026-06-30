@@ -1,0 +1,6 @@
+- [x] code app feature to search online vault by using the JSON library file 'sitemap-keyword-urls.json'
+- [x] add menu item to display the regional map
+- [x] build method GetSearchTerms() to extract search terms when btnSearch is clicked
+- [x] string[] SearchTerms should accept the output of method GetSearchTerms()
+- [x] code a method that, given a search term, will return a list of URLs from the JSON library file 'sitemap-keyword-urls.json' that match the search term
+- [x] add terms from Locations index (on obisidian wiki) to game-posts-key-terms.md

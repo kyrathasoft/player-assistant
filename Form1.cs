@@ -1,0 +1,3290 @@
+using System.Drawing;
+using System.Drawing.Drawing2D;
+using System.Drawing.Imaging;
+using System.Diagnostics;
+using System.IO;
+using System.Reflection;
+using System.Runtime.InteropServices;
+using System.Text.Json;
+using SkiaSharp;
+
+namespace PlayerAssistant
+{
+    public partial class Form1 : Form
+    {
+        private enum LoginInfoDisplayMode
+        {
+            LoginInfo,
+            PostTotals
+        }
+
+        private enum LocalIndexSearchOutcome
+        {
+            FoundMatches,
+            NotFound,
+            IndexUnavailable
+        }
+
+        private static string PlayerCharactersListingUrl => $"{AppSettingsUtility.ObsidianGameVaultUrl}/PCs/Player+Characters+Listing";
+        private static string SitemapUrl => $"{AppSettingsUtility.ObsidianGameVaultUrl}/sitemap.xml";
+        private const string PlayerCharactersDirectoryName = "PCs";
+        private const string PostsDirectoryName = "Posts";
+        private const string InCharacterPostsDirectoryName = "IC";
+        private const string OutOfCharacterPostsDirectoryName = "OOC";
+        private const string AsidePostsDirectoryName = "Aside";
+        private const string ImagesDirectoryName = "Images";
+        private const string MapsDirectoryName = "Maps";
+        private const string ActivePlayerCharactersDirectoryName = "active";
+        private const string InactivePlayerCharactersDirectoryName = "inactive";
+        private const string ActiveHeroImageDownloadMarkerFileName = ".active-hero-images-downloaded";
+        private static readonly TimeSpan ActiveHeroImageDownloadInterval = TimeSpan.FromHours(3);
+        private const string ImageUriMessageBoxShownFileName = ".player-character-image-uris-shown";
+        private const string HtmlImageUriMessageBoxShownFileName = ".player-character-html-image-uris-shown";
+        private const string IndexImagePathMessageBoxShownFileName = ".player-character-index-image-paths-shown";
+        private const string SitemapFileName = "sitemap.xml";
+        private const string SitemapKeywordUrlsFileName = "sitemap-keyword-urls.json";
+        private const string TempDirectoryName = "temp";
+        private const string GameForumChapterPrefixesFileName = "game-forum-chapter-prefixes.txt";
+        private const string GameForumChapterDownloadsFileName = "game-forum-chapter-downloads.txt";
+        private const string GameForumAsideDownloadsFileName = "game-forum-aside-downloads.txt";
+        private const string GameForumOutOfCharacterDownloadsFileName = "game-forum-ooc-downloads.txt";
+        private const string StartupErrorLogFileName = "startup-errors.log";
+        private const string TheCastLoginInfoFileName = "login-info.json";
+        private const string DiceRollsHtmlFileName = "dice-rolls.html";
+        private const string RegionalMapFileName = "northernreaches.png";
+        private const string KeywordIndexFileName = "keyword-index.json";
+        private static readonly TimeSpan HeroImageShowcaseStartDelay = TimeSpan.FromMilliseconds(2500);
+        private static readonly TimeSpan HeroImageIntroDuration = TimeSpan.FromSeconds(1);
+        private static readonly TimeSpan HeroImageFadeInDuration = TimeSpan.FromMilliseconds(200);
+        private static readonly TimeSpan HeroImageDisplayDuration = TimeSpan.FromMilliseconds(400);
+        private static readonly TimeSpan HeroImageFadeOutDuration = TimeSpan.FromMilliseconds(200);
+        private static readonly TimeSpan HeroImageInterImageDelayDuration = TimeSpan.FromMilliseconds(600);
+        private static readonly string[] HeroImageExtensions =
+        [
+            ".avif",
+            ".bmp",
+            ".gif",
+            ".ico",
+            ".jpeg",
+            ".jpg",
+            ".png",
+            ".svg",
+            ".tif",
+            ".tiff",
+            ".webp"
+        ];
+
+        private string[] _playerCharacterImageUris = [];
+        private string[] _playerCharacterHtmlImageUris = [];
+        private string[] _playerCharacterImageFileNames = [];
+        private string[] _playerCharacterResolvedImagePaths = [];
+        private string[] _activePlayerCharacterImagePaths = [];
+        private string _playerCharacterListingMarkdown = string.Empty;
+        private string _playerCharacterListingHtml = string.Empty;
+        private TheCastLoginInfo[] _loginInfoRows = [];
+        private PostTotalsSummary? _postTotalsSummary;
+        private bool _showLoginInfo;
+        private bool _showPostTotals;
+        private bool _showWelcomeText = true;
+        private bool _showHeroIntroText;
+        private bool _showAttributionText;
+        private System.Windows.Forms.Timer? _attributionTimer;
+        private System.Windows.Forms.Timer? _welcomeTimer;
+        private System.Windows.Forms.Timer? _heroImageShowcaseTimer;
+        private System.Windows.Forms.Timer? _keywordIndexStatusTimer;
+        private readonly Random _random = new();
+        private readonly List<string> _heroImageShowcasePaths = [];
+        private Image? _currentHeroImage;
+        private Rectangle _currentHeroImageBounds;
+        private readonly Stopwatch _currentHeroImageStopwatch = new();
+        private float _currentHeroImageOpacity;
+        private bool _heroImageShowcaseStarted;
+        private int _heroImageShowcaseTotal;
+        private int _heroImageShowcaseIndex;
+        private bool _currentHeroImageWasVisible;
+        private bool _playerCharacterListingUpdateStarted;
+        private bool _heroImageShowcaseCompleted;
+        private bool _heroImageIntroStarted;
+        private bool _regionalMapActive;
+        private bool _regionalMapTransitionPending;
+        private int _heroImageShowcaseSkipped;
+        private string _lastHeroImageSkipReason = string.Empty;
+        private PictureBox? _heroImagePictureBox;
+        private Panel? _regionalMapPanel;
+        private ListBox? _diceRollsListBox;
+        private Image? _regionalMapImage;
+        private Image? _regionalMapImageCache;
+        private string? _regionalMapImageCachePath;
+        private DateTime _regionalMapImageCacheLastWriteUtc;
+        private Task? _regionalMapImagePreloadTask;
+        private bool _loginInfoRefreshStarted;
+        private LoginInfoDisplayMode _loginInfoRefreshTarget = LoginInfoDisplayMode.LoginInfo;
+        private readonly bool _suppressHeroImagesForThisRun;
+        private bool _searchResultsRequested;
+        private readonly string _baseTitleText;
+        private DateTimeOffset _keywordIndexStatusLastChangedUtc;
+        private DateTimeOffset _keywordIndexStatusLockedUntilUtc;
+        private string _keywordIndexStatusMessage = string.Empty;
+        private string _keywordIndexPinnedStatusMessage = string.Empty;
+        private static readonly TimeSpan MinimumStatusBarMessageDuration = TimeSpan.FromMilliseconds(1000);
+        private DateTimeOffset _statusBarMessageLockedUntilUtc;
+        private string? _pendingStatusBarMessage;
+        private TimeSpan _pendingStatusBarDuration;
+        private string? _pendingKeywordIndexPinnedStatusMessage;
+        private TimeSpan _pendingKeywordIndexPinnedStatusDuration;
+        private KeywordIndexProgress? _latestKeywordIndexProgress;
+        private KeywordIndexProgress? _pendingKeywordIndexProgress;
+        private bool _keywordIndexingInProgress;
+        private Task? _keywordIndexCrawlerTask;
+        private Func<string[], DialogResult> _showLocalIndexMissPrompt = _ => DialogResult.No;
+        private Action<string[], int> _showOnlineSearchCompletedMessage = static (_, _) => { };
+        private Func<string[], CancellationToken, Task<string[]>> _onlineSearchProvider = static (_, _) => Task.FromResult(Array.Empty<string>());
+
+        public Form1(bool suppressHeroImagesForThisRun = false)
+        {
+            _suppressHeroImagesForThisRun = suppressHeroImagesForThisRun;
+            _showLocalIndexMissPrompt = ShowLocalIndexMissPrompt;
+            _showOnlineSearchCompletedMessage = ShowOnlineSearchCompletedMessage;
+            _onlineSearchProvider = SearchOnlineForTermsAsync;
+            InitializeComponent();
+            _baseTitleText = Text;
+            InitializeRegionalMapPanel();
+            InitializeHeroImagePictureBox();
+            DoubleBuffered = true;
+            Icon = LoadApplicationIcon();
+            skipHeroImageParadeAtStartupToolStripMenuItem.Checked = UserPreferencesUtility.SkipHeroImageParadeAtStartup;
+            whiteMarbleBackgroundTilingToolStripMenuItem.Checked = UserPreferencesUtility.WhiteMarbleBackgroundTilingEnabled;
+            UpdateRegionalMapMenuItem();
+            ApplyWhiteMarbleBackgroundTiling();
+
+            _attributionTimer = new System.Windows.Forms.Timer
+            {
+                Interval = 2000
+            };
+            _attributionTimer.Tick += (_, _) =>
+            {
+                _showAttributionText = true;
+                _attributionTimer.Stop();
+                _attributionTimer.Dispose();
+                _attributionTimer = null;
+                Invalidate();
+            };
+            _attributionTimer.Start();
+
+            _welcomeTimer = new System.Windows.Forms.Timer
+            {
+                Interval = 5000
+            };
+            _welcomeTimer.Tick += (_, _) =>
+            {
+                _showWelcomeText = false;
+                _showAttributionText = false;
+                whiteMarbleBackgroundTilingToolStripMenuItem.Checked = false;
+                SetBackgroundImage(LoadDragonBackgroundImage(), ImageLayout.Center);
+                _welcomeTimer.Stop();
+                _welcomeTimer.Dispose();
+                _welcomeTimer = null;
+                if (!_suppressHeroImagesForThisRun)
+                {
+                    _ = StartHeroImageShowcaseAfterDelayAsync();
+                }
+                _ = StartPlayerCharacterListingUpdateAsync();
+                Invalidate();
+            };
+            _welcomeTimer.Start();
+
+            _keywordIndexStatusTimer = new System.Windows.Forms.Timer
+            {
+                Interval = 250
+            };
+            _keywordIndexStatusTimer.Tick += (_, _) => UpdateKeywordIndexStatusTimer();
+            _keywordIndexStatusTimer.Start();
+        }
+
+        protected override void OnFormClosed(FormClosedEventArgs e)
+        {
+            StopHeroImageShowcase();
+            _attributionTimer?.Dispose();
+            _welcomeTimer?.Dispose();
+            _keywordIndexStatusTimer?.Dispose();
+            _regionalMapPanel?.Dispose();
+            _heroImagePictureBox?.Image?.Dispose();
+            _heroImagePictureBox?.Dispose();
+            _diceRollsListBox?.Dispose();
+            _regionalMapImage?.Dispose();
+            _regionalMapImageCache?.Dispose();
+            BackgroundImage?.Dispose();
+
+            base.OnFormClosed(e);
+        }
+
+        protected override async void OnShown(EventArgs e)
+        {
+            base.OnShown(e);
+            FillCurrentScreenWorkingArea();
+            UpdateRegionalMapPanelBounds();
+            UpdateSearchPanelBounds();
+            InitializeCachedActiveHeroImages();
+            _ = PreloadRegionalMapImageAsync();
+            await Task.Yield();
+            StartKeywordIndexCrawler();
+            await LoadGameForumChapterPrefixesAsync();
+            await StartPlayerCharacterListingUpdateAsync();
+        }
+
+        private void StartKeywordIndexCrawler()
+        {
+            _keywordIndexingInProgress = true;
+            var progress = new Progress<KeywordIndexProgress>(UpdateKeywordIndexStatus);
+            _keywordIndexCrawlerTask = Task.Run(async () =>
+            {
+                try
+                {
+                    await KeywordIndexCrawler.BuildIndexAsync(progress).ConfigureAwait(false);
+                }
+                catch (Exception ex)
+                {
+                    var logPath = Path.Combine(AppContext.BaseDirectory, StartupErrorLogFileName);
+                    await File.AppendAllTextAsync(
+                        logPath,
+                        FormatStartupErrorLogEntry("keyword crawler", ex)).ConfigureAwait(false);
+                }
+                finally
+                {
+                    BeginInvoke(() =>
+                    {
+                        _keywordIndexingInProgress = false;
+                    });
+                }
+            });
+        }
+
+        private void UpdateKeywordIndexStatus(KeywordIndexProgress progress)
+        {
+            UpdateKeywordIndexTitle(progress);
+
+            if (progress.IsCompleted)
+            {
+                _keywordIndexingInProgress = false;
+                _latestKeywordIndexProgress = null;
+                PinKeywordIndexStatusMessage("indexing of keywords has completed", TimeSpan.FromSeconds(3));
+                return;
+            }
+
+            if (progress.IsTermsLoaded)
+            {
+                SetKeywordIndexStatusMessage(
+                    $"Keyword index: loaded {progress.TotalKeywordCount} unique term{(progress.TotalKeywordCount == 1 ? string.Empty : "s")} to be indexed.");
+                return;
+            }
+
+            if (progress.IsIndexFileCreated)
+            {
+                PinKeywordIndexStatusMessage("Keyword index: created keyword-index.json.", TimeSpan.FromSeconds(3));
+                return;
+            }
+
+            if (progress.Keyword is null && progress.TotalUrlCount > 0)
+            {
+                SetKeywordIndexStatusMessage(
+                    $"Keyword index: scanned {progress.ProcessedUrlCount} of {progress.TotalUrlCount} URLs ({progress.TotalObsidianUrlCount} Obsidian + {progress.TotalRpolUrlCount} RPOL); examining {progress.CurrentUrl ?? "(unknown URL)"}.");
+                return;
+            }
+
+            if (progress.Keyword is null)
+            {
+                return;
+            }
+
+            _latestKeywordIndexProgress = progress;
+            if (DateTimeOffset.UtcNow < _keywordIndexStatusLockedUntilUtc)
+            {
+                _pendingKeywordIndexProgress = progress;
+                return;
+            }
+
+            ApplyKeywordIndexProgress(progress);
+        }
+
+        private void ApplyKeywordIndexProgress(KeywordIndexProgress progress)
+        {
+            var currentTermSuffix = FormatKeywordIndexCurrentTermSuffix(progress);
+            SetKeywordIndexStatusMessage(progress.IsNewKeyword
+                ? $"Keyword index: adding '{progress.Keyword}' ({FormatKeywordIndexCount(progress.UrlCount, "URL")} found; total count {progress.TotalOccurrences}); examining {progress.CurrentUrl ?? "(unknown URL)"}.{currentTermSuffix}"
+                : $"Keyword index: updating '{progress.Keyword}' ({FormatKeywordIndexCount(progress.UrlCount, "URL")} found; total count {progress.TotalOccurrences}); examining {progress.CurrentUrl ?? "(unknown URL)"}.{currentTermSuffix}");
+        }
+
+        private static string FormatKeywordIndexCount(int value, string noun)
+        {
+            return value == 1
+                ? $"1 {noun}"
+                : $"{value} {noun}s";
+        }
+
+        private static string FormatKeywordIndexCurrentTermSuffix(KeywordIndexProgress progress)
+        {
+            if (progress.CurrentKeywordNumber <= 0 || progress.TotalKeywordCount <= 0)
+            {
+                return string.Empty;
+            }
+
+            return $" ({progress.CurrentKeywordNumber} of {progress.TotalKeywordCount} terms is now being indexed)";
+        }
+
+        private void UpdateKeywordIndexTitle(KeywordIndexProgress progress)
+        {
+            if (progress.TotalKeywordCount <= 0 || progress.IsTermsLoaded || progress.IsIndexFileCreated)
+            {
+                Text = _baseTitleText;
+                return;
+            }
+
+            var rawPercentage = progress.TotalUrlCount > 0
+                ? progress.ProcessedUrlCount * 100d / progress.TotalUrlCount
+                : progress.CompletedKeywordCount * 100d / Math.Max(progress.TotalKeywordCount, 1);
+            var percentage = (int)Math.Floor(rawPercentage);
+            if (rawPercentage > 0d && percentage == 0)
+            {
+                percentage = 1;
+            }
+
+            if (!progress.IsCompleted && percentage >= 100)
+            {
+                percentage = 99;
+            }
+
+            percentage = Math.Clamp(percentage, 0, 100);
+            Text = $"{_baseTitleText} - {percentage}% of keyword indexing complete";
+        }
+
+        private void UpdateKeywordIndexStatusTimer()
+        {
+            var now = DateTimeOffset.UtcNow;
+            if (_pendingStatusBarMessage is not null && now >= _statusBarMessageLockedUntilUtc)
+            {
+                var pendingMessage = _pendingStatusBarMessage;
+                var pendingDuration = _pendingStatusBarDuration;
+                _pendingStatusBarMessage = null;
+                _pendingStatusBarDuration = TimeSpan.Zero;
+                ApplyStatusBarMessageNow(pendingMessage, pendingDuration);
+                return;
+            }
+
+            if (now < _keywordIndexStatusLockedUntilUtc)
+            {
+                if (_keywordIndexPinnedStatusMessage.Length > 0
+                    && !string.Equals(statusToolStripStatusLabel.Text, _keywordIndexPinnedStatusMessage, StringComparison.Ordinal))
+                {
+                    statusToolStripStatusLabel.Text = _keywordIndexPinnedStatusMessage;
+                }
+
+                return;
+            }
+
+            _keywordIndexPinnedStatusMessage = string.Empty;
+            if (now >= _keywordIndexStatusLockedUntilUtc
+                && _pendingKeywordIndexProgress is { } pendingProgress)
+            {
+                _pendingKeywordIndexProgress = null;
+                UpdateKeywordIndexStatus(pendingProgress);
+                return;
+            }
+
+            if (_keywordIndexingInProgress
+                && _latestKeywordIndexProgress is { } latestProgress
+                && !(statusToolStripStatusLabel.Text ?? string.Empty).StartsWith("Keyword index:", StringComparison.Ordinal))
+            {
+                ApplyKeywordIndexProgress(latestProgress);
+                return;
+            }
+
+            if (!(statusToolStripStatusLabel.Text ?? string.Empty).StartsWith("Keyword index: adding", StringComparison.Ordinal)
+                || now - _keywordIndexStatusLastChangedUtc < TimeSpan.FromSeconds(5))
+            {
+                return;
+            }
+
+            var fileSizeMessage = BuildKeywordTermsFileSizeStatusMessage();
+            PinKeywordIndexStatusMessage(fileSizeMessage, TimeSpan.FromSeconds(3));
+        }
+
+        private void SetKeywordIndexStatusMessage(string message)
+        {
+            if (SetStatusBarMessage(message))
+            {
+                _keywordIndexStatusLastChangedUtc = DateTimeOffset.UtcNow;
+            }
+
+            _keywordIndexStatusMessage = message;
+        }
+
+        private void PinKeywordIndexStatusMessage(string message, TimeSpan duration)
+        {
+            if (SetStatusBarMessage(message, duration))
+            {
+                _keywordIndexStatusLastChangedUtc = DateTimeOffset.UtcNow;
+                _keywordIndexPinnedStatusMessage = message;
+                _keywordIndexStatusLockedUntilUtc = DateTimeOffset.UtcNow.Add(duration);
+                _pendingKeywordIndexPinnedStatusMessage = null;
+                _pendingKeywordIndexPinnedStatusDuration = TimeSpan.Zero;
+                return;
+            }
+
+            _pendingKeywordIndexPinnedStatusMessage = message;
+            _pendingKeywordIndexPinnedStatusDuration = duration;
+        }
+
+        private bool SetStatusBarMessage(
+            string message,
+            TimeSpan? minimumDuration = null)
+        {
+            var effectiveDuration = minimumDuration.GetValueOrDefault(MinimumStatusBarMessageDuration);
+            if (effectiveDuration < MinimumStatusBarMessageDuration)
+            {
+                effectiveDuration = MinimumStatusBarMessageDuration;
+            }
+
+            var now = DateTimeOffset.UtcNow;
+            var currentMessage = statusToolStripStatusLabel.Text ?? string.Empty;
+            if (now < _statusBarMessageLockedUntilUtc
+                && !string.Equals(currentMessage, message, StringComparison.Ordinal))
+            {
+                _pendingStatusBarMessage = message;
+                _pendingStatusBarDuration = effectiveDuration;
+                return false;
+            }
+
+            _pendingStatusBarMessage = null;
+            _pendingStatusBarDuration = TimeSpan.Zero;
+            ApplyStatusBarMessageNow(message, effectiveDuration);
+            return true;
+        }
+
+        private void ApplyStatusBarMessageNow(string message, TimeSpan duration)
+        {
+            statusToolStripStatusLabel.Text = message;
+            var now = DateTimeOffset.UtcNow;
+            _statusBarMessageLockedUntilUtc = now.Add(duration);
+
+            if (string.Equals(_pendingKeywordIndexPinnedStatusMessage, message, StringComparison.Ordinal))
+            {
+                _keywordIndexPinnedStatusMessage = message;
+                _keywordIndexStatusLockedUntilUtc = now.Add(_pendingKeywordIndexPinnedStatusDuration);
+                _keywordIndexStatusLastChangedUtc = now;
+                _pendingKeywordIndexPinnedStatusMessage = null;
+                _pendingKeywordIndexPinnedStatusDuration = TimeSpan.Zero;
+            }
+        }
+
+        private static string BuildKeywordTermsFileSizeStatusMessage()
+        {
+            var markdownPath = KeywordTermsFileUtility.TryResolvePath();
+            if (!string.IsNullOrWhiteSpace(markdownPath)
+                && File.Exists(markdownPath))
+            {
+                return $"Keyword index: game-posts-key-terms.md size {FormatFileSize(new FileInfo(markdownPath).Length)}.";
+            }
+
+            return "Keyword index: game-posts-key-terms.md unavailable.";
+        }
+
+        private static string FormatFileSize(long bytes)
+        {
+            const long kilobyte = 1024;
+            const long megabyte = kilobyte * 1024;
+
+            return bytes >= megabyte
+                ? $"{bytes / (double)megabyte:0.##} MB"
+                : bytes >= kilobyte
+                    ? $"{bytes / (double)kilobyte:0.##} KB"
+                    : $"{bytes} bytes";
+        }
+
+        protected override void OnResize(EventArgs e)
+        {
+            base.OnResize(e);
+            UpdateRegionalMapPanelBounds();
+            UpdateDiceRollsListBoxBounds();
+            UpdateSearchPanelBounds();
+        }
+
+        protected override void OnFormClosing(FormClosingEventArgs e)
+        {
+            if (_keywordIndexCrawlerTask is { IsCompleted: false })
+            {
+                var result = MessageBox.Show(
+                    this,
+                    "Keyword indexing is still in progress. Are you sure you want to close the app?",
+                    "Player Assistant",
+                    MessageBoxButtons.YesNo,
+                    MessageBoxIcon.Question,
+                    MessageBoxDefaultButton.Button2);
+
+                if (result != DialogResult.Yes)
+                {
+                    e.Cancel = true;
+                    return;
+                }
+            }
+
+            base.OnFormClosing(e);
+        }
+
+        protected override void OnPaint(PaintEventArgs e)
+        {
+            base.OnPaint(e);
+
+            if (_regionalMapActive)
+            {
+                DrawRegionalMap(e.Graphics, GetHeroImageDisplayBounds());
+                return;
+            }
+
+            if (_showLoginInfo)
+            {
+                DrawLoginInfo(e.Graphics);
+                return;
+            }
+
+            if (_showPostTotals)
+            {
+                DrawPostTotals(e.Graphics);
+                return;
+            }
+
+            if (_showWelcomeText || _showHeroIntroText)
+            {
+                e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
+                using var fontFamily = new FontFamily("Segoe UI");
+
+                DrawOutlinedText(
+                    e.Graphics,
+                    _showHeroIntroText ? "Let's Meet Our Heroes..." : "Welcome to Player Assistant!",
+                    fontFamily,
+                    40,
+                    new Rectangle(ClientRectangle.X, ClientRectangle.Y - 100, ClientRectangle.Width, ClientRectangle.Height),
+                    Color.LightGray);
+
+                if (_showWelcomeText && _showAttributionText)
+                {
+                    DrawOutlinedText(
+                        e.Graphics,
+                        "For players in the Scarlet Horizons campaign",
+                        fontFamily,
+                        30,
+                        ClientRectangle,
+                        Color.LightGray);
+                }
+            }
+        }
+
+        private void ExitToolStripMenuItem_Click(object? sender, EventArgs e)
+        {
+            EnableLoginInfoMenuItem();
+            EnableShowPostTotalsMenuItem();
+            Close();
+        }
+
+        private void FileToolStripMenuItem_DropDownOpening(object? sender, EventArgs e)
+        {
+            UpdateShowMenuItemsForHeroImageShowcase();
+        }
+
+        private void NonSearchToolStripMenuItem_DropDownOpening(object? sender, EventArgs e)
+        {
+            whiteMarbleBackgroundTilingToolStripMenuItem.Checked = UserPreferencesUtility.WhiteMarbleBackgroundTilingEnabled;
+        }
+
+        private void SearchToolStripMenuItem_Click(object? sender, EventArgs e)
+        {
+            EnableLoginInfoMenuItem();
+            EnableShowPostTotalsMenuItem();
+            EnableShowDiceRollsMenuItem();
+
+            if (_regionalMapActive || _showLoginInfo || _showPostTotals || _diceRollsListBox is not null)
+            {
+                ClearDisplaySurfaceForRegionalMap();
+                Refresh();
+            }
+
+            ShowSearchPanel();
+        }
+
+        private void LoginInfoToolStripMenuItem_Click(object? sender, EventArgs e)
+        {
+            ClearDiceRollsDisplayIfVisible();
+            HideSearchPanel();
+            EnableShowPostTotalsMenuItem();
+            EnableShowDiceRollsMenuItem();
+            loginInfoToolStripMenuItem.Enabled = false;
+            _loginInfoRefreshTarget = LoginInfoDisplayMode.LoginInfo;
+
+            try
+            {
+                var loginInfoPath = GetLoginInfoPath();
+                if (File.Exists(loginInfoPath))
+                {
+                    ShowLoginInfoRows(LoadLoginInfoJson(loginInfoPath), "cached");
+                    _ = RefreshLoginInfoInBackgroundAsync();
+                    return;
+                }
+
+                SetStatusBarMessage("Loading login info...");
+                _ = RefreshLoginInfoInBackgroundAsync();
+            }
+            catch (Exception ex)
+            {
+                loginInfoToolStripMenuItem.Enabled = true;
+                SetStatusBarMessage($"Login info unavailable: {ex.Message}");
+                MessageBox.Show(
+                    this,
+                    ex.Message,
+                    "Login Info Error",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Warning);
+            }
+        }
+
+        private void ShowPostTotalsToolStripMenuItem_Click(object? sender, EventArgs e)
+        {
+            ClearDiceRollsDisplayIfVisible();
+            HideSearchPanel();
+            EnableLoginInfoMenuItem();
+            EnableShowDiceRollsMenuItem();
+            showPostTotalsToolStripMenuItem.Enabled = false;
+            _loginInfoRefreshTarget = LoginInfoDisplayMode.PostTotals;
+
+            try
+            {
+                var localTheCastPath = GetTheCastHtmlPath();
+                if (File.Exists(localTheCastPath))
+                {
+                    ShowPostTotalsRows(LoadTheCastLoginInfoFromHtml(localTheCastPath), "cached");
+                    _ = RefreshLoginInfoInBackgroundAsync();
+                    return;
+                }
+
+                var loginInfoPath = GetLoginInfoPath();
+                if (File.Exists(loginInfoPath))
+                {
+                    ShowPostTotalsRows(LoadLoginInfoJson(loginInfoPath), "cached");
+                    _ = RefreshLoginInfoInBackgroundAsync();
+                    return;
+                }
+
+                SetStatusBarMessage("Loading post totals...");
+                _ = RefreshLoginInfoInBackgroundAsync();
+            }
+            catch (Exception ex)
+            {
+                showPostTotalsToolStripMenuItem.Enabled = true;
+                SetStatusBarMessage($"Post totals unavailable: {ex.Message}");
+                MessageBox.Show(
+                    this,
+                    ex.Message,
+                    "Post Totals Error",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Warning);
+            }
+        }
+
+        private void ShowDiceRollsToolStripMenuItem_Click(object? sender, EventArgs e)
+        {
+            ClearDiceRollsDisplayIfVisible();
+            HideSearchPanel();
+            EnableLoginInfoMenuItem();
+            EnableShowPostTotalsMenuItem();
+
+            var diceRollsPath = GetDiceRollsHtmlPath();
+            if (!TryLoadDiceRollEntries(diceRollsPath, out var entries) || entries.Length == 0)
+            {
+                showDiceRollsToolStripMenuItem.Enabled = false;
+                SetStatusBarMessage($"Dice rolls unavailable: {diceRollsPath}");
+                return;
+            }
+
+            try
+            {
+                ClearDisplaySurfaceForRegionalMap();
+                _postTotalsSummary = null;
+                ShowDiceRollEntries(entries);
+                showDiceRollsToolStripMenuItem.Enabled = false;
+            }
+            catch (Exception ex)
+            {
+                SetStatusBarMessage($"Dice rolls unavailable: {ex.Message}");
+                MessageBox.Show(
+                    this,
+                    ex.Message,
+                    "Dice Rolls Error",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Warning);
+            }
+        }
+
+        private async void RegionalMapToolStripMenuItem_Click(object? sender, EventArgs e)
+        {
+            ClearDiceRollsDisplayIfVisible();
+            EnableLoginInfoMenuItem();
+            EnableShowPostTotalsMenuItem();
+            EnableShowDiceRollsMenuItem();
+            var searchPanelWasHidden = HideSearchPanel();
+            var shouldRefreshBeforeShowingMap = searchPanelWasHidden
+                || _showLoginInfo
+                || _showWelcomeText
+                || _showHeroIntroText
+                || _showAttributionText;
+
+            var regionalMapPath = GetRegionalMapPath();
+            UpdateRegionalMapMenuItem();
+
+            if (!regionalMapToolStripMenuItem.Enabled)
+            {
+                SetStatusBarMessage($"Regional map unavailable: {regionalMapPath}");
+                return;
+            }
+
+            try
+            {
+                _regionalMapTransitionPending = true;
+                ClearDisplaySurfaceForRegionalMap();
+                _regionalMapActive = true;
+                if (shouldRefreshBeforeShowingMap)
+                {
+                    Refresh();
+                }
+
+                var regionalMapImage = TryCreateRegionalMapDisplayImage(regionalMapPath);
+                if (regionalMapImage is null)
+                {
+                    regionalMapToolStripMenuItem.Enabled = false;
+                    SetStatusBarMessage("Loading regional map...");
+                    await PreloadRegionalMapImageAsync();
+                    regionalMapImage = TryCreateRegionalMapDisplayImage(regionalMapPath)
+                        ?? LoadImageCopy(regionalMapPath);
+                }
+
+                _regionalMapImage?.Dispose();
+                _regionalMapImage = regionalMapImage;
+                ShowRegionalMapPanel();
+                _regionalMapTransitionPending = false;
+                loginInfoToolStripMenuItem.Enabled = true;
+                showPostTotalsToolStripMenuItem.Enabled = true;
+                UpdateRegionalMapMenuItem();
+                SetStatusBarMessage($"Regional map loaded: {RegionalMapFileName}.");
+                Invalidate();
+            }
+            catch (Exception ex)
+            {
+                _regionalMapActive = false;
+                _regionalMapTransitionPending = false;
+                _regionalMapImage?.Dispose();
+                _regionalMapImage = null;
+                UpdateRegionalMapMenuItem();
+                SetStatusBarMessage($"Regional map unavailable: {ex.Message}");
+                MessageBox.Show(
+                    this,
+                    ex.Message,
+                    "Regional Map Error",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Warning);
+            }
+        }
+
+        private void WhiteMarbleBackgroundTilingToolStripMenuItem_CheckedChanged(object? sender, EventArgs e)
+        {
+            ClearDiceRollsDisplayIfVisible();
+            EnableLoginInfoMenuItem();
+            EnableShowPostTotalsMenuItem();
+            UserPreferencesUtility.WhiteMarbleBackgroundTilingEnabled = whiteMarbleBackgroundTilingToolStripMenuItem.Checked;
+            UserPreferencesUtility.Save();
+            ApplyWhiteMarbleBackgroundTiling();
+        }
+
+        private void WhiteMarbleBackgroundTilingToolStripMenuItem_Click(object? sender, EventArgs e)
+        {
+            ClearDiceRollsDisplayIfVisible();
+            EnableLoginInfoMenuItem();
+            EnableShowPostTotalsMenuItem();
+            HideSearchPanel();
+        }
+
+        private void SkipHeroImageParadeAtStartupToolStripMenuItem_Click(object? sender, EventArgs e)
+        {
+            UserPreferencesUtility.SkipHeroImageParadeAtStartup = skipHeroImageParadeAtStartupToolStripMenuItem.Checked;
+            UserPreferencesUtility.Save();
+            SetStatusBarMessage(
+                UserPreferencesUtility.SkipHeroImageParadeAtStartup
+                    ? "Hero images will be skipped on the next startup."
+                    : "Hero images will play on the next startup.");
+        }
+
+        private void ShowSearchPanel()
+        {
+            UpdateSearchPanelBounds();
+            pnlSearch.Visible = true;
+            _searchResultsRequested = false;
+            UpdateSearchButtonEnabledState();
+            UpdateSearchResultsVisibility([]);
+            pnlSearch.BringToFront();
+            menuStrip.BringToFront();
+            statusStrip.BringToFront();
+            searchToolStripMenuItem.Enabled = false;
+            txtSearch.Focus();
+        }
+
+        private bool HideSearchPanel()
+        {
+            if (!pnlSearch.Visible)
+            {
+                return false;
+            }
+
+            pnlSearch.Visible = false;
+            _searchResultsRequested = false;
+            UpdateSearchResultsVisibility([]);
+            searchToolStripMenuItem.Enabled = true;
+            ClearPaintedFormSurface();
+            return true;
+        }
+
+        private void ClearPaintedFormSurface()
+        {
+            DisposeDiceRollsListBox();
+            _showLoginInfo = false;
+            _showWelcomeText = false;
+            _showHeroIntroText = false;
+            _showAttributionText = false;
+            Invalidate();
+            Update();
+        }
+
+        private void UpdateSearchPanelBounds()
+        {
+            pnlSearch.Bounds = new Rectangle(
+                10,
+                35,
+                Math.Max(0, ClientSize.Width - 30),
+                Math.Max(0, ClientSize.Height - 70));
+
+            CenterSearchControls();
+        }
+
+        private void CenterSearchControls()
+        {
+            const int controlSpacing = 16;
+            const int searchScopePanelWidthPadding = 10;
+            const int searchResultsPanelTopMargin = 8;
+            var totalWidth = lblSearchPrompt.Width + controlSpacing + txtSearch.Width + controlSpacing + btnSearch.Width;
+            var startX = Math.Max(0, (pnlSearch.ClientSize.Width - totalWidth) / 2);
+            var centerY = 40;
+            const int searchCharacterCountTopMargin = 8;
+            const int searchScopePanelTopMargin = 8;
+
+            lblSearchPrompt.Location = new Point(startX, centerY + (txtSearch.Height - lblSearchPrompt.Height) / 2);
+            txtSearch.Location = new Point(lblSearchPrompt.Right + controlSpacing, centerY);
+            btnSearch.Location = new Point(txtSearch.Right + controlSpacing, centerY - 1);
+            lblSearchCharacterCnt.Location = new Point(txtSearch.Left, txtSearch.Bottom + searchCharacterCountTopMargin);
+            pnlSearchScope.Location = new Point(txtSearch.Left, lblSearchCharacterCnt.Bottom + searchScopePanelTopMargin);
+            pnlSearchScope.Width = txtSearch.Width + searchScopePanelWidthPadding;
+            UpdateSearchScopePanelLayout();
+
+            var searchResultsTop = pnlSearchScope.Bottom + searchResultsPanelTopMargin;
+            pnlSearchResults.Width = (pnlSearch.ClientSize.Width * 3) / 4;
+            pnlSearchResults.Height = Math.Max(0, pnlSearch.ClientSize.Height - searchResultsTop - 12);
+            pnlSearchResults.Location = new Point(
+                Math.Max(0, (pnlSearch.ClientSize.Width - pnlSearchResults.Width) / 2),
+                searchResultsTop);
+            lstSearchResults.ColumnWidth = Math.Max(120, pnlSearchResults.ClientSize.Width / 3);
+        }
+
+        private void TxtSearch_TextChanged(object? sender, EventArgs e)
+        {
+            _searchResultsRequested = false;
+            UpdateSearchButtonEnabledState();
+            UpdateSearchResultsVisibility(GetSearchTerms(txtSearch.Text));
+        }
+
+        private async void BtnSearch_Click(object? sender, EventArgs e)
+        {
+            await PerformSearchAsync();
+        }
+
+        private async Task PerformSearchAsync()
+        {
+            var searchTerms = GetSearchTerms(txtSearch.Text);
+            lstSearchResults.Items.Clear();
+            _searchResultsRequested = true;
+            UpdateSearchResultsVisibility(searchTerms);
+
+            SetStatusBarMessage(
+                searchTerms.Length.ToString() + $" search term(s) entered by the user: {string.Join(", ", searchTerms)}");
+
+            var localIndexUnavailable = false;
+            var localMatchesFound = false;
+
+            for (var i = 0; i < searchTerms.Length; i++)
+            {
+                var searchOutcome = SearchIndexFileForTerm(searchTerms[i], i + 1, searchTerms.Length);
+                localMatchesFound |= searchOutcome == LocalIndexSearchOutcome.FoundMatches;
+                localIndexUnavailable |= searchOutcome == LocalIndexSearchOutcome.IndexUnavailable;
+            }
+
+            if (!localMatchesFound
+                && !localIndexUnavailable
+                && searchTerms.Length > 0
+                && _showLocalIndexMissPrompt(searchTerms) == DialogResult.Yes)
+            {
+                try
+                {
+                    SetStatusBarMessage("Searching online for matching URLs.");
+                    var onlineResults = await _onlineSearchProvider(searchTerms, CancellationToken.None);
+                    foreach (var url in onlineResults)
+                    {
+                        AddSearchResultUrl(url);
+                    }
+
+                    _showOnlineSearchCompletedMessage(searchTerms, onlineResults.Length);
+                }
+                catch (Exception ex)
+                {
+                    SetStatusBarMessage($"Online search unavailable: {ex.Message}");
+                }
+            }
+
+            lblSearchCharacterCnt.Visible = true;
+            lblSearchCharacterCnt.Text = $"Results found: {lstSearchResults.Items.Count}";
+            SetStatusBarMessage(
+                $"Search results: {lstSearchResults.Items.Count} URL{(lstSearchResults.Items.Count == 1 ? string.Empty : "s")} found.");
+        }
+
+        private LocalIndexSearchOutcome SearchIndexFileForTerm(string term, int searchTermNumber, int totalSearchTerms)
+        {
+            var indexPath = Path.Combine(AppContext.BaseDirectory, KeywordIndexFileName);
+            if (!File.Exists(indexPath))
+            {
+                SetStatusBarMessage($"Keyword index unavailable: {indexPath}");
+                return LocalIndexSearchOutcome.IndexUnavailable;
+            }
+
+            try
+            {
+                SetStatusBarMessage(
+                    $"searching against {KeywordIndexFileName} for search term {searchTermNumber} of {totalSearchTerms}: '{term}'");
+                using var document = JsonDocument.Parse(ReadTextFileShared(indexPath));
+                if (!document.RootElement.TryGetProperty("words", out var wordsElement)
+                    || wordsElement.ValueKind != JsonValueKind.Object)
+                {
+                    return LocalIndexSearchOutcome.NotFound;
+                }
+
+                var keywordEntry = FindKeywordEntry(wordsElement, term);
+
+                if (!keywordEntry.HasValue
+                    || !keywordEntry.Value.TryGetProperty("matches", out var matchesElement)
+                    || matchesElement.ValueKind != JsonValueKind.Array)
+                {
+                    return LocalIndexSearchOutcome.NotFound;
+                }
+
+                var foundMatch = false;
+
+                foreach (var matchElement in matchesElement.EnumerateArray())
+                {
+                    if (!matchElement.TryGetProperty("url", out var urlElement))
+                    {
+                        continue;
+                    }
+
+                    var url = urlElement.GetString();
+                    if (string.IsNullOrWhiteSpace(url))
+                    {
+                        continue;
+                    }
+
+                    foundMatch = true;
+                    AddSearchResultUrl(url);
+                }
+
+                return foundMatch
+                    ? LocalIndexSearchOutcome.FoundMatches
+                    : LocalIndexSearchOutcome.NotFound;
+            }
+            catch (Exception ex)
+            {
+                SetStatusBarMessage($"Keyword index unavailable: {ex.Message}");
+                return LocalIndexSearchOutcome.IndexUnavailable;
+            }
+        }
+
+        private static JsonElement? FindKeywordEntry(JsonElement wordsElement, string term)
+        {
+            if (TryFindKeywordEntry(wordsElement, term, out var keywordEntry))
+            {
+                return keywordEntry;
+            }
+
+            var prefixedTerm = "The " + term;
+            return TryFindKeywordEntry(wordsElement, prefixedTerm, out keywordEntry)
+                ? keywordEntry
+                : null;
+        }
+
+        private static bool TryFindKeywordEntry(JsonElement wordsElement, string term, out JsonElement keywordEntry)
+        {
+            foreach (var wordProperty in wordsElement.EnumerateObject())
+            {
+                if (!string.Equals(wordProperty.Name, term, StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
+                keywordEntry = wordProperty.Value;
+                return true;
+            }
+
+            keywordEntry = default;
+            return false;
+        }
+
+        private static string ReadTextFileShared(string path)
+        {
+            using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+            using var reader = new StreamReader(stream);
+            return reader.ReadToEnd();
+        }
+
+        private DialogResult ShowLocalIndexMissPrompt(string[] searchTerms)
+        {
+            var promptPrefix = searchTerms.Length == 1
+                ? $"The term '{searchTerms[0]}' was not found in the local index."
+                : $"These terms were not found in the local index: {string.Join(", ", searchTerms)}.";
+
+            return MessageBox.Show(
+                this,
+                $"{promptPrefix}{Environment.NewLine}{Environment.NewLine}Would you like to search online instead?",
+                "Search Online",
+                MessageBoxButtons.YesNo,
+                MessageBoxIcon.Question,
+                MessageBoxDefaultButton.Button2);
+        }
+
+        private void ShowOnlineSearchCompletedMessage(string[] searchTerms, int resultCount)
+        {
+            var subject = searchTerms.Length == 1
+                ? $"Online search for '{searchTerms[0]}' has completed."
+                : $"Online search for {searchTerms.Length} terms has completed.";
+
+            MessageBox.Show(
+                this,
+                $"{subject}{Environment.NewLine}{Environment.NewLine}Results found: {resultCount}",
+                "Online Search Complete",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Information,
+                MessageBoxDefaultButton.Button1);
+        }
+
+        private async Task<string[]> SearchOnlineForTermsAsync(string[] searchTerms, CancellationToken cancellationToken)
+        {
+            var results = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+            if (ShouldSearchRpolOnline())
+            {
+                foreach (var url in await SearchRpolOnlineAsync(searchTerms, cancellationToken))
+                {
+                    results.Add(url);
+                }
+            }
+
+            if (ShouldSearchObsidianOnline())
+            {
+                foreach (var url in await SearchObsidianOnlineAsync(searchTerms, cancellationToken))
+                {
+                    results.Add(url);
+                }
+            }
+
+            return results.ToArray();
+        }
+
+        private async Task<string[]> SearchRpolOnlineAsync(string[] searchTerms, CancellationToken cancellationToken)
+        {
+            var hyperlinks = await HtmlUtility.GetRpolGameHyperlinksAsync(cancellationToken);
+
+            return hyperlinks
+                .Where(hyperlink => searchTerms.Any(term => SearchTextMatches(hyperlink.Text, term) || SearchTextMatches(hyperlink.Url, term)))
+                .Select(hyperlink => NormalizeSearchResultUrl(hyperlink.Url))
+                .Where(url => !string.IsNullOrWhiteSpace(url))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToArray();
+        }
+
+        private async Task<string[]> SearchObsidianOnlineAsync(string[] searchTerms, CancellationToken cancellationToken)
+        {
+            var tempSitemapPath = Path.Combine(Path.GetTempPath(), $"player-assistant-sitemap-{Guid.NewGuid():N}.xml");
+
+            try
+            {
+                await SitemapUtility.DownloadSitemapAsync(SitemapUrl, tempSitemapPath, cancellationToken);
+                var urls = await SitemapUtility.ReadUrlsFromSitemapAsync(tempSitemapPath, cancellationToken);
+
+                return urls
+                    .Where(url => searchTerms.Any(term => SearchTextMatches(url, term)))
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .ToArray();
+            }
+            finally
+            {
+                if (File.Exists(tempSitemapPath))
+                {
+                    File.Delete(tempSitemapPath);
+                }
+            }
+        }
+
+        private static bool SearchTextMatches(string candidate, string term)
+        {
+            if (string.IsNullOrWhiteSpace(candidate) || string.IsNullOrWhiteSpace(term))
+            {
+                return false;
+            }
+
+            var normalizedCandidate = Uri.UnescapeDataString(candidate)
+                .Replace('+', ' ')
+                .Replace('-', ' ');
+            var normalizedTerm = term.Trim();
+
+            return normalizedCandidate.Contains(normalizedTerm, StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static string NormalizeSearchResultUrl(string url)
+        {
+            if (!Uri.TryCreate(url, UriKind.Absolute, out var uri))
+            {
+                return url;
+            }
+
+            var isRpolThreadUrl = uri.AbsolutePath.EndsWith("/display.cgi", StringComparison.OrdinalIgnoreCase)
+                || uri.AbsolutePath.EndsWith("display.cgi", StringComparison.OrdinalIgnoreCase);
+
+            return isRpolThreadUrl
+                ? RpolThreadPostUtility.GetShowAllThreadUrl(uri.ToString())
+                : uri.ToString();
+        }
+
+        private void AddSearchResultUrl(string url)
+        {
+            if (lstSearchResults.Items.Cast<object>()
+                .Any(item => string.Equals(item?.ToString(), url, StringComparison.OrdinalIgnoreCase)))
+            {
+                return;
+            }
+
+            lstSearchResults.Items.Add(url);
+            SetStatusBarMessage($"Search results: {lstSearchResults.Items.Count} URL{(lstSearchResults.Items.Count == 1 ? string.Empty : "s")} found.");
+        }
+
+        private bool ShouldSearchRpolOnline()
+        {
+            return rdoSearchDefault.Checked || rdoRPOL.Checked;
+        }
+
+        private bool ShouldSearchObsidianOnline()
+        {
+            return rdoSearchDefault.Checked || rdoObsidian.Checked;
+        }
+
+        private void UpdateSearchResultsVisibility(string[] searchResults)
+        {
+            if (pnlSearchResults.Parent != pnlSearch)
+            {
+                pnlSearch.Controls.Add(pnlSearchResults);
+            }
+
+            var showSearchResults = _searchResultsRequested && searchResults.Length > 0;
+            pnlSearchResults.Visible = showSearchResults;
+            lstSearchResults.Visible = showSearchResults;
+
+            if (!showSearchResults)
+            {
+                return;
+            }
+
+            pnlSearchResults.BringToFront();
+            lstSearchResults.BringToFront();
+        }
+
+        private void LstSearchResults_MouseClick(object? sender, MouseEventArgs e)
+        {
+            var selectedItem = lstSearchResults.SelectedItem?.ToString();
+            if (string.IsNullOrWhiteSpace(selectedItem))
+            {
+                return;
+            }
+
+            if (!Uri.TryCreate(selectedItem, UriKind.Absolute, out var uri)
+                || (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps))
+            {
+                return;
+            }
+
+            var result = MessageBox.Show(
+                this,
+                $"Would you like to open this URL in a browser tab?{Environment.NewLine}{selectedItem}",
+                "Open Search Result",
+                MessageBoxButtons.YesNo,
+                MessageBoxIcon.Question,
+                MessageBoxDefaultButton.Button2);
+            if (result != DialogResult.Yes)
+            {
+                return;
+            }
+
+            try
+            {
+                Process.Start(new ProcessStartInfo(selectedItem)
+                {
+                    UseShellExecute = true
+                });
+            }
+            catch (Exception ex)
+            {
+                SetStatusBarMessage($"Unable to open URL: {ex.Message}");
+            }
+        }
+
+        private void TxtSearch_KeyPress(object? sender, KeyPressEventArgs e)
+        {
+            if (e.KeyChar != ' ')
+            {
+                return;
+            }
+
+            var selectionStart = txtSearch.SelectionStart;
+            var selectionLength = txtSearch.SelectionLength;
+            var searchText = txtSearch.Text;
+            var precedingCharacterIsSpace = selectionStart > 0 && searchText[selectionStart - 1] == ' ';
+            var followingCharacterIndex = selectionStart + selectionLength;
+            var followingCharacterIsSpace = followingCharacterIndex < searchText.Length && searchText[followingCharacterIndex] == ' ';
+
+            if (precedingCharacterIsSpace || followingCharacterIsSpace)
+            {
+                e.Handled = true;
+            }
+        }
+
+        private void UpdateSearchButtonEnabledState()
+        {
+            var searchText = txtSearch.Text;
+            var hasContiguousNonSpacePair = HasContiguousNonSpacePair(searchText);
+            var hasAlphanumericCharacter = searchText.Any(char.IsLetterOrDigit);
+
+            btnSearch.Enabled = hasContiguousNonSpacePair && hasAlphanumericCharacter;
+            lblSearchCharacterCnt.Visible = hasContiguousNonSpacePair;
+            lblSearchCharacterCnt.Text = $"Characters entered: {searchText.Length}";
+            pnlSearchScope.Visible = btnSearch.Enabled;
+        }
+
+        private static bool HasContiguousNonSpacePair(string searchText)
+        {
+            for (var i = 1; i < searchText.Length; i++)
+            {
+                if (searchText[i - 1] != ' ' && searchText[i] != ' ')
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        private static string[] GetSearchTerms(string searchText)
+        {
+            var searchTerms = new List<string>();
+            var currentTerm = new List<char>();
+            var insideQuotes = false;
+
+            foreach (var character in searchText)
+            {
+                if (character == '"')
+                {
+                    insideQuotes = !insideQuotes;
+                    continue;
+                }
+
+                if (char.IsWhiteSpace(character) && !insideQuotes)
+                {
+                    AddSearchTerm(currentTerm, searchTerms);
+                    continue;
+                }
+
+                currentTerm.Add(character);
+            }
+
+            AddSearchTerm(currentTerm, searchTerms);
+
+            return searchTerms
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToArray();
+        }
+
+        private static void AddSearchTerm(List<char> currentTerm, List<string> searchTerms)
+        {
+            if (currentTerm.Count == 0)
+            {
+                return;
+            }
+
+            var term = new string(currentTerm.ToArray()).Trim();
+            currentTerm.Clear();
+
+            if (term.Length == 0)
+            {
+                return;
+            }
+
+            searchTerms.Add(term);
+        }
+
+        private void PnlSearch_Paint(object? sender, PaintEventArgs e)
+        {
+            using var pen = new Pen(Color.LightGray);
+            var borderBounds = pnlSearch.ClientRectangle;
+            borderBounds.Width = Math.Max(0, borderBounds.Width - 1);
+            borderBounds.Height = Math.Max(0, borderBounds.Height - 1);
+            e.Graphics.DrawRectangle(pen, borderBounds);
+        }
+
+        private void PnlSearchScope_Paint(object? sender, PaintEventArgs e)
+        {
+            e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
+            var panelBounds = pnlSearchScope.ClientRectangle;
+            panelBounds.Width = Math.Max(0, panelBounds.Width - 1);
+            panelBounds.Height = Math.Max(0, panelBounds.Height - 1);
+
+            using var backgroundBrush = new SolidBrush(pnlSearchScope.BackColor);
+            using var borderPen = new Pen(Color.Silver);
+            using var roundedPath = CreateRoundedRectanglePath(panelBounds, 12);
+            e.Graphics.FillPath(backgroundBrush, roundedPath);
+            e.Graphics.DrawPath(borderPen, roundedPath);
+        }
+
+        private void PnlSearchScope_Resize(object? sender, EventArgs e)
+        {
+            UpdateSearchScopePanelLayout();
+        }
+
+        private void UpdateSearchScopePanelLayout()
+        {
+            const int radioButtonSpacing = 18;
+            const int panelCornerRadius = 12;
+            var radioButtons = new[] { rdoSearchDefault, rdoRPOL, rdoObsidian };
+            var totalWidth = radioButtons.Sum(radioButton => radioButton.PreferredSize.Width)
+                + (radioButtonSpacing * (radioButtons.Length - 1));
+            var startX = Math.Max(12, (pnlSearchScope.ClientSize.Width - totalWidth) / 2);
+            var maxHeight = radioButtons.Max(radioButton => radioButton.PreferredSize.Height);
+            var startY = Math.Max(0, (pnlSearchScope.ClientSize.Height - maxHeight) / 2);
+            var currentX = startX;
+
+            foreach (var radioButton in radioButtons)
+            {
+                radioButton.Location = new Point(currentX, startY);
+                currentX += radioButton.PreferredSize.Width + radioButtonSpacing;
+            }
+
+            pnlSearchScope.Region?.Dispose();
+            using var roundedPath = CreateRoundedRectanglePath(pnlSearchScope.ClientRectangle, panelCornerRadius);
+            pnlSearchScope.Region = new Region(roundedPath);
+            pnlSearchScope.Invalidate();
+        }
+
+        private static GraphicsPath CreateRoundedRectanglePath(Rectangle bounds, int cornerRadius)
+        {
+            var path = new GraphicsPath();
+
+            if (bounds.Width <= 0 || bounds.Height <= 0)
+            {
+                return path;
+            }
+
+            var diameter = Math.Min(cornerRadius * 2, Math.Min(bounds.Width, bounds.Height));
+            if (diameter <= 0)
+            {
+                path.AddRectangle(bounds);
+                return path;
+            }
+
+            path.AddArc(bounds.X, bounds.Y, diameter, diameter, 180, 90);
+            path.AddArc(bounds.Right - diameter, bounds.Y, diameter, diameter, 270, 90);
+            path.AddArc(bounds.Right - diameter, bounds.Bottom - diameter, diameter, diameter, 0, 90);
+            path.AddArc(bounds.X, bounds.Bottom - diameter, diameter, diameter, 90, 90);
+            path.CloseFigure();
+            return path;
+        }
+
+        private void ApplyWhiteMarbleBackgroundTiling()
+        {
+            if (!whiteMarbleBackgroundTilingToolStripMenuItem.Checked)
+            {
+                SetBackgroundImage(LoadDragonBackgroundImage(), ImageLayout.Center);
+                return;
+            }
+
+            SetBackgroundImage(LoadBackgroundImage(), ImageLayout.Tile);
+        }
+
+        private void SetBackgroundImage(Image? image, ImageLayout layout)
+        {
+            var previousImage = BackgroundImage;
+
+            BackgroundImage = image;
+            BackgroundImageLayout = layout;
+            previousImage?.Dispose();
+            Invalidate();
+        }
+
+        private async Task<string> RefreshLoginInfoJsonAsync(CancellationToken cancellationToken = default)
+        {
+            var tempDirectory = Path.Combine(AppContext.BaseDirectory, TempDirectoryName);
+            var loginInfoPath = GetLoginInfoPath();
+            var tempLoginInfoPath = Path.Combine(tempDirectory, TheCastLoginInfoFileName);
+            var oocPostsDirectory = Path.GetDirectoryName(loginInfoPath)
+                ?? Path.Combine(AppContext.BaseDirectory, PostsDirectoryName, OutOfCharacterPostsDirectoryName);
+
+            Directory.CreateDirectory(oocPostsDirectory);
+            Directory.CreateDirectory(tempDirectory);
+
+            var tempCastDownload = await GameForumUtility.DownloadTheCastHtmlAsync(
+                AppSettingsUtility.TheCastUrl,
+                tempDirectory,
+                forceDownload: true,
+                cancellationToken);
+            await GameForumUtility.WriteTheCastLoginInfoJsonAsync(
+                tempCastDownload.FilePath,
+                tempLoginInfoPath,
+                cancellationToken);
+
+            PromoteFileIfChanged(tempLoginInfoPath, loginInfoPath);
+
+            return loginInfoPath;
+        }
+
+        private async Task RefreshLoginInfoInBackgroundAsync()
+        {
+            if (_loginInfoRefreshStarted)
+            {
+                return;
+            }
+
+            _loginInfoRefreshStarted = true;
+            SetStatusBarMessage(_loginInfoRefreshTarget == LoginInfoDisplayMode.PostTotals
+                ? _showPostTotals
+                    ? $"Post totals: {_postTotalsSummary?.Rows.Count ?? 0} cached rows loaded; refreshing..."
+                    : "Refreshing post totals..."
+                : _showLoginInfo
+                    ? $"Login info: {_loginInfoRows.Length} cached rows loaded; refreshing..."
+                    : "Refreshing login info...");
+
+            try
+            {
+                var loginInfoPath = await RefreshLoginInfoJsonAsync();
+                var loginInfoRows = await LoadLoginInfoJsonAsync(loginInfoPath);
+                if (_regionalMapActive || _regionalMapTransitionPending)
+                {
+                    _loginInfoRows = loginInfoRows;
+                    return;
+                }
+
+                if (_loginInfoRefreshTarget == LoginInfoDisplayMode.PostTotals || _showPostTotals)
+                {
+                    var theCastHtmlPath = GetTheCastHtmlPath();
+                    ShowPostTotalsRows(
+                        File.Exists(theCastHtmlPath)
+                            ? LoadTheCastLoginInfoFromHtml(theCastHtmlPath)
+                            : loginInfoRows,
+                        "refreshed");
+                    return;
+                }
+
+                ShowLoginInfoRows(loginInfoRows, "refreshed");
+            }
+            catch (Exception ex)
+            {
+                loginInfoToolStripMenuItem.Enabled = true;
+                showPostTotalsToolStripMenuItem.Enabled = true;
+                SetStatusBarMessage(_loginInfoRefreshTarget == LoginInfoDisplayMode.PostTotals
+                    ? $"Post totals unavailable: {ex.Message}"
+                    : $"Login info unavailable: {ex.Message}");
+                MessageBox.Show(
+                    this,
+                    ex.Message,
+                    _loginInfoRefreshTarget == LoginInfoDisplayMode.PostTotals ? "Post Totals Error" : "Login Info Error",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Warning);
+            }
+            finally
+            {
+                _loginInfoRefreshStarted = false;
+            }
+        }
+
+        private void ShowLoginInfoRows(TheCastLoginInfo[] loginInfoRows, string source)
+        {
+            _loginInfoRows = loginInfoRows;
+            ClearDisplaySurfaceForLoginInfo();
+            _showLoginInfo = true;
+            _showPostTotals = false;
+            _postTotalsSummary = null;
+            SetStatusBarMessage($"Login info: {_loginInfoRows.Length} {source} rows loaded.");
+            Invalidate();
+        }
+
+        private void ShowPostTotalsRows(TheCastLoginInfo[] loginInfoRows, string source)
+        {
+            _loginInfoRows = loginInfoRows;
+            _postTotalsSummary = PostTotalsUtility.BuildSummary(loginInfoRows, GetReleaseDirectory());
+            ClearDisplaySurfaceForLoginInfo();
+            _showLoginInfo = false;
+            _showPostTotals = true;
+            SetStatusBarMessage($"Post totals: {_postTotalsSummary.Rows.Count} {source} rows loaded.");
+            Invalidate();
+        }
+
+        private static string GetLoginInfoPath()
+        {
+            return Path.Combine(
+                AppContext.BaseDirectory,
+                PostsDirectoryName,
+                OutOfCharacterPostsDirectoryName,
+                TheCastLoginInfoFileName);
+        }
+
+        private static string GetTheCastHtmlPath()
+        {
+            return Path.Combine(
+                AppContext.BaseDirectory,
+                PostsDirectoryName,
+                OutOfCharacterPostsDirectoryName,
+                "the-cast.html");
+        }
+
+        private static string GetDiceRollsHtmlPath()
+        {
+            return Path.Combine(
+                AppContext.BaseDirectory,
+                PostsDirectoryName,
+                OutOfCharacterPostsDirectoryName,
+                DiceRollsHtmlFileName);
+        }
+
+        private static bool HasDiceRollEntries(string diceRollsPath)
+        {
+            return TryLoadDiceRollEntries(diceRollsPath, out var entries) && entries.Length > 0;
+        }
+
+        private static bool TryLoadDiceRollEntries(string diceRollsPath, out DieRollEntry[] entries)
+        {
+            entries = [];
+            if (!File.Exists(diceRollsPath))
+            {
+                return false;
+            }
+
+            try
+            {
+                var html = File.ReadAllText(diceRollsPath);
+                entries = GameForumUtility.ExtractDieRollEntries(html);
+                return true;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        private static TheCastLoginInfo[] LoadLoginInfoJson(string loginInfoPath)
+        {
+            using var stream = File.OpenRead(loginInfoPath);
+            return JsonSerializer.Deserialize<TheCastLoginInfo[]>(stream) ?? [];
+        }
+
+        private static TheCastLoginInfo[] LoadTheCastLoginInfoFromHtml(string theCastHtmlPath)
+        {
+            var html = File.ReadAllText(theCastHtmlPath);
+            return GameForumUtility.GetTheCastLoginInfoFromHtml(html);
+        }
+
+        private static async Task<TheCastLoginInfo[]> LoadLoginInfoJsonAsync(
+            string loginInfoPath,
+            CancellationToken cancellationToken = default)
+        {
+            await using var stream = File.OpenRead(loginInfoPath);
+            return await JsonSerializer.DeserializeAsync<TheCastLoginInfo[]>(stream, cancellationToken: cancellationToken)
+                ?? [];
+        }
+
+        private void ClearDisplaySurfaceForLoginInfo()
+        {
+            ClearMainDisplaySurface();
+            _regionalMapActive = false;
+            _regionalMapImage?.Dispose();
+            _regionalMapImage = null;
+            HideRegionalMapPanel();
+            UpdateRegionalMapMenuItem();
+        }
+
+        private void ClearDisplaySurfaceForRegionalMap()
+        {
+            ClearMainDisplaySurface();
+            _showLoginInfo = false;
+            _showPostTotals = false;
+        }
+
+        private void ClearMainDisplaySurface()
+        {
+            StopHeroImageShowcase();
+            ClearHeroImagePictureBox();
+            DisposeDiceRollsListBox();
+            _showWelcomeText = false;
+            _showHeroIntroText = false;
+            _showAttributionText = false;
+            _regionalMapActive = false;
+            _regionalMapImage?.Dispose();
+            _regionalMapImage = null;
+            HideRegionalMapPanel();
+
+            _welcomeTimer?.Stop();
+            _welcomeTimer?.Dispose();
+            _welcomeTimer = null;
+            _attributionTimer?.Stop();
+            _attributionTimer?.Dispose();
+            _attributionTimer = null;
+
+            SetBackgroundImage(null, ImageLayout.None);
+            BackColor = Color.White;
+            menuStrip.BringToFront();
+            statusStrip.BringToFront();
+        }
+
+        private void ClearDiceRollsDisplayIfVisible()
+        {
+            if (_diceRollsListBox is null)
+            {
+                return;
+            }
+
+            ClearDisplaySurfaceForRegionalMap();
+            _postTotalsSummary = null;
+            Invalidate();
+            Update();
+        }
+
+        private void ShowDiceRollEntries(IReadOnlyCollection<DieRollEntry> entries)
+        {
+            DisposeDiceRollsListBox();
+
+            var listBox = new ListBox
+            {
+                HorizontalScrollbar = true,
+                IntegralHeight = false
+            };
+            listBox.Items.AddRange(entries.Select(entry => entry.Line).Cast<object>().ToArray());
+
+            _diceRollsListBox = listBox;
+            Controls.Add(listBox);
+            UpdateDiceRollsListBoxBounds();
+            listBox.BringToFront();
+            menuStrip.BringToFront();
+            statusStrip.BringToFront();
+            SetStatusBarMessage($"Dice rolls: {listBox.Items.Count} loaded.");
+        }
+
+        private void UpdateDiceRollsListBoxBounds()
+        {
+            if (_diceRollsListBox is null)
+            {
+                return;
+            }
+
+            _diceRollsListBox.Bounds = new Rectangle(
+                10,
+                menuStrip.Bottom + 10,
+                Math.Max(0, ClientSize.Width - 20),
+                Math.Max(0, statusStrip.Top - menuStrip.Bottom - 20));
+        }
+
+        private void DisposeDiceRollsListBox()
+        {
+            if (_diceRollsListBox is null)
+            {
+                return;
+            }
+
+            Controls.Remove(_diceRollsListBox);
+            _diceRollsListBox.Dispose();
+            _diceRollsListBox = null;
+        }
+
+        private async Task LoadGameForumChapterPrefixesAsync()
+        {
+            GameForumChapterDownload[] chapterDownloads = [];
+            GameForumPostDownload[] asideDownloads = [];
+            GameForumPostDownload[] allOutOfCharacterDownloads = [];
+
+            try
+            {
+                SetStatusBarMessage("Reading game forum links...");
+
+                var hyperlinks = await HtmlUtility.GetRpolGameHyperlinksAsync();
+                var icPostsDirectory = Path.Combine(AppContext.BaseDirectory, PostsDirectoryName, InCharacterPostsDirectoryName);
+                chapterDownloads = await TryDownloadChaptersAsync(hyperlinks, icPostsDirectory);
+                var asidePostsDirectory = Path.Combine(icPostsDirectory, AsidePostsDirectoryName);
+                asideDownloads = await TryDownloadAsidesAsync(hyperlinks, asidePostsDirectory);
+
+                var oocPostsDirectory = Path.Combine(AppContext.BaseDirectory, PostsDirectoryName, OutOfCharacterPostsDirectoryName);
+                allOutOfCharacterDownloads = await TryDownloadOutOfCharacterAsync(hyperlinks, oocPostsDirectory);
+            }
+            catch (Exception ex)
+            {
+                await AppendStartupErrorLogAsync("game forum startup", ex);
+                SetStatusBarMessage($"Game forum links unavailable: {ex.Message}");
+                return;
+            }
+
+            SetStatusBarMessage(
+                $"Game forum links: {FormatGameForumDownloadStatus("IC", chapterDownloads)}; {FormatGameForumDownloadStatus("Aside", asideDownloads)}; {FormatGameForumDownloadStatus("OOC", allOutOfCharacterDownloads)}.");
+            UpdateShowMenuItemsForHeroImageShowcase();
+        }
+
+        private static string FormatGameForumDownloadStatus<TDownload>(string label, IReadOnlyCollection<TDownload> downloads)
+            where TDownload : notnull
+        {
+            var refreshedCount = downloads.Count(download => GetGameForumDownloadStatus(download).Downloaded);
+            var failedCount = downloads.Count(download => !string.IsNullOrWhiteSpace(GetGameForumDownloadStatus(download).ErrorMessage));
+            var currentCount = downloads.Count - refreshedCount - failedCount;
+
+            return $"{label}: {downloads.Count} links, {refreshedCount} refreshed, {currentCount} already current, {failedCount} failed";
+        }
+
+        private static (bool Downloaded, string? ErrorMessage) GetGameForumDownloadStatus<TDownload>(TDownload download)
+        {
+            return download switch
+            {
+                GameForumChapterDownload chapterDownload => (chapterDownload.Downloaded, chapterDownload.ErrorMessage),
+                GameForumPostDownload postDownload => (postDownload.Downloaded, postDownload.ErrorMessage),
+                _ => throw new ArgumentException("Unsupported game forum download result.", nameof(download))
+            };
+        }
+
+        private async Task<GameForumChapterDownload[]> TryDownloadChaptersAsync(
+            Hyperlink[] hyperlinks,
+            string icPostsDirectory)
+        {
+            try
+            {
+                var chapterDownloads = await GameForumUtility.DownloadChapterHtmlAsync(hyperlinks, icPostsDirectory);
+                var chapterPrefixesPath = Path.Combine(AppContext.BaseDirectory, GameForumChapterPrefixesFileName);
+                await File.WriteAllLinesAsync(
+                    chapterPrefixesPath,
+                    chapterDownloads.Select(download => download.Prefix));
+
+                var chapterDownloadsPath = Path.Combine(AppContext.BaseDirectory, GameForumChapterDownloadsFileName);
+                await WriteDownloadManifestAsync(
+                    chapterDownloadsPath,
+                    chapterDownloads.Select(download =>
+                        $"{download.Prefix}\t{GetManifestStatus(download.Downloaded, download.ErrorMessage)}\t{download.FilePath}\t{download.ErrorMessage}"));
+
+                return chapterDownloads;
+            }
+            catch (Exception ex)
+            {
+                await AppendStartupErrorLogAsync("chapter downloads", ex);
+                return [];
+            }
+        }
+
+        private async Task<GameForumPostDownload[]> TryDownloadAsidesAsync(
+            Hyperlink[] hyperlinks,
+            string asidePostsDirectory)
+        {
+            try
+            {
+                var asideDownloads = await GameForumUtility.DownloadAsideHtmlAsync(hyperlinks, asidePostsDirectory);
+                var asideDownloadsPath = Path.Combine(AppContext.BaseDirectory, GameForumAsideDownloadsFileName);
+                await WriteDownloadManifestAsync(
+                    asideDownloadsPath,
+                    asideDownloads.Select(download =>
+                        $"{download.LinkText}\t{GetManifestStatus(download.Downloaded, download.ErrorMessage)}\t{download.FilePath}\t{download.ErrorMessage}"));
+
+                return asideDownloads;
+            }
+            catch (Exception ex)
+            {
+                await AppendStartupErrorLogAsync("aside downloads", ex);
+                return [];
+            }
+        }
+
+        private async Task<GameForumPostDownload[]> TryDownloadOutOfCharacterAsync(
+            Hyperlink[] hyperlinks,
+            string oocPostsDirectory)
+        {
+            var manifestPath = Path.Combine(AppContext.BaseDirectory, GameForumOutOfCharacterDownloadsFileName);
+            var allDownloads = new List<GameForumPostDownload>();
+
+            try
+            {
+                var outOfCharacterDownloads = await GameForumUtility.DownloadOutOfCharacterHtmlAsync(hyperlinks, oocPostsDirectory);
+                allDownloads.AddRange(outOfCharacterDownloads);
+                await WriteOutOfCharacterDownloadsManifestAsync(manifestPath, allDownloads);
+            }
+            catch (Exception ex)
+            {
+                await AppendStartupErrorLogAsync("ooc thread downloads", ex);
+            }
+
+            try
+            {
+                var houseRulesDownload = await GameForumUtility.DownloadHouseRulesHtmlAsync(hyperlinks, oocPostsDirectory);
+                if (houseRulesDownload is not null)
+                {
+                    allDownloads.Add(houseRulesDownload);
+                    await WriteOutOfCharacterDownloadsManifestAsync(manifestPath, allDownloads);
+                }
+            }
+            catch (Exception ex)
+            {
+                await AppendStartupErrorLogAsync("house rules download", ex);
+            }
+
+            try
+            {
+                var gameIntroDownload = await GameForumUtility.DownloadGameIntroHtmlAsync(AppSettingsUtility.GameIntroUrl, oocPostsDirectory);
+                allDownloads.Add(gameIntroDownload);
+                await WriteOutOfCharacterDownloadsManifestAsync(manifestPath, allDownloads);
+            }
+            catch (Exception ex)
+            {
+                await AppendStartupErrorLogAsync("game intro download", ex);
+            }
+
+            GameForumPostDownload? theCastDownload = null;
+            try
+            {
+                theCastDownload = await GameForumUtility.DownloadTheCastHtmlAsync(AppSettingsUtility.TheCastUrl, oocPostsDirectory);
+                allDownloads.Add(theCastDownload);
+                await WriteOutOfCharacterDownloadsManifestAsync(manifestPath, allDownloads);
+            }
+            catch (Exception ex)
+            {
+                await AppendStartupErrorLogAsync("the cast download", ex);
+            }
+
+            try
+            {
+                var dieRollsDownload = await GameForumUtility.DownloadDieRollsHtmlAsync(hyperlinks, oocPostsDirectory);
+                allDownloads.Add(dieRollsDownload);
+                await WriteOutOfCharacterDownloadsManifestAsync(manifestPath, allDownloads);
+            }
+            catch (Exception ex)
+            {
+                await AppendStartupErrorLogAsync("die rolls download", ex);
+            }
+
+            if (theCastDownload is not null &&
+                string.IsNullOrWhiteSpace(theCastDownload.ErrorMessage) &&
+                File.Exists(theCastDownload.FilePath))
+            {
+                try
+                {
+                    var theCastLoginInfoPath = Path.Combine(oocPostsDirectory, TheCastLoginInfoFileName);
+                    await GameForumUtility.WriteTheCastLoginInfoJsonAsync(theCastDownload.FilePath, theCastLoginInfoPath);
+                }
+                catch (Exception ex)
+                {
+                    await AppendStartupErrorLogAsync("the cast login info export", ex);
+                }
+            }
+
+            await WriteOutOfCharacterDownloadsManifestAsync(manifestPath, allDownloads);
+            return allDownloads.ToArray();
+        }
+
+        private static async Task WriteOutOfCharacterDownloadsManifestAsync(
+            string manifestPath,
+            IReadOnlyCollection<GameForumPostDownload> downloads)
+        {
+            await WriteDownloadManifestAsync(
+                manifestPath,
+                downloads.Select(download =>
+                    $"{download.LinkText}\t{GetManifestStatus(download.Downloaded, download.ErrorMessage)}\t{download.FilePath}\t{download.ErrorMessage}"));
+        }
+
+        private static Task WriteDownloadManifestAsync(
+            string outputPath,
+            IEnumerable<string> lines)
+        {
+            return File.WriteAllLinesAsync(outputPath, lines);
+        }
+
+        internal static string GetManifestStatus(bool downloaded, string? errorMessage)
+        {
+            return downloaded
+                ? "downloaded"
+                : string.IsNullOrWhiteSpace(errorMessage)
+                    ? "skipped"
+                    : "failed";
+        }
+
+        internal static string FormatStartupErrorLogEntry(string phase, Exception ex)
+        {
+            return
+                $"""
+                [{DateTimeOffset.Now:O}] {phase}
+                {ex}
+
+                """;
+        }
+
+        private static Task AppendStartupErrorLogAsync(string phase, Exception ex)
+        {
+            var logPath = Path.Combine(AppContext.BaseDirectory, StartupErrorLogFileName);
+            return File.AppendAllTextAsync(logPath, FormatStartupErrorLogEntry(phase, ex));
+        }
+
+        private async Task UpdatePlayerCharacterListingAsync()
+        {
+            try
+            {
+                var pcsDirectory = EnsurePlayerCharacterDirectories();
+                var cachedListingMarkdownPath = PlayerCharacterAssetUtility.GetPlayerCharactersListingMarkdownCachePath(pcsDirectory);
+
+                _playerCharacterListingHtml = await HtmlUtility.GetHtmlFromUrlAsync(PlayerCharactersListingUrl);
+                _playerCharacterListingMarkdown = await Task.Run(() => MarkdownUtility.GetMarkdownFromURL(PlayerCharactersListingUrl));
+
+                if (IsMarkdownFetchFailure(_playerCharacterListingMarkdown))
+                {
+                    throw new InvalidOperationException($"Markdown could not be fetched from {PlayerCharactersListingUrl}.");
+                }
+
+                await File.WriteAllTextAsync(cachedListingMarkdownPath, _playerCharacterListingMarkdown);
+
+                _playerCharacterImageUris = MarkdownUtility.GetImageUrisFromMarkdown(_playerCharacterListingMarkdown, PlayerCharactersListingUrl);
+                _playerCharacterImageFileNames = MarkdownUtility.GetImageFileNamesFromMarkdown(_playerCharacterListingMarkdown);
+                _playerCharacterHtmlImageUris = HtmlUtility.GetImageUrisFromHtml(_playerCharacterListingHtml, PlayerCharactersListingUrl);
+                var imagePathsByFileName = await ObsidianPublishUtility.GetAttachmentImagePathsByFileNameAsync(PlayerCharactersListingUrl);
+                _playerCharacterResolvedImagePaths = _playerCharacterImageFileNames
+                    .Select(fileName => imagePathsByFileName.TryGetValue(fileName, out var imagePath)
+                        ? $"{fileName}: {imagePath}"
+                        : $"{fileName}: (not found)")
+                    .ToArray();
+
+                var downloadMarkerPath = Path.Combine(pcsDirectory, ActiveHeroImageDownloadMarkerFileName);
+
+                if (ShouldDownloadActiveHeroImages(downloadMarkerPath))
+                {
+                    await PlayerCharacterAssetUtility.DownloadActiveHeroImagesAsync(
+                        PlayerCharactersListingUrl,
+                        pcsDirectory);
+                    File.WriteAllText(downloadMarkerPath, DateTimeOffset.Now.ToString("O"));
+                    _activePlayerCharacterImagePaths = PlayerCharacterAssetUtility.GetListedActiveHeroImagePaths(
+                        _playerCharacterListingMarkdown,
+                        pcsDirectory);
+                    UpdateActiveHeroImageStatus(_activePlayerCharacterImagePaths, refreshed: true);
+                }
+                else
+                {
+                    _activePlayerCharacterImagePaths = PlayerCharacterAssetUtility.GetListedActiveHeroImagePaths(
+                        _playerCharacterListingMarkdown,
+                        pcsDirectory);
+                    UpdateActiveHeroImageStatus(_activePlayerCharacterImagePaths, refreshed: false);
+                }
+
+                await PlayerCharacterAssetUtility.DownloadActiveHeroMarkdownAsync(
+                    _playerCharacterListingMarkdown,
+                    PlayerCharactersListingUrl,
+                    pcsDirectory);
+                await DownloadSitemapAsync();
+                await DownloadRegionalMapAsync();
+                StartHeroImageShowcaseIfReady();
+
+            }
+            catch (OperationCanceledException)
+            {
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(
+                    this,
+                    ex.Message,
+                    "Player Character Image URI Error",
+                    MessageBoxButtons.OK,
+                MessageBoxIcon.Warning);
+            }
+        }
+
+        private async Task DownloadSitemapAsync()
+        {
+            try
+            {
+                var sitemapPath = Path.Combine(AppContext.BaseDirectory, SitemapFileName);
+                var tempDirectory = Path.Combine(AppContext.BaseDirectory, TempDirectoryName);
+                var tempSitemapPath = Path.Combine(tempDirectory, SitemapFileName);
+                var keywordUrlsPath = Path.Combine(AppContext.BaseDirectory, SitemapKeywordUrlsFileName);
+
+                Directory.CreateDirectory(tempDirectory);
+                await SitemapUtility.DownloadSitemapAsync(SitemapUrl, tempSitemapPath);
+
+                var updated = PromoteFileIfChanged(tempSitemapPath, sitemapPath);
+
+                var sitemapIndex = await SitemapUtility.WriteKeywordUrlDictionaryAsync(sitemapPath, keywordUrlsPath);
+                var sitemapStatus = updated
+                    ? $"updated {SitemapFileName}; {sitemapIndex.NodeCount} nodes"
+                    : $"Using cached {SitemapFileName}";
+
+                SetStatusBarMessage(
+                    $"{sitemapStatus}; indexed {sitemapIndex.KeywordCount} sitemap URLs.");
+            }
+            catch (Exception ex)
+            {
+                SetStatusBarMessage($"Sitemap unavailable: {ex.Message}");
+            }
+        }
+
+        private async Task DownloadRegionalMapAsync()
+        {
+            var mapsDirectory = EnsureMapsDirectory();
+            var download = await GameForumUtility.DownloadRegionalMapAsync(
+                AppSettingsUtility.GameForumUrl,
+                mapsDirectory);
+            await PreloadRegionalMapImageAsync();
+
+            var downloadSummary = GetStartupDownloadSummary();
+            SetStatusBarMessage(download.ErrorMessage is null
+                ? downloadSummary
+                : $"{downloadSummary}; regional map unavailable: {download.ErrorMessage}");
+            UpdateRegionalMapMenuItem();
+        }
+
+        private static bool PromoteFileIfChanged(string tempFilePath, string destinationFilePath)
+        {
+            if (!File.Exists(tempFilePath))
+            {
+                return false;
+            }
+
+            if (File.Exists(destinationFilePath) && FilesHaveSameContent(tempFilePath, destinationFilePath))
+            {
+                File.Delete(tempFilePath);
+                return false;
+            }
+
+            if (File.Exists(destinationFilePath))
+            {
+                File.Delete(destinationFilePath);
+            }
+
+            File.Move(tempFilePath, destinationFilePath);
+            return true;
+        }
+
+        private static bool FilesHaveSameContent(string leftPath, string rightPath)
+        {
+            var leftInfo = new FileInfo(leftPath);
+            var rightInfo = new FileInfo(rightPath);
+
+            if (leftInfo.Length != rightInfo.Length)
+            {
+                return false;
+            }
+
+            const int bufferSize = 81920;
+            var leftBuffer = new byte[bufferSize];
+            var rightBuffer = new byte[bufferSize];
+
+            using var leftStream = File.OpenRead(leftPath);
+            using var rightStream = File.OpenRead(rightPath);
+
+            while (true)
+            {
+                var leftBytesRead = leftStream.Read(leftBuffer, 0, leftBuffer.Length);
+                var rightBytesRead = rightStream.Read(rightBuffer, 0, rightBuffer.Length);
+
+                if (leftBytesRead != rightBytesRead)
+                {
+                    return false;
+                }
+
+                if (leftBytesRead == 0)
+                {
+                    return true;
+                }
+
+                for (var index = 0; index < leftBytesRead; index++)
+                {
+                    if (leftBuffer[index] != rightBuffer[index])
+                    {
+                        return false;
+                    }
+                }
+            }
+        }
+
+        private static string EnsureMapsDirectory()
+        {
+            var imagesDirectory = Path.Combine(GetReleaseDirectory(), ImagesDirectoryName);
+            var mapsDirectory = Path.Combine(imagesDirectory, MapsDirectoryName);
+
+            Directory.CreateDirectory(imagesDirectory);
+            Directory.CreateDirectory(mapsDirectory);
+
+            return mapsDirectory;
+        }
+
+        private static string GetRegionalMapPath()
+        {
+            return Path.Combine(GetReleaseDirectory(), ImagesDirectoryName, MapsDirectoryName, RegionalMapFileName);
+        }
+
+        private void UpdateRegionalMapMenuItem()
+        {
+            regionalMapToolStripMenuItem.Enabled = !_heroImageIntroStarted
+                && !_heroImageShowcaseStarted
+                && !_regionalMapActive
+                && File.Exists(GetRegionalMapPath());
+        }
+
+        private void UpdateShowMenuItemsForHeroImageShowcase()
+        {
+            var showMenuItemsEnabled = !_heroImageIntroStarted && !_heroImageShowcaseStarted;
+            loginInfoToolStripMenuItem.Enabled = showMenuItemsEnabled && !_showLoginInfo;
+            showPostTotalsToolStripMenuItem.Enabled = showMenuItemsEnabled && !_showPostTotals;
+            showDiceRollsToolStripMenuItem.Enabled = showMenuItemsEnabled
+                && _diceRollsListBox is null
+                && HasDiceRollEntries(GetDiceRollsHtmlPath());
+            UpdateRegionalMapMenuItem();
+        }
+
+        private void EnableLoginInfoMenuItem()
+        {
+            if (_heroImageIntroStarted || _heroImageShowcaseStarted)
+            {
+                return;
+            }
+
+            loginInfoToolStripMenuItem.Enabled = true;
+        }
+
+        private void EnableShowPostTotalsMenuItem()
+        {
+            if (_heroImageIntroStarted || _heroImageShowcaseStarted)
+            {
+                return;
+            }
+
+            showPostTotalsToolStripMenuItem.Enabled = true;
+        }
+
+        private void EnableShowDiceRollsMenuItem()
+        {
+            if (_heroImageIntroStarted || _heroImageShowcaseStarted)
+            {
+                return;
+            }
+
+            showDiceRollsToolStripMenuItem.Enabled = _diceRollsListBox is null && HasDiceRollEntries(GetDiceRollsHtmlPath());
+        }
+
+        private async Task PreloadRegionalMapImageAsync()
+        {
+            var preloadTask = _regionalMapImagePreloadTask;
+            if (preloadTask is not null && !preloadTask.IsCompleted)
+            {
+                await preloadTask;
+                return;
+            }
+
+            _regionalMapImagePreloadTask = PreloadRegionalMapImageCoreAsync();
+            await _regionalMapImagePreloadTask;
+        }
+
+        private async Task PreloadRegionalMapImageCoreAsync()
+        {
+            var regionalMapPath = GetRegionalMapPath();
+            if (!File.Exists(regionalMapPath))
+            {
+                return;
+            }
+
+            var lastWriteUtc = File.GetLastWriteTimeUtc(regionalMapPath);
+            if (_regionalMapImageCache is not null
+                && string.Equals(_regionalMapImageCachePath, regionalMapPath, StringComparison.OrdinalIgnoreCase)
+                && _regionalMapImageCacheLastWriteUtc == lastWriteUtc)
+            {
+                return;
+            }
+
+            var image = await Task.Run(() => LoadImageCopy(regionalMapPath));
+            var previousImage = _regionalMapImageCache;
+            _regionalMapImageCache = image;
+            _regionalMapImageCachePath = regionalMapPath;
+            _regionalMapImageCacheLastWriteUtc = lastWriteUtc;
+            previousImage?.Dispose();
+            UpdateRegionalMapMenuItem();
+        }
+
+        private Image? TryCreateRegionalMapDisplayImage(string regionalMapPath)
+        {
+            if (_regionalMapImageCache is null
+                || !string.Equals(_regionalMapImageCachePath, regionalMapPath, StringComparison.OrdinalIgnoreCase)
+                || !File.Exists(regionalMapPath)
+                || _regionalMapImageCacheLastWriteUtc != File.GetLastWriteTimeUtc(regionalMapPath))
+            {
+                return null;
+            }
+
+            return new Bitmap(_regionalMapImageCache);
+        }
+
+        private static string EnsurePlayerCharacterDirectories()
+        {
+            var pcsDirectory = Path.Combine(GetReleaseDirectory(), PlayerCharactersDirectoryName);
+
+            Directory.CreateDirectory(pcsDirectory);
+            Directory.CreateDirectory(Path.Combine(pcsDirectory, ActivePlayerCharactersDirectoryName));
+            Directory.CreateDirectory(Path.Combine(pcsDirectory, InactivePlayerCharactersDirectoryName));
+
+            return pcsDirectory;
+        }
+
+        private static string GetReleaseDirectory()
+        {
+            var baseDirectory = Path.GetFullPath(AppContext.BaseDirectory);
+            var currentDirectory = new DirectoryInfo(baseDirectory);
+
+            while (currentDirectory is not null)
+            {
+                if (File.Exists(Path.Combine(currentDirectory.FullName, "player-assistant.csproj")))
+                {
+                    return Path.Combine(currentDirectory.FullName, "Release");
+                }
+
+                currentDirectory = currentDirectory.Parent;
+            }
+
+            return baseDirectory;
+        }
+
+        private void InitializeCachedActiveHeroImages()
+        {
+            var pcsDirectory = EnsurePlayerCharacterDirectories();
+            var cachedListingMarkdownPath = PlayerCharacterAssetUtility.GetPlayerCharactersListingMarkdownCachePath(pcsDirectory);
+            if (File.Exists(cachedListingMarkdownPath))
+            {
+                _playerCharacterListingMarkdown = File.ReadAllText(cachedListingMarkdownPath);
+                _activePlayerCharacterImagePaths = PlayerCharacterAssetUtility.GetListedActiveHeroImagePaths(
+                    _playerCharacterListingMarkdown,
+                    pcsDirectory);
+            }
+            else
+            {
+                _activePlayerCharacterImagePaths = [];
+            }
+
+            if (_activePlayerCharacterImagePaths.Length > 0)
+            {
+                UpdateActiveHeroImageStatus(_activePlayerCharacterImagePaths, refreshed: false);
+                StartHeroImageShowcaseIfReady();
+            }
+        }
+
+        private static bool IsMarkdownFetchFailure(string markdown)
+        {
+            return markdown.StartsWith(MarkdownUtility.InvalidUrlMessage, StringComparison.Ordinal)
+                || markdown.StartsWith(MarkdownUtility.UnresolvedUrlMessage, StringComparison.Ordinal);
+        }
+
+        private static bool ShouldDownloadActiveHeroImages(string markerPath)
+        {
+            return !File.Exists(markerPath)
+                || DateTimeOffset.UtcNow - File.GetLastWriteTimeUtc(markerPath) >= ActiveHeroImageDownloadInterval;
+        }
+
+        private void UpdateActiveHeroImageStatus(string[] imagePaths, bool refreshed)
+        {
+            var totalBytes = imagePaths
+                .Where(File.Exists)
+                .Select(path => new FileInfo(path).Length)
+                .Sum();
+
+            var verb = refreshed ? "Downloaded" : "Using cached";
+            SetStatusBarMessage($"{verb} {imagePaths.Length} hero images ({FormatByteSize(totalBytes)}).");
+        }
+
+        private void StartHeroImageShowcase(string[] imagePaths)
+        {
+            StopHeroImageShowcase();
+            _heroImageShowcaseStarted = true;
+            UpdateShowMenuItemsForHeroImageShowcase();
+
+            _heroImageShowcasePaths.AddRange(imagePaths
+                .Where(File.Exists)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .OrderBy(_ => _random.Next()));
+            _heroImageShowcaseTotal = _heroImageShowcasePaths.Count;
+            _heroImageShowcaseIndex = 0;
+            _heroImageShowcaseSkipped = 0;
+            _lastHeroImageSkipReason = string.Empty;
+
+            if (_heroImageShowcasePaths.Count == 0)
+            {
+                _heroImageShowcaseStarted = false;
+                UpdateShowMenuItemsForHeroImageShowcase();
+                return;
+            }
+
+            _heroImageShowcaseTimer = new System.Windows.Forms.Timer
+            {
+                Interval = 16
+            };
+            _heroImageShowcaseTimer.Tick += (_, _) => UpdateHeroImageShowcase();
+
+            ShowNextHeroImage();
+        }
+
+        private void StartHeroImageShowcaseIfReady()
+        {
+            if (_suppressHeroImagesForThisRun)
+            {
+                return;
+            }
+
+            if (_showWelcomeText
+                || _showHeroIntroText
+                || _regionalMapActive
+                || _heroImageIntroStarted
+                || _heroImageShowcaseStarted
+                || _heroImageShowcaseCompleted
+                || _activePlayerCharacterImagePaths.Length == 0)
+            {
+                return;
+            }
+
+            _ = StartHeroImageShowcaseWithIntroAsync();
+        }
+
+        private async Task StartHeroImageShowcaseAfterDelayAsync()
+        {
+            if (_suppressHeroImagesForThisRun)
+            {
+                return;
+            }
+
+            if (_regionalMapActive
+                || _activePlayerCharacterImagePaths.Length == 0
+                || _heroImageShowcaseStarted
+                || _heroImageShowcaseCompleted)
+            {
+                return;
+            }
+
+            var delayBeforeIntro = HeroImageShowcaseStartDelay - HeroImageIntroDuration;
+            if (delayBeforeIntro > TimeSpan.Zero)
+            {
+                await Task.Delay(delayBeforeIntro);
+            }
+
+            if (_regionalMapActive)
+            {
+                return;
+            }
+
+            await StartHeroImageShowcaseWithIntroAsync();
+        }
+
+        private async Task StartHeroImageShowcaseWithIntroAsync()
+        {
+            if (_suppressHeroImagesForThisRun)
+            {
+                return;
+            }
+
+            if (_showWelcomeText
+                || _showHeroIntroText
+                || _regionalMapActive
+                || _heroImageIntroStarted
+                || _heroImageShowcaseStarted
+                || _heroImageShowcaseCompleted
+                || _activePlayerCharacterImagePaths.Length == 0)
+            {
+                return;
+            }
+
+            _heroImageIntroStarted = true;
+            _showHeroIntroText = true;
+            UpdateShowMenuItemsForHeroImageShowcase();
+            Invalidate();
+
+            await Task.Delay(HeroImageIntroDuration);
+
+            _showHeroIntroText = false;
+            _heroImageIntroStarted = false;
+            UpdateShowMenuItemsForHeroImageShowcase();
+            Invalidate();
+
+            if (_showWelcomeText
+                || _regionalMapActive
+                || _heroImageShowcaseStarted
+                || _heroImageShowcaseCompleted
+                || _activePlayerCharacterImagePaths.Length == 0)
+            {
+                return;
+            }
+
+            StartHeroImageShowcase(_activePlayerCharacterImagePaths);
+        }
+
+        private void StopHeroImageShowcase()
+        {
+            _heroImageShowcaseTimer?.Stop();
+            _heroImageShowcaseTimer?.Dispose();
+            _heroImageShowcaseTimer = null;
+            _heroImageShowcasePaths.Clear();
+            _currentHeroImage?.Dispose();
+            _currentHeroImage = null;
+            ClearHeroImagePictureBox();
+            _currentHeroImageOpacity = 0;
+            _currentHeroImageStopwatch.Reset();
+            _heroImageIntroStarted = false;
+            _heroImageShowcaseStarted = false;
+            UpdateShowMenuItemsForHeroImageShowcase();
+        }
+
+        private void ShowNextHeroImage()
+        {
+            _currentHeroImage?.Dispose();
+            _currentHeroImage = null;
+
+            while (_heroImageShowcasePaths.Count > 0)
+            {
+                var imagePath = _heroImageShowcasePaths[^1];
+                _heroImageShowcasePaths.RemoveAt(_heroImageShowcasePaths.Count - 1);
+
+                try
+                {
+                    _currentHeroImage = LoadImageCopy(imagePath);
+                    _currentHeroImageBounds = GetCenteredHeroImageBounds(_currentHeroImage);
+                    _heroImageShowcaseIndex++;
+                    _currentHeroImageOpacity = 0;
+                    _currentHeroImageWasVisible = false;
+                    _currentHeroImageStopwatch.Restart();
+                    UpdateHeroImagePictureBox();
+                    _heroImageShowcaseTimer?.Start();
+                    return;
+                }
+                catch (Exception ex)
+                {
+                    _heroImageShowcaseSkipped++;
+                    _lastHeroImageSkipReason = ex.Message;
+                    continue;
+                }
+            }
+
+            StopHeroImageShowcase();
+            _heroImageShowcaseCompleted = true;
+            _ = StartPlayerCharacterListingUpdateAsync();
+            Invalidate();
+        }
+
+        private async Task StartPlayerCharacterListingUpdateAsync()
+        {
+            if (_playerCharacterListingUpdateStarted
+                || _showWelcomeText
+                || _showHeroIntroText
+                || _regionalMapActive
+                || _heroImageShowcaseStarted
+                || (_activePlayerCharacterImagePaths.Length > 0 && !_heroImageShowcaseCompleted))
+            {
+                return;
+            }
+
+            _playerCharacterListingUpdateStarted = true;
+            try
+            {
+                await UpdatePlayerCharacterListingAsync();
+            }
+            finally
+            {
+                _playerCharacterListingUpdateStarted = false;
+            }
+        }
+
+        private void UpdateHeroImageShowcase()
+        {
+            var elapsed = _currentHeroImageStopwatch.Elapsed;
+            var fadeInEnd = HeroImageFadeInDuration;
+            var displayEnd = fadeInEnd + HeroImageDisplayDuration;
+            var fadeOutEnd = displayEnd + HeroImageFadeOutDuration;
+            var nextImageStart = fadeOutEnd + HeroImageInterImageDelayDuration;
+
+            if (elapsed < fadeInEnd)
+            {
+                _currentHeroImageOpacity = GetProgress(elapsed, HeroImageFadeInDuration);
+                UpdateHeroImagePictureBox();
+                return;
+            }
+
+            if (elapsed < displayEnd)
+            {
+                _currentHeroImageOpacity = 1;
+                UpdateHeroImagePictureBox();
+                return;
+            }
+
+            if (elapsed < fadeOutEnd)
+            {
+                _currentHeroImageOpacity = 1 - GetProgress(elapsed - displayEnd, HeroImageFadeOutDuration);
+                UpdateHeroImagePictureBox();
+                return;
+            }
+
+            if (elapsed < nextImageStart)
+            {
+                ClearHeroImagePictureBox();
+                return;
+            }
+
+            if (!_currentHeroImageWasVisible)
+            {
+                _currentHeroImageOpacity = 1;
+                UpdateHeroImagePictureBox();
+                return;
+            }
+
+            ShowNextHeroImage();
+        }
+
+        private Rectangle GetCenteredHeroImageBounds(Image image)
+        {
+            var displayBounds = GetHeroImageDisplayBounds();
+            var targetHeight = displayBounds.Height * 0.45;
+            var scale = Math.Min(
+                targetHeight / image.Height,
+                Math.Min(
+                    (double)displayBounds.Width / image.Width,
+                    (double)displayBounds.Height / image.Height));
+            var width = Math.Max(1, (int)Math.Round(image.Width * scale));
+            var height = Math.Max(1, (int)Math.Round(image.Height * scale));
+            var x = displayBounds.Left + (displayBounds.Width - width) / 2;
+            var y = displayBounds.Top + (displayBounds.Height - height) / 2;
+
+            return new Rectangle(x, y, width, height);
+        }
+
+        private Rectangle GetHeroImageDisplayBounds()
+        {
+            var bounds = new Rectangle(
+                ClientRectangle.Left,
+                menuStrip.Bottom,
+                ClientRectangle.Width,
+                statusStrip.Top - menuStrip.Bottom);
+
+            return bounds.Width > 0 && bounds.Height > 0
+                ? bounds
+                : ClientRectangle;
+        }
+
+        private void InitializeRegionalMapPanel()
+        {
+            _regionalMapPanel = new Panel
+            {
+                BackColor = Color.White,
+                Visible = false
+            };
+            _regionalMapPanel.Paint += RegionalMapPanel_Paint;
+            Controls.Add(_regionalMapPanel);
+            UpdateRegionalMapPanelBounds();
+            _regionalMapPanel.SendToBack();
+            menuStrip.BringToFront();
+            statusStrip.BringToFront();
+        }
+
+        private void ShowRegionalMapPanel()
+        {
+            menuStrip.BringToFront();
+            statusStrip.BringToFront();
+            Invalidate();
+            Update();
+        }
+
+        private void HideRegionalMapPanel()
+        {
+            if (_regionalMapPanel is null)
+            {
+                return;
+            }
+
+            _regionalMapPanel.Visible = false;
+        }
+
+        private void UpdateRegionalMapPanelBounds()
+        {
+            if (_regionalMapPanel is null)
+            {
+                return;
+            }
+
+            _regionalMapPanel.Bounds = GetHeroImageDisplayBounds();
+            if (_regionalMapPanel.Visible)
+            {
+                _regionalMapPanel.Invalidate();
+            }
+        }
+
+        private void RegionalMapPanel_Paint(object? sender, PaintEventArgs e)
+        {
+            DrawRegionalMap(e.Graphics, _regionalMapPanel?.ClientRectangle ?? Rectangle.Empty);
+        }
+
+        private void InitializeHeroImagePictureBox()
+        {
+            _heroImagePictureBox = new PictureBox
+            {
+                BackColor = Color.Transparent,
+                Enabled = false,
+                SizeMode = PictureBoxSizeMode.StretchImage,
+                Visible = false
+            };
+            Controls.Add(_heroImagePictureBox);
+            _heroImagePictureBox.BringToFront();
+            menuStrip.BringToFront();
+            statusStrip.BringToFront();
+        }
+
+        private void UpdateHeroImagePictureBox()
+        {
+            if (_heroImagePictureBox is null || _currentHeroImage is null || _currentHeroImageOpacity <= 0)
+            {
+                ClearHeroImagePictureBox();
+                return;
+            }
+
+            if (_currentHeroImageOpacity >= 1)
+            {
+                _currentHeroImageWasVisible = true;
+            }
+
+            var shadowPadding = 8;
+            var imageBounds = new Rectangle(
+                shadowPadding,
+                shadowPadding,
+                _currentHeroImageBounds.Width,
+                _currentHeroImageBounds.Height);
+            var frame = new Bitmap(
+                _currentHeroImageBounds.Width + shadowPadding * 2,
+                _currentHeroImageBounds.Height + shadowPadding * 2,
+                PixelFormat.Format32bppArgb);
+
+            using var graphics = Graphics.FromImage(frame);
+            graphics.Clear(Color.Transparent);
+            graphics.InterpolationMode = InterpolationMode.HighQualityBicubic;
+            graphics.SmoothingMode = SmoothingMode.AntiAlias;
+
+            using var imageAttributes = new ImageAttributes();
+            var colorMatrix = new ColorMatrix
+            {
+                Matrix00 = 1,
+                Matrix11 = 1,
+                Matrix22 = 1,
+                Matrix33 = Math.Clamp(_currentHeroImageOpacity, 0, 1),
+                Matrix44 = 1
+            };
+            imageAttributes.SetColorMatrix(colorMatrix);
+            graphics.DrawImage(
+                _currentHeroImage,
+                imageBounds,
+                0,
+                0,
+                _currentHeroImage.Width,
+                _currentHeroImage.Height,
+                GraphicsUnit.Pixel,
+                imageAttributes);
+
+            _heroImagePictureBox.Image?.Dispose();
+            _heroImagePictureBox.Image = frame;
+            _heroImagePictureBox.Bounds = new Rectangle(
+                _currentHeroImageBounds.Left - shadowPadding,
+                _currentHeroImageBounds.Top - shadowPadding,
+                frame.Width,
+                frame.Height);
+            _heroImagePictureBox.Visible = true;
+            _heroImagePictureBox.BringToFront();
+            menuStrip.BringToFront();
+            statusStrip.BringToFront();
+        }
+
+        private void ClearHeroImagePictureBox()
+        {
+            if (_heroImagePictureBox is null)
+            {
+                return;
+            }
+
+            _heroImagePictureBox.Visible = false;
+            _heroImagePictureBox.Image?.Dispose();
+            _heroImagePictureBox.Image = null;
+        }
+
+        private static Image LoadImageCopy(string imagePath)
+        {
+            try
+            {
+                using var image = Image.FromFile(imagePath);
+                return new Bitmap(image);
+            }
+            catch
+            {
+                try
+                {
+                    return LoadImageWithSkiaSharp(imagePath);
+                }
+                catch (Exception skiaException)
+                {
+                    throw new InvalidOperationException($"Skia fallback failed: {skiaException.Message}", skiaException);
+                }
+            }
+        }
+
+        private static Image LoadImageWithSkiaSharp(string imagePath)
+        {
+            using var skBitmap = SKBitmap.Decode(imagePath)
+                ?? throw new ArgumentException($"Image '{imagePath}' could not be decoded.");
+            using var convertedBitmap = new SKBitmap(new SKImageInfo(
+                skBitmap.Width,
+                skBitmap.Height,
+                SKColorType.Bgra8888,
+                SKAlphaType.Premul));
+
+            if (!skBitmap.CopyTo(convertedBitmap, SKColorType.Bgra8888))
+            {
+                throw new ArgumentException($"Image '{imagePath}' could not be converted.");
+            }
+
+            var bitmap = new Bitmap(skBitmap.Width, skBitmap.Height, PixelFormat.Format32bppPArgb);
+            var bounds = new Rectangle(0, 0, bitmap.Width, bitmap.Height);
+            var bitmapData = bitmap.LockBits(bounds, ImageLockMode.WriteOnly, bitmap.PixelFormat);
+
+            try
+            {
+                var bytes = convertedBitmap.ByteCount;
+                var buffer = new byte[bytes];
+                Marshal.Copy(convertedBitmap.GetPixels(), buffer, 0, bytes);
+                Marshal.Copy(buffer, 0, bitmapData.Scan0, bytes);
+            }
+            finally
+            {
+                bitmap.UnlockBits(bitmapData);
+            }
+
+            return bitmap;
+        }
+
+        private static float GetProgress(TimeSpan elapsed, TimeSpan duration)
+        {
+            return duration <= TimeSpan.Zero
+                ? 1
+                : Math.Clamp((float)(elapsed.TotalMilliseconds / duration.TotalMilliseconds), 0, 1);
+        }
+
+        private static string FormatByteSize(long bytes)
+        {
+            string[] units = ["bytes", "KB", "MB", "GB"];
+            var size = (double)bytes;
+            var unitIndex = 0;
+
+            while (size >= 1024 && unitIndex < units.Length - 1)
+            {
+                size /= 1024;
+                unitIndex++;
+            }
+
+            return unitIndex == 0
+                ? $"{bytes} {units[unitIndex]}"
+                : $"{size:0.##} {units[unitIndex]}";
+        }
+
+        internal static string GetStartupDownloadSummary()
+        {
+            var bytes = FileDownloadCounters.CompletedDownloadBytes;
+            var kilobytes = bytes / 1024;
+            var megabytes = kilobytes / 1024;
+
+            return $"Startup downloads complete: {FileDownloadCounters.CompletedDownloadCount} files, {kilobytes:0.##} KB ({megabytes:0.##} MB).";
+        }
+
+        private void ShowPlayerCharacterResolvedImagePathsOnce()
+        {
+            var markerPath = Path.Combine(AppContext.BaseDirectory, IndexImagePathMessageBoxShownFileName);
+
+            if (File.Exists(markerPath))
+            {
+                return;
+            }
+
+            File.WriteAllText(markerPath, DateTimeOffset.Now.ToString("O"));
+
+            var message = _playerCharacterResolvedImagePaths.Length == 0
+                ? "(no image file names found)"
+                : string.Join(Environment.NewLine, _playerCharacterResolvedImagePaths);
+
+            MessageBox.Show(
+                this,
+                message,
+                "Resolved Player Character Image Paths",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Information);
+        }
+
+        private void ShowPlayerCharacterImageFileNames()
+        {
+            var message = _playerCharacterImageFileNames.Length == 0
+                ? "(no image file names found)"
+                : string.Join(Environment.NewLine, _playerCharacterImageFileNames);
+
+            MessageBox.Show(
+                this,
+                message,
+                "Player Character Image File Names",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Information);
+        }
+
+        private void ShowPlayerCharacterHtmlImageUrisOnce()
+        {
+            var markerPath = Path.Combine(AppContext.BaseDirectory, HtmlImageUriMessageBoxShownFileName);
+
+            if (File.Exists(markerPath))
+            {
+                return;
+            }
+
+            File.WriteAllText(markerPath, DateTimeOffset.Now.ToString("O"));
+
+            var message = _playerCharacterHtmlImageUris.Length == 0
+                ? "(no scraped image links found)"
+                : string.Join(Environment.NewLine, _playerCharacterHtmlImageUris);
+
+            MessageBox.Show(
+                this,
+                message,
+                "Scraped Player Character Image Links",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Information);
+        }
+
+        private void ShowPlayerCharacterImageUrisOnce()
+        {
+            var markerPath = Path.Combine(AppContext.BaseDirectory, ImageUriMessageBoxShownFileName);
+
+            if (File.Exists(markerPath))
+            {
+                return;
+            }
+
+            var message = _playerCharacterImageUris.Length == 0
+                ? "(no image URIs found)"
+                : string.Join(Environment.NewLine, _playerCharacterImageUris);
+
+            MessageBox.Show(
+                this,
+                message,
+                "Player Character Image URIs",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Information);
+
+            File.WriteAllText(markerPath, DateTimeOffset.Now.ToString("O"));
+        }
+
+        private void FillCurrentScreenWorkingArea()
+        {
+            var workingArea = Screen.FromControl(this).WorkingArea;
+
+            WindowState = FormWindowState.Normal;
+            Bounds = workingArea;
+        }
+
+        private void DrawRegionalMap(Graphics graphics, Rectangle contentBounds)
+        {
+            graphics.Clear(BackColor);
+
+            if (_regionalMapImage is null || contentBounds.Width <= 0 || contentBounds.Height <= 0)
+            {
+                return;
+            }
+
+            graphics.InterpolationMode = InterpolationMode.HighQualityBicubic;
+            graphics.SmoothingMode = SmoothingMode.AntiAlias;
+            graphics.PixelOffsetMode = PixelOffsetMode.HighQuality;
+
+            var scale = Math.Min(
+                (double)contentBounds.Width / _regionalMapImage.Width,
+                (double)contentBounds.Height / _regionalMapImage.Height);
+            var width = Math.Max(1, (int)Math.Round(_regionalMapImage.Width * scale));
+            var height = Math.Max(1, (int)Math.Round(_regionalMapImage.Height * scale));
+            var bounds = new Rectangle(
+                contentBounds.Left + (contentBounds.Width - width) / 2,
+                contentBounds.Top + (contentBounds.Height - height) / 2,
+                width,
+                height);
+
+            graphics.DrawImage(_regionalMapImage, bounds);
+        }
+
+        private void DrawLoginInfo(Graphics graphics)
+        {
+            graphics.Clear(BackColor);
+            graphics.SmoothingMode = SmoothingMode.AntiAlias;
+            graphics.TextRenderingHint = System.Drawing.Text.TextRenderingHint.ClearTypeGridFit;
+
+            var contentBounds = GetHeroImageDisplayBounds();
+            var left = contentBounds.Left + 32;
+            var top = contentBounds.Top + 32;
+            var width = Math.Max(320, contentBounds.Width - 64);
+            var rowHeight = 34;
+            var columns = GetLoginInfoColumns(width);
+
+            using var titleFont = new Font("Segoe UI", 22, FontStyle.Bold);
+            using var headerFont = new Font("Segoe UI", 10, FontStyle.Bold);
+            using var rowFont = new Font("Segoe UI", 10, FontStyle.Bold);
+            using var titleBrush = new SolidBrush(Color.FromArgb(30, 30, 30));
+            using var textBrush = new SolidBrush(Color.FromArgb(35, 35, 35));
+            using var headerTextBrush = new SolidBrush(Color.White);
+            using var mutedBrush = new SolidBrush(Color.FromArgb(115, 115, 115));
+            using var headerBackBrush = new SolidBrush(Color.Black);
+            using var alternateBackBrush = new SolidBrush(Color.FromArgb(248, 249, 251));
+            using var linePen = new Pen(Color.FromArgb(215, 218, 224));
+            using var textFormat = new StringFormat
+            {
+                Alignment = StringAlignment.Near,
+                LineAlignment = StringAlignment.Center,
+                Trimming = StringTrimming.EllipsisCharacter,
+                FormatFlags = StringFormatFlags.NoWrap
+            };
+            using var rightTextFormat = new StringFormat
+            {
+                Alignment = StringAlignment.Far,
+                LineAlignment = StringAlignment.Center,
+                Trimming = StringTrimming.EllipsisCharacter,
+                FormatFlags = StringFormatFlags.NoWrap
+            };
+
+            graphics.DrawString("Login Info", titleFont, titleBrush, new PointF(left, top));
+            top += 48;
+
+            DrawLoginInfoRow(
+                graphics,
+                columns,
+                top,
+                rowHeight,
+                ["Character Name", "Posts", "Tag", "Last Visited", "Last Post"],
+                headerFont,
+                headerTextBrush,
+                headerBackBrush,
+                linePen,
+                left,
+                textFormat,
+                rightTextFormat);
+            top += rowHeight;
+
+            for (var index = 0; index < _loginInfoRows.Length; index++)
+            {
+                var row = _loginInfoRows[index];
+                var values = new[]
+                {
+                    row.CharacterName,
+                    row.Posts?.ToString() ?? string.Empty,
+                    row.Tag,
+                    row.LastVisited ?? string.Empty,
+                    row.LastPost
+                };
+
+                DrawLoginInfoRow(
+                    graphics,
+                    columns,
+                    top,
+                    rowHeight,
+                    values,
+                    rowFont,
+                    row.LastVisited is null ? mutedBrush : textBrush,
+                    index % 2 == 0 ? Brushes.White : alternateBackBrush,
+                    linePen,
+                    left,
+                    textFormat,
+                    rightTextFormat);
+                top += rowHeight;
+
+                if (top + rowHeight > contentBounds.Bottom - 16)
+                {
+                    break;
+                }
+            }
+        }
+
+        private void DrawPostTotals(Graphics graphics)
+        {
+            graphics.Clear(BackColor);
+            graphics.SmoothingMode = SmoothingMode.AntiAlias;
+            graphics.TextRenderingHint = System.Drawing.Text.TextRenderingHint.ClearTypeGridFit;
+
+            var summary = _postTotalsSummary;
+            if (summary is null)
+            {
+                return;
+            }
+
+            var contentBounds = GetHeroImageDisplayBounds();
+            var left = contentBounds.Left + 32;
+            var top = contentBounds.Top + 32;
+            var width = Math.Max(320, contentBounds.Width - 64);
+            var rowHeight = 34;
+            var columns = GetPostTotalsColumns(width);
+
+            using var titleFont = new Font("Segoe UI", 22, FontStyle.Bold);
+            using var noteFont = new Font("Segoe UI", 11, FontStyle.Bold);
+            using var headerFont = new Font("Segoe UI", 11, FontStyle.Bold);
+            using var rowFont = new Font("Segoe UI", 11, FontStyle.Bold);
+            using var textBrush = new SolidBrush(Color.FromArgb(35, 35, 35));
+            using var mutedBrush = new SolidBrush(Color.FromArgb(105, 105, 105));
+            using var headerTextBrush = new SolidBrush(Color.White);
+            using var headerBackBrush = new SolidBrush(Color.Black);
+            using var alternateBackBrush = new SolidBrush(Color.FromArgb(248, 249, 251));
+            using var linePen = new Pen(Color.FromArgb(215, 218, 224));
+            using var textFormat = new StringFormat
+            {
+                Alignment = StringAlignment.Near,
+                LineAlignment = StringAlignment.Center,
+                Trimming = StringTrimming.EllipsisCharacter,
+                FormatFlags = StringFormatFlags.NoWrap
+            };
+            using var rightTextFormat = new StringFormat
+            {
+                Alignment = StringAlignment.Far,
+                LineAlignment = StringAlignment.Center,
+                Trimming = StringTrimming.EllipsisCharacter,
+                FormatFlags = StringFormatFlags.NoWrap
+            };
+
+            graphics.DrawString("Post Totals", titleFont, textBrush, new PointF(left, top));
+            top += 42;
+
+            var note = "Local file copies only cover a subset of the posts stored on the RPOL game forum.";
+            var noteBounds = new RectangleF(left, top, width, 42);
+            graphics.DrawString(note, noteFont, mutedBrush, noteBounds);
+            top += 54;
+
+            DrawLoginInfoRow(
+                graphics,
+                columns,
+                top,
+                rowHeight,
+                ["Posting Character", "the-cast.html", "Local HTML Files"],
+                headerFont,
+                headerTextBrush,
+                headerBackBrush,
+                linePen,
+                left,
+                textFormat,
+                rightTextFormat,
+                rightAlignedColumnIndexes: [1, 2]);
+            top += rowHeight;
+
+            for (var index = 0; index < summary.Rows.Count; index++)
+            {
+                var row = summary.Rows[index];
+                var values = new[]
+                {
+                    row.CharacterName,
+                    row.ForumPosts?.ToString() ?? string.Empty,
+                    row.LocalPosts.ToString()
+                };
+
+                DrawLoginInfoRow(
+                    graphics,
+                    columns,
+                    top,
+                    rowHeight,
+                    values,
+                    rowFont,
+                    textBrush,
+                    index % 2 == 0 ? Brushes.White : alternateBackBrush,
+                    linePen,
+                    left,
+                    textFormat,
+                    rightTextFormat,
+                    rightAlignedColumnIndexes: [1, 2]);
+                top += rowHeight;
+
+                if (top + rowHeight > contentBounds.Bottom - 16)
+                {
+                    break;
+                }
+            }
+        }
+
+        private static RectangleF[] GetLoginInfoColumns(int width)
+        {
+            var characterWidth = width * 0.32f;
+            var postsWidth = width * 0.10f;
+            var tagWidth = width * 0.25f;
+            var lastVisitedWidth = width * 0.16f;
+            var lastPostWidth = width - characterWidth - postsWidth - tagWidth - lastVisitedWidth;
+            var x = 0f;
+
+            RectangleF Next(float columnWidth)
+            {
+                var rectangle = new RectangleF(x, 0, columnWidth, 0);
+                x += columnWidth;
+                return rectangle;
+            }
+
+            return
+            [
+                Next(characterWidth),
+                Next(postsWidth),
+                Next(tagWidth),
+                Next(lastVisitedWidth),
+                Next(lastPostWidth)
+            ];
+        }
+
+        private static RectangleF[] GetPostTotalsColumns(int width)
+        {
+            var columnWidth = width / 3f;
+            var x = 0f;
+
+            RectangleF Next(float columnWidth)
+            {
+                var rectangle = new RectangleF(x, 0, columnWidth, 0);
+                x += columnWidth;
+                return rectangle;
+            }
+
+            return
+            [
+                Next(columnWidth),
+                Next(columnWidth),
+                Next(width - (columnWidth * 2))
+            ];
+        }
+
+        private static void DrawLoginInfoRow(
+            Graphics graphics,
+            RectangleF[] columns,
+            int top,
+            int height,
+            string[] values,
+            Font font,
+            Brush textBrush,
+            Brush backBrush,
+            Pen linePen,
+            int left,
+            StringFormat textFormat,
+            StringFormat rightTextFormat,
+            params int[] rightAlignedColumnIndexes)
+        {
+            var rowBounds = new RectangleF(left, top, columns.Sum(column => column.Width), height);
+            graphics.FillRectangle(backBrush, rowBounds);
+            graphics.DrawRectangle(linePen, rowBounds.X, rowBounds.Y, rowBounds.Width, rowBounds.Height);
+
+            for (var index = 0; index < columns.Length; index++)
+            {
+                var column = columns[index];
+                var cellBounds = new RectangleF(
+                    rowBounds.Left + column.Left + 8,
+                    top,
+                    column.Width - 16,
+                    height);
+
+                if (index > 0)
+                {
+                    var separatorX = rowBounds.Left + column.Left;
+                    graphics.DrawLine(linePen, separatorX, top, separatorX, top + height);
+                }
+
+                graphics.DrawString(
+                    values[index],
+                    font,
+                    textBrush,
+                    cellBounds,
+                    rightAlignedColumnIndexes.Contains(index) ? rightTextFormat : textFormat);
+            }
+        }
+
+        private static void DrawOutlinedText(
+            Graphics graphics,
+            string text,
+            FontFamily fontFamily,
+            float fontSize,
+            Rectangle bounds,
+            Color fillColor)
+        {
+            using var textPath = CreateCenteredTextPath(text, fontFamily, fontSize, bounds);
+            using var shadowPath = (GraphicsPath)textPath.Clone();
+            using var transform = new Matrix();
+            transform.Translate(4, 4);
+            shadowPath.Transform(transform);
+
+            using var shadowBrush = new SolidBrush(Color.FromArgb(120, Color.Black));
+            using var outlinePen = new Pen(Color.Black, 4) { LineJoin = LineJoin.Round };
+            using var textBrush = new SolidBrush(fillColor);
+
+            graphics.FillPath(shadowBrush, shadowPath);
+            graphics.DrawPath(outlinePen, textPath);
+            graphics.FillPath(textBrush, textPath);
+        }
+
+        private static Image LoadBackgroundImage()
+        {
+            using var image = Image.FromStream(OpenEmbeddedAsset("white-marble.png"));
+            return new Bitmap(image);
+        }
+
+        private static Image LoadDragonBackgroundImage()
+        {
+            using var image = Image.FromStream(OpenEmbeddedAsset("dragon-dim.png"));
+            return new Bitmap(image);
+        }
+
+        private static Icon LoadApplicationIcon()
+        {
+            using var iconStream = OpenEmbeddedAsset("dragon-icon.ico");
+            return new Icon(iconStream);
+        }
+
+        private static Stream OpenEmbeddedAsset(string fileName)
+        {
+            var assembly = Assembly.GetExecutingAssembly();
+            var resourceName = $"PlayerAssistant.Assets.{fileName}";
+
+            return assembly.GetManifestResourceStream(resourceName)
+                ?? throw new FileNotFoundException($"Embedded resource '{resourceName}' was not found.");
+        }
+
+        private static GraphicsPath CreateCenteredTextPath(
+            string text,
+            FontFamily fontFamily,
+            float fontSize,
+            Rectangle bounds)
+        {
+            var path = new GraphicsPath();
+            using var format = new StringFormat
+            {
+                Alignment = StringAlignment.Center,
+                LineAlignment = StringAlignment.Center
+            };
+
+            path.AddString(text, fontFamily, (int)FontStyle.Bold, fontSize, bounds, format);
+            return path;
+        }
+    }
+}

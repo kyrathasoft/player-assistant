@@ -1,0 +1,13 @@
+<Project>
+  <PropertyGroup>
+    <DefaultItemExcludes>$(DefaultItemExcludes);obj-*\**;Release-*\**;Debug-*\**</DefaultItemExcludes>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(MSBuildProjectName)' == 'player-assistant'">
+    <BaseIntermediateOutputPath>obj\player-assistant\</BaseIntermediateOutputPath>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(MSBuildProjectName)' == 'DungeonMaster'">
+    <BaseIntermediateOutputPath>obj\DungeonMaster\</BaseIntermediateOutputPath>
+  </PropertyGroup>
+</Project>

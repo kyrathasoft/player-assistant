@@ -1,0 +1,3 @@
+FROM ./path_to_your_model_file.gguf
+# Set the correct chat template if known
+TEMPLATE "[INST] {{ .System }}\n{{ .Prompt }} [/INST]"

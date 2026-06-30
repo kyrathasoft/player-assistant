@@ -1,0 +1,51 @@
+*.cache
+*.dll
+*.exe
+*.json
+!/settings.json
+*.pdb
+*.txt
+!to-do.md
+**/bin/
+**/obj/
+.aider*
+
+.vs/
+bin/
+obj/
+codex-scratch/
+**/.playwright/
+**/binfix/
+**/obj-verify/
+**/Release-verify/
+
+# Keep markdown files under version control anywhere in the repo,
+# including inside otherwise ignored directories.
+!*.md
+!**/*.md
+!bin/
+!bin/**/*.md
+!obj/
+!obj/**/*.md
+!codex-scratch/
+!codex-scratch/**/*.md
+!**/.playwright/
+!**/.playwright/**/*.md
+!**/bin/
+!**/bin/**/*.md
+!**/binfix/
+!**/binfix/**/*.md
+!**/obj/
+!**/obj/**/*.md
+!**/obj-verify/
+!**/obj-verify/**/*.md
+!**/Release-verify/
+!**/Release-verify/**/*.md
+
+# Keep generated/tool markdown under these directories out of version control.
+**/.playwright/**/*.md
+Release-verify/**/*.md
+graphify-out/**/*.md
+
+# Keep local aider history out of version control.
+.aider.chat.history.md

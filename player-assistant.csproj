@@ -1,0 +1,98 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <Nullable>enable</Nullable>
+    <UseWindowsForms>true</UseWindowsForms>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AssemblyName>player-assistant</AssemblyName>
+    <RootNamespace>PlayerAssistant</RootNamespace>
+    <ApplicationIcon>Assets\dragon-icon.ico</ApplicationIcon>
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <SelfContained>false</SelfContained>
+    <PublishSingleFile>true</PublishSingleFile>
+    <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
+    <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
+    <DebugType>none</DebugType>
+    <DebugSymbols>false</DebugSymbols>
+    <OutputPath>Release\</OutputPath>
+    <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+    <AppendRuntimeIdentifierToOutputPath>false</AppendRuntimeIdentifierToOutputPath>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Remove="obj\**\*.cs" />
+    <Compile Remove="bin\**\*.cs" />
+    <Compile Remove="Release\**\*.cs" />
+    <Compile Remove="Debug\**\*.cs" />
+    <Compile Remove="obj-*\**\*.cs" />
+    <Compile Remove="bin-*\**\*.cs" />
+    <Compile Remove="Release-*\**\*.cs" />
+    <Compile Remove="Debug-*\**\*.cs" />
+    <Compile Remove="codex-scratch\**\*.cs" />
+    <Compile Remove="PlayerAssistant.Launcher\**\*.cs" />
+    <Compile Remove="PlayerAssistant.Tests\**\*.cs" />
+    <EmbeddedResource Remove="obj\**\*" />
+    <EmbeddedResource Remove="bin\**\*" />
+    <EmbeddedResource Remove="Release\**\*" />
+    <EmbeddedResource Remove="Debug\**\*" />
+    <EmbeddedResource Remove="obj-*\**\*" />
+    <EmbeddedResource Remove="bin-*\**\*" />
+    <EmbeddedResource Remove="Release-*\**\*" />
+    <EmbeddedResource Remove="Debug-*\**\*" />
+    <EmbeddedResource Remove="codex-scratch\**\*" />
+    <EmbeddedResource Remove="PlayerAssistant.Launcher\**\*" />
+    <EmbeddedResource Remove="PlayerAssistant.Tests\**\*" />
+    <None Remove="obj\**\*" />
+    <None Remove="bin\**\*" />
+    <None Remove="Release\**\*" />
+    <None Remove="Debug\**\*" />
+    <None Remove="obj-*\**\*" />
+    <None Remove="bin-*\**\*" />
+    <None Remove="Release-*\**\*" />
+    <None Remove="Debug-*\**\*" />
+    <None Remove="codex-scratch\**\*" />
+    <None Remove="PlayerAssistant.Launcher\**\*" />
+    <None Remove="PlayerAssistant.Tests\**\*" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Include="Assets\dragon-icon.ico" />
+    <EmbeddedResource Include="Assets\dragon-dim.png" />
+    <EmbeddedResource Include="Assets\white-marble.png" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Update="Properties\Settings.settings">
+      <Generator>SettingsSingleFileGenerator</Generator>
+      <LastGenOutput>Settings.Designer.cs</LastGenOutput>
+    </None>
+    <None Update="settings.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+    </None>
+    <None Update="game-posts-key-terms.md">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+    </None>
+    <None Include="settings.local.json" Condition="Exists('settings.local.json')">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>Never</CopyToPublishDirectory>
+    </None>
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Playwright" Version="1.60.0" />
+    <PackageReference Include="SkiaSharp" Version="3.119.4" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Update="Properties\Settings.Designer.cs">
+      <DesignTimeSharedInput>True</DesignTimeSharedInput>
+      <AutoGen>True</AutoGen>
+      <DependentUpon>Settings.settings</DependentUpon>
+    </Compile>
+  </ItemGroup>
+
+</Project>

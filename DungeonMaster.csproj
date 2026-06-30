@@ -1,0 +1,68 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <Nullable>enable</Nullable>
+    <UseWindowsForms>true</UseWindowsForms>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AssemblyName>player-assistant</AssemblyName>
+    <ApplicationIcon>Assets\dragon-icon.ico</ApplicationIcon>
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <SelfContained>false</SelfContained>
+    <PublishSingleFile>true</PublishSingleFile>
+    <DebugType>none</DebugType>
+    <DebugSymbols>false</DebugSymbols>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Remove="obj\**\*.cs" />
+    <Compile Remove="bin\**\*.cs" />
+    <Compile Remove="Release\**\*.cs" />
+    <Compile Remove="Debug\**\*.cs" />
+    <Compile Remove="obj-*\**\*.cs" />
+    <Compile Remove="bin-*\**\*.cs" />
+    <Compile Remove="Release-*\**\*.cs" />
+    <Compile Remove="Debug-*\**\*.cs" />
+    <Compile Remove="codex-scratch\**\*.cs" />
+    <Compile Remove="PlayerAssistant.Tests\**\*.cs" />
+    <EmbeddedResource Remove="obj\**\*" />
+    <EmbeddedResource Remove="bin\**\*" />
+    <EmbeddedResource Remove="Release\**\*" />
+    <EmbeddedResource Remove="Debug\**\*" />
+    <EmbeddedResource Remove="obj-*\**\*" />
+    <EmbeddedResource Remove="bin-*\**\*" />
+    <EmbeddedResource Remove="Release-*\**\*" />
+    <EmbeddedResource Remove="Debug-*\**\*" />
+    <EmbeddedResource Remove="codex-scratch\**\*" />
+    <EmbeddedResource Remove="PlayerAssistant.Tests\**\*" />
+    <None Remove="obj\**\*" />
+    <None Remove="bin\**\*" />
+    <None Remove="Release\**\*" />
+    <None Remove="Debug\**\*" />
+    <None Remove="obj-*\**\*" />
+    <None Remove="bin-*\**\*" />
+    <None Remove="Release-*\**\*" />
+    <None Remove="Debug-*\**\*" />
+    <None Remove="codex-scratch\**\*" />
+    <None Remove="PlayerAssistant.Tests\**\*" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Include="Assets\dragon-icon.ico" />
+    <EmbeddedResource Include="Assets\dragon-dim.png" />
+    <EmbeddedResource Include="Assets\white-marble.png" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Update="appsettings.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+    </None>
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="SkiaSharp" Version="3.119.4" />
+  </ItemGroup>
+
+</Project>
