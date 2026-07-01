@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("PlayerAssistant.Tests")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+05e0d716f7d02bd472b88804b32cb986edbca0d2")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+afc273d94cbe37f7dddc5a26c8e60d4ffca3bee7")]
 [assembly: System.Reflection.AssemblyProductAttribute("PlayerAssistant.Tests")]
 [assembly: System.Reflection.AssemblyTitleAttribute("PlayerAssistant.Tests")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]

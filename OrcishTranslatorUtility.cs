@@ -1,5 +1,7 @@
 namespace PlayerAssistant
 {
+    using System.Text.RegularExpressions;
+
     internal enum OrcishLanguage
     {
         English,
@@ -36,6 +38,12 @@ namespace PlayerAssistant
 
     internal static class OrcishTranslatorUtility
     {
+        private static readonly Regex EmphasizedFirstPersonPronounPattern =
+            new(@"(?<!\S)I\s+\{emphasis\}(?!\S)", RegexOptions.Compiled);
+
+        private static readonly Regex FirstPersonPronounPattern =
+            new(@"(?<!\S)I(?!\S)", RegexOptions.Compiled);
+
         private static readonly OrcishLexiconEntry[] LexiconEntries =
             BuildLexiconEntries();
 
@@ -54,6 +62,18 @@ namespace PlayerAssistant
                 OrcishLanguage.English,
                 OrcishLanguage.Orcish,
                 partOfSpeech));
+        }
+
+        public static string TranslateEnglishTextToOrcishPronouns(string englishText)
+        {
+            ArgumentException.ThrowIfNullOrWhiteSpace(englishText);
+
+            var translatedText = EmphasizedFirstPersonPronounPattern.Replace(englishText, "Grrt-Ugh");
+            translatedText = FirstPersonPronounPattern.Replace(
+                translatedText,
+                static _ => RandomNumberUtility.GenerateInteger(0, 1) == 0 ? "Ugh" : "Grrt");
+
+            return translatedText;
         }
 
         public static IReadOnlyList<OrcishTranslationCandidate> TranslateEnglishToOrcish(
@@ -190,6 +210,10 @@ namespace PlayerAssistant
                 new("will see", "oglaruk", PartOfSpeech: "verb", GrammarClass: "perception", Tags: ["future"]),
                 new("does not see", "noglur", PartOfSpeech: "verb", GrammarClass: "perception", Tags: ["present", "negative"]),
                 new("did not see", "noglash", PartOfSpeech: "verb", GrammarClass: "perception", Tags: ["past", "negative"]),
+                new("I", "Ugh", PartOfSpeech: "pronoun", GrammarClass: "self", Tags: ["variant-a", "plain"]),
+                new("I", "Grrt", PartOfSpeech: "pronoun", GrammarClass: "self", Tags: ["variant-b", "plain"]),
+                new("really", "grak", PartOfSpeech: "adverb", GrammarClass: "emphasis", Tags: ["variant-a", "plain"]),
+                new("really", "urkh", PartOfSpeech: "adverb", GrammarClass: "emphasis", Tags: ["variant-b", "plain"]),
                 new("if", "ut", PartOfSpeech: "conjunction", GrammarClass: "condition", Tags: ["variant-a", "plain", "alternating"]),
                 new("if", "ka", PartOfSpeech: "conjunction", GrammarClass: "condition", Tags: ["variant-b", "plain", "alternating"]),
                 new("but", "rokh", PartOfSpeech: "conjunction", GrammarClass: "contrast", Tags: ["variant-a", "plain"]),

@@ -19,6 +19,11 @@ var tests = new (string Name, Action Test)[]
     ("orcish translator prefers vrak for default skin terms", OrcishTranslatorPrefersVrakForDefaultSkinTerms),
     ("orcish translator reserves drukh for reverent monster hide", OrcishTranslatorReservesDrukhForReverentMonsterHide),
     ("orcish translator supports oglur verb family", OrcishTranslatorSupportsOglurVerbFamily),
+    ("orcish translator exposes both i pronoun variants", OrcishTranslatorExposesBothIPronounVariants),
+    ("orcish translator random i picker returns valid variant", OrcishTranslatorRandomIPickerReturnsValidVariant),
+    ("orcish translator replaces emphasized i in english text", OrcishTranslatorReplacesEmphasizedIInEnglishText),
+    ("orcish translator exposes both really adverb variants", OrcishTranslatorExposesBothReallyAdverbVariants),
+    ("orcish translator random really picker returns valid variant", OrcishTranslatorRandomReallyPickerReturnsValidVariant),
     ("orcish translator exposes both if variants", OrcishTranslatorExposesBothIfVariants),
     ("orcish translator alternates repeated if terms in sequence", OrcishTranslatorAlternatesRepeatedIfTermsInSequence),
     ("orcish translator exposes both but variants", OrcishTranslatorExposesBothButVariants),
@@ -213,6 +218,53 @@ static void OrcishTranslatorSupportsOglurVerbFamily()
     AssertEqual("noglash", OrcishTranslatorUtility.TranslateEnglishToOrcish("did not see", partOfSpeech: "verb", requiredTags: ["past", "negative"])[0].Translation, "unexpected negative past see translation");
 }
 
+static void OrcishTranslatorExposesBothIPronounVariants()
+{
+    var results = OrcishTranslatorUtility.TranslateEnglishToOrcish("I", partOfSpeech: "pronoun");
+
+    AssertEqual(2, results.Count, "expected two plain I variants");
+    AssertTrue(results.Any(result => string.Equals(result.Translation, "Ugh", StringComparison.OrdinalIgnoreCase)), "expected Ugh variant");
+    AssertTrue(results.Any(result => string.Equals(result.Translation, "Grrt", StringComparison.OrdinalIgnoreCase)), "expected Grrt variant");
+}
+
+static void OrcishTranslatorRandomIPickerReturnsValidVariant()
+{
+    var result = OrcishTranslatorUtility.TranslateEnglishToOrcishRandom("I", partOfSpeech: "pronoun");
+
+    AssertTrue(result is not null, "expected random I picker to return a variant");
+    AssertTrue(
+        string.Equals(result!.Translation, "Ugh", StringComparison.OrdinalIgnoreCase) ||
+        string.Equals(result.Translation, "Grrt", StringComparison.OrdinalIgnoreCase),
+        "expected random I picker to return one of the plain variants");
+}
+
+static void OrcishTranslatorReplacesEmphasizedIInEnglishText()
+{
+    var translated = OrcishTranslatorUtility.TranslateEnglishTextToOrcishPronouns("if I {emphasis} see");
+
+    AssertEqual("if Grrt-Ugh see", translated, "expected emphasized I to become Grrt-Ugh");
+}
+
+static void OrcishTranslatorExposesBothReallyAdverbVariants()
+{
+    var results = OrcishTranslatorUtility.TranslateEnglishToOrcish("really", partOfSpeech: "adverb");
+
+    AssertEqual(2, results.Count, "expected two really adverb variants");
+    AssertTrue(results.Any(result => string.Equals(result.Translation, "grak", StringComparison.OrdinalIgnoreCase)), "expected grak variant");
+    AssertTrue(results.Any(result => string.Equals(result.Translation, "urkh", StringComparison.OrdinalIgnoreCase)), "expected urkh variant");
+}
+
+static void OrcishTranslatorRandomReallyPickerReturnsValidVariant()
+{
+    var result = OrcishTranslatorUtility.TranslateEnglishToOrcishRandom("really", partOfSpeech: "adverb");
+
+    AssertTrue(result is not null, "expected random really picker to return a variant");
+    AssertTrue(
+        string.Equals(result!.Translation, "grak", StringComparison.OrdinalIgnoreCase) ||
+        string.Equals(result.Translation, "urkh", StringComparison.OrdinalIgnoreCase),
+        "expected random really picker to return one of the adverb variants");
+}
+
 static void OrcishTranslatorExposesBothIfVariants()
 {
     var results = OrcishTranslatorUtility.TranslateEnglishToOrcish("if", partOfSpeech: "conjunction");
@@ -266,8 +318,10 @@ static void OrcishTranslatorExposesUniqueEnglishTermCount()
 {
     var terms = OrcishTranslatorUtility.GetEnglishTerms();
 
-    AssertEqual(48, OrcishTranslatorUtility.GetEnglishTermCount(), "unexpected total English term count");
+    AssertEqual(50, OrcishTranslatorUtility.GetEnglishTermCount(), "unexpected total English term count");
     AssertEqual(OrcishTranslatorUtility.GetEnglishTermCount(), terms.Count, "term list and count should agree");
+    AssertEqual(1, terms.Count(term => string.Equals(term, "I", StringComparison.OrdinalIgnoreCase)), "I should be counted once despite multiple variants");
+    AssertEqual(1, terms.Count(term => string.Equals(term, "really", StringComparison.OrdinalIgnoreCase)), "really should be counted once despite multiple variants");
     AssertEqual(1, terms.Count(term => string.Equals(term, "watch", StringComparison.OrdinalIgnoreCase)), "watch should be counted once despite multiple parts of speech");
     AssertTrue(terms.Contains("humans'", StringComparer.OrdinalIgnoreCase), "expected generated plural possessive term");
 }

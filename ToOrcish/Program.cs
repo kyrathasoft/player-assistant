@@ -18,6 +18,8 @@ return 0;
 
 static string TranslateSentence(string input)
 {
+    input = OrcishTranslatorUtility.TranslateEnglishTextToOrcishPronouns(input);
+
     var terms = input
         .Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
 
