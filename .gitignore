@@ -9,6 +9,8 @@
 **/bin/
 **/obj/
 .aider*
+node/
+.codex/
 node_modules/
 dist/
 build/
@@ -48,6 +50,9 @@ codex-scratch/
 !**/Release-verify/**/*.md
 
 # Keep generated/tool markdown under these directories out of version control.
+node/**/*.md
+.codex/**/*.md
+node_modules/**/*.md
 **/.playwright/**/*.md
 Release-verify/**/*.md
 graphify-out/**/*.md

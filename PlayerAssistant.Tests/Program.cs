@@ -134,13 +134,13 @@ static void OrcishTranslatorFiltersHumanTermsByRegister()
     var pluralResults = OrcishTranslatorUtility.TranslateEnglishToOrcish("humans", partOfSpeech: "noun", requiredTags: ["neutral", "plural"]);
 
     AssertEqual(1, neutralResults.Count, "expected one neutral human translation");
-    AssertEqual("marg", neutralResults[0].Translation, "unexpected neutral human translation");
+    AssertEqual("margi", neutralResults[0].Translation, "unexpected neutral human translation");
     AssertEqual(1, insultingResults.Count, "expected one insulting human translation");
     AssertEqual("thrum-skin", insultingResults[0].Translation, "unexpected insulting human translation");
     AssertEqual(1, respectfulResults.Count, "expected one respectful human translation");
     AssertEqual("surgar", respectfulResults[0].Translation, "unexpected respectful human translation");
     AssertEqual(1, pluralResults.Count, "expected one plural neutral human translation");
-    AssertEqual("margi", pluralResults[0].Translation, "unexpected plural human translation");
+    AssertEqual("margith", pluralResults[0].Translation, "unexpected plural human translation");
 }
 
 static void OrcishTranslatorSupportsReverseLookupForRespectfulHumanTerm()
@@ -159,7 +159,7 @@ static void OrcishTranslatorGeneratesPluralPossessivesSystematically()
     var respectfulReverseResults = OrcishTranslatorUtility.TranslateOrcishToEnglish("surgariuk", partOfSpeech: "noun", requiredTags: ["respectful", "plural", "possessive"]);
 
     AssertEqual(1, neutralResults.Count, "expected neutral plural possessive");
-    AssertEqual("margiuk", neutralResults[0].Translation, "unexpected neutral plural possessive");
+    AssertEqual("margithuk", neutralResults[0].Translation, "unexpected neutral plural possessive");
     AssertEqual(1, insultingResults.Count, "expected insulting plural possessive");
     AssertEqual("thrum-skinaruk", insultingResults[0].Translation, "unexpected insulting plural possessive");
     AssertTrue(respectfulReverseResults.Any(result => string.Equals(result.Translation, "sun-born ones'", StringComparison.OrdinalIgnoreCase)), "expected respectful plural possessive reverse translation");

@@ -15,6 +15,13 @@ namespace PlayerAssistant
         string? GrammarClass = null,
         IReadOnlyList<string>? Tags = null);
 
+    internal sealed record OrcishAffixEntry(
+        string Affix,
+        string AffixType,
+        string Meaning,
+        string? UsageNote = null,
+        IReadOnlyList<string>? Tags = null);
+
     internal sealed record OrcishTranslationRequest(
         string Text,
         OrcishLanguage SourceLanguage,
@@ -46,6 +53,9 @@ namespace PlayerAssistant
 
         private static readonly OrcishLexiconEntry[] LexiconEntries =
             BuildLexiconEntries();
+
+        private static readonly OrcishAffixEntry[] AffixEntries =
+            BuildAffixEntries();
 
         private static readonly IReadOnlyDictionary<string, OrcishLexiconEntry[]> EnglishIndex =
             BuildIndex(LexiconEntries, static entry => entry.English);
@@ -169,6 +179,11 @@ namespace PlayerAssistant
                 .ToArray();
         }
 
+        public static IReadOnlyList<OrcishAffixEntry> GetAffixEntries()
+        {
+            return AffixEntries;
+        }
+
         private static OrcishLexiconEntry[] BuildLexiconEntries()
         {
             var entries = new List<OrcishLexiconEntry>
@@ -176,17 +191,25 @@ namespace PlayerAssistant
                 new("hello", "zug"),
                 new("friend", "mokra", PartOfSpeech: "noun", GrammarClass: "kinship"),
                 new("ally", "mokra", PartOfSpeech: "noun", GrammarClass: "kinship"),
-                new("human", "marg", PartOfSpeech: "noun", GrammarClass: "person", Tags: ["neutral", "species"]),
-                new("man", "marg", PartOfSpeech: "noun", GrammarClass: "person", Tags: ["neutral", "species"]),
-                new("humans", "margi", PartOfSpeech: "noun", GrammarClass: "person", Tags: ["neutral", "species", "plural"]),
-                new("men", "margi", PartOfSpeech: "noun", GrammarClass: "person", Tags: ["neutral", "species", "plural"]),
-                new("human's", "marguk", PartOfSpeech: "noun", GrammarClass: "person", Tags: ["neutral", "species", "possessive"]),
-                new("man's", "marguk", PartOfSpeech: "noun", GrammarClass: "person", Tags: ["neutral", "species", "possessive"]),
+                new("human", "margi", PartOfSpeech: "noun", GrammarClass: "person", Tags: ["neutral", "species"]),
+                new("man", "margi", PartOfSpeech: "noun", GrammarClass: "person", Tags: ["neutral", "species"]),
+                new("inferior other", "margi", PartOfSpeech: "noun", GrammarClass: "person", Tags: ["pejorative", "outsider", "broad-gloss"]),
+                new("humans", "margith", PartOfSpeech: "noun", GrammarClass: "person", Tags: ["neutral", "species", "plural"]),
+                new("men", "margith", PartOfSpeech: "noun", GrammarClass: "person", Tags: ["neutral", "species", "plural"]),
+                new("inferior others", "margith", PartOfSpeech: "noun", GrammarClass: "person", Tags: ["pejorative", "outsider", "plural", "broad-gloss"]),
+                new("obviously inferior others", "margith", PartOfSpeech: "noun", GrammarClass: "person", Tags: ["pejorative", "outsider", "plural", "emphatic", "broad-gloss"]),
+                new("human's", "margiuk", PartOfSpeech: "noun", GrammarClass: "person", Tags: ["neutral", "species", "possessive"]),
+                new("man's", "margiuk", PartOfSpeech: "noun", GrammarClass: "person", Tags: ["neutral", "species", "possessive"]),
                 new("softskin", "thrum-skin", PartOfSpeech: "noun", GrammarClass: "person", Tags: ["insulting", "species"]),
                 new("weak human", "thrum-skin", PartOfSpeech: "noun", GrammarClass: "person", Tags: ["insulting", "species"]),
                 new("softskins", "thrum-skinar", PartOfSpeech: "noun", GrammarClass: "person", Tags: ["insulting", "species", "plural"]),
                 new("weak humans", "thrum-skinar", PartOfSpeech: "noun", GrammarClass: "person", Tags: ["insulting", "species", "plural"]),
                 new("softskin's", "thrum-skinuk", PartOfSpeech: "noun", GrammarClass: "person", Tags: ["insulting", "species", "possessive"]),
+                new("children of Gruumsh", "mogra", PartOfSpeech: "noun", GrammarClass: "people", Tags: ["orc", "collective", "identity"]),
+                new("favored children of Gruumsh", "mogra-ti", PartOfSpeech: "noun", GrammarClass: "people", Tags: ["orc", "collective", "identity", "favored"]),
+                new("superior children of Gruumsh", "mogra-ti", PartOfSpeech: "noun", GrammarClass: "people", Tags: ["orc", "collective", "identity", "superior"]),
+                new("githyanki", "githyanki", PartOfSpeech: "noun", GrammarClass: "person", Tags: ["exonym", "historical", "orc-origin"]),
+                new("one of unexpected strength", "yanki", PartOfSpeech: "noun", GrammarClass: "person", Tags: ["historical", "unexpected-strength"]),
                 new("sun-born", "surgar", PartOfSpeech: "noun", GrammarClass: "person", Tags: ["respectful", "species"]),
                 new("free human", "surgar", PartOfSpeech: "noun", GrammarClass: "person", Tags: ["respectful", "species"]),
                 new("sun-born ones", "surgari", PartOfSpeech: "noun", GrammarClass: "person", Tags: ["respectful", "species", "plural"]),
@@ -201,6 +224,21 @@ namespace PlayerAssistant
                 new("warrior", "gash", PartOfSpeech: "noun", GrammarClass: "person"),
                 new("watch", "thrak", PartOfSpeech: "noun", GrammarClass: "object"),
                 new("watch", "gor", PartOfSpeech: "verb", GrammarClass: "action"),
+                new("to be", "tar", PartOfSpeech: "verb", GrammarClass: "state", Tags: ["infinitive"]),
+                new("be", "tar", PartOfSpeech: "verb", GrammarClass: "state", Tags: ["infinitive"]),
+                new("is", "tur", PartOfSpeech: "verb", GrammarClass: "state", Tags: ["present"]),
+                new("am", "tur", PartOfSpeech: "verb", GrammarClass: "state", Tags: ["present"]),
+                new("are", "tur", PartOfSpeech: "verb", GrammarClass: "state", Tags: ["present"]),
+                new("was", "tash", PartOfSpeech: "verb", GrammarClass: "state", Tags: ["past"]),
+                new("were", "tash", PartOfSpeech: "verb", GrammarClass: "state", Tags: ["past"]),
+                new("have been", "tuk", PartOfSpeech: "verb", GrammarClass: "state", Tags: ["perfect"]),
+                new("is being", "turin", PartOfSpeech: "verb", GrammarClass: "state", Tags: ["progressive", "present"]),
+                new("are being", "turin", PartOfSpeech: "verb", GrammarClass: "state", Tags: ["progressive", "present"]),
+                new("will be", "taruk", PartOfSpeech: "verb", GrammarClass: "state", Tags: ["future"]),
+                new("is not", "notur", PartOfSpeech: "verb", GrammarClass: "state", Tags: ["present", "negative"]),
+                new("are not", "notur", PartOfSpeech: "verb", GrammarClass: "state", Tags: ["present", "negative"]),
+                new("was not", "notash", PartOfSpeech: "verb", GrammarClass: "state", Tags: ["past", "negative"]),
+                new("were not", "notash", PartOfSpeech: "verb", GrammarClass: "state", Tags: ["past", "negative"]),
                 new("to see", "oglar", PartOfSpeech: "verb", GrammarClass: "perception", Tags: ["infinitive"]),
                 new("see", "oglar", PartOfSpeech: "verb", GrammarClass: "perception", Tags: ["infinitive"]),
                 new("sees", "oglur", PartOfSpeech: "verb", GrammarClass: "perception", Tags: ["present"]),
@@ -214,6 +252,10 @@ namespace PlayerAssistant
                 new("I", "Grrt", PartOfSpeech: "pronoun", GrammarClass: "self", Tags: ["variant-b", "plain"]),
                 new("really", "grak", PartOfSpeech: "adverb", GrammarClass: "emphasis", Tags: ["variant-a", "plain"]),
                 new("really", "urkh", PartOfSpeech: "adverb", GrammarClass: "emphasis", Tags: ["variant-b", "plain"]),
+                new("those", "lek", PartOfSpeech: "determiner", GrammarClass: "demonstrative"),
+                new("these", "lek", PartOfSpeech: "determiner", GrammarClass: "demonstrative"),
+                new("those formidable ones", "lekyanki", PartOfSpeech: "determiner", GrammarClass: "demonstrative", Tags: ["formidable", "marked"]),
+                new("these formidable ones", "lekyanki", PartOfSpeech: "determiner", GrammarClass: "demonstrative", Tags: ["formidable", "marked"]),
                 new("if", "ut", PartOfSpeech: "conjunction", GrammarClass: "condition", Tags: ["variant-a", "plain", "alternating"]),
                 new("if", "ka", PartOfSpeech: "conjunction", GrammarClass: "condition", Tags: ["variant-b", "plain", "alternating"]),
                 new("but", "rokh", PartOfSpeech: "conjunction", GrammarClass: "contrast", Tags: ["variant-a", "plain"]),
@@ -228,6 +270,37 @@ namespace PlayerAssistant
             var baseEntries = entries.ToArray();
             entries.AddRange(BuildPluralPossessives(baseEntries));
             return entries.ToArray();
+        }
+
+        private static OrcishAffixEntry[] BuildAffixEntries()
+        {
+            return
+            [
+                new(
+                    "mar",
+                    "prefix",
+                    "often marks inferiority",
+                    "User guidance: many Orcish words beginning with 'mar-' carry an inferior or lesser sense. In forms like 'margi' and 'margith', the gloss can extend beyond humans to other non-orc humanoids Orcs view as inferior.",
+                    ["connotation", "inferiority"]),
+                new(
+                    "ti",
+                    "suffix",
+                    "connotes grandeur or power",
+                    "Seen in self-reference such as 'mogra-ti', indicating the superior or favored children of Gruumsh.",
+                    ["connotation", "grandeur", "power", "favor"]),
+                new(
+                    "gi",
+                    "suffix",
+                    "marks something broadly foreign to Orcish experience or culture",
+                    "Example: 'fletra-gi' can describe a flying thing that feels alien or outside Orcish experience.",
+                    ["connotation", "foreign", "otherness", "cultural-distance"]),
+                new(
+                    "yanki",
+                    "suffix",
+                    "marks one of unexpected strength",
+                    "Historical note: Orcs are said to have added 'yanki' after underestimating and then losing to the extraplanar humanoids later known as 'githyanki'.",
+                    ["connotation", "unexpected-strength", "historical", "martial-respect"])
+            ];
         }
 
         public static IReadOnlyList<OrcishTranslationCandidate> Translate(OrcishTranslationRequest request)
