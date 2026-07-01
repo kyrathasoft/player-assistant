@@ -31,6 +31,7 @@
     <Compile Remove="Release-*\**\*.cs" />
     <Compile Remove="Debug-*\**\*.cs" />
     <Compile Remove="codex-scratch\**\*.cs" />
+    <Compile Remove="ToOrcish\**\*.cs" />
     <Compile Remove="PlayerAssistant.Launcher\**\*.cs" />
     <Compile Remove="PlayerAssistant.Tests\**\*.cs" />
     <EmbeddedResource Remove="obj\**\*" />
@@ -42,6 +43,7 @@
     <EmbeddedResource Remove="Release-*\**\*" />
     <EmbeddedResource Remove="Debug-*\**\*" />
     <EmbeddedResource Remove="codex-scratch\**\*" />
+    <EmbeddedResource Remove="ToOrcish\**\*" />
     <EmbeddedResource Remove="PlayerAssistant.Launcher\**\*" />
     <EmbeddedResource Remove="PlayerAssistant.Tests\**\*" />
     <None Remove="obj\**\*" />
@@ -53,6 +55,7 @@
     <None Remove="Release-*\**\*" />
     <None Remove="Debug-*\**\*" />
     <None Remove="codex-scratch\**\*" />
+    <None Remove="ToOrcish\**\*" />
     <None Remove="PlayerAssistant.Launcher\**\*" />
     <None Remove="PlayerAssistant.Tests\**\*" />
   </ItemGroup>

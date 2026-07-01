@@ -9,7 +9,12 @@
 **/bin/
 **/obj/
 .aider*
-
+node_modules/
+dist/
+build/
+.next/
+.venv/
+.code-review-graph/
 .vs/
 bin/
 obj/

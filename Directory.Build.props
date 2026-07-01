@@ -10,4 +10,8 @@
   <PropertyGroup Condition="'$(MSBuildProjectName)' == 'DungeonMaster'">
     <BaseIntermediateOutputPath>obj\DungeonMaster\</BaseIntermediateOutputPath>
   </PropertyGroup>
+
+  <PropertyGroup Condition="'$(MSBuildProjectName)' == 'to-orcish'">
+    <BaseIntermediateOutputPath>obj\to-orcish\</BaseIntermediateOutputPath>
+  </PropertyGroup>
 </Project>

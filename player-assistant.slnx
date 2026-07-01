@@ -8,4 +8,7 @@
   <Project Path="PlayerAssistant.Tests\PlayerAssistant.Tests.csproj">
     <BuildType Project="Release" />
   </Project>
+  <Project Path="ToOrcish\to-orcish.csproj">
+    <BuildType Project="Release" />
+  </Project>
 </Solution>

@@ -137,6 +137,18 @@ namespace PlayerAssistant
             return results;
         }
 
+        public static int GetEnglishTermCount()
+        {
+            return EnglishIndex.Count;
+        }
+
+        public static IReadOnlyList<string> GetEnglishTerms()
+        {
+            return EnglishIndex.Keys
+                .OrderBy(static term => term, StringComparer.OrdinalIgnoreCase)
+                .ToArray();
+        }
+
         private static OrcishLexiconEntry[] BuildLexiconEntries()
         {
             var entries = new List<OrcishLexiconEntry>

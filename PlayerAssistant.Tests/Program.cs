@@ -24,6 +24,7 @@ var tests = new (string Name, Action Test)[]
     ("orcish translator exposes both but variants", OrcishTranslatorExposesBothButVariants),
     ("orcish translator supports sarcastic but variants", OrcishTranslatorSupportsSarcasticButVariants),
     ("orcish translator random but picker returns valid variant", OrcishTranslatorRandomButPickerReturnsValidVariant),
+    ("orcish translator exposes unique english term count", OrcishTranslatorExposesUniqueEnglishTermCount),
     ("startup manifest status distinguishes skipped and failed", StartupManifestStatusDistinguishesSkippedAndFailed),
     ("startup error log entry includes phase and exception", StartupErrorLogEntryIncludesPhaseAndException),
     ("show-all thread url preserves base query and adds show all", ShowAllThreadUrlPreservesBaseQueryAndAddsShowAll),
@@ -259,6 +260,16 @@ static void OrcishTranslatorRandomButPickerReturnsValidVariant()
         string.Equals(result!.Translation, "rokh", StringComparison.OrdinalIgnoreCase) ||
         string.Equals(result.Translation, "nar", StringComparison.OrdinalIgnoreCase),
         "expected random but picker to return one of the plain variants");
+}
+
+static void OrcishTranslatorExposesUniqueEnglishTermCount()
+{
+    var terms = OrcishTranslatorUtility.GetEnglishTerms();
+
+    AssertEqual(48, OrcishTranslatorUtility.GetEnglishTermCount(), "unexpected total English term count");
+    AssertEqual(OrcishTranslatorUtility.GetEnglishTermCount(), terms.Count, "term list and count should agree");
+    AssertEqual(1, terms.Count(term => string.Equals(term, "watch", StringComparison.OrdinalIgnoreCase)), "watch should be counted once despite multiple parts of speech");
+    AssertTrue(terms.Contains("humans'", StringComparer.OrdinalIgnoreCase), "expected generated plural possessive term");
 }
 
 static void StartupManifestStatusDistinguishesSkippedAndFailed()
