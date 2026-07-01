@@ -9,6 +9,21 @@ var requestedTestFilter = args.Length > 0 ? string.Join(" ", args).Trim() : stri
 
 var tests = new (string Name, Action Test)[]
 {
+    ("orcish translator returns one-to-one english mapping", OrcishTranslatorReturnsOneToOneEnglishMapping),
+    ("orcish translator returns several english matches for one orcish word", OrcishTranslatorReturnsSeveralEnglishMatchesForOneOrcishWord),
+    ("orcish translator uses part of speech to disambiguate", OrcishTranslatorUsesPartOfSpeechToDisambiguate),
+    ("orcish translator filters human terms by register", OrcishTranslatorFiltersHumanTermsByRegister),
+    ("orcish translator supports reverse lookup for respectful human term", OrcishTranslatorSupportsReverseLookupForRespectfulHumanTerm),
+    ("orcish translator generates plural possessives systematically", OrcishTranslatorGeneratesPluralPossessivesSystematically),
+    ("orcish translator supports pale adjective registers", OrcishTranslatorSupportsPaleAdjectiveRegisters),
+    ("orcish translator prefers vrak for default skin terms", OrcishTranslatorPrefersVrakForDefaultSkinTerms),
+    ("orcish translator reserves drukh for reverent monster hide", OrcishTranslatorReservesDrukhForReverentMonsterHide),
+    ("orcish translator supports oglur verb family", OrcishTranslatorSupportsOglurVerbFamily),
+    ("orcish translator exposes both if variants", OrcishTranslatorExposesBothIfVariants),
+    ("orcish translator alternates repeated if terms in sequence", OrcishTranslatorAlternatesRepeatedIfTermsInSequence),
+    ("orcish translator exposes both but variants", OrcishTranslatorExposesBothButVariants),
+    ("orcish translator supports sarcastic but variants", OrcishTranslatorSupportsSarcasticButVariants),
+    ("orcish translator random but picker returns valid variant", OrcishTranslatorRandomButPickerReturnsValidVariant),
     ("startup manifest status distinguishes skipped and failed", StartupManifestStatusDistinguishesSkippedAndFailed),
     ("startup error log entry includes phase and exception", StartupErrorLogEntryIncludesPhaseAndException),
     ("show-all thread url preserves base query and adds show all", ShowAllThreadUrlPreservesBaseQueryAndAddsShowAll),
@@ -74,6 +89,177 @@ if (failures.Count > 0)
 }
 
 return 0;
+
+static void OrcishTranslatorReturnsOneToOneEnglishMapping()
+{
+    var results = OrcishTranslatorUtility.TranslateEnglishToOrcish("hello");
+
+    AssertEqual(1, results.Count, "expected one translation for hello");
+    AssertEqual("zug", results[0].Translation, "unexpected Orcish translation for hello");
+}
+
+static void OrcishTranslatorReturnsSeveralEnglishMatchesForOneOrcishWord()
+{
+    var results = OrcishTranslatorUtility.TranslateOrcishToEnglish("mokra");
+
+    AssertEqual(2, results.Count, "expected two English translations for mokra");
+    AssertTrue(results.Any(result => string.Equals(result.Translation, "friend", StringComparison.OrdinalIgnoreCase)), "expected friend translation");
+    AssertTrue(results.Any(result => string.Equals(result.Translation, "ally", StringComparison.OrdinalIgnoreCase)), "expected ally translation");
+}
+
+static void OrcishTranslatorUsesPartOfSpeechToDisambiguate()
+{
+    var nounResults = OrcishTranslatorUtility.TranslateEnglishToOrcish("watch", partOfSpeech: "noun");
+    var verbResults = OrcishTranslatorUtility.TranslateEnglishToOrcish("watch", partOfSpeech: "verb");
+    var unfilteredResults = OrcishTranslatorUtility.TranslateEnglishToOrcish("watch");
+
+    AssertEqual(1, nounResults.Count, "expected one noun translation for watch");
+    AssertEqual("thrak", nounResults[0].Translation, "unexpected noun translation for watch");
+    AssertEqual(1, verbResults.Count, "expected one verb translation for watch");
+    AssertEqual("gor", verbResults[0].Translation, "unexpected verb translation for watch");
+    AssertEqual(2, unfilteredResults.Count, "expected both translations when no part of speech is supplied");
+}
+
+static void OrcishTranslatorFiltersHumanTermsByRegister()
+{
+    var neutralResults = OrcishTranslatorUtility.TranslateEnglishToOrcish("human", partOfSpeech: "noun", requiredTags: ["neutral"]);
+    var insultingResults = OrcishTranslatorUtility.TranslateEnglishToOrcish("weak human", partOfSpeech: "noun", requiredTags: ["insulting"]);
+    var respectfulResults = OrcishTranslatorUtility.TranslateEnglishToOrcish("free human", partOfSpeech: "noun", requiredTags: ["respectful"]);
+    var pluralResults = OrcishTranslatorUtility.TranslateEnglishToOrcish("humans", partOfSpeech: "noun", requiredTags: ["neutral", "plural"]);
+
+    AssertEqual(1, neutralResults.Count, "expected one neutral human translation");
+    AssertEqual("marg", neutralResults[0].Translation, "unexpected neutral human translation");
+    AssertEqual(1, insultingResults.Count, "expected one insulting human translation");
+    AssertEqual("thrum-skin", insultingResults[0].Translation, "unexpected insulting human translation");
+    AssertEqual(1, respectfulResults.Count, "expected one respectful human translation");
+    AssertEqual("surgar", respectfulResults[0].Translation, "unexpected respectful human translation");
+    AssertEqual(1, pluralResults.Count, "expected one plural neutral human translation");
+    AssertEqual("margi", pluralResults[0].Translation, "unexpected plural human translation");
+}
+
+static void OrcishTranslatorSupportsReverseLookupForRespectfulHumanTerm()
+{
+    var results = OrcishTranslatorUtility.TranslateOrcishToEnglish("surgar", partOfSpeech: "noun", requiredTags: ["respectful"]);
+
+    AssertEqual(2, results.Count, "expected respectful reverse lookup to surface both English glosses");
+    AssertTrue(results.Any(result => string.Equals(result.Translation, "sun-born", StringComparison.OrdinalIgnoreCase)), "expected sun-born reverse translation");
+    AssertTrue(results.Any(result => string.Equals(result.Translation, "free human", StringComparison.OrdinalIgnoreCase)), "expected free human reverse translation");
+}
+
+static void OrcishTranslatorGeneratesPluralPossessivesSystematically()
+{
+    var neutralResults = OrcishTranslatorUtility.TranslateEnglishToOrcish("humans'", partOfSpeech: "noun", requiredTags: ["neutral", "plural", "possessive"]);
+    var insultingResults = OrcishTranslatorUtility.TranslateEnglishToOrcish("softskins'", partOfSpeech: "noun", requiredTags: ["insulting", "plural", "possessive"]);
+    var respectfulReverseResults = OrcishTranslatorUtility.TranslateOrcishToEnglish("surgariuk", partOfSpeech: "noun", requiredTags: ["respectful", "plural", "possessive"]);
+
+    AssertEqual(1, neutralResults.Count, "expected neutral plural possessive");
+    AssertEqual("margiuk", neutralResults[0].Translation, "unexpected neutral plural possessive");
+    AssertEqual(1, insultingResults.Count, "expected insulting plural possessive");
+    AssertEqual("thrum-skinaruk", insultingResults[0].Translation, "unexpected insulting plural possessive");
+    AssertTrue(respectfulReverseResults.Any(result => string.Equals(result.Translation, "sun-born ones'", StringComparison.OrdinalIgnoreCase)), "expected respectful plural possessive reverse translation");
+    AssertTrue(respectfulReverseResults.Any(result => string.Equals(result.Translation, "free humans'", StringComparison.OrdinalIgnoreCase)), "expected respectful plural possessive reverse translation for gloss");
+}
+
+static void OrcishTranslatorSupportsPaleAdjectiveRegisters()
+{
+    var neutralResults = OrcishTranslatorUtility.TranslateEnglishToOrcish("pale", partOfSpeech: "adjective", requiredTags: ["neutral"]);
+    var fearfulResults = OrcishTranslatorUtility.TranslateEnglishToOrcish("pale with fear", partOfSpeech: "adjective", requiredTags: ["fear", "pejorative"]);
+    var reverseResults = OrcishTranslatorUtility.TranslateOrcishToEnglish("kelnagak", partOfSpeech: "adjective", requiredTags: ["fear", "pejorative"]);
+
+    AssertEqual(1, neutralResults.Count, "expected neutral pale adjective");
+    AssertEqual("kelnib", neutralResults[0].Translation, "unexpected neutral pale adjective");
+    AssertEqual(1, fearfulResults.Count, "expected fear-pale adjective");
+    AssertEqual("kelnagak", fearfulResults[0].Translation, "unexpected fear-pale adjective");
+    AssertTrue(reverseResults.Any(result => string.Equals(result.Translation, "pale with fear", StringComparison.OrdinalIgnoreCase)), "expected fear-pale reverse translation");
+}
+
+static void OrcishTranslatorPrefersVrakForDefaultSkinTerms()
+{
+    var skinResults = OrcishTranslatorUtility.TranslateEnglishToOrcish("skin", partOfSpeech: "noun", requiredTags: ["default"]);
+    var hidesResults = OrcishTranslatorUtility.TranslateEnglishToOrcish("hides", partOfSpeech: "noun", requiredTags: ["default", "plural"]);
+    var possessiveResults = OrcishTranslatorUtility.TranslateEnglishToOrcish("skins'", partOfSpeech: "noun", requiredTags: ["default", "plural", "possessive"]);
+
+    AssertEqual(1, skinResults.Count, "expected one default skin translation");
+    AssertEqual("vrak", skinResults[0].Translation, "unexpected default skin translation");
+    AssertEqual(1, hidesResults.Count, "expected one default hides translation");
+    AssertEqual("vraki", hidesResults[0].Translation, "unexpected default hides translation");
+    AssertEqual(1, possessiveResults.Count, "expected one default plural possessive skin translation");
+    AssertEqual("vrakiuk", possessiveResults[0].Translation, "unexpected default plural possessive skin translation");
+}
+
+static void OrcishTranslatorReservesDrukhForReverentMonsterHide()
+{
+    var reverentResults = OrcishTranslatorUtility.TranslateEnglishToOrcish("hide", partOfSpeech: "noun", requiredTags: ["reverent", "monster", "thick-hide"]);
+    var reverseResults = OrcishTranslatorUtility.TranslateOrcishToEnglish("drukh", partOfSpeech: "noun", requiredTags: ["reverent", "monster", "thick-hide"]);
+    var pluralPossessiveResults = OrcishTranslatorUtility.TranslateEnglishToOrcish("hides'", partOfSpeech: "noun", requiredTags: ["reverent", "monster", "thick-hide", "plural", "possessive"]);
+
+    AssertEqual(1, reverentResults.Count, "expected one reverent monster hide translation");
+    AssertEqual("drukh", reverentResults[0].Translation, "unexpected reverent monster hide translation");
+    AssertTrue(reverseResults.Any(result => string.Equals(result.Translation, "hide", StringComparison.OrdinalIgnoreCase)), "expected reverse hide translation for drukh");
+    AssertEqual(1, pluralPossessiveResults.Count, "expected one reverent monster plural possessive hide translation");
+    AssertEqual("drukhiuk", pluralPossessiveResults[0].Translation, "unexpected reverent monster plural possessive hide translation");
+}
+
+static void OrcishTranslatorSupportsOglurVerbFamily()
+{
+    AssertEqual("oglar", OrcishTranslatorUtility.TranslateEnglishToOrcish("to see", partOfSpeech: "verb", requiredTags: ["infinitive"])[0].Translation, "unexpected infinitive see translation");
+    AssertEqual("oglur", OrcishTranslatorUtility.TranslateEnglishToOrcish("sees", partOfSpeech: "verb", requiredTags: ["present"])[0].Translation, "unexpected present see translation");
+    AssertEqual("oglash", OrcishTranslatorUtility.TranslateEnglishToOrcish("saw", partOfSpeech: "verb", requiredTags: ["past"])[0].Translation, "unexpected past see translation");
+    AssertEqual("ogluk", OrcishTranslatorUtility.TranslateEnglishToOrcish("have seen", partOfSpeech: "verb", requiredTags: ["perfect"])[0].Translation, "unexpected perfect see translation");
+    AssertEqual("oglurin", OrcishTranslatorUtility.TranslateEnglishToOrcish("is seeing", partOfSpeech: "verb", requiredTags: ["progressive"])[0].Translation, "unexpected progressive see translation");
+    AssertEqual("oglaruk", OrcishTranslatorUtility.TranslateEnglishToOrcish("will see", partOfSpeech: "verb", requiredTags: ["future"])[0].Translation, "unexpected future see translation");
+    AssertEqual("noglur", OrcishTranslatorUtility.TranslateEnglishToOrcish("does not see", partOfSpeech: "verb", requiredTags: ["present", "negative"])[0].Translation, "unexpected negative present see translation");
+    AssertEqual("noglash", OrcishTranslatorUtility.TranslateEnglishToOrcish("did not see", partOfSpeech: "verb", requiredTags: ["past", "negative"])[0].Translation, "unexpected negative past see translation");
+}
+
+static void OrcishTranslatorExposesBothIfVariants()
+{
+    var results = OrcishTranslatorUtility.TranslateEnglishToOrcish("if", partOfSpeech: "conjunction");
+
+    AssertEqual(2, results.Count, "expected two plain if variants");
+    AssertTrue(results.Any(result => string.Equals(result.Translation, "ut", StringComparison.OrdinalIgnoreCase)), "expected ut variant");
+    AssertTrue(results.Any(result => string.Equals(result.Translation, "ka", StringComparison.OrdinalIgnoreCase)), "expected ka variant");
+}
+
+static void OrcishTranslatorAlternatesRepeatedIfTermsInSequence()
+{
+    var results = OrcishTranslatorUtility.TranslateEnglishSequenceToOrcish(["if", "if", "if", "if"]);
+
+    AssertEqual(4, results.Count, "expected four translated terms");
+    AssertFalse(string.IsNullOrWhiteSpace(results[0].Translation), "expected first if translation");
+    AssertFalse(string.Equals(results[0].Translation, results[1].Translation, StringComparison.OrdinalIgnoreCase), "expected second if to alternate");
+    AssertEqual(results[0].Translation, results[2].Translation, "expected third if to alternate back to the first choice");
+    AssertEqual(results[1].Translation, results[3].Translation, "expected fourth if to alternate back to the second choice");
+}
+
+static void OrcishTranslatorExposesBothButVariants()
+{
+    var results = OrcishTranslatorUtility.TranslateEnglishToOrcish("but", partOfSpeech: "conjunction");
+
+    AssertEqual(2, results.Count, "expected two plain but variants");
+    AssertTrue(results.Any(result => string.Equals(result.Translation, "rokh", StringComparison.OrdinalIgnoreCase)), "expected rokh variant");
+    AssertTrue(results.Any(result => string.Equals(result.Translation, "nar", StringComparison.OrdinalIgnoreCase)), "expected nar variant");
+}
+
+static void OrcishTranslatorSupportsSarcasticButVariants()
+{
+    var results = OrcishTranslatorUtility.TranslateEnglishToOrcish("sarcastic but", partOfSpeech: "conjunction");
+
+    AssertEqual(2, results.Count, "expected two sarcastic but variants");
+    AssertTrue(results.Any(result => string.Equals(result.Translation, "rokhki", StringComparison.OrdinalIgnoreCase)), "expected sarcastic rokh variant");
+    AssertTrue(results.Any(result => string.Equals(result.Translation, "narki", StringComparison.OrdinalIgnoreCase)), "expected sarcastic nar variant");
+}
+
+static void OrcishTranslatorRandomButPickerReturnsValidVariant()
+{
+    var result = OrcishTranslatorUtility.TranslateEnglishToOrcishRandom("but", partOfSpeech: "conjunction");
+
+    AssertTrue(result is not null, "expected random but picker to return a variant");
+    AssertTrue(
+        string.Equals(result!.Translation, "rokh", StringComparison.OrdinalIgnoreCase) ||
+        string.Equals(result.Translation, "nar", StringComparison.OrdinalIgnoreCase),
+        "expected random but picker to return one of the plain variants");
+}
 
 static void StartupManifestStatusDistinguishesSkippedAndFailed()
 {
