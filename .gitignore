@@ -59,3 +59,25 @@ graphify-out/**/*.md
 
 # Keep local aider history out of version control.
 .aider.chat.history.md
+
+# graphify generates disposable local outputs, caches, and dated snapshots.
+# Keep the repo clean while still allowing explicitly tracked markers to remain tracked.
+graphify-out/cache/
+graphify-out/.graphify_python
+graphify-out/.graphify_detect.json
+graphify-out/.graphify_extract.json
+graphify-out/.graphify_ast.json
+graphify-out/.graphify_semantic.json
+graphify-out/.graphify_semantic_new.json
+graphify-out/.graphify_cached.json
+graphify-out/.graphify_uncached.txt
+graphify-out/.graphify_chunk_*.json
+graphify-out/.needs_update
+graphify-out/cost.json
+graphify-out/graph.html
+graphify-out/graph.svg
+graphify-out/graph.graphml
+graphify-out/cypher.txt
+graphify-out/obsidian/
+graphify-out/wiki/
+graphify-out/20??-??-??/
