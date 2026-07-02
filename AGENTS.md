@@ -30,3 +30,10 @@ Rules:
 # Project Constraints
 - Do not read or scan the /bin or /obj directories.
 - Focus strictly on source files inside /src or specific .cs files mentioned.
+- Before adopting a new Orcish lexicon term, first check for exact collisions and close-form conflicts against existing translator entries and affix patterns.
+- For Orcish lexicon additions, prefer extending existing roots, compounds, plural patterns, and affix meanings instead of inventing unrelated forms when an established pattern already fits.
+- When an English term is better represented as a fixed Orcish phrase or compound, add the full entry explicitly rather than assuming the CLI translator will compose it from separate words.
+- Keep part of speech and sense distinctions explicit in the lexicon when meaning depends on usage, such as noun vs. verb vs. adjective/complement or singular vs. plural vs. possessive.
+- When a new term has multiple plausible senses, preserve nuance with tags and grammar classes that support context-aware selection in `ToOrcish/Program.cs` rather than collapsing distinct meanings into one entry.
+- Use `codex-scratch\candidates.txt` as the current curated backlog for Orcish lexicon work; remove an item only when the exact remaining candidate has been covered, not merely a related root word.
+- After lexicon edits, verify representative terms with `to-orcish`; if Debug outputs are locked, use a Release build artifact for confirmation instead of assuming the change worked.

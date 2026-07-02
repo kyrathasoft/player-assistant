@@ -33,6 +33,12 @@ static string TranslateSentence(string input)
 
     for (var index = 0; index < terms.Length; index++)
     {
+        if (string.Equals(terms[index], "the", StringComparison.OrdinalIgnoreCase))
+        {
+            translatedTerms.Add(TranslateDefiniteArticle(terms, index));
+            continue;
+        }
+
         var translated = TranslateLongestPhrase(terms, index, out var consumedTerms);
         translatedTerms.Add(translated);
         index += consumedTerms - 1;
@@ -44,6 +50,17 @@ static string TranslateSentence(string input)
     }
 
     return string.Join(" ", translatedTerms);
+}
+
+static string TranslateDefiniteArticle(IReadOnlyList<string> terms, int articleIndex)
+{
+    if (articleIndex >= terms.Count - 1)
+    {
+        return "arhk";
+    }
+
+    var nextTranslation = TranslateLongestPhrase(terms, articleIndex + 1, out _);
+    return StartsWithOrcishVowel(nextTranslation) ? "karnt" : "arhk";
 }
 
 static string TranslateLongestPhrase(IReadOnlyList<string> terms, int startIndex, out int consumedTerms)
@@ -58,11 +75,106 @@ static string TranslateLongestPhrase(IReadOnlyList<string> terms, int startIndex
         }
 
         consumedTerms = termCount;
-        return translations[0].Translation;
+        return SelectBestTranslation(terms, startIndex, termCount, translations).Translation;
     }
 
     consumedTerms = 1;
     return terms[startIndex];
+}
+
+static OrcishTranslationCandidate SelectBestTranslation(
+    IReadOnlyList<string> terms,
+    int startIndex,
+    int termCount,
+    IReadOnlyList<OrcishTranslationCandidate> translations)
+{
+    if (translations.Count == 1)
+    {
+        return translations[0];
+    }
+
+    var previousEnglish = startIndex > 0 ? terms[startIndex - 1] : null;
+    var nextEnglish = startIndex + termCount < terms.Count ? terms[startIndex + termCount] : null;
+
+    if (IsLinkingVerb(previousEnglish))
+    {
+        var complementCandidate = translations.FirstOrDefault(candidate =>
+            string.Equals(candidate.PartOfSpeech, "adjective", StringComparison.OrdinalIgnoreCase)
+            || HasTag(candidate.Tags, "subject-complement"));
+        if (complementCandidate is not null)
+        {
+            return complementCandidate;
+        }
+    }
+
+    if (IsSubjectLike(previousEnglish) || string.Equals(previousEnglish, "to", StringComparison.OrdinalIgnoreCase))
+    {
+        var verbCandidate = translations.FirstOrDefault(candidate =>
+            string.Equals(candidate.PartOfSpeech, "verb", StringComparison.OrdinalIgnoreCase));
+        if (verbCandidate is not null)
+        {
+            return verbCandidate;
+        }
+    }
+
+    if (IsLikelyNounContext(previousEnglish, nextEnglish))
+    {
+        var nounCandidate = translations.FirstOrDefault(candidate =>
+            string.Equals(candidate.PartOfSpeech, "noun", StringComparison.OrdinalIgnoreCase));
+        if (nounCandidate is not null)
+        {
+            return nounCandidate;
+        }
+    }
+
+    return translations[0];
+}
+
+static bool IsSubjectLike(string? englishTerm)
+{
+    return englishTerm is not null && englishTerm.Trim().ToLowerInvariant() is
+        "i" or "you" or "he" or "she" or "it" or "we" or "they";
+}
+
+static bool IsLinkingVerb(string? englishTerm)
+{
+    return englishTerm is not null && englishTerm.Trim().ToLowerInvariant() is
+        "be" or "am" or "is" or "are" or "was" or "were" or "been" or "being";
+}
+
+static bool IsLikelyNounContext(string? previousEnglish, string? nextEnglish)
+{
+    return previousEnglish is not null
+        && previousEnglish.Trim().ToLowerInvariant() is "a" or "an" or "the" or "those" or "these"
+        || nextEnglish is not null
+        && nextEnglish.Trim().ToLowerInvariant() is "'s" or "is" or "are" or "was" or "were";
+}
+
+static bool HasTag(IReadOnlyList<string>? tags, string tag)
+{
+    return (tags ?? Array.Empty<string>())
+        .Any(existingTag => string.Equals(existingTag, tag, StringComparison.OrdinalIgnoreCase));
+}
+
+static bool StartsWithOrcishVowel(string value)
+{
+    if (string.IsNullOrWhiteSpace(value))
+    {
+        return false;
+    }
+
+    foreach (var character in value)
+    {
+        if (!char.IsLetter(character))
+        {
+            continue;
+        }
+
+        var normalized = char.ToLowerInvariant(character);
+        return normalized is 'a' or 'e' or 'i' or 'o' or 'u';
+    }
+
+    return false;
 }
 
 static string JoinTerms(IReadOnlyList<string> terms, int startIndex, int termCount)
