@@ -30,6 +30,6 @@
 
 ## Next hardening tasks
 
-- [ ] Add an RC commit/tag checklist script that verifies clean intended diffs, runs the focused hardening tests, confirms both executable versions, and prints the exact `v0.9.0-hardening.5-rc1` tagging commands without mutating Git state.
-- [ ] Add a published-folder runtime integrity check that verifies no startup run from `Release\publish` modifies or deletes parent `Release` artifacts, using before/after file manifests for tracked runtime files.
+- [x] Add an RC commit/tag checklist script that verifies clean intended diffs, runs the focused hardening tests, confirms both executable versions, and prints the exact `v0.9.0-hardening.5-rc1` tagging commands without mutating Git state.
+- [x] Add a published-folder runtime integrity check that verifies no startup run from `Release\publish` modifies or deletes parent `Release` artifacts, using before/after file manifests for tracked runtime files.
 - [ ] Add a diagnostic bundle script that collects `startup-health.json`, `startup-errors.log`, version metadata, publish verification output, and smoke verification output into a redacted timestamped zip for troubleshooting.
