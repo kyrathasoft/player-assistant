@@ -38,11 +38,16 @@ namespace PlayerAssistant
                 return await RpolAuthUtility.GetHtmlFromUrlAsync(uri, cancellationToken);
             }
 
-            using var request = new HttpRequestMessage(HttpMethod.Get, uri);
-            request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("text/html"));
-            request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("*/*", 0.1));
-
-            using var response = await HttpClient.SendAsync(request, cancellationToken);
+            using var response = await NetworkRequestUtility.SendAsync(
+                HttpClient,
+                () =>
+                {
+                    var request = new HttpRequestMessage(HttpMethod.Get, uri);
+                    request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("text/html"));
+                    request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("*/*", 0.1));
+                    return request;
+                },
+                cancellationToken: cancellationToken);
             response.EnsureSuccessStatusCode();
 
             return await response.Content.ReadAsStringAsync(cancellationToken);
@@ -200,12 +205,7 @@ namespace PlayerAssistant
 
         private static HttpClient CreateHttpClient()
         {
-            var httpClient = new HttpClient
-            {
-                Timeout = TimeSpan.FromSeconds(30)
-            };
-            httpClient.DefaultRequestHeaders.UserAgent.ParseAdd("PlayerAssistant/1.0");
-            return httpClient;
+            return NetworkRequestUtility.CreateHttpClient();
         }
     }
 }

@@ -16,6 +16,25 @@ namespace PlayerAssistant
         [STAThread]
         static void Main(string[] args)
         {
+            RegisterUnhandledExceptionLogging();
+
+            try
+            {
+                Run(args);
+            }
+            catch (Exception ex)
+            {
+                StartupLoggingUtility.Append("startup", ex);
+                MessageBox.Show(
+                    ex.Message,
+                    "Player Assistant Startup Error",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Error);
+            }
+        }
+
+        private static void Run(string[] args)
+        {
             using Mutex singleInstanceMutex = new(true, SingleInstanceMutexName, out bool createdNew);
 
             if (!createdNew)
@@ -30,16 +49,49 @@ namespace PlayerAssistant
 
             // To customize application configuration such as set high DPI settings or default font,
             // see https://aka.ms/applicationconfiguration.
-            AppSettingsUtility.Load();
+            StartupLoggingUtility.RunRequiredPhase("settings load", AppSettingsUtility.Load);
             UserPreferencesUtility.Load();
             FileDownloadCounters.Reset();
             EnsurePostsDirectory();
             KeywordTermsFileUtility.EnsureReleaseCopy();
+            StartupLoggingUtility.RunOptionalPhaseAsync(
+                "runtime housekeeping",
+                () =>
+                {
+                    RuntimeHousekeepingUtility.CleanCurrentRuntimeAndLog();
+                    return Task.CompletedTask;
+                }).GetAwaiter().GetResult();
+            StartupLoggingUtility.RunOptionalPhaseAsync(
+                "configuration validation",
+                () =>
+                {
+                    AppConfigurationValidationUtility.ValidateCurrentAndLog();
+                    return Task.CompletedTask;
+                }).GetAwaiter().GetResult();
             ApplicationConfiguration.Initialize();
             var suppressHeroImages = args.Any(arg =>
                 string.Equals(arg, SuppressHeroImagesArgument, StringComparison.OrdinalIgnoreCase))
                 || UserPreferencesUtility.SkipHeroImageParadeAtStartup;
             Application.Run(new Form1(suppressHeroImages));
+        }
+
+        private static void RegisterUnhandledExceptionLogging()
+        {
+            Application.SetUnhandledExceptionMode(UnhandledExceptionMode.CatchException);
+            Application.ThreadException += (_, e) =>
+                StartupLoggingUtility.Append("UI thread exception", e.Exception);
+            AppDomain.CurrentDomain.UnhandledException += (_, e) =>
+            {
+                if (e.ExceptionObject is Exception ex)
+                {
+                    StartupLoggingUtility.Append("unhandled exception", ex);
+                }
+            };
+            TaskScheduler.UnobservedTaskException += (_, e) =>
+            {
+                StartupLoggingUtility.Append("unobserved task exception", e.Exception);
+                e.SetObserved();
+            };
         }
 
         private static void EnsurePostsDirectory()

@@ -65,7 +65,7 @@ namespace PlayerAssistant
             var encryptedEnvelope = CreateEncryptedEnvelope(plaintextBytes);
 
             var encryptedJson = JsonSerializer.Serialize(encryptedEnvelope, JsonOptions);
-            File.WriteAllText(settingsPath, encryptedJson);
+            AtomicFileUtility.WriteAllText(settingsPath, encryptedJson);
         }
 
         public static bool IsEncryptedSettingsFile(string settingsPath)

@@ -1,8 +1,11 @@
+using System.Text.Json;
+
 namespace PlayerAssistant
 {
     internal static class KeywordTermsFileUtility
     {
         public const string FileName = "game-posts-key-terms.md";
+        private const string KeywordIndexFileName = "keyword-index.json";
 
         private static readonly HashSet<string> IgnoredSearchDirectories = new(StringComparer.OrdinalIgnoreCase)
         {
@@ -55,6 +58,10 @@ namespace PlayerAssistant
                     File.Copy(sourcePath, releasePath, overwrite: true);
                     termPaths.Add(releasePath);
                 }
+                else if (TryWriteTermsFromKeywordIndex(releasePath))
+                {
+                    termPaths.Add(releasePath);
+                }
             }
 
             if (termPaths.Count <= 1)
@@ -65,6 +72,62 @@ namespace PlayerAssistant
             foreach (var duplicatePath in termPaths.Where(path => !path.Equals(releasePath, StringComparison.OrdinalIgnoreCase)))
             {
                 File.Delete(duplicatePath);
+            }
+        }
+
+        private static bool TryWriteTermsFromKeywordIndex(string destinationPath)
+        {
+            var releaseDirectory = Path.GetDirectoryName(destinationPath);
+            if (string.IsNullOrWhiteSpace(releaseDirectory))
+            {
+                return false;
+            }
+
+            var indexPath = Path.Combine(releaseDirectory, KeywordIndexFileName);
+            if (!File.Exists(indexPath))
+            {
+                return false;
+            }
+
+            try
+            {
+                using var document = JsonDocument.Parse(File.ReadAllText(indexPath));
+                if (!document.RootElement.TryGetProperty("words", out var wordsElement)
+                    || wordsElement.ValueKind != JsonValueKind.Object)
+                {
+                    return false;
+                }
+
+                var terms = wordsElement
+                    .EnumerateObject()
+                    .Select(property => property.Name.Trim())
+                    .Where(term => term.Length > 0)
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .OrderBy(term => term, StringComparer.OrdinalIgnoreCase)
+                    .ToArray();
+
+                if (terms.Length == 0)
+                {
+                    return false;
+                }
+
+                AtomicFileUtility.WriteAllText(destinationPath, string.Join(Environment.NewLine, terms) + Environment.NewLine);
+                return true;
+            }
+            catch (JsonException exception)
+            {
+                StartupLoggingUtility.Append("keyword terms generation", exception);
+                return false;
+            }
+            catch (IOException exception)
+            {
+                StartupLoggingUtility.Append("keyword terms generation", exception);
+                return false;
+            }
+            catch (UnauthorizedAccessException exception)
+            {
+                StartupLoggingUtility.Append("keyword terms generation", exception);
+                return false;
             }
         }
 

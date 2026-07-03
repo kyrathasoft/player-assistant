@@ -48,7 +48,6 @@ namespace PlayerAssistant
         private const string GameForumChapterDownloadsFileName = "game-forum-chapter-downloads.txt";
         private const string GameForumAsideDownloadsFileName = "game-forum-aside-downloads.txt";
         private const string GameForumOutOfCharacterDownloadsFileName = "game-forum-ooc-downloads.txt";
-        private const string StartupErrorLogFileName = "startup-errors.log";
         private const string TheCastLoginInfoFileName = "login-info.json";
         private const string DiceRollsHtmlFileName = "dice-rolls.html";
         private const string RegionalMapFileName = "northernreaches.png";
@@ -119,6 +118,7 @@ namespace PlayerAssistant
         private Task? _regionalMapImagePreloadTask;
         private bool _loginInfoRefreshStarted;
         private LoginInfoDisplayMode _loginInfoRefreshTarget = LoginInfoDisplayMode.LoginInfo;
+        private readonly BackgroundTaskSupervisor _backgroundTasks = new();
         private readonly bool _suppressHeroImagesForThisRun;
         private bool _searchResultsRequested;
         private readonly string _baseTitleText;
@@ -135,9 +135,10 @@ namespace PlayerAssistant
         private KeywordIndexProgress? _latestKeywordIndexProgress;
         private KeywordIndexProgress? _pendingKeywordIndexProgress;
         private bool _keywordIndexingInProgress;
-        private Task? _keywordIndexCrawlerTask;
+        private CancellationTokenSource? _searchOperationCancellation;
         private Func<string[], DialogResult> _showLocalIndexMissPrompt = _ => DialogResult.No;
         private Action<string[], int> _showOnlineSearchCompletedMessage = static (_, _) => { };
+        private Action<string, string> _showWarningDialog = static (_, _) => { };
         private Func<string[], CancellationToken, Task<string[]>> _onlineSearchProvider = static (_, _) => Task.FromResult(Array.Empty<string>());
         private Func<string, string, CancellationToken, Task<bool>> _rpolHeroNameBodyMatchProvider = static (_, _, _) => Task.FromResult(false);
 
@@ -146,6 +147,7 @@ namespace PlayerAssistant
             _suppressHeroImagesForThisRun = suppressHeroImagesForThisRun;
             _showLocalIndexMissPrompt = ShowLocalIndexMissPrompt;
             _showOnlineSearchCompletedMessage = ShowOnlineSearchCompletedMessage;
+            _showWarningDialog = ShowWarningDialog;
             _onlineSearchProvider = SearchOnlineForTermsAsync;
             _rpolHeroNameBodyMatchProvider = DoesRpolPostBodyContainSearchTermAsync;
             InitializeComponent();
@@ -188,9 +190,13 @@ namespace PlayerAssistant
                 _welcomeTimer = null;
                 if (!_suppressHeroImagesForThisRun)
                 {
-                    _ = StartHeroImageShowcaseAfterDelayAsync();
+                    StartBackgroundTask("hero image showcase startup", StartHeroImageShowcaseAfterDelayAsync);
                 }
-                _ = StartPlayerCharacterListingUpdateAsync();
+                StartBackgroundTask(
+                    "player character refresh",
+                    cancellationToken => StartPlayerCharacterListingUpdateAsync(
+                        showFailureDialog: false,
+                        cancellationToken));
                 Invalidate();
             };
             _welcomeTimer.Start();
@@ -209,6 +215,8 @@ namespace PlayerAssistant
             _attributionTimer?.Dispose();
             _welcomeTimer?.Dispose();
             _keywordIndexStatusTimer?.Dispose();
+            _searchOperationCancellation?.Cancel();
+            _backgroundTasks.Dispose();
             _regionalMapPanel?.Dispose();
             _heroImagePictureBox?.Image?.Dispose();
             _heroImagePictureBox?.Dispose();
@@ -226,37 +234,74 @@ namespace PlayerAssistant
             FillCurrentScreenWorkingArea();
             UpdateRegionalMapPanelBounds();
             UpdateSearchPanelBounds();
+            ShowStartupConfigurationWarning();
             InitializeCachedActiveHeroImages();
-            _ = PreloadRegionalMapImageAsync();
+            StartBackgroundTask("regional map preload", PreloadRegionalMapImageAsync);
             await Task.Yield();
             StartKeywordIndexCrawler();
-            await LoadGameForumChapterPrefixesAsync();
-            await StartPlayerCharacterListingUpdateAsync();
+            StartBackgroundTask(
+                "game forum startup",
+                async cancellationToken =>
+                {
+                    await LoadGameForumChapterPrefixesAsync(cancellationToken);
+                    StartBackgroundTask(
+                        "player character refresh",
+                        playerCharacterCancellationToken => StartPlayerCharacterListingUpdateAsync(
+                            showFailureDialog: false,
+                            playerCharacterCancellationToken));
+                });
+        }
+
+        private void ShowStartupConfigurationWarning()
+        {
+            var message = AppConfigurationValidationUtility.LatestReport.FirstUserMessage;
+            if (!string.IsNullOrWhiteSpace(message))
+            {
+                SetStatusBarMessage(message, TimeSpan.FromSeconds(8));
+            }
         }
 
         private void StartKeywordIndexCrawler()
         {
+            if (_keywordIndexingInProgress)
+            {
+                return;
+            }
+
             _keywordIndexingInProgress = true;
-            var progress = new Progress<KeywordIndexProgress>(UpdateKeywordIndexStatus);
-            _keywordIndexCrawlerTask = Task.Run(async () =>
+            var started = StartBackgroundTask("keyword crawler", async cancellationToken =>
+            {
+                var progress = new Progress<KeywordIndexProgress>(UpdateKeywordIndexStatus);
+                await Task.Run(
+                    () => KeywordIndexCrawler.BuildIndexAsync(progress, cancellationToken),
+                    cancellationToken).ConfigureAwait(false);
+            });
+
+            if (!started)
+            {
+                _keywordIndexingInProgress = false;
+            }
+        }
+
+        private bool StartBackgroundTask(string phase, Func<CancellationToken, Task> action)
+        {
+            return _backgroundTasks.TryStart(phase, async cancellationToken =>
             {
                 try
                 {
-                    await KeywordIndexCrawler.BuildIndexAsync(progress).ConfigureAwait(false);
-                }
-                catch (Exception ex)
-                {
-                    var logPath = Path.Combine(AppContext.BaseDirectory, StartupErrorLogFileName);
-                    await File.AppendAllTextAsync(
-                        logPath,
-                        FormatStartupErrorLogEntry("keyword crawler", ex)).ConfigureAwait(false);
+                    await action(cancellationToken).ConfigureAwait(false);
                 }
                 finally
                 {
-                    BeginInvoke(() =>
+                    if (string.Equals(phase, "keyword crawler", StringComparison.OrdinalIgnoreCase)
+                        && !IsDisposed
+                        && IsHandleCreated)
                     {
-                        _keywordIndexingInProgress = false;
-                    });
+                        BeginInvoke(() =>
+                        {
+                            _keywordIndexingInProgress = false;
+                        });
+                    }
                 }
             });
         }
@@ -512,7 +557,9 @@ namespace PlayerAssistant
 
         protected override void OnFormClosing(FormClosingEventArgs e)
         {
-            if (_keywordIndexCrawlerTask is { IsCompleted: false })
+            _searchOperationCancellation?.Cancel();
+
+            if (_backgroundTasks.IsRunning("keyword crawler"))
             {
                 var result = MessageBox.Show(
                     this,
@@ -612,7 +659,7 @@ namespace PlayerAssistant
             ShowSearchPanel();
         }
 
-        private void LoginInfoToolStripMenuItem_Click(object? sender, EventArgs e)
+        private async void LoginInfoToolStripMenuItem_Click(object? sender, EventArgs e)
         {
             ClearDiceRollsDisplayIfVisible();
             HideSearchPanel();
@@ -627,27 +674,26 @@ namespace PlayerAssistant
                 if (File.Exists(loginInfoPath))
                 {
                     ShowLoginInfoRows(LoadLoginInfoJson(loginInfoPath), "cached");
-                    _ = RefreshLoginInfoInBackgroundAsync();
+                    StartBackgroundTask("login info refresh", _ => RefreshLoginInfoInBackgroundAsync());
                     return;
                 }
 
                 SetStatusBarMessage("Loading login info...");
-                _ = RefreshLoginInfoInBackgroundAsync();
+                StartBackgroundTask("login info refresh", _ => RefreshLoginInfoInBackgroundAsync());
             }
             catch (Exception ex)
             {
                 loginInfoToolStripMenuItem.Enabled = true;
-                SetStatusBarMessage($"Login info unavailable: {ex.Message}");
-                MessageBox.Show(
-                    this,
-                    ex.Message,
+                await ReportOperationFailureAsync(
+                    "login info display",
+                    "Login info unavailable",
                     "Login Info Error",
-                    MessageBoxButtons.OK,
-                    MessageBoxIcon.Warning);
+                    ex,
+                    showDialog: true);
             }
         }
 
-        private void ShowPostTotalsToolStripMenuItem_Click(object? sender, EventArgs e)
+        private async void ShowPostTotalsToolStripMenuItem_Click(object? sender, EventArgs e)
         {
             ClearDiceRollsDisplayIfVisible();
             HideSearchPanel();
@@ -662,7 +708,7 @@ namespace PlayerAssistant
                 if (File.Exists(localTheCastPath))
                 {
                     ShowPostTotalsRows(LoadTheCastLoginInfoFromHtml(localTheCastPath), "cached");
-                    _ = RefreshLoginInfoInBackgroundAsync();
+                    StartBackgroundTask("login info refresh", _ => RefreshLoginInfoInBackgroundAsync());
                     return;
                 }
 
@@ -670,27 +716,26 @@ namespace PlayerAssistant
                 if (File.Exists(loginInfoPath))
                 {
                     ShowPostTotalsRows(LoadLoginInfoJson(loginInfoPath), "cached");
-                    _ = RefreshLoginInfoInBackgroundAsync();
+                    StartBackgroundTask("login info refresh", _ => RefreshLoginInfoInBackgroundAsync());
                     return;
                 }
 
                 SetStatusBarMessage("Loading post totals...");
-                _ = RefreshLoginInfoInBackgroundAsync();
+                StartBackgroundTask("login info refresh", _ => RefreshLoginInfoInBackgroundAsync());
             }
             catch (Exception ex)
             {
                 showPostTotalsToolStripMenuItem.Enabled = true;
-                SetStatusBarMessage($"Post totals unavailable: {ex.Message}");
-                MessageBox.Show(
-                    this,
-                    ex.Message,
+                await ReportOperationFailureAsync(
+                    "post totals display",
+                    "Post totals unavailable",
                     "Post Totals Error",
-                    MessageBoxButtons.OK,
-                    MessageBoxIcon.Warning);
+                    ex,
+                    showDialog: true);
             }
         }
 
-        private void ShowDiceRollsToolStripMenuItem_Click(object? sender, EventArgs e)
+        private async void ShowDiceRollsToolStripMenuItem_Click(object? sender, EventArgs e)
         {
             ClearDiceRollsDisplayIfVisible();
             HideSearchPanel();
@@ -714,13 +759,12 @@ namespace PlayerAssistant
             }
             catch (Exception ex)
             {
-                SetStatusBarMessage($"Dice rolls unavailable: {ex.Message}");
-                MessageBox.Show(
-                    this,
-                    ex.Message,
+                await ReportOperationFailureAsync(
+                    "dice rolls display",
+                    "Dice rolls unavailable",
                     "Dice Rolls Error",
-                    MessageBoxButtons.OK,
-                    MessageBoxIcon.Warning);
+                    ex,
+                    showDialog: true);
             }
         }
 
@@ -783,13 +827,12 @@ namespace PlayerAssistant
                 _regionalMapImage?.Dispose();
                 _regionalMapImage = null;
                 UpdateRegionalMapMenuItem();
-                SetStatusBarMessage($"Regional map unavailable: {ex.Message}");
-                MessageBox.Show(
-                    this,
-                    ex.Message,
+                await ReportOperationFailureAsync(
+                    "regional map display",
+                    "Regional map unavailable",
                     "Regional Map Error",
-                    MessageBoxButtons.OK,
-                    MessageBoxIcon.Warning);
+                    ex,
+                    showDialog: true);
             }
         }
 
@@ -914,50 +957,103 @@ namespace PlayerAssistant
 
         private async Task PerformSearchAsync()
         {
+            using var searchOperation = StartSearchOperation();
+            await PerformSearchAsync(searchOperation.Token, searchOperation);
+        }
+
+        private async Task PerformSearchAsync(
+            CancellationToken cancellationToken,
+            CancellationTokenSource? searchOperation = null)
+        {
             var searchTerms = GetSearchTerms(txtSearch.Text);
             lstSearchResults.Items.Clear();
             _searchResultsRequested = true;
             UpdateSearchResultsVisibility(searchTerms);
+            btnSearch.Enabled = false;
 
             SetStatusBarMessage(
                 searchTerms.Length.ToString() + $" search term(s) entered by the user: {string.Join(", ", searchTerms)}");
 
-            var localIndexUnavailable = false;
-            var localMatchesFound = false;
-
-            for (var i = 0; i < searchTerms.Length; i++)
+            try
             {
-                var searchOutcome = await SearchIndexFileForTermAsync(searchTerms[i], i + 1, searchTerms.Length, CancellationToken.None);
-                localMatchesFound |= searchOutcome == LocalIndexSearchOutcome.FoundMatches;
-                localIndexUnavailable |= searchOutcome == LocalIndexSearchOutcome.IndexUnavailable;
-            }
+                var localIndexUnavailable = false;
+                var localMatchesFound = false;
 
-            if (!localMatchesFound
-                && !localIndexUnavailable
-                && searchTerms.Length > 0
-                && _showLocalIndexMissPrompt(searchTerms) == DialogResult.Yes)
-            {
-                try
+                for (var i = 0; i < searchTerms.Length; i++)
                 {
-                    SetStatusBarMessage("Searching online for matching URLs.");
-                    var onlineResults = await _onlineSearchProvider(searchTerms, CancellationToken.None);
-                    foreach (var url in onlineResults)
+                    cancellationToken.ThrowIfCancellationRequested();
+                    var searchOutcome = await SearchIndexFileForTermAsync(searchTerms[i], i + 1, searchTerms.Length, cancellationToken);
+                    localMatchesFound |= searchOutcome == LocalIndexSearchOutcome.FoundMatches;
+                    localIndexUnavailable |= searchOutcome == LocalIndexSearchOutcome.IndexUnavailable;
+                }
+
+                if (!localMatchesFound
+                    && !localIndexUnavailable
+                    && searchTerms.Length > 0
+                    && _showLocalIndexMissPrompt(searchTerms) == DialogResult.Yes)
+                {
+                    try
                     {
-                        AddSearchResultUrl(url);
-                    }
+                        SetStatusBarMessage("Searching online for matching URLs.");
+                        var onlineResults = await _onlineSearchProvider(searchTerms, cancellationToken);
+                        foreach (var url in onlineResults)
+                        {
+                            cancellationToken.ThrowIfCancellationRequested();
+                            AddSearchResultUrl(url);
+                        }
 
-                    _showOnlineSearchCompletedMessage(searchTerms, onlineResults.Length);
+                        _showOnlineSearchCompletedMessage(searchTerms, onlineResults.Length);
+                    }
+                    catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+                    {
+                        throw;
+                    }
+                    catch (Exception ex)
+                    {
+                        await ReportOperationFailureAsync(
+                            "online search",
+                            "Online search unavailable",
+                            "Search Error",
+                            ex,
+                            showDialog: false);
+                    }
                 }
-                catch (Exception ex)
+
+                cancellationToken.ThrowIfCancellationRequested();
+                lblSearchCharacterCnt.Visible = true;
+                lblSearchCharacterCnt.Text = $"Results found: {lstSearchResults.Items.Count}";
+                SetStatusBarMessage(
+                    $"Search results: {lstSearchResults.Items.Count} URL{(lstSearchResults.Items.Count == 1 ? string.Empty : "s")} found.");
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                if (IsCurrentSearchOperation(searchOperation))
                 {
-                    SetStatusBarMessage($"Online search unavailable: {ex.Message}");
+                    SetStatusBarMessage("Search canceled.");
                 }
             }
+            finally
+            {
+                if (IsCurrentSearchOperation(searchOperation))
+                {
+                    _searchOperationCancellation = null;
+                    UpdateSearchButtonEnabledState();
+                }
+            }
+        }
 
-            lblSearchCharacterCnt.Visible = true;
-            lblSearchCharacterCnt.Text = $"Results found: {lstSearchResults.Items.Count}";
-            SetStatusBarMessage(
-                $"Search results: {lstSearchResults.Items.Count} URL{(lstSearchResults.Items.Count == 1 ? string.Empty : "s")} found.");
+        private CancellationTokenSource StartSearchOperation()
+        {
+            _searchOperationCancellation?.Cancel();
+            var cancellation = new CancellationTokenSource();
+            _searchOperationCancellation = cancellation;
+            return cancellation;
+        }
+
+        private bool IsCurrentSearchOperation(CancellationTokenSource? searchOperation)
+        {
+            return searchOperation is null
+                || ReferenceEquals(_searchOperationCancellation, searchOperation);
         }
 
         private async Task<LocalIndexSearchOutcome> SearchIndexFileForTermAsync(
@@ -975,6 +1071,7 @@ namespace PlayerAssistant
 
             try
             {
+                cancellationToken.ThrowIfCancellationRequested();
                 SetStatusBarMessage(
                     $"searching against {KeywordIndexFileName} for search term {searchTermNumber} of {totalSearchTerms}: '{term}'");
                 using var document = JsonDocument.Parse(ReadTextFileShared(indexPath));
@@ -998,6 +1095,7 @@ namespace PlayerAssistant
 
                 foreach (var matchElement in matchesElement.EnumerateArray())
                 {
+                    cancellationToken.ThrowIfCancellationRequested();
                     if (!matchElement.TryGetProperty("url", out var urlElement))
                     {
                         continue;
@@ -1024,6 +1122,10 @@ namespace PlayerAssistant
                 return foundMatch
                     ? LocalIndexSearchOutcome.FoundMatches
                     : LocalIndexSearchOutcome.NotFound;
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                throw;
             }
             catch (Exception ex)
             {
@@ -1624,7 +1726,7 @@ namespace PlayerAssistant
                 tempLoginInfoPath,
                 cancellationToken);
 
-            PromoteFileIfChanged(tempLoginInfoPath, loginInfoPath);
+            await PromoteFileIfChangedAsync(tempLoginInfoPath, loginInfoPath, cancellationToken);
 
             return loginInfoPath;
         }
@@ -1672,15 +1774,18 @@ namespace PlayerAssistant
             {
                 loginInfoToolStripMenuItem.Enabled = true;
                 showPostTotalsToolStripMenuItem.Enabled = true;
-                SetStatusBarMessage(_loginInfoRefreshTarget == LoginInfoDisplayMode.PostTotals
-                    ? $"Post totals unavailable: {ex.Message}"
-                    : $"Login info unavailable: {ex.Message}");
-                MessageBox.Show(
-                    this,
-                    ex.Message,
-                    _loginInfoRefreshTarget == LoginInfoDisplayMode.PostTotals ? "Post Totals Error" : "Login Info Error",
-                    MessageBoxButtons.OK,
-                    MessageBoxIcon.Warning);
+                await ReportOperationFailureAsync(
+                    _loginInfoRefreshTarget == LoginInfoDisplayMode.PostTotals
+                        ? "post totals refresh"
+                        : "login info refresh",
+                    _loginInfoRefreshTarget == LoginInfoDisplayMode.PostTotals
+                        ? "Post totals unavailable"
+                        : "Login info unavailable",
+                    _loginInfoRefreshTarget == LoginInfoDisplayMode.PostTotals
+                        ? "Post Totals Error"
+                        : "Login Info Error",
+                    ex,
+                    showDialog: true);
             }
             finally
             {
@@ -1745,42 +1850,66 @@ namespace PlayerAssistant
         private static bool TryLoadDiceRollEntries(string diceRollsPath, out DieRollEntry[] entries)
         {
             entries = [];
-            if (!File.Exists(diceRollsPath))
+            if (!RuntimeArtifactUtility.TryReadText(
+                    diceRollsPath,
+                    "dice rolls cache load",
+                    out var html))
             {
                 return false;
             }
 
             try
             {
-                var html = File.ReadAllText(diceRollsPath);
                 entries = GameForumUtility.ExtractDieRollEntries(html);
                 return true;
             }
-            catch
+            catch (Exception ex) when (ex is InvalidOperationException or ArgumentException)
             {
+                RuntimeArtifactUtility.QuarantineAndLog(diceRollsPath, "dice rolls cache parse", ex);
                 return false;
             }
         }
 
         private static TheCastLoginInfo[] LoadLoginInfoJson(string loginInfoPath)
         {
-            using var stream = File.OpenRead(loginInfoPath);
-            return JsonSerializer.Deserialize<TheCastLoginInfo[]>(stream) ?? [];
+            return RuntimeArtifactUtility.TryLoadJson<TheCastLoginInfo[]>(
+                loginInfoPath,
+                "login info cache load",
+                out var loginInfoRows)
+                    ? loginInfoRows ?? []
+                    : [];
         }
 
         private static TheCastLoginInfo[] LoadTheCastLoginInfoFromHtml(string theCastHtmlPath)
         {
-            var html = File.ReadAllText(theCastHtmlPath);
-            return GameForumUtility.GetTheCastLoginInfoFromHtml(html);
+            if (!RuntimeArtifactUtility.TryReadText(
+                    theCastHtmlPath,
+                    "the cast cache load",
+                    out var html))
+            {
+                return [];
+            }
+
+            try
+            {
+                return GameForumUtility.GetTheCastLoginInfoFromHtml(html);
+            }
+            catch (Exception ex) when (ex is InvalidOperationException or ArgumentException)
+            {
+                RuntimeArtifactUtility.QuarantineAndLog(theCastHtmlPath, "the cast cache parse", ex);
+                return [];
+            }
         }
 
         private static async Task<TheCastLoginInfo[]> LoadLoginInfoJsonAsync(
             string loginInfoPath,
             CancellationToken cancellationToken = default)
         {
-            await using var stream = File.OpenRead(loginInfoPath);
-            return await JsonSerializer.DeserializeAsync<TheCastLoginInfo[]>(stream, cancellationToken: cancellationToken)
-                ?? [];
+            return await RuntimeArtifactUtility.LoadJsonOrDefaultAsync<TheCastLoginInfo[]>(
+                loginInfoPath,
+                "login info cache load",
+                cancellationToken).ConfigureAwait(false)
+                    ?? [];
         }
 
         private void ClearDisplaySurfaceForLoginInfo()
@@ -1885,7 +2014,7 @@ namespace PlayerAssistant
             _diceRollsListBox = null;
         }
 
-        private async Task LoadGameForumChapterPrefixesAsync()
+        private async Task LoadGameForumChapterPrefixesAsync(CancellationToken cancellationToken = default)
         {
             GameForumChapterDownload[] chapterDownloads = [];
             GameForumPostDownload[] asideDownloads = [];
@@ -1893,21 +2022,30 @@ namespace PlayerAssistant
 
             try
             {
+                cancellationToken.ThrowIfCancellationRequested();
                 SetStatusBarMessage("Reading game forum links...");
 
-                var hyperlinks = await HtmlUtility.GetRpolGameHyperlinksAsync();
+                var hyperlinks = await HtmlUtility.GetRpolGameHyperlinksAsync(cancellationToken);
                 var icPostsDirectory = Path.Combine(AppContext.BaseDirectory, PostsDirectoryName, InCharacterPostsDirectoryName);
-                chapterDownloads = await TryDownloadChaptersAsync(hyperlinks, icPostsDirectory);
+                chapterDownloads = await TryDownloadChaptersAsync(hyperlinks, icPostsDirectory, cancellationToken);
                 var asidePostsDirectory = Path.Combine(icPostsDirectory, AsidePostsDirectoryName);
-                asideDownloads = await TryDownloadAsidesAsync(hyperlinks, asidePostsDirectory);
+                asideDownloads = await TryDownloadAsidesAsync(hyperlinks, asidePostsDirectory, cancellationToken);
 
                 var oocPostsDirectory = Path.Combine(AppContext.BaseDirectory, PostsDirectoryName, OutOfCharacterPostsDirectoryName);
-                allOutOfCharacterDownloads = await TryDownloadOutOfCharacterAsync(hyperlinks, oocPostsDirectory);
+                allOutOfCharacterDownloads = await TryDownloadOutOfCharacterAsync(hyperlinks, oocPostsDirectory, cancellationToken);
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                throw;
             }
             catch (Exception ex)
             {
-                await AppendStartupErrorLogAsync("game forum startup", ex);
-                SetStatusBarMessage($"Game forum links unavailable: {ex.Message}");
+                await ReportOperationFailureAsync(
+                    "game forum startup",
+                    "Game forum links unavailable",
+                    "Game Forum Error",
+                    ex,
+                    showDialog: false);
                 return;
             }
 
@@ -1938,23 +2076,33 @@ namespace PlayerAssistant
 
         private async Task<GameForumChapterDownload[]> TryDownloadChaptersAsync(
             Hyperlink[] hyperlinks,
-            string icPostsDirectory)
+            string icPostsDirectory,
+            CancellationToken cancellationToken = default)
         {
             try
             {
-                var chapterDownloads = await GameForumUtility.DownloadChapterHtmlAsync(hyperlinks, icPostsDirectory);
+                var chapterDownloads = await GameForumUtility.DownloadChapterHtmlAsync(
+                    hyperlinks,
+                    icPostsDirectory,
+                    cancellationToken);
                 var chapterPrefixesPath = Path.Combine(AppContext.BaseDirectory, GameForumChapterPrefixesFileName);
-                await File.WriteAllLinesAsync(
+                await AtomicFileUtility.WriteAllLinesAsync(
                     chapterPrefixesPath,
-                    chapterDownloads.Select(download => download.Prefix));
+                    chapterDownloads.Select(download => download.Prefix),
+                    cancellationToken);
 
                 var chapterDownloadsPath = Path.Combine(AppContext.BaseDirectory, GameForumChapterDownloadsFileName);
                 await WriteDownloadManifestAsync(
                     chapterDownloadsPath,
                     chapterDownloads.Select(download =>
-                        $"{download.Prefix}\t{GetManifestStatus(download.Downloaded, download.ErrorMessage)}\t{download.FilePath}\t{download.ErrorMessage}"));
+                        $"{download.Prefix}\t{GetManifestStatus(download.Downloaded, download.ErrorMessage)}\t{download.FilePath}\t{download.ErrorMessage}"),
+                    cancellationToken);
 
                 return chapterDownloads;
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                throw;
             }
             catch (Exception ex)
             {
@@ -1965,18 +2113,27 @@ namespace PlayerAssistant
 
         private async Task<GameForumPostDownload[]> TryDownloadAsidesAsync(
             Hyperlink[] hyperlinks,
-            string asidePostsDirectory)
+            string asidePostsDirectory,
+            CancellationToken cancellationToken = default)
         {
             try
             {
-                var asideDownloads = await GameForumUtility.DownloadAsideHtmlAsync(hyperlinks, asidePostsDirectory);
+                var asideDownloads = await GameForumUtility.DownloadAsideHtmlAsync(
+                    hyperlinks,
+                    asidePostsDirectory,
+                    cancellationToken);
                 var asideDownloadsPath = Path.Combine(AppContext.BaseDirectory, GameForumAsideDownloadsFileName);
                 await WriteDownloadManifestAsync(
                     asideDownloadsPath,
                     asideDownloads.Select(download =>
-                        $"{download.LinkText}\t{GetManifestStatus(download.Downloaded, download.ErrorMessage)}\t{download.FilePath}\t{download.ErrorMessage}"));
+                        $"{download.LinkText}\t{GetManifestStatus(download.Downloaded, download.ErrorMessage)}\t{download.FilePath}\t{download.ErrorMessage}"),
+                    cancellationToken);
 
                 return asideDownloads;
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                throw;
             }
             catch (Exception ex)
             {
@@ -1987,16 +2144,24 @@ namespace PlayerAssistant
 
         private async Task<GameForumPostDownload[]> TryDownloadOutOfCharacterAsync(
             Hyperlink[] hyperlinks,
-            string oocPostsDirectory)
+            string oocPostsDirectory,
+            CancellationToken cancellationToken = default)
         {
             var manifestPath = Path.Combine(AppContext.BaseDirectory, GameForumOutOfCharacterDownloadsFileName);
             var allDownloads = new List<GameForumPostDownload>();
 
             try
             {
-                var outOfCharacterDownloads = await GameForumUtility.DownloadOutOfCharacterHtmlAsync(hyperlinks, oocPostsDirectory);
+                var outOfCharacterDownloads = await GameForumUtility.DownloadOutOfCharacterHtmlAsync(
+                    hyperlinks,
+                    oocPostsDirectory,
+                    cancellationToken);
                 allDownloads.AddRange(outOfCharacterDownloads);
-                await WriteOutOfCharacterDownloadsManifestAsync(manifestPath, allDownloads);
+                await WriteOutOfCharacterDownloadsManifestAsync(manifestPath, allDownloads, cancellationToken);
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                throw;
             }
             catch (Exception ex)
             {
@@ -2005,12 +2170,19 @@ namespace PlayerAssistant
 
             try
             {
-                var houseRulesDownload = await GameForumUtility.DownloadHouseRulesHtmlAsync(hyperlinks, oocPostsDirectory);
+                var houseRulesDownload = await GameForumUtility.DownloadHouseRulesHtmlAsync(
+                    hyperlinks,
+                    oocPostsDirectory,
+                    cancellationToken);
                 if (houseRulesDownload is not null)
                 {
                     allDownloads.Add(houseRulesDownload);
-                    await WriteOutOfCharacterDownloadsManifestAsync(manifestPath, allDownloads);
+                    await WriteOutOfCharacterDownloadsManifestAsync(manifestPath, allDownloads, cancellationToken);
                 }
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                throw;
             }
             catch (Exception ex)
             {
@@ -2019,9 +2191,16 @@ namespace PlayerAssistant
 
             try
             {
-                var gameIntroDownload = await GameForumUtility.DownloadGameIntroHtmlAsync(AppSettingsUtility.GameIntroUrl, oocPostsDirectory);
+                var gameIntroDownload = await GameForumUtility.DownloadGameIntroHtmlAsync(
+                    AppSettingsUtility.GameIntroUrl,
+                    oocPostsDirectory,
+                    cancellationToken);
                 allDownloads.Add(gameIntroDownload);
-                await WriteOutOfCharacterDownloadsManifestAsync(manifestPath, allDownloads);
+                await WriteOutOfCharacterDownloadsManifestAsync(manifestPath, allDownloads, cancellationToken);
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                throw;
             }
             catch (Exception ex)
             {
@@ -2031,9 +2210,16 @@ namespace PlayerAssistant
             GameForumPostDownload? theCastDownload = null;
             try
             {
-                theCastDownload = await GameForumUtility.DownloadTheCastHtmlAsync(AppSettingsUtility.TheCastUrl, oocPostsDirectory);
+                theCastDownload = await GameForumUtility.DownloadTheCastHtmlAsync(
+                    AppSettingsUtility.TheCastUrl,
+                    oocPostsDirectory,
+                    cancellationToken);
                 allDownloads.Add(theCastDownload);
-                await WriteOutOfCharacterDownloadsManifestAsync(manifestPath, allDownloads);
+                await WriteOutOfCharacterDownloadsManifestAsync(manifestPath, allDownloads, cancellationToken);
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                throw;
             }
             catch (Exception ex)
             {
@@ -2042,9 +2228,16 @@ namespace PlayerAssistant
 
             try
             {
-                var dieRollsDownload = await GameForumUtility.DownloadDieRollsHtmlAsync(hyperlinks, oocPostsDirectory);
+                var dieRollsDownload = await GameForumUtility.DownloadDieRollsHtmlAsync(
+                    hyperlinks,
+                    oocPostsDirectory,
+                    cancellationToken);
                 allDownloads.Add(dieRollsDownload);
-                await WriteOutOfCharacterDownloadsManifestAsync(manifestPath, allDownloads);
+                await WriteOutOfCharacterDownloadsManifestAsync(manifestPath, allDownloads, cancellationToken);
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                throw;
             }
             catch (Exception ex)
             {
@@ -2058,7 +2251,14 @@ namespace PlayerAssistant
                 try
                 {
                     var theCastLoginInfoPath = Path.Combine(oocPostsDirectory, TheCastLoginInfoFileName);
-                    await GameForumUtility.WriteTheCastLoginInfoJsonAsync(theCastDownload.FilePath, theCastLoginInfoPath);
+                    await GameForumUtility.WriteTheCastLoginInfoJsonAsync(
+                        theCastDownload.FilePath,
+                        theCastLoginInfoPath,
+                        cancellationToken);
+                }
+                catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+                {
+                    throw;
                 }
                 catch (Exception ex)
                 {
@@ -2066,25 +2266,28 @@ namespace PlayerAssistant
                 }
             }
 
-            await WriteOutOfCharacterDownloadsManifestAsync(manifestPath, allDownloads);
+            await WriteOutOfCharacterDownloadsManifestAsync(manifestPath, allDownloads, cancellationToken);
             return allDownloads.ToArray();
         }
 
         private static async Task WriteOutOfCharacterDownloadsManifestAsync(
             string manifestPath,
-            IReadOnlyCollection<GameForumPostDownload> downloads)
+            IReadOnlyCollection<GameForumPostDownload> downloads,
+            CancellationToken cancellationToken = default)
         {
             await WriteDownloadManifestAsync(
                 manifestPath,
                 downloads.Select(download =>
-                    $"{download.LinkText}\t{GetManifestStatus(download.Downloaded, download.ErrorMessage)}\t{download.FilePath}\t{download.ErrorMessage}"));
+                    $"{download.LinkText}\t{GetManifestStatus(download.Downloaded, download.ErrorMessage)}\t{download.FilePath}\t{download.ErrorMessage}"),
+                cancellationToken);
         }
 
         private static Task WriteDownloadManifestAsync(
             string outputPath,
-            IEnumerable<string> lines)
+            IEnumerable<string> lines,
+            CancellationToken cancellationToken = default)
         {
-            return File.WriteAllLinesAsync(outputPath, lines);
+            return AtomicFileUtility.WriteAllLinesAsync(outputPath, lines, cancellationToken);
         }
 
         internal static string GetManifestStatus(bool downloaded, string? errorMessage)
@@ -2098,41 +2301,71 @@ namespace PlayerAssistant
 
         internal static string FormatStartupErrorLogEntry(string phase, Exception ex)
         {
-            return
-                $"""
-                [{DateTimeOffset.Now:O}] {phase}
-                {ex}
-
-                """;
+            return StartupLoggingUtility.FormatLogEntry(phase, ex);
         }
 
         private static Task AppendStartupErrorLogAsync(string phase, Exception ex)
         {
-            var logPath = Path.Combine(AppContext.BaseDirectory, StartupErrorLogFileName);
-            return File.AppendAllTextAsync(logPath, FormatStartupErrorLogEntry(phase, ex));
+            return StartupLoggingUtility.AppendAsync(phase, ex);
         }
 
-        private async Task UpdatePlayerCharacterListingAsync()
+        private Task ReportOperationFailureAsync(
+            string phase,
+            string statusPrefix,
+            string dialogTitle,
+            Exception ex,
+            bool showDialog)
+        {
+            return UiOperationFailureReporter.ReportAsync(
+                new UiOperationFailure(phase, statusPrefix, dialogTitle, ex, showDialog),
+                message => SetStatusBarMessage(message),
+                _showWarningDialog);
+        }
+
+        private void ShowWarningDialog(string title, string message)
+        {
+            MessageBox.Show(
+                this,
+                message,
+                title,
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Warning);
+        }
+
+        private async Task UpdatePlayerCharacterListingAsync(
+            bool showFailureDialog,
+            CancellationToken cancellationToken = default)
         {
             try
             {
+                cancellationToken.ThrowIfCancellationRequested();
                 var pcsDirectory = EnsurePlayerCharacterDirectories();
                 var cachedListingMarkdownPath = PlayerCharacterAssetUtility.GetPlayerCharactersListingMarkdownCachePath(pcsDirectory);
 
-                _playerCharacterListingHtml = await HtmlUtility.GetHtmlFromUrlAsync(PlayerCharactersListingUrl);
-                _playerCharacterListingMarkdown = await Task.Run(() => MarkdownUtility.GetMarkdownFromURL(PlayerCharactersListingUrl));
+                _playerCharacterListingHtml = await HtmlUtility.GetHtmlFromUrlAsync(
+                    PlayerCharactersListingUrl,
+                    cancellationToken);
+                _playerCharacterListingMarkdown = await MarkdownUtility.GetMarkdownFromUrlAsync(
+                    PlayerCharactersListingUrl,
+                    cancellationToken);
 
                 if (IsMarkdownFetchFailure(_playerCharacterListingMarkdown))
                 {
                     throw new InvalidOperationException($"Markdown could not be fetched from {PlayerCharactersListingUrl}.");
                 }
 
-                await File.WriteAllTextAsync(cachedListingMarkdownPath, _playerCharacterListingMarkdown);
+                await AtomicFileUtility.WriteAllTextAsync(
+                    cachedListingMarkdownPath,
+                    _playerCharacterListingMarkdown,
+                    cancellationToken);
 
+                cancellationToken.ThrowIfCancellationRequested();
                 _playerCharacterImageUris = MarkdownUtility.GetImageUrisFromMarkdown(_playerCharacterListingMarkdown, PlayerCharactersListingUrl);
                 _playerCharacterImageFileNames = MarkdownUtility.GetImageFileNamesFromMarkdown(_playerCharacterListingMarkdown);
                 _playerCharacterHtmlImageUris = HtmlUtility.GetImageUrisFromHtml(_playerCharacterListingHtml, PlayerCharactersListingUrl);
-                var imagePathsByFileName = await ObsidianPublishUtility.GetAttachmentImagePathsByFileNameAsync(PlayerCharactersListingUrl);
+                var imagePathsByFileName = await ObsidianPublishUtility.GetAttachmentImagePathsByFileNameAsync(
+                    PlayerCharactersListingUrl,
+                    cancellationToken: cancellationToken);
                 _playerCharacterResolvedImagePaths = _playerCharacterImageFileNames
                     .Select(fileName => imagePathsByFileName.TryGetValue(fileName, out var imagePath)
                         ? $"{fileName}: {imagePath}"
@@ -2145,8 +2378,12 @@ namespace PlayerAssistant
                 {
                     await PlayerCharacterAssetUtility.DownloadActiveHeroImagesAsync(
                         PlayerCharactersListingUrl,
-                        pcsDirectory);
-                    File.WriteAllText(downloadMarkerPath, DateTimeOffset.Now.ToString("O"));
+                        pcsDirectory,
+                        cancellationToken);
+                    await AtomicFileUtility.WriteAllTextAsync(
+                        downloadMarkerPath,
+                        DateTimeOffset.Now.ToString("O"),
+                        cancellationToken);
                     _activePlayerCharacterImagePaths = PlayerCharacterAssetUtility.GetListedActiveHeroImagePaths(
                         _playerCharacterListingMarkdown,
                         pcsDirectory);
@@ -2163,9 +2400,11 @@ namespace PlayerAssistant
                 await PlayerCharacterAssetUtility.DownloadActiveHeroMarkdownAsync(
                     _playerCharacterListingMarkdown,
                     PlayerCharactersListingUrl,
-                    pcsDirectory);
-                await DownloadSitemapAsync();
-                await DownloadRegionalMapAsync();
+                    pcsDirectory,
+                    cancellationToken);
+                await DownloadSitemapAsync(cancellationToken);
+                await DownloadRegionalMapAsync(cancellationToken);
+                cancellationToken.ThrowIfCancellationRequested();
                 StartHeroImageShowcaseIfReady();
 
             }
@@ -2174,30 +2413,34 @@ namespace PlayerAssistant
             }
             catch (Exception ex)
             {
-                MessageBox.Show(
-                    this,
-                    ex.Message,
+                await ReportOperationFailureAsync(
+                    "player character refresh",
+                    "Player character refresh unavailable",
                     "Player Character Image URI Error",
-                    MessageBoxButtons.OK,
-                MessageBoxIcon.Warning);
+                    ex,
+                    showFailureDialog);
             }
         }
 
-        private async Task DownloadSitemapAsync()
+        private async Task DownloadSitemapAsync(CancellationToken cancellationToken = default)
         {
             try
             {
+                cancellationToken.ThrowIfCancellationRequested();
                 var sitemapPath = Path.Combine(AppContext.BaseDirectory, SitemapFileName);
                 var tempDirectory = Path.Combine(AppContext.BaseDirectory, TempDirectoryName);
                 var tempSitemapPath = Path.Combine(tempDirectory, SitemapFileName);
                 var keywordUrlsPath = Path.Combine(AppContext.BaseDirectory, SitemapKeywordUrlsFileName);
 
                 Directory.CreateDirectory(tempDirectory);
-                await SitemapUtility.DownloadSitemapAsync(SitemapUrl, tempSitemapPath);
+                await SitemapUtility.DownloadSitemapAsync(SitemapUrl, tempSitemapPath, cancellationToken);
 
-                var updated = PromoteFileIfChanged(tempSitemapPath, sitemapPath);
+                var updated = await PromoteFileIfChangedAsync(tempSitemapPath, sitemapPath, cancellationToken);
 
-                var sitemapIndex = await SitemapUtility.WriteKeywordUrlDictionaryAsync(sitemapPath, keywordUrlsPath);
+                var sitemapIndex = await SitemapUtility.WriteKeywordUrlDictionaryAsync(
+                    sitemapPath,
+                    keywordUrlsPath,
+                    cancellationToken);
                 var sitemapStatus = updated
                     ? $"updated {SitemapFileName}; {sitemapIndex.NodeCount} nodes"
                     : $"Using cached {SitemapFileName}";
@@ -2205,19 +2448,25 @@ namespace PlayerAssistant
                 SetStatusBarMessage(
                     $"{sitemapStatus}; indexed {sitemapIndex.KeywordCount} sitemap URLs.");
             }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                throw;
+            }
             catch (Exception ex)
             {
                 SetStatusBarMessage($"Sitemap unavailable: {ex.Message}");
             }
         }
 
-        private async Task DownloadRegionalMapAsync()
+        private async Task DownloadRegionalMapAsync(CancellationToken cancellationToken = default)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             var mapsDirectory = EnsureMapsDirectory();
             var download = await GameForumUtility.DownloadRegionalMapAsync(
                 AppSettingsUtility.GameForumUrl,
-                mapsDirectory);
-            await PreloadRegionalMapImageAsync();
+                mapsDirectory,
+                cancellationToken);
+            await PreloadRegionalMapImageAsync(cancellationToken);
 
             var downloadSummary = GetStartupDownloadSummary();
             SetStatusBarMessage(download.ErrorMessage is null
@@ -2226,68 +2475,15 @@ namespace PlayerAssistant
             UpdateRegionalMapMenuItem();
         }
 
-        private static bool PromoteFileIfChanged(string tempFilePath, string destinationFilePath)
+        private static Task<bool> PromoteFileIfChangedAsync(
+            string tempFilePath,
+            string destinationFilePath,
+            CancellationToken cancellationToken = default)
         {
-            if (!File.Exists(tempFilePath))
-            {
-                return false;
-            }
-
-            if (File.Exists(destinationFilePath) && FilesHaveSameContent(tempFilePath, destinationFilePath))
-            {
-                File.Delete(tempFilePath);
-                return false;
-            }
-
-            if (File.Exists(destinationFilePath))
-            {
-                File.Delete(destinationFilePath);
-            }
-
-            File.Move(tempFilePath, destinationFilePath);
-            return true;
-        }
-
-        private static bool FilesHaveSameContent(string leftPath, string rightPath)
-        {
-            var leftInfo = new FileInfo(leftPath);
-            var rightInfo = new FileInfo(rightPath);
-
-            if (leftInfo.Length != rightInfo.Length)
-            {
-                return false;
-            }
-
-            const int bufferSize = 81920;
-            var leftBuffer = new byte[bufferSize];
-            var rightBuffer = new byte[bufferSize];
-
-            using var leftStream = File.OpenRead(leftPath);
-            using var rightStream = File.OpenRead(rightPath);
-
-            while (true)
-            {
-                var leftBytesRead = leftStream.Read(leftBuffer, 0, leftBuffer.Length);
-                var rightBytesRead = rightStream.Read(rightBuffer, 0, rightBuffer.Length);
-
-                if (leftBytesRead != rightBytesRead)
-                {
-                    return false;
-                }
-
-                if (leftBytesRead == 0)
-                {
-                    return true;
-                }
-
-                for (var index = 0; index < leftBytesRead; index++)
-                {
-                    if (leftBuffer[index] != rightBuffer[index])
-                    {
-                        return false;
-                    }
-                }
-            }
+            return AtomicFileUtility.PromoteTempFileIfChangedAsync(
+                tempFilePath,
+                destinationFilePath,
+                cancellationToken);
         }
 
         private static string EnsureMapsDirectory()
@@ -2355,7 +2551,7 @@ namespace PlayerAssistant
             showDiceRollsToolStripMenuItem.Enabled = _diceRollsListBox is null && HasDiceRollEntries(GetDiceRollsHtmlPath());
         }
 
-        private async Task PreloadRegionalMapImageAsync()
+        private async Task PreloadRegionalMapImageAsync(CancellationToken cancellationToken = default)
         {
             var preloadTask = _regionalMapImagePreloadTask;
             if (preloadTask is not null && !preloadTask.IsCompleted)
@@ -2364,11 +2560,11 @@ namespace PlayerAssistant
                 return;
             }
 
-            _regionalMapImagePreloadTask = PreloadRegionalMapImageCoreAsync();
+            _regionalMapImagePreloadTask = PreloadRegionalMapImageCoreAsync(cancellationToken);
             await _regionalMapImagePreloadTask;
         }
 
-        private async Task PreloadRegionalMapImageCoreAsync()
+        private async Task PreloadRegionalMapImageCoreAsync(CancellationToken cancellationToken = default)
         {
             var regionalMapPath = GetRegionalMapPath();
             if (!File.Exists(regionalMapPath))
@@ -2384,7 +2580,7 @@ namespace PlayerAssistant
                 return;
             }
 
-            var image = await Task.Run(() => LoadImageCopy(regionalMapPath));
+            var image = await Task.Run(() => LoadImageCopy(regionalMapPath), cancellationToken);
             var previousImage = _regionalMapImageCache;
             _regionalMapImageCache = image;
             _regionalMapImageCachePath = regionalMapPath;
@@ -2530,10 +2726,10 @@ namespace PlayerAssistant
                 return;
             }
 
-            _ = StartHeroImageShowcaseWithIntroAsync();
+            StartBackgroundTask("hero image showcase intro", StartHeroImageShowcaseWithIntroAsync);
         }
 
-        private async Task StartHeroImageShowcaseAfterDelayAsync()
+        private async Task StartHeroImageShowcaseAfterDelayAsync(CancellationToken cancellationToken = default)
         {
             if (_suppressHeroImagesForThisRun)
             {
@@ -2551,7 +2747,7 @@ namespace PlayerAssistant
             var delayBeforeIntro = HeroImageShowcaseStartDelay - HeroImageIntroDuration;
             if (delayBeforeIntro > TimeSpan.Zero)
             {
-                await Task.Delay(delayBeforeIntro);
+                await Task.Delay(delayBeforeIntro, cancellationToken);
             }
 
             if (_regionalMapActive)
@@ -2559,10 +2755,10 @@ namespace PlayerAssistant
                 return;
             }
 
-            await StartHeroImageShowcaseWithIntroAsync();
+            await StartHeroImageShowcaseWithIntroAsync(cancellationToken);
         }
 
-        private async Task StartHeroImageShowcaseWithIntroAsync()
+        private async Task StartHeroImageShowcaseWithIntroAsync(CancellationToken cancellationToken = default)
         {
             if (_suppressHeroImagesForThisRun)
             {
@@ -2585,7 +2781,7 @@ namespace PlayerAssistant
             UpdateShowMenuItemsForHeroImageShowcase();
             Invalidate();
 
-            await Task.Delay(HeroImageIntroDuration);
+            await Task.Delay(HeroImageIntroDuration, cancellationToken);
 
             _showHeroIntroText = false;
             _heroImageIntroStarted = false;
@@ -2652,11 +2848,17 @@ namespace PlayerAssistant
 
             StopHeroImageShowcase();
             _heroImageShowcaseCompleted = true;
-            _ = StartPlayerCharacterListingUpdateAsync();
+            StartBackgroundTask(
+                "player character refresh",
+                cancellationToken => StartPlayerCharacterListingUpdateAsync(
+                    showFailureDialog: false,
+                    cancellationToken));
             Invalidate();
         }
 
-        private async Task StartPlayerCharacterListingUpdateAsync()
+        private async Task StartPlayerCharacterListingUpdateAsync(
+            bool showFailureDialog = true,
+            CancellationToken cancellationToken = default)
         {
             if (_playerCharacterListingUpdateStarted
                 || _showWelcomeText
@@ -2671,7 +2873,7 @@ namespace PlayerAssistant
             _playerCharacterListingUpdateStarted = true;
             try
             {
-                await UpdatePlayerCharacterListingAsync();
+                await UpdatePlayerCharacterListingAsync(showFailureDialog, cancellationToken);
             }
             finally
             {

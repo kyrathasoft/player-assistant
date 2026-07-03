@@ -104,7 +104,7 @@ namespace PlayerAssistant
                     if (ShouldDownload(filePath))
                     {
                         var html = await GetHtmlFromUrlWithRateLimitAsync(hyperlink.Url, cancellationToken);
-                        await File.WriteAllTextAsync(filePath, html, cancellationToken);
+                        await AtomicFileUtility.WriteAllTextAsync(filePath, html, cancellationToken);
                         FileDownloadCounters.AddCompletedDownload(filePath);
                         downloaded = true;
                     }
@@ -147,7 +147,7 @@ namespace PlayerAssistant
                     if (!File.Exists(filePath))
                     {
                         var html = await GetHtmlFromUrlWithRateLimitAsync(hyperlink.Url, cancellationToken);
-                        await File.WriteAllTextAsync(
+                        await AtomicFileUtility.WriteAllTextAsync(
                             filePath,
                             HtmlUtility.RemoveImagesFromHtml(html),
                             cancellationToken);
@@ -207,7 +207,7 @@ namespace PlayerAssistant
 
                     if (downloaded)
                     {
-                        await File.WriteAllTextAsync(filePath, html, cancellationToken);
+                        await AtomicFileUtility.WriteAllTextAsync(filePath, html, cancellationToken);
                         FileDownloadCounters.AddCompletedDownload(filePath);
                     }
 
@@ -280,7 +280,7 @@ namespace PlayerAssistant
                 if (ShouldDownload(filePath))
                 {
                     var html = await GetHtmlFromUrlWithRateLimitAsync(hyperlink.Url, cancellationToken);
-                    await File.WriteAllTextAsync(filePath, html, cancellationToken);
+                    await AtomicFileUtility.WriteAllTextAsync(filePath, html, cancellationToken);
                     FileDownloadCounters.AddCompletedDownload(filePath);
                     downloaded = true;
                 }
@@ -312,7 +312,7 @@ namespace PlayerAssistant
                 if (ShouldDownload(filePath, GameIntroHtmlRefreshInterval))
                 {
                     var html = await GetHtmlFromUrlWithRateLimitAsync(gameIntroUrl, cancellationToken);
-                    await File.WriteAllTextAsync(filePath, html, cancellationToken);
+                    await AtomicFileUtility.WriteAllTextAsync(filePath, html, cancellationToken);
                     FileDownloadCounters.AddCompletedDownload(filePath);
                     downloaded = true;
                 }
@@ -345,7 +345,7 @@ namespace PlayerAssistant
                 if (forceDownload || ShouldDownload(filePath, TheCastHtmlRefreshInterval))
                 {
                     var html = await GetHtmlFromUrlWithRateLimitAsync(theCastUrl, cancellationToken);
-                    await File.WriteAllTextAsync(filePath, html, cancellationToken);
+                    await AtomicFileUtility.WriteAllTextAsync(filePath, html, cancellationToken);
                     FileDownloadCounters.AddCompletedDownload(filePath);
                     downloaded = true;
                 }
@@ -472,7 +472,7 @@ namespace PlayerAssistant
                 }
 
                 var allEntries = existingEntries.Concat(newEntries).ToArray();
-                await File.WriteAllTextAsync(
+                await AtomicFileUtility.WriteAllTextAsync(
                     outputPath,
                     BuildDieRollHtml(allEntries),
                     cancellationToken);
@@ -498,7 +498,7 @@ namespace PlayerAssistant
                 Directory.CreateDirectory(outputDirectory);
             }
 
-            await File.WriteAllTextAsync(
+            await AtomicFileUtility.WriteAllTextAsync(
                 outputPath,
                 JsonSerializer.Serialize(loginInfo, new JsonSerializerOptions { WriteIndented = true }),
                 cancellationToken);

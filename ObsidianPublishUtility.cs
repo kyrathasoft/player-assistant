@@ -71,7 +71,10 @@ namespace PlayerAssistant
             CancellationToken cancellationToken)
         {
             var cacheUrl = $"https://{siteInfo.Host}/cache/{siteInfo.Uid}";
-            using var response = await HttpClient.GetAsync(cacheUrl, cancellationToken);
+            using var response = await NetworkRequestUtility.SendAsync(
+                HttpClient,
+                () => new HttpRequestMessage(HttpMethod.Get, cacheUrl),
+                cancellationToken: cancellationToken);
             response.EnsureSuccessStatusCode();
 
             await using var cacheStream = await response.Content.ReadAsStreamAsync(cancellationToken);
@@ -137,12 +140,7 @@ namespace PlayerAssistant
 
         private static HttpClient CreateHttpClient()
         {
-            var httpClient = new HttpClient
-            {
-                Timeout = TimeSpan.FromSeconds(30)
-            };
-            httpClient.DefaultRequestHeaders.UserAgent.ParseAdd("PlayerAssistant/1.0");
-            return httpClient;
+            return NetworkRequestUtility.CreateHttpClient();
         }
 
         private sealed record ObsidianPublishSiteInfo(string Uid, string Host);

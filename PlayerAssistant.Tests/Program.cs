@@ -1,6 +1,8 @@
 using PlayerAssistant;
+using System.Diagnostics;
 using System.Drawing;
 using System.Drawing.Imaging;
+using System.Net;
 using System.Reflection;
 using System.Security.Cryptography;
 using System.Windows.Forms;
@@ -30,8 +32,37 @@ var tests = new (string Name, Action Test)[]
     ("orcish translator supports sarcastic but variants", OrcishTranslatorSupportsSarcasticButVariants),
     ("orcish translator random but picker returns valid variant", OrcishTranslatorRandomButPickerReturnsValidVariant),
     ("orcish translator exposes unique english term count", OrcishTranslatorExposesUniqueEnglishTermCount),
+    ("app configuration validation accepts complete runtime", AppConfigurationValidationAcceptsCompleteRuntime),
+    ("app configuration validation reports missing url", AppConfigurationValidationReportsMissingUrl),
+    ("app configuration validation warns about missing rpol credentials", AppConfigurationValidationWarnsAboutMissingRpolCredentials),
+    ("app configuration validation warns about missing sidecars", AppConfigurationValidationWarnsAboutMissingSidecars),
     ("startup manifest status distinguishes skipped and failed", StartupManifestStatusDistinguishesSkippedAndFailed),
     ("startup error log entry includes phase and exception", StartupErrorLogEntryIncludesPhaseAndException),
+    ("runtime housekeeping removes stale temp and atomic files", RuntimeHousekeepingRemovesStaleTempAndAtomicFiles),
+    ("runtime housekeeping preserves fresh and unrelated tmp files", RuntimeHousekeepingPreservesFreshAndUnrelatedTmpFiles),
+    ("runtime housekeeping removes old quarantined json only", RuntimeHousekeepingRemovesOldQuarantinedJsonOnly),
+    ("runtime housekeeping rotates oversized startup log", RuntimeHousekeepingRotatesOversizedStartupLog),
+    ("runtime housekeeping skips locked files", RuntimeHousekeepingSkipsLockedFiles),
+    ("ui operation failure reporter logs status and dialog", UiOperationFailureReporterLogsStatusAndDialog),
+    ("background task supervisor suppresses duplicate phases", BackgroundTaskSupervisorSuppressesDuplicatePhases),
+    ("background task supervisor logs failures", BackgroundTaskSupervisorLogsFailures),
+    ("background task supervisor cancels running tasks on dispose", BackgroundTaskSupervisorCancelsRunningTasksOnDispose),
+    ("atomic file promotion preserves existing destination on locked replacement", AtomicFilePromotionPreservesExistingDestinationOnLockedReplacement),
+    ("network request retries transient failures", NetworkRequestRetriesTransientFailures),
+    ("network request does not retry unauthorized", NetworkRequestDoesNotRetryUnauthorized),
+    ("network request wraps timeout", NetworkRequestWrapsTimeout),
+    ("network request preserves caller cancellation", NetworkRequestPreservesCallerCancellation),
+    ("markdown async fetch preserves caller cancellation", MarkdownAsyncFetchPreservesCallerCancellation),
+    ("runtime artifact loader quarantines malformed json", RuntimeArtifactLoaderQuarantinesMalformedJson),
+    ("login info cache load returns empty for malformed json", LoginInfoCacheLoadReturnsEmptyForMalformedJson),
+    ("asset manifest load returns empty for malformed json", AssetManifestLoadReturnsEmptyForMalformedJson),
+    ("active hero markdown cancellation writes no files", ActiveHeroMarkdownCancellationWritesNoFiles),
+    ("player character refresh cancellation clears in progress flag", PlayerCharacterRefreshCancellationClearsInProgressFlag),
+    ("game forum startup cancellation writes no manifests", GameForumStartupCancellationWritesNoManifests),
+    ("keyword index loader quarantines malformed json", KeywordIndexLoaderQuarantinesMalformedJson),
+    ("keyword terms release copy generates from keyword index", KeywordTermsReleaseCopyGeneratesFromKeywordIndex),
+    ("rpol auth cached failure short circuits html fetch", RpolAuthCachedFailureShortCircuitsHtmlFetch),
+    ("rpol auth cached failure logs once", RpolAuthCachedFailureLogsOnce),
     ("show-all thread url preserves base query and adds show all", ShowAllThreadUrlPreservesBaseQueryAndAddsShowAll),
     ("die roll extraction keeps only saved-log lines", DieRollExtractionKeepsOnlySavedLogLines),
     ("die roll extraction handles live rpol paragraph markup", DieRollExtractionHandlesLiveRpolParagraphMarkup),
@@ -48,11 +79,14 @@ var tests = new (string Name, Action Test)[]
     ("keyword search filters rpol hero metadata-only hits", KeywordSearchFiltersRpolHeroMetadataOnlyHits),
     ("search enter triggers click when enabled", SearchEnterTriggersClickWhenEnabled),
     ("keyword search offers online fallback on local miss", KeywordSearchOffersOnlineFallbackOnLocalMiss),
+    ("keyword search cancels previous online fallback", KeywordSearchCancelsPreviousOnlineFallback),
     ("keyword search rpol scope excludes obsidian-only whiteheart", KeywordSearchRpolScopeExcludesObsidianOnlyWhiteheart),
     ("keyword search rpol scope excludes obsidian-only whiteheart stiffwhiskers", KeywordSearchRpolScopeExcludesObsidianOnlyWhiteheartStiffwhiskers),
     ("hero image paths follow listing markdown table", HeroImagePathsFollowListingMarkdownTable),
     ("legacy local settings migrate to portable encryption", LegacyLocalSettingsMigrateToPortableEncryption),
-    ("local settings are encrypted on load", LocalSettingsAreEncryptedOnLoad)
+    ("local settings are encrypted on load", LocalSettingsAreEncryptedOnLoad),
+    ("publish verification accepts current output", PublishVerificationAcceptsCurrentOutput),
+    ("publish verification rejects stale startup log", PublishVerificationRejectsStaleStartupLog)
 };
 
 if (!string.IsNullOrWhiteSpace(requestedTestFilter))
@@ -318,12 +352,78 @@ static void OrcishTranslatorExposesUniqueEnglishTermCount()
 {
     var terms = OrcishTranslatorUtility.GetEnglishTerms();
 
-    AssertEqual(50, OrcishTranslatorUtility.GetEnglishTermCount(), "unexpected total English term count");
+    AssertEqual(179, OrcishTranslatorUtility.GetEnglishTermCount(), "unexpected total English term count");
     AssertEqual(OrcishTranslatorUtility.GetEnglishTermCount(), terms.Count, "term list and count should agree");
     AssertEqual(1, terms.Count(term => string.Equals(term, "I", StringComparison.OrdinalIgnoreCase)), "I should be counted once despite multiple variants");
     AssertEqual(1, terms.Count(term => string.Equals(term, "really", StringComparison.OrdinalIgnoreCase)), "really should be counted once despite multiple variants");
     AssertEqual(1, terms.Count(term => string.Equals(term, "watch", StringComparison.OrdinalIgnoreCase)), "watch should be counted once despite multiple parts of speech");
     AssertTrue(terms.Contains("humans'", StringComparer.OrdinalIgnoreCase), "expected generated plural possessive term");
+}
+
+static void AppConfigurationValidationAcceptsCompleteRuntime()
+{
+    using var directory = TemporaryDirectory.Create();
+    WriteRequiredRuntimeSidecars(directory.Path);
+
+    var report = AppConfigurationValidationUtility.Validate(
+        CreateValidAppSettings(includeCredentials: true),
+        directory.Path);
+
+    AssertFalse(report.HasIssues, "complete runtime configuration should not report issues");
+}
+
+static void AppConfigurationValidationReportsMissingUrl()
+{
+    using var directory = TemporaryDirectory.Create();
+    WriteRequiredRuntimeSidecars(directory.Path);
+    var settings = CreateValidAppSettings(includeCredentials: true);
+    settings.Remove("The Cast");
+
+    var report = AppConfigurationValidationUtility.Validate(settings, directory.Path);
+
+    AssertTrue(report.HasIssues, "missing URL should report a configuration issue");
+    AssertTrue(
+        report.Issues.Any(issue => issue.Severity == AppConfigurationIssueSeverity.Error
+            && issue.Message.Contains("The Cast", StringComparison.Ordinal)),
+        "missing The Cast URL should be an error");
+    AssertEqual(
+        "Settings problem: The Cast is missing or empty.",
+        report.FirstUserMessage!,
+        "unexpected first user-facing validation message");
+}
+
+static void AppConfigurationValidationWarnsAboutMissingRpolCredentials()
+{
+    using var directory = TemporaryDirectory.Create();
+    WriteRequiredRuntimeSidecars(directory.Path);
+
+    var report = AppConfigurationValidationUtility.Validate(
+        CreateValidAppSettings(includeCredentials: false),
+        directory.Path);
+
+    AssertTrue(
+        report.Issues.Any(issue => issue.Severity == AppConfigurationIssueSeverity.Warning
+            && issue.Message.Contains("RPOL credentials", StringComparison.Ordinal)),
+        "missing RPOL credentials should be a warning");
+    AssertFalse(
+        report.Issues.Any(issue => issue.Severity == AppConfigurationIssueSeverity.Error),
+        "missing optional RPOL credentials should not be fatal");
+}
+
+static void AppConfigurationValidationWarnsAboutMissingSidecars()
+{
+    using var directory = TemporaryDirectory.Create();
+
+    var report = AppConfigurationValidationUtility.Validate(
+        CreateValidAppSettings(includeCredentials: true),
+        directory.Path);
+
+    AssertTrue(
+        report.Issues.Count(issue => issue.Message.Contains("missing", StringComparison.OrdinalIgnoreCase)) >= 3,
+        "missing runtime sidecars should be reported");
+    AssertTrue(
+        report.Issues.All(issue => issue.Severity == AppConfigurationIssueSeverity.Warning),
+        "missing sidecars should warn without blocking startup");
 }
 
 static void StartupManifestStatusDistinguishesSkippedAndFailed()
@@ -340,6 +440,766 @@ static void StartupErrorLogEntryIncludesPhaseAndException()
     AssertContains(entry, "ooc thread downloads");
     AssertContains(entry, "InvalidOperationException");
     AssertContains(entry, "Missing RPoL credentials.");
+}
+
+static void RuntimeHousekeepingRemovesStaleTempAndAtomicFiles()
+{
+    using var directory = TemporaryDirectory.Create();
+    var now = new DateTimeOffset(2026, 7, 2, 12, 0, 0, TimeSpan.Zero);
+    var tempDirectory = Path.Combine(directory.Path, "temp");
+    Directory.CreateDirectory(tempDirectory);
+    var staleTempPath = Path.Combine(tempDirectory, "old-download.tmp");
+    var atomicPath = AtomicFileUtility.CreateTempPath(Path.Combine(directory.Path, "keyword-index.json"));
+    File.WriteAllText(staleTempPath, "temp");
+    File.WriteAllText(atomicPath, "atomic");
+    SetLastWriteTimeUtc(staleTempPath, now - TimeSpan.FromHours(2));
+    SetLastWriteTimeUtc(atomicPath, now - TimeSpan.FromHours(2));
+
+    var report = RuntimeHousekeepingUtility.Clean(
+        directory.Path,
+        now,
+        new RuntimeHousekeepingOptions
+        {
+            StaleTempFileAge = TimeSpan.FromHours(1),
+            OrphanedAtomicFileAge = TimeSpan.FromHours(1)
+        });
+
+    AssertFalse(File.Exists(staleTempPath), "stale temp file should be removed");
+    AssertFalse(File.Exists(atomicPath), "stale atomic temp file should be removed");
+    AssertEqual(2, report.RemovedFileCount, "unexpected removed file count");
+    AssertTrue(report.ReclaimedBytes > 0, "expected reclaimed bytes to be reported");
+}
+
+static void RuntimeHousekeepingPreservesFreshAndUnrelatedTmpFiles()
+{
+    using var directory = TemporaryDirectory.Create();
+    var now = new DateTimeOffset(2026, 7, 2, 12, 0, 0, TimeSpan.Zero);
+    var tempDirectory = Path.Combine(directory.Path, "temp");
+    Directory.CreateDirectory(tempDirectory);
+    var freshTempPath = Path.Combine(tempDirectory, "fresh-download.tmp");
+    var unrelatedTmpPath = Path.Combine(directory.Path, "cache.txt.tmp");
+    File.WriteAllText(freshTempPath, "temp");
+    File.WriteAllText(unrelatedTmpPath, "not an atomic temp file");
+    SetLastWriteTimeUtc(freshTempPath, now - TimeSpan.FromMinutes(5));
+    SetLastWriteTimeUtc(unrelatedTmpPath, now - TimeSpan.FromDays(7));
+
+    var report = RuntimeHousekeepingUtility.Clean(
+        directory.Path,
+        now,
+        new RuntimeHousekeepingOptions
+        {
+            StaleTempFileAge = TimeSpan.FromHours(1),
+            OrphanedAtomicFileAge = TimeSpan.FromHours(1)
+        });
+
+    AssertTrue(File.Exists(freshTempPath), "fresh temp file should be preserved");
+    AssertTrue(File.Exists(unrelatedTmpPath), "unrelated tmp file should be preserved");
+    AssertEqual(0, report.RemovedFileCount, "fresh/unrelated files should not be removed");
+}
+
+static void RuntimeHousekeepingRemovesOldQuarantinedJsonOnly()
+{
+    using var directory = TemporaryDirectory.Create();
+    var now = new DateTimeOffset(2026, 7, 2, 12, 0, 0, TimeSpan.Zero);
+    var oldBadPath = Path.Combine(directory.Path, "keyword-index.bad-20260601-010203-004.json");
+    var freshBadPath = Path.Combine(directory.Path, "settings.bad-20260702-010203-004.json");
+    var normalJsonPath = Path.Combine(directory.Path, "settings.json");
+    File.WriteAllText(oldBadPath, "{}");
+    File.WriteAllText(freshBadPath, "{}");
+    File.WriteAllText(normalJsonPath, "{}");
+    SetLastWriteTimeUtc(oldBadPath, now - TimeSpan.FromDays(15));
+    SetLastWriteTimeUtc(freshBadPath, now - TimeSpan.FromDays(1));
+    SetLastWriteTimeUtc(normalJsonPath, now - TimeSpan.FromDays(30));
+
+    var report = RuntimeHousekeepingUtility.Clean(
+        directory.Path,
+        now,
+        new RuntimeHousekeepingOptions
+        {
+            QuarantinedJsonRetention = TimeSpan.FromDays(14)
+        });
+
+    AssertFalse(File.Exists(oldBadPath), "old quarantined json should be removed");
+    AssertTrue(File.Exists(freshBadPath), "fresh quarantined json should be preserved");
+    AssertTrue(File.Exists(normalJsonPath), "normal json should be preserved");
+    AssertEqual(1, report.RemovedFileCount, "unexpected removed quarantine count");
+}
+
+static void RuntimeHousekeepingRotatesOversizedStartupLog()
+{
+    using var directory = TemporaryDirectory.Create();
+    var logPath = Path.Combine(directory.Path, StartupLoggingUtility.LogFileName);
+    var archivePath = Path.Combine(directory.Path, "startup-errors.log.1");
+    File.WriteAllText(logPath, new string('x', 128));
+
+    var report = RuntimeHousekeepingUtility.Clean(
+        directory.Path,
+        new DateTimeOffset(2026, 7, 2, 12, 0, 0, TimeSpan.Zero),
+        new RuntimeHousekeepingOptions
+        {
+            MaxStartupLogBytes = 32
+        });
+
+    AssertTrue(report.StartupLogRotated, "oversized startup log should be rotated");
+    AssertTrue(File.Exists(logPath), "active startup log should be recreated after rotation");
+    AssertTrue(File.Exists(archivePath), "startup log archive should be written");
+    AssertEqual(128L, new FileInfo(archivePath).Length, "archive should contain the original log");
+    AssertContains(File.ReadAllText(logPath), "rotated to startup-errors.log.1");
+}
+
+static void RuntimeHousekeepingSkipsLockedFiles()
+{
+    using var directory = TemporaryDirectory.Create();
+    var now = new DateTimeOffset(2026, 7, 2, 12, 0, 0, TimeSpan.Zero);
+    var tempDirectory = Path.Combine(directory.Path, "temp");
+    Directory.CreateDirectory(tempDirectory);
+    var lockedPath = Path.Combine(tempDirectory, "locked.tmp");
+    File.WriteAllText(lockedPath, "locked");
+    SetLastWriteTimeUtc(lockedPath, now - TimeSpan.FromDays(2));
+
+    using (new FileStream(lockedPath, FileMode.Open, FileAccess.ReadWrite, FileShare.None))
+    {
+        var report = RuntimeHousekeepingUtility.Clean(
+            directory.Path,
+            now,
+            new RuntimeHousekeepingOptions
+            {
+                StaleTempFileAge = TimeSpan.FromHours(1)
+            });
+
+        AssertTrue(File.Exists(lockedPath), "locked file should be preserved");
+        AssertEqual(1, report.SkippedFileCount, "locked file should be counted as skipped");
+    }
+}
+
+static void UiOperationFailureReporterLogsStatusAndDialog()
+{
+    var startupLogPath = Path.Combine(AppContext.BaseDirectory, StartupLoggingUtility.LogFileName);
+    var hadStartupLog = File.Exists(startupLogPath);
+    var originalStartupLog = hadStartupLog ? File.ReadAllText(startupLogPath) : null;
+    var statusMessages = new List<string>();
+    var dialogs = new List<(string Title, string Message)>();
+
+    try
+    {
+        if (File.Exists(startupLogPath))
+        {
+            File.Delete(startupLogPath);
+        }
+
+        UiOperationFailureReporter.ReportAsync(
+            new UiOperationFailure(
+                "login info display",
+                "Login info unavailable",
+                "Login Info Error",
+                new InvalidOperationException("cached login info is malformed"),
+                ShowDialog: true),
+            statusMessages.Add,
+            (title, message) => dialogs.Add((title, message))).GetAwaiter().GetResult();
+
+        AssertEqual(1, statusMessages.Count, "expected reporter to set one status message");
+        AssertEqual(
+            "Login info unavailable: cached login info is malformed",
+            statusMessages[0],
+            "unexpected reporter status message");
+        AssertEqual(1, dialogs.Count, "expected reporter to show one warning dialog");
+        AssertEqual("Login Info Error", dialogs[0].Title, "unexpected dialog title");
+        AssertEqual("cached login info is malformed", dialogs[0].Message, "unexpected dialog message");
+
+        var log = File.ReadAllText(startupLogPath);
+        AssertContains(log, "login info display");
+        AssertContains(log, "InvalidOperationException");
+        AssertContains(log, "cached login info is malformed");
+    }
+    finally
+    {
+        if (hadStartupLog)
+        {
+            File.WriteAllText(startupLogPath, originalStartupLog);
+        }
+        else if (File.Exists(startupLogPath))
+        {
+            File.Delete(startupLogPath);
+        }
+    }
+}
+
+static void BackgroundTaskSupervisorSuppressesDuplicatePhases()
+{
+    using var supervisor = new BackgroundTaskSupervisor();
+    var releaseTask = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+    var startCount = 0;
+
+    AssertTrue(
+        supervisor.TryStart("duplicate phase", async cancellationToken =>
+        {
+            Interlocked.Increment(ref startCount);
+            await releaseTask.Task.WaitAsync(cancellationToken);
+        }),
+        "expected first background task to start");
+
+    WaitForCondition(() => Volatile.Read(ref startCount) == 1, "background task did not start");
+    AssertTrue(supervisor.IsRunning("duplicate phase"), "expected background phase to be running");
+    AssertFalse(
+        supervisor.TryStart("duplicate phase", _ =>
+        {
+            Interlocked.Increment(ref startCount);
+            return Task.CompletedTask;
+        }),
+        "expected duplicate background phase to be suppressed");
+
+    releaseTask.SetResult();
+    WaitForCondition(() => !supervisor.IsRunning("duplicate phase"), "background task did not complete");
+    AssertEqual(1, Volatile.Read(ref startCount), "duplicate phase should not start twice");
+}
+
+static void BackgroundTaskSupervisorLogsFailures()
+{
+    var startupLogPath = Path.Combine(AppContext.BaseDirectory, StartupLoggingUtility.LogFileName);
+    var hadStartupLog = File.Exists(startupLogPath);
+    var originalStartupLog = hadStartupLog ? File.ReadAllText(startupLogPath) : null;
+
+    try
+    {
+        if (File.Exists(startupLogPath))
+        {
+            File.Delete(startupLogPath);
+        }
+
+        using var supervisor = new BackgroundTaskSupervisor();
+        AssertTrue(
+            supervisor.TryStart("supervised failure", _ => throw new InvalidOperationException("supervised boom")),
+            "expected failing background task to start");
+        WaitForCondition(() => !supervisor.IsRunning("supervised failure"), "failing background task did not complete");
+
+        var log = File.ReadAllText(startupLogPath);
+        AssertContains(log, "supervised failure");
+        AssertContains(log, "InvalidOperationException");
+        AssertContains(log, "supervised boom");
+    }
+    finally
+    {
+        if (hadStartupLog)
+        {
+            File.WriteAllText(startupLogPath, originalStartupLog);
+        }
+        else if (File.Exists(startupLogPath))
+        {
+            File.Delete(startupLogPath);
+        }
+    }
+}
+
+static void BackgroundTaskSupervisorCancelsRunningTasksOnDispose()
+{
+    var cancellationObserved = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+    var supervisor = new BackgroundTaskSupervisor();
+
+    AssertTrue(
+        supervisor.TryStart("cancellable phase", async cancellationToken =>
+        {
+            try
+            {
+                await Task.Delay(TimeSpan.FromMinutes(1), cancellationToken);
+            }
+            catch (OperationCanceledException)
+            {
+                cancellationObserved.SetResult();
+                throw;
+            }
+        }),
+        "expected cancellable background task to start");
+
+    supervisor.Dispose();
+    AssertTrue(cancellationObserved.Task.Wait(TimeSpan.FromSeconds(2)), "expected disposal to cancel running background task");
+}
+
+static void AtomicFilePromotionPreservesExistingDestinationOnLockedReplacement()
+{
+    using var directory = TemporaryDirectory.Create();
+    var destinationPath = Path.Combine(directory.Path, "cache.txt");
+    var tempPath = Path.Combine(directory.Path, "cache.txt.tmp");
+    File.WriteAllText(destinationPath, "old cache");
+    File.WriteAllText(tempPath, "new cache");
+
+    using (new FileStream(destinationPath, FileMode.Open, FileAccess.Read, FileShare.None))
+    {
+        try
+        {
+            AtomicFileUtility.PromoteTempFileAsync(tempPath, destinationPath).GetAwaiter().GetResult();
+            throw new InvalidOperationException("expected locked destination promotion to fail");
+        }
+        catch (IOException)
+        {
+        }
+        catch (UnauthorizedAccessException)
+        {
+        }
+    }
+
+    AssertEqual("old cache", File.ReadAllText(destinationPath), "existing cache should survive failed promotion");
+    AssertTrue(File.Exists(tempPath), "temp file should remain for caller cleanup after failed promotion");
+}
+
+static void NetworkRequestRetriesTransientFailures()
+{
+    var attempts = 0;
+    using var httpClient = NetworkRequestUtility.CreateHttpClient(new ScriptedHttpMessageHandler(async (_, _) =>
+    {
+        attempts++;
+        await Task.Yield();
+        return attempts == 1
+            ? new HttpResponseMessage(HttpStatusCode.ServiceUnavailable)
+            : new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent("ok")
+            };
+    }));
+
+    using var response = NetworkRequestUtility.SendAsync(
+        httpClient,
+        () => new HttpRequestMessage(HttpMethod.Get, "https://example.invalid/retry"),
+        policy: new NetworkRequestPolicy(TimeSpan.FromSeconds(1), MaxAttempts: 2, TimeSpan.Zero)).GetAwaiter().GetResult();
+
+    AssertEqual(HttpStatusCode.OK, response.StatusCode, "expected retry to return successful response");
+    AssertEqual(2, attempts, "expected transient response to be retried once");
+}
+
+static void NetworkRequestDoesNotRetryUnauthorized()
+{
+    var attempts = 0;
+    using var httpClient = NetworkRequestUtility.CreateHttpClient(new ScriptedHttpMessageHandler((_, _) =>
+    {
+        attempts++;
+        return Task.FromResult(new HttpResponseMessage(HttpStatusCode.Unauthorized));
+    }));
+
+    using var response = NetworkRequestUtility.SendAsync(
+        httpClient,
+        () => new HttpRequestMessage(HttpMethod.Get, "https://example.invalid/auth"),
+        policy: new NetworkRequestPolicy(TimeSpan.FromSeconds(1), MaxAttempts: 3, TimeSpan.Zero)).GetAwaiter().GetResult();
+
+    AssertEqual(HttpStatusCode.Unauthorized, response.StatusCode, "expected unauthorized response to be returned to caller");
+    AssertEqual(1, attempts, "unauthorized response should not be retried");
+}
+
+static void NetworkRequestWrapsTimeout()
+{
+    using var httpClient = NetworkRequestUtility.CreateHttpClient(new ScriptedHttpMessageHandler(async (_, cancellationToken) =>
+    {
+        await Task.Delay(TimeSpan.FromMinutes(1), cancellationToken);
+        return new HttpResponseMessage(HttpStatusCode.OK);
+    }));
+
+    var exception = AssertThrows<NetworkRequestException>(() =>
+        NetworkRequestUtility.SendAsync(
+            httpClient,
+            () => new HttpRequestMessage(HttpMethod.Get, "https://example.invalid/timeout"),
+            policy: new NetworkRequestPolicy(TimeSpan.FromMilliseconds(20), MaxAttempts: 1, TimeSpan.Zero)).GetAwaiter().GetResult());
+
+    AssertEqual(NetworkFailureKind.TimedOut, exception.Kind, "expected timeout failures to be classified");
+}
+
+static void NetworkRequestPreservesCallerCancellation()
+{
+    using var cancellation = new CancellationTokenSource();
+    using var httpClient = NetworkRequestUtility.CreateHttpClient(new ScriptedHttpMessageHandler(async (_, cancellationToken) =>
+    {
+        await Task.Delay(TimeSpan.FromMinutes(1), cancellationToken);
+        return new HttpResponseMessage(HttpStatusCode.OK);
+    }));
+
+    cancellation.Cancel();
+
+    AssertThrows<OperationCanceledException>(() =>
+        NetworkRequestUtility.SendAsync(
+            httpClient,
+            () => new HttpRequestMessage(HttpMethod.Get, "https://example.invalid/cancel"),
+            policy: new NetworkRequestPolicy(TimeSpan.FromSeconds(1), MaxAttempts: 3, TimeSpan.Zero),
+            cancellationToken: cancellation.Token).GetAwaiter().GetResult());
+}
+
+static void MarkdownAsyncFetchPreservesCallerCancellation()
+{
+    using var cancellation = new CancellationTokenSource();
+    cancellation.Cancel();
+
+    AssertThrows<OperationCanceledException>(() =>
+        MarkdownUtility.GetMarkdownFromUrlAsync(
+            "https://example.invalid/cancel",
+            cancellation.Token).GetAwaiter().GetResult());
+}
+
+static void RuntimeArtifactLoaderQuarantinesMalformedJson()
+{
+    using var directory = TemporaryDirectory.Create();
+    var artifactPath = Path.Combine(directory.Path, "runtime-cache.json");
+    File.WriteAllText(artifactPath, "{ not valid json");
+    var startupLogPath = Path.Combine(AppContext.BaseDirectory, StartupLoggingUtility.LogFileName);
+    var hadStartupLog = File.Exists(startupLogPath);
+    var originalStartupLog = hadStartupLog ? File.ReadAllText(startupLogPath) : null;
+
+    try
+    {
+        if (File.Exists(startupLogPath))
+        {
+            File.Delete(startupLogPath);
+        }
+
+        var loaded = RuntimeArtifactUtility.TryLoadJson<Dictionary<string, string>>(
+            artifactPath,
+            "runtime artifact test",
+            out var value);
+
+        AssertFalse(loaded, "malformed runtime artifact should not load");
+        AssertTrue(value is null, "malformed runtime artifact should return a null value");
+        AssertFalse(File.Exists(artifactPath), "malformed runtime artifact should be moved out of the active path");
+
+        var badFiles = Directory.GetFiles(directory.Path, "runtime-cache.bad-*.json");
+        AssertEqual(1, badFiles.Length, "expected one quarantined runtime artifact");
+        AssertEqual("{ not valid json", File.ReadAllText(badFiles[0]), "quarantined artifact should preserve original content");
+
+        var startupLog = File.ReadAllText(startupLogPath);
+        AssertContains(startupLog, "runtime artifact test");
+        AssertContains(startupLog, badFiles[0]);
+    }
+    finally
+    {
+        if (hadStartupLog)
+        {
+            File.WriteAllText(startupLogPath, originalStartupLog);
+        }
+        else if (File.Exists(startupLogPath))
+        {
+            File.Delete(startupLogPath);
+        }
+    }
+}
+
+static void LoginInfoCacheLoadReturnsEmptyForMalformedJson()
+{
+    using var directory = TemporaryDirectory.Create();
+    var loginInfoPath = Path.Combine(directory.Path, "login-info.json");
+    File.WriteAllText(loginInfoPath, "{ not valid json");
+    var startupLogPath = Path.Combine(AppContext.BaseDirectory, StartupLoggingUtility.LogFileName);
+    var hadStartupLog = File.Exists(startupLogPath);
+    var originalStartupLog = hadStartupLog ? File.ReadAllText(startupLogPath) : null;
+
+    try
+    {
+        if (File.Exists(startupLogPath))
+        {
+            File.Delete(startupLogPath);
+        }
+
+        var rows = (TheCastLoginInfo[]?)InvokeStaticMethod(typeof(Form1), "LoadLoginInfoJson", loginInfoPath)
+            ?? throw new InvalidOperationException("LoadLoginInfoJson returned null.");
+
+        AssertEqual(0, rows.Length, "malformed login-info cache should return an empty row set");
+        AssertFalse(File.Exists(loginInfoPath), "malformed login-info cache should be moved out of the active path");
+
+        var badFiles = Directory.GetFiles(directory.Path, "login-info.bad-*.json");
+        AssertEqual(1, badFiles.Length, "expected one quarantined login-info cache");
+
+        var startupLog = File.ReadAllText(startupLogPath);
+        AssertContains(startupLog, "login info cache load");
+        AssertContains(startupLog, badFiles[0]);
+    }
+    finally
+    {
+        if (hadStartupLog)
+        {
+            File.WriteAllText(startupLogPath, originalStartupLog);
+        }
+        else if (File.Exists(startupLogPath))
+        {
+            File.Delete(startupLogPath);
+        }
+    }
+}
+
+static void AssetManifestLoadReturnsEmptyForMalformedJson()
+{
+    var startupLogPath = Path.Combine(AppContext.BaseDirectory, StartupLoggingUtility.LogFileName);
+    var hadStartupLog = File.Exists(startupLogPath);
+    var originalStartupLog = hadStartupLog ? File.ReadAllText(startupLogPath) : null;
+
+    try
+    {
+        if (File.Exists(startupLogPath))
+        {
+            File.Delete(startupLogPath);
+        }
+
+        var args = new object[] { "{ not valid json", null! };
+        var loaded = (bool)(InvokeStaticMethod(
+            typeof(PlayerCharacterAssetUtility),
+            "TryDeserializeAssetManifest",
+            args) ?? throw new InvalidOperationException("TryDeserializeAssetManifest returned null."));
+
+        AssertFalse(loaded, "malformed asset manifest should not load");
+        AssertTrue(args[1] is Dictionary<string, string> manifest && manifest.Count == 0, "malformed asset manifest should return an empty dictionary");
+
+        var startupLog = File.ReadAllText(startupLogPath);
+        AssertContains(startupLog, "asset manifest load");
+        AssertContains(startupLog, "asset manifest could not be parsed");
+    }
+    finally
+    {
+        if (hadStartupLog)
+        {
+            File.WriteAllText(startupLogPath, originalStartupLog);
+        }
+        else if (File.Exists(startupLogPath))
+        {
+            File.Delete(startupLogPath);
+        }
+    }
+}
+
+static void ActiveHeroMarkdownCancellationWritesNoFiles()
+{
+    using var directory = TemporaryDirectory.Create();
+    using var cancellation = new CancellationTokenSource();
+    cancellation.Cancel();
+
+    AssertThrows<OperationCanceledException>(() =>
+        PlayerCharacterAssetUtility.DownloadActiveHeroMarkdownAsync(
+            """
+            | Name | Character | Notes | Hero |
+            | --- | --- | --- | --- |
+            | Alice Example | [[Alice Example]] | active | ![[alice-token.webp]] |
+            """,
+            "https://publish.obsidian.md/example/PCs/Player+Characters+Listing",
+            directory.Path,
+            cancellation.Token).GetAwaiter().GetResult());
+
+    var activeDirectory = Path.Combine(directory.Path, "active");
+    AssertFalse(
+        Directory.Exists(activeDirectory) && Directory.EnumerateFiles(activeDirectory).Any(),
+        "canceled hero markdown refresh should not write active hero files");
+}
+
+static void PlayerCharacterRefreshCancellationClearsInProgressFlag()
+{
+    RunOnStaThread(() =>
+    {
+        using var form = new Form1(suppressHeroImagesForThisRun: true);
+        using var cancellation = new CancellationTokenSource();
+        cancellation.Cancel();
+
+        SetPrivateField(form, "_showWelcomeText", false);
+        InvokePrivateAsync(
+            form,
+            "StartPlayerCharacterListingUpdateAsync",
+            false,
+            cancellation.Token).GetAwaiter().GetResult();
+
+        AssertFalse(
+            (bool)(GetPrivateField(form, "_playerCharacterListingUpdateStarted") ?? true),
+            "canceled player-character refresh should clear the in-progress flag");
+    });
+}
+
+static void GameForumStartupCancellationWritesNoManifests()
+{
+    RunOnStaThread(() =>
+    {
+        var startupLogPath = Path.Combine(AppContext.BaseDirectory, StartupLoggingUtility.LogFileName);
+        var manifestPaths = new[]
+        {
+            Path.Combine(AppContext.BaseDirectory, "game-forum-chapter-prefixes.txt"),
+            Path.Combine(AppContext.BaseDirectory, "game-forum-chapter-downloads.txt"),
+            Path.Combine(AppContext.BaseDirectory, "game-forum-aside-downloads.txt"),
+            Path.Combine(AppContext.BaseDirectory, "game-forum-ooc-downloads.txt")
+        };
+        var preservedFiles = manifestPaths
+            .Append(startupLogPath)
+            .Select(path => (Path: path, Exists: File.Exists(path), Content: File.Exists(path) ? File.ReadAllText(path) : null))
+            .ToArray();
+
+        try
+        {
+            foreach (var path in manifestPaths.Append(startupLogPath))
+            {
+                if (File.Exists(path))
+                {
+                    File.Delete(path);
+                }
+            }
+
+            using var form = new Form1(suppressHeroImagesForThisRun: true);
+            using var cancellation = new CancellationTokenSource();
+            cancellation.Cancel();
+
+            AssertThrows<OperationCanceledException>(() =>
+                InvokePrivateAsync(
+                    form,
+                    "LoadGameForumChapterPrefixesAsync",
+                    cancellation.Token).GetAwaiter().GetResult());
+
+            foreach (var manifestPath in manifestPaths)
+            {
+                AssertFalse(File.Exists(manifestPath), $"canceled game-forum startup should not write {Path.GetFileName(manifestPath)}");
+            }
+
+            AssertFalse(File.Exists(startupLogPath), "canceled game-forum startup should not be logged as a startup failure");
+        }
+        finally
+        {
+            foreach (var preservedFile in preservedFiles)
+            {
+                if (preservedFile.Exists)
+                {
+                    File.WriteAllText(preservedFile.Path, preservedFile.Content ?? string.Empty);
+                }
+                else if (File.Exists(preservedFile.Path))
+                {
+                    File.Delete(preservedFile.Path);
+                }
+            }
+        }
+    });
+}
+
+static void KeywordIndexLoaderQuarantinesMalformedJson()
+{
+    using var directory = TemporaryDirectory.Create();
+    var indexPath = Path.Combine(directory.Path, "keyword-index.json");
+    File.WriteAllText(indexPath, "{ not valid json");
+
+    var startupLogPath = Path.Combine(AppContext.BaseDirectory, StartupLoggingUtility.LogFileName);
+    var hadStartupLog = File.Exists(startupLogPath);
+    var originalStartupLog = hadStartupLog ? File.ReadAllText(startupLogPath) : null;
+
+    try
+    {
+        var loadTask = (Task?)InvokeStaticMethod(
+            typeof(KeywordIndexCrawler),
+            "LoadExistingDocumentAsync",
+            indexPath,
+            CancellationToken.None);
+        loadTask?.GetAwaiter().GetResult();
+
+        var badIndexFiles = Directory.GetFiles(directory.Path, "keyword-index.bad-*.json");
+        AssertFalse(File.Exists(indexPath), "malformed keyword index should be moved out of the active path");
+        AssertEqual(1, badIndexFiles.Length, "expected one quarantined keyword index file");
+        AssertEqual("{ not valid json", File.ReadAllText(badIndexFiles[0]), "quarantined keyword index should preserve original content");
+
+        var startupLog = File.ReadAllText(startupLogPath);
+        AssertContains(startupLog, "keyword index recovery");
+        AssertContains(startupLog, "could not be loaded");
+        AssertContains(startupLog, badIndexFiles[0]);
+    }
+    finally
+    {
+        if (hadStartupLog)
+        {
+            File.WriteAllText(startupLogPath, originalStartupLog);
+        }
+        else if (File.Exists(startupLogPath))
+        {
+            File.Delete(startupLogPath);
+        }
+    }
+}
+
+static void KeywordTermsReleaseCopyGeneratesFromKeywordIndex()
+{
+    const string indexJson =
+        """
+        {
+          "words": {
+            "zeta": {},
+            "Alpha": {},
+            "beta": {}
+          }
+        }
+        """;
+
+    WithTemporaryKeywordIndex(
+        indexJson,
+        () => WithTemporaryKeywordTermsFile(
+            () =>
+            {
+                KeywordTermsFileUtility.EnsureReleaseCopy();
+
+                var termsPath = GetPlayerAssistantKeywordTermsPath();
+                AssertTrue(File.Exists(termsPath), "expected keyword terms file to be generated");
+                AssertEqual(
+                    "Alpha|beta|zeta",
+                    string.Join("|", File.ReadAllLines(termsPath)),
+                    "generated keyword terms should be sorted from keyword index words");
+            }));
+}
+
+static void RpolAuthCachedFailureShortCircuitsHtmlFetch()
+{
+    ResetRpolAuthFailureCache();
+    var cachedFailure = new RpolAuthException(
+        RpolAuthFailureKind.MissingCredentials,
+        "Missing RPoL credentials for test.");
+
+    try
+    {
+        InvokeStaticMethod(typeof(RpolAuthUtility), "CacheFatalAuthFailure", cachedFailure);
+
+        var exception = AssertThrows<RpolAuthException>(() =>
+            RpolAuthUtility.GetHtmlFromUrlAsync(new Uri("https://rpol.net/display.cgi?gi=1")).GetAwaiter().GetResult());
+        AssertEqual(RpolAuthFailureKind.MissingCredentials, exception.Kind, "expected cached missing-credentials failure");
+        AssertEqual(cachedFailure.Message, exception.Message, "expected cached failure message to be reused");
+
+        exception = AssertThrows<RpolAuthException>(() =>
+            RpolAuthUtility.GetResponseAsync(new Uri("https://rpol.net/images/example.png")).GetAwaiter().GetResult());
+        AssertEqual(RpolAuthFailureKind.MissingCredentials, exception.Kind, "expected cached missing-credentials response failure");
+    }
+    finally
+    {
+        ResetRpolAuthFailureCache();
+    }
+}
+
+static void RpolAuthCachedFailureLogsOnce()
+{
+    ResetRpolAuthFailureCache();
+    var startupLogPath = Path.Combine(AppContext.BaseDirectory, StartupLoggingUtility.LogFileName);
+    var hadStartupLog = File.Exists(startupLogPath);
+    var originalStartupLog = hadStartupLog ? File.ReadAllText(startupLogPath) : null;
+
+    try
+    {
+        if (File.Exists(startupLogPath))
+        {
+            File.Delete(startupLogPath);
+        }
+
+        var firstFailure = new RpolAuthException(
+            RpolAuthFailureKind.MissingCredentials,
+            "Missing RPoL credentials for test.");
+        var secondFailure = new RpolAuthException(
+            RpolAuthFailureKind.LoginRejected,
+            "RPoL login was rejected for test.");
+
+        InvokeStaticMethod(typeof(RpolAuthUtility), "CacheFatalAuthFailure", firstFailure);
+        InvokeStaticMethod(typeof(RpolAuthUtility), "CacheFatalAuthFailure", secondFailure);
+
+        var log = File.ReadAllText(startupLogPath);
+        AssertEqual(1, CountOccurrences(log, "RPOL authentication"), "expected one RPOL auth log entry");
+        AssertContains(log, "Missing RPoL credentials for test.");
+        AssertFalse(log.Contains("RPoL login was rejected for test.", StringComparison.Ordinal), "second fatal auth failure should reuse first cached entry");
+    }
+    finally
+    {
+        ResetRpolAuthFailureCache();
+        if (hadStartupLog)
+        {
+            File.WriteAllText(startupLogPath, originalStartupLog);
+        }
+        else if (File.Exists(startupLogPath))
+        {
+            File.Delete(startupLogPath);
+        }
+    }
 }
 
 static void ShowAllThreadUrlPreservesBaseQueryAndAddsShowAll()
@@ -883,6 +1743,75 @@ static void KeywordSearchOffersOnlineFallbackOnLocalMiss()
     });
 }
 
+static void KeywordSearchCancelsPreviousOnlineFallback()
+{
+    RunOnStaThread(() =>
+    {
+        WithTemporaryKeywordIndex(
+            """
+            {
+              "index_metadata": {
+                "total_words_indexed": 0
+              },
+              "words": {}
+            }
+            """,
+            () =>
+            {
+                using var form = new Form1(suppressHeroImagesForThisRun: true);
+                var txtSearch = GetControl<TextBox>(form, "txtSearch");
+                var btnSearch = GetControl<Button>(form, "btnSearch");
+                var lstSearchResults = GetControl<ListBox>(form, "lstSearchResults");
+                var firstSearchStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+                var secondSearchStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+                CancellationToken firstSearchToken = default;
+                var onlineSearchCallCount = 0;
+
+                SetPrivateField(
+                    form,
+                    "_showLocalIndexMissPrompt",
+                    (Func<string[], DialogResult>)(_ => DialogResult.Yes));
+                SetPrivateField(
+                    form,
+                    "_showOnlineSearchCompletedMessage",
+                    (Action<string[], int>)((_, _) => { }));
+                SetPrivateField(
+                    form,
+                    "_onlineSearchProvider",
+                    (Func<string[], CancellationToken, Task<string[]>>)(async (terms, cancellationToken) =>
+                    {
+                        onlineSearchCallCount++;
+                        if (onlineSearchCallCount == 1)
+                        {
+                            firstSearchToken = cancellationToken;
+                            firstSearchStarted.SetResult();
+                            await Task.Delay(TimeSpan.FromMinutes(1), cancellationToken);
+                        }
+
+                        secondSearchStarted.SetResult();
+                        cancellationToken.ThrowIfCancellationRequested();
+                        return ["https://example.test/current-search"];
+                    }));
+
+                txtSearch.Text = "\"first missing\"";
+                _ = InvokePrivateAsync(form, "PerformSearchAsync");
+                AssertTrue(firstSearchStarted.Task.Wait(TimeSpan.FromSeconds(2)), "first search did not reach online fallback");
+
+                txtSearch.Text = "\"second missing\"";
+                var secondSearch = InvokePrivateAsync(form, "PerformSearchAsync");
+                secondSearch.GetAwaiter().GetResult();
+
+                var results = lstSearchResults.Items.Cast<object>().Select(item => item?.ToString()).ToArray();
+                AssertTrue(firstSearchToken.IsCancellationRequested, "starting a second search should cancel the first search token");
+                AssertTrue(secondSearchStarted.Task.IsCompleted, "second search did not reach online fallback");
+                AssertEqual(2, onlineSearchCallCount, "expected both online search attempts to start");
+                AssertTrue(btnSearch.Enabled, "search button should be re-enabled after current search completes");
+                AssertEqual(1, results.Length, "only current search results should remain");
+                AssertContains(string.Join("\n", results), "https://example.test/current-search");
+            });
+    });
+}
+
 static void KeywordSearchRpolScopeExcludesObsidianOnlyWhiteheart()
 {
     RunOnStaThread(() =>
@@ -1018,6 +1947,124 @@ static void LegacyLocalSettingsMigrateToPortableEncryption()
         "expected legacy encrypted settings to be rewritten using the portable app-protected-v1 format");
 }
 
+static void PublishVerificationAcceptsCurrentOutput()
+{
+    var output = RunPublishVerification(GetCurrentPublishDirectory());
+
+    AssertEqual(0, output.ExitCode, $"publish verification should pass. Output: {output.Output}");
+    AssertContains(output.Output, "Publish verification passed:");
+}
+
+static void PublishVerificationRejectsStaleStartupLog()
+{
+    var directoryPath = Path.Combine(
+        GetRepositoryRoot(),
+        "codex-scratch",
+        $"publish-verification-{Guid.NewGuid():N}");
+
+    try
+    {
+        CopyDirectory(GetCurrentPublishDirectory(), directoryPath);
+        File.WriteAllText(Path.Combine(directoryPath, StartupLoggingUtility.LogFileName), "stale failure");
+
+        var output = RunPublishVerification(directoryPath);
+
+        AssertFalse(output.ExitCode == 0, "publish verification should fail when startup-errors.log is present");
+        AssertContains(output.Output, "startup-errors.log");
+    }
+    finally
+    {
+        if (Directory.Exists(directoryPath))
+        {
+            Directory.Delete(directoryPath, recursive: true);
+        }
+    }
+}
+
+static string GetCurrentPublishDirectory()
+{
+    var publishDirectory = Path.Combine(GetRepositoryRoot(), "Release", "publish");
+    if (!Directory.Exists(publishDirectory))
+    {
+        throw new InvalidOperationException($"Publish directory is missing: {publishDirectory}");
+    }
+
+    return publishDirectory;
+}
+
+static (int ExitCode, string Output) RunPublishVerification(string outputDirectory)
+{
+    var repoRoot = GetRepositoryRoot();
+    var scriptPath = Path.Combine(repoRoot, "publish-player-assistant.ps1");
+    if (!File.Exists(scriptPath))
+    {
+        throw new InvalidOperationException($"Publish script is missing: {scriptPath}");
+    }
+
+    using var process = Process.Start(new ProcessStartInfo
+    {
+        FileName = "powershell",
+        ArgumentList =
+        {
+            "-NoProfile",
+            "-ExecutionPolicy",
+            "Bypass",
+            "-File",
+            scriptPath,
+            "-VerifyOnly",
+            "-OutputDir",
+            outputDirectory
+        },
+        WorkingDirectory = repoRoot,
+        RedirectStandardOutput = true,
+        RedirectStandardError = true,
+        UseShellExecute = false,
+        CreateNoWindow = true
+    }) ?? throw new InvalidOperationException("Unable to start publish verification process.");
+
+    var output = process.StandardOutput.ReadToEnd() + process.StandardError.ReadToEnd();
+    if (!process.WaitForExit(30000))
+    {
+        process.Kill(entireProcessTree: true);
+        throw new TimeoutException("Publish verification process did not exit within 30 seconds.");
+    }
+
+    return (process.ExitCode, output);
+}
+
+static string GetRepositoryRoot()
+{
+    var directory = new DirectoryInfo(AppContext.BaseDirectory);
+    while (directory is not null)
+    {
+        if (File.Exists(Path.Combine(directory.FullName, "publish-player-assistant.ps1")))
+        {
+            return directory.FullName;
+        }
+
+        directory = directory.Parent;
+    }
+
+    throw new InvalidOperationException("Unable to locate repository root.");
+}
+
+static void CopyDirectory(string sourceDirectory, string destinationDirectory)
+{
+    Directory.CreateDirectory(destinationDirectory);
+
+    foreach (var directory in Directory.GetDirectories(sourceDirectory, "*", SearchOption.AllDirectories))
+    {
+        Directory.CreateDirectory(Path.Combine(destinationDirectory, Path.GetRelativePath(sourceDirectory, directory)));
+    }
+
+    foreach (var file in Directory.GetFiles(sourceDirectory, "*", SearchOption.AllDirectories))
+    {
+        var destinationPath = Path.Combine(destinationDirectory, Path.GetRelativePath(sourceDirectory, file));
+        Directory.CreateDirectory(Path.GetDirectoryName(destinationPath) ?? destinationDirectory);
+        File.Copy(file, destinationPath, overwrite: true);
+    }
+}
+
 static void AssertTrue(bool actual, string message)
 {
     if (!actual)
@@ -1048,6 +2095,64 @@ static void AssertEqual<T>(T expected, T actual, string message) where T : notnu
     {
         throw new InvalidOperationException($"{message}. Expected '{expected}' but was '{actual}'.");
     }
+}
+
+static TException AssertThrows<TException>(Action action)
+    where TException : Exception
+{
+    try
+    {
+        action();
+    }
+    catch (TException ex)
+    {
+        return ex;
+    }
+    catch (TargetInvocationException ex) when (ex.InnerException is TException innerException)
+    {
+        return innerException;
+    }
+
+    throw new InvalidOperationException($"Expected exception of type {typeof(TException).Name}.");
+}
+
+static int CountOccurrences(string value, string pattern)
+{
+    var count = 0;
+    var index = 0;
+    while (true)
+    {
+        index = value.IndexOf(pattern, index, StringComparison.Ordinal);
+        if (index < 0)
+        {
+            return count;
+        }
+
+        count++;
+        index += pattern.Length;
+    }
+}
+
+static void WaitForCondition(Func<bool> condition, string message)
+{
+    var deadline = DateTimeOffset.UtcNow.AddSeconds(2);
+    while (DateTimeOffset.UtcNow < deadline)
+    {
+        if (condition())
+        {
+            return;
+        }
+
+        Thread.Sleep(10);
+    }
+
+    throw new InvalidOperationException(message);
+}
+
+static void ResetRpolAuthFailureCache()
+{
+    SetStaticField(typeof(RpolAuthUtility), "_cachedFatalAuthFailure", null);
+    SetStaticField(typeof(RpolAuthUtility), "_cachedFatalAuthFailureLogged", false);
 }
 
 static void RunOnStaThread(Action action)
@@ -1088,7 +2193,11 @@ static T GetControl<T>(Form form, string fieldName) where T : Control
 
 static Task InvokePrivateAsync(object instance, string methodName, params object[] args)
 {
-    var method = instance.GetType().GetMethod(methodName, BindingFlags.Instance | BindingFlags.NonPublic);
+    var method = instance.GetType()
+        .GetMethods(BindingFlags.Instance | BindingFlags.NonPublic)
+        .SingleOrDefault(method =>
+            string.Equals(method.Name, methodName, StringComparison.Ordinal)
+            && method.GetParameters().Length == args.Length);
     if (method is null)
     {
         throw new InvalidOperationException($"Unable to find method '{methodName}'.");
@@ -1115,7 +2224,11 @@ static object? InvokeStaticMethod(Type type, string methodName, params object[] 
 
 static object? InvokePrivateMethod(object instance, string methodName, params object[] args)
 {
-    var method = instance.GetType().GetMethod(methodName, BindingFlags.Instance | BindingFlags.NonPublic);
+    var method = instance.GetType()
+        .GetMethods(BindingFlags.Instance | BindingFlags.NonPublic)
+        .SingleOrDefault(method =>
+            string.Equals(method.Name, methodName, StringComparison.Ordinal)
+            && method.GetParameters().Length == args.Length);
     if (method is null)
     {
         throw new InvalidOperationException($"Unable to find method '{methodName}'.");
@@ -1133,6 +2246,28 @@ static void SetPrivateField(object instance, string fieldName, object? value)
     }
 
     field.SetValue(instance, value);
+}
+
+static object? GetPrivateField(object instance, string fieldName)
+{
+    var field = instance.GetType().GetField(fieldName, BindingFlags.Instance | BindingFlags.NonPublic);
+    if (field is null)
+    {
+        throw new InvalidOperationException($"Unable to find field '{fieldName}'.");
+    }
+
+    return field.GetValue(instance);
+}
+
+static void SetStaticField(Type type, string fieldName, object? value)
+{
+    var field = type.GetField(fieldName, BindingFlags.Static | BindingFlags.NonPublic);
+    if (field is null)
+    {
+        throw new InvalidOperationException($"Unable to find static field '{fieldName}'.");
+    }
+
+    field.SetValue(null, value);
 }
 
 static void WithTemporaryKeywordIndex(string json, Action action)
@@ -1171,6 +2306,42 @@ static void WithTemporaryKeywordIndex(string json, Action action)
     }
 }
 
+static void WithTemporaryKeywordTermsFile(Action action)
+{
+    var termsPath = GetPlayerAssistantKeywordTermsPath();
+    var backupPath = termsPath + ".test-backup";
+    var hadOriginalTerms = File.Exists(termsPath);
+
+    try
+    {
+        Directory.CreateDirectory(Path.GetDirectoryName(termsPath)!);
+        if (hadOriginalTerms)
+        {
+            File.Copy(termsPath, backupPath, overwrite: true);
+            File.Delete(termsPath);
+        }
+
+        action();
+    }
+    finally
+    {
+        if (File.Exists(termsPath))
+        {
+            File.Delete(termsPath);
+        }
+
+        if (hadOriginalTerms)
+        {
+            if (!File.Exists(backupPath))
+            {
+                throw new FileNotFoundException($"Expected backup file '{backupPath}' to exist for restore.", backupPath);
+            }
+
+            File.Move(backupPath, termsPath, overwrite: true);
+        }
+    }
+}
+
 static string GetPlayerAssistantIndexPath()
 {
     var assemblyDirectory = Path.GetDirectoryName(typeof(Form1).Assembly.Location);
@@ -1182,11 +2353,56 @@ static string GetPlayerAssistantIndexPath()
     return Path.Combine(assemblyDirectory, "keyword-index.json");
 }
 
+static string GetPlayerAssistantKeywordTermsPath()
+{
+    var assemblyDirectory = Path.GetDirectoryName(typeof(Form1).Assembly.Location);
+    if (string.IsNullOrWhiteSpace(assemblyDirectory))
+    {
+        throw new InvalidOperationException("Unable to resolve the player-assistant assembly directory.");
+    }
+
+    return Path.Combine(assemblyDirectory, KeywordTermsFileUtility.FileName);
+}
+
+static Dictionary<string, string> CreateValidAppSettings(bool includeCredentials)
+{
+    var settings = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+    {
+        ["RPOL Site"] = "https://rpol.net/game.php?gi=80170",
+        ["Game Intro"] = "https://rpol.net/gameinfo.php?gi=80170",
+        ["The Cast"] = "https://rpol.net/gameinfo.php?action=cast&gi=80170",
+        ["Obsidian Game Vault"] = "https://publish.obsidian.md/scarlethorizons"
+    };
+
+    if (includeCredentials)
+    {
+        settings["RPOL user name"] = "example-user";
+        settings["RPOL password"] = "example-password";
+    }
+
+    return settings;
+}
+
+static void WriteRequiredRuntimeSidecars(string directoryPath)
+{
+    File.WriteAllText(Path.Combine(directoryPath, "keyword-index.json"), "{}");
+    File.WriteAllText(Path.Combine(directoryPath, KeywordTermsFileUtility.FileName), "scarlet");
+    File.WriteAllText(Path.Combine(directoryPath, "sitemap.xml"), "<urlset />");
+}
+
+static void SetLastWriteTimeUtc(string filePath, DateTimeOffset value)
+{
+    File.SetLastWriteTimeUtc(filePath, value.UtcDateTime);
+}
+
 static void WriteVisiblePng(string filePath)
 {
     using var bitmap = new Bitmap(2, 2, PixelFormat.Format32bppArgb);
     bitmap.SetPixel(0, 0, Color.Black);
     bitmap.Save(filePath, ImageFormat.Png);
+
+    using var padding = new FileStream(filePath, FileMode.Append, FileAccess.Write, FileShare.None);
+    padding.SetLength(600_000);
 }
 
 static void WriteTransparentPng(string filePath)
@@ -1217,5 +2433,22 @@ internal sealed class TemporaryDirectory : IDisposable
         {
             Directory.Delete(Path, recursive: true);
         }
+    }
+}
+
+internal sealed class ScriptedHttpMessageHandler : HttpMessageHandler
+{
+    private readonly Func<HttpRequestMessage, CancellationToken, Task<HttpResponseMessage>> _handler;
+
+    public ScriptedHttpMessageHandler(Func<HttpRequestMessage, CancellationToken, Task<HttpResponseMessage>> handler)
+    {
+        _handler = handler;
+    }
+
+    protected override Task<HttpResponseMessage> SendAsync(
+        HttpRequestMessage request,
+        CancellationToken cancellationToken)
+    {
+        return _handler(request, cancellationToken);
     }
 }

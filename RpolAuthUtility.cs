@@ -5,6 +5,25 @@ namespace PlayerAssistant
 {
     internal sealed record RpolResponse(byte[] Body, string? ContentType);
 
+    internal enum RpolAuthFailureKind
+    {
+        MissingCredentials,
+        PlaywrightUnavailable,
+        LoginRejected,
+        RemoteUnavailable
+    }
+
+    internal sealed class RpolAuthException : InvalidOperationException
+    {
+        public RpolAuthException(RpolAuthFailureKind kind, string message, Exception? innerException = null)
+            : base(message, innerException)
+        {
+            Kind = kind;
+        }
+
+        public RpolAuthFailureKind Kind { get; }
+    }
+
     internal static class RpolAuthUtility
     {
         private const string SettingsLocalFileName = "settings.local.json";
@@ -14,6 +33,8 @@ namespace PlayerAssistant
         private static readonly TimeSpan PlaywrightOperationTimeout = TimeSpan.FromSeconds(30);
         private static readonly SemaphoreSlim SessionSemaphore = new(1, 1);
         private static RpolBrowserSession? _session;
+        private static RpolAuthException? _cachedFatalAuthFailure;
+        private static bool _cachedFatalAuthFailureLogged;
         private static bool _processExitRegistered;
 
         public static bool IsRpolUri(Uri uri)
@@ -27,44 +48,62 @@ namespace PlayerAssistant
         public static async Task<string> GetHtmlFromUrlAsync(Uri uri, CancellationToken cancellationToken = default)
         {
             cancellationToken.ThrowIfCancellationRequested();
+            ThrowIfCachedFatalAuthFailure();
 
             for (var attempt = 0; attempt < 2; attempt++)
             {
-                var context = await GetAuthenticatedContextAsync(cancellationToken);
-                var html = await GetPageHtmlAsync(context, uri, cancellationToken);
-                if (LooksLikeLoginPage(html))
+                try
                 {
-                    await ResetSessionAsync(cancellationToken);
-                    continue;
-                }
+                    var context = await GetAuthenticatedContextAsync(cancellationToken);
+                    var html = await GetPageHtmlAsync(context, uri, cancellationToken);
+                    if (LooksLikeLoginPage(html))
+                    {
+                        await ResetSessionAsync(cancellationToken);
+                        continue;
+                    }
 
-                return html;
+                    return html;
+                }
+                catch (Exception ex) when (TryCacheFatalAuthFailure(ex, out var cachedException))
+                {
+                    throw cachedException;
+                }
             }
 
-            throw new InvalidOperationException(
-                $"Unable to authenticate against rpol.net. Add credentials to '{SettingsLocalFileName}' and retry.");
+            throw CacheFatalAuthFailure(new RpolAuthException(
+                RpolAuthFailureKind.LoginRejected,
+                $"Unable to authenticate against rpol.net. Add credentials to '{SettingsLocalFileName}' and retry."));
         }
 
         public static async Task<RpolResponse> GetResponseAsync(Uri uri, CancellationToken cancellationToken = default)
         {
             cancellationToken.ThrowIfCancellationRequested();
+            ThrowIfCachedFatalAuthFailure();
 
             for (var attempt = 0; attempt < 2; attempt++)
             {
-                var context = await GetAuthenticatedContextAsync(cancellationToken);
-                var response = await GetPageResponseAsync(context, uri, cancellationToken);
-
-                if (LooksLikeLoginResponse(response.ContentType, response.Body))
+                try
                 {
-                    await ResetSessionAsync(cancellationToken);
-                    continue;
-                }
+                    var context = await GetAuthenticatedContextAsync(cancellationToken);
+                    var response = await GetPageResponseAsync(context, uri, cancellationToken);
 
-                return response;
+                    if (LooksLikeLoginResponse(response.ContentType, response.Body))
+                    {
+                        await ResetSessionAsync(cancellationToken);
+                        continue;
+                    }
+
+                    return response;
+                }
+                catch (Exception ex) when (TryCacheFatalAuthFailure(ex, out var cachedException))
+                {
+                    throw cachedException;
+                }
             }
 
-            throw new InvalidOperationException(
-                $"Unable to authenticate against rpol.net. Add credentials to '{SettingsLocalFileName}' and retry.");
+            throw CacheFatalAuthFailure(new RpolAuthException(
+                RpolAuthFailureKind.LoginRejected,
+                $"Unable to authenticate against rpol.net. Add credentials to '{SettingsLocalFileName}' and retry."));
         }
 
         private static async Task<IBrowserContext> GetAuthenticatedContextAsync(CancellationToken cancellationToken)
@@ -72,6 +111,7 @@ namespace PlayerAssistant
             await SessionSemaphore.WaitAsync(cancellationToken);
             try
             {
+                ThrowIfCachedFatalAuthFailure();
                 RegisterProcessExitHandler();
 
                 if (_session is null)
@@ -92,21 +132,33 @@ namespace PlayerAssistant
             var (userName, password) = GetCredentials();
             var storageStatePath = GetStorageStatePath();
             Environment.SetEnvironmentVariable("NODE_OPTIONS", "--use-system-ca");
-            var playwright = await WaitForPlaywrightAsync(
-                Playwright.CreateAsync(),
-                "starting the RPOL browser session",
-                cancellationToken);
-            var browser = await WaitForPlaywrightAsync(
-                playwright.Chromium.LaunchAsync(new BrowserTypeLaunchOptions
-                {
-                    Headless = true,
-                    Args =
-                    [
-                        "--disable-blink-features=AutomationControlled"
-                    ]
-                }),
-                "launching the RPOL browser",
-                cancellationToken);
+            IPlaywright playwright;
+            IBrowser browser;
+            try
+            {
+                playwright = await WaitForPlaywrightAsync(
+                    Playwright.CreateAsync(),
+                    "starting the RPOL browser session",
+                    cancellationToken);
+                browser = await WaitForPlaywrightAsync(
+                    playwright.Chromium.LaunchAsync(new BrowserTypeLaunchOptions
+                    {
+                        Headless = true,
+                        Args =
+                        [
+                            "--disable-blink-features=AutomationControlled"
+                        ]
+                    }),
+                    "launching the RPOL browser",
+                    cancellationToken);
+            }
+            catch (Exception ex) when (ex is PlaywrightException or TimeoutException or IOException)
+            {
+                throw new RpolAuthException(
+                    RpolAuthFailureKind.PlaywrightUnavailable,
+                    $"RPOL browser authentication is unavailable while starting Playwright: {ex.Message}",
+                    ex);
+            }
  
             try
             {
@@ -202,7 +254,9 @@ namespace PlayerAssistant
 
                 if (await HasLoginFormAsync(page, cancellationToken))
                 {
-                    throw new InvalidOperationException("RPoL login was rejected. Check the configured credentials.");
+                    throw new RpolAuthException(
+                        RpolAuthFailureKind.LoginRejected,
+                        "RPoL login was rejected. Check the configured credentials.");
                 }
             }
             finally
@@ -227,7 +281,8 @@ namespace PlayerAssistant
 
             if (string.IsNullOrWhiteSpace(userName) || string.IsNullOrWhiteSpace(password))
             {
-                throw new InvalidOperationException(
+                throw new RpolAuthException(
+                    RpolAuthFailureKind.MissingCredentials,
                     $"Missing RPoL credentials. Add 'RPOL user name' and 'RPOL password' to '{SettingsLocalFileName}'.");
             }
 
@@ -329,13 +384,53 @@ namespace PlayerAssistant
         {
             if (response is null)
             {
-                throw new InvalidOperationException($"RPoL navigation to '{uri}' did not return a response.");
+                throw new RpolAuthException(
+                    RpolAuthFailureKind.RemoteUnavailable,
+                    $"RPoL navigation to '{uri}' did not return a response.");
             }
 
             if (!response.Ok)
             {
-                throw new HttpRequestException(
+                throw new RpolAuthException(
+                    RpolAuthFailureKind.RemoteUnavailable,
                     $"RPoL request to '{uri}' failed with status {response.Status} {response.StatusText}.");
+            }
+        }
+
+        private static bool TryCacheFatalAuthFailure(Exception ex, out RpolAuthException cachedException)
+        {
+            if (ex is RpolAuthException { Kind: RpolAuthFailureKind.MissingCredentials or RpolAuthFailureKind.PlaywrightUnavailable or RpolAuthFailureKind.LoginRejected } authException)
+            {
+                cachedException = CacheFatalAuthFailure(authException);
+                return true;
+            }
+
+            cachedException = null!;
+            return false;
+        }
+
+        private static RpolAuthException CacheFatalAuthFailure(RpolAuthException exception)
+        {
+            if (_cachedFatalAuthFailure is not null)
+            {
+                return _cachedFatalAuthFailure;
+            }
+
+            _cachedFatalAuthFailure = exception;
+            if (!_cachedFatalAuthFailureLogged)
+            {
+                StartupLoggingUtility.Append("RPOL authentication", exception);
+                _cachedFatalAuthFailureLogged = true;
+            }
+
+            return _cachedFatalAuthFailure;
+        }
+
+        private static void ThrowIfCachedFatalAuthFailure()
+        {
+            if (_cachedFatalAuthFailure is not null)
+            {
+                throw _cachedFatalAuthFailure;
             }
         }
 

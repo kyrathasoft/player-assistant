@@ -39,14 +39,68 @@ namespace PlayerAssistant
 
             try
             {
-                using var request = new HttpRequestMessage(HttpMethod.Get, uri);
-                request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("text/markdown"));
-                request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("text/plain"));
-                request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("*/*", 0.1));
-
-                return GetMarkdownFromResponse(response: HttpClient.Send(request), originalUrl: url);
+                return GetMarkdownFromResponse(
+                    response: NetworkRequestUtility.Send(
+                        HttpClient,
+                        () =>
+                        {
+                            var request = new HttpRequestMessage(HttpMethod.Get, uri);
+                            request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("text/markdown"));
+                            request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("text/plain"));
+                            request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("*/*", 0.1));
+                            return request;
+                        }),
+                    originalUrl: url);
             }
             catch (HttpRequestException)
+            {
+                return $"{UnresolvedUrlMessage}: {url}";
+            }
+            catch (NetworkRequestException)
+            {
+                return $"{UnresolvedUrlMessage}: {url}";
+            }
+            catch (TaskCanceledException)
+            {
+                return $"{UnresolvedUrlMessage}: {url}";
+            }
+        }
+
+        public static async Task<string> GetMarkdownFromUrlAsync(
+            string url,
+            CancellationToken cancellationToken = default)
+        {
+            if (!Uri.TryCreate(url, UriKind.Absolute, out var uri)
+                || (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps))
+            {
+                return $"{InvalidUrlMessage}: {url}";
+            }
+
+            try
+            {
+                using var response = await NetworkRequestUtility.SendAsync(
+                    HttpClient,
+                    () =>
+                    {
+                        var request = new HttpRequestMessage(HttpMethod.Get, uri);
+                        request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("text/markdown"));
+                        request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("text/plain"));
+                        request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("*/*", 0.1));
+                        return request;
+                    },
+                    cancellationToken: cancellationToken);
+
+                return await GetMarkdownFromResponseAsync(response, url, cancellationToken);
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                throw;
+            }
+            catch (HttpRequestException)
+            {
+                return $"{UnresolvedUrlMessage}: {url}";
+            }
+            catch (NetworkRequestException)
             {
                 return $"{UnresolvedUrlMessage}: {url}";
             }
@@ -157,15 +211,53 @@ namespace PlayerAssistant
                     return $"{UnresolvedUrlMessage}: {originalUrl}";
                 }
 
-                using var markdownRequest = new HttpRequestMessage(HttpMethod.Get, markdownUrl);
-                markdownRequest.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("text/markdown"));
-                markdownRequest.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("text/plain"));
-
-                using var markdownResponse = HttpClient.Send(markdownRequest);
+                using var markdownResponse = NetworkRequestUtility.Send(
+                    HttpClient,
+                    () =>
+                    {
+                        var markdownRequest = new HttpRequestMessage(HttpMethod.Get, markdownUrl);
+                        markdownRequest.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("text/markdown"));
+                        markdownRequest.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("text/plain"));
+                        return markdownRequest;
+                    });
                 markdownResponse.EnsureSuccessStatusCode();
 
                 return markdownResponse.Content.ReadAsStringAsync().GetAwaiter().GetResult();
             }
+        }
+
+        private static async Task<string> GetMarkdownFromResponseAsync(
+            HttpResponseMessage response,
+            string originalUrl,
+            CancellationToken cancellationToken)
+        {
+            response.EnsureSuccessStatusCode();
+            var content = await response.Content.ReadAsStringAsync(cancellationToken);
+
+            if (!IsHtmlResponse(response, content))
+            {
+                return content;
+            }
+
+            var markdownUrl = GetObsidianPublishMarkdownUrl(content);
+            if (markdownUrl is null)
+            {
+                return $"{UnresolvedUrlMessage}: {originalUrl}";
+            }
+
+            using var markdownResponse = await NetworkRequestUtility.SendAsync(
+                HttpClient,
+                () =>
+                {
+                    var markdownRequest = new HttpRequestMessage(HttpMethod.Get, markdownUrl);
+                    markdownRequest.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("text/markdown"));
+                    markdownRequest.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("text/plain"));
+                    return markdownRequest;
+                },
+                cancellationToken: cancellationToken);
+            markdownResponse.EnsureSuccessStatusCode();
+
+            return await markdownResponse.Content.ReadAsStringAsync(cancellationToken);
         }
 
         private static bool IsHtmlResponse(HttpResponseMessage response, string content)
@@ -250,12 +342,7 @@ namespace PlayerAssistant
 
         private static HttpClient CreateHttpClient()
         {
-            var httpClient = new HttpClient
-            {
-                Timeout = TimeSpan.FromSeconds(30)
-            };
-            httpClient.DefaultRequestHeaders.UserAgent.ParseAdd("PlayerAssistant/1.0");
-            return httpClient;
+            return NetworkRequestUtility.CreateHttpClient();
         }
     }
 }

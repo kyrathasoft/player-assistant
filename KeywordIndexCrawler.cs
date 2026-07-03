@@ -12,8 +12,7 @@ namespace PlayerAssistant
         private const string ErrorLogFileName = "keyword-index-errors.log";
         private const string TempDirectoryName = "temp";
         private const string TempSitemapFileName = "keyword-index-sitemap.xml";
-        private static readonly TimeSpan SaveRetryDelay = TimeSpan.FromMilliseconds(250);
-        private const int SaveRetryCount = 8;
+        private const string BadIndexFileTimestampFormat = "yyyyMMdd-HHmmss-fff";
         private static readonly JsonSerializerOptions JsonOptions = new()
         {
             Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
@@ -321,10 +320,52 @@ namespace PlayerAssistant
                 return null;
             }
 
-            await using var stream = File.OpenRead(outputPath);
-            return await JsonSerializer.DeserializeAsync<KeywordIndexDocument>(
-                stream,
-                cancellationToken: cancellationToken).ConfigureAwait(false);
+            try
+            {
+                await using var stream = new FileStream(
+                    outputPath,
+                    FileMode.Open,
+                    FileAccess.Read,
+                    FileShare.ReadWrite | FileShare.Delete,
+                    bufferSize: 81920,
+                    useAsync: true);
+                return await JsonSerializer.DeserializeAsync<KeywordIndexDocument>(
+                    stream,
+                    cancellationToken: cancellationToken).ConfigureAwait(false);
+            }
+            catch (Exception ex) when (ex is JsonException or InvalidOperationException or IOException)
+            {
+                var badIndexPath = PreserveBadIndexFile(outputPath);
+                await StartupLoggingUtility.AppendAsync(
+                    "keyword index recovery",
+                    new InvalidOperationException(
+                        $"Keyword index '{outputPath}' could not be loaded and was moved to '{badIndexPath}'. The index will be rebuilt.",
+                        ex)).ConfigureAwait(false);
+                return null;
+            }
+        }
+
+        private static string PreserveBadIndexFile(string outputPath)
+        {
+            var badIndexPath = GetBadIndexPath(outputPath);
+            File.Move(outputPath, badIndexPath);
+            return badIndexPath;
+        }
+
+        private static string GetBadIndexPath(string outputPath)
+        {
+            var directory = Path.GetDirectoryName(outputPath) ?? string.Empty;
+            var fileNameWithoutExtension = Path.GetFileNameWithoutExtension(outputPath);
+            var extension = Path.GetExtension(outputPath);
+            var timestamp = DateTimeOffset.UtcNow.ToString(BadIndexFileTimestampFormat);
+            var candidatePath = Path.Combine(directory, $"{fileNameWithoutExtension}.bad-{timestamp}{extension}");
+
+            for (var suffix = 2; File.Exists(candidatePath); suffix++)
+            {
+                candidatePath = Path.Combine(directory, $"{fileNameWithoutExtension}.bad-{timestamp}-{suffix}{extension}");
+            }
+
+            return candidatePath;
         }
 
         private static HashSet<string> GetIndexedTerms(KeywordIndexDocument? existingDocument)
@@ -780,38 +821,28 @@ namespace PlayerAssistant
                                 .ToArray()),
                         StringComparer.OrdinalIgnoreCase));
 
-                var tempOutputPath = _outputPath + ".tmp";
-                await using (var stream = File.Create(tempOutputPath))
+                var tempOutputPath = AtomicFileUtility.CreateTempPath(_outputPath);
+                try
                 {
-                    await JsonSerializer.SerializeAsync(stream, document, JsonOptions, cancellationToken).ConfigureAwait(false);
+                    await using (var stream = new FileStream(
+                        tempOutputPath,
+                        FileMode.CreateNew,
+                        FileAccess.Write,
+                        FileShare.None,
+                        bufferSize: 81920,
+                        useAsync: true))
+                    {
+                        await JsonSerializer.SerializeAsync(stream, document, JsonOptions, cancellationToken).ConfigureAwait(false);
+                    }
+
+                    await AtomicFileUtility.PromoteTempFileAsync(tempOutputPath, _outputPath, cancellationToken).ConfigureAwait(false);
                 }
-
-                await ReplaceOutputFileAsync(tempOutputPath, cancellationToken).ConfigureAwait(false);
-            }
-
-            private async Task ReplaceOutputFileAsync(string tempOutputPath, CancellationToken cancellationToken)
-            {
-                for (var attempt = 0; ; attempt++)
+                finally
                 {
-                    cancellationToken.ThrowIfCancellationRequested();
-                    try
+                    if (File.Exists(tempOutputPath))
                     {
-                        File.Move(tempOutputPath, _outputPath, overwrite: true);
-                        return;
+                        File.Delete(tempOutputPath);
                     }
-                    catch (UnauthorizedAccessException) when (attempt < SaveRetryCount)
-                    {
-                    }
-                    catch (IOException) when (attempt < SaveRetryCount)
-                    {
-                    }
-
-                    if (!File.Exists(tempOutputPath))
-                    {
-                        throw new IOException($"Temporary keyword index file '{tempOutputPath}' disappeared before it could replace '{_outputPath}'.");
-                    }
-
-                    await Task.Delay(SaveRetryDelay, cancellationToken).ConfigureAwait(false);
                 }
             }
         }

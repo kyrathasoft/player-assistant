@@ -34,10 +34,11 @@ namespace PlayerAssistant
                 return new Bitmap(rpolImage);
             }
 
-            using var response = await HttpClient.GetAsync(
-                uri,
+            using var response = await NetworkRequestUtility.SendAsync(
+                HttpClient,
+                () => new HttpRequestMessage(HttpMethod.Get, uri),
                 HttpCompletionOption.ResponseHeadersRead,
-                cancellationToken);
+                cancellationToken: cancellationToken);
             response.EnsureSuccessStatusCode();
 
             var mediaType = response.Content.Headers.ContentType?.MediaType;
@@ -90,10 +91,11 @@ namespace PlayerAssistant
                 return;
             }
 
-            using var response = await HttpClient.GetAsync(
-                uri,
+            using var response = await NetworkRequestUtility.SendAsync(
+                HttpClient,
+                () => new HttpRequestMessage(HttpMethod.Get, uri),
                 HttpCompletionOption.ResponseHeadersRead,
-                cancellationToken);
+                cancellationToken: cancellationToken);
             response.EnsureSuccessStatusCode();
 
             var mediaType = response.Content.Headers.ContentType?.MediaType;
@@ -102,30 +104,15 @@ namespace PlayerAssistant
                 throw new InvalidOperationException($"The URI did not return an image. Content type: {mediaType}");
             }
 
-            var tempPath = $"{destinationPath}.tmp";
-            try
+            await using (var imageStream = await response.Content.ReadAsStreamAsync(cancellationToken))
             {
-                await using (var imageStream = await response.Content.ReadAsStreamAsync(cancellationToken))
-                await using (var outputStream = File.Create(tempPath))
-                {
-                    await imageStream.CopyToAsync(outputStream, cancellationToken);
-                }
-
-                if (File.Exists(destinationPath))
-                {
-                    File.Delete(destinationPath);
-                }
-
-                File.Move(tempPath, destinationPath);
-                FileDownloadCounters.AddCompletedDownload(destinationPath);
+                await AtomicFileUtility.WriteFileAsync(
+                    destinationPath,
+                    outputStream => imageStream.CopyToAsync(outputStream, cancellationToken),
+                    cancellationToken);
             }
-            finally
-            {
-                if (File.Exists(tempPath))
-                {
-                    File.Delete(tempPath);
-                }
-            }
+
+            FileDownloadCounters.AddCompletedDownload(destinationPath);
         }
 
         public static async Task DownloadImageFileAsPngAsync(
@@ -167,10 +154,11 @@ namespace PlayerAssistant
                 return;
             }
 
-            using var response = await HttpClient.GetAsync(
-                uri,
+            using var response = await NetworkRequestUtility.SendAsync(
+                HttpClient,
+                () => new HttpRequestMessage(HttpMethod.Get, uri),
                 HttpCompletionOption.ResponseHeadersRead,
-                cancellationToken);
+                cancellationToken: cancellationToken);
             response.EnsureSuccessStatusCode();
 
             var mediaType = response.Content.Headers.ContentType?.MediaType;
@@ -179,13 +167,18 @@ namespace PlayerAssistant
                 throw new InvalidOperationException($"The URI did not return an image. Content type: {mediaType}");
             }
 
-            var tempPath = $"{destinationPath}.tmp";
-            var tempSourcePath = $"{destinationPath}.source";
+            var tempSourcePath = AtomicFileUtility.CreateTempPath(destinationPath, ".source");
             try
             {
                 await using (var imageStream = await response.Content.ReadAsStreamAsync(cancellationToken))
                 {
-                    await using (var sourceStream = File.Create(tempSourcePath))
+                    await using (var sourceStream = new FileStream(
+                        tempSourcePath,
+                        FileMode.CreateNew,
+                        FileAccess.Write,
+                        FileShare.None,
+                        bufferSize: 81920,
+                        useAsync: true))
                     {
                         await imageStream.CopyToAsync(sourceStream, cancellationToken);
                     }
@@ -195,16 +188,16 @@ namespace PlayerAssistant
                     using var image = SKImage.FromBitmap(bitmap);
                     using var data = image.Encode(SKEncodedImageFormat.Png, 100)
                         ?? throw new InvalidOperationException("The image could not be encoded as PNG.");
-                    await using var outputStream = File.Create(tempPath);
-                    data.SaveTo(outputStream);
+                    await AtomicFileUtility.WriteFileAsync(
+                        destinationPath,
+                        outputStream =>
+                        {
+                            data.SaveTo(outputStream);
+                            return Task.CompletedTask;
+                        },
+                        cancellationToken);
                 }
 
-                if (File.Exists(destinationPath))
-                {
-                    File.Delete(destinationPath);
-                }
-
-                File.Move(tempPath, destinationPath);
                 FileDownloadCounters.AddCompletedDownload(destinationPath);
             }
             finally
@@ -212,11 +205,6 @@ namespace PlayerAssistant
                 if (File.Exists(tempSourcePath))
                 {
                     File.Delete(tempSourcePath);
-                }
-
-                if (File.Exists(tempPath))
-                {
-                    File.Delete(tempPath);
                 }
             }
         }
@@ -253,12 +241,7 @@ namespace PlayerAssistant
 
         private static HttpClient CreateHttpClient()
         {
-            var httpClient = new HttpClient
-            {
-                Timeout = TimeSpan.FromSeconds(30)
-            };
-            httpClient.DefaultRequestHeaders.UserAgent.ParseAdd("PlayerAssistant/1.0");
-            return httpClient;
+            return NetworkRequestUtility.CreateHttpClient();
         }
 
         private static void EnsureImageContentType(string? mediaType)
@@ -274,26 +257,8 @@ namespace PlayerAssistant
             byte[] bytes,
             CancellationToken cancellationToken)
         {
-            var tempPath = $"{destinationPath}.tmp";
-            try
-            {
-                await File.WriteAllBytesAsync(tempPath, bytes, cancellationToken);
-
-                if (File.Exists(destinationPath))
-                {
-                    File.Delete(destinationPath);
-                }
-
-                File.Move(tempPath, destinationPath);
-                FileDownloadCounters.AddCompletedDownload(destinationPath);
-            }
-            finally
-            {
-                if (File.Exists(tempPath))
-                {
-                    File.Delete(tempPath);
-                }
-            }
+            await AtomicFileUtility.WriteAllBytesAsync(destinationPath, bytes, cancellationToken);
+            FileDownloadCounters.AddCompletedDownload(destinationPath);
         }
 
         private static async Task WritePngBytesToFileAsync(
@@ -301,7 +266,7 @@ namespace PlayerAssistant
             byte[] bytes,
             CancellationToken cancellationToken)
         {
-            var tempSourcePath = $"{destinationPath}.source";
+            var tempSourcePath = AtomicFileUtility.CreateTempPath(destinationPath, ".source");
             try
             {
                 await File.WriteAllBytesAsync(tempSourcePath, bytes, cancellationToken);
@@ -318,34 +283,19 @@ namespace PlayerAssistant
 
         private static async Task ConvertSourceImageToPngAsync(string sourcePath, string destinationPath)
         {
-            var tempPath = $"{destinationPath}.tmp";
-            try
-            {
-                using var bitmap = SKBitmap.Decode(sourcePath)
-                    ?? throw new InvalidOperationException("The URI did not return a supported raster image.");
-                using var image = SKImage.FromBitmap(bitmap);
-                using var data = image.Encode(SKEncodedImageFormat.Png, 100)
-                    ?? throw new InvalidOperationException("The image could not be encoded as PNG.");
-                await using (var outputStream = File.Create(tempPath))
+            using var bitmap = SKBitmap.Decode(sourcePath)
+                ?? throw new InvalidOperationException("The URI did not return a supported raster image.");
+            using var image = SKImage.FromBitmap(bitmap);
+            using var data = image.Encode(SKEncodedImageFormat.Png, 100)
+                ?? throw new InvalidOperationException("The image could not be encoded as PNG.");
+            await AtomicFileUtility.WriteFileAsync(
+                destinationPath,
+                outputStream =>
                 {
                     data.SaveTo(outputStream);
-                }
-
-                if (File.Exists(destinationPath))
-                {
-                    File.Delete(destinationPath);
-                }
-
-                File.Move(tempPath, destinationPath);
-                FileDownloadCounters.AddCompletedDownload(destinationPath);
-            }
-            finally
-            {
-                if (File.Exists(tempPath))
-                {
-                    File.Delete(tempPath);
-                }
-            }
+                    return Task.CompletedTask;
+                });
+            FileDownloadCounters.AddCompletedDownload(destinationPath);
         }
     }
 }

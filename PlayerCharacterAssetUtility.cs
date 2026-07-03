@@ -35,13 +35,16 @@ namespace PlayerAssistant
             CancellationToken cancellationToken = default)
         {
             var activeDirectory = Path.Combine(pcsDirectory, "active");
-            var listingMarkdown = await Task.Run(() => MarkdownUtility.GetMarkdownFromURL(listingUrl), cancellationToken);
-            var manifestMarkdown = await Task.Run(() => MarkdownUtility.GetMarkdownFromURL(AssetManifestUrl), cancellationToken);
+            var listingMarkdown = await MarkdownUtility.GetMarkdownFromUrlAsync(listingUrl, cancellationToken);
+            var manifestMarkdown = await MarkdownUtility.GetMarkdownFromUrlAsync(AssetManifestUrl, cancellationToken);
 
             ThrowIfMarkdownFetchFailed(listingMarkdown, listingUrl);
             ThrowIfMarkdownFetchFailed(manifestMarkdown, AssetManifestUrl);
 
-            var manifest = DeserializeAssetManifest(manifestMarkdown);
+            if (!TryDeserializeAssetManifest(manifestMarkdown, out var manifest))
+            {
+                return [];
+            }
 
             var heroes = GetHeroRows(listingMarkdown).ToArray();
             var downloadedFiles = new List<string>();
@@ -97,12 +100,12 @@ namespace PlayerAssistant
                     continue;
                 }
 
-                var heroMarkdown = await Task.Run(
-                    () => MarkdownUtility.GetMarkdownFromURL(hero.CharacterPageUrl),
+                var heroMarkdown = await MarkdownUtility.GetMarkdownFromUrlAsync(
+                    hero.CharacterPageUrl,
                     cancellationToken);
                 ThrowIfMarkdownFetchFailed(heroMarkdown, hero.CharacterPageUrl);
 
-                await File.WriteAllTextAsync(destinationPath, heroMarkdown, cancellationToken);
+                await AtomicFileUtility.WriteAllTextAsync(destinationPath, heroMarkdown, cancellationToken);
                 FileDownloadCounters.AddCompletedDownload(destinationPath);
                 downloadedFiles.Add(destinationPath);
             }
@@ -184,6 +187,23 @@ namespace PlayerAssistant
                 throw new InvalidOperationException(
                     "The asset manifest could not be parsed as JSON after removing optional Markdown front matter.",
                     ex);
+            }
+        }
+
+        private static bool TryDeserializeAssetManifest(
+            string manifestMarkdown,
+            out Dictionary<string, string> manifest)
+        {
+            try
+            {
+                manifest = DeserializeAssetManifest(manifestMarkdown);
+                return true;
+            }
+            catch (Exception ex) when (ex is InvalidOperationException or JsonException)
+            {
+                manifest = [];
+                StartupLoggingUtility.Append("asset manifest load", ex);
+                return false;
             }
         }
 
@@ -388,17 +408,19 @@ namespace PlayerAssistant
 
         private static async Task DownloadFileAsync(string url, string destinationPath, CancellationToken cancellationToken)
         {
-            using var request = new HttpRequestMessage(HttpMethod.Get, url);
-            using var response = await HttpClient.SendAsync(
-                request,
+            using var response = await NetworkRequestUtility.SendAsync(
+                HttpClient,
+                () => new HttpRequestMessage(HttpMethod.Get, url),
                 HttpCompletionOption.ResponseHeadersRead,
-                cancellationToken);
+                cancellationToken: cancellationToken);
             response.EnsureSuccessStatusCode();
 
             await using (var source = await response.Content.ReadAsStreamAsync(cancellationToken))
-            await using (var destination = File.Create(destinationPath))
             {
-                await source.CopyToAsync(destination, cancellationToken);
+                await AtomicFileUtility.WriteFileAsync(
+                    destinationPath,
+                    destination => source.CopyToAsync(destination, cancellationToken),
+                    cancellationToken);
             }
 
             FileDownloadCounters.AddCompletedDownload(destinationPath);
@@ -406,11 +428,7 @@ namespace PlayerAssistant
 
         private static HttpClient CreateHttpClient()
         {
-            var httpClient = new HttpClient
-            {
-                Timeout = TimeSpan.FromSeconds(30)
-            };
-            httpClient.DefaultRequestHeaders.UserAgent.ParseAdd("PlayerAssistant/1.0");
+            var httpClient = NetworkRequestUtility.CreateHttpClient();
             httpClient.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("*/*"));
             return httpClient;
         }

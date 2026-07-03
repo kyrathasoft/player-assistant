@@ -26,21 +26,26 @@ namespace PlayerAssistant
                 throw new ArgumentException("Only HTTP and HTTPS sitemap URLs are supported.", nameof(sitemapUrl));
             }
 
-            using var request = new HttpRequestMessage(HttpMethod.Get, uri);
-            request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/xml"));
-            request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("text/xml"));
-            request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("*/*", 0.1));
-
-            using var response = await HttpClient.SendAsync(
-                request,
+            using var response = await NetworkRequestUtility.SendAsync(
+                HttpClient,
+                () =>
+                {
+                    var request = new HttpRequestMessage(HttpMethod.Get, uri);
+                    request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/xml"));
+                    request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("text/xml"));
+                    request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("*/*", 0.1));
+                    return request;
+                },
                 HttpCompletionOption.ResponseHeadersRead,
-                cancellationToken);
+                cancellationToken: cancellationToken);
             response.EnsureSuccessStatusCode();
 
             await using (var source = await response.Content.ReadAsStreamAsync(cancellationToken))
-            await using (var destination = File.Create(destinationPath))
             {
-                await source.CopyToAsync(destination, cancellationToken);
+                await AtomicFileUtility.WriteFileAsync(
+                    destinationPath,
+                    destination => source.CopyToAsync(destination, cancellationToken),
+                    cancellationToken);
             }
 
             FileDownloadCounters.AddCompletedDownload(destinationPath);
@@ -53,15 +58,17 @@ namespace PlayerAssistant
         {
             var sitemapIndex = await Task.Run(() => BuildSitemapIndex(sitemapPath), cancellationToken);
 
-            await using var destination = File.Create(destinationPath);
-            await JsonSerializer.SerializeAsync(
-                destination,
-                sitemapIndex.KeywordUrls,
-                new JsonSerializerOptions
-                {
-                    Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
-                    WriteIndented = true
-                },
+            await AtomicFileUtility.WriteFileAsync(
+                destinationPath,
+                destination => JsonSerializer.SerializeAsync(
+                    destination,
+                    sitemapIndex.KeywordUrls,
+                    new JsonSerializerOptions
+                    {
+                        Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
+                        WriteIndented = true
+                    },
+                    cancellationToken),
                 cancellationToken);
 
             return new SitemapIndexResult(sitemapIndex.KeywordUrls.Count, sitemapIndex.NodeCount);
@@ -131,12 +138,7 @@ namespace PlayerAssistant
 
         private static HttpClient CreateHttpClient()
         {
-            var httpClient = new HttpClient
-            {
-                Timeout = TimeSpan.FromSeconds(30)
-            };
-            httpClient.DefaultRequestHeaders.UserAgent.ParseAdd("PlayerAssistant/1.0");
-            return httpClient;
+            return NetworkRequestUtility.CreateHttpClient();
         }
     }
 }
