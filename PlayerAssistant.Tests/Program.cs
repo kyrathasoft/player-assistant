@@ -132,6 +132,8 @@ var tests = new (string Name, Action Test)[]
     ("publish verification rejects mismatched executable version", PublishVerificationRejectsMismatchedExecutableVersion),
     ("publish verification rejects stale release manifest", PublishVerificationRejectsStaleReleaseManifest),
     ("published health verification accepts current output", PublishedHealthVerificationAcceptsCurrentOutput),
+    ("secret scan accepts current repository", SecretScanAcceptsCurrentRepository),
+    ("secret scan rejects tracked env secret", SecretScanRejectsTrackedEnvSecret),
     ("release publish parity accepts current output", ReleasePublishParityAcceptsCurrentOutput),
     ("release publish parity rejects mismatched sidecar", ReleasePublishParityRejectsMismatchedSidecar),
     ("diagnostic bundle redacts sensitive values", DiagnosticBundleRedactsSensitiveValues),
@@ -2991,6 +2993,47 @@ static void PublishedHealthVerificationAcceptsCurrentOutput()
     AssertContains(output.Output, "Status:");
 }
 
+static void SecretScanAcceptsCurrentRepository()
+{
+    var output = RunSecretScan(GetRepositoryRoot(), includeHistory: true);
+
+    AssertEqual(0, output.ExitCode, $"secret scan should pass. Output: {output.Output}");
+    AssertContains(output.Output, "Secret scan passed.");
+}
+
+static void SecretScanRejectsTrackedEnvSecret()
+{
+    var scratchRoot = Path.Combine(GetRepositoryRoot(), "codex-scratch");
+    var scratchPath = Path.Combine(scratchRoot, $"secret-scan-test-{Guid.NewGuid():N}");
+
+    try
+    {
+        Directory.CreateDirectory(scratchPath);
+        RunGit(scratchPath, "init");
+        RunGit(scratchPath, "config", "user.email", "test@example.invalid");
+        RunGit(scratchPath, "config", "user.name", "Player Assistant Test");
+        File.WriteAllText(
+            Path.Combine(scratchPath, ".env"),
+            "OPENAI" + "_API_KEY=sk-" + "proj-synthetic-test-secret-1234567890");
+        RunGit(scratchPath, "add", ".env");
+        RunGit(scratchPath, "commit", "-m", "add synthetic secret");
+
+        var output = RunSecretScan(scratchPath, includeHistory: true);
+
+        AssertFalse(output.ExitCode == 0, "secret scan should fail for a tracked env secret");
+        AssertContains(output.Output, "Secret scan findings:");
+        AssertContains(output.Output, "Forbidden tracked path");
+        AssertContains(output.Output, "OpenAI API key");
+    }
+    finally
+    {
+        if (Directory.Exists(scratchPath))
+        {
+            DeleteDirectoryTree(scratchPath);
+        }
+    }
+}
+
 static void ReleasePublishParityAcceptsCurrentOutput()
 {
     var output = RunReleasePublishParity(GetCurrentReleaseDirectory(), GetCurrentPublishDirectory());
@@ -3447,6 +3490,27 @@ static (int ExitCode, string Output) RunPublishedHealthVerification(string publi
         TimeSpan.FromSeconds(30));
 }
 
+static (int ExitCode, string Output) RunSecretScan(string repoRoot, bool includeHistory)
+{
+    var arguments = new List<string>
+    {
+        "-NoProfile",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-File",
+        Path.Combine(GetRepositoryRoot(), "verify-secret-scan.ps1"),
+        "-RepoRoot",
+        repoRoot
+    };
+
+    if (includeHistory)
+    {
+        arguments.Add("-IncludeHistory");
+    }
+
+    return RunPowerShell(arguments, TimeSpan.FromSeconds(60));
+}
+
 static (int ExitCode, string Output) RunPublishVerification(string outputDirectory)
 {
     var repoRoot = GetRepositoryRoot();
@@ -3472,6 +3536,41 @@ static (int ExitCode, string Output) RunPublishVerification(string outputDirecto
                 $"{Path.GetFileName(outputDirectory)}.source.settings.local.json")
         ],
         TimeSpan.FromSeconds(30));
+}
+
+static (int ExitCode, string Output) RunGit(string workingDirectory, params string[] arguments)
+{
+    var startInfo = new ProcessStartInfo
+    {
+        FileName = "git",
+        WorkingDirectory = workingDirectory,
+        RedirectStandardOutput = true,
+        RedirectStandardError = true,
+        UseShellExecute = false,
+        CreateNoWindow = true
+    };
+
+    foreach (var argument in arguments)
+    {
+        startInfo.ArgumentList.Add(argument);
+    }
+
+    using var process = Process.Start(startInfo)
+        ?? throw new InvalidOperationException("Unable to start git process.");
+
+    var output = process.StandardOutput.ReadToEnd() + process.StandardError.ReadToEnd();
+    if (!process.WaitForExit(TimeSpan.FromSeconds(30)))
+    {
+        process.Kill(entireProcessTree: true);
+        throw new TimeoutException("Git process did not exit within 30 seconds.");
+    }
+
+    if (process.ExitCode != 0)
+    {
+        throw new InvalidOperationException($"git {string.Join(' ', arguments)} failed. Output: {output}");
+    }
+
+    return (process.ExitCode, output);
 }
 
 static (int ExitCode, string Output) RunPowerShell(IEnumerable<string> arguments, TimeSpan timeout)
@@ -3534,6 +3633,26 @@ static void CopyDirectory(string sourceDirectory, string destinationDirectory)
         Directory.CreateDirectory(Path.GetDirectoryName(destinationPath) ?? destinationDirectory);
         File.Copy(file, destinationPath, overwrite: true);
     }
+}
+
+static void DeleteDirectoryTree(string directoryPath)
+{
+    if (!Directory.Exists(directoryPath))
+    {
+        return;
+    }
+
+    foreach (var filePath in Directory.EnumerateFiles(directoryPath, "*", SearchOption.AllDirectories))
+    {
+        File.SetAttributes(filePath, FileAttributes.Normal);
+    }
+
+    foreach (var childDirectoryPath in Directory.EnumerateDirectories(directoryPath, "*", SearchOption.AllDirectories))
+    {
+        File.SetAttributes(childDirectoryPath, FileAttributes.Directory);
+    }
+
+    Directory.Delete(directoryPath, recursive: true);
 }
 
 static void AssertTrue(bool actual, string message)

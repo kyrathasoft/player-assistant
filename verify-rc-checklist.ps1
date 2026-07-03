@@ -10,6 +10,7 @@ param(
         'runtime housekeeping',
         'publish verification'
     ),
+    [switch]$SkipSecretScan,
     [switch]$SkipTests,
     [switch]$SkipReleasePublishParity,
     [switch]$SkipPublishedHealth,
@@ -23,6 +24,7 @@ $ProjectFileName = 'player-assistant.csproj'
 $ExecutableFileName = 'player-assistant.exe'
 $TestExecutablePath = Join-Path $PSScriptRoot 'PlayerAssistant.Tests\bin\Release\net10.0-windows\PlayerAssistant.Tests.exe'
 $TestStartupLogPath = Join-Path $PSScriptRoot 'PlayerAssistant.Tests\bin\Release\net10.0-windows\startup-errors.log'
+$SecretScanScriptPath = Join-Path $PSScriptRoot 'verify-secret-scan.ps1'
 $ReleasePublishParityScriptPath = Join-Path $PSScriptRoot 'verify-release-publish-parity.ps1'
 $PublishedHealthScriptPath = Join-Path $PSScriptRoot 'verify-published-health.ps1'
 $PublishRuntimeIntegrityScriptPath = Join-Path $PSScriptRoot 'verify-publish-runtime-integrity.ps1'
@@ -384,6 +386,27 @@ function Invoke-FocusedHardeningTests {
     }
 }
 
+function Invoke-SecretScan {
+    if ($SkipSecretScan) {
+        Write-Output "Skipping secret scan because -SkipSecretScan was supplied."
+        return
+    }
+
+    Assert-RequiredFile -Path $SecretScanScriptPath -Description 'secret scan script'
+    [void](Invoke-ExternalCommand `
+        -FileName 'powershell.exe' `
+        -Arguments @(
+            '-NoProfile',
+            '-ExecutionPolicy',
+            'Bypass',
+            '-File',
+            $SecretScanScriptPath,
+            '-RepoRoot',
+            $PSScriptRoot,
+            '-IncludeHistory'
+        ))
+}
+
 function Invoke-PublishRuntimeIntegrityCheck {
     if ($SkipPublishRuntimeIntegrity) {
         Write-Output "Skipping published-folder runtime integrity check because -SkipPublishRuntimeIntegrity was supplied."
@@ -543,6 +566,7 @@ Assert-RcTagMatchesVersion -Tag $RcTag -Version $projectVersion.Version
 
 Write-Output "RC checklist for $($projectVersion.Version) using tag $RcTag"
 Test-GitReady
+Invoke-SecretScan
 Invoke-FocusedHardeningTests
 Invoke-ReleasePublishParityCheck
 Invoke-PublishedHealthCheck
