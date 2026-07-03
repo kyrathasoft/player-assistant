@@ -10,6 +10,7 @@ param(
 $ErrorActionPreference = 'Stop'
 
 $HealthFileName = 'startup-health.json'
+$StartupHealthSchemaVersion = 1
 $StartupLogFileName = 'startup-errors.log'
 $RequiredHealthPhases = @(
     'settings load',
@@ -204,6 +205,13 @@ function Assert-StartupHealth {
 
     if ($null -eq $Health.PSObject.Properties['phases']) {
         throw "$HealthFileName does not contain a phases array."
+    }
+
+    if ($null -ne $Health.PSObject.Properties['schema_version']) {
+        $schemaVersion = [int]$Health.schema_version
+        if ($schemaVersion -gt $StartupHealthSchemaVersion) {
+            throw "$HealthFileName schema_version $schemaVersion is newer than supported version $StartupHealthSchemaVersion."
+        }
     }
 
     foreach ($phaseName in $RequiredHealthPhases) {

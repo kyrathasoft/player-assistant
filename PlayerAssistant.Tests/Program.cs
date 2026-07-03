@@ -2,6 +2,7 @@ using PlayerAssistant;
 using System.Diagnostics;
 using System.Drawing;
 using System.Drawing.Imaging;
+using System.IO.Compression;
 using System.Net;
 using System.Reflection;
 using System.Security.Cryptography;
@@ -34,6 +35,7 @@ var tests = new (string Name, Action Test)[]
     ("orcish translator exposes unique english term count", OrcishTranslatorExposesUniqueEnglishTermCount),
     ("app configuration validation accepts complete runtime", AppConfigurationValidationAcceptsCompleteRuntime),
     ("app configuration validation reports missing url", AppConfigurationValidationReportsMissingUrl),
+    ("app configuration validation writes repair guidance", AppConfigurationValidationWritesRepairGuidance),
     ("app configuration validation warns about missing rpol credentials", AppConfigurationValidationWarnsAboutMissingRpolCredentials),
     ("app configuration validation warns about missing sidecars", AppConfigurationValidationWarnsAboutMissingSidecars),
     ("startup dependency matrix reports bad config and sidecars", StartupDependencyMatrixReportsBadConfigAndSidecars),
@@ -42,7 +44,9 @@ var tests = new (string Name, Action Test)[]
     ("application version argument returns version text", ApplicationVersionArgumentReturnsVersionText),
     ("startup manifest status distinguishes skipped and failed", StartupManifestStatusDistinguishesSkippedAndFailed),
     ("startup error log entry includes phase and exception", StartupErrorLogEntryIncludesPhaseAndException),
+    ("last crash diagnostic writes redacted exception details", LastCrashDiagnosticWritesRedactedExceptionDetails),
     ("startup health records required phase success", StartupHealthRecordsRequiredPhaseSuccess),
+    ("startup health writes schema version", StartupHealthWritesSchemaVersion),
     ("startup health records required phase failure", StartupHealthRecordsRequiredPhaseFailure),
     ("startup health records optional phase failure without throwing", StartupHealthRecordsOptionalPhaseFailureWithoutThrowing),
     ("runtime housekeeping removes stale temp and atomic files", RuntimeHousekeepingRemovesStaleTempAndAtomicFiles),
@@ -57,6 +61,8 @@ var tests = new (string Name, Action Test)[]
     ("atomic file promotion preserves existing destination on locked replacement", AtomicFilePromotionPreservesExistingDestinationOnLockedReplacement),
     ("network request retries transient failures", NetworkRequestRetriesTransientFailures),
     ("network request does not retry unauthorized", NetworkRequestDoesNotRetryUnauthorized),
+    ("network circuit breaker opens after repeated terminal failures", NetworkCircuitBreakerOpensAfterRepeatedTerminalFailures),
+    ("network circuit breaker clears after success", NetworkCircuitBreakerClearsAfterSuccess),
     ("startup dependency matrix classifies terminal network failure", StartupDependencyMatrixClassifiesTerminalNetworkFailure),
     ("network request wraps timeout", NetworkRequestWrapsTimeout),
     ("network request preserves caller cancellation", NetworkRequestPreservesCallerCancellation),
@@ -76,6 +82,10 @@ var tests = new (string Name, Action Test)[]
     ("rpol auth cached failure short circuits html fetch", RpolAuthCachedFailureShortCircuitsHtmlFetch),
     ("rpol auth cached failure logs once", RpolAuthCachedFailureLogsOnce),
     ("rpol auth caches blocked and expired session failures", RpolAuthCachesBlockedAndExpiredSessionFailures),
+    ("rpol storage state validation accepts current rpol cookies", RpolStorageStateValidationAcceptsCurrentRpolCookies),
+    ("rpol storage state validation deletes malformed state", RpolStorageStateValidationDeletesMalformedState),
+    ("rpol storage state validation deletes stale state", RpolStorageStateValidationDeletesStaleState),
+    ("rpol storage state validation deletes non-rpol state", RpolStorageStateValidationDeletesNonRpolState),
     ("show-all thread url preserves base query and adds show all", ShowAllThreadUrlPreservesBaseQueryAndAddsShowAll),
     ("die roll extraction keeps only saved-log lines", DieRollExtractionKeepsOnlySavedLogLines),
     ("die roll extraction handles live rpol paragraph markup", DieRollExtractionHandlesLiveRpolParagraphMarkup),
@@ -101,11 +111,18 @@ var tests = new (string Name, Action Test)[]
     ("publish verification accepts current output", PublishVerificationAcceptsCurrentOutput),
     ("publish verification rejects stale startup log", PublishVerificationRejectsStaleStartupLog),
     ("publish verification rejects startup health artifact", PublishVerificationRejectsStartupHealthArtifact),
+    ("publish verification rejects last crash artifact", PublishVerificationRejectsLastCrashArtifact),
     ("publish verification rejects malformed settings json", PublishVerificationRejectsMalformedSettingsJson),
     ("publish verification rejects malformed keyword index", PublishVerificationRejectsMalformedKeywordIndex),
     ("publish verification rejects malformed sitemap", PublishVerificationRejectsMalformedSitemap),
     ("publish verification rejects incomplete playwright runtime", PublishVerificationRejectsIncompletePlaywrightRuntime),
-    ("publish verification rejects mismatched executable version", PublishVerificationRejectsMismatchedExecutableVersion)
+    ("publish verification rejects mismatched executable version", PublishVerificationRejectsMismatchedExecutableVersion),
+    ("publish verification rejects stale release manifest", PublishVerificationRejectsStaleReleaseManifest),
+    ("release publish parity accepts current output", ReleasePublishParityAcceptsCurrentOutput),
+    ("release publish parity rejects mismatched sidecar", ReleasePublishParityRejectsMismatchedSidecar),
+    ("diagnostic bundle redacts sensitive values", DiagnosticBundleRedactsSensitiveValues),
+    ("diagnostic bundle verify only rejects forbidden auth state", DiagnosticBundleVerifyOnlyRejectsForbiddenAuthState),
+    ("diagnostic retention cleanup removes old diagnostics and preserves unrelated scratch files", DiagnosticRetentionCleanupRemovesOldDiagnosticsAndPreservesUnrelatedScratchFiles)
 };
 
 if (!string.IsNullOrWhiteSpace(requestedTestFilter))
@@ -409,6 +426,26 @@ static void AppConfigurationValidationReportsMissingUrl()
         "Settings problem: The Cast is missing or empty.",
         report.FirstUserMessage!,
         "unexpected first user-facing validation message");
+    AssertContains(report.Issues[0].RepairAction, "settings.json");
+    AssertContains(report.ToRemediationText(), "Repair:");
+}
+
+static void AppConfigurationValidationWritesRepairGuidance()
+{
+    using var directory = TemporaryDirectory.Create();
+    var settings = CreateValidAppSettings(includeCredentials: false);
+    settings["Game Intro"] = "not a url";
+
+    var report = AppConfigurationValidationUtility.Validate(settings, directory.Path);
+    AppConfigurationValidationUtility.WriteRemediationFile(report, directory.Path);
+
+    var remediationPath = Path.Combine(directory.Path, AppConfigurationValidationUtility.RemediationFileName);
+    AssertTrue(File.Exists(remediationPath), "startup remediation file should be written");
+    var remediation = File.ReadAllText(remediationPath);
+    AssertContains(remediation, "Player Assistant startup configuration guidance");
+    AssertContains(remediation, "Game Intro must be an absolute HTTP or HTTPS URL.");
+    AssertContains(remediation, "Edit settings.json");
+    AssertContains(remediation, "RPOL credentials are incomplete");
 }
 
 static void AppConfigurationValidationWarnsAboutMissingRpolCredentials()
@@ -558,6 +595,36 @@ static void StartupErrorLogEntryIncludesPhaseAndException()
     AssertContains(entry, "Missing RPoL credentials.");
 }
 
+static void LastCrashDiagnosticWritesRedactedExceptionDetails()
+{
+    WithPreservedLastCrash(() =>
+    {
+        var exception = new InvalidOperationException(
+            "failed url=https://user:pass@example.test/path?password=secret-password&token=secret-token Authorization: Bearer abc123",
+            new ApplicationException("Cookie: sessionid=abc123"));
+
+        LastCrashDiagnosticUtility.Write("synthetic crash RPOL password=hunter2", exception);
+
+        var crashJson = File.ReadAllText(GetLastCrashPath());
+        using var document = System.Text.Json.JsonDocument.Parse(crashJson);
+        var root = document.RootElement;
+        var exceptionElement = root.GetProperty("exception");
+        var environment = root.GetProperty("environment");
+
+        AssertJsonNumber(root, "schema_version", LastCrashDiagnosticUtility.CurrentSchemaVersion, "last crash should include schema version");
+        AssertJsonString(root, "phase", "synthetic crash RPOL password=[REDACTED]", "last crash phase should be redacted");
+        AssertJsonString(exceptionElement, "type", "InvalidOperationException", "last crash should record exception type");
+        AssertContains(exceptionElement.GetProperty("message").GetString() ?? string.Empty, "[REDACTED]");
+        AssertFalse(crashJson.Contains("secret-password", StringComparison.Ordinal), "last crash diagnostic should redact password query values");
+        AssertFalse(crashJson.Contains("secret-token", StringComparison.Ordinal), "last crash diagnostic should redact token query values");
+        AssertFalse(crashJson.Contains("Bearer abc123", StringComparison.Ordinal), "last crash diagnostic should redact bearer tokens");
+        AssertFalse(crashJson.Contains("sessionid=abc123", StringComparison.Ordinal), "last crash diagnostic should redact cookie headers");
+        AssertFalse(crashJson.Contains("user:pass@", StringComparison.Ordinal), "last crash diagnostic should redact credentialed URLs");
+        AssertJsonString(environment, "machine_name", "[REDACTED]", "last crash should redact machine name");
+        AssertJsonString(environment, "user_name", "[REDACTED]", "last crash should redact user name");
+    });
+}
+
 static void StartupHealthRecordsRequiredPhaseSuccess()
 {
     WithPreservedStartupHealth(() =>
@@ -573,6 +640,23 @@ static void StartupHealthRecordsRequiredPhaseSuccess()
         AssertJsonNumberAtLeast(phase, "refreshed_count", 0, "required success refreshed count should be present");
         AssertJsonNumber(phase, "failed_count", 0, "required success should not increment failure count");
         AssertEqual(System.Text.Json.JsonValueKind.Null, phase.GetProperty("last_exception").ValueKind, "successful phase should not include an exception");
+    });
+}
+
+static void StartupHealthWritesSchemaVersion()
+{
+    WithPreservedStartupHealth(() =>
+    {
+        StartupHealthUtility.Reset();
+
+        using var document = LoadStartupHealthDocument();
+        AssertJsonNumber(
+            document.RootElement,
+            "schema_version",
+            StartupHealthUtility.CurrentSchemaVersion,
+            "startup health should include the current schema version");
+        AssertTrue(document.RootElement.TryGetProperty("phases", out var phases), "startup health should include phases");
+        AssertEqual(System.Text.Json.JsonValueKind.Array, phases.ValueKind, "startup health phases should remain an array");
     });
 }
 
@@ -963,6 +1047,84 @@ static void NetworkRequestDoesNotRetryUnauthorized()
 
     AssertEqual(HttpStatusCode.Unauthorized, response.StatusCode, "expected unauthorized response to be returned to caller");
     AssertEqual(1, attempts, "unauthorized response should not be retried");
+}
+
+static void NetworkCircuitBreakerOpensAfterRepeatedTerminalFailures()
+{
+    WithPreservedStartupLog(() =>
+    {
+        NetworkRequestUtility.ResetCircuitBreakersForTests();
+        var attempts = 0;
+        using var httpClient = NetworkRequestUtility.CreateHttpClient(new ScriptedHttpMessageHandler((_, _) =>
+        {
+            attempts++;
+            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.ServiceUnavailable)
+            {
+                ReasonPhrase = "Service Unavailable"
+            });
+        }));
+
+        using (NetworkRequestUtility.SendAsync(
+            httpClient,
+            () => new HttpRequestMessage(HttpMethod.Get, "https://breaker.example.test/one"),
+            policy: new NetworkRequestPolicy(TimeSpan.FromSeconds(1), MaxAttempts: 1, TimeSpan.Zero)).GetAwaiter().GetResult())
+        {
+        }
+
+        using (NetworkRequestUtility.SendAsync(
+            httpClient,
+            () => new HttpRequestMessage(HttpMethod.Get, "https://breaker.example.test/two"),
+            policy: new NetworkRequestPolicy(TimeSpan.FromSeconds(1), MaxAttempts: 1, TimeSpan.Zero)).GetAwaiter().GetResult())
+        {
+        }
+
+        var exception = AssertThrows<NetworkRequestException>(() =>
+            NetworkRequestUtility.SendAsync(
+                httpClient,
+                () => new HttpRequestMessage(HttpMethod.Get, "https://breaker.example.test/three"),
+                policy: new NetworkRequestPolicy(TimeSpan.FromSeconds(1), MaxAttempts: 1, TimeSpan.Zero)).GetAwaiter().GetResult());
+
+        AssertEqual(NetworkFailureKind.CircuitOpen, exception.Kind, "expected repeated terminal failures to open the circuit breaker");
+        AssertEqual(2, attempts, "open circuit breaker should short-circuit before sending another request");
+        AssertContains(File.ReadAllText(GetStartupLogPath()), "network circuit breaker");
+        NetworkRequestUtility.ResetCircuitBreakersForTests();
+    });
+}
+
+static void NetworkCircuitBreakerClearsAfterSuccess()
+{
+    NetworkRequestUtility.ResetCircuitBreakersForTests();
+    var attempts = 0;
+    using var httpClient = NetworkRequestUtility.CreateHttpClient(new ScriptedHttpMessageHandler((_, _) =>
+    {
+        attempts++;
+        return Task.FromResult(attempts == 1
+            ? new HttpResponseMessage(HttpStatusCode.ServiceUnavailable)
+            : new HttpResponseMessage(HttpStatusCode.OK));
+    }));
+
+    using (NetworkRequestUtility.SendAsync(
+        httpClient,
+        () => new HttpRequestMessage(HttpMethod.Get, "https://breaker-clear.example.test/one"),
+        policy: new NetworkRequestPolicy(TimeSpan.FromSeconds(1), MaxAttempts: 1, TimeSpan.Zero)).GetAwaiter().GetResult())
+    {
+    }
+
+    using (NetworkRequestUtility.SendAsync(
+        httpClient,
+        () => new HttpRequestMessage(HttpMethod.Get, "https://breaker-clear.example.test/two"),
+        policy: new NetworkRequestPolicy(TimeSpan.FromSeconds(1), MaxAttempts: 1, TimeSpan.Zero)).GetAwaiter().GetResult())
+    {
+    }
+
+    using var response = NetworkRequestUtility.SendAsync(
+        httpClient,
+        () => new HttpRequestMessage(HttpMethod.Get, "https://breaker-clear.example.test/three"),
+        policy: new NetworkRequestPolicy(TimeSpan.FromSeconds(1), MaxAttempts: 1, TimeSpan.Zero)).GetAwaiter().GetResult();
+
+    AssertEqual(HttpStatusCode.OK, response.StatusCode, "successful request should clear prior circuit-breaker failures");
+    AssertEqual(3, attempts, "successful request should allow the next related request to be sent");
+    NetworkRequestUtility.ResetCircuitBreakersForTests();
 }
 
 static void StartupDependencyMatrixClassifiesTerminalNetworkFailure()
@@ -1521,6 +1683,114 @@ static void RpolAuthCachesBlockedAndExpiredSessionFailures()
     {
         ResetRpolAuthFailureCache();
     }
+}
+
+static void RpolStorageStateValidationAcceptsCurrentRpolCookies()
+{
+    using var directory = TemporaryDirectory.Create();
+    var storageStatePath = Path.Combine(directory.Path, "rpol-storage-state.json");
+    WriteRpolStorageState(
+        storageStatePath,
+        """
+        {
+          "cookies": [
+            {
+              "name": "rpol_session",
+              "value": "cookie-value",
+              "domain": ".rpol.net",
+              "path": "/"
+            }
+          ],
+          "origins": []
+        }
+        """,
+        DateTimeOffset.UtcNow.AddDays(-1));
+
+    var valid = RpolAuthUtility.TryPrepareStorageStateFile(
+        storageStatePath,
+        DateTimeOffset.UtcNow);
+
+    AssertTrue(valid, "current RPOL storage state should be usable");
+    AssertTrue(File.Exists(storageStatePath), "valid RPOL storage state should be preserved");
+}
+
+static void RpolStorageStateValidationDeletesMalformedState()
+{
+    WithPreservedStartupLog(() =>
+    {
+        using var directory = TemporaryDirectory.Create();
+        var storageStatePath = Path.Combine(directory.Path, "rpol-storage-state.json");
+        WriteRpolStorageState(storageStatePath, "{ not valid json", DateTimeOffset.UtcNow);
+
+        var valid = RpolAuthUtility.TryPrepareStorageStateFile(
+            storageStatePath,
+            DateTimeOffset.UtcNow);
+
+        AssertFalse(valid, "malformed RPOL storage state should not be usable");
+        AssertFalse(File.Exists(storageStatePath), "malformed RPOL storage state should be deleted");
+    });
+}
+
+static void RpolStorageStateValidationDeletesStaleState()
+{
+    WithPreservedStartupLog(() =>
+    {
+        using var directory = TemporaryDirectory.Create();
+        var storageStatePath = Path.Combine(directory.Path, "rpol-storage-state.json");
+        WriteRpolStorageState(
+            storageStatePath,
+            """
+            {
+              "cookies": [
+                {
+                  "name": "rpol_session",
+                  "value": "cookie-value",
+                  "domain": "rpol.net",
+                  "path": "/"
+                }
+              ]
+            }
+            """,
+            DateTimeOffset.UtcNow.AddDays(-45));
+
+        var valid = RpolAuthUtility.TryPrepareStorageStateFile(
+            storageStatePath,
+            DateTimeOffset.UtcNow);
+
+        AssertFalse(valid, "stale RPOL storage state should not be usable");
+        AssertFalse(File.Exists(storageStatePath), "stale RPOL storage state should be deleted");
+    });
+}
+
+static void RpolStorageStateValidationDeletesNonRpolState()
+{
+    WithPreservedStartupLog(() =>
+    {
+        using var directory = TemporaryDirectory.Create();
+        var storageStatePath = Path.Combine(directory.Path, "rpol-storage-state.json");
+        WriteRpolStorageState(
+            storageStatePath,
+            """
+            {
+              "cookies": [
+                {
+                  "name": "session",
+                  "value": "cookie-value",
+                  "domain": "example.test",
+                  "path": "/"
+                }
+              ]
+            }
+            """,
+            DateTimeOffset.UtcNow);
+
+        var valid = RpolAuthUtility.TryPrepareStorageStateFile(
+            storageStatePath,
+            DateTimeOffset.UtcNow);
+
+        AssertFalse(valid, "non-RPOL storage state should not be usable");
+        AssertFalse(File.Exists(storageStatePath), "non-RPOL storage state should be deleted");
+    });
 }
 
 static void ShowAllThreadUrlPreservesBaseQueryAndAddsShowAll()
@@ -2328,6 +2598,19 @@ static void PublishVerificationRejectsStartupHealthArtifact()
     }
 }
 
+static void PublishVerificationRejectsLastCrashArtifact()
+{
+    WithCopiedPublishDirectory(directoryPath =>
+    {
+        File.WriteAllText(Path.Combine(directoryPath, LastCrashDiagnosticUtility.FileName), "{}");
+
+        var output = RunPublishVerification(directoryPath);
+
+        AssertFalse(output.ExitCode == 0, "publish verification should fail when last-crash.json is present");
+        AssertContains(output.Output, LastCrashDiagnosticUtility.FileName);
+    });
+}
+
 static void PublishVerificationRejectsMalformedSettingsJson()
 {
     WithCopiedPublishDirectory(directoryPath =>
@@ -2402,6 +2685,208 @@ static void PublishVerificationRejectsMismatchedExecutableVersion()
     });
 }
 
+static void PublishVerificationRejectsStaleReleaseManifest()
+{
+    WithCopiedPublishDirectory(directoryPath =>
+    {
+        var manifestPath = Path.Combine(directoryPath, "release-manifest.json");
+        var manifest = File.ReadAllText(manifestPath);
+        var marker = "\"sha256\":";
+        var markerIndex = manifest.IndexOf(marker, StringComparison.Ordinal);
+        if (markerIndex < 0)
+        {
+            throw new InvalidOperationException("release-manifest.json did not contain a sha256 entry.");
+        }
+
+        var valueStart = manifest.IndexOf('"', markerIndex + marker.Length);
+        var valueEnd = manifest.IndexOf('"', valueStart + 1);
+        var tamperedManifest = manifest[..(valueStart + 1)]
+            + new string('0', valueEnd - valueStart - 1)
+            + manifest[valueEnd..];
+        File.WriteAllText(manifestPath, tamperedManifest);
+
+        var output = RunPublishVerification(directoryPath);
+
+        AssertFalse(output.ExitCode == 0, "publish verification should fail when release-manifest.json is stale");
+        AssertContains(output.Output, "release-manifest.json SHA256 mismatch");
+    });
+}
+
+static void ReleasePublishParityAcceptsCurrentOutput()
+{
+    var output = RunReleasePublishParity(GetCurrentReleaseDirectory(), GetCurrentPublishDirectory());
+
+    AssertEqual(0, output.ExitCode, $"release/publish parity should pass. Output: {output.Output}");
+    AssertContains(output.Output, "Release/publish parity verification passed.");
+}
+
+static void ReleasePublishParityRejectsMismatchedSidecar()
+{
+    WithCopiedPublishDirectory(directoryPath =>
+    {
+        File.AppendAllText(Path.Combine(directoryPath, KeywordTermsFileUtility.FileName), "\nsynthetic-parity-drift\n");
+
+        var output = RunReleasePublishParity(GetCurrentReleaseDirectory(), directoryPath);
+
+        AssertFalse(output.ExitCode == 0, "release/publish parity should fail when a published sidecar drifts");
+        AssertContains(output.Output, "game-posts-key-terms.md SHA256 differs");
+    });
+}
+
+static void DiagnosticBundleRedactsSensitiveValues()
+{
+    WithTemporaryDiagnosticsRuntime((rootPath, releasePath, publishPath, outputPath) =>
+    {
+        var output = RunDiagnosticsCollection(
+            releasePath,
+            publishPath,
+            outputPath,
+            "-NoPublishVerification",
+            "-NoPlanOutputs");
+
+        AssertEqual(0, output.ExitCode, $"diagnostic collection should pass. Output: {output.Output}");
+        AssertContains(output.Output, "Diagnostic bundle created:");
+
+        var zipPath = GetDiagnosticZipPathFromOutput(output.Output);
+        AssertTrue(File.Exists(zipPath), "diagnostic bundle zip should exist");
+
+        var entries = GetZipEntryNames(zipPath);
+        var expectedEntries = new[]
+        {
+            "metadata.json",
+            "version-metadata.json",
+            "runtime-sidecars.json",
+            "Release/settings.redacted.json",
+            "Release/settings.local.shape.json",
+            "Release/startup-errors.log",
+            "Release/startup-health.json",
+            "Release/last-crash.json",
+            "Release/startup-remediation.txt",
+            "publish/settings.redacted.json",
+            "publish/settings.local.shape.json",
+            "publish/startup-errors.log",
+            "publish/startup-health.json",
+            "publish/last-crash.json",
+            "publish/startup-remediation.txt"
+        };
+
+        AssertEqual(expectedEntries.Length, entries.Length, "diagnostic bundle should contain only the expected low-impact files");
+        foreach (var expectedEntry in expectedEntries)
+        {
+            AssertTrue(entries.Contains(expectedEntry, StringComparer.Ordinal), $"diagnostic bundle is missing {expectedEntry}");
+        }
+
+        var releaseSettings = ReadZipEntryText(zipPath, "Release/settings.redacted.json");
+        AssertContains(releaseSettings, "\"RPOL user name\":  \"[REDACTED]\"");
+        AssertContains(releaseSettings, "\"RPOL password\":  \"[REDACTED]\"");
+        AssertFalse(releaseSettings.Contains("example-user", StringComparison.Ordinal), "diagnostic settings should not contain RPOL user name");
+        AssertFalse(releaseSettings.Contains("example-password", StringComparison.Ordinal), "diagnostic settings should not contain RPOL password");
+
+        var releaseLog = ReadZipEntryText(zipPath, "Release/startup-errors.log");
+        AssertFalse(releaseLog.Contains("secret-password", StringComparison.Ordinal), "diagnostic log should redact password query values");
+        AssertFalse(releaseLog.Contains("secret-token", StringComparison.Ordinal), "diagnostic log should redact token query values");
+        AssertFalse(releaseLog.Contains("Bearer abc123", StringComparison.Ordinal), "diagnostic log should redact bearer tokens");
+        AssertFalse(releaseLog.Contains("sessionid=abc123", StringComparison.Ordinal), "diagnostic log should redact cookie headers");
+        AssertFalse(releaseLog.Contains("user:pass@", StringComparison.Ordinal), "diagnostic log should redact credentialed URLs");
+
+        var localSettingsShape = ReadZipEntryText(zipPath, "Release/settings.local.shape.json");
+        AssertContains(localSettingsShape, "\"has_payload\":  true");
+        AssertContains(localSettingsShape, "\"payload_length\":");
+        AssertFalse(localSettingsShape.Contains("very-secret-payload", StringComparison.Ordinal), "diagnostic bundle should summarize encrypted payloads instead of copying them");
+
+        var verifyOutput = RunDiagnosticsVerification(outputPath, zipPath);
+        AssertEqual(0, verifyOutput.ExitCode, $"diagnostic verify-only should pass. Output: {verifyOutput.Output}");
+        AssertContains(verifyOutput.Output, "Diagnostic bundle verification passed:");
+    });
+}
+
+static void DiagnosticBundleVerifyOnlyRejectsForbiddenAuthState()
+{
+    WithTemporaryDiagnosticsRuntime((rootPath, releasePath, publishPath, outputPath) =>
+    {
+        Directory.CreateDirectory(outputPath);
+        var zipPath = Path.Combine(outputPath, "malicious-diagnostics.zip");
+        var forbiddenSourcePath = Path.Combine(rootPath, "rpol-storage-state.json");
+        File.WriteAllText(forbiddenSourcePath, """{"cookies":[{"name":"secret"}]}""");
+
+        using (var archive = ZipFile.Open(zipPath, ZipArchiveMode.Create))
+        {
+            archive.CreateEntryFromFile(forbiddenSourcePath, "rpol-storage-state.json");
+        }
+
+        var output = RunDiagnosticsVerification(outputPath, zipPath);
+
+        AssertFalse(output.ExitCode == 0, "diagnostic verify-only should fail for forbidden auth state files");
+        AssertContains(output.Output, "forbidden sensitive file");
+    });
+}
+
+static void DiagnosticRetentionCleanupRemovesOldDiagnosticsAndPreservesUnrelatedScratchFiles()
+{
+    var scratchPath = Path.Combine(
+        GetRepositoryRoot(),
+        "codex-scratch",
+        $"retention-test-{Guid.NewGuid():N}");
+    var diagnosticsPath = Path.Combine(scratchPath, "diagnostics");
+    var oldZipPath = Path.Combine(diagnosticsPath, "player-assistant-diagnostics-20260601-010101.zip");
+    var newZipPath = Path.Combine(diagnosticsPath, "player-assistant-diagnostics-20260702-010101.zip");
+    var oldStagingPath = Path.Combine(diagnosticsPath, "player-assistant-diagnostics-20260601-010101");
+    var oldDiagnosticsTestPath = Path.Combine(scratchPath, "diagnostics-test-old");
+    var oldPublishVerificationPath = Path.Combine(scratchPath, "publish-verification-old");
+    var unrelatedScratchFilePath = Path.Combine(scratchPath, "candidates.txt");
+    var unrelatedScratchDirectoryPath = Path.Combine(scratchPath, "manual-notes");
+
+    try
+    {
+        Directory.CreateDirectory(diagnosticsPath);
+        File.WriteAllText(oldZipPath, "old diagnostic zip");
+        File.WriteAllText(newZipPath, "new diagnostic zip");
+        Directory.CreateDirectory(oldStagingPath);
+        File.WriteAllText(Path.Combine(oldStagingPath, "marker.txt"), "old staging");
+        Directory.CreateDirectory(oldDiagnosticsTestPath);
+        File.WriteAllText(Path.Combine(oldDiagnosticsTestPath, "marker.txt"), "old diagnostics test");
+        Directory.CreateDirectory(oldPublishVerificationPath);
+        File.WriteAllText(Path.Combine(oldPublishVerificationPath, "marker.txt"), "old publish verification");
+        File.WriteAllText(unrelatedScratchFilePath, "lexicon backlog should stay");
+        Directory.CreateDirectory(unrelatedScratchDirectoryPath);
+        File.WriteAllText(Path.Combine(unrelatedScratchDirectoryPath, "marker.txt"), "manual scratch should stay");
+
+        var oldTime = DateTimeOffset.UtcNow - TimeSpan.FromDays(30);
+        SetLastWriteTimeUtc(oldZipPath, oldTime);
+        SetDirectoryLastWriteTimeUtc(oldStagingPath, oldTime);
+        SetDirectoryLastWriteTimeUtc(oldDiagnosticsTestPath, oldTime);
+        SetDirectoryLastWriteTimeUtc(oldPublishVerificationPath, oldTime);
+        SetLastWriteTimeUtc(unrelatedScratchFilePath, oldTime);
+        SetDirectoryLastWriteTimeUtc(unrelatedScratchDirectoryPath, oldTime);
+
+        var output = RunDiagnosticsRetentionCleanup(
+            scratchPath,
+            "-DiagnosticRetentionDays",
+            "14",
+            "-ScratchRetentionDays",
+            "7",
+            "-MaxDiagnosticZipCount",
+            "10");
+
+        AssertEqual(0, output.ExitCode, $"diagnostic retention cleanup should pass. Output: {output.Output}");
+        AssertContains(output.Output, "Diagnostic retention cleanup removed");
+        AssertFalse(File.Exists(oldZipPath), "old diagnostic zip should be removed");
+        AssertTrue(File.Exists(newZipPath), "fresh diagnostic zip should be preserved");
+        AssertFalse(Directory.Exists(oldStagingPath), "old diagnostic staging directory should be removed");
+        AssertFalse(Directory.Exists(oldDiagnosticsTestPath), "old diagnostics test scratch directory should be removed");
+        AssertFalse(Directory.Exists(oldPublishVerificationPath), "old publish verification scratch directory should be removed");
+        AssertTrue(File.Exists(unrelatedScratchFilePath), "unrelated scratch file should be preserved");
+        AssertTrue(Directory.Exists(unrelatedScratchDirectoryPath), "unrelated scratch directory should be preserved");
+    }
+    finally
+    {
+        if (Directory.Exists(scratchPath))
+        {
+            Directory.Delete(scratchPath, recursive: true);
+        }
+    }
+}
+
 static void WithCopiedPublishDirectory(Action<string> action)
 {
     var directoryPath = Path.Combine(
@@ -2423,6 +2908,196 @@ static void WithCopiedPublishDirectory(Action<string> action)
     }
 }
 
+static void WithTemporaryDiagnosticsRuntime(Action<string, string, string, string> action)
+{
+    var rootPath = Path.Combine(
+        GetRepositoryRoot(),
+        "codex-scratch",
+        $"diagnostics-test-{Guid.NewGuid():N}");
+    var releasePath = Path.Combine(rootPath, "Release");
+    var publishPath = Path.Combine(releasePath, "publish");
+    var outputPath = Path.Combine(rootPath, "out");
+
+    try
+    {
+        WriteDiagnosticsRuntime(releasePath, includeSensitiveLog: true);
+        WriteDiagnosticsRuntime(publishPath, includeSensitiveLog: false);
+        action(rootPath, releasePath, publishPath, outputPath);
+    }
+    finally
+    {
+        if (Directory.Exists(rootPath))
+        {
+            Directory.Delete(rootPath, recursive: true);
+        }
+    }
+}
+
+static void WriteDiagnosticsRuntime(string directoryPath, bool includeSensitiveLog)
+{
+    Directory.CreateDirectory(directoryPath);
+    File.WriteAllText(Path.Combine(directoryPath, "player-assistant.exe"), "fake executable");
+    WriteSettingsJson(directoryPath, CreateValidAppSettings(includeCredentials: true));
+    File.WriteAllText(
+        Path.Combine(directoryPath, "settings.local.json"),
+        """
+        {
+          "format": "app-protected-v1",
+          "payload": "very-secret-payload"
+        }
+        """);
+    File.WriteAllText(
+        Path.Combine(directoryPath, "startup-health.json"),
+        """
+        {
+          "schema_version": 1,
+          "phases": []
+        }
+        """);
+    File.WriteAllText(
+        Path.Combine(directoryPath, "last-crash.json"),
+        """
+        {
+          "schema_version": 1,
+          "phase": "synthetic crash",
+          "exception": {
+            "type": "InvalidOperationException",
+            "message": "synthetic crash"
+          }
+        }
+        """);
+    File.WriteAllText(
+        Path.Combine(directoryPath, "startup-remediation.txt"),
+        """
+        Player Assistant startup configuration guidance
+
+        1. Warning: synthetic warning
+           Repair: synthetic repair
+        """);
+    File.WriteAllText(
+        Path.Combine(directoryPath, "startup-errors.log"),
+        includeSensitiveLog
+            ? """
+              RPOL password: hunter2
+              RPOL user name: example-user
+              Authorization: Bearer abc123
+              Cookie: sessionid=abc123
+              url=https://user:pass@example.test/path?password=secret-password&token=secret-token
+              """
+            : "no startup errors");
+    File.WriteAllText(
+        Path.Combine(directoryPath, "keyword-index.json"),
+        """
+        {
+          "words": {
+            "scarlet": []
+          },
+          "index_metadata": {}
+        }
+        """);
+    File.WriteAllText(Path.Combine(directoryPath, KeywordTermsFileUtility.FileName), "scarlet");
+    File.WriteAllText(Path.Combine(directoryPath, "sitemap.xml"), "<urlset />");
+    File.WriteAllText(Path.Combine(directoryPath, "sitemap-keyword-urls.json"), "{}");
+    File.WriteAllText(Path.Combine(directoryPath, "game-forum-chapter-prefixes.txt"), "chapter");
+    File.WriteAllText(Path.Combine(directoryPath, "game-forum-chapter-downloads.txt"), "chapter");
+    File.WriteAllText(Path.Combine(directoryPath, "game-forum-aside-downloads.txt"), "aside");
+    File.WriteAllText(Path.Combine(directoryPath, "game-forum-ooc-downloads.txt"), "ooc");
+}
+
+static (int ExitCode, string Output) RunDiagnosticsCollection(
+    string releaseDirectory,
+    string publishDirectory,
+    string outputDirectory,
+    params string[] extraArguments)
+{
+    var arguments = new List<string>
+    {
+        "-NoProfile",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-File",
+        Path.Combine(GetRepositoryRoot(), "collect-diagnostics.ps1"),
+        "-ReleaseDir",
+        releaseDirectory,
+        "-PublishDir",
+        publishDirectory,
+        "-OutputDir",
+        outputDirectory
+    };
+    arguments.AddRange(extraArguments);
+    return RunPowerShell(arguments, TimeSpan.FromSeconds(45));
+}
+
+static (int ExitCode, string Output) RunDiagnosticsVerification(string outputDirectory, string zipPath)
+{
+    return RunPowerShell(
+        [
+            "-NoProfile",
+            "-ExecutionPolicy",
+            "Bypass",
+            "-File",
+            Path.Combine(GetRepositoryRoot(), "collect-diagnostics.ps1"),
+            "-OutputDir",
+            outputDirectory,
+            "-VerifyOnly",
+            zipPath
+        ],
+        TimeSpan.FromSeconds(30));
+}
+
+static (int ExitCode, string Output) RunDiagnosticsRetentionCleanup(string scratchDirectory, params string[] extraArguments)
+{
+    var arguments = new List<string>
+    {
+        "-NoProfile",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-File",
+        Path.Combine(GetRepositoryRoot(), "clean-diagnostics-retention.ps1"),
+        "-ScratchDir",
+        scratchDirectory
+    };
+    arguments.AddRange(extraArguments);
+    return RunPowerShell(arguments, TimeSpan.FromSeconds(30));
+}
+
+static string GetDiagnosticZipPathFromOutput(string output)
+{
+    var line = output
+        .Split(["\r\n", "\n"], StringSplitOptions.RemoveEmptyEntries)
+        .LastOrDefault(line => line.StartsWith("Diagnostic bundle created:", StringComparison.Ordinal));
+    if (line is null)
+    {
+        throw new InvalidOperationException($"Unable to find diagnostic bundle path in output: {output}");
+    }
+
+    return line["Diagnostic bundle created:".Length..].Trim();
+}
+
+static string[] GetZipEntryNames(string zipPath)
+{
+    using var archive = ZipFile.OpenRead(zipPath);
+    return archive.Entries
+        .Select(entry => entry.FullName.Replace('\\', '/'))
+        .OrderBy(entry => entry, StringComparer.Ordinal)
+        .ToArray();
+}
+
+static string ReadZipEntryText(string zipPath, string entryName)
+{
+    using var archive = ZipFile.OpenRead(zipPath);
+    var entry = archive.Entries.SingleOrDefault(entry =>
+        string.Equals(entry.FullName.Replace('\\', '/'), entryName, StringComparison.Ordinal));
+    if (entry is null)
+    {
+        throw new InvalidOperationException($"Zip entry '{entryName}' was not found in {zipPath}.");
+    }
+
+    using var stream = entry.Open();
+    using var reader = new StreamReader(stream);
+    return reader.ReadToEnd();
+}
+
 static string GetCurrentPublishDirectory()
 {
     var publishDirectory = Path.Combine(GetRepositoryRoot(), "Release", "publish");
@@ -2434,6 +3109,34 @@ static string GetCurrentPublishDirectory()
     return publishDirectory;
 }
 
+static string GetCurrentReleaseDirectory()
+{
+    var releaseDirectory = Path.Combine(GetRepositoryRoot(), "Release");
+    if (!Directory.Exists(releaseDirectory))
+    {
+        throw new InvalidOperationException($"Release directory is missing: {releaseDirectory}");
+    }
+
+    return releaseDirectory;
+}
+
+static (int ExitCode, string Output) RunReleasePublishParity(string releaseDirectory, string publishDirectory)
+{
+    return RunPowerShell(
+        [
+            "-NoProfile",
+            "-ExecutionPolicy",
+            "Bypass",
+            "-File",
+            Path.Combine(GetRepositoryRoot(), "verify-release-publish-parity.ps1"),
+            "-ReleaseDir",
+            releaseDirectory,
+            "-PublishDir",
+            publishDirectory
+        ],
+        TimeSpan.FromSeconds(30));
+}
+
 static (int ExitCode, string Output) RunPublishVerification(string outputDirectory)
 {
     var repoRoot = GetRepositoryRoot();
@@ -2443,11 +3146,8 @@ static (int ExitCode, string Output) RunPublishVerification(string outputDirecto
         throw new InvalidOperationException($"Publish script is missing: {scriptPath}");
     }
 
-    using var process = Process.Start(new ProcessStartInfo
-    {
-        FileName = "powershell",
-        ArgumentList =
-        {
+    return RunPowerShell(
+        [
             "-NoProfile",
             "-ExecutionPolicy",
             "Bypass",
@@ -2456,19 +3156,34 @@ static (int ExitCode, string Output) RunPublishVerification(string outputDirecto
             "-VerifyOnly",
             "-OutputDir",
             outputDirectory
-        },
-        WorkingDirectory = repoRoot,
+        ],
+        TimeSpan.FromSeconds(30));
+}
+
+static (int ExitCode, string Output) RunPowerShell(IEnumerable<string> arguments, TimeSpan timeout)
+{
+    var startInfo = new ProcessStartInfo
+    {
+        FileName = "powershell",
+        WorkingDirectory = GetRepositoryRoot(),
         RedirectStandardOutput = true,
         RedirectStandardError = true,
         UseShellExecute = false,
         CreateNoWindow = true
-    }) ?? throw new InvalidOperationException("Unable to start publish verification process.");
+    };
+    foreach (var argument in arguments)
+    {
+        startInfo.ArgumentList.Add(argument);
+    }
+
+    using var process = Process.Start(startInfo)
+        ?? throw new InvalidOperationException("Unable to start PowerShell process.");
 
     var output = process.StandardOutput.ReadToEnd() + process.StandardError.ReadToEnd();
-    if (!process.WaitForExit(30000))
+    if (!process.WaitForExit(timeout))
     {
         process.Kill(entireProcessTree: true);
-        throw new TimeoutException("Publish verification process did not exit within 30 seconds.");
+        throw new TimeoutException($"PowerShell process did not exit within {timeout.TotalSeconds:0.#} seconds.");
     }
 
     return (process.ExitCode, output);
@@ -2816,6 +3531,11 @@ static string GetStartupHealthPath()
     return Path.Combine(AppContext.BaseDirectory, StartupHealthUtility.HealthFileName);
 }
 
+static string GetLastCrashPath()
+{
+    return Path.Combine(AppContext.BaseDirectory, LastCrashDiagnosticUtility.FileName);
+}
+
 static void WithPreservedStartupLog(Action action)
 {
     var startupLogPath = GetStartupLogPath();
@@ -2868,6 +3588,34 @@ static void WithPreservedStartupHealth(Action action)
         else if (File.Exists(startupHealthPath))
         {
             File.Delete(startupHealthPath);
+        }
+    }
+}
+
+static void WithPreservedLastCrash(Action action)
+{
+    var lastCrashPath = GetLastCrashPath();
+    var hadLastCrash = File.Exists(lastCrashPath);
+    var originalLastCrash = hadLastCrash ? File.ReadAllText(lastCrashPath) : null;
+
+    try
+    {
+        if (File.Exists(lastCrashPath))
+        {
+            File.Delete(lastCrashPath);
+        }
+
+        action();
+    }
+    finally
+    {
+        if (hadLastCrash)
+        {
+            File.WriteAllText(lastCrashPath, originalLastCrash);
+        }
+        else if (File.Exists(lastCrashPath))
+        {
+            File.Delete(lastCrashPath);
         }
     }
 }
@@ -2952,6 +3700,13 @@ static void WriteSettingsJson(string directoryPath, IReadOnlyDictionary<string, 
             new System.Text.Json.JsonSerializerOptions { WriteIndented = true }));
 }
 
+static void WriteRpolStorageState(string storageStatePath, string contents, DateTimeOffset lastWriteUtc)
+{
+    Directory.CreateDirectory(Path.GetDirectoryName(storageStatePath)!);
+    File.WriteAllText(storageStatePath, contents);
+    File.SetLastWriteTimeUtc(storageStatePath, lastWriteUtc.UtcDateTime);
+}
+
 static void WriteRequiredRuntimeSidecars(string directoryPath)
 {
     File.WriteAllText(Path.Combine(directoryPath, "keyword-index.json"), "{}");
@@ -2962,6 +3717,11 @@ static void WriteRequiredRuntimeSidecars(string directoryPath)
 static void SetLastWriteTimeUtc(string filePath, DateTimeOffset value)
 {
     File.SetLastWriteTimeUtc(filePath, value.UtcDateTime);
+}
+
+static void SetDirectoryLastWriteTimeUtc(string directoryPath, DateTimeOffset value)
+{
+    Directory.SetLastWriteTimeUtc(directoryPath, value.UtcDateTime);
 }
 
 static void WriteVisiblePng(string filePath)

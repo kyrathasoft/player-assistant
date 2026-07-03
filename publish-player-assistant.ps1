@@ -13,12 +13,16 @@ $SettingsEncryptionSeed = 'PlayerAssistant.LocalSettings.v1'
 $KeywordIndexFileName = 'keyword-index.json'
 $KeywordTermsFileName = 'game-posts-key-terms.md'
 $SitemapFileName = 'sitemap.xml'
+$SitemapKeywordUrlsFileName = 'sitemap-keyword-urls.json'
+$ReleaseManifestFileName = 'release-manifest.json'
 $SensitiveFileNames = @(
     'rpol-storage-state.json'
 )
 $ForbiddenPublishFileNames = @(
     'startup-errors.log',
-    'startup-health.json'
+    'startup-health.json',
+    'last-crash.json',
+    'startup-remediation.txt'
 )
 $ForbiddenPublishDirectoryNames = @(
     'temp'
@@ -40,6 +44,7 @@ $RequiredSettingsUrlKeys = @(
     'The Cast',
     'Obsidian Game Vault'
 )
+$ProcessLockDiagnosticsScriptPath = Join-Path $PSScriptRoot 'diagnose-player-assistant-locks.ps1'
 
 function Get-ProjectVersionInfo {
     $projectPath = Join-Path $PSScriptRoot $ProjectFileName
@@ -606,7 +611,105 @@ function Assert-PublishInputs {
     Assert-RequiredFile -Path (Join-Path $PSScriptRoot "Release\$KeywordIndexFileName") -Description 'Release keyword index'
     Assert-RequiredFile -Path (Join-Path $PSScriptRoot "Release\$KeywordTermsFileName") -Description 'keyword terms file'
     Assert-RequiredFile -Path (Join-Path $PSScriptRoot "Release\$SitemapFileName") -Description 'Release sitemap'
+    Assert-RequiredFile -Path (Join-Path $PSScriptRoot "Release\$SitemapKeywordUrlsFileName") -Description 'Release sitemap keyword URL library'
     Assert-RequiredFile -Path (Join-Path $PSScriptRoot $SettingsLocalFileName) -Description $SettingsLocalFileName
+}
+
+function Get-ManifestFileEntry {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Directory,
+
+        [Parameter(Mandatory = $true)]
+        [string]$RelativePath
+    )
+
+    $path = Join-Path $Directory $RelativePath
+    Assert-RequiredFile -Path $path -Description "release manifest file $RelativePath"
+    $item = Get-Item -LiteralPath $path
+    return [ordered]@{
+        relative_path = $RelativePath
+        length = $item.Length
+        sha256 = (Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash
+    }
+}
+
+function Get-ReleaseManifestFileList {
+    return @(
+        'player-assistant.exe',
+        'settings.json',
+        $SettingsLocalFileName,
+        $KeywordIndexFileName,
+        $KeywordTermsFileName,
+        $SitemapFileName,
+        $SitemapKeywordUrlsFileName,
+        '.playwright\node\win32_x64\node.exe',
+        '.playwright\package\package.json',
+        '.playwright\package\browsers.json'
+    )
+}
+
+function Write-ReleaseIntegrityManifest {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Directory
+    )
+
+    $projectVersion = Get-ProjectVersionInfo
+    $files = @(Get-ReleaseManifestFileList | ForEach-Object {
+        Get-ManifestFileEntry -Directory $Directory -RelativePath $_
+    })
+    $manifest = [ordered]@{
+        schema_version = 1
+        generated_at = (Get-Date).ToString('O')
+        app_version = $projectVersion.Version
+        file_version = $projectVersion.FileVersion
+        product_version = $projectVersion.InformationalVersion
+        hash_algorithm = 'SHA256'
+        files = $files
+    }
+
+    $manifestPath = Join-Path $Directory $ReleaseManifestFileName
+    $manifest | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $manifestPath -Encoding UTF8
+    Assert-RequiredFile -Path $manifestPath -Description $ReleaseManifestFileName
+}
+
+function Assert-ReleaseIntegrityManifest {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Directory
+    )
+
+    $manifestPath = Join-Path $Directory $ReleaseManifestFileName
+    $manifest = Read-JsonFile -Path $manifestPath -Description $ReleaseManifestFileName
+    if ($manifest.schema_version -ne 1) {
+        throw "$ReleaseManifestFileName schema_version '$($manifest.schema_version)' is not supported."
+    }
+
+    if ($manifest.hash_algorithm -ne 'SHA256') {
+        throw "$ReleaseManifestFileName must use SHA256 hashes."
+    }
+
+    $entries = @($manifest.files)
+    $requiredPaths = @(Get-ReleaseManifestFileList)
+    foreach ($relativePath in $requiredPaths) {
+        $entry = @($entries | Where-Object { $_.relative_path -eq $relativePath } | Select-Object -First 1)
+        if ($entry.Count -eq 0) {
+            throw "$ReleaseManifestFileName is missing an entry for '$relativePath'."
+        }
+
+        $path = Join-Path $Directory $relativePath
+        Assert-RequiredFile -Path $path -Description "manifested file $relativePath"
+        $item = Get-Item -LiteralPath $path
+        if ([long]$entry[0].length -ne [long]$item.Length) {
+            throw "$ReleaseManifestFileName length mismatch for '$relativePath'."
+        }
+
+        $actualHash = (Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash
+        if ($actualHash -ne [string]$entry[0].sha256) {
+            throw "$ReleaseManifestFileName SHA256 mismatch for '$relativePath'."
+        }
+    }
 }
 
 function Assert-PublishOutput {
@@ -620,14 +723,33 @@ function Assert-PublishOutput {
     Assert-PublishedExecutableVersion -Path (Join-Path $Directory 'player-assistant.exe')
     Assert-PublishedSettingsJson -Path (Join-Path $Directory 'settings.json')
     Assert-PublishedKeywordIndex -Path (Join-Path $Directory $KeywordIndexFileName) -Description 'published keyword index'
-    Assert-PublishedKeywordIndex -Path (Join-Path $Directory 'keyword-index.md') -Description 'published keyword index markdown sidecar'
     Assert-PublishedKeywordTerms -Path (Join-Path $Directory $KeywordTermsFileName)
     Assert-PublishedSitemap -Path (Join-Path $Directory $SitemapFileName)
+    [void](Read-JsonFile -Path (Join-Path $Directory $SitemapKeywordUrlsFileName) -Description 'published sitemap keyword URL library')
     Assert-PublishedPlaywrightRuntime -Directory (Join-Path $Directory '.playwright')
     Assert-EncryptedLocalSettings -SourcePath (Join-Path $PSScriptRoot $SettingsLocalFileName) -PublishedPath $settingsPath
     Assert-NoSensitiveFiles -Directory $Directory
     Assert-NoForbiddenPublishArtifacts -Directory $Directory
     Assert-NoPlaintextCredentialMarkers -Directory $Directory
+    Assert-ReleaseIntegrityManifest -Directory $Directory
+}
+
+function Invoke-ProcessLockDiagnostics {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$PublishDirectory
+    )
+
+    if (!(Test-Path -LiteralPath $ProcessLockDiagnosticsScriptPath -PathType Leaf)) {
+        Write-Output "Process-lock diagnostics script is missing: $ProcessLockDiagnosticsScriptPath"
+        return
+    }
+
+    Write-Output ''
+    Write-Output 'Process-lock diagnostics after publish failure:'
+    & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $ProcessLockDiagnosticsScriptPath `
+        -ReleasePath (Join-Path $PSScriptRoot 'Release\player-assistant.exe') `
+        -PublishPath (Join-Path $PublishDirectory 'player-assistant.exe')
 }
 
 $resolvedOutputDir = Resolve-FullPath $OutputDir
@@ -649,24 +771,37 @@ if (Test-Path -LiteralPath $resolvedOutputDir) {
 
 New-Item -ItemType Directory -Force -Path $resolvedOutputDir | Out-Null
 
-dotnet publish "$PSScriptRoot\player-assistant.csproj" `
-    --configuration Release `
-    --runtime win-x64 `
-    --self-contained true `
-    -p:PublishSingleFile=true `
-    -p:IncludeNativeLibrariesForSelfExtract=true `
-    -p:EnableCompressionInSingleFile=true `
-    -p:DebugType=None `
-    -p:DebugSymbols=false `
-    --output $resolvedOutputDir
+$publishArguments = @(
+    'publish',
+    "$PSScriptRoot\player-assistant.csproj",
+    '--configuration',
+    'Release',
+    '--runtime',
+    'win-x64',
+    '--self-contained',
+    'true',
+    '-p:PublishSingleFile=true',
+    '-p:IncludeNativeLibrariesForSelfExtract=true',
+    '-p:EnableCompressionInSingleFile=true',
+    '-p:DebugType=None',
+    '-p:DebugSymbols=false',
+    '--output',
+    $resolvedOutputDir
+)
+& dotnet @publishArguments
+if ($LASTEXITCODE -ne 0) {
+    Invoke-ProcessLockDiagnostics -PublishDirectory $resolvedOutputDir
+    throw "dotnet publish failed with exit code $LASTEXITCODE."
+}
 
 Get-ChildItem -Path $resolvedOutputDir -Filter *.pdb -File | Remove-Item -Force
 
 Copy-Item -LiteralPath (Join-Path $PSScriptRoot "Release\$KeywordIndexFileName") -Destination (Join-Path $resolvedOutputDir $KeywordIndexFileName) -Force
-Copy-Item -LiteralPath (Join-Path $PSScriptRoot "Release\$KeywordIndexFileName") -Destination (Join-Path $resolvedOutputDir 'keyword-index.md') -Force
 Copy-Item -LiteralPath (Join-Path $PSScriptRoot "Release\$KeywordTermsFileName") -Destination (Join-Path $resolvedOutputDir $KeywordTermsFileName) -Force
 Copy-Item -LiteralPath (Join-Path $PSScriptRoot "Release\$SitemapFileName") -Destination (Join-Path $resolvedOutputDir $SitemapFileName) -Force
+Copy-Item -LiteralPath (Join-Path $PSScriptRoot "Release\$SitemapKeywordUrlsFileName") -Destination (Join-Path $resolvedOutputDir $SitemapKeywordUrlsFileName) -Force
 Write-AppEncryptedLocalSettings -SourcePath (Join-Path $PSScriptRoot $SettingsLocalFileName) -DestinationPath (Join-Path $resolvedOutputDir $SettingsLocalFileName)
+Write-ReleaseIntegrityManifest -Directory $resolvedOutputDir
 
 Assert-PublishOutput -Directory $resolvedOutputDir
 Write-Output "Publish verified: $resolvedOutputDir"

@@ -88,6 +88,7 @@ namespace PlayerAssistant
                     PhaseStatusFailed,
                     DateTimeOffset.UtcNow - startedAt,
                     ex);
+                LastCrashDiagnosticUtility.Write(phase, ex);
                 Append(phase, ex);
                 throw;
             }
@@ -133,6 +134,7 @@ namespace PlayerAssistant
                     PhaseStatusFailed,
                     DateTimeOffset.UtcNow - startedAt,
                     ex);
+                LastCrashDiagnosticUtility.Write(phase, ex);
                 await AppendAsync(phase, ex);
                 throw;
             }

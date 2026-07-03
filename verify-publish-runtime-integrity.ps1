@@ -7,7 +7,6 @@ param(
         'settings.json',
         'settings.local.json',
         'keyword-index.json',
-        'keyword-index.md',
         'game-posts-key-terms.md',
         'sitemap.xml',
         'sitemap-keyword-urls.json',
@@ -17,7 +16,8 @@ param(
         'game-forum-ooc-downloads.txt',
         'rpol-storage-state.json',
         'startup-errors.log',
-        'startup-health.json'
+        'startup-health.json',
+        'startup-remediation.txt'
     ),
     [switch]$KeepAppRunning,
     [switch]$PlanOnly
@@ -27,6 +27,7 @@ $ErrorActionPreference = 'Stop'
 
 $ExecutableFileName = 'player-assistant.exe'
 $HealthFileName = 'startup-health.json'
+$StartupHealthSchemaVersion = 1
 $StartupLogFileName = 'startup-errors.log'
 $RequiredHealthPhases = @(
     'settings load',
@@ -36,6 +37,7 @@ $RequiredHealthPhases = @(
 $PublishDiagnosticsToRestore = @(
     'startup-health.json',
     'startup-errors.log',
+    'startup-remediation.txt',
     'rpol-storage-state.json'
 )
 
@@ -219,6 +221,13 @@ function Assert-StartupHealth {
 
     if ($null -eq $Health.PSObject.Properties['phases']) {
         throw "$HealthFileName does not contain a phases array."
+    }
+
+    if ($null -ne $Health.PSObject.Properties['schema_version']) {
+        $schemaVersion = [int]$Health.schema_version
+        if ($schemaVersion -gt $StartupHealthSchemaVersion) {
+            throw "$HealthFileName schema_version $schemaVersion is newer than supported version $StartupHealthSchemaVersion."
+        }
     }
 
     foreach ($phaseName in $RequiredHealthPhases) {

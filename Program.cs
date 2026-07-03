@@ -26,6 +26,7 @@ namespace PlayerAssistant
             catch (Exception ex)
             {
                 StartupLoggingUtility.Append("startup", ex);
+                LastCrashDiagnosticUtility.Write("startup", ex, overwrite: false);
                 MessageBox.Show(
                     ex.Message,
                     "Player Assistant Startup Error",
@@ -89,17 +90,22 @@ namespace PlayerAssistant
         {
             Application.SetUnhandledExceptionMode(UnhandledExceptionMode.CatchException);
             Application.ThreadException += (_, e) =>
+            {
                 StartupLoggingUtility.Append("UI thread exception", e.Exception);
+                LastCrashDiagnosticUtility.Write("UI thread exception", e.Exception);
+            };
             AppDomain.CurrentDomain.UnhandledException += (_, e) =>
             {
                 if (e.ExceptionObject is Exception ex)
                 {
                     StartupLoggingUtility.Append("unhandled exception", ex);
+                    LastCrashDiagnosticUtility.Write("unhandled exception", ex, e.IsTerminating);
                 }
             };
             TaskScheduler.UnobservedTaskException += (_, e) =>
             {
                 StartupLoggingUtility.Append("unobserved task exception", e.Exception);
+                LastCrashDiagnosticUtility.Write("unobserved task exception", e.Exception);
                 e.SetObserved();
             };
         }

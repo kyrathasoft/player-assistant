@@ -5,7 +5,8 @@ namespace PlayerAssistant
     internal enum NetworkFailureKind
     {
         Unavailable,
-        TimedOut
+        TimedOut,
+        CircuitOpen
     }
 
     internal sealed class NetworkRequestException : InvalidOperationException
@@ -29,6 +30,11 @@ namespace PlayerAssistant
 
     internal static class NetworkRequestUtility
     {
+        private const int CircuitBreakerFailureThreshold = 2;
+        private static readonly TimeSpan CircuitBreakerCooldown = TimeSpan.FromMinutes(5);
+        private static readonly object CircuitBreakerSyncRoot = new();
+        private static readonly Dictionary<string, NetworkCircuitBreakerState> CircuitBreakers = new(StringComparer.OrdinalIgnoreCase);
+
         public static async Task<HttpResponseMessage> SendAsync(
             HttpClient httpClient,
             Func<HttpRequestMessage> createRequest,
@@ -55,6 +61,8 @@ namespace PlayerAssistant
                 try
                 {
                     using var request = createRequest();
+                    var circuitBreakerKey = GetCircuitBreakerKey(request);
+                    ThrowIfCircuitOpen(circuitBreakerKey, DateTimeOffset.Now);
                     var response = await httpClient.SendAsync(
                         request,
                         completionOption,
@@ -67,16 +75,30 @@ namespace PlayerAssistant
                         continue;
                     }
 
+                    if (ShouldRetry(response.StatusCode))
+                    {
+                        RecordCircuitFailure(
+                            circuitBreakerKey,
+                            $"HTTP {(int)response.StatusCode} {response.ReasonPhrase}".Trim(),
+                            DateTimeOffset.Now);
+                    }
+                    else
+                    {
+                        RecordCircuitSuccess(circuitBreakerKey);
+                    }
+
                     return response;
                 }
                 catch (OperationCanceledException ex) when (!cancellationToken.IsCancellationRequested)
                 {
                     if (attempt >= policy.MaxAttempts)
                     {
-                        throw new NetworkRequestException(
+                        var exception = new NetworkRequestException(
                             NetworkFailureKind.TimedOut,
                             $"The network request timed out after {policy.Timeout.TotalSeconds:0.#} seconds.",
                             ex);
+                        RecordCircuitFailureFromException(createRequest, exception);
+                        throw exception;
                     }
 
                     await DelayBeforeRetryAsync(policy, cancellationToken).ConfigureAwait(false);
@@ -91,17 +113,21 @@ namespace PlayerAssistant
                 }
                 catch (HttpRequestException ex)
                 {
-                    throw new NetworkRequestException(
+                    var exception = new NetworkRequestException(
                         NetworkFailureKind.Unavailable,
                         $"The network request failed: {ex.Message}",
                         ex);
+                    RecordCircuitFailureFromException(createRequest, exception);
+                    throw exception;
                 }
                 catch (IOException ex)
                 {
-                    throw new NetworkRequestException(
+                    var exception = new NetworkRequestException(
                         NetworkFailureKind.Unavailable,
                         $"The network request failed: {ex.Message}",
                         ex);
+                    RecordCircuitFailureFromException(createRequest, exception);
+                    throw exception;
                 }
             }
         }
@@ -140,6 +166,94 @@ namespace PlayerAssistant
             return httpClient;
         }
 
+        internal static void ResetCircuitBreakersForTests()
+        {
+            lock (CircuitBreakerSyncRoot)
+            {
+                CircuitBreakers.Clear();
+            }
+        }
+
+        private static string GetCircuitBreakerKey(HttpRequestMessage request)
+        {
+            var uri = request.RequestUri;
+            if (uri is null || !uri.IsAbsoluteUri)
+            {
+                return $"{request.Method.Method} <relative>";
+            }
+
+            return $"{request.Method.Method} {uri.Scheme}://{uri.Authority}";
+        }
+
+        private static void ThrowIfCircuitOpen(string circuitBreakerKey, DateTimeOffset now)
+        {
+            lock (CircuitBreakerSyncRoot)
+            {
+                if (!CircuitBreakers.TryGetValue(circuitBreakerKey, out var state)
+                    || state.OpenedAt is null)
+                {
+                    return;
+                }
+
+                var elapsed = now - state.OpenedAt.Value;
+                if (elapsed >= CircuitBreakerCooldown)
+                {
+                    CircuitBreakers.Remove(circuitBreakerKey);
+                    return;
+                }
+
+                throw new NetworkRequestException(
+                    NetworkFailureKind.CircuitOpen,
+                    $"Network circuit breaker is open for {circuitBreakerKey}. Last failure: {state.LastFailure}. Retry after {CircuitBreakerCooldown - elapsed:hh\\:mm\\:ss}.");
+            }
+        }
+
+        private static void RecordCircuitSuccess(string circuitBreakerKey)
+        {
+            lock (CircuitBreakerSyncRoot)
+            {
+                CircuitBreakers.Remove(circuitBreakerKey);
+            }
+        }
+
+        private static void RecordCircuitFailure(string circuitBreakerKey, string failure, DateTimeOffset now)
+        {
+            lock (CircuitBreakerSyncRoot)
+            {
+                var failureCount = 1;
+                DateTimeOffset? openedAt = null;
+                if (CircuitBreakers.TryGetValue(circuitBreakerKey, out var state))
+                {
+                    failureCount = state.FailureCount + 1;
+                    openedAt = state.OpenedAt;
+                }
+
+                if (failureCount >= CircuitBreakerFailureThreshold && openedAt is null)
+                {
+                    openedAt = now;
+                    StartupLoggingUtility.Append(
+                        "network circuit breaker",
+                        $"Opened circuit for {circuitBreakerKey} after {failureCount} terminal failure(s). Last failure: {failure}");
+                }
+
+                CircuitBreakers[circuitBreakerKey] = new NetworkCircuitBreakerState(
+                    failureCount,
+                    openedAt,
+                    failure);
+            }
+        }
+
+        private static void RecordCircuitFailureFromException(
+            Func<HttpRequestMessage> createRequest,
+            NetworkRequestException exception)
+        {
+            using var request = createRequest();
+            RecordCircuitFailure(
+                GetCircuitBreakerKey(request),
+                exception.Message,
+                DateTimeOffset.Now);
+        }
+
         private static bool ShouldRetry(HttpStatusCode statusCode)
         {
             return statusCode is HttpStatusCode.RequestTimeout
@@ -156,5 +270,10 @@ namespace PlayerAssistant
                 ? Task.CompletedTask
                 : Task.Delay(policy.RetryDelay, cancellationToken);
         }
+
+        private sealed record NetworkCircuitBreakerState(
+            int FailureCount,
+            DateTimeOffset? OpenedAt,
+            string LastFailure);
     }
 }

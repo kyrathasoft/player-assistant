@@ -6,6 +6,7 @@ namespace PlayerAssistant
     internal static class StartupHealthUtility
     {
         public const string HealthFileName = "startup-health.json";
+        public const int CurrentSchemaVersion = 1;
         private static readonly object SyncRoot = new();
         private static readonly JsonSerializerOptions JsonOptions = new()
         {
@@ -55,6 +56,7 @@ namespace PlayerAssistant
             try
             {
                 var snapshot = new StartupHealthSnapshot(
+                    CurrentSchemaVersion,
                     _startedAt,
                     _updatedAt,
                     Phases.ToArray());
@@ -69,6 +71,7 @@ namespace PlayerAssistant
     }
 
     internal sealed record StartupHealthSnapshot(
+        [property: JsonPropertyName("schema_version")] int SchemaVersion,
         [property: JsonPropertyName("started_at")] DateTimeOffset StartedAt,
         [property: JsonPropertyName("updated_at")] DateTimeOffset UpdatedAt,
         [property: JsonPropertyName("phases")] IReadOnlyList<StartupHealthPhase> Phases);

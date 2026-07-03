@@ -8,7 +8,8 @@ namespace PlayerAssistant
 
     internal sealed record AppConfigurationIssue(
         AppConfigurationIssueSeverity Severity,
-        string Message);
+        string Message,
+        string RepairAction);
 
     internal sealed record AppConfigurationValidationReport(
         IReadOnlyList<AppConfigurationIssue> Issues)
@@ -18,6 +19,31 @@ namespace PlayerAssistant
         public string? FirstUserMessage => Issues.Count == 0
             ? null
             : $"Settings problem: {Issues[0].Message}";
+
+        public string ToRemediationText()
+        {
+            if (Issues.Count == 0)
+            {
+                return "No startup configuration problems were detected." + Environment.NewLine;
+            }
+
+            var lines = new List<string>
+            {
+                "Player Assistant startup configuration guidance",
+                $"Generated: {DateTimeOffset.Now:O}",
+                string.Empty
+            };
+
+            for (var index = 0; index < Issues.Count; index++)
+            {
+                var issue = Issues[index];
+                lines.Add($"{index + 1}. {issue.Severity}: {issue.Message}");
+                lines.Add($"   Repair: {issue.RepairAction}");
+                lines.Add(string.Empty);
+            }
+
+            return string.Join(Environment.NewLine, lines);
+        }
     }
 
     internal sealed class AppConfigurationValidationException : InvalidOperationException
@@ -33,6 +59,7 @@ namespace PlayerAssistant
 
     internal static class AppConfigurationValidationUtility
     {
+        public const string RemediationFileName = "startup-remediation.txt";
         private const string RpolSiteSettingsKey = "RPOL Site";
         private const string RpolUserNameSettingsKey = "RPOL user name";
         private const string RpolPasswordSettingsKey = "RPOL password";
@@ -72,12 +99,34 @@ namespace PlayerAssistant
             LatestReport = Validate(settings, AppContext.BaseDirectory);
             if (LatestReport.HasIssues)
             {
+                WriteRemediationFile(LatestReport, AppContext.BaseDirectory);
                 StartupLoggingUtility.Append(
                     "configuration validation",
                     new AppConfigurationValidationException(LatestReport));
             }
+            else
+            {
+                DeleteRemediationFile(AppContext.BaseDirectory);
+            }
 
             return LatestReport;
+        }
+
+        public static void WriteRemediationFile(AppConfigurationValidationReport report, string runtimeDirectory)
+        {
+            ArgumentNullException.ThrowIfNull(report);
+            ArgumentException.ThrowIfNullOrWhiteSpace(runtimeDirectory);
+
+            try
+            {
+                Directory.CreateDirectory(runtimeDirectory);
+                AtomicFileUtility.WriteAllText(
+                    Path.Combine(runtimeDirectory, RemediationFileName),
+                    report.ToRemediationText());
+            }
+            catch
+            {
+            }
         }
 
         public static AppConfigurationValidationReport Validate(
@@ -110,7 +159,8 @@ namespace PlayerAssistant
             {
                 issues.Add(new AppConfigurationIssue(
                     AppConfigurationIssueSeverity.Error,
-                    $"{settingsKey} is missing or empty."));
+                    $"{settingsKey} is missing or empty.",
+                    $"Set '{settingsKey}' in settings.json to the expected absolute HTTP or HTTPS URL, then restart the app."));
                 return;
             }
 
@@ -119,7 +169,8 @@ namespace PlayerAssistant
             {
                 issues.Add(new AppConfigurationIssue(
                     AppConfigurationIssueSeverity.Error,
-                    $"{settingsKey} must be an absolute HTTP or HTTPS URL."));
+                    $"{settingsKey} must be an absolute HTTP or HTTPS URL.",
+                    $"Edit settings.json and replace '{settingsKey}' with an absolute URL beginning with http:// or https://."));
             }
         }
 
@@ -139,7 +190,8 @@ namespace PlayerAssistant
 
             issues.Add(new AppConfigurationIssue(
                 AppConfigurationIssueSeverity.Warning,
-                "RPOL credentials are incomplete; authenticated RPOL downloads will be unavailable."));
+                "RPOL credentials are incomplete; authenticated RPOL downloads will be unavailable.",
+                "Open the app settings and provide both RPOL user name and RPOL password, or leave both blank if authenticated RPOL downloads are not needed."));
         }
 
         private static void ValidateRuntimeDirectory(string runtimeDirectory, List<AppConfigurationIssue> issues)
@@ -148,7 +200,8 @@ namespace PlayerAssistant
             {
                 issues.Add(new AppConfigurationIssue(
                     AppConfigurationIssueSeverity.Error,
-                    $"Runtime directory does not exist: {runtimeDirectory}"));
+                    $"Runtime directory does not exist: {runtimeDirectory}",
+                    "Restore the Release or publish folder, or rebuild/publish the app so the runtime directory exists."));
                 return;
             }
 
@@ -161,7 +214,8 @@ namespace PlayerAssistant
             {
                 issues.Add(new AppConfigurationIssue(
                     AppConfigurationIssueSeverity.Error,
-                    $"Runtime directory is not writable: {runtimeDirectory}"));
+                    $"Runtime directory is not writable: {runtimeDirectory}",
+                    "Close other processes using the folder, check Windows permissions, and run the app from a writable Release or publish directory."));
             }
             finally
             {
@@ -187,7 +241,8 @@ namespace PlayerAssistant
                 {
                     issues.Add(new AppConfigurationIssue(
                         AppConfigurationIssueSeverity.Warning,
-                        $"{fileName} is missing; related cached features may be unavailable."));
+                        $"{fileName} is missing; related cached features may be unavailable.",
+                        $"Restore or regenerate '{fileName}'. For Release output, rebuild or rerun the startup/download workflow that creates runtime sidecars."));
                     continue;
                 }
 
@@ -195,8 +250,24 @@ namespace PlayerAssistant
                 {
                     issues.Add(new AppConfigurationIssue(
                         AppConfigurationIssueSeverity.Warning,
-                        $"{fileName} is empty; related cached features may be unavailable."));
+                        $"{fileName} is empty; related cached features may be unavailable.",
+                        $"Regenerate '{fileName}' because the current file is empty."));
                 }
+            }
+        }
+
+        private static void DeleteRemediationFile(string runtimeDirectory)
+        {
+            try
+            {
+                var path = Path.Combine(runtimeDirectory, RemediationFileName);
+                if (File.Exists(path))
+                {
+                    File.Delete(path);
+                }
+            }
+            catch
+            {
             }
         }
     }

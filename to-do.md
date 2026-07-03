@@ -32,4 +32,17 @@
 
 - [x] Add an RC commit/tag checklist script that verifies clean intended diffs, runs the focused hardening tests, confirms both executable versions, and prints the exact `v0.9.0-hardening.5-rc1` tagging commands without mutating Git state.
 - [x] Add a published-folder runtime integrity check that verifies no startup run from `Release\publish` modifies or deletes parent `Release` artifacts, using before/after file manifests for tracked runtime files.
-- [ ] Add a diagnostic bundle script that collects `startup-health.json`, `startup-errors.log`, version metadata, publish verification output, and smoke verification output into a redacted timestamped zip for troubleshooting.
+- [x] Add a diagnostic bundle script that collects `startup-health.json`, `startup-errors.log`, version metadata, publish verification output, and smoke verification output into a redacted timestamped zip for troubleshooting.
+- [x] Add focused regression coverage for diagnostic bundle redaction, encrypted local-settings summarization, expected zip contents, and forbidden auth-state rejection.
+- [x] Add `collect-diagnostics.ps1 -VerifyOnly` to inspect an existing diagnostics zip for forbidden auth-state files and unredacted credential markers.
+- [x] Broaden diagnostics redaction for bearer tokens, cookie headers, credentialed URLs, and password/token/secret query values.
+- [x] Add diagnostics bundle generation and verification to the RC checklist.
+- [x] Add process-lock diagnostics for build/publish troubleshooting so running `player-assistant.exe` process paths and PIDs are reported after publish failure.
+- [x] Validate `rpol-storage-state.json` before Playwright uses it, deleting stale, malformed, or non-RPOL auth state so authenticated fetches start from a clean login path.
+- [x] Add retention limits for diagnostics, quarantines, and old scratch folders.
+- [x] Add `startup-health.json` schema/versioning.
+- [x] Add crash-path diagnostic capture like `last-crash.json`.
+- [x] Add Release/publish parity checks.
+- [x] Add config repair guidance for startup validation failures.
+- [x] Add a network/auth circuit breaker for repeated terminal failures.
+- [x] Add a release integrity hash manifest.

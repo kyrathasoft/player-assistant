@@ -1,4 +1,5 @@
 using System.Text;
+using System.Text.Json;
 using Microsoft.Playwright;
 
 namespace PlayerAssistant
@@ -32,6 +33,7 @@ namespace PlayerAssistant
         private const string StorageStateFileName = "rpol-storage-state.json";
         private const string DesktopChromeUserAgent =
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36";
+        private static readonly TimeSpan StorageStateMaxAge = TimeSpan.FromDays(30);
         private static readonly TimeSpan PlaywrightOperationTimeout = TimeSpan.FromSeconds(30);
         private static readonly SemaphoreSlim SessionSemaphore = new(1, 1);
         private static RpolBrowserSession? _session;
@@ -164,7 +166,8 @@ namespace PlayerAssistant
  
             try
             {
-                var contextOptions = File.Exists(storageStatePath)
+                var useStorageState = TryPrepareStorageStateFile(storageStatePath);
+                var contextOptions = useStorageState
                     ? new BrowserNewContextOptions
                     {
                         IgnoreHTTPSErrors = true,
@@ -312,6 +315,127 @@ namespace PlayerAssistant
         private static string GetStorageStatePath()
         {
             return Path.Combine(AppContext.BaseDirectory, StorageStateFileName);
+        }
+
+        internal static bool TryPrepareStorageStateFile(
+            string storageStatePath,
+            DateTimeOffset? now = null)
+        {
+            ArgumentException.ThrowIfNullOrWhiteSpace(storageStatePath);
+
+            if (!File.Exists(storageStatePath))
+            {
+                return false;
+            }
+
+            try
+            {
+                ValidateStorageStateFile(storageStatePath, now ?? DateTimeOffset.Now);
+                return true;
+            }
+            catch (Exception ex) when (ex is JsonException
+                or InvalidOperationException
+                or IOException
+                or UnauthorizedAccessException)
+            {
+                DeleteInvalidStorageStateAndLog(storageStatePath, ex);
+                return false;
+            }
+        }
+
+        private static void ValidateStorageStateFile(string storageStatePath, DateTimeOffset now)
+        {
+            var fileInfo = new FileInfo(storageStatePath);
+            if (fileInfo.Length <= 0)
+            {
+                throw new InvalidOperationException("RPOL browser auth state is empty.");
+            }
+
+            var lastWriteUtc = new DateTimeOffset(fileInfo.LastWriteTimeUtc);
+            var age = now.ToUniversalTime() - lastWriteUtc;
+            if (age > StorageStateMaxAge)
+            {
+                throw new InvalidOperationException(
+                    $"RPOL browser auth state is older than {StorageStateMaxAge.TotalDays:0} days.");
+            }
+
+            using var stream = new FileStream(
+                storageStatePath,
+                FileMode.Open,
+                FileAccess.Read,
+                FileShare.ReadWrite | FileShare.Delete);
+            using var document = JsonDocument.Parse(stream);
+            var root = document.RootElement;
+            if (root.ValueKind != JsonValueKind.Object)
+            {
+                throw new InvalidOperationException("RPOL browser auth state root must be a JSON object.");
+            }
+
+            if (!root.TryGetProperty("cookies", out var cookies)
+                || cookies.ValueKind != JsonValueKind.Array)
+            {
+                throw new InvalidOperationException("RPOL browser auth state must contain a cookies array.");
+            }
+
+            var hasRpolCookie = false;
+            foreach (var cookie in cookies.EnumerateArray())
+            {
+                if (cookie.ValueKind != JsonValueKind.Object)
+                {
+                    throw new InvalidOperationException("RPOL browser auth state cookies must be JSON objects.");
+                }
+
+                var name = GetRequiredCookieString(cookie, "name");
+                _ = GetRequiredCookieString(cookie, "value");
+                var domain = GetRequiredCookieString(cookie, "domain");
+                _ = GetRequiredCookieString(cookie, "path");
+
+                if (name.Length > 0
+                    && (string.Equals(domain, "rpol.net", StringComparison.OrdinalIgnoreCase)
+                        || domain.EndsWith(".rpol.net", StringComparison.OrdinalIgnoreCase)))
+                {
+                    hasRpolCookie = true;
+                }
+            }
+
+            if (!hasRpolCookie)
+            {
+                throw new InvalidOperationException("RPOL browser auth state does not contain an rpol.net cookie.");
+            }
+        }
+
+        private static string GetRequiredCookieString(JsonElement cookie, string propertyName)
+        {
+            if (!cookie.TryGetProperty(propertyName, out var property)
+                || property.ValueKind != JsonValueKind.String
+                || string.IsNullOrWhiteSpace(property.GetString()))
+            {
+                throw new InvalidOperationException(
+                    $"RPOL browser auth state cookie is missing required '{propertyName}' text.");
+            }
+
+            return property.GetString()!;
+        }
+
+        private static void DeleteInvalidStorageStateAndLog(string storageStatePath, Exception exception)
+        {
+            try
+            {
+                File.Delete(storageStatePath);
+                StartupLoggingUtility.Append(
+                    "RPOL storage state validation",
+                    new InvalidOperationException(
+                        $"Deleted invalid RPOL browser auth state '{storageStatePath}'. A fresh login will be attempted.",
+                        exception));
+            }
+            catch (Exception deleteException) when (deleteException is IOException or UnauthorizedAccessException)
+            {
+                StartupLoggingUtility.Append(
+                    "RPOL storage state validation",
+                    new InvalidOperationException(
+                        $"RPOL browser auth state '{storageStatePath}' is invalid but could not be deleted.",
+                        deleteException));
+            }
         }
 
         private static async Task<string> GetPageHtmlAsync(

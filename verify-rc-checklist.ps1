@@ -11,7 +11,9 @@ param(
         'publish verification'
     ),
     [switch]$SkipTests,
-    [switch]$SkipPublishRuntimeIntegrity
+    [switch]$SkipReleasePublishParity,
+    [switch]$SkipPublishRuntimeIntegrity,
+    [switch]$SkipDiagnostics
 )
 
 $ErrorActionPreference = 'Stop'
@@ -20,7 +22,9 @@ $ProjectFileName = 'player-assistant.csproj'
 $ExecutableFileName = 'player-assistant.exe'
 $TestExecutablePath = Join-Path $PSScriptRoot 'PlayerAssistant.Tests\bin\Release\net10.0-windows\PlayerAssistant.Tests.exe'
 $TestStartupLogPath = Join-Path $PSScriptRoot 'PlayerAssistant.Tests\bin\Release\net10.0-windows\startup-errors.log'
+$ReleasePublishParityScriptPath = Join-Path $PSScriptRoot 'verify-release-publish-parity.ps1'
 $PublishRuntimeIntegrityScriptPath = Join-Path $PSScriptRoot 'verify-publish-runtime-integrity.ps1'
+$DiagnosticsScriptPath = Join-Path $PSScriptRoot 'collect-diagnostics.ps1'
 
 function Resolve-FullPath {
     param(
@@ -401,6 +405,90 @@ function Invoke-PublishRuntimeIntegrityCheck {
         ))
 }
 
+function Invoke-ReleasePublishParityCheck {
+    if ($SkipReleasePublishParity) {
+        Write-Output "Skipping Release/publish parity check because -SkipReleasePublishParity was supplied."
+        return
+    }
+
+    Assert-RequiredFile -Path $ReleasePublishParityScriptPath -Description 'Release/publish parity script'
+    [void](Invoke-ExternalCommand `
+        -FileName 'powershell.exe' `
+        -Arguments @(
+            '-NoProfile',
+            '-ExecutionPolicy',
+            'Bypass',
+            '-File',
+            $ReleasePublishParityScriptPath,
+            '-ReleaseDir',
+            $resolvedReleaseDir,
+            '-PublishDir',
+            $resolvedPublishDir
+        ))
+}
+
+function Invoke-DiagnosticsBundleCheck {
+    if ($SkipDiagnostics) {
+        Write-Output "Skipping diagnostic bundle check because -SkipDiagnostics was supplied."
+        return
+    }
+
+    Assert-RequiredFile -Path $DiagnosticsScriptPath -Description 'diagnostic bundle script'
+    $diagnosticsOutputDir = Join-Path $PSScriptRoot 'codex-scratch\rc-diagnostics'
+    if (Test-Path -LiteralPath $diagnosticsOutputDir) {
+        Remove-Item -LiteralPath $diagnosticsOutputDir -Recurse -Force
+    }
+
+    New-Item -ItemType Directory -Force -Path $diagnosticsOutputDir | Out-Null
+    try {
+        $result = Invoke-ExternalCommand `
+            -FileName 'powershell.exe' `
+            -Arguments @(
+                '-NoProfile',
+                '-ExecutionPolicy',
+                'Bypass',
+                '-File',
+                $DiagnosticsScriptPath,
+                '-ReleaseDir',
+                $resolvedReleaseDir,
+                '-PublishDir',
+                $resolvedPublishDir,
+                '-OutputDir',
+                $diagnosticsOutputDir,
+                '-NoPublishVerification'
+            )
+
+        $zipLine = @($result.Output -split "`r?`n" |
+            Where-Object { $_ -like 'Diagnostic bundle created:*' } |
+            Select-Object -Last 1)
+        if ($zipLine.Count -eq 0) {
+            throw "Diagnostic bundle script did not report a created zip."
+        }
+
+        $zipPath = $zipLine[0].Substring('Diagnostic bundle created:'.Length).Trim()
+        Assert-RequiredFile -Path $zipPath -Description 'diagnostic bundle zip'
+
+        [void](Invoke-ExternalCommand `
+            -FileName 'powershell.exe' `
+            -Arguments @(
+                '-NoProfile',
+                '-ExecutionPolicy',
+                'Bypass',
+                '-File',
+                $DiagnosticsScriptPath,
+                '-OutputDir',
+                $diagnosticsOutputDir,
+                '-VerifyOnly',
+                $zipPath
+            ))
+    }
+    finally {
+        if (Test-Path -LiteralPath $diagnosticsOutputDir) {
+            Remove-Item -LiteralPath $diagnosticsOutputDir -Recurse -Force
+        }
+    }
+}
+
 function Write-ReleaseCommands {
     param(
         [Parameter(Mandatory = $true)]
@@ -435,7 +523,9 @@ Assert-RcTagMatchesVersion -Tag $RcTag -Version $projectVersion.Version
 Write-Output "RC checklist for $($projectVersion.Version) using tag $RcTag"
 Test-GitReady
 Invoke-FocusedHardeningTests
+Invoke-ReleasePublishParityCheck
 Invoke-PublishRuntimeIntegrityCheck
+Invoke-DiagnosticsBundleCheck
 Assert-ExecutableVersion `
     -Path (Join-Path $resolvedReleaseDir $ExecutableFileName) `
     -ExpectedVersion $projectVersion `
