@@ -9,6 +9,7 @@ namespace PlayerAssistant
         private const string OocDirectoryName = "OOC";
         private const string AsideDirectoryName = "Aside";
         private const string SuppressHeroImagesArgument = "--suppress-hero-images";
+        private static readonly string[] VersionArguments = ["--version", "/version"];
 
         /// <summary>
         ///  The main entry point for the application.
@@ -35,6 +36,14 @@ namespace PlayerAssistant
 
         private static void Run(string[] args)
         {
+            if (args.Any(IsVersionArgument))
+            {
+                var versionText = GetVersionText();
+                Console.WriteLine(versionText);
+                StartupLoggingUtility.Append("version", versionText);
+                return;
+            }
+
             using Mutex singleInstanceMutex = new(true, SingleInstanceMutexName, out bool createdNew);
 
             if (!createdNew)
@@ -49,6 +58,7 @@ namespace PlayerAssistant
 
             // To customize application configuration such as set high DPI settings or default font,
             // see https://aka.ms/applicationconfiguration.
+            StartupHealthUtility.Reset();
             StartupLoggingUtility.RunRequiredPhase("settings load", AppSettingsUtility.Load);
             UserPreferencesUtility.Load();
             FileDownloadCounters.Reset();
@@ -103,6 +113,26 @@ namespace PlayerAssistant
             Directory.CreateDirectory(Path.Combine(postsDirectory, IcDirectoryName, AsideDirectoryName));
             Directory.CreateDirectory(Path.Combine(postsDirectory, OocDirectoryName));
             Directory.CreateDirectory(Path.Combine(postsDirectory, OocDirectoryName, AsideDirectoryName));
+        }
+
+        internal static bool IsVersionArgument(string argument)
+        {
+            return VersionArguments.Any(versionArgument =>
+                string.Equals(argument, versionArgument, StringComparison.OrdinalIgnoreCase));
+        }
+
+        internal static string GetVersionText()
+        {
+            var assembly = typeof(Program).Assembly;
+            var informationalVersion = assembly
+                .GetCustomAttributes(typeof(System.Reflection.AssemblyInformationalVersionAttribute), inherit: false)
+                .OfType<System.Reflection.AssemblyInformationalVersionAttribute>()
+                .FirstOrDefault()
+                ?.InformationalVersion;
+
+            return string.IsNullOrWhiteSpace(informationalVersion)
+                ? "player-assistant version unknown"
+                : $"player-assistant {informationalVersion}";
         }
     }
 }

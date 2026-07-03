@@ -3,6 +3,8 @@ namespace PlayerAssistant
     internal static class StartupLoggingUtility
     {
         public const string LogFileName = "startup-errors.log";
+        private const string PhaseStatusSucceeded = "succeeded";
+        private const string PhaseStatusFailed = "failed";
 
         public static string FormatLogEntry(string phase, Exception ex)
         {
@@ -70,12 +72,22 @@ namespace PlayerAssistant
 
         public static void RunRequiredPhase(string phase, Action action)
         {
+            var startedAt = DateTimeOffset.UtcNow;
             try
             {
                 action();
+                StartupHealthUtility.RecordPhase(
+                    phase,
+                    PhaseStatusSucceeded,
+                    DateTimeOffset.UtcNow - startedAt);
             }
             catch (Exception ex)
             {
+                StartupHealthUtility.RecordPhase(
+                    phase,
+                    PhaseStatusFailed,
+                    DateTimeOffset.UtcNow - startedAt,
+                    ex);
                 Append(phase, ex);
                 throw;
             }
@@ -83,24 +95,44 @@ namespace PlayerAssistant
 
         public static async Task RunOptionalPhaseAsync(string phase, Func<Task> action)
         {
+            var startedAt = DateTimeOffset.UtcNow;
             try
             {
                 await action();
+                StartupHealthUtility.RecordPhase(
+                    phase,
+                    PhaseStatusSucceeded,
+                    DateTimeOffset.UtcNow - startedAt);
             }
             catch (Exception ex)
             {
+                StartupHealthUtility.RecordPhase(
+                    phase,
+                    PhaseStatusFailed,
+                    DateTimeOffset.UtcNow - startedAt,
+                    ex);
                 await AppendAsync(phase, ex);
             }
         }
 
         public static async Task RunRequiredPhaseAsync(string phase, Func<Task> action)
         {
+            var startedAt = DateTimeOffset.UtcNow;
             try
             {
                 await action();
+                StartupHealthUtility.RecordPhase(
+                    phase,
+                    PhaseStatusSucceeded,
+                    DateTimeOffset.UtcNow - startedAt);
             }
             catch (Exception ex)
             {
+                StartupHealthUtility.RecordPhase(
+                    phase,
+                    PhaseStatusFailed,
+                    DateTimeOffset.UtcNow - startedAt,
+                    ex);
                 await AppendAsync(phase, ex);
                 throw;
             }

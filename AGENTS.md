@@ -9,7 +9,7 @@
 - Prefer PowerShell commands.
 - Inspect `.sln`, `.csproj`, `.props`, `.targets`, and `.cs` files before making language/framework assumptions.
 - Build the executable and related output files under the repository root `Release` folder instead of under `Debug`.
-- At the start of each session, read `to-do.md` so current completed hardening work, active backlog notes, and project priorities are in context before making changes.
+- At the beginning of each coding session, read `to-do.md` so current completed hardening work, active backlog notes, and project priorities are in context before making changes.
 
 # graphify
 

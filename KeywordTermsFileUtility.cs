@@ -17,7 +17,12 @@ namespace PlayerAssistant
 
         public static string GetReleasePath()
         {
-            var baseDirectory = Path.TrimEndingDirectorySeparator(Path.GetFullPath(AppContext.BaseDirectory));
+            return GetReleasePath(AppContext.BaseDirectory);
+        }
+
+        internal static string GetReleasePath(string baseDirectory)
+        {
+            baseDirectory = Path.TrimEndingDirectorySeparator(Path.GetFullPath(baseDirectory));
             return Path.Combine(baseDirectory, FileName);
         }
 
@@ -40,7 +45,12 @@ namespace PlayerAssistant
 
         public static void EnsureReleaseCopy()
         {
-            var releasePath = GetReleasePath();
+            EnsureReleaseCopy(AppContext.BaseDirectory);
+        }
+
+        internal static void EnsureReleaseCopy(string baseDirectory)
+        {
+            var releasePath = GetReleasePath(baseDirectory);
             var repoRoot = Directory.GetParent(Path.GetDirectoryName(releasePath) ?? releasePath)?.FullName
                 ?? Path.GetDirectoryName(releasePath)
                 ?? releasePath;
@@ -62,16 +72,6 @@ namespace PlayerAssistant
                 {
                     termPaths.Add(releasePath);
                 }
-            }
-
-            if (termPaths.Count <= 1)
-            {
-                return;
-            }
-
-            foreach (var duplicatePath in termPaths.Where(path => !path.Equals(releasePath, StringComparison.OrdinalIgnoreCase)))
-            {
-                File.Delete(duplicatePath);
             }
         }
 

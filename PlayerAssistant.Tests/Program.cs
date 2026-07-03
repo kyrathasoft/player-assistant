@@ -36,8 +36,15 @@ var tests = new (string Name, Action Test)[]
     ("app configuration validation reports missing url", AppConfigurationValidationReportsMissingUrl),
     ("app configuration validation warns about missing rpol credentials", AppConfigurationValidationWarnsAboutMissingRpolCredentials),
     ("app configuration validation warns about missing sidecars", AppConfigurationValidationWarnsAboutMissingSidecars),
+    ("startup dependency matrix reports bad config and sidecars", StartupDependencyMatrixReportsBadConfigAndSidecars),
+    ("startup dependency matrix ignores corrupt optional local settings", StartupDependencyMatrixIgnoresCorruptOptionalLocalSettings),
+    ("application version metadata matches hardening release", ApplicationVersionMetadataMatchesHardeningRelease),
+    ("application version argument returns version text", ApplicationVersionArgumentReturnsVersionText),
     ("startup manifest status distinguishes skipped and failed", StartupManifestStatusDistinguishesSkippedAndFailed),
     ("startup error log entry includes phase and exception", StartupErrorLogEntryIncludesPhaseAndException),
+    ("startup health records required phase success", StartupHealthRecordsRequiredPhaseSuccess),
+    ("startup health records required phase failure", StartupHealthRecordsRequiredPhaseFailure),
+    ("startup health records optional phase failure without throwing", StartupHealthRecordsOptionalPhaseFailureWithoutThrowing),
     ("runtime housekeeping removes stale temp and atomic files", RuntimeHousekeepingRemovesStaleTempAndAtomicFiles),
     ("runtime housekeeping preserves fresh and unrelated tmp files", RuntimeHousekeepingPreservesFreshAndUnrelatedTmpFiles),
     ("runtime housekeeping removes old quarantined json only", RuntimeHousekeepingRemovesOldQuarantinedJsonOnly),
@@ -50,10 +57,12 @@ var tests = new (string Name, Action Test)[]
     ("atomic file promotion preserves existing destination on locked replacement", AtomicFilePromotionPreservesExistingDestinationOnLockedReplacement),
     ("network request retries transient failures", NetworkRequestRetriesTransientFailures),
     ("network request does not retry unauthorized", NetworkRequestDoesNotRetryUnauthorized),
+    ("startup dependency matrix classifies terminal network failure", StartupDependencyMatrixClassifiesTerminalNetworkFailure),
     ("network request wraps timeout", NetworkRequestWrapsTimeout),
     ("network request preserves caller cancellation", NetworkRequestPreservesCallerCancellation),
     ("markdown async fetch preserves caller cancellation", MarkdownAsyncFetchPreservesCallerCancellation),
     ("runtime artifact loader quarantines malformed json", RuntimeArtifactLoaderQuarantinesMalformedJson),
+    ("startup dependency matrix logs locked runtime artifact failures", StartupDependencyMatrixLogsLockedRuntimeArtifactFailures),
     ("login info cache load returns empty for malformed json", LoginInfoCacheLoadReturnsEmptyForMalformedJson),
     ("asset manifest load returns empty for malformed json", AssetManifestLoadReturnsEmptyForMalformedJson),
     ("active hero markdown cancellation writes no files", ActiveHeroMarkdownCancellationWritesNoFiles),
@@ -61,8 +70,12 @@ var tests = new (string Name, Action Test)[]
     ("game forum startup cancellation writes no manifests", GameForumStartupCancellationWritesNoManifests),
     ("keyword index loader quarantines malformed json", KeywordIndexLoaderQuarantinesMalformedJson),
     ("keyword terms release copy generates from keyword index", KeywordTermsReleaseCopyGeneratesFromKeywordIndex),
+    ("keyword terms publish copy preserves parent release terms", KeywordTermsPublishCopyPreservesParentReleaseTerms),
+    ("rpol auth detects login page fallback", RpolAuthDetectsLoginPageFallback),
+    ("rpol auth distinguishes blocked and remote failures", RpolAuthDistinguishesBlockedAndRemoteFailures),
     ("rpol auth cached failure short circuits html fetch", RpolAuthCachedFailureShortCircuitsHtmlFetch),
     ("rpol auth cached failure logs once", RpolAuthCachedFailureLogsOnce),
+    ("rpol auth caches blocked and expired session failures", RpolAuthCachesBlockedAndExpiredSessionFailures),
     ("show-all thread url preserves base query and adds show all", ShowAllThreadUrlPreservesBaseQueryAndAddsShowAll),
     ("die roll extraction keeps only saved-log lines", DieRollExtractionKeepsOnlySavedLogLines),
     ("die roll extraction handles live rpol paragraph markup", DieRollExtractionHandlesLiveRpolParagraphMarkup),
@@ -86,7 +99,13 @@ var tests = new (string Name, Action Test)[]
     ("legacy local settings migrate to portable encryption", LegacyLocalSettingsMigrateToPortableEncryption),
     ("local settings are encrypted on load", LocalSettingsAreEncryptedOnLoad),
     ("publish verification accepts current output", PublishVerificationAcceptsCurrentOutput),
-    ("publish verification rejects stale startup log", PublishVerificationRejectsStaleStartupLog)
+    ("publish verification rejects stale startup log", PublishVerificationRejectsStaleStartupLog),
+    ("publish verification rejects startup health artifact", PublishVerificationRejectsStartupHealthArtifact),
+    ("publish verification rejects malformed settings json", PublishVerificationRejectsMalformedSettingsJson),
+    ("publish verification rejects malformed keyword index", PublishVerificationRejectsMalformedKeywordIndex),
+    ("publish verification rejects malformed sitemap", PublishVerificationRejectsMalformedSitemap),
+    ("publish verification rejects incomplete playwright runtime", PublishVerificationRejectsIncompletePlaywrightRuntime),
+    ("publish verification rejects mismatched executable version", PublishVerificationRejectsMismatchedExecutableVersion)
 };
 
 if (!string.IsNullOrWhiteSpace(requestedTestFilter))
@@ -426,6 +445,103 @@ static void AppConfigurationValidationWarnsAboutMissingSidecars()
         "missing sidecars should warn without blocking startup");
 }
 
+static void StartupDependencyMatrixReportsBadConfigAndSidecars()
+{
+    using var directory = TemporaryDirectory.Create();
+    File.WriteAllText(Path.Combine(directory.Path, "keyword-index.json"), string.Empty);
+    File.WriteAllText(Path.Combine(directory.Path, KeywordTermsFileUtility.FileName), "scarlet");
+    var settings = CreateValidAppSettings(includeCredentials: true);
+    settings["RPOL Site"] = "file:///not-http";
+    settings["Game Intro"] = "not a url";
+    var missingRuntimeDirectory = Path.Combine(directory.Path, "missing-runtime");
+
+    var badUrlReport = AppConfigurationValidationUtility.Validate(settings, directory.Path);
+    var missingRuntimeReport = AppConfigurationValidationUtility.Validate(
+        CreateValidAppSettings(includeCredentials: true),
+        missingRuntimeDirectory);
+
+    AssertTrue(
+        badUrlReport.Issues.Count(issue => issue.Severity == AppConfigurationIssueSeverity.Error
+            && issue.Message.Contains("absolute HTTP or HTTPS URL", StringComparison.Ordinal)) >= 2,
+        "malformed startup URLs should be reported as configuration errors");
+    AssertTrue(
+        badUrlReport.Issues.Any(issue => issue.Severity == AppConfigurationIssueSeverity.Warning
+            && issue.Message.Contains("keyword-index.json is empty", StringComparison.Ordinal)),
+        "empty keyword index sidecar should be reported as a warning");
+    AssertTrue(
+        badUrlReport.Issues.Any(issue => issue.Severity == AppConfigurationIssueSeverity.Warning
+            && issue.Message.Contains("sitemap.xml is missing", StringComparison.Ordinal)),
+        "missing sitemap sidecar should be reported as a warning");
+    AssertTrue(
+        missingRuntimeReport.Issues.Any(issue => issue.Severity == AppConfigurationIssueSeverity.Error
+            && issue.Message.Contains("Runtime directory does not exist", StringComparison.Ordinal)),
+        "missing runtime directory should be reported as a configuration error");
+}
+
+static void StartupDependencyMatrixIgnoresCorruptOptionalLocalSettings()
+{
+    using var directory = TemporaryDirectory.Create();
+    WriteSettingsJson(directory.Path, CreateValidAppSettings(includeCredentials: false));
+    var localSettingsPath = Path.Combine(directory.Path, "settings.local.json");
+    File.WriteAllText(localSettingsPath, "{ not valid json");
+
+    WithPreservedStartupLog(() =>
+    {
+        var settings = AppSettingsUtility.LoadSettings(directory.Path);
+
+        AssertEqual(
+            "https://rpol.net/game.php?gi=80170",
+            settings["RPOL Site"],
+            "base settings should still load when optional local settings are corrupt");
+        AssertFalse(settings.ContainsKey("RPOL user name"), "corrupt optional local settings should not inject credentials");
+        AssertFalse(File.Exists(localSettingsPath), "corrupt local settings should be moved out of the active path");
+
+        var badLocalSettingsFiles = Directory.GetFiles(directory.Path, "settings.local.bad-*.json");
+        AssertEqual(1, badLocalSettingsFiles.Length, "expected one quarantined local settings file");
+
+        var startupLog = File.ReadAllText(GetStartupLogPath());
+        AssertContains(startupLog, "local settings load");
+        AssertContains(startupLog, badLocalSettingsFiles[0]);
+    });
+}
+
+static void ApplicationVersionMetadataMatchesHardeningRelease()
+{
+    var assembly = typeof(Form1).Assembly;
+    var name = assembly.GetName();
+    var informationalVersion = assembly
+        .GetCustomAttributes(typeof(System.Reflection.AssemblyInformationalVersionAttribute), inherit: false)
+        .OfType<System.Reflection.AssemblyInformationalVersionAttribute>()
+        .Single()
+        .InformationalVersion;
+    var fileVersion = FileVersionInfo.GetVersionInfo(assembly.Location).FileVersion;
+
+    AssertEqual(new Version(0, 9, 0, 0), name.Version!, "unexpected assembly version");
+    AssertEqual("0.9.0.5", fileVersion!, "unexpected file version");
+    AssertEqual("0.9.0-hardening.5", informationalVersion, "unexpected informational version");
+}
+
+static void ApplicationVersionArgumentReturnsVersionText()
+{
+    var programType = typeof(Form1).Assembly.GetType("PlayerAssistant.Program")
+        ?? throw new InvalidOperationException("Unable to find PlayerAssistant.Program.");
+
+    AssertTrue(
+        (bool)(InvokeStaticMethod(programType, "IsVersionArgument", "--version") ?? false),
+        "--version should be recognized as a version argument");
+    AssertTrue(
+        (bool)(InvokeStaticMethod(programType, "IsVersionArgument", "/version") ?? false),
+        "/version should be recognized as a version argument");
+    AssertFalse(
+        (bool)(InvokeStaticMethod(programType, "IsVersionArgument", "--suppress-hero-images") ?? true),
+        "non-version arguments should not be recognized as version arguments");
+
+    var versionText = (string?)InvokeStaticMethod(programType, "GetVersionText")
+        ?? throw new InvalidOperationException("GetVersionText returned null.");
+    AssertContains(versionText, "player-assistant");
+    AssertContains(versionText, "0.9.0-hardening.5");
+}
+
 static void StartupManifestStatusDistinguishesSkippedAndFailed()
 {
     AssertEqual("downloaded", Form1.GetManifestStatus(downloaded: true, errorMessage: null), "unexpected downloaded status");
@@ -440,6 +556,72 @@ static void StartupErrorLogEntryIncludesPhaseAndException()
     AssertContains(entry, "ooc thread downloads");
     AssertContains(entry, "InvalidOperationException");
     AssertContains(entry, "Missing RPoL credentials.");
+}
+
+static void StartupHealthRecordsRequiredPhaseSuccess()
+{
+    WithPreservedStartupHealth(() =>
+    {
+        StartupHealthUtility.Reset();
+        StartupLoggingUtility.RunRequiredPhase("synthetic required success", () => { });
+
+        using var document = LoadStartupHealthDocument();
+        var phase = FindStartupHealthPhase(document, "synthetic required success");
+
+        AssertJsonString(phase, "status", "succeeded", "required success should be recorded as succeeded");
+        AssertJsonNumberAtLeast(phase, "elapsed_milliseconds", 0, "required success elapsed time should be recorded");
+        AssertJsonNumberAtLeast(phase, "refreshed_count", 0, "required success refreshed count should be present");
+        AssertJsonNumber(phase, "failed_count", 0, "required success should not increment failure count");
+        AssertEqual(System.Text.Json.JsonValueKind.Null, phase.GetProperty("last_exception").ValueKind, "successful phase should not include an exception");
+    });
+}
+
+static void StartupHealthRecordsRequiredPhaseFailure()
+{
+    WithPreservedStartupHealth(() =>
+    {
+        StartupHealthUtility.Reset();
+
+        var exception = AssertThrows<InvalidOperationException>(() =>
+            StartupLoggingUtility.RunRequiredPhase(
+                "synthetic required failure",
+                () => throw new InvalidOperationException("required boom")));
+
+        AssertEqual("required boom", exception.Message, "required phase should rethrow the original exception");
+
+        using var document = LoadStartupHealthDocument();
+        var phase = FindStartupHealthPhase(document, "synthetic required failure");
+        var lastException = phase.GetProperty("last_exception");
+
+        AssertJsonString(phase, "status", "failed", "required failure should be recorded as failed");
+        AssertJsonNumber(phase, "failed_count", 1, "required failure should increment failure count");
+        AssertJsonString(lastException, "type", "InvalidOperationException", "required failure should record exception type");
+        AssertJsonString(lastException, "message", "required boom", "required failure should record exception message");
+    });
+}
+
+static void StartupHealthRecordsOptionalPhaseFailureWithoutThrowing()
+{
+    WithPreservedStartupLog(() =>
+    {
+        WithPreservedStartupHealth(() =>
+        {
+            StartupHealthUtility.Reset();
+
+            StartupLoggingUtility.RunOptionalPhaseAsync(
+                "synthetic optional failure",
+                () => throw new InvalidOperationException("optional boom")).GetAwaiter().GetResult();
+
+            using var document = LoadStartupHealthDocument();
+            var phase = FindStartupHealthPhase(document, "synthetic optional failure");
+            var lastException = phase.GetProperty("last_exception");
+
+            AssertJsonString(phase, "status", "failed", "optional failure should be recorded as failed");
+            AssertJsonNumber(phase, "failed_count", 1, "optional failure should increment failure count");
+            AssertJsonString(lastException, "message", "optional boom", "optional failure should record exception message");
+            AssertContains(File.ReadAllText(GetStartupLogPath()), "optional boom");
+        });
+    });
 }
 
 static void RuntimeHousekeepingRemovesStaleTempAndAtomicFiles()
@@ -783,6 +965,24 @@ static void NetworkRequestDoesNotRetryUnauthorized()
     AssertEqual(1, attempts, "unauthorized response should not be retried");
 }
 
+static void StartupDependencyMatrixClassifiesTerminalNetworkFailure()
+{
+    using var httpClient = NetworkRequestUtility.CreateHttpClient(new ScriptedHttpMessageHandler((_, _) =>
+        throw new HttpRequestException("synthetic DNS failure")));
+
+    var exception = AssertThrows<NetworkRequestException>(() =>
+        NetworkRequestUtility.SendAsync(
+            httpClient,
+            () => new HttpRequestMessage(HttpMethod.Get, "https://example.test/failure"),
+            policy: new NetworkRequestPolicy(
+                TimeSpan.FromSeconds(1),
+                MaxAttempts: 1,
+                TimeSpan.Zero)).GetAwaiter().GetResult());
+
+    AssertEqual(NetworkFailureKind.Unavailable, exception.Kind, "terminal request failures should be classified as unavailable");
+    AssertContains(exception.Message, "synthetic DNS failure");
+}
+
 static void NetworkRequestWrapsTimeout()
 {
     using var httpClient = NetworkRequestUtility.CreateHttpClient(new ScriptedHttpMessageHandler(async (_, cancellationToken) =>
@@ -874,6 +1074,32 @@ static void RuntimeArtifactLoaderQuarantinesMalformedJson()
             File.Delete(startupLogPath);
         }
     }
+}
+
+static void StartupDependencyMatrixLogsLockedRuntimeArtifactFailures()
+{
+    using var directory = TemporaryDirectory.Create();
+    var artifactPath = Path.Combine(directory.Path, "locked-artifact.json");
+    File.WriteAllText(artifactPath, "{}");
+
+    WithPreservedStartupLog(() =>
+    {
+        using (new FileStream(artifactPath, FileMode.Open, FileAccess.ReadWrite, FileShare.None))
+        {
+            var loaded = RuntimeArtifactUtility.TryLoadJson<Dictionary<string, string>>(
+                artifactPath,
+                "locked runtime artifact test",
+                out var value);
+
+            AssertFalse(loaded, "locked runtime artifact should fail without throwing");
+            AssertTrue(value is null, "locked runtime artifact should return no value");
+            AssertTrue(File.Exists(artifactPath), "locked runtime artifact should remain active when quarantine cannot move it");
+        }
+
+        var startupLog = File.ReadAllText(GetStartupLogPath());
+        AssertContains(startupLog, "locked runtime artifact test");
+        AssertContains(startupLog, "runtime artifact quarantine");
+    });
 }
 
 static void LoginInfoCacheLoadReturnsEmptyForMalformedJson()
@@ -1133,6 +1359,65 @@ static void KeywordTermsReleaseCopyGeneratesFromKeywordIndex()
             }));
 }
 
+static void KeywordTermsPublishCopyPreservesParentReleaseTerms()
+{
+    using var directory = TemporaryDirectory.Create();
+    var publishDirectory = Path.Combine(directory.Path, "publish");
+    Directory.CreateDirectory(publishDirectory);
+
+    var parentTermsPath = Path.Combine(directory.Path, KeywordTermsFileUtility.FileName);
+    var publishTermsPath = Path.Combine(publishDirectory, KeywordTermsFileUtility.FileName);
+    File.WriteAllText(parentTermsPath, "parent-term");
+    File.WriteAllText(publishTermsPath, "publish-term");
+
+    KeywordTermsFileUtility.EnsureReleaseCopy(publishDirectory);
+
+    AssertTrue(File.Exists(parentTermsPath), "running from publish should not delete parent Release keyword terms");
+    AssertTrue(File.Exists(publishTermsPath), "running from publish should keep its own keyword terms");
+    AssertEqual("parent-term", File.ReadAllText(parentTermsPath), "parent Release keyword terms should be unchanged");
+    AssertEqual("publish-term", File.ReadAllText(publishTermsPath), "publish keyword terms should be unchanged");
+}
+
+static void RpolAuthDetectsLoginPageFallback()
+{
+    var loginHtml =
+        """
+        <html>
+          <body>
+            <form action='/login.cgi'>
+              <input name='username'>
+              <input name='password' type='password'>
+            </form>
+          </body>
+        </html>
+        """;
+
+    AssertTrue(RpolAuthUtility.LooksLikeLoginPage(loginHtml), "expected RPOL login page markup to be detected");
+    AssertTrue(
+        RpolAuthUtility.LooksLikeLoginResponse("text/html; charset=utf-8", System.Text.Encoding.UTF8.GetBytes(loginHtml)),
+        "expected HTML login response to be detected");
+    AssertFalse(
+        RpolAuthUtility.LooksLikeLoginResponse("image/png", System.Text.Encoding.UTF8.GetBytes(loginHtml)),
+        "non-HTML responses should not be treated as expired auth pages");
+    AssertFalse(
+        RpolAuthUtility.LooksLikeLoginPage("<html><body>normal game page</body></html>"),
+        "ordinary RPOL pages should not be treated as login pages");
+}
+
+static void RpolAuthDistinguishesBlockedAndRemoteFailures()
+{
+    var uri = new Uri("https://rpol.net/display.cgi?gi=80170");
+
+    var forbidden = RpolAuthUtility.CreateUnsuccessfulResponseException(uri, 403, "Forbidden");
+    var rateLimited = RpolAuthUtility.CreateUnsuccessfulResponseException(uri, 429, "Too Many Requests");
+    var unavailable = RpolAuthUtility.CreateUnsuccessfulResponseException(uri, 503, "Service Unavailable");
+
+    AssertEqual(RpolAuthFailureKind.RpolBlocked, forbidden.Kind, "403 should be classified as RPOL blocking");
+    AssertContains(forbidden.Message, "blocked authenticated access");
+    AssertEqual(RpolAuthFailureKind.RpolBlocked, rateLimited.Kind, "429 should be classified as RPOL blocking");
+    AssertEqual(RpolAuthFailureKind.RemoteUnavailable, unavailable.Kind, "503 should remain a transient remote failure");
+}
+
 static void RpolAuthCachedFailureShortCircuitsHtmlFetch()
 {
     ResetRpolAuthFailureCache();
@@ -1199,6 +1484,42 @@ static void RpolAuthCachedFailureLogsOnce()
         {
             File.Delete(startupLogPath);
         }
+    }
+}
+
+static void RpolAuthCachesBlockedAndExpiredSessionFailures()
+{
+    ResetRpolAuthFailureCache();
+
+    try
+    {
+        var blocked = new RpolAuthException(
+            RpolAuthFailureKind.RpolBlocked,
+            "RPoL blocked authenticated access for test.");
+        var cached = (RpolAuthException?)InvokeStaticMethod(typeof(RpolAuthUtility), "CacheFatalAuthFailure", blocked)
+            ?? throw new InvalidOperationException("CacheFatalAuthFailure returned null.");
+
+        AssertEqual(RpolAuthFailureKind.RpolBlocked, cached.Kind, "blocked RPOL access should be cacheable as a fatal auth failure");
+        AssertEqual(blocked.Message, cached.Message, "blocked RPOL failure should be cached as-is");
+        AssertTrue(RpolAuthUtility.IsFatalAuthFailure(blocked), "blocked RPOL access should be treated as fatal until settings or site state changes");
+
+        ResetRpolAuthFailureCache();
+
+        var expiredSession = new RpolAuthException(
+            RpolAuthFailureKind.AuthSessionExpired,
+            "RPoL returned a login page after authenticated navigation for test.");
+        cached = (RpolAuthException?)InvokeStaticMethod(typeof(RpolAuthUtility), "CacheFatalAuthFailure", expiredSession)
+            ?? throw new InvalidOperationException("CacheFatalAuthFailure returned null.");
+
+        AssertEqual(RpolAuthFailureKind.AuthSessionExpired, cached.Kind, "expired auth session should be cacheable as a fatal auth failure");
+        AssertTrue(RpolAuthUtility.IsFatalAuthFailure(expiredSession), "expired authenticated sessions should be treated as fatal after retry");
+        AssertFalse(
+            RpolAuthUtility.IsFatalAuthFailure(new RpolAuthException(RpolAuthFailureKind.RemoteUnavailable, "remote outage")),
+            "remote RPOL outages should remain transient and uncached");
+    }
+    finally
+    {
+        ResetRpolAuthFailureCache();
     }
 }
 
@@ -1981,6 +2302,127 @@ static void PublishVerificationRejectsStaleStartupLog()
     }
 }
 
+static void PublishVerificationRejectsStartupHealthArtifact()
+{
+    var directoryPath = Path.Combine(
+        GetRepositoryRoot(),
+        "codex-scratch",
+        $"publish-verification-{Guid.NewGuid():N}");
+
+    try
+    {
+        CopyDirectory(GetCurrentPublishDirectory(), directoryPath);
+        File.WriteAllText(Path.Combine(directoryPath, StartupHealthUtility.HealthFileName), "{}");
+
+        var output = RunPublishVerification(directoryPath);
+
+        AssertFalse(output.ExitCode == 0, "publish verification should fail when startup-health.json is present");
+        AssertContains(output.Output, StartupHealthUtility.HealthFileName);
+    }
+    finally
+    {
+        if (Directory.Exists(directoryPath))
+        {
+            Directory.Delete(directoryPath, recursive: true);
+        }
+    }
+}
+
+static void PublishVerificationRejectsMalformedSettingsJson()
+{
+    WithCopiedPublishDirectory(directoryPath =>
+    {
+        File.WriteAllText(Path.Combine(directoryPath, "settings.json"), "{ not valid json");
+
+        var output = RunPublishVerification(directoryPath);
+
+        AssertFalse(output.ExitCode == 0, "publish verification should fail when settings.json is malformed");
+        AssertContains(output.Output, "published settings.json is not valid JSON");
+    });
+}
+
+static void PublishVerificationRejectsMalformedKeywordIndex()
+{
+    WithCopiedPublishDirectory(directoryPath =>
+    {
+        File.WriteAllText(
+            Path.Combine(directoryPath, "keyword-index.json"),
+            """
+            {
+              "index_metadata": {}
+            }
+            """);
+
+        var output = RunPublishVerification(directoryPath);
+
+        AssertFalse(output.ExitCode == 0, "publish verification should fail when keyword-index.json has no words object");
+        AssertContains(output.Output, "published keyword index must contain a words object");
+    });
+}
+
+static void PublishVerificationRejectsMalformedSitemap()
+{
+    WithCopiedPublishDirectory(directoryPath =>
+    {
+        File.WriteAllText(Path.Combine(directoryPath, "sitemap.xml"), "not xml");
+
+        var output = RunPublishVerification(directoryPath);
+
+        AssertFalse(output.ExitCode == 0, "publish verification should fail when sitemap.xml is malformed");
+        AssertContains(output.Output, "sitemap.xml is not valid XML");
+    });
+}
+
+static void PublishVerificationRejectsIncompletePlaywrightRuntime()
+{
+    WithCopiedPublishDirectory(directoryPath =>
+    {
+        File.Delete(Path.Combine(directoryPath, ".playwright", "node", "win32_x64", "node.exe"));
+
+        var output = RunPublishVerification(directoryPath);
+
+        AssertFalse(output.ExitCode == 0, "publish verification should fail when Playwright node.exe is missing");
+        AssertContains(output.Output, "published Playwright node.exe");
+    });
+}
+
+static void PublishVerificationRejectsMismatchedExecutableVersion()
+{
+    WithCopiedPublishDirectory(directoryPath =>
+    {
+        File.Copy(
+            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.System), "WindowsPowerShell", "v1.0", "powershell.exe"),
+            Path.Combine(directoryPath, "player-assistant.exe"),
+            overwrite: true);
+
+        var output = RunPublishVerification(directoryPath);
+
+        AssertFalse(output.ExitCode == 0, "publish verification should fail when player-assistant.exe has the wrong version metadata");
+        AssertContains(output.Output, "Published executable FileVersion");
+    });
+}
+
+static void WithCopiedPublishDirectory(Action<string> action)
+{
+    var directoryPath = Path.Combine(
+        GetRepositoryRoot(),
+        "codex-scratch",
+        $"publish-verification-{Guid.NewGuid():N}");
+
+    try
+    {
+        CopyDirectory(GetCurrentPublishDirectory(), directoryPath);
+        action(directoryPath);
+    }
+    finally
+    {
+        if (Directory.Exists(directoryPath))
+        {
+            Directory.Delete(directoryPath, recursive: true);
+        }
+    }
+}
+
 static string GetCurrentPublishDirectory()
 {
     var publishDirectory = Path.Combine(GetRepositoryRoot(), "Release", "publish");
@@ -2364,6 +2806,123 @@ static string GetPlayerAssistantKeywordTermsPath()
     return Path.Combine(assemblyDirectory, KeywordTermsFileUtility.FileName);
 }
 
+static string GetStartupLogPath()
+{
+    return Path.Combine(AppContext.BaseDirectory, StartupLoggingUtility.LogFileName);
+}
+
+static string GetStartupHealthPath()
+{
+    return Path.Combine(AppContext.BaseDirectory, StartupHealthUtility.HealthFileName);
+}
+
+static void WithPreservedStartupLog(Action action)
+{
+    var startupLogPath = GetStartupLogPath();
+    var hadStartupLog = File.Exists(startupLogPath);
+    var originalStartupLog = hadStartupLog ? File.ReadAllText(startupLogPath) : null;
+
+    try
+    {
+        if (File.Exists(startupLogPath))
+        {
+            File.Delete(startupLogPath);
+        }
+
+        action();
+    }
+    finally
+    {
+        if (hadStartupLog)
+        {
+            File.WriteAllText(startupLogPath, originalStartupLog);
+        }
+        else if (File.Exists(startupLogPath))
+        {
+            File.Delete(startupLogPath);
+        }
+    }
+}
+
+static void WithPreservedStartupHealth(Action action)
+{
+    var startupHealthPath = GetStartupHealthPath();
+    var hadStartupHealth = File.Exists(startupHealthPath);
+    var originalStartupHealth = hadStartupHealth ? File.ReadAllText(startupHealthPath) : null;
+
+    try
+    {
+        if (File.Exists(startupHealthPath))
+        {
+            File.Delete(startupHealthPath);
+        }
+
+        action();
+    }
+    finally
+    {
+        if (hadStartupHealth)
+        {
+            File.WriteAllText(startupHealthPath, originalStartupHealth);
+        }
+        else if (File.Exists(startupHealthPath))
+        {
+            File.Delete(startupHealthPath);
+        }
+    }
+}
+
+static System.Text.Json.JsonDocument LoadStartupHealthDocument()
+{
+    return System.Text.Json.JsonDocument.Parse(File.ReadAllText(GetStartupHealthPath()));
+}
+
+static System.Text.Json.JsonElement FindStartupHealthPhase(
+    System.Text.Json.JsonDocument document,
+    string phaseName)
+{
+    foreach (var phase in document.RootElement.GetProperty("phases").EnumerateArray())
+    {
+        if (string.Equals(phase.GetProperty("phase").GetString(), phaseName, StringComparison.Ordinal))
+        {
+            return phase;
+        }
+    }
+
+    throw new InvalidOperationException($"Startup health phase '{phaseName}' was not found.");
+}
+
+static void AssertJsonString(
+    System.Text.Json.JsonElement element,
+    string propertyName,
+    string expected,
+    string message)
+{
+    AssertEqual(expected, element.GetProperty(propertyName).GetString() ?? string.Empty, message);
+}
+
+static void AssertJsonNumber(
+    System.Text.Json.JsonElement element,
+    string propertyName,
+    long expected,
+    string message)
+{
+    AssertEqual(expected, element.GetProperty(propertyName).GetInt64(), message);
+}
+
+static void AssertJsonNumberAtLeast(
+    System.Text.Json.JsonElement element,
+    string propertyName,
+    long minimum,
+    string message)
+{
+    var actual = element.GetProperty(propertyName).GetInt64();
+    if (actual < minimum)
+    {
+        throw new InvalidOperationException($"{message}. Expected at least '{minimum}' but was '{actual}'.");
+    }
+}
+
 static Dictionary<string, string> CreateValidAppSettings(bool includeCredentials)
 {
     var settings = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
@@ -2381,6 +2940,16 @@ static Dictionary<string, string> CreateValidAppSettings(bool includeCredentials
     }
 
     return settings;
+}
+
+static void WriteSettingsJson(string directoryPath, IReadOnlyDictionary<string, string> settings)
+{
+    Directory.CreateDirectory(directoryPath);
+    File.WriteAllText(
+        Path.Combine(directoryPath, "settings.json"),
+        System.Text.Json.JsonSerializer.Serialize(
+            settings,
+            new System.Text.Json.JsonSerializerOptions { WriteIndented = true }));
 }
 
 static void WriteRequiredRuntimeSidecars(string directoryPath)

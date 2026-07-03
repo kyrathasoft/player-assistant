@@ -19,3 +19,17 @@
 - [x] Hardened publish verification to reject diagnostic/runtime leak artifacts such as stale startup logs, temp folders, debug symbols, plaintext credentials, and browser auth state.
 - [x] Added runtime housekeeping to remove stale temp files, orphaned atomic temp files, and old quarantined JSON files while rotating oversized startup logs.
 - [x] Added focused regression tests for the above hardening paths in the Release test harness.
+- [x] Added startup dependency failure-matrix coverage for bad config, missing/empty sidecars, corrupt optional local settings, locked runtime artifacts, keyword-index recovery, and terminal network failures.
+- [x] Hardened RPOL authenticated-fetch failure classification for missing credentials, rejected login, expired auth state, RPOL blocking/rate limits, Playwright unavailability, and transient remote outages.
+- [x] Added `startup-health.json` to record structured startup phase status, elapsed time, download counts, failure counts, and last exception summaries while keeping the diagnostic artifact out of publish output.
+- [x] Expanded publish verification to parse and validate published `settings.json`, encrypted `settings.local.json`, keyword-index sidecars, keyword terms, `sitemap.xml`, and required Playwright runtime internals.
+- [x] Added and ran a controlled Release startup smoke verification script that backs up selected runtime artifacts, launches `Release\player-assistant.exe --suppress-hero-images`, validates fresh `startup-health.json` phases, and restores prior artifacts.
+- [x] Added release identity hardening with `0.9.0-hardening.5` project metadata, a `/version`/`--version` command path, executable version verification during publish checks, and regression coverage for version metadata.
+- [x] Ran the full release rehearsal: Release build, publish, publish verification tests, Release startup smoke, published-folder startup smoke, and executable version checks for both output folders.
+- [x] Hardened keyword terms startup handling so running from `Release\publish` no longer deletes the parent `Release\game-posts-key-terms.md` runtime artifact.
+
+## Next hardening tasks
+
+- [ ] Add an RC commit/tag checklist script that verifies clean intended diffs, runs the focused hardening tests, confirms both executable versions, and prints the exact `v0.9.0-hardening.5-rc1` tagging commands without mutating Git state.
+- [ ] Add a published-folder runtime integrity check that verifies no startup run from `Release\publish` modifies or deletes parent `Release` artifacts, using before/after file manifests for tracked runtime files.
+- [ ] Add a diagnostic bundle script that collects `startup-health.json`, `startup-errors.log`, version metadata, publish verification output, and smoke verification output into a redacted timestamped zip for troubleshooting.

@@ -28,14 +28,28 @@ namespace PlayerAssistant
 
         private static IReadOnlyDictionary<string, string> LoadSettings()
         {
-            var settings = LoadSettingsFile(SettingsFileName);
-            var localSettingsPath = Path.Combine(AppContext.BaseDirectory, LocalSettingsFileName);
+            return LoadSettings(AppContext.BaseDirectory);
+        }
+
+        internal static IReadOnlyDictionary<string, string> LoadSettings(string runtimeDirectory)
+        {
+            ArgumentException.ThrowIfNullOrWhiteSpace(runtimeDirectory);
+
+            var settings = LoadSettingsFile(Path.Combine(runtimeDirectory, SettingsFileName));
+            var localSettingsPath = Path.Combine(runtimeDirectory, LocalSettingsFileName);
 
             if (File.Exists(localSettingsPath))
             {
-                foreach (var pair in LocalSettingsUtility.LoadSettings(localSettingsPath))
+                try
                 {
-                    settings[pair.Key] = pair.Value;
+                    foreach (var pair in LocalSettingsUtility.LoadSettings(localSettingsPath))
+                    {
+                        settings[pair.Key] = pair.Value;
+                    }
+                }
+                catch (Exception ex) when (IsRecoverableLocalSettingsException(ex))
+                {
+                    RuntimeArtifactUtility.QuarantineAndLog(localSettingsPath, "local settings load", ex);
                 }
             }
 
@@ -47,13 +61,11 @@ namespace PlayerAssistant
             return settings;
         }
 
-        private static Dictionary<string, string> LoadSettingsFile(string fileName)
+        private static Dictionary<string, string> LoadSettingsFile(string settingsPath)
         {
-            var settingsPath = Path.Combine(AppContext.BaseDirectory, fileName);
-
             if (!File.Exists(settingsPath))
             {
-                throw new FileNotFoundException($"Settings file '{fileName}' was not found.", settingsPath);
+                throw new FileNotFoundException($"Settings file '{SettingsFileName}' was not found.", settingsPath);
             }
 
             using var settingsStream = File.OpenRead(settingsPath);
@@ -63,10 +75,18 @@ namespace PlayerAssistant
 
             if (settings is null)
             {
-                throw new InvalidOperationException($"Settings file '{fileName}' is empty or invalid.");
+                throw new InvalidOperationException($"Settings file '{SettingsFileName}' is empty or invalid.");
             }
 
             return settings;
+        }
+
+        private static bool IsRecoverableLocalSettingsException(Exception ex)
+        {
+            return ex is IOException
+                or UnauthorizedAccessException
+                or InvalidOperationException
+                or JsonException;
         }
 
         private static string? GetOptionalSetting(string settingsKey)

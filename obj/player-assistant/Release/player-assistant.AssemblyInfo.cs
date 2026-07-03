@@ -12,11 +12,11 @@ using System.Reflection;
 
 [assembly: System.Reflection.AssemblyCompanyAttribute("player-assistant")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Release")]
-[assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+170530235fc90950a454ed26d49afa447ebc6549")]
+[assembly: System.Reflection.AssemblyFileVersionAttribute("0.9.0.5")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("0.9.0-hardening.5")]
 [assembly: System.Reflection.AssemblyProductAttribute("player-assistant")]
 [assembly: System.Reflection.AssemblyTitleAttribute("player-assistant")]
-[assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]
+[assembly: System.Reflection.AssemblyVersionAttribute("0.9.0.0")]
 [assembly: System.Runtime.Versioning.TargetPlatformAttribute("Windows7.0")]
 [assembly: System.Runtime.Versioning.SupportedOSPlatformAttribute("Windows7.0")]
 

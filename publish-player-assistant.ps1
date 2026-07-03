@@ -6,6 +6,7 @@ param(
 $ErrorActionPreference = 'Stop'
 
 $SettingsLocalFileName = 'settings.local.json'
+$ProjectFileName = 'player-assistant.csproj'
 $SettingsFormat = 'app-protected-v1'
 $LegacySettingsFormat = 'dpapi-current-user'
 $SettingsEncryptionSeed = 'PlayerAssistant.LocalSettings.v1'
@@ -16,7 +17,8 @@ $SensitiveFileNames = @(
     'rpol-storage-state.json'
 )
 $ForbiddenPublishFileNames = @(
-    'startup-errors.log'
+    'startup-errors.log',
+    'startup-health.json'
 )
 $ForbiddenPublishDirectoryNames = @(
     'temp'
@@ -32,6 +34,39 @@ $IgnoredKeywordTermsSourceDirectories = @(
     'graphify-out',
     'Release'
 )
+$RequiredSettingsUrlKeys = @(
+    'RPOL Site',
+    'Game Intro',
+    'The Cast',
+    'Obsidian Game Vault'
+)
+
+function Get-ProjectVersionInfo {
+    $projectPath = Join-Path $PSScriptRoot $ProjectFileName
+    Assert-RequiredFile -Path $projectPath -Description $ProjectFileName
+
+    [xml]$project = Get-Content -Raw -LiteralPath $projectPath
+    $propertyGroup = @($project.Project.PropertyGroup | Where-Object { $_.Version -or $_.FileVersion -or $_.InformationalVersion } | Select-Object -First 1)
+    if ($propertyGroup.Count -eq 0) {
+        throw "$ProjectFileName does not define Version, FileVersion, or InformationalVersion."
+    }
+
+    $version = [string]$propertyGroup[0].Version
+    $fileVersion = [string]$propertyGroup[0].FileVersion
+    $informationalVersion = [string]$propertyGroup[0].InformationalVersion
+
+    if ([string]::IsNullOrWhiteSpace($version) -or
+        [string]::IsNullOrWhiteSpace($fileVersion) -or
+        [string]::IsNullOrWhiteSpace($informationalVersion)) {
+        throw "$ProjectFileName must define non-empty Version, FileVersion, and InformationalVersion."
+    }
+
+    return [pscustomobject]@{
+        Version = $version
+        FileVersion = $fileVersion
+        InformationalVersion = $informationalVersion
+    }
+}
 
 function Resolve-FullPath {
     param(
@@ -357,6 +392,136 @@ function Assert-NoPlaintextCredentialMarkers {
     }
 }
 
+function Read-JsonFile {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Path,
+
+        [Parameter(Mandatory = $true)]
+        [string]$Description
+    )
+
+    Assert-RequiredFile -Path $Path -Description $Description
+
+    try {
+        return Get-Content -Raw -LiteralPath $Path | ConvertFrom-Json
+    }
+    catch {
+        throw "$Description is not valid JSON: $Path. $($_.Exception.Message)"
+    }
+}
+
+function Assert-PublishedSettingsJson {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Path
+    )
+
+    $settings = Read-JsonFile -Path $Path -Description 'published settings.json'
+    foreach ($settingsKey in $RequiredSettingsUrlKeys) {
+        $property = $settings.PSObject.Properties[$settingsKey]
+        if ($null -eq $property -or [string]::IsNullOrWhiteSpace([string]$property.Value)) {
+            throw "Published settings.json is missing required URL setting '$settingsKey'."
+        }
+
+        $uri = $null
+        if (![System.Uri]::TryCreate([string]$property.Value, [System.UriKind]::Absolute, [ref]$uri) -or
+            ($uri.Scheme -ne [System.Uri]::UriSchemeHttp -and $uri.Scheme -ne [System.Uri]::UriSchemeHttps)) {
+            throw "Published settings.json value '$settingsKey' must be an absolute HTTP or HTTPS URL."
+        }
+    }
+}
+
+function Assert-PublishedKeywordIndex {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Path,
+
+        [Parameter(Mandatory = $true)]
+        [string]$Description
+    )
+
+    $index = Read-JsonFile -Path $Path -Description $Description
+    if ($null -eq $index.PSObject.Properties['words']) {
+        throw "$Description must contain a words object."
+    }
+
+    $wordCount = @($index.words.PSObject.Properties).Count
+    if ($wordCount -le 0) {
+        throw "$Description must contain at least one indexed word."
+    }
+
+    if ($null -eq $index.PSObject.Properties['index_metadata']) {
+        throw "$Description must contain index_metadata."
+    }
+}
+
+function Assert-PublishedKeywordTerms {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Path
+    )
+
+    Assert-RequiredFile -Path $Path -Description 'published keyword terms file'
+    $terms = @(Get-Content -LiteralPath $Path | Where-Object { ![string]::IsNullOrWhiteSpace($_) })
+    if ($terms.Count -le 0) {
+        throw "Published $KeywordTermsFileName must contain at least one term."
+    }
+}
+
+function Assert-PublishedSitemap {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Path
+    )
+
+    Assert-RequiredFile -Path $Path -Description 'published sitemap'
+
+    try {
+        [xml]$sitemap = Get-Content -Raw -LiteralPath $Path
+    }
+    catch {
+        throw "Published $SitemapFileName is not valid XML: $($_.Exception.Message)"
+    }
+
+    if ($null -eq $sitemap.DocumentElement) {
+        throw "Published $SitemapFileName has no XML document element."
+    }
+}
+
+function Assert-PublishedPlaywrightRuntime {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Directory
+    )
+
+    Assert-RequiredDirectory -Path $Directory -Description 'published Playwright runtime'
+    Assert-RequiredFile -Path (Join-Path $Directory 'node\win32_x64\node.exe') -Description 'published Playwright node.exe'
+    Assert-RequiredFile -Path (Join-Path $Directory 'package\package.json') -Description 'published Playwright package manifest'
+    Assert-RequiredFile -Path (Join-Path $Directory 'package\browsers.json') -Description 'published Playwright browser manifest'
+    [void](Read-JsonFile -Path (Join-Path $Directory 'package\package.json') -Description 'published Playwright package manifest')
+    [void](Read-JsonFile -Path (Join-Path $Directory 'package\browsers.json') -Description 'published Playwright browser manifest')
+}
+
+function Assert-PublishedExecutableVersion {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Path
+    )
+
+    Assert-RequiredFile -Path $Path -Description 'published executable'
+
+    $expected = Get-ProjectVersionInfo
+    $versionInfo = [System.Diagnostics.FileVersionInfo]::GetVersionInfo($Path)
+    if ($versionInfo.FileVersion -ne $expected.FileVersion) {
+        throw "Published executable FileVersion '$($versionInfo.FileVersion)' does not match project FileVersion '$($expected.FileVersion)'."
+    }
+
+    if ($versionInfo.ProductVersion -ne $expected.InformationalVersion) {
+        throw "Published executable ProductVersion '$($versionInfo.ProductVersion)' does not match project InformationalVersion '$($expected.InformationalVersion)'."
+    }
+}
+
 function Get-KeywordTermsSourceCandidate {
     $pendingDirectories = [System.Collections.Generic.Stack[string]]::new()
     $pendingDirectories.Push($PSScriptRoot)
@@ -452,13 +617,13 @@ function Assert-PublishOutput {
 
     $settingsPath = Join-Path $Directory $SettingsLocalFileName
 
-    Assert-RequiredFile -Path (Join-Path $Directory 'player-assistant.exe') -Description 'published executable'
-    Assert-RequiredFile -Path (Join-Path $Directory 'settings.json') -Description 'published settings.json'
-    Assert-RequiredFile -Path (Join-Path $Directory $KeywordIndexFileName) -Description 'published keyword index'
-    Assert-RequiredFile -Path (Join-Path $Directory 'keyword-index.md') -Description 'published keyword index markdown sidecar'
-    Assert-RequiredFile -Path (Join-Path $Directory $KeywordTermsFileName) -Description 'published keyword terms file'
-    Assert-RequiredFile -Path (Join-Path $Directory $SitemapFileName) -Description 'published sitemap'
-    Assert-RequiredDirectory -Path (Join-Path $Directory '.playwright') -Description 'published Playwright runtime'
+    Assert-PublishedExecutableVersion -Path (Join-Path $Directory 'player-assistant.exe')
+    Assert-PublishedSettingsJson -Path (Join-Path $Directory 'settings.json')
+    Assert-PublishedKeywordIndex -Path (Join-Path $Directory $KeywordIndexFileName) -Description 'published keyword index'
+    Assert-PublishedKeywordIndex -Path (Join-Path $Directory 'keyword-index.md') -Description 'published keyword index markdown sidecar'
+    Assert-PublishedKeywordTerms -Path (Join-Path $Directory $KeywordTermsFileName)
+    Assert-PublishedSitemap -Path (Join-Path $Directory $SitemapFileName)
+    Assert-PublishedPlaywrightRuntime -Directory (Join-Path $Directory '.playwright')
     Assert-EncryptedLocalSettings -SourcePath (Join-Path $PSScriptRoot $SettingsLocalFileName) -PublishedPath $settingsPath
     Assert-NoSensitiveFiles -Directory $Directory
     Assert-NoForbiddenPublishArtifacts -Directory $Directory

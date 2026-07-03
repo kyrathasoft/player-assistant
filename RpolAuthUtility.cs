@@ -10,6 +10,8 @@ namespace PlayerAssistant
         MissingCredentials,
         PlaywrightUnavailable,
         LoginRejected,
+        AuthSessionExpired,
+        RpolBlocked,
         RemoteUnavailable
     }
 
@@ -71,8 +73,8 @@ namespace PlayerAssistant
             }
 
             throw CacheFatalAuthFailure(new RpolAuthException(
-                RpolAuthFailureKind.LoginRejected,
-                $"Unable to authenticate against rpol.net. Add credentials to '{SettingsLocalFileName}' and retry."));
+                RpolAuthFailureKind.AuthSessionExpired,
+                $"RPoL returned a login page after authenticated navigation to '{uri}'. The stored auth state may have expired or the account may no longer have access."));
         }
 
         public static async Task<RpolResponse> GetResponseAsync(Uri uri, CancellationToken cancellationToken = default)
@@ -102,8 +104,8 @@ namespace PlayerAssistant
             }
 
             throw CacheFatalAuthFailure(new RpolAuthException(
-                RpolAuthFailureKind.LoginRejected,
-                $"Unable to authenticate against rpol.net. Add credentials to '{SettingsLocalFileName}' and retry."));
+                RpolAuthFailureKind.AuthSessionExpired,
+                $"RPoL returned a login page after authenticated navigation to '{uri}'. The stored auth state may have expired or the account may no longer have access."));
         }
 
         private static async Task<IBrowserContext> GetAuthenticatedContextAsync(CancellationToken cancellationToken)
@@ -289,7 +291,7 @@ namespace PlayerAssistant
             return (userName, password);
         }
 
-        private static bool LooksLikeLoginResponse(string? contentType, byte[] body)
+        internal static bool LooksLikeLoginResponse(string? contentType, byte[] body)
         {
             if (contentType is null ||
                 !contentType.Contains("text/html", StringComparison.OrdinalIgnoreCase))
@@ -300,7 +302,7 @@ namespace PlayerAssistant
             return LooksLikeLoginPage(Encoding.UTF8.GetString(body));
         }
 
-        private static bool LooksLikeLoginPage(string html)
+        internal static bool LooksLikeLoginPage(string html)
         {
             return html.Contains("action='/login.cgi'", StringComparison.OrdinalIgnoreCase)
                 && html.Contains("name='username'", StringComparison.OrdinalIgnoreCase)
@@ -391,15 +393,35 @@ namespace PlayerAssistant
 
             if (!response.Ok)
             {
-                throw new RpolAuthException(
-                    RpolAuthFailureKind.RemoteUnavailable,
-                    $"RPoL request to '{uri}' failed with status {response.Status} {response.StatusText}.");
+                throw CreateUnsuccessfulResponseException(uri, response.Status, response.StatusText);
             }
+        }
+
+        internal static RpolAuthException CreateUnsuccessfulResponseException(
+            Uri uri,
+            int statusCode,
+            string? statusText)
+        {
+            ArgumentNullException.ThrowIfNull(uri);
+
+            var statusDescription = string.IsNullOrWhiteSpace(statusText)
+                ? statusCode.ToString()
+                : $"{statusCode} {statusText}";
+            if (statusCode is 401 or 403 or 429)
+            {
+                return new RpolAuthException(
+                    RpolAuthFailureKind.RpolBlocked,
+                    $"RPoL blocked authenticated access to '{uri}' with status {statusDescription}. Check credentials, account access, rate limits, or site-side blocking.");
+            }
+
+            return new RpolAuthException(
+                RpolAuthFailureKind.RemoteUnavailable,
+                $"RPoL request to '{uri}' failed with status {statusDescription}.");
         }
 
         private static bool TryCacheFatalAuthFailure(Exception ex, out RpolAuthException cachedException)
         {
-            if (ex is RpolAuthException { Kind: RpolAuthFailureKind.MissingCredentials or RpolAuthFailureKind.PlaywrightUnavailable or RpolAuthFailureKind.LoginRejected } authException)
+            if (ex is RpolAuthException authException && IsFatalAuthFailure(authException))
             {
                 cachedException = CacheFatalAuthFailure(authException);
                 return true;
@@ -407,6 +429,17 @@ namespace PlayerAssistant
 
             cachedException = null!;
             return false;
+        }
+
+        internal static bool IsFatalAuthFailure(RpolAuthException exception)
+        {
+            ArgumentNullException.ThrowIfNull(exception);
+
+            return exception.Kind is RpolAuthFailureKind.MissingCredentials
+                or RpolAuthFailureKind.PlaywrightUnavailable
+                or RpolAuthFailureKind.LoginRejected
+                or RpolAuthFailureKind.AuthSessionExpired
+                or RpolAuthFailureKind.RpolBlocked;
         }
 
         private static RpolAuthException CacheFatalAuthFailure(RpolAuthException exception)
