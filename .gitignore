@@ -59,6 +59,7 @@ graphify-out/**/*.md
 
 # Keep local aider history out of version control.
 .aider.chat.history.md
+launch-codex.ps1
 
 # graphify generates disposable local outputs, caches, and dated snapshots.
 # Keep the repo clean while still allowing explicitly tracked markers to remain tracked.
