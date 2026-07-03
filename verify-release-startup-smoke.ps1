@@ -182,7 +182,10 @@ function Wait-ForStartupHealth {
             $healthFile = Get-Item -LiteralPath $HealthPath
             if ($healthFile.LastWriteTimeUtc -ge $StartedAfterUtc) {
                 try {
-                    return Get-Content -Raw -LiteralPath $HealthPath | ConvertFrom-Json
+                    $health = Get-Content -Raw -LiteralPath $HealthPath | ConvertFrom-Json
+                    if (Test-StartupHealthHasRequiredPhases -Health $health) {
+                        return $health
+                    }
                 }
                 catch {
                     Start-Sleep -Milliseconds 250
@@ -195,6 +198,26 @@ function Wait-ForStartupHealth {
     }
 
     throw "Timed out after $TimeoutSeconds seconds waiting for fresh $HealthFileName."
+}
+
+function Test-StartupHealthHasRequiredPhases {
+    param(
+        [Parameter(Mandatory = $true)]
+        [object]$Health
+    )
+
+    if ($null -eq $Health.PSObject.Properties['phases']) {
+        return $false
+    }
+
+    foreach ($phaseName in $RequiredHealthPhases) {
+        $phase = @($Health.phases | Where-Object { $_.phase -eq $phaseName } | Select-Object -First 1)
+        if ($phase.Count -eq 0) {
+            return $false
+        }
+    }
+
+    return $true
 }
 
 function Assert-StartupHealth {

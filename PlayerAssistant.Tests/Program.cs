@@ -38,6 +38,10 @@ var tests = new (string Name, Action Test)[]
     ("app configuration validation writes repair guidance", AppConfigurationValidationWritesRepairGuidance),
     ("app configuration validation warns about missing rpol credentials", AppConfigurationValidationWarnsAboutMissingRpolCredentials),
     ("app configuration validation warns about missing sidecars", AppConfigurationValidationWarnsAboutMissingSidecars),
+    ("app configuration validation accepts valid release manifest", AppConfigurationValidationAcceptsValidReleaseManifest),
+    ("app configuration validation rejects missing manifest file", AppConfigurationValidationRejectsMissingManifestFile),
+    ("app configuration validation rejects manifest hash mismatch", AppConfigurationValidationRejectsManifestHashMismatch),
+    ("health argument surfaces release manifest issue", HealthArgumentSurfacesReleaseManifestIssue),
     ("startup dependency matrix reports bad config and sidecars", StartupDependencyMatrixReportsBadConfigAndSidecars),
     ("startup dependency matrix ignores corrupt optional local settings", StartupDependencyMatrixIgnoresCorruptOptionalLocalSettings),
     ("application version metadata matches hardening release", ApplicationVersionMetadataMatchesHardeningRelease),
@@ -110,8 +114,13 @@ var tests = new (string Name, Action Test)[]
     ("external url launch policy accepts http and https", ExternalUrlLaunchPolicyAcceptsHttpAndHttps),
     ("external url launch policy rejects unsafe inputs", ExternalUrlLaunchPolicyRejectsUnsafeInputs),
     ("hero image paths follow listing markdown table", HeroImagePathsFollowListingMarkdownTable),
+    ("hero asset paths reject escaped targets", HeroAssetPathsRejectEscapedTargets),
     ("legacy local settings migrate to portable encryption", LegacyLocalSettingsMigrateToPortableEncryption),
+    ("v1 local settings migrate to authenticated encryption", V1LocalSettingsMigrateToAuthenticatedEncryption),
     ("local settings are encrypted on load", LocalSettingsAreEncryptedOnLoad),
+    ("authenticated local settings reject tampered payload", AuthenticatedLocalSettingsRejectTamperedPayload),
+    ("runtime path utility rejects escaped paths", RuntimePathUtilityRejectsEscapedPaths),
+    ("health argument returns startup health summary", HealthArgumentReturnsStartupHealthSummary),
     ("publish verification accepts current output", PublishVerificationAcceptsCurrentOutput),
     ("publish verification rejects stale startup log", PublishVerificationRejectsStaleStartupLog),
     ("publish verification rejects startup health artifact", PublishVerificationRejectsStartupHealthArtifact),
@@ -122,6 +131,7 @@ var tests = new (string Name, Action Test)[]
     ("publish verification rejects incomplete playwright runtime", PublishVerificationRejectsIncompletePlaywrightRuntime),
     ("publish verification rejects mismatched executable version", PublishVerificationRejectsMismatchedExecutableVersion),
     ("publish verification rejects stale release manifest", PublishVerificationRejectsStaleReleaseManifest),
+    ("published health verification accepts current output", PublishedHealthVerificationAcceptsCurrentOutput),
     ("release publish parity accepts current output", ReleasePublishParityAcceptsCurrentOutput),
     ("release publish parity rejects mismatched sidecar", ReleasePublishParityRejectsMismatchedSidecar),
     ("diagnostic bundle redacts sensitive values", DiagnosticBundleRedactsSensitiveValues),
@@ -484,6 +494,106 @@ static void AppConfigurationValidationWarnsAboutMissingSidecars()
     AssertTrue(
         report.Issues.All(issue => issue.Severity == AppConfigurationIssueSeverity.Warning),
         "missing sidecars should warn without blocking startup");
+}
+
+static void AppConfigurationValidationAcceptsValidReleaseManifest()
+{
+    using var directory = TemporaryDirectory.Create();
+    WriteManifestedRuntime(directory.Path);
+
+    var report = AppConfigurationValidationUtility.Validate(
+        CreateValidAppSettings(includeCredentials: true),
+        directory.Path);
+
+    AssertFalse(
+        report.Issues.Any(issue => issue.Message.Contains("release-manifest.json", StringComparison.Ordinal)),
+        "valid release manifest should not report an integrity issue");
+}
+
+static void AppConfigurationValidationRejectsMissingManifestFile()
+{
+    using var directory = TemporaryDirectory.Create();
+    WriteManifestedRuntime(directory.Path);
+    File.Delete(Path.Combine(directory.Path, ".playwright", "package", "package.json"));
+
+    var report = AppConfigurationValidationUtility.Validate(
+        CreateValidAppSettings(includeCredentials: true),
+        directory.Path);
+
+    AssertTrue(
+        report.Issues.Any(issue => issue.Severity == AppConfigurationIssueSeverity.Error
+            && issue.Message.Contains("release-manifest.json missing manifested file", StringComparison.Ordinal)
+            && issue.Message.Contains("package.json", StringComparison.Ordinal)),
+        "missing manifested file should report a release integrity error");
+}
+
+static void AppConfigurationValidationRejectsManifestHashMismatch()
+{
+    using var directory = TemporaryDirectory.Create();
+    WriteManifestedRuntime(directory.Path);
+    File.AppendAllText(Path.Combine(directory.Path, "settings.json"), "tampered");
+
+    var report = AppConfigurationValidationUtility.Validate(
+        CreateValidAppSettings(includeCredentials: true),
+        directory.Path);
+
+    AssertTrue(
+        report.Issues.Any(issue => issue.Severity == AppConfigurationIssueSeverity.Error
+            && issue.Message.Contains("release-manifest.json SHA256 mismatch", StringComparison.Ordinal)
+            && issue.Message.Contains("settings.json", StringComparison.Ordinal)),
+        "modified manifested file should report a release integrity hash error");
+}
+
+static void HealthArgumentSurfacesReleaseManifestIssue()
+{
+    var runtimeDirectory = AppContext.BaseDirectory;
+    var manifestPath = Path.Combine(runtimeDirectory, ReleaseIntegrityManifestUtility.FileName);
+    var backupPath = Path.Combine(runtimeDirectory, $"{ReleaseIntegrityManifestUtility.FileName}.test-backup-{Guid.NewGuid():N}");
+    var hadManifest = File.Exists(manifestPath);
+
+    try
+    {
+        if (hadManifest)
+        {
+            File.Move(manifestPath, backupPath);
+        }
+
+        File.WriteAllText(
+            manifestPath,
+            """
+            {
+              "schema_version": 1,
+              "hash_algorithm": "SHA256",
+              "files": [
+                {
+                  "relative_path": "missing-health-sidecar.txt",
+                  "length": 1,
+                  "sha256": "00"
+                }
+              ]
+            }
+            """);
+
+        var programType = typeof(PlayerAssistant.Form1).Assembly.GetType("PlayerAssistant.Program")
+            ?? throw new InvalidOperationException("Unable to find PlayerAssistant.Program type.");
+        var health = (string)InvokeStaticMethod(programType, "GetHealthText")!;
+
+        AssertContains(health, "status: error");
+        AssertContains(health, "release-manifest.json missing manifested file");
+        AssertContains(health, "missing-health-sidecar.txt");
+    }
+    finally
+    {
+        if (File.Exists(manifestPath))
+        {
+            File.Delete(manifestPath);
+        }
+
+        if (hadManifest && File.Exists(backupPath))
+        {
+            File.Move(backupPath, manifestPath);
+        }
+    }
 }
 
 static void StartupDependencyMatrixReportsBadConfigAndSidecars()
@@ -2559,6 +2669,29 @@ static void HeroImagePathsFollowListingMarkdownTable()
     AssertFalse(paths.Contains("stray-token.webp", StringComparer.OrdinalIgnoreCase), "unlisted hero image should not be selected");
 }
 
+static void HeroAssetPathsRejectEscapedTargets()
+{
+    using var directory = TemporaryDirectory.Create();
+    var activeDirectory = Path.Combine(directory.Path, "PCs", "active");
+    var utilityType = typeof(PlayerAssistant.Form1).Assembly.GetType("PlayerAssistant.PlayerCharacterAssetUtility")
+        ?? throw new InvalidOperationException("Unable to find PlayerCharacterAssetUtility type.");
+
+    var safePath = (string)(InvokeStaticMethod(
+        utilityType,
+        "GetActiveHeroAssetPath",
+        activeDirectory,
+        "alice-token.webp") ?? throw new InvalidOperationException("GetActiveHeroAssetPath returned null."));
+
+    AssertTrue(
+        safePath.StartsWith(activeDirectory, StringComparison.OrdinalIgnoreCase),
+        "safe hero asset path should remain under the active PCs directory");
+
+    AssertThrows<InvalidOperationException>(() =>
+        InvokeStaticMethod(utilityType, "GetActiveHeroAssetPath", activeDirectory, "..\\escape.webp"));
+    AssertThrows<InvalidOperationException>(() =>
+        InvokeStaticMethod(utilityType, "GetActiveHeroAssetPath", activeDirectory, "/escape.webp"));
+}
+
 static void LocalSettingsAreEncryptedOnLoad()
 {
     using var directory = TemporaryDirectory.Create();
@@ -2587,6 +2720,7 @@ static void LocalSettingsAreEncryptedOnLoad()
             "IsEncryptedSettingsFile",
             localSettingsPath)!,
         "expected the local settings file to be encrypted after load");
+    AssertContains(File.ReadAllText(localSettingsPath), "\"format\": \"app-protected-v2\"");
 }
 
 static void LegacyLocalSettingsMigrateToPortableEncryption()
@@ -2619,8 +2753,82 @@ static void LegacyLocalSettingsMigrateToPortableEncryption()
     AssertEqual("example-user", settings["RPOL user name"], "unexpected user name after migrating legacy encrypted settings");
     AssertEqual("example-password", settings["RPOL password"], "unexpected password after migrating legacy encrypted settings");
     AssertTrue(
-        File.ReadAllText(localSettingsPath).Contains("\"format\": \"app-protected-v1\"", StringComparison.Ordinal),
-        "expected legacy encrypted settings to be rewritten using the portable app-protected-v1 format");
+        File.ReadAllText(localSettingsPath).Contains("\"format\": \"app-protected-v2\"", StringComparison.Ordinal),
+        "expected legacy encrypted settings to be rewritten using the authenticated app-protected-v2 format");
+}
+
+static void V1LocalSettingsMigrateToAuthenticatedEncryption()
+{
+    using var directory = TemporaryDirectory.Create();
+    var localSettingsPath = Path.Combine(directory.Path, "settings.local.json");
+    File.WriteAllText(localSettingsPath, CreateV1LocalSettingsEnvelope("example-user", "example-password"));
+
+    var settings = (Dictionary<string, string>)InvokeStaticMethod(
+        typeof(PlayerAssistant.Form1).Assembly.GetType("PlayerAssistant.LocalSettingsUtility")
+            ?? throw new InvalidOperationException("Unable to find LocalSettingsUtility type."),
+        "LoadSettings",
+        localSettingsPath)!;
+
+    AssertEqual("example-user", settings["RPOL user name"], "unexpected user name after migrating v1 encrypted settings");
+    AssertEqual("example-password", settings["RPOL password"], "unexpected password after migrating v1 encrypted settings");
+    AssertContains(File.ReadAllText(localSettingsPath), "\"format\": \"app-protected-v2\"");
+}
+
+static void AuthenticatedLocalSettingsRejectTamperedPayload()
+{
+    using var directory = TemporaryDirectory.Create();
+    var localSettingsPath = Path.Combine(directory.Path, "settings.local.json");
+    LocalSettingsUtility.SaveEncryptedSettings(
+        localSettingsPath,
+        new Dictionary<string, string>
+        {
+            ["RPOL user name"] = "example-user",
+            ["RPOL password"] = "example-password"
+        });
+
+    using (var document = System.Text.Json.JsonDocument.Parse(File.ReadAllText(localSettingsPath)))
+    {
+        var payload = document.RootElement.GetProperty("payload").GetString() ?? string.Empty;
+        var payloadBytes = Convert.FromBase64String(payload);
+        payloadBytes[^1] ^= 0x7F;
+        File.WriteAllText(
+            localSettingsPath,
+            $$"""
+            {
+              "format": "app-protected-v2",
+              "payload": "{{Convert.ToBase64String(payloadBytes)}}"
+            }
+            """);
+    }
+
+    var exception = AssertThrows<InvalidOperationException>(() =>
+        LocalSettingsUtility.LoadSettings(localSettingsPath));
+    AssertContains(exception.Message, "authenticate or decrypt");
+}
+
+static void RuntimePathUtilityRejectsEscapedPaths()
+{
+    using var directory = TemporaryDirectory.Create();
+
+    var contained = RuntimePathUtility.CombineUnderBase(directory.Path, "child", "file.txt");
+    AssertTrue(contained.StartsWith(directory.Path, StringComparison.OrdinalIgnoreCase), "contained path should remain under the base directory");
+
+    AssertThrows<InvalidOperationException>(() =>
+        RuntimePathUtility.CombineUnderBase(directory.Path, "..", "escape.txt"));
+}
+
+static void HealthArgumentReturnsStartupHealthSummary()
+{
+    var programType = typeof(PlayerAssistant.Form1).Assembly.GetType("PlayerAssistant.Program")
+        ?? throw new InvalidOperationException("Unable to find PlayerAssistant.Program type.");
+    AssertTrue(
+        (bool)InvokeStaticMethod(programType, "IsHealthArgument", "--health")!,
+        "expected --health to be recognized");
+    var health = (string)InvokeStaticMethod(programType, "GetHealthText")!;
+
+    AssertContains(health, "player-assistant");
+    AssertContains(health, "runtime:");
+    AssertContains(health, "status:");
 }
 
 static void PublishVerificationAcceptsCurrentOutput()
@@ -2774,6 +2982,15 @@ static void PublishVerificationRejectsStaleReleaseManifest()
     });
 }
 
+static void PublishedHealthVerificationAcceptsCurrentOutput()
+{
+    var output = RunPublishedHealthVerification(GetCurrentPublishDirectory());
+
+    AssertEqual(0, output.ExitCode, $"published health verification should pass. Output: {output.Output}");
+    AssertContains(output.Output, "Published health verification passed.");
+    AssertContains(output.Output, "Status:");
+}
+
 static void ReleasePublishParityAcceptsCurrentOutput()
 {
     var output = RunReleasePublishParity(GetCurrentReleaseDirectory(), GetCurrentPublishDirectory());
@@ -2852,6 +3069,7 @@ static void DiagnosticBundleRedactsSensitiveValues()
         AssertFalse(releaseLog.Contains("user:pass@", StringComparison.Ordinal), "diagnostic log should redact credentialed URLs");
 
         var localSettingsShape = ReadZipEntryText(zipPath, "Release/settings.local.shape.json");
+        AssertContains(localSettingsShape, "\"encrypted_format\":  \"app-protected-v2\"");
         AssertContains(localSettingsShape, "\"has_payload\":  true");
         AssertContains(localSettingsShape, "\"payload_length\":");
         AssertFalse(localSettingsShape.Contains("very-secret-payload", StringComparison.Ordinal), "diagnostic bundle should summarize encrypted payloads instead of copying them");
@@ -2955,11 +3173,19 @@ static void WithCopiedPublishDirectory(Action<string> action)
         GetRepositoryRoot(),
         "codex-scratch",
         $"publish-verification-{Guid.NewGuid():N}");
+    var sourceSettingsPath = Path.Combine(
+        Path.GetDirectoryName(directoryPath) ?? GetRepositoryRoot(),
+        $"{Path.GetFileName(directoryPath)}.source.settings.local.json");
 
     try
     {
+        var publishedSettingsPath = Path.Combine(directoryPath, "settings.local.json");
+        var fixtureSettings = CreateValidAppSettings(includeCredentials: true);
+
         CopyDirectory(GetCurrentPublishDirectory(), directoryPath);
         WriteRequiredRuntimeSidecars(directoryPath);
+        LocalSettingsUtility.SaveEncryptedSettings(sourceSettingsPath, fixtureSettings);
+        LocalSettingsUtility.SaveEncryptedSettings(publishedSettingsPath, fixtureSettings);
         WriteReleaseManifest(directoryPath);
         action(directoryPath);
     }
@@ -2968,6 +3194,11 @@ static void WithCopiedPublishDirectory(Action<string> action)
         if (Directory.Exists(directoryPath))
         {
             Directory.Delete(directoryPath, recursive: true);
+        }
+
+        if (File.Exists(sourceSettingsPath))
+        {
+            File.Delete(sourceSettingsPath);
         }
     }
 }
@@ -3006,7 +3237,7 @@ static void WriteDiagnosticsRuntime(string directoryPath, bool includeSensitiveL
         Path.Combine(directoryPath, "settings.local.json"),
         """
         {
-          "format": "app-protected-v1",
+          "format": "app-protected-v2",
           "payload": "very-secret-payload"
         }
         """);
@@ -3201,6 +3432,21 @@ static (int ExitCode, string Output) RunReleasePublishParity(string releaseDirec
         TimeSpan.FromSeconds(30));
 }
 
+static (int ExitCode, string Output) RunPublishedHealthVerification(string publishDirectory)
+{
+    return RunPowerShell(
+        [
+            "-NoProfile",
+            "-ExecutionPolicy",
+            "Bypass",
+            "-File",
+            Path.Combine(GetRepositoryRoot(), "verify-published-health.ps1"),
+            "-PublishDir",
+            publishDirectory
+        ],
+        TimeSpan.FromSeconds(30));
+}
+
 static (int ExitCode, string Output) RunPublishVerification(string outputDirectory)
 {
     var repoRoot = GetRepositoryRoot();
@@ -3219,7 +3465,11 @@ static (int ExitCode, string Output) RunPublishVerification(string outputDirecto
             scriptPath,
             "-VerifyOnly",
             "-OutputDir",
-            outputDirectory
+            outputDirectory,
+            "-SourceSettingsPath",
+            Path.Combine(
+                Path.GetDirectoryName(outputDirectory) ?? GetRepositoryRoot(),
+                $"{Path.GetFileName(outputDirectory)}.source.settings.local.json")
         ],
         TimeSpan.FromSeconds(30));
 }
@@ -3788,6 +4038,29 @@ static void WriteRequiredRuntimeSidecars(string directoryPath)
     File.WriteAllText(Path.Combine(directoryPath, "sitemap-keyword-urls.json"), "{}");
 }
 
+static void WriteManifestedRuntime(string directoryPath)
+{
+    Directory.CreateDirectory(directoryPath);
+    WriteRequiredRuntimeSidecars(directoryPath);
+    File.WriteAllText(Path.Combine(directoryPath, "player-assistant.exe"), "synthetic executable");
+    File.WriteAllText(Path.Combine(directoryPath, "settings.json"), "{}");
+    File.WriteAllText(
+        Path.Combine(directoryPath, "settings.local.json"),
+        """
+        {
+          "format": "app-protected-v2",
+          "payload": "synthetic"
+        }
+        """);
+
+    Directory.CreateDirectory(Path.Combine(directoryPath, ".playwright", "node", "win32_x64"));
+    Directory.CreateDirectory(Path.Combine(directoryPath, ".playwright", "package"));
+    File.WriteAllText(Path.Combine(directoryPath, ".playwright", "node", "win32_x64", "node.exe"), "synthetic node");
+    File.WriteAllText(Path.Combine(directoryPath, ".playwright", "package", "package.json"), "{}");
+    File.WriteAllText(Path.Combine(directoryPath, ".playwright", "package", "browsers.json"), "{}");
+    WriteReleaseManifest(directoryPath);
+}
+
 static void WriteReleaseManifest(string directoryPath)
 {
     var assembly = typeof(Program).Assembly;
@@ -3905,6 +4178,38 @@ static string CreateSampleRpolThreadHtml()
         </div><!-- 1 -->
         </div><!-- 2 -->
         </body></html>
+        """;
+}
+
+static string CreateV1LocalSettingsEnvelope(string userName, string password)
+{
+    var plaintext = System.Text.Json.JsonSerializer.SerializeToUtf8Bytes(
+        new Dictionary<string, string>
+        {
+            ["RPOL user name"] = userName,
+            ["RPOL password"] = password
+        },
+        new System.Text.Json.JsonSerializerOptions { WriteIndented = true });
+    var key = SHA256.HashData(System.Text.Encoding.UTF8.GetBytes("PlayerAssistant.LocalSettings.v1"));
+    var iv = RandomNumberGenerator.GetBytes(16);
+
+    using var aes = Aes.Create();
+    aes.Key = key;
+    aes.IV = iv;
+    aes.Mode = CipherMode.CBC;
+    aes.Padding = PaddingMode.PKCS7;
+
+    using var encryptor = aes.CreateEncryptor();
+    var ciphertext = encryptor.TransformFinalBlock(plaintext, 0, plaintext.Length);
+    var payloadBytes = new byte[iv.Length + ciphertext.Length];
+    Buffer.BlockCopy(iv, 0, payloadBytes, 0, iv.Length);
+    Buffer.BlockCopy(ciphertext, 0, payloadBytes, iv.Length, ciphertext.Length);
+
+    return $$"""
+        {
+          "format": "app-protected-v1",
+          "payload": "{{Convert.ToBase64String(payloadBytes)}}"
+        }
         """;
 }
 

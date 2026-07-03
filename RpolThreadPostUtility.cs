@@ -151,12 +151,14 @@ namespace PlayerAssistant
 
             var posts = GetThreadPostsFromHtml(html).ToArray();
             var fullOutputDirectory = Path.GetFullPath(outputDirectory);
+            var outputParentDirectory = Path.GetDirectoryName(fullOutputDirectory) ?? Directory.GetCurrentDirectory();
+            fullOutputDirectory = RuntimePathUtility.EnsurePathUnderBase(outputParentDirectory, fullOutputDirectory);
             var stagingDirectory = CreateSiblingWorkingDirectory(fullOutputDirectory, "staging");
 
             try
             {
                 Directory.CreateDirectory(stagingDirectory);
-                await File.WriteAllTextAsync(Path.Combine(stagingDirectory, "_source-show-all.html"), html, cancellationToken);
+                await File.WriteAllTextAsync(RuntimePathUtility.CombineUnderBase(stagingDirectory, "_source-show-all.html"), html, cancellationToken);
 
                 var postFiles = new List<RpolThreadPostFile>();
 
@@ -166,7 +168,7 @@ namespace PlayerAssistant
 
                     var postDocument = CreatePostDocument(post, threadTitle);
                     await File.WriteAllTextAsync(
-                        Path.Combine(stagingDirectory, post.FileName),
+                        RuntimePathUtility.CombineUnderBase(stagingDirectory, post.FileName),
                         postDocument,
                         cancellationToken);
 
@@ -193,12 +195,12 @@ namespace PlayerAssistant
                     postFiles);
 
                 await File.WriteAllTextAsync(
-                    Path.Combine(stagingDirectory, "index.html"),
+                    RuntimePathUtility.CombineUnderBase(stagingDirectory, "index.html"),
                     CreateIndexDocument(result),
                     cancellationToken);
 
                 await File.WriteAllTextAsync(
-                    Path.Combine(stagingDirectory, "manifest.json"),
+                    RuntimePathUtility.CombineUnderBase(stagingDirectory, "manifest.json"),
                     JsonSerializer.Serialize(result, ManifestJsonOptions),
                     cancellationToken);
 
@@ -400,17 +402,17 @@ namespace PlayerAssistant
 
         private static void ValidateStagedThreadExport(string stagingDirectory, RpolThreadSplitResult expected)
         {
-            if (!File.Exists(Path.Combine(stagingDirectory, "_source-show-all.html")))
+            if (!File.Exists(RuntimePathUtility.CombineUnderBase(stagingDirectory, "_source-show-all.html")))
             {
                 throw new InvalidOperationException("Staged RPOL thread export is missing the source HTML file.");
             }
 
-            if (!File.Exists(Path.Combine(stagingDirectory, "index.html")))
+            if (!File.Exists(RuntimePathUtility.CombineUnderBase(stagingDirectory, "index.html")))
             {
                 throw new InvalidOperationException("Staged RPOL thread export is missing index.html.");
             }
 
-            var manifestPath = Path.Combine(stagingDirectory, "manifest.json");
+            var manifestPath = RuntimePathUtility.CombineUnderBase(stagingDirectory, "manifest.json");
             if (!File.Exists(manifestPath))
             {
                 throw new InvalidOperationException("Staged RPOL thread export is missing manifest.json.");
@@ -428,7 +430,7 @@ namespace PlayerAssistant
 
             foreach (var post in expected.Posts)
             {
-                if (!File.Exists(Path.Combine(stagingDirectory, post.FileName)))
+                if (!File.Exists(RuntimePathUtility.CombineUnderBase(stagingDirectory, post.FileName)))
                 {
                     throw new InvalidOperationException($"Staged RPOL thread export is missing post file '{post.FileName}'.");
                 }

@@ -71,7 +71,8 @@ namespace PlayerAssistant
         [
             "keyword-index.json",
             KeywordTermsFileUtility.FileName,
-            "sitemap.xml"
+            "sitemap.xml",
+            "sitemap-keyword-urls.json"
         ];
 
         public static AppConfigurationValidationReport LatestReport { get; private set; } = new([]);
@@ -121,7 +122,7 @@ namespace PlayerAssistant
             {
                 Directory.CreateDirectory(runtimeDirectory);
                 AtomicFileUtility.WriteAllText(
-                    Path.Combine(runtimeDirectory, RemediationFileName),
+                    RuntimePathUtility.CombineUnderBase(runtimeDirectory, RemediationFileName),
                     report.ToRemediationText());
             }
             catch
@@ -145,6 +146,7 @@ namespace PlayerAssistant
             ValidateRpolCredentials(settings, issues);
             ValidateRuntimeDirectory(runtimeDirectory, issues);
             ValidateRuntimeSidecars(runtimeDirectory, issues);
+            ValidateReleaseIntegrityManifest(runtimeDirectory, issues);
 
             return new AppConfigurationValidationReport(issues);
         }
@@ -205,7 +207,7 @@ namespace PlayerAssistant
                 return;
             }
 
-            var testPath = Path.Combine(runtimeDirectory, $".player-assistant-write-test-{Guid.NewGuid():N}.tmp");
+            var testPath = RuntimePathUtility.CombineUnderBase(runtimeDirectory, $".player-assistant-write-test-{Guid.NewGuid():N}.tmp");
             try
             {
                 File.WriteAllText(testPath, string.Empty);
@@ -236,7 +238,7 @@ namespace PlayerAssistant
         {
             foreach (var fileName in RequiredRuntimeSidecars)
             {
-                var path = Path.Combine(runtimeDirectory, fileName);
+                var path = RuntimePathUtility.CombineUnderBase(runtimeDirectory, fileName);
                 if (!File.Exists(path))
                 {
                     issues.Add(new AppConfigurationIssue(
@@ -256,11 +258,24 @@ namespace PlayerAssistant
             }
         }
 
+        private static void ValidateReleaseIntegrityManifest(
+            string runtimeDirectory,
+            List<AppConfigurationIssue> issues)
+        {
+            foreach (var message in ReleaseIntegrityManifestUtility.ValidateIfPresent(runtimeDirectory))
+            {
+                issues.Add(new AppConfigurationIssue(
+                    AppConfigurationIssueSeverity.Error,
+                    message,
+                    "Restore the published folder from a trusted build, or rerun the publish script so release-manifest.json and its listed runtime files are regenerated together."));
+            }
+        }
+
         private static void DeleteRemediationFile(string runtimeDirectory)
         {
             try
             {
-                var path = Path.Combine(runtimeDirectory, RemediationFileName);
+                var path = RuntimePathUtility.CombineUnderBase(runtimeDirectory, RemediationFileName);
                 if (File.Exists(path))
                 {
                     File.Delete(path);

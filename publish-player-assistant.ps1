@@ -1,13 +1,15 @@
 param(
     [string]$OutputDir = (Join-Path $PSScriptRoot 'Release\publish'),
-    [switch]$VerifyOnly
+    [switch]$VerifyOnly,
+    [string]$SourceSettingsPath = (Join-Path $PSScriptRoot 'settings.local.json')
 )
 
 $ErrorActionPreference = 'Stop'
 
 $SettingsLocalFileName = 'settings.local.json'
 $ProjectFileName = 'player-assistant.csproj'
-$SettingsFormat = 'app-protected-v1'
+$SettingsFormat = 'app-protected-v2'
+$PreviousSettingsFormat = 'app-protected-v1'
 $LegacySettingsFormat = 'dpapi-current-user'
 $SettingsEncryptionSeed = 'PlayerAssistant.LocalSettings.v1'
 $KeywordIndexFileName = 'keyword-index.json'
@@ -149,6 +151,37 @@ function Get-SettingsEncryptionKey {
     }
 }
 
+function Get-SettingsAuthenticationKey {
+    $sha256 = [System.Security.Cryptography.SHA256]::Create()
+    try {
+        return ,$sha256.ComputeHash([System.Text.Encoding]::UTF8.GetBytes("$SettingsEncryptionSeed.hmac"))
+    }
+    finally {
+        $sha256.Dispose()
+    }
+}
+
+function Test-FixedTimeEquals {
+    param(
+        [Parameter(Mandatory = $true)]
+        [byte[]]$Left,
+
+        [Parameter(Mandatory = $true)]
+        [byte[]]$Right
+    )
+
+    if ($Left.Length -ne $Right.Length) {
+        return $false
+    }
+
+    [byte]$difference = 0
+    for ($index = 0; $index -lt $Left.Length; $index++) {
+        $difference = $difference -bor ($Left[$index] -bxor $Right[$index])
+    }
+
+    return $difference -eq 0
+}
+
 function ConvertFrom-AppEncryptedLocalSettings {
     param(
         [Parameter(Mandatory = $true)]
@@ -157,8 +190,8 @@ function ConvertFrom-AppEncryptedLocalSettings {
 
     $raw = Get-Content -Raw -LiteralPath $SettingsPath
     $envelope = $raw | ConvertFrom-Json
-    if ($envelope.format -ne $SettingsFormat) {
-        throw "$SettingsLocalFileName must use encrypted format '$SettingsFormat', but found '$($envelope.format)'."
+    if ($envelope.format -ne $SettingsFormat -and $envelope.format -ne $PreviousSettingsFormat) {
+        throw "$SettingsLocalFileName must use encrypted format '$SettingsFormat' or '$PreviousSettingsFormat', but found '$($envelope.format)'."
     }
 
     if ([string]::IsNullOrWhiteSpace($envelope.payload)) {
@@ -166,6 +199,54 @@ function ConvertFrom-AppEncryptedLocalSettings {
     }
 
     $payloadBytes = [Convert]::FromBase64String($envelope.payload)
+    if ($envelope.format -eq $SettingsFormat) {
+        if ($payloadBytes.Length -lt 49) {
+            throw "$SettingsLocalFileName authenticated encrypted payload is too short."
+        }
+
+        $tag = [byte[]]::new(32)
+        $protectedContent = [byte[]]::new($payloadBytes.Length - $tag.Length)
+        [System.Buffer]::BlockCopy($payloadBytes, 0, $protectedContent, 0, $protectedContent.Length)
+        [System.Buffer]::BlockCopy($payloadBytes, $protectedContent.Length, $tag, 0, $tag.Length)
+        $hmac = [System.Security.Cryptography.HMACSHA256]::new((Get-SettingsAuthenticationKey))
+        try {
+            $actualTag = $hmac.ComputeHash($protectedContent)
+        }
+        finally {
+            $hmac.Dispose()
+        }
+
+        if (!(Test-FixedTimeEquals -Left $actualTag -Right $tag)) {
+            throw "$SettingsLocalFileName encrypted payload authentication tag did not match."
+        }
+
+        $iv = [byte[]]::new(16)
+        $ciphertext = [byte[]]::new($protectedContent.Length - $iv.Length)
+        [System.Buffer]::BlockCopy($protectedContent, 0, $iv, 0, $iv.Length)
+        [System.Buffer]::BlockCopy($protectedContent, $iv.Length, $ciphertext, 0, $ciphertext.Length)
+
+        $aes = [System.Security.Cryptography.Aes]::Create()
+        $aes.Key = Get-SettingsEncryptionKey
+        $aes.IV = $iv
+        $aes.Mode = [System.Security.Cryptography.CipherMode]::CBC
+        $aes.Padding = [System.Security.Cryptography.PaddingMode]::PKCS7
+        try {
+            $decryptor = $aes.CreateDecryptor()
+            try {
+                $plaintextBytes = $decryptor.TransformFinalBlock($ciphertext, 0, $ciphertext.Length)
+            }
+            finally {
+                $decryptor.Dispose()
+            }
+        }
+        finally {
+            $aes.Dispose()
+        }
+
+        $plaintextJson = [System.Text.Encoding]::UTF8.GetString($plaintextBytes)
+        return $plaintextJson | ConvertFrom-Json
+    }
+
     if ($payloadBytes.Length -lt 17) {
         throw "$SettingsLocalFileName encrypted payload is too short."
     }
@@ -230,7 +311,7 @@ function Test-IsEncryptedLocalSettings {
 
     return $Settings.PSObject.Properties['format'] `
         -and $Settings.PSObject.Properties['payload'] `
-        -and ($Settings.format -eq $SettingsFormat -or $Settings.format -eq $LegacySettingsFormat)
+        -and ($Settings.format -eq $SettingsFormat -or $Settings.format -eq $PreviousSettingsFormat -or $Settings.format -eq $LegacySettingsFormat)
 }
 
 function ConvertFrom-LocalSettingsFile {
@@ -241,7 +322,7 @@ function ConvertFrom-LocalSettingsFile {
 
     $settings = Get-Content -Raw -LiteralPath $SettingsPath | ConvertFrom-Json
     if (Test-IsEncryptedLocalSettings -Settings $settings) {
-        if ($settings.format -eq $SettingsFormat) {
+        if ($settings.format -eq $SettingsFormat -or $settings.format -eq $PreviousSettingsFormat) {
             return ConvertFrom-AppEncryptedLocalSettings -SettingsPath $SettingsPath
         }
 
@@ -266,12 +347,20 @@ function Write-AppEncryptedLocalSettings {
     $plaintextJson = $settings | ConvertTo-Json -Depth 10
     $plaintextBytes = [System.Text.Encoding]::UTF8.GetBytes($plaintextJson)
 
+    $iv = [byte[]]::new(16)
+    $rng = [System.Security.Cryptography.RandomNumberGenerator]::Create()
+    try {
+        $rng.GetBytes($iv)
+    }
+    finally {
+        $rng.Dispose()
+    }
+
     $aes = [System.Security.Cryptography.Aes]::Create()
     $aes.Key = Get-SettingsEncryptionKey
+    $aes.IV = $iv
     $aes.Mode = [System.Security.Cryptography.CipherMode]::CBC
     $aes.Padding = [System.Security.Cryptography.PaddingMode]::PKCS7
-    $aes.GenerateIV()
-    $iv = [byte[]]$aes.IV.Clone()
     try {
         $encryptor = $aes.CreateEncryptor()
         try {
@@ -285,9 +374,20 @@ function Write-AppEncryptedLocalSettings {
         $aes.Dispose()
     }
 
-    $payloadBytes = [byte[]]::new($iv.Length + $ciphertext.Length)
-    [System.Buffer]::BlockCopy($iv, 0, $payloadBytes, 0, $iv.Length)
-    [System.Buffer]::BlockCopy($ciphertext, 0, $payloadBytes, $iv.Length, $ciphertext.Length)
+    $protectedContent = [byte[]]::new($iv.Length + $ciphertext.Length)
+    [System.Buffer]::BlockCopy($iv, 0, $protectedContent, 0, $iv.Length)
+    [System.Buffer]::BlockCopy($ciphertext, 0, $protectedContent, $iv.Length, $ciphertext.Length)
+    $hmac = [System.Security.Cryptography.HMACSHA256]::new((Get-SettingsAuthenticationKey))
+    try {
+        $tag = $hmac.ComputeHash($protectedContent)
+    }
+    finally {
+        $hmac.Dispose()
+    }
+
+    $payloadBytes = [byte[]]::new($protectedContent.Length + $tag.Length)
+    [System.Buffer]::BlockCopy($protectedContent, 0, $payloadBytes, 0, $protectedContent.Length)
+    [System.Buffer]::BlockCopy($tag, 0, $payloadBytes, $protectedContent.Length, $tag.Length)
 
     $envelope = [pscustomobject]@{
         format = $SettingsFormat
@@ -715,7 +815,10 @@ function Assert-ReleaseIntegrityManifest {
 function Assert-PublishOutput {
     param(
         [Parameter(Mandatory = $true)]
-        [string]$Directory
+        [string]$Directory,
+
+        [Parameter(Mandatory = $true)]
+        [string]$SourceSettingsPath
     )
 
     $settingsPath = Join-Path $Directory $SettingsLocalFileName
@@ -727,7 +830,7 @@ function Assert-PublishOutput {
     Assert-PublishedSitemap -Path (Join-Path $Directory $SitemapFileName)
     [void](Read-JsonFile -Path (Join-Path $Directory $SitemapKeywordUrlsFileName) -Description 'published sitemap keyword URL library')
     Assert-PublishedPlaywrightRuntime -Directory (Join-Path $Directory '.playwright')
-    Assert-EncryptedLocalSettings -SourcePath (Join-Path $PSScriptRoot $SettingsLocalFileName) -PublishedPath $settingsPath
+    Assert-EncryptedLocalSettings -SourcePath $SourceSettingsPath -PublishedPath $settingsPath
     Assert-NoSensitiveFiles -Directory $Directory
     Assert-NoForbiddenPublishArtifacts -Directory $Directory
     Assert-NoPlaintextCredentialMarkers -Directory $Directory
@@ -757,7 +860,7 @@ Assert-PathInsideRepo -Path $resolvedOutputDir -Description 'publish output dire
 
 if ($VerifyOnly) {
     Assert-PublishInputs
-    Assert-PublishOutput -Directory $resolvedOutputDir
+    Assert-PublishOutput -Directory $resolvedOutputDir -SourceSettingsPath $SourceSettingsPath
     Write-Output "Publish verification passed: $resolvedOutputDir"
     return
 }
@@ -803,5 +906,5 @@ Copy-Item -LiteralPath (Join-Path $PSScriptRoot "Release\$SitemapKeywordUrlsFile
 Write-AppEncryptedLocalSettings -SourcePath (Join-Path $PSScriptRoot $SettingsLocalFileName) -DestinationPath (Join-Path $resolvedOutputDir $SettingsLocalFileName)
 Write-ReleaseIntegrityManifest -Directory $resolvedOutputDir
 
-Assert-PublishOutput -Directory $resolvedOutputDir
+Assert-PublishOutput -Directory $resolvedOutputDir -SourceSettingsPath $SourceSettingsPath
 Write-Output "Publish verified: $resolvedOutputDir"

@@ -10,6 +10,7 @@ namespace PlayerAssistant
         private const string AsideDirectoryName = "Aside";
         private const string SuppressHeroImagesArgument = "--suppress-hero-images";
         private static readonly string[] VersionArguments = ["--version", "/version"];
+        private static readonly string[] HealthArguments = ["--health", "/health"];
 
         /// <summary>
         ///  The main entry point for the application.
@@ -42,6 +43,14 @@ namespace PlayerAssistant
                 var versionText = GetVersionText();
                 Console.WriteLine(versionText);
                 StartupLoggingUtility.Append("version", versionText);
+                return;
+            }
+
+            if (args.Any(IsHealthArgument))
+            {
+                var healthText = GetHealthText();
+                Console.WriteLine(healthText);
+                StartupLoggingUtility.Append("health", healthText);
                 return;
             }
 
@@ -115,16 +124,22 @@ namespace PlayerAssistant
             var postsDirectory = Path.Combine(AppContext.BaseDirectory, PostsDirectoryName);
 
             Directory.CreateDirectory(postsDirectory);
-            Directory.CreateDirectory(Path.Combine(postsDirectory, IcDirectoryName));
-            Directory.CreateDirectory(Path.Combine(postsDirectory, IcDirectoryName, AsideDirectoryName));
-            Directory.CreateDirectory(Path.Combine(postsDirectory, OocDirectoryName));
-            Directory.CreateDirectory(Path.Combine(postsDirectory, OocDirectoryName, AsideDirectoryName));
+            Directory.CreateDirectory(RuntimePathUtility.CombineUnderBase(postsDirectory, IcDirectoryName));
+            Directory.CreateDirectory(RuntimePathUtility.CombineUnderBase(postsDirectory, IcDirectoryName, AsideDirectoryName));
+            Directory.CreateDirectory(RuntimePathUtility.CombineUnderBase(postsDirectory, OocDirectoryName));
+            Directory.CreateDirectory(RuntimePathUtility.CombineUnderBase(postsDirectory, OocDirectoryName, AsideDirectoryName));
         }
 
         internal static bool IsVersionArgument(string argument)
         {
             return VersionArguments.Any(versionArgument =>
                 string.Equals(argument, versionArgument, StringComparison.OrdinalIgnoreCase));
+        }
+
+        internal static bool IsHealthArgument(string argument)
+        {
+            return HealthArguments.Any(healthArgument =>
+                string.Equals(argument, healthArgument, StringComparison.OrdinalIgnoreCase));
         }
 
         internal static string GetVersionText()
@@ -139,6 +154,37 @@ namespace PlayerAssistant
             return string.IsNullOrWhiteSpace(informationalVersion)
                 ? "player-assistant version unknown"
                 : $"player-assistant {informationalVersion}";
+        }
+
+        internal static string GetHealthText()
+        {
+            try
+            {
+                AppSettingsUtility.Load();
+                var report = AppConfigurationValidationUtility.ValidateCurrentAndLog();
+                var status = report.Issues.Any(issue => issue.Severity == AppConfigurationIssueSeverity.Error)
+                    ? "error"
+                    : report.HasIssues ? "warning" : "ok";
+                var lines = new List<string>
+                {
+                    GetVersionText(),
+                    $"runtime: {AppContext.BaseDirectory}",
+                    $"status: {status}",
+                    $"issues: {report.Issues.Count}"
+                };
+
+                lines.AddRange(report.Issues.Select(issue => $"{issue.Severity}: {issue.Message}"));
+                return string.Join(Environment.NewLine, lines);
+            }
+            catch (Exception ex)
+            {
+                return string.Join(
+                    Environment.NewLine,
+                    GetVersionText(),
+                    $"runtime: {AppContext.BaseDirectory}",
+                    "status: error",
+                    $"Error: {SensitiveTextRedactionUtility.Redact(ex.Message)}");
+            }
         }
     }
 }

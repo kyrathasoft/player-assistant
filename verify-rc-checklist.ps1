@@ -12,6 +12,7 @@ param(
     ),
     [switch]$SkipTests,
     [switch]$SkipReleasePublishParity,
+    [switch]$SkipPublishedHealth,
     [switch]$SkipPublishRuntimeIntegrity,
     [switch]$SkipDiagnostics
 )
@@ -23,6 +24,7 @@ $ExecutableFileName = 'player-assistant.exe'
 $TestExecutablePath = Join-Path $PSScriptRoot 'PlayerAssistant.Tests\bin\Release\net10.0-windows\PlayerAssistant.Tests.exe'
 $TestStartupLogPath = Join-Path $PSScriptRoot 'PlayerAssistant.Tests\bin\Release\net10.0-windows\startup-errors.log'
 $ReleasePublishParityScriptPath = Join-Path $PSScriptRoot 'verify-release-publish-parity.ps1'
+$PublishedHealthScriptPath = Join-Path $PSScriptRoot 'verify-published-health.ps1'
 $PublishRuntimeIntegrityScriptPath = Join-Path $PSScriptRoot 'verify-publish-runtime-integrity.ps1'
 $DiagnosticsScriptPath = Join-Path $PSScriptRoot 'collect-diagnostics.ps1'
 
@@ -248,7 +250,6 @@ function Assert-ExpectedChangedPaths {
         [Parameter(Mandatory = $true)]
         [string[]]$StatusLines,
 
-        [Parameter(Mandatory = $true)]
         [string[]]$ExpectedPaths
     )
 
@@ -427,6 +428,26 @@ function Invoke-ReleasePublishParityCheck {
         ))
 }
 
+function Invoke-PublishedHealthCheck {
+    if ($SkipPublishedHealth) {
+        Write-Output "Skipping published health check because -SkipPublishedHealth was supplied."
+        return
+    }
+
+    Assert-RequiredFile -Path $PublishedHealthScriptPath -Description 'published health verification script'
+    [void](Invoke-ExternalCommand `
+        -FileName 'powershell.exe' `
+        -Arguments @(
+            '-NoProfile',
+            '-ExecutionPolicy',
+            'Bypass',
+            '-File',
+            $PublishedHealthScriptPath,
+            '-PublishDir',
+            $resolvedPublishDir
+        ))
+}
+
 function Invoke-DiagnosticsBundleCheck {
     if ($SkipDiagnostics) {
         Write-Output "Skipping diagnostic bundle check because -SkipDiagnostics was supplied."
@@ -524,6 +545,7 @@ Write-Output "RC checklist for $($projectVersion.Version) using tag $RcTag"
 Test-GitReady
 Invoke-FocusedHardeningTests
 Invoke-ReleasePublishParityCheck
+Invoke-PublishedHealthCheck
 Invoke-PublishRuntimeIntegrityCheck
 Invoke-DiagnosticsBundleCheck
 Assert-ExecutableVersion `

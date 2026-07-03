@@ -34,7 +34,7 @@ namespace PlayerAssistant
             string pcsDirectory,
             CancellationToken cancellationToken = default)
         {
-            var activeDirectory = Path.Combine(pcsDirectory, "active");
+            var activeDirectory = GetActivePlayerCharactersDirectory(pcsDirectory);
             var listingMarkdown = await MarkdownUtility.GetMarkdownFromUrlAsync(listingUrl, cancellationToken);
             var manifestMarkdown = await MarkdownUtility.GetMarkdownFromUrlAsync(AssetManifestUrl, cancellationToken);
 
@@ -53,13 +53,15 @@ namespace PlayerAssistant
             {
                 cancellationToken.ThrowIfCancellationRequested();
 
-                if (hero.TokenFileName is null || !manifest.TryGetValue(hero.TokenFileName, out var vaultPath))
+                if (hero.TokenFileName is null
+                    || !TryGetSafeHeroImageFileName(hero.TokenFileName, out var tokenFileName)
+                    || !manifest.TryGetValue(hero.TokenFileName, out var vaultPath))
                 {
                     continue;
                 }
 
                 var imageUrl = await ObsidianPublishUtility.GetAccessUrlAsync(listingUrl, vaultPath, cancellationToken);
-                var destinationPath = Path.Combine(activeDirectory, hero.TokenFileName);
+                var destinationPath = GetActiveHeroAssetPath(activeDirectory, tokenFileName);
 
                 await DownloadFileAsync(imageUrl, destinationPath, cancellationToken);
                 downloadedFiles.Add(destinationPath);
@@ -76,7 +78,7 @@ namespace PlayerAssistant
         {
             ThrowIfMarkdownFetchFailed(listingMarkdown, listingUrl);
 
-            var activeDirectory = Path.Combine(pcsDirectory, "active");
+            var activeDirectory = GetActivePlayerCharactersDirectory(pcsDirectory);
             var downloadedFiles = new List<string>();
 
             foreach (var hero in GetHeroRows(listingMarkdown, listingUrl))
@@ -94,7 +96,7 @@ namespace PlayerAssistant
                     continue;
                 }
 
-                var destinationPath = Path.Combine(activeDirectory, $"{fileName}.md");
+                var destinationPath = RuntimePathUtility.CombineUnderBase(activeDirectory, $"{fileName}.md");
                 if (!ShouldDownloadHeroMarkdown(destinationPath))
                 {
                     continue;
@@ -120,7 +122,7 @@ namespace PlayerAssistant
             ArgumentNullException.ThrowIfNull(listingMarkdown);
             ArgumentNullException.ThrowIfNull(pcsDirectory);
 
-            var activeDirectory = Path.Combine(pcsDirectory, "active");
+            var activeDirectory = GetActivePlayerCharactersDirectory(pcsDirectory);
             if (!Directory.Exists(activeDirectory))
             {
                 return [];
@@ -130,6 +132,7 @@ namespace PlayerAssistant
                 .Select(hero => hero.TokenFileName)
                 .Where(tokenFileName => !string.IsNullOrWhiteSpace(tokenFileName))
                 .Select(tokenFileName => tokenFileName!)
+                .Where(tokenFileName => TryGetSafeHeroImageFileName(tokenFileName, out _))
                 .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
             return Directory.GetFiles(activeDirectory)
@@ -142,7 +145,9 @@ namespace PlayerAssistant
         public static string GetPlayerCharactersListingMarkdownCachePath(string pcsDirectory)
         {
             ArgumentNullException.ThrowIfNull(pcsDirectory);
-            return Path.Combine(pcsDirectory, PlayerCharactersListingMarkdownCacheFileName);
+            return RuntimePathUtility.CombineUnderBase(
+                pcsDirectory,
+                PlayerCharactersListingMarkdownCacheFileName);
         }
 
         public static PlayerCharacterHeroRow[] GetHeroRows(string markdown, string? listingUrl = null)
@@ -404,6 +409,42 @@ namespace PlayerAssistant
             return match.Success
                 ? match.Groups["target"].Value.Trim().TrimEnd('\\')
                 : null;
+        }
+
+        private static string GetActivePlayerCharactersDirectory(string pcsDirectory)
+        {
+            return RuntimePathUtility.CombineUnderBase(pcsDirectory, "active");
+        }
+
+        private static string GetActiveHeroAssetPath(string activeDirectory, string tokenFileName)
+        {
+            if (!TryGetSafeHeroImageFileName(tokenFileName, out var safeFileName))
+            {
+                throw new InvalidOperationException($"Hero image target '{tokenFileName}' is not a safe file name.");
+            }
+
+            return RuntimePathUtility.CombineUnderBase(activeDirectory, safeFileName);
+        }
+
+        private static bool TryGetSafeHeroImageFileName(string tokenFileName, out string safeFileName)
+        {
+            safeFileName = string.Empty;
+            if (string.IsNullOrWhiteSpace(tokenFileName))
+            {
+                return false;
+            }
+
+            var candidate = tokenFileName.Trim().TrimEnd('\\', '/');
+            if (candidate.Length == 0
+                || Path.IsPathRooted(candidate)
+                || candidate.Contains(Path.DirectorySeparatorChar)
+                || candidate.Contains(Path.AltDirectorySeparatorChar))
+            {
+                return false;
+            }
+
+            safeFileName = candidate;
+            return true;
         }
 
         private static async Task DownloadFileAsync(string url, string destinationPath, CancellationToken cancellationToken)
