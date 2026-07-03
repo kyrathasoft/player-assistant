@@ -10,8 +10,8 @@ namespace PlayerAssistant
         {
             return
                 $"""
-                [{DateTimeOffset.Now:O}] {phase}
-                {ex}
+                [{DateTimeOffset.Now:O}] {SensitiveTextRedactionUtility.Redact(phase)}
+                {SensitiveTextRedactionUtility.Redact(ex.ToString())}
 
                 """;
         }
@@ -20,8 +20,8 @@ namespace PlayerAssistant
         {
             return
                 $"""
-                [{DateTimeOffset.Now:O}] {phase}
-                {message}
+                [{DateTimeOffset.Now:O}] {SensitiveTextRedactionUtility.Redact(phase)}
+                {SensitiveTextRedactionUtility.Redact(message)}
 
                 """;
         }

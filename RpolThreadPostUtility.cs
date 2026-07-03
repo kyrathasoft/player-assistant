@@ -50,6 +50,7 @@ namespace PlayerAssistant
         private static readonly Regex RuleRegex = new(@"<hr\s*/?>", RegexOptions.Compiled | RegexOptions.IgnoreCase);
         private static readonly Regex HtmlTagRegex = new(@"<[^>]+>", RegexOptions.Compiled);
         private static readonly Regex WhitespaceRegex = new(@"\s+", RegexOptions.Compiled);
+        private static readonly JsonSerializerOptions ManifestJsonOptions = new() { WriteIndented = true };
 
         public static Task<RpolThreadSplitResult> WriteCh1KirkilstonPostsAsync(
             string outputDirectory,
@@ -149,60 +150,68 @@ namespace PlayerAssistant
             ArgumentException.ThrowIfNullOrWhiteSpace(threadTitle);
 
             var posts = GetThreadPostsFromHtml(html).ToArray();
+            var fullOutputDirectory = Path.GetFullPath(outputDirectory);
+            var stagingDirectory = CreateSiblingWorkingDirectory(fullOutputDirectory, "staging");
 
-            if (Directory.Exists(outputDirectory))
+            try
             {
-                Directory.Delete(outputDirectory, recursive: true);
-            }
+                Directory.CreateDirectory(stagingDirectory);
+                await File.WriteAllTextAsync(Path.Combine(stagingDirectory, "_source-show-all.html"), html, cancellationToken);
 
-            Directory.CreateDirectory(outputDirectory);
-            await File.WriteAllTextAsync(Path.Combine(outputDirectory, "_source-show-all.html"), html, cancellationToken);
+                var postFiles = new List<RpolThreadPostFile>();
 
-            var postFiles = new List<RpolThreadPostFile>();
+                foreach (var post in posts)
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
 
-            foreach (var post in posts)
-            {
-                cancellationToken.ThrowIfCancellationRequested();
+                    var postDocument = CreatePostDocument(post, threadTitle);
+                    await File.WriteAllTextAsync(
+                        Path.Combine(stagingDirectory, post.FileName),
+                        postDocument,
+                        cancellationToken);
 
-                var postDocument = CreatePostDocument(post, threadTitle);
+                    postFiles.Add(new RpolThreadPostFile(
+                        post.MessageNumber,
+                        post.Author,
+                        post.PostedDate,
+                        post.PostedTime,
+                        post.FileName,
+                        post.BodyText.Length));
+                }
+
+                var countsByAuthor = posts
+                    .GroupBy(post => post.Author, StringComparer.Ordinal)
+                    .OrderBy(group => group.Key, StringComparer.Ordinal)
+                    .ToDictionary(group => group.Key, group => group.Count(), StringComparer.Ordinal);
+
+                var result = new RpolThreadSplitResult(
+                    threadTitle,
+                    sourceUrl,
+                    fullOutputDirectory,
+                    posts.Length,
+                    countsByAuthor,
+                    postFiles);
+
                 await File.WriteAllTextAsync(
-                    Path.Combine(outputDirectory, post.FileName),
-                    postDocument,
+                    Path.Combine(stagingDirectory, "index.html"),
+                    CreateIndexDocument(result),
                     cancellationToken);
 
-                postFiles.Add(new RpolThreadPostFile(
-                    post.MessageNumber,
-                    post.Author,
-                    post.PostedDate,
-                    post.PostedTime,
-                    post.FileName,
-                    post.BodyText.Length));
+                await File.WriteAllTextAsync(
+                    Path.Combine(stagingDirectory, "manifest.json"),
+                    JsonSerializer.Serialize(result, ManifestJsonOptions),
+                    cancellationToken);
+
+                ValidateStagedThreadExport(stagingDirectory, result);
+                cancellationToken.ThrowIfCancellationRequested();
+                CommitStagedDirectory(stagingDirectory, fullOutputDirectory);
+
+                return result;
             }
-
-            var countsByAuthor = posts
-                .GroupBy(post => post.Author, StringComparer.Ordinal)
-                .OrderBy(group => group.Key, StringComparer.Ordinal)
-                .ToDictionary(group => group.Key, group => group.Count(), StringComparer.Ordinal);
-
-            var result = new RpolThreadSplitResult(
-                threadTitle,
-                sourceUrl,
-                Path.GetFullPath(outputDirectory),
-                posts.Length,
-                countsByAuthor,
-                postFiles);
-
-            await File.WriteAllTextAsync(
-                Path.Combine(outputDirectory, "index.html"),
-                CreateIndexDocument(result),
-                cancellationToken);
-
-            await File.WriteAllTextAsync(
-                Path.Combine(outputDirectory, "manifest.json"),
-                JsonSerializer.Serialize(result, new JsonSerializerOptions { WriteIndented = true }),
-                cancellationToken);
-
-            return result;
+            finally
+            {
+                TryDeleteDirectoryIfPresent(stagingDirectory);
+            }
         }
 
         public static RpolThreadPost[] GetThreadPostsFromHtml(string html)
@@ -387,6 +396,105 @@ namespace PlayerAssistant
                 </body>
                 </html>
                 """;
+        }
+
+        private static void ValidateStagedThreadExport(string stagingDirectory, RpolThreadSplitResult expected)
+        {
+            if (!File.Exists(Path.Combine(stagingDirectory, "_source-show-all.html")))
+            {
+                throw new InvalidOperationException("Staged RPOL thread export is missing the source HTML file.");
+            }
+
+            if (!File.Exists(Path.Combine(stagingDirectory, "index.html")))
+            {
+                throw new InvalidOperationException("Staged RPOL thread export is missing index.html.");
+            }
+
+            var manifestPath = Path.Combine(stagingDirectory, "manifest.json");
+            if (!File.Exists(manifestPath))
+            {
+                throw new InvalidOperationException("Staged RPOL thread export is missing manifest.json.");
+            }
+
+            var manifest = JsonSerializer.Deserialize<RpolThreadSplitResult>(
+                File.ReadAllText(manifestPath),
+                ManifestJsonOptions);
+            if (manifest is null
+                || manifest.PostCount != expected.PostCount
+                || manifest.Posts.Count != expected.Posts.Count)
+            {
+                throw new InvalidOperationException("Staged RPOL thread export manifest did not match the generated posts.");
+            }
+
+            foreach (var post in expected.Posts)
+            {
+                if (!File.Exists(Path.Combine(stagingDirectory, post.FileName)))
+                {
+                    throw new InvalidOperationException($"Staged RPOL thread export is missing post file '{post.FileName}'.");
+                }
+            }
+        }
+
+        private static void CommitStagedDirectory(string stagingDirectory, string outputDirectory)
+        {
+            var backupDirectory = CreateSiblingWorkingDirectory(outputDirectory, "backup");
+            var movedExistingToBackup = false;
+
+            try
+            {
+                if (Directory.Exists(outputDirectory))
+                {
+                    Directory.Move(outputDirectory, backupDirectory);
+                    movedExistingToBackup = true;
+                }
+
+                Directory.Move(stagingDirectory, outputDirectory);
+                TryDeleteDirectoryIfPresent(backupDirectory);
+            }
+            catch
+            {
+                if (movedExistingToBackup && Directory.Exists(backupDirectory))
+                {
+                    DeleteDirectoryIfPresent(outputDirectory);
+                    Directory.Move(backupDirectory, outputDirectory);
+                }
+
+                throw;
+            }
+        }
+
+        private static string CreateSiblingWorkingDirectory(string outputDirectory, string purpose)
+        {
+            var parentDirectory = Path.GetDirectoryName(outputDirectory);
+            if (string.IsNullOrWhiteSpace(parentDirectory))
+            {
+                parentDirectory = Directory.GetCurrentDirectory();
+            }
+
+            Directory.CreateDirectory(parentDirectory);
+            return Path.Combine(
+                parentDirectory,
+                $"{Path.GetFileName(outputDirectory)}.{purpose}-{Guid.NewGuid():N}");
+        }
+
+        private static void DeleteDirectoryIfPresent(string directory)
+        {
+            if (Directory.Exists(directory))
+            {
+                Directory.Delete(directory, recursive: true);
+            }
+        }
+
+        private static void TryDeleteDirectoryIfPresent(string directory)
+        {
+            try
+            {
+                DeleteDirectoryIfPresent(directory);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                StartupLoggingUtility.Append("RPOL thread export cleanup", ex);
+            }
         }
 
         private static string GetPlainText(string html)

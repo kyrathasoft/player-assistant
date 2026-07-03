@@ -40,7 +40,7 @@ namespace PlayerAssistant
             {
                 _updatedAt = DateTimeOffset.Now;
                 Phases.Add(new StartupHealthPhase(
-                    phase,
+                    SensitiveTextRedactionUtility.Redact(phase),
                     status,
                     Math.Max(0, (long)Math.Round(elapsed.TotalMilliseconds)),
                     FileDownloadCounters.CompletedDownloadCount,
@@ -95,7 +95,7 @@ namespace PlayerAssistant
 
             return new StartupHealthException(
                 exception.GetType().Name,
-                exception.Message);
+                SensitiveTextRedactionUtility.Redact(exception.Message));
         }
     }
 }

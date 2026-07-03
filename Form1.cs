@@ -1465,15 +1465,20 @@ namespace PlayerAssistant
                 return;
             }
 
-            if (!Uri.TryCreate(selectedItem, UriKind.Absolute, out var uri)
-                || (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps))
+            var launchValidation = ExternalUrlLaunchUtility.Validate(selectedItem);
+            if (!launchValidation.IsAllowed)
             {
+                var reason = launchValidation.RejectionReason ?? "The selected URL cannot be opened.";
+                SetStatusBarMessage(reason);
+                StartupLoggingUtility.Append(
+                    "external URL launch rejected",
+                    reason);
                 return;
             }
 
             var result = MessageBox.Show(
                 this,
-                $"Would you like to open this URL in a browser tab?{Environment.NewLine}{selectedItem}",
+                $"Would you like to open this URL in a browser tab?{Environment.NewLine}{launchValidation.Url}{Environment.NewLine}{Environment.NewLine}Host: {launchValidation.Host}",
                 "Open Search Result",
                 MessageBoxButtons.YesNo,
                 MessageBoxIcon.Question,
@@ -1485,13 +1490,11 @@ namespace PlayerAssistant
 
             try
             {
-                Process.Start(new ProcessStartInfo(selectedItem)
-                {
-                    UseShellExecute = true
-                });
+                Process.Start(ExternalUrlLaunchUtility.CreateStartInfo(launchValidation));
             }
             catch (Exception ex)
             {
+                StartupLoggingUtility.Append("external URL launch", ex);
                 SetStatusBarMessage($"Unable to open URL: {ex.Message}");
             }
         }

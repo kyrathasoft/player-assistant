@@ -87,6 +87,8 @@ var tests = new (string Name, Action Test)[]
     ("rpol storage state validation deletes stale state", RpolStorageStateValidationDeletesStaleState),
     ("rpol storage state validation deletes non-rpol state", RpolStorageStateValidationDeletesNonRpolState),
     ("show-all thread url preserves base query and adds show all", ShowAllThreadUrlPreservesBaseQueryAndAddsShowAll),
+    ("rpol thread export preserves existing output on cancellation", RpolThreadExportPreservesExistingOutputOnCancellation),
+    ("rpol thread export commits staged output", RpolThreadExportCommitsStagedOutput),
     ("die roll extraction keeps only saved-log lines", DieRollExtractionKeepsOnlySavedLogLines),
     ("die roll extraction handles live rpol paragraph markup", DieRollExtractionHandlesLiveRpolParagraphMarkup),
     ("die roll sync appends only unsaved rolls", DieRollSyncAppendsOnlyUnsavedRolls),
@@ -105,6 +107,8 @@ var tests = new (string Name, Action Test)[]
     ("keyword search cancels previous online fallback", KeywordSearchCancelsPreviousOnlineFallback),
     ("keyword search rpol scope excludes obsidian-only whiteheart", KeywordSearchRpolScopeExcludesObsidianOnlyWhiteheart),
     ("keyword search rpol scope excludes obsidian-only whiteheart stiffwhiskers", KeywordSearchRpolScopeExcludesObsidianOnlyWhiteheartStiffwhiskers),
+    ("external url launch policy accepts http and https", ExternalUrlLaunchPolicyAcceptsHttpAndHttps),
+    ("external url launch policy rejects unsafe inputs", ExternalUrlLaunchPolicyRejectsUnsafeInputs),
     ("hero image paths follow listing markdown table", HeroImagePathsFollowListingMarkdownTable),
     ("legacy local settings migrate to portable encryption", LegacyLocalSettingsMigrateToPortableEncryption),
     ("local settings are encrypted on load", LocalSettingsAreEncryptedOnLoad),
@@ -588,11 +592,18 @@ static void StartupManifestStatusDistinguishesSkippedAndFailed()
 
 static void StartupErrorLogEntryIncludesPhaseAndException()
 {
-    var entry = Form1.FormatStartupErrorLogEntry("ooc thread downloads", new InvalidOperationException("Missing RPoL credentials."));
+    var entry = Form1.FormatStartupErrorLogEntry(
+        "ooc thread downloads RPOL password=hunter2",
+        new InvalidOperationException("Missing RPoL credentials at https://user:pass@example.test/path?password=secret-password&token=secret-token Authorization: Bearer abc123"));
 
     AssertContains(entry, "ooc thread downloads");
     AssertContains(entry, "InvalidOperationException");
-    AssertContains(entry, "Missing RPoL credentials.");
+    AssertContains(entry, "Missing RPoL credentials");
+    AssertFalse(entry.Contains("hunter2", StringComparison.Ordinal), "startup log phase should redact RPOL passwords");
+    AssertFalse(entry.Contains("secret-password", StringComparison.Ordinal), "startup log should redact password query values");
+    AssertFalse(entry.Contains("secret-token", StringComparison.Ordinal), "startup log should redact token query values");
+    AssertFalse(entry.Contains("Bearer abc123", StringComparison.Ordinal), "startup log should redact bearer tokens");
+    AssertFalse(entry.Contains("user:pass@", StringComparison.Ordinal), "startup log should redact credentialed URLs");
 }
 
 static void LastCrashDiagnosticWritesRedactedExceptionDetails()
@@ -668,19 +679,19 @@ static void StartupHealthRecordsRequiredPhaseFailure()
 
         var exception = AssertThrows<InvalidOperationException>(() =>
             StartupLoggingUtility.RunRequiredPhase(
-                "synthetic required failure",
-                () => throw new InvalidOperationException("required boom")));
+                "synthetic required failure RPOL user name=secret-user",
+                () => throw new InvalidOperationException("required boom Cookie: sessionid=abc123")));
 
-        AssertEqual("required boom", exception.Message, "required phase should rethrow the original exception");
+        AssertEqual("required boom Cookie: sessionid=abc123", exception.Message, "required phase should rethrow the original exception");
 
         using var document = LoadStartupHealthDocument();
-        var phase = FindStartupHealthPhase(document, "synthetic required failure");
+        var phase = FindStartupHealthPhase(document, "synthetic required failure RPOL user name=[REDACTED]");
         var lastException = phase.GetProperty("last_exception");
 
         AssertJsonString(phase, "status", "failed", "required failure should be recorded as failed");
         AssertJsonNumber(phase, "failed_count", 1, "required failure should increment failure count");
         AssertJsonString(lastException, "type", "InvalidOperationException", "required failure should record exception type");
-        AssertJsonString(lastException, "message", "required boom", "required failure should record exception message");
+        AssertJsonString(lastException, "message", "required boom Cookie: [REDACTED]", "required failure should redact exception message");
     });
 }
 
@@ -694,7 +705,7 @@ static void StartupHealthRecordsOptionalPhaseFailureWithoutThrowing()
 
             StartupLoggingUtility.RunOptionalPhaseAsync(
                 "synthetic optional failure",
-                () => throw new InvalidOperationException("optional boom")).GetAwaiter().GetResult();
+                () => throw new InvalidOperationException("optional boom Authorization: Bearer abc123")).GetAwaiter().GetResult();
 
             using var document = LoadStartupHealthDocument();
             var phase = FindStartupHealthPhase(document, "synthetic optional failure");
@@ -702,8 +713,9 @@ static void StartupHealthRecordsOptionalPhaseFailureWithoutThrowing()
 
             AssertJsonString(phase, "status", "failed", "optional failure should be recorded as failed");
             AssertJsonNumber(phase, "failed_count", 1, "optional failure should increment failure count");
-            AssertJsonString(lastException, "message", "optional boom", "optional failure should record exception message");
+            AssertJsonString(lastException, "message", "optional boom Authorization: Bearer [REDACTED]", "optional failure should redact exception message");
             AssertContains(File.ReadAllText(GetStartupLogPath()), "optional boom");
+            AssertFalse(File.ReadAllText(GetStartupLogPath()).Contains("Bearer abc123", StringComparison.Ordinal), "startup log should redact optional phase bearer tokens");
         });
     });
 }
@@ -1805,6 +1817,54 @@ static void ShowAllThreadUrlPreservesBaseQueryAndAddsShowAll()
         "unexpected show-all thread url");
 }
 
+static void RpolThreadExportPreservesExistingOutputOnCancellation()
+{
+    using var directory = TemporaryDirectory.Create();
+    var outputDirectory = Path.Combine(directory.Path, "thread-export");
+    Directory.CreateDirectory(outputDirectory);
+    var markerPath = Path.Combine(outputDirectory, "last-good.txt");
+    File.WriteAllText(markerPath, "keep me");
+    using var cancellation = new CancellationTokenSource();
+    cancellation.Cancel();
+
+    AssertThrows<OperationCanceledException>(() =>
+        RpolThreadPostUtility.WriteThreadPostsFromHtmlAsync(
+            CreateSampleRpolThreadHtml(),
+            "https://rpol.net/display.cgi?gi=80170&ti=17&show=all",
+            outputDirectory,
+            "Synthetic Thread",
+            cancellation.Token).GetAwaiter().GetResult());
+
+    AssertTrue(File.Exists(markerPath), "existing RPOL thread export should survive a cancelled replacement");
+    AssertEqual("keep me", File.ReadAllText(markerPath), "existing RPOL thread export marker should remain unchanged");
+    AssertEqual(0, Directory.GetDirectories(directory.Path, "thread-export.staging-*").Length, "cancelled export should clean staging directories");
+    AssertEqual(0, Directory.GetDirectories(directory.Path, "thread-export.backup-*").Length, "cancelled export should not leave backup directories");
+}
+
+static void RpolThreadExportCommitsStagedOutput()
+{
+    using var directory = TemporaryDirectory.Create();
+    var outputDirectory = Path.Combine(directory.Path, "thread-export");
+    Directory.CreateDirectory(outputDirectory);
+    File.WriteAllText(Path.Combine(outputDirectory, "stale.txt"), "old");
+
+    var result = RpolThreadPostUtility.WriteThreadPostsFromHtmlAsync(
+        CreateSampleRpolThreadHtml(),
+        "https://rpol.net/display.cgi?gi=80170&ti=17&show=all",
+        outputDirectory,
+        "Synthetic Thread").GetAwaiter().GetResult();
+
+    AssertEqual(2, result.PostCount, "expected staged RPOL export to include both posts");
+    AssertFalse(File.Exists(Path.Combine(outputDirectory, "stale.txt")), "successful staged export should replace stale output");
+    AssertTrue(File.Exists(Path.Combine(outputDirectory, "_source-show-all.html")), "successful staged export should include source HTML");
+    AssertTrue(File.Exists(Path.Combine(outputDirectory, "index.html")), "successful staged export should include index.html");
+    AssertTrue(File.Exists(Path.Combine(outputDirectory, "manifest.json")), "successful staged export should include manifest.json");
+    AssertTrue(File.Exists(Path.Combine(outputDirectory, "001-alice.html")), "successful staged export should include the first post");
+    AssertTrue(File.Exists(Path.Combine(outputDirectory, "002-bob.html")), "successful staged export should include the second post");
+    AssertEqual(0, Directory.GetDirectories(directory.Path, "thread-export.staging-*").Length, "successful export should clean staging directories");
+    AssertEqual(0, Directory.GetDirectories(directory.Path, "thread-export.backup-*").Length, "successful export should clean backup directories");
+}
+
 static void DieRollExtractionKeepsOnlySavedLogLines()
 {
     const string html = """
@@ -2439,6 +2499,31 @@ static void KeywordSearchRpolScopeExcludesObsidianOnlyWhiteheartStiffwhiskers()
     });
 }
 
+static void ExternalUrlLaunchPolicyAcceptsHttpAndHttps()
+{
+    var http = ExternalUrlLaunchUtility.Validate(" http://example.test/path?q=one ");
+    var https = ExternalUrlLaunchUtility.Validate("https://example.test/entry");
+
+    AssertTrue(http.IsAllowed, "HTTP URLs should be allowed");
+    AssertEqual("http://example.test/path?q=one", http.Url ?? string.Empty, "HTTP URL should be normalized before launch");
+    AssertEqual("example.test", http.Host ?? string.Empty, "HTTP host should be exposed for confirmation");
+    AssertTrue(https.IsAllowed, "HTTPS URLs should be allowed");
+}
+
+static void ExternalUrlLaunchPolicyRejectsUnsafeInputs()
+{
+    var relative = ExternalUrlLaunchUtility.Validate("/relative/path");
+    var file = ExternalUrlLaunchUtility.Validate("file:///C:/temp/report.html");
+    var credentialed = ExternalUrlLaunchUtility.Validate("https://user:pass@example.test/private");
+
+    AssertFalse(relative.IsAllowed, "relative URLs should not be opened externally");
+    AssertContains(relative.RejectionReason ?? string.Empty, "absolute URL");
+    AssertFalse(file.IsAllowed, "file URLs should not be opened from search results");
+    AssertContains(file.RejectionReason ?? string.Empty, "HTTP and HTTPS");
+    AssertFalse(credentialed.IsAllowed, "credentialed URLs should not be opened externally");
+    AssertContains(credentialed.RejectionReason ?? string.Empty, "embedded credentials");
+}
+
 static void HeroImagePathsFollowListingMarkdownTable()
 {
     using var directory = TemporaryDirectory.Create();
@@ -2540,62 +2625,39 @@ static void LegacyLocalSettingsMigrateToPortableEncryption()
 
 static void PublishVerificationAcceptsCurrentOutput()
 {
-    var output = RunPublishVerification(GetCurrentPublishDirectory());
+    WithCopiedPublishDirectory(directoryPath =>
+    {
+        var output = RunPublishVerification(directoryPath);
 
-    AssertEqual(0, output.ExitCode, $"publish verification should pass. Output: {output.Output}");
-    AssertContains(output.Output, "Publish verification passed:");
+        AssertEqual(0, output.ExitCode, $"publish verification should pass. Output: {output.Output}");
+        AssertContains(output.Output, "Publish verification passed:");
+    });
 }
 
 static void PublishVerificationRejectsStaleStartupLog()
 {
-    var directoryPath = Path.Combine(
-        GetRepositoryRoot(),
-        "codex-scratch",
-        $"publish-verification-{Guid.NewGuid():N}");
-
-    try
+    WithCopiedPublishDirectory(directoryPath =>
     {
-        CopyDirectory(GetCurrentPublishDirectory(), directoryPath);
         File.WriteAllText(Path.Combine(directoryPath, StartupLoggingUtility.LogFileName), "stale failure");
 
         var output = RunPublishVerification(directoryPath);
 
         AssertFalse(output.ExitCode == 0, "publish verification should fail when startup-errors.log is present");
         AssertContains(output.Output, "startup-errors.log");
-    }
-    finally
-    {
-        if (Directory.Exists(directoryPath))
-        {
-            Directory.Delete(directoryPath, recursive: true);
-        }
-    }
+    });
 }
 
 static void PublishVerificationRejectsStartupHealthArtifact()
 {
-    var directoryPath = Path.Combine(
-        GetRepositoryRoot(),
-        "codex-scratch",
-        $"publish-verification-{Guid.NewGuid():N}");
-
-    try
+    WithCopiedPublishDirectory(directoryPath =>
     {
-        CopyDirectory(GetCurrentPublishDirectory(), directoryPath);
         File.WriteAllText(Path.Combine(directoryPath, StartupHealthUtility.HealthFileName), "{}");
 
         var output = RunPublishVerification(directoryPath);
 
         AssertFalse(output.ExitCode == 0, "publish verification should fail when startup-health.json is present");
         AssertContains(output.Output, StartupHealthUtility.HealthFileName);
-    }
-    finally
-    {
-        if (Directory.Exists(directoryPath))
-        {
-            Directory.Delete(directoryPath, recursive: true);
-        }
-    }
+    });
 }
 
 static void PublishVerificationRejectsLastCrashArtifact()
@@ -2897,6 +2959,8 @@ static void WithCopiedPublishDirectory(Action<string> action)
     try
     {
         CopyDirectory(GetCurrentPublishDirectory(), directoryPath);
+        WriteRequiredRuntimeSidecars(directoryPath);
+        WriteReleaseManifest(directoryPath);
         action(directoryPath);
     }
     finally
@@ -3709,9 +3773,89 @@ static void WriteRpolStorageState(string storageStatePath, string contents, Date
 
 static void WriteRequiredRuntimeSidecars(string directoryPath)
 {
-    File.WriteAllText(Path.Combine(directoryPath, "keyword-index.json"), "{}");
+    File.WriteAllText(
+        Path.Combine(directoryPath, "keyword-index.json"),
+        """
+        {
+          "words": {
+            "scarlet": []
+          },
+          "index_metadata": {}
+        }
+        """);
     File.WriteAllText(Path.Combine(directoryPath, KeywordTermsFileUtility.FileName), "scarlet");
     File.WriteAllText(Path.Combine(directoryPath, "sitemap.xml"), "<urlset />");
+    File.WriteAllText(Path.Combine(directoryPath, "sitemap-keyword-urls.json"), "{}");
+}
+
+static void WriteReleaseManifest(string directoryPath)
+{
+    var assembly = typeof(Program).Assembly;
+    var fileVersion = assembly
+        .GetCustomAttributes(typeof(AssemblyFileVersionAttribute), inherit: false)
+        .OfType<AssemblyFileVersionAttribute>()
+        .FirstOrDefault()
+        ?.Version
+        ?? string.Empty;
+    var informationalVersion = assembly
+        .GetCustomAttributes(typeof(AssemblyInformationalVersionAttribute), inherit: false)
+        .OfType<AssemblyInformationalVersionAttribute>()
+        .FirstOrDefault()
+        ?.InformationalVersion
+        ?? string.Empty;
+
+    var files = GetReleaseManifestRelativePaths()
+        .Select(relativePath => GetReleaseManifestEntry(directoryPath, relativePath))
+        .ToArray();
+    var manifest = new
+    {
+        schema_version = 1,
+        generated_at = DateTimeOffset.UtcNow.ToString("O"),
+        app_version = assembly.GetName().Version?.ToString() ?? string.Empty,
+        file_version = fileVersion,
+        product_version = informationalVersion,
+        hash_algorithm = "SHA256",
+        files
+    };
+
+    File.WriteAllText(
+        Path.Combine(directoryPath, "release-manifest.json"),
+        System.Text.Json.JsonSerializer.Serialize(
+            manifest,
+            new System.Text.Json.JsonSerializerOptions { WriteIndented = true }));
+}
+
+static string[] GetReleaseManifestRelativePaths()
+{
+    return
+    [
+        "player-assistant.exe",
+        "settings.json",
+        "settings.local.json",
+        "keyword-index.json",
+        KeywordTermsFileUtility.FileName,
+        "sitemap.xml",
+        "sitemap-keyword-urls.json",
+        Path.Combine(".playwright", "node", "win32_x64", "node.exe"),
+        Path.Combine(".playwright", "package", "package.json"),
+        Path.Combine(".playwright", "package", "browsers.json")
+    ];
+}
+
+static object GetReleaseManifestEntry(string directoryPath, string relativePath)
+{
+    var path = Path.Combine(directoryPath, relativePath);
+    if (!File.Exists(path))
+    {
+        throw new FileNotFoundException($"Release manifest fixture file '{relativePath}' was missing.", path);
+    }
+
+    return new
+    {
+        relative_path = relativePath.Replace(Path.DirectorySeparatorChar, '\\'),
+        length = new FileInfo(path).Length,
+        sha256 = Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(path)))
+    };
 }
 
 static void SetLastWriteTimeUtc(string filePath, DateTimeOffset value)
@@ -3738,6 +3882,30 @@ static void WriteTransparentPng(string filePath)
 {
     using var bitmap = new Bitmap(2, 2, PixelFormat.Format32bppArgb);
     bitmap.Save(filePath, ImageFormat.Png);
+}
+
+static string CreateSampleRpolThreadHtml()
+{
+    return """
+        <html><body>
+        <div class='message'>
+            <ul><li>msg #1</li></ul>
+            <span class='messageauthor'>Alice</span>
+            <div class='characterdetails'>Scout</div>
+            <span>Mon 1 Jan 2024 at 12:00</span>
+            <div class='messagebody' id='msg1'>Hello from Alice.</div>
+        </div><!-- 1 -->
+        </div><!-- 2 -->
+        <div class='message'>
+            <ul><li>msg #2</li></ul>
+            <span class='messageauthor'>Bob</span>
+            <div class='characterdetails'>Wizard</div>
+            <span>Tue 2 Jan 2024 at 13:30</span>
+            <div class='messagebody' id='msg2'>Hello from Bob.</div>
+        </div><!-- 1 -->
+        </div><!-- 2 -->
+        </body></html>
+        """;
 }
 
 internal sealed class TemporaryDirectory : IDisposable

@@ -1,11 +1,10 @@
 using System.Runtime.InteropServices;
 using System.Text.Json;
 using System.Text.Json.Serialization;
-using System.Text.RegularExpressions;
 
 namespace PlayerAssistant
 {
-    internal static partial class LastCrashDiagnosticUtility
+    internal static class LastCrashDiagnosticUtility
     {
         public const string FileName = "last-crash.json";
         public const int CurrentSchemaVersion = 1;
@@ -31,7 +30,7 @@ namespace PlayerAssistant
                 var diagnostic = new LastCrashDiagnostic(
                     CurrentSchemaVersion,
                     DateTimeOffset.Now,
-                    RedactText(phase),
+                    SensitiveTextRedactionUtility.Redact(phase),
                     Program.GetVersionText(),
                     isTerminating,
                     LastCrashException.From(exception),
@@ -43,32 +42,6 @@ namespace PlayerAssistant
             {
             }
         }
-
-        private static string RedactText(string text)
-        {
-            var redacted = text;
-            redacted = CredentialedUrlPattern().Replace(redacted, "$1[REDACTED]:[REDACTED]@");
-            redacted = SecretQueryPattern().Replace(redacted, "$1[REDACTED]");
-            redacted = BearerTokenPattern().Replace(redacted, "$1[REDACTED]");
-            redacted = CookieHeaderPattern().Replace(redacted, "$1[REDACTED]");
-            redacted = RpolCredentialPattern().Replace(redacted, "$1[REDACTED]");
-            return redacted;
-        }
-
-        [GeneratedRegex("(https?://)([^/\\s:@]+):([^/\\s@]+)@", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
-        private static partial Regex CredentialedUrlPattern();
-
-        [GeneratedRegex("([?&](?:password|token|secret)=)[^&\\s]+", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
-        private static partial Regex SecretQueryPattern();
-
-        [GeneratedRegex("(Authorization\\s*:\\s*Bearer\\s+)\\S+", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
-        private static partial Regex BearerTokenPattern();
-
-        [GeneratedRegex("(Cookie\\s*:\\s*).+", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
-        private static partial Regex CookieHeaderPattern();
-
-        [GeneratedRegex("(RPOL (?:password|user name)\\s*[:=]\\s*)\\S+", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
-        private static partial Regex RpolCredentialPattern();
 
         private sealed record LastCrashDiagnostic(
             [property: JsonPropertyName("schema_version")] int SchemaVersion,
@@ -89,7 +62,7 @@ namespace PlayerAssistant
             {
                 return new LastCrashException(
                     exception.GetType().Name,
-                    RedactText(exception.Message),
+                    SensitiveTextRedactionUtility.Redact(exception.Message),
                     exception.HResult,
                     exception.InnerException is null ? null : From(exception.InnerException));
             }
