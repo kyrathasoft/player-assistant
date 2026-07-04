@@ -1,6 +1,9 @@
 param(
     [string]$PackagePath = (Join-Path $PSScriptRoot 'Release\installer\player-assistant-0.9.0-hardening.5-installer.zip'),
-    [string]$ExpectedVersion = '0.9.0-hardening.5'
+    [string]$ExpectedVersion = '0.9.0-hardening.5',
+    [string]$ExpectedSignerSubject = $env:PLAYER_ASSISTANT_RELEASE_SIGNER_SUBJECT,
+    [string]$ExpectedSignerThumbprint = $env:PLAYER_ASSISTANT_RELEASE_SIGNER_THUMBPRINT,
+    [switch]$RequireCodeSigning
 )
 
 $ErrorActionPreference = 'Stop'
@@ -62,6 +65,51 @@ function Assert-EncryptedEnvelope {
     }
 }
 
+function Test-CodeSigningPolicyConfigured {
+    return $RequireCodeSigning -or
+        ![string]::IsNullOrWhiteSpace($ExpectedSignerSubject) -or
+        ![string]::IsNullOrWhiteSpace($ExpectedSignerThumbprint)
+}
+
+function Assert-AuthenticodeSignatureMatchesPolicy {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Path,
+
+        [Parameter(Mandatory = $true)]
+        [string]$Description
+    )
+
+    if (!(Test-CodeSigningPolicyConfigured)) {
+        return
+    }
+
+    Assert-RequiredFile -Path $Path -Description $Description
+    $signature = Get-AuthenticodeSignature -LiteralPath $Path
+    if ($signature.Status -ne 'Valid') {
+        throw "$Description Authenticode signature status '$($signature.Status)' is not valid."
+    }
+
+    if ($null -eq $signature.SignerCertificate) {
+        throw "$Description is missing an Authenticode signer certificate."
+    }
+
+    $actualSubject = [string]$signature.SignerCertificate.Subject
+    $actualThumbprint = ([string]$signature.SignerCertificate.Thumbprint).Replace(' ', '').ToUpperInvariant()
+
+    if (![string]::IsNullOrWhiteSpace($ExpectedSignerSubject) -and
+        $actualSubject.IndexOf($ExpectedSignerSubject, [System.StringComparison]::OrdinalIgnoreCase) -lt 0) {
+        throw "$Description signer subject '$actualSubject' did not contain expected subject '$ExpectedSignerSubject'."
+    }
+
+    if (![string]::IsNullOrWhiteSpace($ExpectedSignerThumbprint)) {
+        $expectedThumbprint = $ExpectedSignerThumbprint.Replace(' ', '').ToUpperInvariant()
+        if ($actualThumbprint -ne $expectedThumbprint) {
+            throw "$Description signer thumbprint '$actualThumbprint' did not match expected thumbprint '$expectedThumbprint'."
+        }
+    }
+}
+
 function Test-InstallerDirectory {
     param([Parameter(Mandatory = $true)][string]$Directory)
 
@@ -117,6 +165,8 @@ function Test-InstallerDirectory {
     if ($versionInfo.ProductVersion -ne $ExpectedVersion) {
         throw "Payload executable product version '$($versionInfo.ProductVersion)' did not match expected version $ExpectedVersion."
     }
+
+    Assert-AuthenticodeSignatureMatchesPolicy -Path (Join-Path $payloadDirectory 'player-assistant.exe') -Description 'Payload executable'
 
     foreach ($forbiddenName in @('startup-errors.log', 'startup-health.json', 'last-crash.json', 'startup-remediation.txt')) {
         $matches = Get-ChildItem -LiteralPath $payloadDirectory -Recurse -Force -File -Filter $forbiddenName

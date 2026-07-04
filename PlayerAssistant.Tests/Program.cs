@@ -169,8 +169,10 @@ var tests = new (string Name, Action Test)[]
     ("publish verification rejects stale release manifest", PublishVerificationRejectsStaleReleaseManifest),
     ("publish verification rejects malformed runtime inventory", PublishVerificationRejectsMalformedRuntimeInventory),
     ("publish verification rejects malformed release provenance", PublishVerificationRejectsMalformedReleaseProvenance),
+    ("publish verification rejects unsigned executable when signing required", PublishVerificationRejectsUnsignedExecutableWhenSigningRequired),
     ("installer scripts target program files install path", InstallerScriptsTargetProgramFilesInstallPath),
     ("installer package verification accepts current package", InstallerPackageVerificationAcceptsCurrentPackage),
+    ("installer package verification rejects unsigned payload when signing required", InstallerPackageVerificationRejectsUnsignedPayloadWhenSigningRequired),
     ("published health verification accepts current output", PublishedHealthVerificationAcceptsCurrentOutput),
     ("secret scan accepts current repository", SecretScanAcceptsCurrentRepository),
     ("secret scan rejects tracked env secret", SecretScanRejectsTrackedEnvSecret),
@@ -3752,6 +3754,17 @@ static void PublishVerificationRejectsMalformedReleaseProvenance()
     });
 }
 
+static void PublishVerificationRejectsUnsignedExecutableWhenSigningRequired()
+{
+    WithCopiedPublishDirectory(directoryPath =>
+    {
+        var output = RunPublishVerification(directoryPath, "-RequireCodeSigning");
+
+        AssertFalse(output.ExitCode == 0, "publish verification should fail when code signing is required for an unsigned executable");
+        AssertContains(output.Output, "Published executable Authenticode signature status");
+    });
+}
+
 static void InstallerScriptsTargetProgramFilesInstallPath()
 {
     var installerPath = Path.Combine(GetRepositoryRoot(), "Installer", "install-player-assistant.ps1");
@@ -3808,6 +3821,35 @@ static void InstallerPackageVerificationAcceptsCurrentPackage()
 
     AssertEqual(0, output.ExitCode, $"installer package verification should pass. Output: {output.Output}");
     AssertContains(output.Output, "Installer package verification passed:");
+}
+
+static void InstallerPackageVerificationRejectsUnsignedPayloadWhenSigningRequired()
+{
+    var packagePath = Path.Combine(
+        GetRepositoryRoot(),
+        "Release",
+        "installer",
+        "player-assistant-0.9.0-hardening.5-installer.zip");
+    if (!File.Exists(packagePath))
+    {
+        return;
+    }
+
+    var output = RunPowerShell(
+        [
+            "-NoProfile",
+            "-ExecutionPolicy",
+            "Bypass",
+            "-File",
+            Path.Combine(GetRepositoryRoot(), "verify-installer-package.ps1"),
+            "-PackagePath",
+            packagePath,
+            "-RequireCodeSigning"
+        ],
+        TimeSpan.FromSeconds(60));
+
+    AssertFalse(output.ExitCode == 0, "installer package verification should fail when code signing is required for an unsigned payload");
+    AssertContains(output.Output, "Payload executable Authenticode signature status");
 }
 
 static void PublishedHealthVerificationAcceptsCurrentOutput()
@@ -3948,6 +3990,10 @@ static void DiagnosticBundleRedactsSensitiveValues()
         AssertContains(localSettingsShape, "\"payload_length\":");
         AssertContains(localSettingsShape, "\"install_path_bound\":  true");
         AssertFalse(localSettingsShape.Contains("very-secret-payload", StringComparison.Ordinal), "diagnostic bundle should summarize encrypted payloads instead of copying them");
+
+        var versionMetadata = ReadZipEntryText(zipPath, "version-metadata.json");
+        AssertContains(versionMetadata, "\"authenticode_signature\":");
+        AssertContains(versionMetadata, "\"status\":");
 
         var verifyOutput = RunDiagnosticsVerification(outputPath, zipPath);
         AssertEqual(0, verifyOutput.ExitCode, $"diagnostic verify-only should pass. Output: {verifyOutput.Output}");
@@ -4092,6 +4138,18 @@ static void ClearReadOnlyAttributes(string directoryPath)
     foreach (var path in Directory.EnumerateFiles(directoryPath, "*", SearchOption.AllDirectories))
     {
         File.SetAttributes(path, File.GetAttributes(path) & ~FileAttributes.ReadOnly);
+    }
+}
+
+static void SetRuntimeSidecarsReadOnly(string directoryPath)
+{
+    foreach (var fileName in new[] { "settings.local.json", XpPasswordStoreUtility.FileName })
+    {
+        var path = Path.Combine(directoryPath, fileName);
+        if (File.Exists(path))
+        {
+            File.SetAttributes(path, File.GetAttributes(path) | FileAttributes.ReadOnly);
+        }
     }
 }
 
@@ -4359,7 +4417,7 @@ static (int ExitCode, string Output) RunSecretScan(string repoRoot, bool include
     return RunPowerShell(arguments, TimeSpan.FromSeconds(60));
 }
 
-static (int ExitCode, string Output) RunPublishVerification(string outputDirectory)
+static (int ExitCode, string Output) RunPublishVerification(string outputDirectory, params string[] extraArguments)
 {
     var repoRoot = GetRepositoryRoot();
     var scriptPath = Path.Combine(repoRoot, "publish-player-assistant.ps1");
@@ -4368,8 +4426,10 @@ static (int ExitCode, string Output) RunPublishVerification(string outputDirecto
         throw new InvalidOperationException($"Publish script is missing: {scriptPath}");
     }
 
-    return RunPowerShell(
-        [
+    SetRuntimeSidecarsReadOnly(outputDirectory);
+
+    var arguments = new List<string>
+    {
             "-NoProfile",
             "-ExecutionPolicy",
             "Bypass",
@@ -4382,8 +4442,10 @@ static (int ExitCode, string Output) RunPublishVerification(string outputDirecto
             Path.Combine(
                 Path.GetDirectoryName(outputDirectory) ?? GetRepositoryRoot(),
                 $"{Path.GetFileName(outputDirectory)}.source.settings.local.json")
-        ],
-        TimeSpan.FromSeconds(30));
+    };
+    arguments.AddRange(extraArguments);
+
+    return RunPowerShell(arguments, TimeSpan.FromSeconds(30));
 }
 
 static (int ExitCode, string Output) RunGit(string workingDirectory, params string[] arguments)

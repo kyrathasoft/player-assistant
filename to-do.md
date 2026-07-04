@@ -104,9 +104,9 @@
 
 ## Remaining hardening backlog
 
-- [ ] Add release code-signing enforcement and Authenticode verification to publish verification, installer builds, and the RC checklist.
-  - [ ] Fail RC verification when the release executable or installer is unsigned or signed with an unexpected certificate subject/thumbprint.
-  - [ ] Record signature metadata in release provenance and diagnostics.
+- [x] Add release code-signing enforcement and Authenticode verification to publish verification, installer builds, and the RC checklist.
+  - [x] Fail RC verification when the release executable or installer is unsigned or signed with an unexpected certificate subject/thumbprint.
+  - [x] Record signature metadata in release provenance and diagnostics.
 - [x] Add installer/runtime sidecar ACL validation.
   - [x] Verify encrypted runtime sidecars are installed read-only for normal users where appropriate.
   - [x] Verify writable runtime directories live under the approved per-user or ProgramData fallback locations.

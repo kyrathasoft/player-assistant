@@ -1,7 +1,10 @@
 param(
     [string]$OutputDir = (Join-Path $PSScriptRoot 'Release\publish'),
     [switch]$VerifyOnly,
-    [string]$SourceSettingsPath = (Join-Path $PSScriptRoot 'settings.local.json')
+    [string]$SourceSettingsPath = (Join-Path $PSScriptRoot 'settings.local.json'),
+    [string]$ExpectedSignerSubject = $env:PLAYER_ASSISTANT_RELEASE_SIGNER_SUBJECT,
+    [string]$ExpectedSignerThumbprint = $env:PLAYER_ASSISTANT_RELEASE_SIGNER_THUMBPRINT,
+    [switch]$RequireCodeSigning
 )
 
 $ErrorActionPreference = 'Stop'
@@ -1138,7 +1141,58 @@ function Get-AuthenticodeSignatureSummary {
         status = [string]$signature.Status
         signer_subject = if ($signature.SignerCertificate) { $signature.SignerCertificate.Subject } else { $null }
         thumbprint = if ($signature.SignerCertificate) { $signature.SignerCertificate.Thumbprint } else { $null }
+        issuer = if ($signature.SignerCertificate) { $signature.SignerCertificate.Issuer } else { $null }
+        not_before = if ($signature.SignerCertificate) { $signature.SignerCertificate.NotBefore.ToString('O') } else { $null }
+        not_after = if ($signature.SignerCertificate) { $signature.SignerCertificate.NotAfter.ToString('O') } else { $null }
+        timestamp_subject = if ($signature.TimeStamperCertificate) { $signature.TimeStamperCertificate.Subject } else { $null }
     }
+}
+
+function Test-CodeSigningPolicyConfigured {
+    return $RequireCodeSigning -or
+        ![string]::IsNullOrWhiteSpace($ExpectedSignerSubject) -or
+        ![string]::IsNullOrWhiteSpace($ExpectedSignerThumbprint)
+}
+
+function Assert-AuthenticodeSignatureMatchesPolicy {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Path,
+
+        [Parameter(Mandatory = $true)]
+        [string]$Description
+    )
+
+    if (!(Test-CodeSigningPolicyConfigured)) {
+        return Get-AuthenticodeSignatureSummary -Path $Path
+    }
+
+    Assert-RequiredFile -Path $Path -Description $Description
+    $signature = Get-AuthenticodeSignature -LiteralPath $Path
+    if ($signature.Status -ne 'Valid') {
+        throw "$Description Authenticode signature status '$($signature.Status)' is not valid."
+    }
+
+    if ($null -eq $signature.SignerCertificate) {
+        throw "$Description is missing an Authenticode signer certificate."
+    }
+
+    $actualSubject = [string]$signature.SignerCertificate.Subject
+    $actualThumbprint = ([string]$signature.SignerCertificate.Thumbprint).Replace(' ', '').ToUpperInvariant()
+
+    if (![string]::IsNullOrWhiteSpace($ExpectedSignerSubject) -and
+        $actualSubject.IndexOf($ExpectedSignerSubject, [System.StringComparison]::OrdinalIgnoreCase) -lt 0) {
+        throw "$Description signer subject '$actualSubject' did not contain expected subject '$ExpectedSignerSubject'."
+    }
+
+    if (![string]::IsNullOrWhiteSpace($ExpectedSignerThumbprint)) {
+        $expectedThumbprint = $ExpectedSignerThumbprint.Replace(' ', '').ToUpperInvariant()
+        if ($actualThumbprint -ne $expectedThumbprint) {
+            throw "$Description signer thumbprint '$actualThumbprint' did not match expected thumbprint '$expectedThumbprint'."
+        }
+    }
+
+    return Get-AuthenticodeSignatureSummary -Path $Path
 }
 
 function Write-ReleaseProvenance {
@@ -1215,6 +1269,17 @@ function Assert-ReleaseProvenance {
 
     if ($null -eq $provenance.PSObject.Properties['executable_signature']) {
         throw "$ReleaseProvenanceFileName is missing executable signature status."
+    }
+
+    $executablePath = Join-Path $Directory 'player-assistant.exe'
+    $actualSignature = Assert-AuthenticodeSignatureMatchesPolicy -Path $executablePath -Description 'Published executable'
+    if ((Test-CodeSigningPolicyConfigured) -and [string]$provenance.executable_signature.status -ne [string]$actualSignature.status) {
+        throw "$ReleaseProvenanceFileName executable signature status does not match the current executable."
+    }
+
+    if ((Test-CodeSigningPolicyConfigured) -and
+        [string]$provenance.executable_signature.thumbprint -ne [string]$actualSignature.thumbprint) {
+        throw "$ReleaseProvenanceFileName executable signature thumbprint does not match the current executable."
     }
 }
 

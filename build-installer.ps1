@@ -3,6 +3,9 @@ param(
     [string]$PublishDir = (Join-Path $PSScriptRoot 'Release\publish'),
     [string]$Version = '0.9.0-hardening.5',
     [string]$InnoCompilerPath,
+    [string]$ExpectedSignerSubject = $env:PLAYER_ASSISTANT_RELEASE_SIGNER_SUBJECT,
+    [string]$ExpectedSignerThumbprint = $env:PLAYER_ASSISTANT_RELEASE_SIGNER_THUMBPRINT,
+    [switch]$RequireCodeSigning,
     [switch]$SkipPublish
 )
 
@@ -294,8 +297,64 @@ function Resolve-InnoCompilerPath {
     return $null
 }
 
+function Test-CodeSigningPolicyConfigured {
+    return $RequireCodeSigning -or
+        ![string]::IsNullOrWhiteSpace($ExpectedSignerSubject) -or
+        ![string]::IsNullOrWhiteSpace($ExpectedSignerThumbprint)
+}
+
+function Assert-AuthenticodeSignatureMatchesPolicy {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Path,
+
+        [Parameter(Mandatory = $true)]
+        [string]$Description
+    )
+
+    if (!(Test-CodeSigningPolicyConfigured)) {
+        return
+    }
+
+    Assert-RequiredFile -Path $Path -Description $Description
+    $signature = Get-AuthenticodeSignature -LiteralPath $Path
+    if ($signature.Status -ne 'Valid') {
+        throw "$Description Authenticode signature status '$($signature.Status)' is not valid."
+    }
+
+    if ($null -eq $signature.SignerCertificate) {
+        throw "$Description is missing an Authenticode signer certificate."
+    }
+
+    $actualSubject = [string]$signature.SignerCertificate.Subject
+    $actualThumbprint = ([string]$signature.SignerCertificate.Thumbprint).Replace(' ', '').ToUpperInvariant()
+
+    if (![string]::IsNullOrWhiteSpace($ExpectedSignerSubject) -and
+        $actualSubject.IndexOf($ExpectedSignerSubject, [System.StringComparison]::OrdinalIgnoreCase) -lt 0) {
+        throw "$Description signer subject '$actualSubject' did not contain expected subject '$ExpectedSignerSubject'."
+    }
+
+    if (![string]::IsNullOrWhiteSpace($ExpectedSignerThumbprint)) {
+        $expectedThumbprint = $ExpectedSignerThumbprint.Replace(' ', '').ToUpperInvariant()
+        if ($actualThumbprint -ne $expectedThumbprint) {
+            throw "$Description signer thumbprint '$actualThumbprint' did not match expected thumbprint '$expectedThumbprint'."
+        }
+    }
+}
+
 if (!$SkipPublish) {
-    & (Join-Path $PSScriptRoot 'publish-player-assistant.ps1') -OutputDir $PublishDir
+    $publishArguments = @('-OutputDir', $PublishDir)
+    if ($RequireCodeSigning) {
+        $publishArguments += '-RequireCodeSigning'
+    }
+    if (![string]::IsNullOrWhiteSpace($ExpectedSignerSubject)) {
+        $publishArguments += @('-ExpectedSignerSubject', $ExpectedSignerSubject)
+    }
+    if (![string]::IsNullOrWhiteSpace($ExpectedSignerThumbprint)) {
+        $publishArguments += @('-ExpectedSignerThumbprint', $ExpectedSignerThumbprint)
+    }
+
+    & (Join-Path $PSScriptRoot 'publish-player-assistant.ps1') @publishArguments
 }
 
 Assert-RequiredFile -Path (Join-Path $PublishDir 'player-assistant.exe') -Description 'published executable'
@@ -326,7 +385,18 @@ Protect-RuntimeSidecarFiles -Directory $payloadRoot
 
 Compress-Archive -LiteralPath $packageRoot -DestinationPath $packagePath -Force
 
-& (Join-Path $PSScriptRoot 'verify-installer-package.ps1') -PackagePath $packagePath -ExpectedVersion $Version
+$verifyInstallerArguments = @('-PackagePath', $packagePath, '-ExpectedVersion', $Version)
+if ($RequireCodeSigning) {
+    $verifyInstallerArguments += '-RequireCodeSigning'
+}
+if (![string]::IsNullOrWhiteSpace($ExpectedSignerSubject)) {
+    $verifyInstallerArguments += @('-ExpectedSignerSubject', $ExpectedSignerSubject)
+}
+if (![string]::IsNullOrWhiteSpace($ExpectedSignerThumbprint)) {
+    $verifyInstallerArguments += @('-ExpectedSignerThumbprint', $ExpectedSignerThumbprint)
+}
+
+& (Join-Path $PSScriptRoot 'verify-installer-package.ps1') @verifyInstallerArguments
 
 Write-Output "Installer package created: $packagePath"
 
@@ -348,6 +418,7 @@ if ($resolvedInnoCompilerPath) {
     }
 
     Assert-RequiredFile -Path $innoOutputPath -Description 'Inno Setup installer'
+    Assert-AuthenticodeSignatureMatchesPolicy -Path $innoOutputPath -Description 'Inno Setup installer'
     Write-Output "Inno Setup installer created: $innoOutputPath"
 }
 else {

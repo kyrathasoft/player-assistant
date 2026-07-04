@@ -22,6 +22,10 @@ param(
     [switch]$SkipDiagnostics,
     [switch]$SkipDependencyChecks,
     [switch]$SkipRuntimeSidecarChecks,
+    [switch]$SkipCodeSigning,
+    [string]$ExpectedSignerSubject = $env:PLAYER_ASSISTANT_RELEASE_SIGNER_SUBJECT,
+    [string]$ExpectedSignerThumbprint = $env:PLAYER_ASSISTANT_RELEASE_SIGNER_THUMBPRINT,
+    [string]$InstallerPath,
     [string]$DependencyVulnerabilityOutputFixture
 )
 
@@ -39,6 +43,7 @@ $PublishRuntimeIntegrityScriptPath = Join-Path $PSScriptRoot 'verify-publish-run
 $DiagnosticsScriptPath = Join-Path $PSScriptRoot 'collect-diagnostics.ps1'
 $RuntimeSidecarScriptPath = Join-Path $PSScriptRoot 'verify-runtime-sidecars.ps1'
 $DependencyInventoryPath = Join-Path $PSScriptRoot 'codex-scratch\rc-dependency-inventory.json'
+$ReleaseProvenanceFileName = 'release-provenance.json'
 $RcDryRunSteps = [System.Collections.Generic.List[object]]::new()
 $RcDryRunFailed = $false
 
@@ -354,6 +359,117 @@ function Assert-ExecutableVersion {
     }
 
     Write-Output "$Description version verified: FileVersion=$($versionInfo.FileVersion), ProductVersion=$($versionInfo.ProductVersion)"
+}
+
+function Get-AuthenticodeSignatureSummary {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Path
+    )
+
+    $signature = Get-AuthenticodeSignature -LiteralPath $Path
+    return [pscustomobject]@{
+        status = [string]$signature.Status
+        signer_subject = if ($signature.SignerCertificate) { $signature.SignerCertificate.Subject } else { $null }
+        thumbprint = if ($signature.SignerCertificate) { $signature.SignerCertificate.Thumbprint } else { $null }
+    }
+}
+
+function Assert-CodeSigningPolicyConfigured {
+    if ([string]::IsNullOrWhiteSpace($ExpectedSignerSubject) -and
+        [string]::IsNullOrWhiteSpace($ExpectedSignerThumbprint)) {
+        throw 'Code-signing enforcement requires -ExpectedSignerSubject or -ExpectedSignerThumbprint, or PLAYER_ASSISTANT_RELEASE_SIGNER_SUBJECT / PLAYER_ASSISTANT_RELEASE_SIGNER_THUMBPRINT.'
+    }
+}
+
+function Assert-AuthenticodeSignatureMatchesPolicy {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Path,
+
+        [Parameter(Mandatory = $true)]
+        [string]$Description
+    )
+
+    Assert-RequiredFile -Path $Path -Description $Description
+    $signature = Get-AuthenticodeSignature -LiteralPath $Path
+    if ($signature.Status -ne 'Valid') {
+        throw "$Description Authenticode signature status '$($signature.Status)' is not valid."
+    }
+
+    if ($null -eq $signature.SignerCertificate) {
+        throw "$Description is missing an Authenticode signer certificate."
+    }
+
+    $actualSubject = [string]$signature.SignerCertificate.Subject
+    $actualThumbprint = ([string]$signature.SignerCertificate.Thumbprint).Replace(' ', '').ToUpperInvariant()
+
+    if (![string]::IsNullOrWhiteSpace($ExpectedSignerSubject) -and
+        $actualSubject.IndexOf($ExpectedSignerSubject, [System.StringComparison]::OrdinalIgnoreCase) -lt 0) {
+        throw "$Description signer subject '$actualSubject' did not contain expected subject '$ExpectedSignerSubject'."
+    }
+
+    if (![string]::IsNullOrWhiteSpace($ExpectedSignerThumbprint)) {
+        $expectedThumbprint = $ExpectedSignerThumbprint.Replace(' ', '').ToUpperInvariant()
+        if ($actualThumbprint -ne $expectedThumbprint) {
+            throw "$Description signer thumbprint '$actualThumbprint' did not match expected thumbprint '$expectedThumbprint'."
+        }
+    }
+
+    return Get-AuthenticodeSignatureSummary -Path $Path
+}
+
+function Assert-ProvenanceSignatureMatches {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Directory,
+
+        [Parameter(Mandatory = $true)]
+        [object]$ActualSignature,
+
+        [Parameter(Mandatory = $true)]
+        [string]$Description
+    )
+
+    $provenancePath = Join-Path $Directory $ReleaseProvenanceFileName
+    $provenance = ConvertFrom-JsonFileIfPresent -Path $provenancePath -Description "$Description $ReleaseProvenanceFileName"
+    if ($null -eq $provenance.PSObject.Properties['executable_signature']) {
+        throw "$Description $ReleaseProvenanceFileName is missing executable_signature."
+    }
+
+    if ([string]$provenance.executable_signature.status -ne [string]$ActualSignature.status) {
+        throw "$Description $ReleaseProvenanceFileName executable_signature.status does not match the executable."
+    }
+
+    if ([string]$provenance.executable_signature.thumbprint -ne [string]$ActualSignature.thumbprint) {
+        throw "$Description $ReleaseProvenanceFileName executable_signature.thumbprint does not match the executable."
+    }
+}
+
+function Invoke-CodeSigningCheck {
+    if ($SkipCodeSigning) {
+        Write-Output "Skipping code-signing checks because -SkipCodeSigning was supplied."
+        return
+    }
+
+    Assert-CodeSigningPolicyConfigured
+
+    $releaseExecutablePath = Join-Path $resolvedReleaseDir $ExecutableFileName
+    $publishExecutablePath = Join-Path $resolvedPublishDir $ExecutableFileName
+    $releaseSignature = Assert-AuthenticodeSignatureMatchesPolicy -Path $releaseExecutablePath -Description 'Release executable'
+    $publishSignature = Assert-AuthenticodeSignatureMatchesPolicy -Path $publishExecutablePath -Description 'published executable'
+    Assert-ProvenanceSignatureMatches -Directory $resolvedReleaseDir -ActualSignature $releaseSignature -Description 'Release'
+    Assert-ProvenanceSignatureMatches -Directory $resolvedPublishDir -ActualSignature $publishSignature -Description 'publish'
+
+    $resolvedInstallerPath = if (![string]::IsNullOrWhiteSpace($InstallerPath)) {
+        Resolve-FullPath $InstallerPath
+    }
+    else {
+        Join-Path $PSScriptRoot "Release\installer\player-assistant-$($projectVersion.Version)-setup.exe"
+    }
+
+    Assert-AuthenticodeSignatureMatchesPolicy -Path $resolvedInstallerPath -Description 'Inno Setup installer'
+    Write-Output "Code-signing verified: subject='$ExpectedSignerSubject', thumbprint='$ExpectedSignerThumbprint'"
 }
 
 function Assert-RcTagMatchesVersion {
@@ -1115,6 +1231,18 @@ Invoke-RcChecklistStep `
         (Join-Path $PSScriptRoot 'Installer\install-player-assistant.ps1')
     ) `
     -Action { Invoke-RuntimeSidecarCheck }
+
+Invoke-RcChecklistStep `
+    -Name 'code-signing and Authenticode verification' `
+    -Command 'verify Authenticode signatures for Release exe, published exe, release provenance, and setup.exe' `
+    -Artifacts @(
+        (Join-Path $resolvedReleaseDir $ExecutableFileName),
+        (Join-Path $resolvedPublishDir $ExecutableFileName),
+        (Join-Path $resolvedReleaseDir $ReleaseProvenanceFileName),
+        (Join-Path $resolvedPublishDir $ReleaseProvenanceFileName),
+        $(if (![string]::IsNullOrWhiteSpace($InstallerPath)) { $InstallerPath } else { Join-Path $PSScriptRoot "Release\installer\player-assistant-$($projectVersion.Version)-setup.exe" })
+    ) `
+    -Action { Invoke-CodeSigningCheck }
 
 Invoke-RcChecklistStep `
     -Name 'diagnostic bundle' `

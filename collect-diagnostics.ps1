@@ -374,6 +374,7 @@ function Get-ExecutableVersionSummary {
 
     $item = Get-Item -LiteralPath $Path
     $version = [System.Diagnostics.FileVersionInfo]::GetVersionInfo($Path)
+    $signature = Get-AuthenticodeSignature -LiteralPath $Path
     return [pscustomobject]@{
         label = $Label
         path = $Path
@@ -385,6 +386,15 @@ function Get-ExecutableVersionSummary {
         product_version = $version.ProductVersion
         product_name = $version.ProductName
         original_file_name = $version.OriginalFilename
+        authenticode_signature = [ordered]@{
+            status = [string]$signature.Status
+            signer_subject = if ($signature.SignerCertificate) { $signature.SignerCertificate.Subject } else { $null }
+            thumbprint = if ($signature.SignerCertificate) { $signature.SignerCertificate.Thumbprint } else { $null }
+            issuer = if ($signature.SignerCertificate) { $signature.SignerCertificate.Issuer } else { $null }
+            not_before = if ($signature.SignerCertificate) { $signature.SignerCertificate.NotBefore.ToString('O') } else { $null }
+            not_after = if ($signature.SignerCertificate) { $signature.SignerCertificate.NotAfter.ToString('O') } else { $null }
+            timestamp_subject = if ($signature.TimeStamperCertificate) { $signature.TimeStamperCertificate.Subject } else { $null }
+        }
     }
 }
 
