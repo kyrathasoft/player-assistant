@@ -48,6 +48,29 @@ jobs:
         shell: pwsh
         run: dotnet build .\player-assistant.csproj --configuration Release --nologo
 
+      - name: Seed CI local sidecars
+        shell: pwsh
+        run: |
+          if (-not (Test-Path -LiteralPath .\settings.local.json -PathType Leaf)) {
+            @'
+          {
+            "schema_version": 1,
+            "RPOL user name": "ci-fixture-user",
+            "RPOL password": "ci-fixture-password"
+          }
+          '@ | Set-Content -LiteralPath .\settings.local.json -Encoding UTF8
+          }
+
+          if (-not (Test-Path -LiteralPath .\xp-passwords.json -PathType Leaf)) {
+            @'
+          {
+            "schema_version": 1,
+            "Dungeon Master": "ci-fixture-password",
+            "Kelpie": "ci-fixture-password"
+          }
+          '@ | Set-Content -LiteralPath .\xp-passwords.json -Encoding UTF8
+          }
+
       - name: Seed Release runtime artifacts
         shell: pwsh
         run: |
