@@ -121,7 +121,7 @@ namespace PlayerAssistant
 
         private static void EnsurePostsDirectory()
         {
-            var postsDirectory = Path.Combine(AppContext.BaseDirectory, PostsDirectoryName);
+            var postsDirectory = RuntimePathUtility.GetWritableRuntimePath(PostsDirectoryName);
 
             Directory.CreateDirectory(postsDirectory);
             Directory.CreateDirectory(RuntimePathUtility.CombineUnderBase(postsDirectory, IcDirectoryName));

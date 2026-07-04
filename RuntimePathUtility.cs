@@ -4,8 +4,11 @@ namespace PlayerAssistant
     {
         private const string CompanyDirectoryName = "KyrathaSoft";
         private const string AppDirectoryName = "player-assistant";
+        private const string DevelopmentReleaseDirectoryName = "Release";
+        private const string ProjectFileName = "player-assistant.csproj";
 
         public static string ApplicationDirectory => Path.GetFullPath(AppContext.BaseDirectory);
+        public static string WritableRuntimeDirectory => GetWritableRuntimeDirectory();
 
         public static string SharedDataDirectory => Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData),
@@ -45,6 +48,11 @@ namespace PlayerAssistant
         public static string GetApplicationPath(params string[] relativeParts)
         {
             return CombineUnderBase(ApplicationDirectory, relativeParts);
+        }
+
+        public static string GetWritableRuntimePath(params string[] relativeParts)
+        {
+            return CombineUnderBase(WritableRuntimeDirectory, relativeParts);
         }
 
         public static string CombineUnderBase(string baseDirectory, params string[] relativeParts)
@@ -96,6 +104,22 @@ namespace PlayerAssistant
             }
 
             return fallbackPath ?? CombineUnderBase(ApplicationDirectory, relativeParts);
+        }
+
+        private static string GetWritableRuntimeDirectory()
+        {
+            var currentDirectory = new DirectoryInfo(ApplicationDirectory);
+            while (currentDirectory is not null)
+            {
+                if (File.Exists(Path.Combine(currentDirectory.FullName, ProjectFileName)))
+                {
+                    return Path.Combine(currentDirectory.FullName, DevelopmentReleaseDirectoryName);
+                }
+
+                currentDirectory = currentDirectory.Parent;
+            }
+
+            return UserDataDirectory;
         }
     }
 }

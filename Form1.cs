@@ -1986,11 +1986,11 @@ namespace PlayerAssistant
 
         private async Task<string> RefreshLoginInfoJsonAsync(CancellationToken cancellationToken = default)
         {
-            var tempDirectory = Path.Combine(AppContext.BaseDirectory, TempDirectoryName);
+            var tempDirectory = Path.Combine(GetReleaseDirectory(), TempDirectoryName);
             var loginInfoPath = GetLoginInfoPath();
             var tempLoginInfoPath = Path.Combine(tempDirectory, TheCastLoginInfoFileName);
             var oocPostsDirectory = Path.GetDirectoryName(loginInfoPath)
-                ?? Path.Combine(AppContext.BaseDirectory, PostsDirectoryName, OutOfCharacterPostsDirectoryName);
+                ?? Path.Combine(GetReleaseDirectory(), PostsDirectoryName, OutOfCharacterPostsDirectoryName);
 
             Directory.CreateDirectory(oocPostsDirectory);
             Directory.CreateDirectory(tempDirectory);
@@ -2119,7 +2119,7 @@ namespace PlayerAssistant
         private static string GetLoginInfoPath()
         {
             return Path.Combine(
-                AppContext.BaseDirectory,
+                GetReleaseDirectory(),
                 PostsDirectoryName,
                 OutOfCharacterPostsDirectoryName,
                 TheCastLoginInfoFileName);
@@ -2128,7 +2128,7 @@ namespace PlayerAssistant
         private static string GetTheCastHtmlPath()
         {
             return Path.Combine(
-                AppContext.BaseDirectory,
+                GetReleaseDirectory(),
                 PostsDirectoryName,
                 OutOfCharacterPostsDirectoryName,
                 "the-cast.html");
@@ -2137,7 +2137,7 @@ namespace PlayerAssistant
         private static string GetDiceRollsHtmlPath()
         {
             return Path.Combine(
-                AppContext.BaseDirectory,
+                GetReleaseDirectory(),
                 PostsDirectoryName,
                 OutOfCharacterPostsDirectoryName,
                 DiceRollsHtmlFileName);
@@ -2333,12 +2333,12 @@ namespace PlayerAssistant
                 SetStatusBarMessage("Reading game forum links...");
 
                 var hyperlinks = await HtmlUtility.GetRpolGameHyperlinksAsync(cancellationToken);
-                var icPostsDirectory = Path.Combine(AppContext.BaseDirectory, PostsDirectoryName, InCharacterPostsDirectoryName);
+                var icPostsDirectory = Path.Combine(GetReleaseDirectory(), PostsDirectoryName, InCharacterPostsDirectoryName);
                 chapterDownloads = await TryDownloadChaptersAsync(hyperlinks, icPostsDirectory, cancellationToken);
                 var asidePostsDirectory = Path.Combine(icPostsDirectory, AsidePostsDirectoryName);
                 asideDownloads = await TryDownloadAsidesAsync(hyperlinks, asidePostsDirectory, cancellationToken);
 
-                var oocPostsDirectory = Path.Combine(AppContext.BaseDirectory, PostsDirectoryName, OutOfCharacterPostsDirectoryName);
+                var oocPostsDirectory = Path.Combine(GetReleaseDirectory(), PostsDirectoryName, OutOfCharacterPostsDirectoryName);
                 allOutOfCharacterDownloads = await TryDownloadOutOfCharacterAsync(hyperlinks, oocPostsDirectory, cancellationToken);
             }
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
@@ -2933,20 +2933,7 @@ namespace PlayerAssistant
 
         private static string GetReleaseDirectory()
         {
-            var baseDirectory = Path.GetFullPath(AppContext.BaseDirectory);
-            var currentDirectory = new DirectoryInfo(baseDirectory);
-
-            while (currentDirectory is not null)
-            {
-                if (File.Exists(Path.Combine(currentDirectory.FullName, "player-assistant.csproj")))
-                {
-                    return Path.Combine(currentDirectory.FullName, "Release");
-                }
-
-                currentDirectory = currentDirectory.Parent;
-            }
-
-            return baseDirectory;
+            return RuntimePathUtility.WritableRuntimeDirectory;
         }
 
         private void InitializeCachedActiveHeroImages()
