@@ -52,6 +52,12 @@ namespace PlayerAssistant
             string siteUrl,
             CancellationToken cancellationToken)
         {
+            var siteValidation = NetworkUrlAllowlistUtility.Validate(siteUrl, NetworkUrlPurpose.ObsidianPublish);
+            if (!siteValidation.IsAllowed)
+            {
+                throw new InvalidOperationException($"Obsidian Publish site URL is not allowed: {siteValidation.RejectionReason}");
+            }
+
             var html = await HtmlUtility.GetHtmlFromUrlAsync(siteUrl, cancellationToken);
             var uidMatch = SiteUidRegex.Match(html);
             var hostMatch = SiteHostRegex.Match(html);
@@ -61,9 +67,11 @@ namespace PlayerAssistant
                 throw new InvalidOperationException("Obsidian Publish site information could not be found.");
             }
 
-            return new ObsidianPublishSiteInfo(
+            var siteInfo = new ObsidianPublishSiteInfo(
                 uidMatch.Groups["uid"].Value,
                 hostMatch.Groups["host"].Value);
+            NetworkUrlAllowlistUtility.EnsureAllowed(new Uri($"https://{siteInfo.Host}/"), NetworkUrlPurpose.ObsidianPublish);
+            return siteInfo;
         }
 
         private static async Task<string[]> GetPublishedCacheAsync(
@@ -126,7 +134,9 @@ namespace PlayerAssistant
 
         private static string BuildAccessUrl(ObsidianPublishSiteInfo siteInfo, string path)
         {
-            return $"https://{siteInfo.Host}/access/{siteInfo.Uid}/{EscapePath(path)}";
+            var accessUrl = $"https://{siteInfo.Host}/access/{siteInfo.Uid}/{EscapePath(path)}";
+            NetworkUrlAllowlistUtility.EnsureAllowed(new Uri(accessUrl), NetworkUrlPurpose.ObsidianPublish);
+            return accessUrl;
         }
 
         private static string EscapePath(string path)

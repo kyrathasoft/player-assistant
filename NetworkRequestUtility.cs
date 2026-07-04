@@ -61,12 +61,21 @@ namespace PlayerAssistant
                 try
                 {
                     using var request = createRequest();
+                    if (request.RequestUri is not null)
+                    {
+                        NetworkUrlAllowlistUtility.EnsureAllowed(request.RequestUri);
+                    }
+
                     var circuitBreakerKey = GetCircuitBreakerKey(request);
                     ThrowIfCircuitOpen(circuitBreakerKey, DateTimeOffset.Now);
                     var response = await httpClient.SendAsync(
                         request,
                         completionOption,
                         timeoutCancellation.Token).ConfigureAwait(false);
+                    if (response.RequestMessage?.RequestUri is not null)
+                    {
+                        NetworkUrlAllowlistUtility.EnsureAllowed(response.RequestMessage.RequestUri);
+                    }
 
                     if (ShouldRetry(response.StatusCode) && attempt < policy.MaxAttempts)
                     {

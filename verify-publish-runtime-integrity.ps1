@@ -3,6 +3,7 @@ param(
     [string]$PublishDir = (Join-Path $PSScriptRoot 'Release\publish'),
     [int]$StartupTimeoutSeconds = 45,
     [int]$PostHealthRunSeconds = 5,
+    [string]$VerifyHealthFileOnly,
     [string[]]$TrackedReleaseFile = @(
         'settings.json',
         'settings.local.json',
@@ -328,6 +329,17 @@ function Restore-PublishDiagnostics {
 
 $resolvedReleaseDir = Resolve-FullPath $ReleaseDir
 $resolvedPublishDir = Resolve-FullPath $PublishDir
+
+if (![string]::IsNullOrWhiteSpace($VerifyHealthFileOnly)) {
+    $resolvedHealthFile = Resolve-FullPath $VerifyHealthFileOnly
+    Assert-PathInsideRepo -Path $resolvedHealthFile -Description 'startup health fixture'
+    Assert-RequiredFile -Path $resolvedHealthFile -Description 'startup health fixture'
+    $health = Get-Content -Raw -LiteralPath $resolvedHealthFile | ConvertFrom-Json
+    Assert-StartupHealth -Health $health
+    Write-Output "Startup health fixture verification passed: $resolvedHealthFile"
+    return
+}
+
 Assert-PathInsideRepo -Path $resolvedReleaseDir -Description 'Release directory'
 Assert-PathInsideRepo -Path $resolvedPublishDir -Description 'publish directory'
 

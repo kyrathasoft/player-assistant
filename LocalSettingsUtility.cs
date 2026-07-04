@@ -8,15 +8,18 @@ namespace PlayerAssistant
     internal static class LocalSettingsUtility
     {
         private const string LegacyEncryptedFormat = "dpapi-current-user";
-        private const string PreviousEncryptedFormat = "app-protected-v1";
-        private const string EncryptedFormat = "app-protected-v2";
+        private const string V1EncryptedFormat = "app-protected-v1";
+        private const string V2EncryptedFormat = "app-protected-v2";
+        private const string EncryptedFormat = "app-protected-v3";
         private const string FormatPropertyName = "format";
         private const string PayloadPropertyName = "payload";
+        private const string KeyScopePropertyName = "key_scope";
         private const string EncryptionKeySeed = "PlayerAssistant.LocalSettings.v1";
         private const int AesIvSizeBytes = 16;
         private const int HmacSizeBytes = 32;
-        private static readonly byte[] EncryptionKey = SHA256.HashData(Encoding.UTF8.GetBytes(EncryptionKeySeed));
-        private static readonly byte[] AuthenticationKey = SHA256.HashData(Encoding.UTF8.GetBytes($"{EncryptionKeySeed}.hmac"));
+        private static readonly byte[] V1EncryptionKey = SHA256.HashData(Encoding.UTF8.GetBytes(EncryptionKeySeed));
+        private static readonly byte[] V2EncryptionKey = SHA256.HashData(Encoding.UTF8.GetBytes(EncryptionKeySeed));
+        private static readonly byte[] V2AuthenticationKey = SHA256.HashData(Encoding.UTF8.GetBytes($"{EncryptionKeySeed}.hmac"));
         private static readonly JsonSerializerOptions JsonOptions = new()
         {
             PropertyNameCaseInsensitive = true,
@@ -37,7 +40,7 @@ namespace PlayerAssistant
 
             if (TryReadEncryptedEnvelope(document.RootElement, out var envelope))
             {
-                var decryptedSettings = DecryptSettings(envelope);
+                var decryptedSettings = DecryptSettings(envelope, settingsPath);
                 if (!string.Equals(envelope.Format, EncryptedFormat, StringComparison.Ordinal))
                 {
                     SaveEncryptedSettings(settingsPath, decryptedSettings);
@@ -65,7 +68,7 @@ namespace PlayerAssistant
             ArgumentNullException.ThrowIfNull(settings);
 
             var plaintextBytes = JsonSerializer.SerializeToUtf8Bytes(settings, JsonOptions);
-            var encryptedEnvelope = CreateEncryptedEnvelope(plaintextBytes);
+            var encryptedEnvelope = CreateEncryptedEnvelope(plaintextBytes, settingsPath);
 
             var encryptedJson = JsonSerializer.Serialize(encryptedEnvelope, JsonOptions);
             AtomicFileUtility.WriteAllText(settingsPath, encryptedJson);
@@ -83,14 +86,15 @@ namespace PlayerAssistant
             return TryReadEncryptedEnvelope(document.RootElement, out _);
         }
 
-        private static Dictionary<string, string> DecryptSettings(EncryptedSettingsEnvelope envelope)
+        private static Dictionary<string, string> DecryptSettings(EncryptedSettingsEnvelope envelope, string settingsPath)
         {
             try
             {
                 return envelope.Format switch
                 {
-                    EncryptedFormat => DecryptAuthenticatedAesCbcSettings(envelope.Payload),
-                    PreviousEncryptedFormat => DecryptAesCbcSettings(envelope.Payload),
+                    EncryptedFormat => DecryptAuthenticatedAesCbcSettings(envelope.Payload, settingsPath, EncryptedFormat),
+                    V2EncryptedFormat => DecryptAuthenticatedAesCbcSettings(envelope.Payload, settingsPath, V2EncryptedFormat),
+                    V1EncryptedFormat => DecryptAesCbcSettings(envelope.Payload),
                     LegacyEncryptedFormat => DecryptDpapiSettings(envelope.Payload),
                     _ => throw new InvalidOperationException(
                         $"Unsupported encrypted settings format '{envelope.Format}'.")
@@ -102,7 +106,7 @@ namespace PlayerAssistant
             }
         }
 
-        private static Dictionary<string, string> DecryptAuthenticatedAesCbcSettings(string payload)
+        private static Dictionary<string, string> DecryptAuthenticatedAesCbcSettings(string payload, string settingsPath, string format)
         {
             try
             {
@@ -114,7 +118,8 @@ namespace PlayerAssistant
 
                 var protectedContent = protectedBytes[..^HmacSizeBytes];
                 var expectedHmac = protectedBytes[^HmacSizeBytes..];
-                using (var hmac = new HMACSHA256(AuthenticationKey))
+                var keySet = GetKeySet(format, settingsPath);
+                using (var hmac = new HMACSHA256(keySet.AuthenticationKey))
                 {
                     var actualHmac = hmac.ComputeHash(protectedContent);
                     if (!CryptographicOperations.FixedTimeEquals(actualHmac, expectedHmac))
@@ -127,7 +132,7 @@ namespace PlayerAssistant
                 var ciphertext = protectedContent[AesIvSizeBytes..];
 
                 using var aes = Aes.Create();
-                aes.Key = EncryptionKey;
+                aes.Key = keySet.EncryptionKey;
                 aes.IV = iv;
                 aes.Mode = CipherMode.CBC;
                 aes.Padding = PaddingMode.PKCS7;
@@ -141,7 +146,7 @@ namespace PlayerAssistant
             catch (CryptographicException ex)
             {
                 throw new InvalidOperationException(
-                    "Unable to authenticate or decrypt settings.local.json. The encrypted settings file may have been tampered with, corrupted, or created with a different app key.",
+                    "Unable to authenticate or decrypt settings.local.json. The encrypted settings file may have been tampered with, corrupted, or created for a different Windows user, machine, or install directory.",
                     ex);
             }
         }
@@ -160,7 +165,7 @@ namespace PlayerAssistant
                 var ciphertext = protectedBytes[AesIvSizeBytes..];
 
                 using var aes = Aes.Create();
-                aes.Key = EncryptionKey;
+                aes.Key = V1EncryptionKey;
                 aes.IV = iv;
                 aes.Mode = CipherMode.CBC;
                 aes.Padding = PaddingMode.PKCS7;
@@ -196,12 +201,13 @@ namespace PlayerAssistant
             }
         }
 
-        private static EncryptedSettingsEnvelope CreateEncryptedEnvelope(byte[] plaintextBytes)
+        private static EncryptedSettingsEnvelope CreateEncryptedEnvelope(byte[] plaintextBytes, string settingsPath)
         {
             var iv = RandomNumberGenerator.GetBytes(AesIvSizeBytes);
+            var keySet = GetKeySet(EncryptedFormat, settingsPath);
 
             using var aes = Aes.Create();
-            aes.Key = EncryptionKey;
+            aes.Key = keySet.EncryptionKey;
             aes.IV = iv;
             aes.Mode = CipherMode.CBC;
             aes.Padding = PaddingMode.PKCS7;
@@ -214,7 +220,7 @@ namespace PlayerAssistant
             Buffer.BlockCopy(ciphertext, 0, protectedContent, iv.Length, ciphertext.Length);
 
             byte[] tag;
-            using (var hmac = new HMACSHA256(AuthenticationKey))
+            using (var hmac = new HMACSHA256(keySet.AuthenticationKey))
             {
                 tag = hmac.ComputeHash(protectedContent);
             }
@@ -225,7 +231,40 @@ namespace PlayerAssistant
 
             return new EncryptedSettingsEnvelope(
                 EncryptedFormat,
-                Convert.ToBase64String(payloadBytes));
+                Convert.ToBase64String(payloadBytes),
+                GetKeyScope(settingsPath));
+        }
+
+        private static KeySet GetKeySet(string format, string settingsPath)
+        {
+            if (string.Equals(format, V2EncryptedFormat, StringComparison.Ordinal))
+            {
+                return new KeySet(V2EncryptionKey, V2AuthenticationKey);
+            }
+
+            var scope = GetDerivationScope(settingsPath);
+            return new KeySet(
+                SHA256.HashData(Encoding.UTF8.GetBytes($"{EncryptionKeySeed}.v3.encryption.{scope}")),
+                SHA256.HashData(Encoding.UTF8.GetBytes($"{EncryptionKeySeed}.v3.hmac.{scope}")));
+        }
+
+        private static string GetDerivationScope(string settingsPath)
+        {
+            var directoryPath = Path.GetDirectoryName(Path.GetFullPath(settingsPath)) ?? AppContext.BaseDirectory;
+            var installPath = Path.GetFullPath(directoryPath).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar).ToUpperInvariant();
+            var machine = Environment.MachineName.ToUpperInvariant();
+            var user = $"{Environment.UserDomainName}\\{Environment.UserName}".ToUpperInvariant();
+            return $"{machine}|{user}|{installPath}";
+        }
+
+        private static KeyScope GetKeyScope(string settingsPath)
+        {
+            var scopeHash = SHA256.HashData(Encoding.UTF8.GetBytes(GetDerivationScope(settingsPath)));
+            return new KeyScope(
+                MachineBound: true,
+                UserBound: true,
+                InstallPathBound: true,
+                ScopeHash: Convert.ToHexString(scopeHash));
         }
 
         private static bool TryReadEncryptedEnvelope(JsonElement root, out EncryptedSettingsEnvelope envelope)
@@ -245,7 +284,8 @@ namespace PlayerAssistant
 
             var format = formatElement.GetString() ?? string.Empty;
             if (!string.Equals(format, EncryptedFormat, StringComparison.Ordinal)
-                && !string.Equals(format, PreviousEncryptedFormat, StringComparison.Ordinal)
+                && !string.Equals(format, V2EncryptedFormat, StringComparison.Ordinal)
+                && !string.Equals(format, V1EncryptedFormat, StringComparison.Ordinal)
                 && !string.Equals(format, LegacyEncryptedFormat, StringComparison.Ordinal))
             {
                 return false;
@@ -263,12 +303,28 @@ namespace PlayerAssistant
                 return false;
             }
 
-            envelope = new EncryptedSettingsEnvelope(format, payload);
+            KeyScope? keyScope = null;
+            if (root.TryGetProperty(KeyScopePropertyName, out var keyScopeElement)
+                && keyScopeElement.ValueKind == JsonValueKind.Object)
+            {
+                keyScope = keyScopeElement.Deserialize<KeyScope>(JsonOptions);
+            }
+
+            envelope = new EncryptedSettingsEnvelope(format, payload, keyScope);
             return true;
         }
 
         private sealed record EncryptedSettingsEnvelope(
             [property: JsonPropertyName(FormatPropertyName)] string Format,
-            [property: JsonPropertyName(PayloadPropertyName)] string Payload);
+            [property: JsonPropertyName(PayloadPropertyName)] string Payload,
+            [property: JsonPropertyName(KeyScopePropertyName)] KeyScope? KeyScope = null);
+
+        private sealed record KeyScope(
+            [property: JsonPropertyName("machine_bound")] bool MachineBound,
+            [property: JsonPropertyName("user_bound")] bool UserBound,
+            [property: JsonPropertyName("install_path_bound")] bool InstallPathBound,
+            [property: JsonPropertyName("scope_hash")] string ScopeHash);
+
+        private sealed record KeySet(byte[] EncryptionKey, byte[] AuthenticationKey);
     }
 }

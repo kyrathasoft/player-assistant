@@ -16,19 +16,10 @@ namespace PlayerAssistant
                 return ExternalUrlLaunchValidation.Rejected("The selected item is not an absolute URL.");
             }
 
-            if (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps)
+            var allowlistValidation = NetworkUrlAllowlistUtility.Validate(uri);
+            if (!allowlistValidation.IsAllowed)
             {
-                return ExternalUrlLaunchValidation.Rejected("Only HTTP and HTTPS URLs can be opened.");
-            }
-
-            if (!string.IsNullOrWhiteSpace(uri.UserInfo))
-            {
-                return ExternalUrlLaunchValidation.Rejected("URLs with embedded credentials cannot be opened.");
-            }
-
-            if (string.IsNullOrWhiteSpace(uri.Host))
-            {
-                return ExternalUrlLaunchValidation.Rejected("The selected URL does not include a host.");
+                return ExternalUrlLaunchValidation.Rejected(allowlistValidation.RejectionReason ?? "The selected URL is not allowed.");
             }
 
             return ExternalUrlLaunchValidation.Allowed(uri.AbsoluteUri, uri.IdnHost);

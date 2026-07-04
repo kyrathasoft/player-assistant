@@ -18,6 +18,7 @@ $LastCrashFileName = 'last-crash.json'
 $StartupRemediationFileName = 'startup-remediation.txt'
 $SettingsFileName = 'settings.json'
 $SettingsLocalFileName = 'settings.local.json'
+$RuntimeInventoryFileName = 'release-runtime-inventory.json'
 $ForbiddenFileNames = @(
     'rpol-storage-state.json',
     'cookies.json',
@@ -29,6 +30,7 @@ $ForbiddenDirectoryNames = @(
 )
 $RuntimeSidecars = @(
     'release-manifest.json',
+    'release-runtime-inventory.json',
     'keyword-index.json',
     'game-posts-key-terms.md',
     'sitemap.xml',
@@ -300,6 +302,16 @@ function Write-LocalSettingsShape {
         $shape['encrypted_format'] = if ($json.PSObject.Properties['format']) { [string]$json.format } else { $null }
         $shape['has_payload'] = [bool]$json.PSObject.Properties['payload']
         $shape['payload_length'] = if ($json.PSObject.Properties['payload']) { ([string]$json.payload).Length } else { $null }
+        $shape['key_scope'] = if ($json.PSObject.Properties['key_scope']) {
+            [ordered]@{
+                machine_bound = [bool]$json.key_scope.machine_bound
+                user_bound = [bool]$json.key_scope.user_bound
+                install_path_bound = [bool]$json.key_scope.install_path_bound
+                has_scope_hash = ![string]::IsNullOrWhiteSpace([string]$json.key_scope.scope_hash)
+            }
+        } else {
+            $null
+        }
         $shape['plaintext_key_names'] = if ($json.PSObject.Properties['payload']) { @() } else { '[REDACTED]' }
     }
     catch {
@@ -561,6 +573,8 @@ try {
     Write-RedactedJsonCopy -SourcePath (Join-Path $resolvedPublishDir $SettingsFileName) -DestinationPath (Join-Path $stagingDirectory 'publish\settings.redacted.json')
     Write-LocalSettingsShape -SourcePath (Join-Path $resolvedReleaseDir $SettingsLocalFileName) -DestinationPath (Join-Path $stagingDirectory 'Release\settings.local.shape.json')
     Write-LocalSettingsShape -SourcePath (Join-Path $resolvedPublishDir $SettingsLocalFileName) -DestinationPath (Join-Path $stagingDirectory 'publish\settings.local.shape.json')
+    Write-RedactedJsonCopy -SourcePath (Join-Path $resolvedReleaseDir $RuntimeInventoryFileName) -DestinationPath (Join-Path $stagingDirectory 'Release\release-runtime-inventory.json')
+    Write-RedactedJsonCopy -SourcePath (Join-Path $resolvedPublishDir $RuntimeInventoryFileName) -DestinationPath (Join-Path $stagingDirectory 'publish\release-runtime-inventory.json')
 
     $sidecarSummary = [ordered]@{
         release = @($RuntimeSidecars | ForEach-Object { Get-FileSummary -BaseDirectory $resolvedReleaseDir -RelativePath $_ })

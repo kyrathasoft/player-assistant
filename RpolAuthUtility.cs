@@ -43,15 +43,13 @@ namespace PlayerAssistant
 
         public static bool IsRpolUri(Uri uri)
         {
-            ArgumentNullException.ThrowIfNull(uri);
-
-            return string.Equals(uri.Host, "rpol.net", StringComparison.OrdinalIgnoreCase)
-                || uri.Host.EndsWith(".rpol.net", StringComparison.OrdinalIgnoreCase);
+            return NetworkUrlAllowlistUtility.IsRpolHost(uri);
         }
 
         public static async Task<string> GetHtmlFromUrlAsync(Uri uri, CancellationToken cancellationToken = default)
         {
             cancellationToken.ThrowIfCancellationRequested();
+            NetworkUrlAllowlistUtility.EnsureAllowed(uri, NetworkUrlPurpose.Rpol);
             ThrowIfCachedFatalAuthFailure();
 
             for (var attempt = 0; attempt < 2; attempt++)
@@ -82,6 +80,7 @@ namespace PlayerAssistant
         public static async Task<RpolResponse> GetResponseAsync(Uri uri, CancellationToken cancellationToken = default)
         {
             cancellationToken.ThrowIfCancellationRequested();
+            NetworkUrlAllowlistUtility.EnsureAllowed(uri, NetworkUrlPurpose.Rpol);
             ThrowIfCachedFatalAuthFailure();
 
             for (var attempt = 0; attempt < 2; attempt++)

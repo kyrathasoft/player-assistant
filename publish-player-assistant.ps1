@@ -8,8 +8,9 @@ $ErrorActionPreference = 'Stop'
 
 $SettingsLocalFileName = 'settings.local.json'
 $ProjectFileName = 'player-assistant.csproj'
-$SettingsFormat = 'app-protected-v2'
-$PreviousSettingsFormat = 'app-protected-v1'
+$SettingsFormat = 'app-protected-v3'
+$PreviousSettingsFormat = 'app-protected-v2'
+$V1SettingsFormat = 'app-protected-v1'
 $LegacySettingsFormat = 'dpapi-current-user'
 $SettingsEncryptionSeed = 'PlayerAssistant.LocalSettings.v1'
 $KeywordIndexFileName = 'keyword-index.json'
@@ -17,6 +18,20 @@ $KeywordTermsFileName = 'game-posts-key-terms.md'
 $SitemapFileName = 'sitemap.xml'
 $SitemapKeywordUrlsFileName = 'sitemap-keyword-urls.json'
 $ReleaseManifestFileName = 'release-manifest.json'
+$RuntimeInventoryFileName = 'release-runtime-inventory.json'
+$ReleaseScriptFileNames = @(
+    'publish-player-assistant.ps1',
+    'verify-rc-checklist.ps1',
+    'verify-rc-self-tests.ps1',
+    'verify-secret-scan.ps1',
+    'verify-published-health.ps1',
+    'verify-release-publish-parity.ps1',
+    'verify-publish-runtime-integrity.ps1',
+    'verify-release-startup-smoke.ps1',
+    'collect-diagnostics.ps1',
+    'clean-diagnostics-retention.ps1',
+    'diagnose-player-assistant-locks.ps1'
+)
 $SensitiveFileNames = @(
     'rpol-storage-state.json'
 )
@@ -72,6 +87,45 @@ function Get-ProjectVersionInfo {
         Version = $version
         FileVersion = $fileVersion
         InformationalVersion = $informationalVersion
+    }
+}
+
+function Get-ProjectRuntimeInfo {
+    $projectPath = Join-Path $PSScriptRoot $ProjectFileName
+    Assert-RequiredFile -Path $projectPath -Description $ProjectFileName
+
+    [xml]$project = Get-Content -Raw -LiteralPath $projectPath
+    $propertyGroups = @($project.Project.PropertyGroup)
+
+    function Get-ProjectPropertyValue {
+        param(
+            [Parameter(Mandatory = $true)]
+            [string]$Name
+        )
+
+        foreach ($propertyGroup in $propertyGroups) {
+            $value = [string]$propertyGroup.$Name
+            if (![string]::IsNullOrWhiteSpace($value)) {
+                return $value
+            }
+        }
+
+        return $null
+    }
+
+    $packages = @($project.Project.ItemGroup | ForEach-Object { $_.PackageReference } | Where-Object { $_ -and $_.Include } | ForEach-Object {
+        [ordered]@{
+            name = [string]$_.Include
+            version = [string]$_.Version
+        }
+    } | Sort-Object { $_.name })
+
+    return [pscustomobject]@{
+        TargetFramework = Get-ProjectPropertyValue -Name 'TargetFramework'
+        RuntimeIdentifier = Get-ProjectPropertyValue -Name 'RuntimeIdentifier'
+        SelfContained = Get-ProjectPropertyValue -Name 'SelfContained'
+        PublishSingleFile = Get-ProjectPropertyValue -Name 'PublishSingleFile'
+        Packages = $packages
     }
 }
 
@@ -141,7 +195,7 @@ function Assert-RequiredDirectory {
     }
 }
 
-function Get-SettingsEncryptionKey {
+function Get-SettingsV1EncryptionKey {
     $sha256 = [System.Security.Cryptography.SHA256]::Create()
     try {
         return ,$sha256.ComputeHash([System.Text.Encoding]::UTF8.GetBytes($SettingsEncryptionSeed))
@@ -151,7 +205,11 @@ function Get-SettingsEncryptionKey {
     }
 }
 
-function Get-SettingsAuthenticationKey {
+function Get-SettingsV2EncryptionKey {
+    return ,(Get-SettingsV1EncryptionKey)
+}
+
+function Get-SettingsV2AuthenticationKey {
     $sha256 = [System.Security.Cryptography.SHA256]::Create()
     try {
         return ,$sha256.ComputeHash([System.Text.Encoding]::UTF8.GetBytes("$SettingsEncryptionSeed.hmac"))
@@ -190,8 +248,8 @@ function ConvertFrom-AppEncryptedLocalSettings {
 
     $raw = Get-Content -Raw -LiteralPath $SettingsPath
     $envelope = $raw | ConvertFrom-Json
-    if ($envelope.format -ne $SettingsFormat -and $envelope.format -ne $PreviousSettingsFormat) {
-        throw "$SettingsLocalFileName must use encrypted format '$SettingsFormat' or '$PreviousSettingsFormat', but found '$($envelope.format)'."
+    if ($envelope.format -ne $SettingsFormat -and $envelope.format -ne $PreviousSettingsFormat -and $envelope.format -ne $V1SettingsFormat) {
+        throw "$SettingsLocalFileName must use encrypted format '$SettingsFormat', '$PreviousSettingsFormat', or '$V1SettingsFormat', but found '$($envelope.format)'."
     }
 
     if ([string]::IsNullOrWhiteSpace($envelope.payload)) {
@@ -199,7 +257,7 @@ function ConvertFrom-AppEncryptedLocalSettings {
     }
 
     $payloadBytes = [Convert]::FromBase64String($envelope.payload)
-    if ($envelope.format -eq $SettingsFormat) {
+    if ($envelope.format -eq $SettingsFormat -or $envelope.format -eq $PreviousSettingsFormat) {
         if ($payloadBytes.Length -lt 49) {
             throw "$SettingsLocalFileName authenticated encrypted payload is too short."
         }
@@ -208,7 +266,13 @@ function ConvertFrom-AppEncryptedLocalSettings {
         $protectedContent = [byte[]]::new($payloadBytes.Length - $tag.Length)
         [System.Buffer]::BlockCopy($payloadBytes, 0, $protectedContent, 0, $protectedContent.Length)
         [System.Buffer]::BlockCopy($payloadBytes, $protectedContent.Length, $tag, 0, $tag.Length)
-        $hmac = [System.Security.Cryptography.HMACSHA256]::new((Get-SettingsAuthenticationKey))
+        $authenticationKey = if ($envelope.format -eq $SettingsFormat) {
+            Get-SettingsV3AuthenticationKey -SettingsPath $SettingsPath
+        }
+        else {
+            Get-SettingsV2AuthenticationKey
+        }
+        $hmac = [System.Security.Cryptography.HMACSHA256]::new($authenticationKey)
         try {
             $actualTag = $hmac.ComputeHash($protectedContent)
         }
@@ -226,7 +290,12 @@ function ConvertFrom-AppEncryptedLocalSettings {
         [System.Buffer]::BlockCopy($protectedContent, $iv.Length, $ciphertext, 0, $ciphertext.Length)
 
         $aes = [System.Security.Cryptography.Aes]::Create()
-        $aes.Key = Get-SettingsEncryptionKey
+        $aes.Key = if ($envelope.format -eq $SettingsFormat) {
+            Get-SettingsV3EncryptionKey -SettingsPath $SettingsPath
+        }
+        else {
+            Get-SettingsV2EncryptionKey
+        }
         $aes.IV = $iv
         $aes.Mode = [System.Security.Cryptography.CipherMode]::CBC
         $aes.Padding = [System.Security.Cryptography.PaddingMode]::PKCS7
@@ -257,7 +326,7 @@ function ConvertFrom-AppEncryptedLocalSettings {
     [System.Buffer]::BlockCopy($payloadBytes, $iv.Length, $ciphertext, 0, $ciphertext.Length)
 
     $aes = [System.Security.Cryptography.Aes]::Create()
-    $aes.Key = Get-SettingsEncryptionKey
+    $aes.Key = Get-SettingsV1EncryptionKey
     $aes.IV = $iv
     $aes.Mode = [System.Security.Cryptography.CipherMode]::CBC
     $aes.Padding = [System.Security.Cryptography.PaddingMode]::PKCS7
@@ -311,7 +380,7 @@ function Test-IsEncryptedLocalSettings {
 
     return $Settings.PSObject.Properties['format'] `
         -and $Settings.PSObject.Properties['payload'] `
-        -and ($Settings.format -eq $SettingsFormat -or $Settings.format -eq $PreviousSettingsFormat -or $Settings.format -eq $LegacySettingsFormat)
+        -and ($Settings.format -eq $SettingsFormat -or $Settings.format -eq $PreviousSettingsFormat -or $Settings.format -eq $V1SettingsFormat -or $Settings.format -eq $LegacySettingsFormat)
 }
 
 function ConvertFrom-LocalSettingsFile {
@@ -322,7 +391,7 @@ function ConvertFrom-LocalSettingsFile {
 
     $settings = Get-Content -Raw -LiteralPath $SettingsPath | ConvertFrom-Json
     if (Test-IsEncryptedLocalSettings -Settings $settings) {
-        if ($settings.format -eq $SettingsFormat -or $settings.format -eq $PreviousSettingsFormat) {
+        if ($settings.format -eq $SettingsFormat -or $settings.format -eq $PreviousSettingsFormat -or $settings.format -eq $V1SettingsFormat) {
             return ConvertFrom-AppEncryptedLocalSettings -SettingsPath $SettingsPath
         }
 
@@ -357,7 +426,7 @@ function Write-AppEncryptedLocalSettings {
     }
 
     $aes = [System.Security.Cryptography.Aes]::Create()
-    $aes.Key = Get-SettingsEncryptionKey
+    $aes.Key = Get-SettingsV3EncryptionKey -SettingsPath $DestinationPath
     $aes.IV = $iv
     $aes.Mode = [System.Security.Cryptography.CipherMode]::CBC
     $aes.Padding = [System.Security.Cryptography.PaddingMode]::PKCS7
@@ -377,7 +446,7 @@ function Write-AppEncryptedLocalSettings {
     $protectedContent = [byte[]]::new($iv.Length + $ciphertext.Length)
     [System.Buffer]::BlockCopy($iv, 0, $protectedContent, 0, $iv.Length)
     [System.Buffer]::BlockCopy($ciphertext, 0, $protectedContent, $iv.Length, $ciphertext.Length)
-    $hmac = [System.Security.Cryptography.HMACSHA256]::new((Get-SettingsAuthenticationKey))
+    $hmac = [System.Security.Cryptography.HMACSHA256]::new((Get-SettingsV3AuthenticationKey -SettingsPath $DestinationPath))
     try {
         $tag = $hmac.ComputeHash($protectedContent)
     }
@@ -392,6 +461,7 @@ function Write-AppEncryptedLocalSettings {
     $envelope = [pscustomobject]@{
         format = $SettingsFormat
         payload = [Convert]::ToBase64String($payloadBytes)
+        key_scope = Get-SettingsKeyScope -SettingsPath $DestinationPath
     }
 
     $envelope | ConvertTo-Json -Depth 4 | Set-Content -LiteralPath $DestinationPath -Encoding UTF8
@@ -734,11 +804,170 @@ function Get-ManifestFileEntry {
     }
 }
 
+function Get-SettingsDerivationScope {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$SettingsPath
+    )
+
+    $fullPath = [System.IO.Path]::GetFullPath($SettingsPath)
+    $directoryPath = [System.IO.Path]::GetDirectoryName($fullPath)
+    if ([string]::IsNullOrWhiteSpace($directoryPath)) {
+        $directoryPath = $PSScriptRoot
+    }
+
+    $installPath = [System.IO.Path]::GetFullPath($directoryPath).TrimEnd([System.IO.Path]::DirectorySeparatorChar, [System.IO.Path]::AltDirectorySeparatorChar).ToUpperInvariant()
+    $machine = [Environment]::MachineName.ToUpperInvariant()
+    $user = "$([Environment]::UserDomainName)\$([Environment]::UserName)".ToUpperInvariant()
+    return "$machine|$user|$installPath"
+}
+
+function Get-ScopedSha256Bytes {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Value
+    )
+
+    $sha256 = [System.Security.Cryptography.SHA256]::Create()
+    try {
+        return ,$sha256.ComputeHash([System.Text.Encoding]::UTF8.GetBytes($Value))
+    }
+    finally {
+        $sha256.Dispose()
+    }
+}
+
+function Get-SettingsV3EncryptionKey {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$SettingsPath
+    )
+
+    $scope = Get-SettingsDerivationScope -SettingsPath $SettingsPath
+    return ,(Get-ScopedSha256Bytes -Value "$SettingsEncryptionSeed.v3.encryption.$scope")
+}
+
+function Get-SettingsV3AuthenticationKey {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$SettingsPath
+    )
+
+    $scope = Get-SettingsDerivationScope -SettingsPath $SettingsPath
+    return ,(Get-ScopedSha256Bytes -Value "$SettingsEncryptionSeed.v3.hmac.$scope")
+}
+
+function Get-SettingsKeyScope {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$SettingsPath
+    )
+
+    $scopeHashBytes = Get-ScopedSha256Bytes -Value (Get-SettingsDerivationScope -SettingsPath $SettingsPath)
+    return [ordered]@{
+        machine_bound = $true
+        user_bound = $true
+        install_path_bound = $true
+        scope_hash = [System.BitConverter]::ToString($scopeHashBytes).Replace('-', '')
+    }
+}
+
+function Get-ReleaseScriptHashEntries {
+    return @($ReleaseScriptFileNames | ForEach-Object {
+        $relativePath = $_
+        $path = Join-Path $PSScriptRoot $relativePath
+        if (Test-Path -LiteralPath $path -PathType Leaf) {
+            $item = Get-Item -LiteralPath $path
+            [ordered]@{
+                relative_path = $relativePath
+                length = $item.Length
+                sha256 = (Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash
+            }
+        }
+    })
+}
+
+function Write-ReleaseRuntimeInventory {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Directory
+    )
+
+    $projectVersion = Get-ProjectVersionInfo
+    $runtimeInfo = Get-ProjectRuntimeInfo
+    $inventory = [ordered]@{
+        schema_version = 1
+        generated_at = (Get-Date).ToString('O')
+        app = [ordered]@{
+            version = $projectVersion.Version
+            file_version = $projectVersion.FileVersion
+            product_version = $projectVersion.InformationalVersion
+        }
+        runtime = [ordered]@{
+            target_framework = $runtimeInfo.TargetFramework
+            runtime_identifier = $runtimeInfo.RuntimeIdentifier
+            self_contained = $runtimeInfo.SelfContained
+            publish_single_file = $runtimeInfo.PublishSingleFile
+            publish_runtime_identifier = 'win-x64'
+            publish_self_contained = 'true'
+        }
+        packages = @($runtimeInfo.Packages)
+        scripts = @(Get-ReleaseScriptHashEntries)
+        hash_algorithm = 'SHA256'
+    }
+
+    $inventoryPath = Join-Path $Directory $RuntimeInventoryFileName
+    $inventory | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $inventoryPath -Encoding UTF8
+    Assert-RequiredFile -Path $inventoryPath -Description $RuntimeInventoryFileName
+}
+
+function Assert-PublishedRuntimeInventory {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Directory
+    )
+
+    $inventoryPath = Join-Path $Directory $RuntimeInventoryFileName
+    $inventory = Read-JsonFile -Path $inventoryPath -Description $RuntimeInventoryFileName
+    if ($inventory.schema_version -ne 1) {
+        throw "$RuntimeInventoryFileName schema_version '$($inventory.schema_version)' is not supported."
+    }
+
+    if ($inventory.hash_algorithm -ne 'SHA256') {
+        throw "$RuntimeInventoryFileName must use SHA256 hashes."
+    }
+
+    $expectedVersion = Get-ProjectVersionInfo
+    if ($inventory.app.version -ne $expectedVersion.Version -or
+        $inventory.app.file_version -ne $expectedVersion.FileVersion -or
+        $inventory.app.product_version -ne $expectedVersion.InformationalVersion) {
+        throw "$RuntimeInventoryFileName app version does not match $ProjectFileName."
+    }
+
+    $expectedRuntime = Get-ProjectRuntimeInfo
+    if ($inventory.runtime.target_framework -ne $expectedRuntime.TargetFramework) {
+        throw "$RuntimeInventoryFileName target framework does not match $ProjectFileName."
+    }
+
+    foreach ($packageName in @('Microsoft.Playwright', 'SkiaSharp')) {
+        $package = @($inventory.packages | Where-Object { $_.name -eq $packageName } | Select-Object -First 1)
+        if ($package.Count -eq 0 -or [string]::IsNullOrWhiteSpace([string]$package[0].version)) {
+            throw "$RuntimeInventoryFileName is missing package version for '$packageName'."
+        }
+    }
+
+    $scriptEntry = @($inventory.scripts | Where-Object { $_.relative_path -eq 'publish-player-assistant.ps1' } | Select-Object -First 1)
+    if ($scriptEntry.Count -eq 0 -or [string]::IsNullOrWhiteSpace([string]$scriptEntry[0].sha256)) {
+        throw "$RuntimeInventoryFileName is missing publish script hash."
+    }
+}
+
 function Get-ReleaseManifestFileList {
     return @(
         'player-assistant.exe',
         'settings.json',
         $SettingsLocalFileName,
+        $RuntimeInventoryFileName,
         $KeywordIndexFileName,
         $KeywordTermsFileName,
         $SitemapFileName,
@@ -831,6 +1060,7 @@ function Assert-PublishOutput {
     [void](Read-JsonFile -Path (Join-Path $Directory $SitemapKeywordUrlsFileName) -Description 'published sitemap keyword URL library')
     Assert-PublishedPlaywrightRuntime -Directory (Join-Path $Directory '.playwright')
     Assert-EncryptedLocalSettings -SourcePath $SourceSettingsPath -PublishedPath $settingsPath
+    Assert-PublishedRuntimeInventory -Directory $Directory
     Assert-NoSensitiveFiles -Directory $Directory
     Assert-NoForbiddenPublishArtifacts -Directory $Directory
     Assert-NoPlaintextCredentialMarkers -Directory $Directory
@@ -904,6 +1134,7 @@ Copy-Item -LiteralPath (Join-Path $PSScriptRoot "Release\$KeywordTermsFileName")
 Copy-Item -LiteralPath (Join-Path $PSScriptRoot "Release\$SitemapFileName") -Destination (Join-Path $resolvedOutputDir $SitemapFileName) -Force
 Copy-Item -LiteralPath (Join-Path $PSScriptRoot "Release\$SitemapKeywordUrlsFileName") -Destination (Join-Path $resolvedOutputDir $SitemapKeywordUrlsFileName) -Force
 Write-AppEncryptedLocalSettings -SourcePath (Join-Path $PSScriptRoot $SettingsLocalFileName) -DestinationPath (Join-Path $resolvedOutputDir $SettingsLocalFileName)
+Write-ReleaseRuntimeInventory -Directory $resolvedOutputDir
 Write-ReleaseIntegrityManifest -Directory $resolvedOutputDir
 
 Assert-PublishOutput -Directory $resolvedOutputDir -SourceSettingsPath $SourceSettingsPath

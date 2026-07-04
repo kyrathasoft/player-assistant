@@ -7,6 +7,7 @@ using System.Net;
 using System.Reflection;
 using System.Security.Cryptography;
 using System.Windows.Forms;
+using System.Xml.Linq;
 
 var requestedTestFilter = args.Length > 0 ? string.Join(" ", args).Trim() : string.Empty;
 
@@ -35,6 +36,7 @@ var tests = new (string Name, Action Test)[]
     ("orcish translator exposes unique english term count", OrcishTranslatorExposesUniqueEnglishTermCount),
     ("app configuration validation accepts complete runtime", AppConfigurationValidationAcceptsCompleteRuntime),
     ("app configuration validation reports missing url", AppConfigurationValidationReportsMissingUrl),
+    ("app configuration validation rejects disallowed network host", AppConfigurationValidationRejectsDisallowedNetworkHost),
     ("app configuration validation writes repair guidance", AppConfigurationValidationWritesRepairGuidance),
     ("app configuration validation warns about missing rpol credentials", AppConfigurationValidationWarnsAboutMissingRpolCredentials),
     ("app configuration validation warns about missing sidecars", AppConfigurationValidationWarnsAboutMissingSidecars),
@@ -64,6 +66,7 @@ var tests = new (string Name, Action Test)[]
     ("background task supervisor cancels running tasks on dispose", BackgroundTaskSupervisorCancelsRunningTasksOnDispose),
     ("atomic file promotion preserves existing destination on locked replacement", AtomicFilePromotionPreservesExistingDestinationOnLockedReplacement),
     ("network request retries transient failures", NetworkRequestRetriesTransientFailures),
+    ("network request rejects disallowed host before send", NetworkRequestRejectsDisallowedHostBeforeSend),
     ("network request does not retry unauthorized", NetworkRequestDoesNotRetryUnauthorized),
     ("network circuit breaker opens after repeated terminal failures", NetworkCircuitBreakerOpensAfterRepeatedTerminalFailures),
     ("network circuit breaker clears after success", NetworkCircuitBreakerClearsAfterSuccess),
@@ -115,9 +118,11 @@ var tests = new (string Name, Action Test)[]
     ("external url launch policy rejects unsafe inputs", ExternalUrlLaunchPolicyRejectsUnsafeInputs),
     ("hero image paths follow listing markdown table", HeroImagePathsFollowListingMarkdownTable),
     ("hero asset paths reject escaped targets", HeroAssetPathsRejectEscapedTargets),
-    ("legacy local settings migrate to portable encryption", LegacyLocalSettingsMigrateToPortableEncryption),
+    ("legacy local settings migrate to scoped encryption", LegacyLocalSettingsMigrateToPortableEncryption),
     ("v1 local settings migrate to authenticated encryption", V1LocalSettingsMigrateToAuthenticatedEncryption),
+    ("v2 local settings migrate to scoped encryption", V2LocalSettingsMigrateToScopedEncryption),
     ("local settings are encrypted on load", LocalSettingsAreEncryptedOnLoad),
+    ("scoped local settings reject copied install path", ScopedLocalSettingsRejectCopiedInstallPath),
     ("authenticated local settings reject tampered payload", AuthenticatedLocalSettingsRejectTamperedPayload),
     ("runtime path utility rejects escaped paths", RuntimePathUtilityRejectsEscapedPaths),
     ("health argument returns startup health summary", HealthArgumentReturnsStartupHealthSummary),
@@ -131,6 +136,7 @@ var tests = new (string Name, Action Test)[]
     ("publish verification rejects incomplete playwright runtime", PublishVerificationRejectsIncompletePlaywrightRuntime),
     ("publish verification rejects mismatched executable version", PublishVerificationRejectsMismatchedExecutableVersion),
     ("publish verification rejects stale release manifest", PublishVerificationRejectsStaleReleaseManifest),
+    ("publish verification rejects malformed runtime inventory", PublishVerificationRejectsMalformedRuntimeInventory),
     ("published health verification accepts current output", PublishedHealthVerificationAcceptsCurrentOutput),
     ("secret scan accepts current repository", SecretScanAcceptsCurrentRepository),
     ("secret scan rejects tracked env secret", SecretScanRejectsTrackedEnvSecret),
@@ -446,6 +452,23 @@ static void AppConfigurationValidationReportsMissingUrl()
     AssertContains(report.ToRemediationText(), "Repair:");
 }
 
+static void AppConfigurationValidationRejectsDisallowedNetworkHost()
+{
+    using var directory = TemporaryDirectory.Create();
+    WriteRequiredRuntimeSidecars(directory.Path);
+    var settings = CreateValidAppSettings(includeCredentials: true);
+    settings["Game Intro"] = "https://unexpected.example.test/gameinfo";
+
+    var report = AppConfigurationValidationUtility.Validate(settings, directory.Path);
+
+    AssertTrue(report.HasIssues, "disallowed host should report a configuration issue");
+    AssertTrue(
+        report.Issues.Any(issue => issue.Severity == AppConfigurationIssueSeverity.Error
+            && issue.Message.Contains("Game Intro", StringComparison.Ordinal)
+            && issue.Message.Contains("allowed network host", StringComparison.Ordinal)),
+        "disallowed Game Intro host should be an allowlist error");
+}
+
 static void AppConfigurationValidationWritesRepairGuidance()
 {
     using var directory = TemporaryDirectory.Create();
@@ -459,7 +482,8 @@ static void AppConfigurationValidationWritesRepairGuidance()
     AssertTrue(File.Exists(remediationPath), "startup remediation file should be written");
     var remediation = File.ReadAllText(remediationPath);
     AssertContains(remediation, "Player Assistant startup configuration guidance");
-    AssertContains(remediation, "Game Intro must be an absolute HTTP or HTTPS URL.");
+    AssertContains(remediation, "Game Intro is not on the allowed network host list");
+    AssertContains(remediation, "URL must be absolute.");
     AssertContains(remediation, "Edit settings.json");
     AssertContains(remediation, "RPOL credentials are incomplete");
 }
@@ -615,7 +639,7 @@ static void StartupDependencyMatrixReportsBadConfigAndSidecars()
 
     AssertTrue(
         badUrlReport.Issues.Count(issue => issue.Severity == AppConfigurationIssueSeverity.Error
-            && issue.Message.Contains("absolute HTTP or HTTPS URL", StringComparison.Ordinal)) >= 2,
+            && issue.Message.Contains("allowed network host", StringComparison.Ordinal)) >= 2,
         "malformed startup URLs should be reported as configuration errors");
     AssertTrue(
         badUrlReport.Issues.Any(issue => issue.Severity == AppConfigurationIssueSeverity.Warning
@@ -1148,11 +1172,30 @@ static void NetworkRequestRetriesTransientFailures()
 
     using var response = NetworkRequestUtility.SendAsync(
         httpClient,
-        () => new HttpRequestMessage(HttpMethod.Get, "https://example.invalid/retry"),
+        () => new HttpRequestMessage(HttpMethod.Get, "https://rpol.net/retry"),
         policy: new NetworkRequestPolicy(TimeSpan.FromSeconds(1), MaxAttempts: 2, TimeSpan.Zero)).GetAwaiter().GetResult();
 
     AssertEqual(HttpStatusCode.OK, response.StatusCode, "expected retry to return successful response");
     AssertEqual(2, attempts, "expected transient response to be retried once");
+}
+
+static void NetworkRequestRejectsDisallowedHostBeforeSend()
+{
+    var attempts = 0;
+    using var httpClient = NetworkRequestUtility.CreateHttpClient(new ScriptedHttpMessageHandler((_, _) =>
+    {
+        attempts++;
+        return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK));
+    }));
+
+    var exception = AssertThrows<InvalidOperationException>(() =>
+        NetworkRequestUtility.SendAsync(
+            httpClient,
+            () => new HttpRequestMessage(HttpMethod.Get, "https://unexpected.example.test/blocked"),
+            policy: new NetworkRequestPolicy(TimeSpan.FromSeconds(1), MaxAttempts: 1, TimeSpan.Zero)).GetAwaiter().GetResult());
+
+    AssertContains(exception.Message, "not allowed");
+    AssertEqual(0, attempts, "disallowed requests should be rejected before the HTTP handler runs");
 }
 
 static void NetworkRequestDoesNotRetryUnauthorized()
@@ -1166,7 +1209,7 @@ static void NetworkRequestDoesNotRetryUnauthorized()
 
     using var response = NetworkRequestUtility.SendAsync(
         httpClient,
-        () => new HttpRequestMessage(HttpMethod.Get, "https://example.invalid/auth"),
+        () => new HttpRequestMessage(HttpMethod.Get, "https://rpol.net/auth"),
         policy: new NetworkRequestPolicy(TimeSpan.FromSeconds(1), MaxAttempts: 3, TimeSpan.Zero)).GetAwaiter().GetResult();
 
     AssertEqual(HttpStatusCode.Unauthorized, response.StatusCode, "expected unauthorized response to be returned to caller");
@@ -1190,14 +1233,14 @@ static void NetworkCircuitBreakerOpensAfterRepeatedTerminalFailures()
 
         using (NetworkRequestUtility.SendAsync(
             httpClient,
-            () => new HttpRequestMessage(HttpMethod.Get, "https://breaker.example.test/one"),
+            () => new HttpRequestMessage(HttpMethod.Get, "https://rpol.net/breaker-one"),
             policy: new NetworkRequestPolicy(TimeSpan.FromSeconds(1), MaxAttempts: 1, TimeSpan.Zero)).GetAwaiter().GetResult())
         {
         }
 
         using (NetworkRequestUtility.SendAsync(
             httpClient,
-            () => new HttpRequestMessage(HttpMethod.Get, "https://breaker.example.test/two"),
+            () => new HttpRequestMessage(HttpMethod.Get, "https://rpol.net/breaker-two"),
             policy: new NetworkRequestPolicy(TimeSpan.FromSeconds(1), MaxAttempts: 1, TimeSpan.Zero)).GetAwaiter().GetResult())
         {
         }
@@ -1205,7 +1248,7 @@ static void NetworkCircuitBreakerOpensAfterRepeatedTerminalFailures()
         var exception = AssertThrows<NetworkRequestException>(() =>
             NetworkRequestUtility.SendAsync(
                 httpClient,
-                () => new HttpRequestMessage(HttpMethod.Get, "https://breaker.example.test/three"),
+                () => new HttpRequestMessage(HttpMethod.Get, "https://rpol.net/breaker-three"),
                 policy: new NetworkRequestPolicy(TimeSpan.FromSeconds(1), MaxAttempts: 1, TimeSpan.Zero)).GetAwaiter().GetResult());
 
         AssertEqual(NetworkFailureKind.CircuitOpen, exception.Kind, "expected repeated terminal failures to open the circuit breaker");
@@ -1229,21 +1272,21 @@ static void NetworkCircuitBreakerClearsAfterSuccess()
 
     using (NetworkRequestUtility.SendAsync(
         httpClient,
-        () => new HttpRequestMessage(HttpMethod.Get, "https://breaker-clear.example.test/one"),
+        () => new HttpRequestMessage(HttpMethod.Get, "https://publish.obsidian.md/breaker-clear-one"),
         policy: new NetworkRequestPolicy(TimeSpan.FromSeconds(1), MaxAttempts: 1, TimeSpan.Zero)).GetAwaiter().GetResult())
     {
     }
 
     using (NetworkRequestUtility.SendAsync(
         httpClient,
-        () => new HttpRequestMessage(HttpMethod.Get, "https://breaker-clear.example.test/two"),
+        () => new HttpRequestMessage(HttpMethod.Get, "https://publish.obsidian.md/breaker-clear-two"),
         policy: new NetworkRequestPolicy(TimeSpan.FromSeconds(1), MaxAttempts: 1, TimeSpan.Zero)).GetAwaiter().GetResult())
     {
     }
 
     using var response = NetworkRequestUtility.SendAsync(
         httpClient,
-        () => new HttpRequestMessage(HttpMethod.Get, "https://breaker-clear.example.test/three"),
+        () => new HttpRequestMessage(HttpMethod.Get, "https://publish.obsidian.md/breaker-clear-three"),
         policy: new NetworkRequestPolicy(TimeSpan.FromSeconds(1), MaxAttempts: 1, TimeSpan.Zero)).GetAwaiter().GetResult();
 
     AssertEqual(HttpStatusCode.OK, response.StatusCode, "successful request should clear prior circuit-breaker failures");
@@ -1259,7 +1302,7 @@ static void StartupDependencyMatrixClassifiesTerminalNetworkFailure()
     var exception = AssertThrows<NetworkRequestException>(() =>
         NetworkRequestUtility.SendAsync(
             httpClient,
-            () => new HttpRequestMessage(HttpMethod.Get, "https://example.test/failure"),
+            () => new HttpRequestMessage(HttpMethod.Get, "https://rpol.net/failure"),
             policy: new NetworkRequestPolicy(
                 TimeSpan.FromSeconds(1),
                 MaxAttempts: 1,
@@ -1280,7 +1323,7 @@ static void NetworkRequestWrapsTimeout()
     var exception = AssertThrows<NetworkRequestException>(() =>
         NetworkRequestUtility.SendAsync(
             httpClient,
-            () => new HttpRequestMessage(HttpMethod.Get, "https://example.invalid/timeout"),
+            () => new HttpRequestMessage(HttpMethod.Get, "https://rpol.net/timeout"),
             policy: new NetworkRequestPolicy(TimeSpan.FromMilliseconds(20), MaxAttempts: 1, TimeSpan.Zero)).GetAwaiter().GetResult());
 
     AssertEqual(NetworkFailureKind.TimedOut, exception.Kind, "expected timeout failures to be classified");
@@ -1300,7 +1343,7 @@ static void NetworkRequestPreservesCallerCancellation()
     AssertThrows<OperationCanceledException>(() =>
         NetworkRequestUtility.SendAsync(
             httpClient,
-            () => new HttpRequestMessage(HttpMethod.Get, "https://example.invalid/cancel"),
+            () => new HttpRequestMessage(HttpMethod.Get, "https://rpol.net/cancel"),
             policy: new NetworkRequestPolicy(TimeSpan.FromSeconds(1), MaxAttempts: 3, TimeSpan.Zero),
             cancellationToken: cancellation.Token).GetAwaiter().GetResult());
 }
@@ -1312,7 +1355,7 @@ static void MarkdownAsyncFetchPreservesCallerCancellation()
 
     AssertThrows<OperationCanceledException>(() =>
         MarkdownUtility.GetMarkdownFromUrlAsync(
-            "https://example.invalid/cancel",
+            "https://publish.obsidian.md/cancel",
             cancellation.Token).GetAwaiter().GetResult());
 }
 
@@ -2613,12 +2656,12 @@ static void KeywordSearchRpolScopeExcludesObsidianOnlyWhiteheartStiffwhiskers()
 
 static void ExternalUrlLaunchPolicyAcceptsHttpAndHttps()
 {
-    var http = ExternalUrlLaunchUtility.Validate(" http://example.test/path?q=one ");
-    var https = ExternalUrlLaunchUtility.Validate("https://example.test/entry");
+    var http = ExternalUrlLaunchUtility.Validate(" http://rpol.net/path?q=one ");
+    var https = ExternalUrlLaunchUtility.Validate("https://publish.obsidian.md/entry");
 
     AssertTrue(http.IsAllowed, "HTTP URLs should be allowed");
-    AssertEqual("http://example.test/path?q=one", http.Url ?? string.Empty, "HTTP URL should be normalized before launch");
-    AssertEqual("example.test", http.Host ?? string.Empty, "HTTP host should be exposed for confirmation");
+    AssertEqual("http://rpol.net/path?q=one", http.Url ?? string.Empty, "HTTP URL should be normalized before launch");
+    AssertEqual("rpol.net", http.Host ?? string.Empty, "HTTP host should be exposed for confirmation");
     AssertTrue(https.IsAllowed, "HTTPS URLs should be allowed");
 }
 
@@ -2627,13 +2670,16 @@ static void ExternalUrlLaunchPolicyRejectsUnsafeInputs()
     var relative = ExternalUrlLaunchUtility.Validate("/relative/path");
     var file = ExternalUrlLaunchUtility.Validate("file:///C:/temp/report.html");
     var credentialed = ExternalUrlLaunchUtility.Validate("https://user:pass@example.test/private");
+    var disallowed = ExternalUrlLaunchUtility.Validate("https://unexpected.example.test/private");
 
     AssertFalse(relative.IsAllowed, "relative URLs should not be opened externally");
     AssertContains(relative.RejectionReason ?? string.Empty, "absolute URL");
     AssertFalse(file.IsAllowed, "file URLs should not be opened from search results");
     AssertContains(file.RejectionReason ?? string.Empty, "HTTP and HTTPS");
     AssertFalse(credentialed.IsAllowed, "credentialed URLs should not be opened externally");
-    AssertContains(credentialed.RejectionReason ?? string.Empty, "embedded credentials");
+    AssertContains(credentialed.RejectionReason ?? string.Empty, "credentials");
+    AssertFalse(disallowed.IsAllowed, "non-allowlisted URLs should not be opened externally");
+    AssertContains(disallowed.RejectionReason ?? string.Empty, "allowlist");
 }
 
 static void HeroImagePathsFollowListingMarkdownTable()
@@ -2722,7 +2768,10 @@ static void LocalSettingsAreEncryptedOnLoad()
             "IsEncryptedSettingsFile",
             localSettingsPath)!,
         "expected the local settings file to be encrypted after load");
-    AssertContains(File.ReadAllText(localSettingsPath), "\"format\": \"app-protected-v2\"");
+    var encryptedJson = File.ReadAllText(localSettingsPath);
+    AssertContains(encryptedJson, "\"format\": \"app-protected-v3\"");
+    AssertContains(encryptedJson, "\"key_scope\":");
+    AssertContains(encryptedJson, "\"install_path_bound\": true");
 }
 
 static void LegacyLocalSettingsMigrateToPortableEncryption()
@@ -2755,8 +2804,8 @@ static void LegacyLocalSettingsMigrateToPortableEncryption()
     AssertEqual("example-user", settings["RPOL user name"], "unexpected user name after migrating legacy encrypted settings");
     AssertEqual("example-password", settings["RPOL password"], "unexpected password after migrating legacy encrypted settings");
     AssertTrue(
-        File.ReadAllText(localSettingsPath).Contains("\"format\": \"app-protected-v2\"", StringComparison.Ordinal),
-        "expected legacy encrypted settings to be rewritten using the authenticated app-protected-v2 format");
+        File.ReadAllText(localSettingsPath).Contains("\"format\": \"app-protected-v3\"", StringComparison.Ordinal),
+        "expected legacy encrypted settings to be rewritten using the scoped app-protected-v3 format");
 }
 
 static void V1LocalSettingsMigrateToAuthenticatedEncryption()
@@ -2773,7 +2822,48 @@ static void V1LocalSettingsMigrateToAuthenticatedEncryption()
 
     AssertEqual("example-user", settings["RPOL user name"], "unexpected user name after migrating v1 encrypted settings");
     AssertEqual("example-password", settings["RPOL password"], "unexpected password after migrating v1 encrypted settings");
-    AssertContains(File.ReadAllText(localSettingsPath), "\"format\": \"app-protected-v2\"");
+    AssertContains(File.ReadAllText(localSettingsPath), "\"format\": \"app-protected-v3\"");
+}
+
+static void V2LocalSettingsMigrateToScopedEncryption()
+{
+    using var directory = TemporaryDirectory.Create();
+    var localSettingsPath = Path.Combine(directory.Path, "settings.local.json");
+    File.WriteAllText(localSettingsPath, CreateV2LocalSettingsEnvelope("example-user", "example-password"));
+
+    var settings = (Dictionary<string, string>)InvokeStaticMethod(
+        typeof(PlayerAssistant.Form1).Assembly.GetType("PlayerAssistant.LocalSettingsUtility")
+            ?? throw new InvalidOperationException("Unable to find LocalSettingsUtility type."),
+        "LoadSettings",
+        localSettingsPath)!;
+
+    AssertEqual("example-user", settings["RPOL user name"], "unexpected user name after migrating v2 encrypted settings");
+    AssertEqual("example-password", settings["RPOL password"], "unexpected password after migrating v2 encrypted settings");
+    var encryptedJson = File.ReadAllText(localSettingsPath);
+    AssertContains(encryptedJson, "\"format\": \"app-protected-v3\"");
+    AssertContains(encryptedJson, "\"key_scope\":");
+}
+
+static void ScopedLocalSettingsRejectCopiedInstallPath()
+{
+    using var sourceDirectory = TemporaryDirectory.Create();
+    using var copiedDirectory = TemporaryDirectory.Create();
+    var sourcePath = Path.Combine(sourceDirectory.Path, "settings.local.json");
+    var copiedPath = Path.Combine(copiedDirectory.Path, "settings.local.json");
+
+    LocalSettingsUtility.SaveEncryptedSettings(
+        sourcePath,
+        new Dictionary<string, string>
+        {
+            ["RPOL user name"] = "example-user",
+            ["RPOL password"] = "example-password"
+        });
+
+    File.Copy(sourcePath, copiedPath);
+
+    var exception = AssertThrows<InvalidOperationException>(() =>
+        LocalSettingsUtility.LoadSettings(copiedPath));
+    AssertContains(exception.Message, "different Windows user, machine, or install directory");
 }
 
 static void AuthenticatedLocalSettingsRejectTamperedPayload()
@@ -2797,7 +2887,7 @@ static void AuthenticatedLocalSettingsRejectTamperedPayload()
             localSettingsPath,
             $$"""
             {
-              "format": "app-protected-v2",
+              "format": "app-protected-v3",
               "payload": "{{Convert.ToBase64String(payloadBytes)}}"
             }
             """);
@@ -2984,6 +3074,20 @@ static void PublishVerificationRejectsStaleReleaseManifest()
     });
 }
 
+static void PublishVerificationRejectsMalformedRuntimeInventory()
+{
+    WithCopiedPublishDirectory(directoryPath =>
+    {
+        File.WriteAllText(Path.Combine(directoryPath, "release-runtime-inventory.json"), "{ not valid json");
+        WriteReleaseManifest(directoryPath);
+
+        var output = RunPublishVerification(directoryPath);
+
+        AssertFalse(output.ExitCode == 0, "publish verification should fail when release-runtime-inventory.json is malformed");
+        AssertContains(output.Output, "release-runtime-inventory.json is not valid JSON");
+    });
+}
+
 static void PublishedHealthVerificationAcceptsCurrentOutput()
 {
     var output = RunPublishedHealthVerification(GetCurrentPublishDirectory());
@@ -3078,12 +3182,14 @@ static void DiagnosticBundleRedactsSensitiveValues()
             "metadata.json",
             "version-metadata.json",
             "runtime-sidecars.json",
+            "Release/release-runtime-inventory.json",
             "Release/settings.redacted.json",
             "Release/settings.local.shape.json",
             "Release/startup-errors.log",
             "Release/startup-health.json",
             "Release/last-crash.json",
             "Release/startup-remediation.txt",
+            "publish/release-runtime-inventory.json",
             "publish/settings.redacted.json",
             "publish/settings.local.shape.json",
             "publish/startup-errors.log",
@@ -3112,9 +3218,10 @@ static void DiagnosticBundleRedactsSensitiveValues()
         AssertFalse(releaseLog.Contains("user:pass@", StringComparison.Ordinal), "diagnostic log should redact credentialed URLs");
 
         var localSettingsShape = ReadZipEntryText(zipPath, "Release/settings.local.shape.json");
-        AssertContains(localSettingsShape, "\"encrypted_format\":  \"app-protected-v2\"");
+        AssertContains(localSettingsShape, "\"encrypted_format\":  \"app-protected-v3\"");
         AssertContains(localSettingsShape, "\"has_payload\":  true");
         AssertContains(localSettingsShape, "\"payload_length\":");
+        AssertContains(localSettingsShape, "\"install_path_bound\":  true");
         AssertFalse(localSettingsShape.Contains("very-secret-payload", StringComparison.Ordinal), "diagnostic bundle should summarize encrypted payloads instead of copying them");
 
         var verifyOutput = RunDiagnosticsVerification(outputPath, zipPath);
@@ -3229,6 +3336,7 @@ static void WithCopiedPublishDirectory(Action<string> action)
         WriteRequiredRuntimeSidecars(directoryPath);
         LocalSettingsUtility.SaveEncryptedSettings(sourceSettingsPath, fixtureSettings);
         LocalSettingsUtility.SaveEncryptedSettings(publishedSettingsPath, fixtureSettings);
+        WriteReleaseRuntimeInventory(directoryPath);
         WriteReleaseManifest(directoryPath);
         action(directoryPath);
     }
@@ -3276,14 +3384,13 @@ static void WriteDiagnosticsRuntime(string directoryPath, bool includeSensitiveL
     Directory.CreateDirectory(directoryPath);
     File.WriteAllText(Path.Combine(directoryPath, "player-assistant.exe"), "fake executable");
     WriteSettingsJson(directoryPath, CreateValidAppSettings(includeCredentials: true));
-    File.WriteAllText(
+    LocalSettingsUtility.SaveEncryptedSettings(
         Path.Combine(directoryPath, "settings.local.json"),
-        """
+        new Dictionary<string, string>
         {
-          "format": "app-protected-v2",
-          "payload": "very-secret-payload"
-        }
-        """);
+            ["RPOL user name"] = "example-user",
+            ["RPOL password"] = "very-secret-payload"
+        });
     File.WriteAllText(
         Path.Combine(directoryPath, "startup-health.json"),
         """
@@ -4177,7 +4284,66 @@ static void WriteManifestedRuntime(string directoryPath)
     File.WriteAllText(Path.Combine(directoryPath, ".playwright", "node", "win32_x64", "node.exe"), "synthetic node");
     File.WriteAllText(Path.Combine(directoryPath, ".playwright", "package", "package.json"), "{}");
     File.WriteAllText(Path.Combine(directoryPath, ".playwright", "package", "browsers.json"), "{}");
+    WriteReleaseRuntimeInventory(directoryPath);
     WriteReleaseManifest(directoryPath);
+}
+
+static void WriteReleaseRuntimeInventory(string directoryPath)
+{
+    var project = XDocument.Load(Path.Combine(GetRepositoryRoot(), "player-assistant.csproj"));
+    var packages = project
+        .Descendants()
+        .Where(element => element.Name.LocalName == "PackageReference")
+        .Select(element => new
+        {
+            name = element.Attribute("Include")?.Value ?? string.Empty,
+            version = element.Attribute("Version")?.Value ?? string.Empty
+        })
+        .Where(package => !string.IsNullOrWhiteSpace(package.name))
+        .OrderBy(package => package.name, StringComparer.Ordinal)
+        .ToArray();
+
+    string GetProjectProperty(string name)
+    {
+        return project
+            .Descendants()
+            .FirstOrDefault(element => element.Name.LocalName == name)
+            ?.Value
+            ?? string.Empty;
+    }
+
+    var inventory = new
+    {
+        schema_version = 1,
+        generated_at = DateTimeOffset.UtcNow.ToString("O"),
+        app = new
+        {
+            version = GetProjectProperty("Version"),
+            file_version = GetProjectProperty("FileVersion"),
+            product_version = GetProjectProperty("InformationalVersion")
+        },
+        runtime = new
+        {
+            target_framework = GetProjectProperty("TargetFramework"),
+            runtime_identifier = GetProjectProperty("RuntimeIdentifier"),
+            self_contained = GetProjectProperty("SelfContained"),
+            publish_single_file = GetProjectProperty("PublishSingleFile"),
+            publish_runtime_identifier = "win-x64",
+            publish_self_contained = "true"
+        },
+        packages,
+        scripts = new[]
+        {
+            new { relative_path = "publish-player-assistant.ps1", length = 1L, sha256 = new string('A', 64) }
+        },
+        hash_algorithm = "SHA256"
+    };
+
+    File.WriteAllText(
+        Path.Combine(directoryPath, "release-runtime-inventory.json"),
+        System.Text.Json.JsonSerializer.Serialize(
+            inventory,
+            new System.Text.Json.JsonSerializerOptions { WriteIndented = true }));
 }
 
 static void WriteReleaseManifest(string directoryPath)
@@ -4224,6 +4390,7 @@ static string[] GetReleaseManifestRelativePaths()
         "player-assistant.exe",
         "settings.json",
         "settings.local.json",
+        "release-runtime-inventory.json",
         "keyword-index.json",
         KeywordTermsFileUtility.FileName,
         "sitemap.xml",
@@ -4327,6 +4494,49 @@ static string CreateV1LocalSettingsEnvelope(string userName, string password)
     return $$"""
         {
           "format": "app-protected-v1",
+          "payload": "{{Convert.ToBase64String(payloadBytes)}}"
+        }
+        """;
+}
+
+static string CreateV2LocalSettingsEnvelope(string userName, string password)
+{
+    var plaintext = System.Text.Json.JsonSerializer.SerializeToUtf8Bytes(
+        new Dictionary<string, string>
+        {
+            ["RPOL user name"] = userName,
+            ["RPOL password"] = password
+        },
+        new System.Text.Json.JsonSerializerOptions { WriteIndented = true });
+    var key = SHA256.HashData(System.Text.Encoding.UTF8.GetBytes("PlayerAssistant.LocalSettings.v1"));
+    var authenticationKey = SHA256.HashData(System.Text.Encoding.UTF8.GetBytes("PlayerAssistant.LocalSettings.v1.hmac"));
+    var iv = RandomNumberGenerator.GetBytes(16);
+
+    using var aes = Aes.Create();
+    aes.Key = key;
+    aes.IV = iv;
+    aes.Mode = CipherMode.CBC;
+    aes.Padding = PaddingMode.PKCS7;
+
+    using var encryptor = aes.CreateEncryptor();
+    var ciphertext = encryptor.TransformFinalBlock(plaintext, 0, plaintext.Length);
+    var protectedContent = new byte[iv.Length + ciphertext.Length];
+    Buffer.BlockCopy(iv, 0, protectedContent, 0, iv.Length);
+    Buffer.BlockCopy(ciphertext, 0, protectedContent, iv.Length, ciphertext.Length);
+
+    byte[] tag;
+    using (var hmac = new HMACSHA256(authenticationKey))
+    {
+        tag = hmac.ComputeHash(protectedContent);
+    }
+
+    var payloadBytes = new byte[protectedContent.Length + tag.Length];
+    Buffer.BlockCopy(protectedContent, 0, payloadBytes, 0, protectedContent.Length);
+    Buffer.BlockCopy(tag, 0, payloadBytes, protectedContent.Length, tag.Length);
+
+    return $$"""
+        {
+          "format": "app-protected-v2",
           "payload": "{{Convert.ToBase64String(payloadBytes)}}"
         }
         """;

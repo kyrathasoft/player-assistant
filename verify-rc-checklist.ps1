@@ -11,6 +11,7 @@ param(
         'publish verification'
     ),
     [switch]$SkipSecretScan,
+    [switch]$SkipSelfTests,
     [switch]$SkipTests,
     [switch]$SkipReleasePublishParity,
     [switch]$SkipPublishedHealth,
@@ -25,6 +26,7 @@ $ExecutableFileName = 'player-assistant.exe'
 $TestExecutablePath = Join-Path $PSScriptRoot 'PlayerAssistant.Tests\bin\Release\net10.0-windows\PlayerAssistant.Tests.exe'
 $TestStartupLogPath = Join-Path $PSScriptRoot 'PlayerAssistant.Tests\bin\Release\net10.0-windows\startup-errors.log'
 $SecretScanScriptPath = Join-Path $PSScriptRoot 'verify-secret-scan.ps1'
+$RcSelfTestsScriptPath = Join-Path $PSScriptRoot 'verify-rc-self-tests.ps1'
 $ReleasePublishParityScriptPath = Join-Path $PSScriptRoot 'verify-release-publish-parity.ps1'
 $PublishedHealthScriptPath = Join-Path $PSScriptRoot 'verify-published-health.ps1'
 $PublishRuntimeIntegrityScriptPath = Join-Path $PSScriptRoot 'verify-publish-runtime-integrity.ps1'
@@ -407,6 +409,28 @@ function Invoke-SecretScan {
         ))
 }
 
+function Invoke-RcSelfTests {
+    if ($SkipSelfTests) {
+        Write-Output "Skipping RC checklist self-tests because -SkipSelfTests was supplied."
+        return
+    }
+
+    Assert-RequiredFile -Path $RcSelfTestsScriptPath -Description 'RC checklist self-test script'
+    [void](Invoke-ExternalCommand `
+        -FileName 'powershell.exe' `
+        -Arguments @(
+            '-NoProfile',
+            '-ExecutionPolicy',
+            'Bypass',
+            '-File',
+            $RcSelfTestsScriptPath,
+            '-ReleaseDir',
+            $resolvedReleaseDir,
+            '-PublishDir',
+            $resolvedPublishDir
+        ))
+}
+
 function Invoke-PublishRuntimeIntegrityCheck {
     if ($SkipPublishRuntimeIntegrity) {
         Write-Output "Skipping published-folder runtime integrity check because -SkipPublishRuntimeIntegrity was supplied."
@@ -567,6 +591,7 @@ Assert-RcTagMatchesVersion -Tag $RcTag -Version $projectVersion.Version
 Write-Output "RC checklist for $($projectVersion.Version) using tag $RcTag"
 Test-GitReady
 Invoke-SecretScan
+Invoke-RcSelfTests
 Invoke-FocusedHardeningTests
 Invoke-ReleasePublishParityCheck
 Invoke-PublishedHealthCheck

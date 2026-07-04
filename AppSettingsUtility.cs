@@ -53,10 +53,10 @@ namespace PlayerAssistant
                 }
             }
 
-            ValidateHttpUrlSetting(settings, RpolSiteSettingsKey);
-            ValidateHttpUrlSetting(settings, GameIntroSettingsKey);
-            ValidateHttpUrlSetting(settings, TheCastSettingsKey);
-            ValidateHttpUrlSetting(settings, ObsidianGameVaultSettingsKey);
+            ValidateHttpUrlSetting(settings, RpolSiteSettingsKey, NetworkUrlPurpose.Rpol);
+            ValidateHttpUrlSetting(settings, GameIntroSettingsKey, NetworkUrlPurpose.Rpol);
+            ValidateHttpUrlSetting(settings, TheCastSettingsKey, NetworkUrlPurpose.Rpol);
+            ValidateHttpUrlSetting(settings, ObsidianGameVaultSettingsKey, NetworkUrlPurpose.ObsidianPublish);
 
             return settings;
         }
@@ -98,7 +98,8 @@ namespace PlayerAssistant
 
         private static void ValidateHttpUrlSetting(
             IReadOnlyDictionary<string, string> settings,
-            string settingsKey)
+            string settingsKey,
+            NetworkUrlPurpose purpose)
         {
             if (!settings.TryGetValue(settingsKey, out var url) ||
                 string.IsNullOrWhiteSpace(url))
@@ -107,11 +108,11 @@ namespace PlayerAssistant
                     $"Settings file '{SettingsFileName}' must contain a '{settingsKey}' URL.");
             }
 
-            if (!Uri.TryCreate(url, UriKind.Absolute, out var uri) ||
-                (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps))
+            var validation = NetworkUrlAllowlistUtility.Validate(url, purpose);
+            if (!validation.IsAllowed)
             {
                 throw new InvalidOperationException(
-                    $"Settings value '{settingsKey}' must be a valid HTTP or HTTPS URL.");
+                    $"Settings value '{settingsKey}' is not allowed: {validation.RejectionReason}");
             }
         }
     }

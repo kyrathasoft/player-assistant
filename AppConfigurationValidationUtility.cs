@@ -139,10 +139,10 @@ namespace PlayerAssistant
 
             var issues = new List<AppConfigurationIssue>();
 
-            ValidateHttpUrlSetting(settings, RpolSiteSettingsKey, issues);
-            ValidateHttpUrlSetting(settings, GameIntroSettingsKey, issues);
-            ValidateHttpUrlSetting(settings, TheCastSettingsKey, issues);
-            ValidateHttpUrlSetting(settings, ObsidianGameVaultSettingsKey, issues);
+            ValidateHttpUrlSetting(settings, RpolSiteSettingsKey, NetworkUrlPurpose.Rpol, issues);
+            ValidateHttpUrlSetting(settings, GameIntroSettingsKey, NetworkUrlPurpose.Rpol, issues);
+            ValidateHttpUrlSetting(settings, TheCastSettingsKey, NetworkUrlPurpose.Rpol, issues);
+            ValidateHttpUrlSetting(settings, ObsidianGameVaultSettingsKey, NetworkUrlPurpose.ObsidianPublish, issues);
             ValidateRpolCredentials(settings, issues);
             ValidateRuntimeDirectory(runtimeDirectory, issues);
             ValidateRuntimeSidecars(runtimeDirectory, issues);
@@ -154,6 +154,7 @@ namespace PlayerAssistant
         private static void ValidateHttpUrlSetting(
             IReadOnlyDictionary<string, string> settings,
             string settingsKey,
+            NetworkUrlPurpose purpose,
             List<AppConfigurationIssue> issues)
         {
             if (!settings.TryGetValue(settingsKey, out var value)
@@ -166,13 +167,13 @@ namespace PlayerAssistant
                 return;
             }
 
-            if (!Uri.TryCreate(value, UriKind.Absolute, out var uri)
-                || (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps))
+            var validation = NetworkUrlAllowlistUtility.Validate(value, purpose);
+            if (!validation.IsAllowed)
             {
                 issues.Add(new AppConfigurationIssue(
                     AppConfigurationIssueSeverity.Error,
-                    $"{settingsKey} must be an absolute HTTP or HTTPS URL.",
-                    $"Edit settings.json and replace '{settingsKey}' with an absolute URL beginning with http:// or https://."));
+                    $"{settingsKey} is not on the allowed network host list: {validation.RejectionReason}",
+                    $"Edit settings.json and replace '{settingsKey}' with the expected RPOL or Obsidian Publish URL."));
             }
         }
 
