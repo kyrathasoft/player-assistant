@@ -4,7 +4,6 @@ namespace PlayerAssistant
 {
     internal static class UserPreferencesUtility
     {
-        private const string PreferencesDirectoryName = "PlayerAssistant";
         private const string PreferencesFileName = "preferences.json";
         private static readonly JsonSerializerOptions SerializerOptions = new() { WriteIndented = true };
 
@@ -81,10 +80,17 @@ namespace PlayerAssistant
 
         private static string GetPreferencesPath()
         {
-            return Path.Combine(
+            var preferredPath = RuntimePathUtility.GetUserDataPath(PreferencesFileName);
+            if (File.Exists(preferredPath))
+            {
+                return preferredPath;
+            }
+
+            var legacyPath = Path.Combine(
                 Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-                PreferencesDirectoryName,
+                "PlayerAssistant",
                 PreferencesFileName);
+            return File.Exists(legacyPath) ? legacyPath : preferredPath;
         }
 
         private sealed record UserPreferences(

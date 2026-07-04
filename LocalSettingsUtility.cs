@@ -30,6 +30,16 @@ namespace PlayerAssistant
 
         public static Dictionary<string, string> LoadSettings(string settingsPath)
         {
+            return LoadSettings(settingsPath, migrateToCurrentFormat: true);
+        }
+
+        internal static Dictionary<string, string> LoadSettingsWithoutMigration(string settingsPath)
+        {
+            return LoadSettings(settingsPath, migrateToCurrentFormat: false);
+        }
+
+        private static Dictionary<string, string> LoadSettings(string settingsPath, bool migrateToCurrentFormat)
+        {
             ArgumentNullException.ThrowIfNull(settingsPath);
 
             if (!File.Exists(settingsPath))
@@ -43,8 +53,9 @@ namespace PlayerAssistant
             if (TryReadEncryptedEnvelope(document.RootElement, out var envelope))
             {
                 var decryptedSettings = DecryptSettings(envelope, settingsPath);
-                if (!string.Equals(envelope.Format, EncryptedFormat, StringComparison.Ordinal)
-                    || envelope.SchemaVersion != CurrentSchemaVersion)
+                if (migrateToCurrentFormat
+                    && (!string.Equals(envelope.Format, EncryptedFormat, StringComparison.Ordinal)
+                        || envelope.SchemaVersion != CurrentSchemaVersion))
                 {
                     SaveEncryptedSettings(settingsPath, decryptedSettings);
                 }
@@ -54,7 +65,11 @@ namespace PlayerAssistant
 
             var plaintextSettings = ReadPlaintextSettings(document.RootElement, settingsPath);
 
-            SaveEncryptedSettings(settingsPath, plaintextSettings);
+            if (migrateToCurrentFormat)
+            {
+                SaveEncryptedSettings(settingsPath, plaintextSettings);
+            }
+
             return plaintextSettings;
         }
 

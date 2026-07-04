@@ -11,6 +11,7 @@
 - Build the executable and related output files under the repository root `Release` folder instead of under `Debug`.
 - At the beginning of each coding session, read `to-do.md` so current completed hardening work, active backlog notes, and project priorities are in context before making changes.
 - When committing hardening or implementation work, always include `to-do.md` in the commit if it has been updated.
+- Never commit installer files unless the user specifically tells you to commit installer files.
 
 # graphify
 

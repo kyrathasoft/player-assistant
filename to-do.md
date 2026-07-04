@@ -7,6 +7,7 @@
 - [x] Store the XP Tracking URL in encrypted local settings and add a parser/fetch helper for current PC XP totals.
 - [x] Add `Show > XP` with encrypted per-PC password sidecar validation before displaying a character's XP date and total.
 - [x] Allow the Dungeon Master XP credential to display dates and XP totals for all PCs.
+- [x] Add a polished installer package workflow for `0.9.0-hardening.5` targeting `C:\Program Files\kyrathasoft\player-assistant`.
 
 ## Hardening completed in this session
 

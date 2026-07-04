@@ -34,7 +34,11 @@ $ReleaseScriptFileNames = @(
     'verify-release-startup-smoke.ps1',
     'collect-diagnostics.ps1',
     'clean-diagnostics-retention.ps1',
-    'diagnose-player-assistant-locks.ps1'
+    'diagnose-player-assistant-locks.ps1',
+    'build-installer.ps1',
+    'verify-installer-package.ps1',
+    'Installer\install-player-assistant.ps1',
+    'Installer\install-player-assistant.cmd'
 )
 $SensitiveFileNames = @(
     'rpol-storage-state.json'

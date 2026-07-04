@@ -163,6 +163,8 @@ var tests = new (string Name, Action Test)[]
     ("publish verification rejects stale release manifest", PublishVerificationRejectsStaleReleaseManifest),
     ("publish verification rejects malformed runtime inventory", PublishVerificationRejectsMalformedRuntimeInventory),
     ("publish verification rejects malformed release provenance", PublishVerificationRejectsMalformedReleaseProvenance),
+    ("installer scripts target program files install path", InstallerScriptsTargetProgramFilesInstallPath),
+    ("installer package verification accepts current package", InstallerPackageVerificationAcceptsCurrentPackage),
     ("published health verification accepts current output", PublishedHealthVerificationAcceptsCurrentOutput),
     ("secret scan accepts current repository", SecretScanAcceptsCurrentRepository),
     ("secret scan rejects tracked env secret", SecretScanRejectsTrackedEnvSecret),
@@ -3601,6 +3603,54 @@ static void PublishVerificationRejectsMalformedReleaseProvenance()
         AssertFalse(output.ExitCode == 0, "publish verification should fail when release-provenance.json is malformed");
         AssertContains(output.Output, "release-provenance.json is not valid JSON");
     });
+}
+
+static void InstallerScriptsTargetProgramFilesInstallPath()
+{
+    var installerPath = Path.Combine(GetRepositoryRoot(), "Installer", "install-player-assistant.ps1");
+    var launcherPath = Path.Combine(GetRepositoryRoot(), "Installer", "install-player-assistant.cmd");
+    var builderPath = Path.Combine(GetRepositoryRoot(), "build-installer.ps1");
+    var verifierPath = Path.Combine(GetRepositoryRoot(), "verify-installer-package.ps1");
+
+    AssertTrue(File.Exists(installerPath), "installer script should exist");
+    AssertTrue(File.Exists(launcherPath), "installer launcher should exist");
+    AssertTrue(File.Exists(builderPath), "installer package builder should exist");
+    AssertTrue(File.Exists(verifierPath), "installer package verifier should exist");
+
+    var installer = File.ReadAllText(installerPath);
+    AssertContains(installer, "kyrathasoft\\player-assistant");
+    AssertContains(installer, "CommonPrograms");
+    AssertContains(installer, "Uninstall\\KyrathaSoft Player Assistant");
+    AssertContains(File.ReadAllText(builderPath), "app-protected-v2");
+    AssertContains(File.ReadAllText(verifierPath), "app-protected-v2");
+}
+
+static void InstallerPackageVerificationAcceptsCurrentPackage()
+{
+    var packagePath = Path.Combine(
+        GetRepositoryRoot(),
+        "Release",
+        "installer",
+        "player-assistant-0.9.0-hardening.5-installer.zip");
+    if (!File.Exists(packagePath))
+    {
+        return;
+    }
+
+    var output = RunPowerShell(
+        [
+            "-NoProfile",
+            "-ExecutionPolicy",
+            "Bypass",
+            "-File",
+            Path.Combine(GetRepositoryRoot(), "verify-installer-package.ps1"),
+            "-PackagePath",
+            packagePath
+        ],
+        TimeSpan.FromSeconds(60));
+
+    AssertEqual(0, output.ExitCode, $"installer package verification should pass. Output: {output.Output}");
+    AssertContains(output.Output, "Installer package verification passed:");
 }
 
 static void PublishedHealthVerificationAcceptsCurrentOutput()

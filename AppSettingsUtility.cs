@@ -32,23 +32,37 @@ namespace PlayerAssistant
 
         private static IReadOnlyDictionary<string, string> LoadSettings()
         {
-            return LoadSettings(AppContext.BaseDirectory);
+            return LoadSettings(RuntimePathUtility.ApplicationDirectory);
         }
 
         internal static IReadOnlyDictionary<string, string> LoadSettings(string runtimeDirectory)
         {
             ArgumentException.ThrowIfNullOrWhiteSpace(runtimeDirectory);
 
-            var settings = LoadSettingsFile(Path.Combine(runtimeDirectory, SettingsFileName));
-            var localSettingsPath = Path.Combine(runtimeDirectory, LocalSettingsFileName);
+            var settings = LoadSettingsFile(RuntimePathUtility.ResolveApplicationFileForRead(SettingsFileName));
+            var preferredLocalSettingsPath = RuntimePathUtility.GetUserDataPath(LocalSettingsFileName);
+            var localSettingsPath = ResolveLocalSettingsPath(preferredLocalSettingsPath, runtimeDirectory);
 
             if (File.Exists(localSettingsPath))
             {
                 try
                 {
-                    foreach (var pair in LocalSettingsUtility.LoadSettings(localSettingsPath))
+                    var localSettings = string.Equals(
+                        localSettingsPath,
+                        preferredLocalSettingsPath,
+                        StringComparison.OrdinalIgnoreCase)
+                            ? LocalSettingsUtility.LoadSettings(localSettingsPath)
+                            : LocalSettingsUtility.LoadSettingsWithoutMigration(localSettingsPath);
+
+                    foreach (var pair in localSettings)
                     {
                         settings[pair.Key] = pair.Value;
+                    }
+
+                    if (!string.Equals(localSettingsPath, preferredLocalSettingsPath, StringComparison.OrdinalIgnoreCase))
+                    {
+                        Directory.CreateDirectory(Path.GetDirectoryName(preferredLocalSettingsPath)!);
+                        LocalSettingsUtility.SaveEncryptedSettings(preferredLocalSettingsPath, localSettings);
                     }
                 }
                 catch (Exception ex) when (IsRecoverableLocalSettingsException(ex))
@@ -64,6 +78,22 @@ namespace PlayerAssistant
             ValidateHttpUrlSetting(settings, XpTrackingSettingsKey, NetworkUrlPurpose.ObsidianPublish);
 
             return settings;
+        }
+
+        private static string ResolveLocalSettingsPath(string preferredLocalSettingsPath, string runtimeDirectory)
+        {
+            if (File.Exists(preferredLocalSettingsPath))
+            {
+                return preferredLocalSettingsPath;
+            }
+
+            var runtimeLocalSettingsPath = RuntimePathUtility.CombineUnderBase(runtimeDirectory, LocalSettingsFileName);
+            if (File.Exists(runtimeLocalSettingsPath))
+            {
+                return runtimeLocalSettingsPath;
+            }
+
+            return RuntimePathUtility.ResolveUserDataFileForRead(LocalSettingsFileName);
         }
 
         private static Dictionary<string, string> LoadSettingsFile(string settingsPath)

@@ -1,0 +1,290 @@
+param(
+    [string]$OutputDir = (Join-Path $PSScriptRoot 'Release\installer'),
+    [string]$PublishDir = (Join-Path $PSScriptRoot 'Release\publish'),
+    [string]$Version = '0.9.0-hardening.5',
+    [switch]$SkipPublish
+)
+
+$ErrorActionPreference = 'Stop'
+
+$SettingsEncryptionSeed = 'PlayerAssistant.LocalSettings.v1'
+$SettingsSchemaVersion = 1
+$SettingsLocalFileName = 'settings.local.json'
+$PackageRootName = "player-assistant-$Version"
+$PackageFileName = "player-assistant-$Version-installer.zip"
+
+function Assert-RequiredFile {
+    param(
+        [Parameter(Mandatory = $true)][string]$Path,
+        [Parameter(Mandatory = $true)][string]$Description
+    )
+
+    if (!(Test-Path -LiteralPath $Path -PathType Leaf)) {
+        throw "Required $Description is missing: $Path"
+    }
+
+    if ((Get-Item -LiteralPath $Path).Length -le 0) {
+        throw "Required $Description is empty: $Path"
+    }
+}
+
+function Get-Sha256Bytes {
+    param([Parameter(Mandatory = $true)][string]$Value)
+
+    $sha256 = [System.Security.Cryptography.SHA256]::Create()
+    try {
+        return ,$sha256.ComputeHash([System.Text.Encoding]::UTF8.GetBytes($Value))
+    }
+    finally {
+        $sha256.Dispose()
+    }
+}
+
+function Test-FixedTimeEquals {
+    param(
+        [Parameter(Mandatory = $true)][byte[]]$Left,
+        [Parameter(Mandatory = $true)][byte[]]$Right
+    )
+
+    if ($Left.Length -ne $Right.Length) {
+        return $false
+    }
+
+    [byte]$difference = 0
+    for ($index = 0; $index -lt $Left.Length; $index++) {
+        $difference = $difference -bor ($Left[$index] -bxor $Right[$index])
+    }
+
+    return $difference -eq 0
+}
+
+function ConvertTo-PlainSettingsObject {
+    param([Parameter(Mandatory = $true)][object]$Settings)
+
+    $plainSettings = [ordered]@{}
+    foreach ($property in $Settings.PSObject.Properties) {
+        if ($property.Name -eq 'schema_version') {
+            continue
+        }
+
+        $plainSettings[$property.Name] = [string]$property.Value
+    }
+
+    return [pscustomobject]$plainSettings
+}
+
+function Get-SettingsDerivationScope {
+    param([Parameter(Mandatory = $true)][string]$SettingsPath)
+
+    $fullPath = [System.IO.Path]::GetFullPath($SettingsPath)
+    $directoryPath = [System.IO.Path]::GetDirectoryName($fullPath)
+    if ([string]::IsNullOrWhiteSpace($directoryPath)) {
+        $directoryPath = $PSScriptRoot
+    }
+
+    $installPath = [System.IO.Path]::GetFullPath($directoryPath).TrimEnd([System.IO.Path]::DirectorySeparatorChar, [System.IO.Path]::AltDirectorySeparatorChar).ToUpperInvariant()
+    $machine = [Environment]::MachineName.ToUpperInvariant()
+    $user = "$([Environment]::UserDomainName)\$([Environment]::UserName)".ToUpperInvariant()
+    return "$machine|$user|$installPath"
+}
+
+function ConvertFrom-EncryptedSettingsFile {
+    param([Parameter(Mandatory = $true)][string]$Path)
+
+    $raw = Get-Content -Raw -LiteralPath $Path
+    $envelope = $raw | ConvertFrom-Json
+    $format = [string]$envelope.format
+    $payloadBytes = [Convert]::FromBase64String([string]$envelope.payload)
+    $encryptionKey = $null
+    $authenticationKey = $null
+
+    if ($format -eq 'app-protected-v3') {
+        $scope = Get-SettingsDerivationScope -SettingsPath $Path
+        $encryptionKey = Get-Sha256Bytes -Value "$SettingsEncryptionSeed.v3.encryption.$scope"
+        $authenticationKey = Get-Sha256Bytes -Value "$SettingsEncryptionSeed.v3.hmac.$scope"
+    }
+    elseif ($format -eq 'app-protected-v2') {
+        $encryptionKey = Get-Sha256Bytes -Value $SettingsEncryptionSeed
+        $authenticationKey = Get-Sha256Bytes -Value "$SettingsEncryptionSeed.hmac"
+    }
+    elseif ($format -eq 'app-protected-v1') {
+        $encryptionKey = Get-Sha256Bytes -Value $SettingsEncryptionSeed
+    }
+    else {
+        throw "Unsupported settings encryption format '$format' for installer packaging."
+    }
+
+    if ($format -eq 'app-protected-v3' -or $format -eq 'app-protected-v2') {
+        if ($payloadBytes.Length -lt 49) {
+            throw 'Encrypted settings payload is too short.'
+        }
+
+        $tag = [byte[]]::new(32)
+        $protectedContent = [byte[]]::new($payloadBytes.Length - $tag.Length)
+        [System.Buffer]::BlockCopy($payloadBytes, 0, $protectedContent, 0, $protectedContent.Length)
+        [System.Buffer]::BlockCopy($payloadBytes, $protectedContent.Length, $tag, 0, $tag.Length)
+        $hmac = [System.Security.Cryptography.HMACSHA256]::new($authenticationKey)
+        try {
+            $actualTag = $hmac.ComputeHash($protectedContent)
+        }
+        finally {
+            $hmac.Dispose()
+        }
+
+        if (!(Test-FixedTimeEquals -Left $actualTag -Right $tag)) {
+            throw 'Encrypted settings authentication tag did not match.'
+        }
+    }
+    else {
+        $protectedContent = $payloadBytes
+    }
+
+    $iv = [byte[]]::new(16)
+    $ciphertext = [byte[]]::new($protectedContent.Length - $iv.Length)
+    [System.Buffer]::BlockCopy($protectedContent, 0, $iv, 0, $iv.Length)
+    [System.Buffer]::BlockCopy($protectedContent, $iv.Length, $ciphertext, 0, $ciphertext.Length)
+
+    $aes = [System.Security.Cryptography.Aes]::Create()
+    try {
+        $aes.Key = $encryptionKey
+        $aes.IV = $iv
+        $aes.Mode = [System.Security.Cryptography.CipherMode]::CBC
+        $aes.Padding = [System.Security.Cryptography.PaddingMode]::PKCS7
+        $decryptor = $aes.CreateDecryptor()
+        try {
+            $plaintextBytes = $decryptor.TransformFinalBlock($ciphertext, 0, $ciphertext.Length)
+        }
+        finally {
+            $decryptor.Dispose()
+        }
+    }
+    finally {
+        $aes.Dispose()
+    }
+
+    return ConvertTo-PlainSettingsObject -Settings (([System.Text.Encoding]::UTF8.GetString($plaintextBytes)) | ConvertFrom-Json)
+}
+
+function ConvertFrom-SettingsFile {
+    param([Parameter(Mandatory = $true)][string]$Path)
+
+    $raw = Get-Content -Raw -LiteralPath $Path
+    $json = $raw | ConvertFrom-Json
+    if ($json.PSObject.Properties['format'] -and $json.PSObject.Properties['payload']) {
+        return ConvertFrom-EncryptedSettingsFile -Path $Path
+    }
+
+    return ConvertTo-PlainSettingsObject -Settings $json
+}
+
+function Write-PortableEncryptedSettings {
+    param(
+        [Parameter(Mandatory = $true)][object]$Settings,
+        [Parameter(Mandatory = $true)][string]$DestinationPath
+    )
+
+    $plaintextJson = $Settings | ConvertTo-Json -Depth 10
+    $plaintextBytes = [System.Text.Encoding]::UTF8.GetBytes($plaintextJson)
+    $iv = [byte[]]::new(16)
+    $rng = [System.Security.Cryptography.RandomNumberGenerator]::Create()
+    try {
+        $rng.GetBytes($iv)
+    }
+    finally {
+        $rng.Dispose()
+    }
+
+    $aes = [System.Security.Cryptography.Aes]::Create()
+    try {
+        $aes.Key = Get-Sha256Bytes -Value $SettingsEncryptionSeed
+        $aes.IV = $iv
+        $aes.Mode = [System.Security.Cryptography.CipherMode]::CBC
+        $aes.Padding = [System.Security.Cryptography.PaddingMode]::PKCS7
+        $encryptor = $aes.CreateEncryptor()
+        try {
+            $ciphertext = $encryptor.TransformFinalBlock($plaintextBytes, 0, $plaintextBytes.Length)
+        }
+        finally {
+            $encryptor.Dispose()
+        }
+    }
+    finally {
+        $aes.Dispose()
+    }
+
+    $protectedContent = [byte[]]::new($iv.Length + $ciphertext.Length)
+    [System.Buffer]::BlockCopy($iv, 0, $protectedContent, 0, $iv.Length)
+    [System.Buffer]::BlockCopy($ciphertext, 0, $protectedContent, $iv.Length, $ciphertext.Length)
+    $hmac = [System.Security.Cryptography.HMACSHA256]::new((Get-Sha256Bytes -Value "$SettingsEncryptionSeed.hmac"))
+    try {
+        $tag = $hmac.ComputeHash($protectedContent)
+    }
+    finally {
+        $hmac.Dispose()
+    }
+
+    $payloadBytes = [byte[]]::new($protectedContent.Length + $tag.Length)
+    [System.Buffer]::BlockCopy($protectedContent, 0, $payloadBytes, 0, $protectedContent.Length)
+    [System.Buffer]::BlockCopy($tag, 0, $payloadBytes, $protectedContent.Length, $tag.Length)
+
+    $envelope = [ordered]@{
+        schema_version = $SettingsSchemaVersion
+        format = 'app-protected-v2'
+        payload = [Convert]::ToBase64String($payloadBytes)
+    }
+
+    [pscustomobject]$envelope | ConvertTo-Json -Depth 4 | Set-Content -LiteralPath $DestinationPath -Encoding UTF8
+}
+
+function Copy-DirectoryContents {
+    param(
+        [Parameter(Mandatory = $true)][string]$Source,
+        [Parameter(Mandatory = $true)][string]$Destination
+    )
+
+    New-Item -ItemType Directory -Force -Path $Destination | Out-Null
+    Get-ChildItem -LiteralPath $Source -Force | ForEach-Object {
+        Copy-Item -LiteralPath $_.FullName -Destination $Destination -Recurse -Force
+    }
+}
+
+if (!$SkipPublish) {
+    & (Join-Path $PSScriptRoot 'publish-player-assistant.ps1') -OutputDir $PublishDir
+    if ($LASTEXITCODE -ne 0) {
+        throw "Publish failed with exit code $LASTEXITCODE."
+    }
+}
+
+Assert-RequiredFile -Path (Join-Path $PublishDir 'player-assistant.exe') -Description 'published executable'
+Assert-RequiredFile -Path (Join-Path $PSScriptRoot $SettingsLocalFileName) -Description $SettingsLocalFileName
+
+New-Item -ItemType Directory -Force -Path $OutputDir | Out-Null
+
+$packageRoot = Join-Path $OutputDir $PackageRootName
+$payloadRoot = Join-Path $packageRoot 'payload'
+$packagePath = Join-Path $OutputDir $PackageFileName
+
+if (Test-Path -LiteralPath $packageRoot) {
+    Remove-Item -LiteralPath $packageRoot -Recurse -Force
+}
+
+if (Test-Path -LiteralPath $packagePath) {
+    Remove-Item -LiteralPath $packagePath -Force
+}
+
+New-Item -ItemType Directory -Force -Path $packageRoot | Out-Null
+Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'Installer\install-player-assistant.ps1') -Destination (Join-Path $packageRoot 'install-player-assistant.ps1') -Force
+Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'Installer\install-player-assistant.cmd') -Destination (Join-Path $packageRoot 'install-player-assistant.cmd') -Force
+Copy-DirectoryContents -Source $PublishDir -Destination $payloadRoot
+
+$sourceSettings = ConvertFrom-SettingsFile -Path (Join-Path $PSScriptRoot $SettingsLocalFileName)
+Write-PortableEncryptedSettings -Settings $sourceSettings -DestinationPath (Join-Path $payloadRoot $SettingsLocalFileName)
+
+Compress-Archive -LiteralPath $packageRoot -DestinationPath $packagePath -Force
+
+& (Join-Path $PSScriptRoot 'verify-installer-package.ps1') -PackagePath $packagePath -ExpectedVersion $Version
+if ($LASTEXITCODE -ne 0) {
+    throw "Installer package verification failed with exit code $LASTEXITCODE."
+}
+
+Write-Output "Installer package created: $packagePath"

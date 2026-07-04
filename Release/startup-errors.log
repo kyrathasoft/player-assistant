@@ -118,3 +118,5 @@ PlayerAssistant.RpolAuthException: RPoL blocked authenticated access to 'https:/
    at PlayerAssistant.Form1.<>c__DisplayClass115_0.<<StartBackgroundTask>b__0>d.MoveNext()
 --- End of stack trace from previous location ---
    at System.Runtime.CompilerServices.TaskAwaiter.HandleNonSuccessAndDebuggerNotification(Task task, ConfigureAwaitOptions options)
+[2026-07-04T08:21:58.7629573-05:00] version
+player-assistant 0.9.0-hardening.5
