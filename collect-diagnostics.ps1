@@ -427,27 +427,22 @@ function Invoke-CapturedCommand {
         [string]$OutputPath
     )
 
-    $stdoutPath = Join-Path ([System.IO.Path]::GetTempPath()) "player-assistant-diag-stdout-$([Guid]::NewGuid().ToString('N')).txt"
-    $stderrPath = Join-Path ([System.IO.Path]::GetTempPath()) "player-assistant-diag-stderr-$([Guid]::NewGuid().ToString('N')).txt"
     try {
         $resolvedFileName = if ($FileName -ieq 'powershell.exe') { Get-PowerShellExecutable } else { $FileName }
-        $process = Start-Process `
-            -FilePath $resolvedFileName `
-            -ArgumentList $Arguments `
-            -WorkingDirectory $WorkingDirectory `
-            -NoNewWindow `
-            -PassThru `
-            -Wait `
-            -RedirectStandardOutput $stdoutPath `
-            -RedirectStandardError $stderrPath
+        Push-Location $WorkingDirectory
+        try {
+            $combinedOutput = & $resolvedFileName @Arguments 2>&1 | Out-String
+            $exitCode = if ($null -ne $LASTEXITCODE) { [int]$LASTEXITCODE } else { 0 }
+        }
+        finally {
+            Pop-Location
+        }
 
-        $stdout = if (Test-Path -LiteralPath $stdoutPath) { Get-Content -Raw -LiteralPath $stdoutPath } else { '' }
-        $stderr = if (Test-Path -LiteralPath $stderrPath) { Get-Content -Raw -LiteralPath $stderrPath } else { '' }
         $report = [ordered]@{
             command = "$resolvedFileName $($Arguments -join ' ')"
-            exit_code = $process.ExitCode
-            stdout = Redact-Text -Text $stdout
-            stderr = Redact-Text -Text $stderr
+            exit_code = $exitCode
+            stdout = Redact-Text -Text $combinedOutput
+            stderr = ''
         }
 
         Write-Utf8File -Path $OutputPath -Contents (($report | ConvertTo-Json -Depth 6) + "`r`n")
@@ -459,9 +454,6 @@ function Invoke-CapturedCommand {
             error = Redact-Text -Text $_.Exception.Message
         }
         Write-Utf8File -Path $OutputPath -Contents (($report | ConvertTo-Json -Depth 6) + "`r`n")
-    }
-    finally {
-        Remove-Item -LiteralPath $stdoutPath, $stderrPath -Force -ErrorAction SilentlyContinue
     }
 }
 
