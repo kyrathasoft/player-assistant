@@ -59,6 +59,20 @@ function Resolve-FullPath {
     return [System.IO.Path]::GetFullPath($Path)
 }
 
+function Get-PowerShellExecutable {
+    $pwsh = Get-Command pwsh.exe -ErrorAction SilentlyContinue
+    if ($pwsh) {
+        return $pwsh.Source
+    }
+
+    $windowsPowerShell = Get-Command powershell.exe -ErrorAction SilentlyContinue
+    if ($windowsPowerShell) {
+        return $windowsPowerShell.Source
+    }
+
+    throw 'Neither pwsh.exe nor powershell.exe is available.'
+}
+
 function Assert-PathInsideRepo {
     param(
         [Parameter(Mandatory = $true)]
@@ -181,11 +195,12 @@ function Invoke-ExternalCommand {
         [switch]$AllowFailure
     )
 
-    $displayCommand = Format-Command -FileName $FileName -Arguments $Arguments
+    $resolvedFileName = if ($FileName -ieq 'powershell.exe') { Get-PowerShellExecutable } else { $FileName }
+    $displayCommand = Format-Command -FileName $resolvedFileName -Arguments $Arguments
     Write-Host "Running: $displayCommand"
 
     $startInfo = [System.Diagnostics.ProcessStartInfo]::new()
-    $startInfo.FileName = $FileName
+    $startInfo.FileName = $resolvedFileName
     $startInfo.Arguments = ConvertTo-ProcessArguments -Arguments $Arguments
     $startInfo.WorkingDirectory = $WorkingDirectory
     $startInfo.RedirectStandardOutput = $true

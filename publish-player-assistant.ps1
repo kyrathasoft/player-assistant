@@ -77,6 +77,22 @@ $RequiredSettingsUrlKeys = @(
 $ProcessLockDiagnosticsScriptPath = Join-Path $PSScriptRoot 'diagnose-player-assistant-locks.ps1'
 $RuntimeSidecarVerificationScriptPath = Join-Path $PSScriptRoot 'verify-runtime-sidecars.ps1'
 
+function Get-PowerShellExecutable {
+    $pwsh = Get-Command pwsh.exe -ErrorAction SilentlyContinue
+    if ($pwsh) {
+        return $pwsh.Source
+    }
+
+    $windowsPowerShell = Get-Command powershell.exe -ErrorAction SilentlyContinue
+    if ($windowsPowerShell) {
+        return $windowsPowerShell.Source
+    }
+
+    throw 'Neither pwsh.exe nor powershell.exe is available.'
+}
+
+$PowerShellExecutable = Get-PowerShellExecutable
+
 function Protect-RuntimeSidecarFiles {
     param([Parameter(Mandatory = $true)][string]$Directory)
 
@@ -91,7 +107,7 @@ function Invoke-RuntimeSidecarVerification {
     param([Parameter(Mandatory = $true)][string]$Directory)
 
     Assert-RequiredFile -Path $RuntimeSidecarVerificationScriptPath -Description 'runtime sidecar verification script'
-    & powershell.exe `
+    & $PowerShellExecutable `
         -NoProfile `
         -ExecutionPolicy Bypass `
         -File $RuntimeSidecarVerificationScriptPath `
@@ -1480,7 +1496,7 @@ function Invoke-ProcessLockDiagnostics {
 
     Write-Output ''
     Write-Output 'Process-lock diagnostics after publish failure:'
-    & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $ProcessLockDiagnosticsScriptPath `
+    & $PowerShellExecutable -NoProfile -ExecutionPolicy Bypass -File $ProcessLockDiagnosticsScriptPath `
         -ReleasePath (Join-Path $PSScriptRoot 'Release\player-assistant.exe') `
         -PublishPath (Join-Path $PublishDirectory 'player-assistant.exe')
 }

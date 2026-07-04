@@ -63,6 +63,20 @@ function Resolve-FullPath {
     return [System.IO.Path]::GetFullPath($Path)
 }
 
+function Get-PowerShellExecutable {
+    $pwsh = Get-Command pwsh.exe -ErrorAction SilentlyContinue
+    if ($pwsh) {
+        return $pwsh.Source
+    }
+
+    $windowsPowerShell = Get-Command powershell.exe -ErrorAction SilentlyContinue
+    if ($windowsPowerShell) {
+        return $windowsPowerShell.Source
+    }
+
+    throw 'Neither pwsh.exe nor powershell.exe is available.'
+}
+
 function Assert-PathInsideRepo {
     param(
         [Parameter(Mandatory = $true)]
@@ -416,8 +430,9 @@ function Invoke-CapturedCommand {
     $stdoutPath = Join-Path ([System.IO.Path]::GetTempPath()) "player-assistant-diag-stdout-$([Guid]::NewGuid().ToString('N')).txt"
     $stderrPath = Join-Path ([System.IO.Path]::GetTempPath()) "player-assistant-diag-stderr-$([Guid]::NewGuid().ToString('N')).txt"
     try {
+        $resolvedFileName = if ($FileName -ieq 'powershell.exe') { Get-PowerShellExecutable } else { $FileName }
         $process = Start-Process `
-            -FilePath $FileName `
+            -FilePath $resolvedFileName `
             -ArgumentList $Arguments `
             -WorkingDirectory $WorkingDirectory `
             -NoNewWindow `
@@ -429,7 +444,7 @@ function Invoke-CapturedCommand {
         $stdout = if (Test-Path -LiteralPath $stdoutPath) { Get-Content -Raw -LiteralPath $stdoutPath } else { '' }
         $stderr = if (Test-Path -LiteralPath $stderrPath) { Get-Content -Raw -LiteralPath $stderrPath } else { '' }
         $report = [ordered]@{
-            command = "$FileName $($Arguments -join ' ')"
+            command = "$resolvedFileName $($Arguments -join ' ')"
             exit_code = $process.ExitCode
             stdout = Redact-Text -Text $stdout
             stderr = Redact-Text -Text $stderr
@@ -439,7 +454,7 @@ function Invoke-CapturedCommand {
     }
     catch {
         $report = [ordered]@{
-            command = "$FileName $($Arguments -join ' ')"
+            command = "$resolvedFileName $($Arguments -join ' ')"
             failed_to_start = $true
             error = Redact-Text -Text $_.Exception.Message
         }
@@ -544,7 +559,7 @@ Assert-PathInsideRepo -Path $resolvedPublishDir -Description 'publish directory'
 if (!$NoRetentionCleanup) {
     $retentionScriptPath = Join-Path $PSScriptRoot 'clean-diagnostics-retention.ps1'
     if (Test-Path -LiteralPath $retentionScriptPath -PathType Leaf) {
-        & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $retentionScriptPath -ScratchDir (Join-Path $PSScriptRoot 'codex-scratch')
+        & (Get-PowerShellExecutable) -NoProfile -ExecutionPolicy Bypass -File $retentionScriptPath -ScratchDir (Join-Path $PSScriptRoot 'codex-scratch')
     }
 }
 
