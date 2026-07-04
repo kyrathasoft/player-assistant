@@ -853,7 +853,19 @@ namespace PlayerAssistant
                         await JsonSerializer.SerializeAsync(stream, document, JsonOptions, cancellationToken).ConfigureAwait(false);
                     }
 
+                    var documentBytes = await File.ReadAllBytesAsync(tempOutputPath, cancellationToken).ConfigureAwait(false);
+                    var sourceIntegrityRecord = SourceIntegrityUtility.ValidateContent(
+                        _outputPath,
+                        "keyword-index-crawl",
+                        "keyword-index",
+                        documentBytes,
+                        SourceIntegrityUtility.CreateKeywordIndexShape(
+                            document.Urls?.Count ?? 0,
+                            document.Words.Count,
+                            document.Words.Values.Sum(word => (long)word.TotalOccurrences)));
+
                     await AtomicFileUtility.PromoteTempFileAsync(tempOutputPath, _outputPath, cancellationToken).ConfigureAwait(false);
+                    await SourceIntegrityUtility.WriteRecordAsync(_outputPath, sourceIntegrityRecord, cancellationToken).ConfigureAwait(false);
                 }
                 finally
                 {

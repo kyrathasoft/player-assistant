@@ -115,10 +115,10 @@
   - [x] Compare NuGet and Playwright versions against the latest available package metadata.
   - [x] Warn or fail RC verification when dependencies exceed an approved age threshold.
   - [x] Record stale dependency findings in dependency inventory JSON.
-- [ ] Add authenticated-source tamper detection for fetched Obsidian/RPOL content.
-  - [ ] Persist source hashes for last-known-good downloaded markdown, sitemap, keyword, and RPOL export inputs.
-  - [ ] Detect unexpected structural changes and show player-safe recovery guidance.
-  - [ ] Keep previous good content available when newly fetched content fails integrity or shape checks.
+- [x] Add authenticated-source tamper detection for fetched Obsidian/RPOL content.
+  - [x] Persist source hashes for last-known-good downloaded markdown, sitemap, keyword, and RPOL export inputs.
+  - [x] Detect unexpected structural changes and show player-safe recovery guidance.
+  - [x] Keep previous good content available when newly fetched content fails integrity or shape checks.
 - [x] Add backup/restore hardening for user-writable runtime data.
   - [x] Create bounded rotating backups before modifying user settings, indexes, exports, and encrypted sidecars.
   - [x] Add startup recovery that can restore the newest valid backup after corruption or interrupted writes.

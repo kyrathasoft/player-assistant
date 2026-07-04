@@ -98,6 +98,10 @@ var tests = new (string Name, Action Test)[]
     ("keyword index loader quarantines malformed json", KeywordIndexLoaderQuarantinesMalformedJson),
     ("sitemap validation rejects poisoned url", SitemapValidationRejectsPoisonedUrl),
     ("sitemap keyword dictionary preserves existing output on rejected url", SitemapKeywordDictionaryPreservesExistingOutputOnRejectedUrl),
+    ("source integrity records first accepted sitemap", SourceIntegrityRecordsFirstAcceptedSitemap),
+    ("source integrity rejects collapsed sitemap and preserves output", SourceIntegrityRejectsCollapsedSitemapAndPreservesOutput),
+    ("source integrity rejects collapsed markdown and preserves output", SourceIntegrityRejectsCollapsedMarkdownAndPreservesOutput),
+    ("source integrity rejects collapsed keyword index and preserves output", SourceIntegrityRejectsCollapsedKeywordIndexAndPreservesOutput),
     ("keyword index validation rejects poisoned url entries", KeywordIndexValidationRejectsPoisonedUrlEntries),
     ("keyword index validation rejects poisoned match urls", KeywordIndexValidationRejectsPoisonedMatchUrls),
     ("keyword terms release copy generates from keyword index", KeywordTermsReleaseCopyGeneratesFromKeywordIndex),
@@ -114,6 +118,7 @@ var tests = new (string Name, Action Test)[]
     ("show-all thread url preserves base query and adds show all", ShowAllThreadUrlPreservesBaseQueryAndAddsShowAll),
     ("rpol thread export preserves existing output on cancellation", RpolThreadExportPreservesExistingOutputOnCancellation),
     ("rpol thread export commits staged output", RpolThreadExportCommitsStagedOutput),
+    ("rpol thread export rejects collapsed source and preserves existing output", RpolThreadExportRejectsCollapsedSourceAndPreservesExistingOutput),
     ("die roll extraction keeps only saved-log lines", DieRollExtractionKeepsOnlySavedLogLines),
     ("die roll extraction handles live rpol paragraph markup", DieRollExtractionHandlesLiveRpolParagraphMarkup),
     ("die roll sync appends only unsaved rolls", DieRollSyncAppendsOnlyUnsavedRolls),
@@ -2017,6 +2022,114 @@ static void SitemapKeywordDictionaryPreservesExistingOutputOnRejectedUrl()
     AssertContains(File.ReadAllText(dictionaryPath), "https://publish.obsidian.md/scarlethorizons/Safe");
 }
 
+static void SourceIntegrityRecordsFirstAcceptedSitemap()
+{
+    using var directory = TemporaryDirectory.Create();
+    var sitemapPath = Path.Combine(directory.Path, "sitemap.xml");
+    var sitemapXml = CreateSitemapXml(
+        "https://publish.obsidian.md/scarlethorizons/One",
+        "https://publish.obsidian.md/scarlethorizons/Two");
+
+    SourceIntegrityUtility.ValidateAndWriteTextFileAsync(
+        sitemapPath,
+        "https://publish.obsidian.md/scarlethorizons/sitemap.xml",
+        "obsidian-sitemap",
+        sitemapXml,
+        SourceIntegrityUtility.CreateSitemapShape(sitemapXml)).GetAwaiter().GetResult();
+
+    var sidecarPath = SourceIntegrityUtility.GetSidecarPath(sitemapPath);
+    AssertTrue(File.Exists(sidecarPath), "source integrity sidecar should be written for accepted sitemap");
+    AssertContains(File.ReadAllText(sidecarPath), "\"artifact_kind\": \"obsidian-sitemap\"");
+    AssertContains(File.ReadAllText(sidecarPath), "\"url_count\": 2");
+}
+
+static void SourceIntegrityRejectsCollapsedSitemapAndPreservesOutput()
+{
+    using var directory = TemporaryDirectory.Create();
+    var sitemapPath = Path.Combine(directory.Path, "sitemap.xml");
+    var originalSitemap = CreateSitemapXml(
+        "https://publish.obsidian.md/scarlethorizons/One",
+        "https://publish.obsidian.md/scarlethorizons/Two",
+        "https://publish.obsidian.md/scarlethorizons/Three",
+        "https://publish.obsidian.md/scarlethorizons/Four");
+    SourceIntegrityUtility.ValidateAndWriteTextFileAsync(
+        sitemapPath,
+        "https://publish.obsidian.md/scarlethorizons/sitemap.xml",
+        "obsidian-sitemap",
+        originalSitemap,
+        SourceIntegrityUtility.CreateSitemapShape(originalSitemap)).GetAwaiter().GetResult();
+
+    var collapsedSitemap = CreateSitemapXml("https://publish.obsidian.md/scarlethorizons/One");
+    var exception = AssertThrows<InvalidOperationException>(() =>
+        SourceIntegrityUtility.ValidateAndWriteTextFileAsync(
+            sitemapPath,
+            "https://publish.obsidian.md/scarlethorizons/sitemap.xml",
+            "obsidian-sitemap",
+            collapsedSitemap,
+            SourceIntegrityUtility.CreateSitemapShape(collapsedSitemap)).GetAwaiter().GetResult());
+
+    AssertContains(exception.Message, "Authenticated source tamper detection rejected fetched content");
+    AssertContains(exception.Message, "last-known-good content was preserved");
+    AssertEqual(originalSitemap, File.ReadAllText(sitemapPath), "collapsed sitemap should not replace last known good sitemap");
+}
+
+static void SourceIntegrityRejectsCollapsedMarkdownAndPreservesOutput()
+{
+    using var directory = TemporaryDirectory.Create();
+    var markdownPath = Path.Combine(directory.Path, "kelpie.md");
+    var originalMarkdown = """
+        # Kelpie Lawfuller
+        ## Summary
+        Useful notes.
+        ## Links
+        [[Allies]]
+        [Map](https://publish.obsidian.md/scarlethorizons/Map)
+        """;
+    SourceIntegrityUtility.ValidateAndWriteTextFileAsync(
+        markdownPath,
+        "https://publish.obsidian.md/scarlethorizons/PCs/Kelpie",
+        "obsidian-markdown",
+        originalMarkdown,
+        SourceIntegrityUtility.CreateMarkdownShape(originalMarkdown)).GetAwaiter().GetResult();
+
+    var collapsedMarkdown = "# Kelpie";
+    var exception = AssertThrows<InvalidOperationException>(() =>
+        SourceIntegrityUtility.ValidateAndWriteTextFileAsync(
+            markdownPath,
+            "https://publish.obsidian.md/scarlethorizons/PCs/Kelpie",
+            "obsidian-markdown",
+            collapsedMarkdown,
+            SourceIntegrityUtility.CreateMarkdownShape(collapsedMarkdown)).GetAwaiter().GetResult());
+
+    AssertContains(exception.Message, "Authenticated source tamper detection rejected fetched content");
+    AssertEqual(originalMarkdown, File.ReadAllText(markdownPath), "collapsed markdown should not replace last known good markdown");
+}
+
+static void SourceIntegrityRejectsCollapsedKeywordIndexAndPreservesOutput()
+{
+    using var directory = TemporaryDirectory.Create();
+    var indexPath = Path.Combine(directory.Path, "keyword-index.json");
+    var originalIndex = """{"urls":{"u1":{},"u2":{},"u3":{},"u4":{}},"words":{"safe":{}}}""";
+    SourceIntegrityUtility.ValidateAndWriteTextFileAsync(
+        indexPath,
+        "keyword-index-crawl",
+        "keyword-index",
+        originalIndex,
+        SourceIntegrityUtility.CreateKeywordIndexShape(4, 1, 4)).GetAwaiter().GetResult();
+
+    var collapsedIndex = """{"urls":{"u1":{}},"words":{}}""";
+    var exception = AssertThrows<InvalidOperationException>(() =>
+        SourceIntegrityUtility.ValidateAndWriteTextFileAsync(
+            indexPath,
+            "keyword-index-crawl",
+            "keyword-index",
+            collapsedIndex,
+            SourceIntegrityUtility.CreateKeywordIndexShape(1, 0, 0)).GetAwaiter().GetResult());
+
+    AssertContains(exception.Message, "Authenticated source tamper detection rejected fetched content");
+    AssertEqual(originalIndex, File.ReadAllText(indexPath), "collapsed keyword index should not replace last known good index");
+}
+
 static void KeywordIndexValidationRejectsPoisonedUrlEntries()
 {
     var exception = AssertThrows<InvalidOperationException>(() =>
@@ -2433,6 +2546,43 @@ static void RpolThreadExportCommitsStagedOutput()
     AssertTrue(File.Exists(Path.Combine(outputDirectory, "002-bob.html")), "successful staged export should include the second post");
     AssertEqual(0, Directory.GetDirectories(directory.Path, "thread-export.staging-*").Length, "successful export should clean staging directories");
     AssertEqual(0, Directory.GetDirectories(directory.Path, "thread-export.backup-*").Length, "successful export should clean backup directories");
+}
+
+static void RpolThreadExportRejectsCollapsedSourceAndPreservesExistingOutput()
+{
+    using var directory = TemporaryDirectory.Create();
+    var outputDirectory = Path.Combine(directory.Path, "thread-export");
+    var sourceUrl = "https://rpol.net/display.cgi?gi=80170&ti=17&show=all";
+    var originalResult = RpolThreadPostUtility.WriteThreadPostsFromHtmlAsync(
+        CreateSampleRpolThreadHtml(),
+        sourceUrl,
+        outputDirectory,
+        "Synthetic Thread").GetAwaiter().GetResult();
+
+    AssertEqual(2, originalResult.PostCount, "expected baseline RPOL export to include both posts");
+    var originalSourceHtml = File.ReadAllText(Path.Combine(outputDirectory, "_source-show-all.html"));
+    var collapsedHtml = """
+        <html><body>
+        <div class='message'>
+            <ul><li>msg #1</li></ul>
+            <span class='messageauthor'>Alice</span>
+            <div class='messagebody' id='msg1'>Only one post survived.</div>
+        </div><!-- 1 -->
+        </div><!-- 2 -->
+        </body></html>
+        """;
+
+    var exception = AssertThrows<InvalidOperationException>(() =>
+        RpolThreadPostUtility.WriteThreadPostsFromHtmlAsync(
+            collapsedHtml,
+            sourceUrl,
+            outputDirectory,
+            "Synthetic Thread").GetAwaiter().GetResult());
+
+    AssertContains(exception.Message, "Authenticated source tamper detection rejected fetched content");
+    AssertEqual(originalSourceHtml, File.ReadAllText(Path.Combine(outputDirectory, "_source-show-all.html")), "collapsed RPOL source should not replace last known good export");
+    AssertTrue(File.Exists(Path.Combine(outputDirectory, "002-bob.html")), "last known good RPOL post files should remain available");
+    AssertEqual(0, Directory.GetDirectories(directory.Path, "thread-export.staging-*").Length, "rejected export should clean staging directories");
 }
 
 static void DieRollExtractionKeepsOnlySavedLogLines()
@@ -5496,6 +5646,14 @@ static string CreateSampleRpolThreadHtml()
         </div><!-- 2 -->
         </body></html>
         """;
+}
+
+static string CreateSitemapXml(params string[] urls)
+{
+    var entries = string.Join(
+        Environment.NewLine,
+        urls.Select(url => $"  <url><loc>{System.Security.SecurityElement.Escape(url)}</loc></url>"));
+    return $"<urlset>{Environment.NewLine}{entries}{Environment.NewLine}</urlset>";
 }
 
 static string CreateV1LocalSettingsEnvelope(string userName, string password)

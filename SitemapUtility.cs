@@ -47,7 +47,13 @@ namespace PlayerAssistant
                 cancellationToken);
             ValidateSitemapXml(sitemapBytes);
 
-            await AtomicFileUtility.WriteAllBytesAsync(destinationPath, sitemapBytes, cancellationToken);
+            await SourceIntegrityUtility.ValidateAndWriteBytesFileAsync(
+                destinationPath,
+                uri.ToString(),
+                "obsidian-sitemap",
+                sitemapBytes,
+                SourceIntegrityUtility.CreateSitemapShape(Encoding.UTF8.GetString(sitemapBytes)),
+                cancellationToken);
 
             FileDownloadCounters.AddCompletedDownload(destinationPath);
         }

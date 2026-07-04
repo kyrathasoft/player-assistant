@@ -205,6 +205,16 @@ namespace PlayerAssistant
                     cancellationToken);
 
                 ValidateStagedThreadExport(stagingDirectory, result);
+                var sourceIntegrityRecord = SourceIntegrityUtility.ValidateTextContent(
+                    fullOutputDirectory,
+                    sourceUrl,
+                    "rpol-thread-export",
+                    html,
+                    SourceIntegrityUtility.CreateRpolThreadShape(
+                        posts.Length,
+                        countsByAuthor.Count,
+                        posts.Sum(post => (long)post.BodyText.Length)));
+                await SourceIntegrityUtility.WriteRecordAsync(stagingDirectory, sourceIntegrityRecord, cancellationToken);
                 cancellationToken.ThrowIfCancellationRequested();
                 CommitStagedDirectory(stagingDirectory, fullOutputDirectory);
 

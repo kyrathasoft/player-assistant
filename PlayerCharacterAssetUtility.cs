@@ -107,7 +107,13 @@ namespace PlayerAssistant
                     cancellationToken);
                 ThrowIfMarkdownFetchFailed(heroMarkdown, hero.CharacterPageUrl);
 
-                await AtomicFileUtility.WriteAllTextAsync(destinationPath, heroMarkdown, cancellationToken);
+                await SourceIntegrityUtility.ValidateAndWriteTextFileAsync(
+                    destinationPath,
+                    hero.CharacterPageUrl,
+                    "obsidian-markdown",
+                    heroMarkdown,
+                    SourceIntegrityUtility.CreateMarkdownShape(heroMarkdown),
+                    cancellationToken);
                 FileDownloadCounters.AddCompletedDownload(destinationPath);
                 downloadedFiles.Add(destinationPath);
             }
