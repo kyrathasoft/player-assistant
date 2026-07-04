@@ -35,6 +35,8 @@ var tests = new (string Name, Action Test)[]
     ("orcish translator random but picker returns valid variant", OrcishTranslatorRandomButPickerReturnsValidVariant),
     ("orcish translator exposes unique english term count", OrcishTranslatorExposesUniqueEnglishTermCount),
     ("app configuration validation accepts complete runtime", AppConfigurationValidationAcceptsCompleteRuntime),
+    ("settings json accepts current schema version", SettingsJsonAcceptsCurrentSchemaVersion),
+    ("settings json rejects future schema version", SettingsJsonRejectsFutureSchemaVersion),
     ("app configuration validation reports missing url", AppConfigurationValidationReportsMissingUrl),
     ("app configuration validation rejects disallowed network host", AppConfigurationValidationRejectsDisallowedNetworkHost),
     ("app configuration validation writes repair guidance", AppConfigurationValidationWritesRepairGuidance),
@@ -122,6 +124,7 @@ var tests = new (string Name, Action Test)[]
     ("v1 local settings migrate to authenticated encryption", V1LocalSettingsMigrateToAuthenticatedEncryption),
     ("v2 local settings migrate to scoped encryption", V2LocalSettingsMigrateToScopedEncryption),
     ("local settings are encrypted on load", LocalSettingsAreEncryptedOnLoad),
+    ("local settings rejects future schema version", LocalSettingsRejectsFutureSchemaVersion),
     ("scoped local settings reject copied install path", ScopedLocalSettingsRejectCopiedInstallPath),
     ("authenticated local settings reject tampered payload", AuthenticatedLocalSettingsRejectTamperedPayload),
     ("runtime path utility rejects escaped paths", RuntimePathUtilityRejectsEscapedPaths),
@@ -131,12 +134,15 @@ var tests = new (string Name, Action Test)[]
     ("publish verification rejects startup health artifact", PublishVerificationRejectsStartupHealthArtifact),
     ("publish verification rejects last crash artifact", PublishVerificationRejectsLastCrashArtifact),
     ("publish verification rejects malformed settings json", PublishVerificationRejectsMalformedSettingsJson),
+    ("publish verification rejects future settings schema", PublishVerificationRejectsFutureSettingsSchema),
+    ("publish verification rejects future local settings schema", PublishVerificationRejectsFutureLocalSettingsSchema),
     ("publish verification rejects malformed keyword index", PublishVerificationRejectsMalformedKeywordIndex),
     ("publish verification rejects malformed sitemap", PublishVerificationRejectsMalformedSitemap),
     ("publish verification rejects incomplete playwright runtime", PublishVerificationRejectsIncompletePlaywrightRuntime),
     ("publish verification rejects mismatched executable version", PublishVerificationRejectsMismatchedExecutableVersion),
     ("publish verification rejects stale release manifest", PublishVerificationRejectsStaleReleaseManifest),
     ("publish verification rejects malformed runtime inventory", PublishVerificationRejectsMalformedRuntimeInventory),
+    ("publish verification rejects malformed release provenance", PublishVerificationRejectsMalformedReleaseProvenance),
     ("published health verification accepts current output", PublishedHealthVerificationAcceptsCurrentOutput),
     ("secret scan accepts current repository", SecretScanAcceptsCurrentRepository),
     ("secret scan rejects tracked env secret", SecretScanRejectsTrackedEnvSecret),
@@ -428,6 +434,47 @@ static void AppConfigurationValidationAcceptsCompleteRuntime()
         directory.Path);
 
     AssertFalse(report.HasIssues, "complete runtime configuration should not report issues");
+}
+
+static void SettingsJsonAcceptsCurrentSchemaVersion()
+{
+    using var directory = TemporaryDirectory.Create();
+    File.WriteAllText(
+        Path.Combine(directory.Path, "settings.json"),
+        """
+        {
+          "schema_version": 1,
+          "RPOL Site": "https://rpol.net/game.php?gi=80170",
+          "Game Intro": "https://rpol.net/gameinfo.php?gi=80170",
+          "The Cast": "https://rpol.net/gameinfo.php?action=cast&gi=80170",
+          "Obsidian Game Vault": "https://publish.obsidian.md/scarlethorizons"
+        }
+        """);
+
+    var settings = AppSettingsUtility.LoadSettings(directory.Path);
+
+    AssertEqual("https://rpol.net/game.php?gi=80170", settings["RPOL Site"], "unexpected RPOL Site after schema-versioned load");
+    AssertFalse(settings.ContainsKey("schema_version"), "schema_version should be treated as settings metadata");
+}
+
+static void SettingsJsonRejectsFutureSchemaVersion()
+{
+    using var directory = TemporaryDirectory.Create();
+    File.WriteAllText(
+        Path.Combine(directory.Path, "settings.json"),
+        """
+        {
+          "schema_version": 99,
+          "RPOL Site": "https://rpol.net/game.php?gi=80170",
+          "Game Intro": "https://rpol.net/gameinfo.php?gi=80170",
+          "The Cast": "https://rpol.net/gameinfo.php?action=cast&gi=80170",
+          "Obsidian Game Vault": "https://publish.obsidian.md/scarlethorizons"
+        }
+        """);
+
+    var exception = AssertThrows<InvalidOperationException>(() =>
+        AppSettingsUtility.LoadSettings(directory.Path));
+    AssertContains(exception.Message, "unsupported schema version 99");
 }
 
 static void AppConfigurationValidationReportsMissingUrl()
@@ -2769,9 +2816,29 @@ static void LocalSettingsAreEncryptedOnLoad()
             localSettingsPath)!,
         "expected the local settings file to be encrypted after load");
     var encryptedJson = File.ReadAllText(localSettingsPath);
+    AssertContains(encryptedJson, "\"schema_version\": 1");
     AssertContains(encryptedJson, "\"format\": \"app-protected-v3\"");
     AssertContains(encryptedJson, "\"key_scope\":");
     AssertContains(encryptedJson, "\"install_path_bound\": true");
+}
+
+static void LocalSettingsRejectsFutureSchemaVersion()
+{
+    using var directory = TemporaryDirectory.Create();
+    var localSettingsPath = Path.Combine(directory.Path, "settings.local.json");
+    File.WriteAllText(
+        localSettingsPath,
+        """
+        {
+          "schema_version": 99,
+          "format": "app-protected-v3",
+          "payload": "not-a-real-payload"
+        }
+        """);
+
+    var exception = AssertThrows<InvalidOperationException>(() =>
+        LocalSettingsUtility.LoadSettings(localSettingsPath));
+    AssertContains(exception.Message, "unsupported schema version 99");
 }
 
 static void LegacyLocalSettingsMigrateToPortableEncryption()
@@ -2986,6 +3053,47 @@ static void PublishVerificationRejectsMalformedSettingsJson()
     });
 }
 
+static void PublishVerificationRejectsFutureSettingsSchema()
+{
+    WithCopiedPublishDirectory(directoryPath =>
+    {
+        File.WriteAllText(
+            Path.Combine(directoryPath, "settings.json"),
+            """
+            {
+              "schema_version": 99,
+              "RPOL Site": "https://rpol.net/game.php?gi=80170",
+              "Game Intro": "https://rpol.net/gameinfo.php?gi=80170",
+              "The Cast": "https://rpol.net/gameinfo.php?action=cast&gi=80170",
+              "Obsidian Game Vault": "https://publish.obsidian.md/scarlethorizons"
+            }
+            """);
+
+        var output = RunPublishVerification(directoryPath);
+
+        AssertFalse(output.ExitCode == 0, "publish verification should fail when settings.json uses a future schema");
+        AssertContains(output.Output, "published settings.json uses unsupported schema version 99");
+    });
+}
+
+static void PublishVerificationRejectsFutureLocalSettingsSchema()
+{
+    WithCopiedPublishDirectory(directoryPath =>
+    {
+        var localSettingsPath = Path.Combine(directoryPath, "settings.local.json");
+        var localSettingsJson = File.ReadAllText(localSettingsPath);
+        AssertContains(localSettingsJson, "\"schema_version\": 1");
+        File.WriteAllText(
+            localSettingsPath,
+            localSettingsJson.Replace("\"schema_version\": 1", "\"schema_version\": 99", StringComparison.Ordinal));
+
+        var output = RunPublishVerification(directoryPath);
+
+        AssertFalse(output.ExitCode == 0, "publish verification should fail when settings.local.json uses a future schema");
+        AssertContains(output.Output, "settings.local.json uses unsupported schema version 99");
+    });
+}
+
 static void PublishVerificationRejectsMalformedKeywordIndex()
 {
     WithCopiedPublishDirectory(directoryPath =>
@@ -3088,6 +3196,19 @@ static void PublishVerificationRejectsMalformedRuntimeInventory()
     });
 }
 
+static void PublishVerificationRejectsMalformedReleaseProvenance()
+{
+    WithCopiedPublishDirectory(directoryPath =>
+    {
+        File.WriteAllText(Path.Combine(directoryPath, "release-provenance.json"), "{ not valid json");
+
+        var output = RunPublishVerification(directoryPath);
+
+        AssertFalse(output.ExitCode == 0, "publish verification should fail when release-provenance.json is malformed");
+        AssertContains(output.Output, "release-provenance.json is not valid JSON");
+    });
+}
+
 static void PublishedHealthVerificationAcceptsCurrentOutput()
 {
     var output = RunPublishedHealthVerification(GetCurrentPublishDirectory());
@@ -3182,6 +3303,7 @@ static void DiagnosticBundleRedactsSensitiveValues()
             "metadata.json",
             "version-metadata.json",
             "runtime-sidecars.json",
+            "Release/release-provenance.json",
             "Release/release-runtime-inventory.json",
             "Release/settings.redacted.json",
             "Release/settings.local.shape.json",
@@ -3189,6 +3311,7 @@ static void DiagnosticBundleRedactsSensitiveValues()
             "Release/startup-health.json",
             "Release/last-crash.json",
             "Release/startup-remediation.txt",
+            "publish/release-provenance.json",
             "publish/release-runtime-inventory.json",
             "publish/settings.redacted.json",
             "publish/settings.local.shape.json",
@@ -3218,6 +3341,7 @@ static void DiagnosticBundleRedactsSensitiveValues()
         AssertFalse(releaseLog.Contains("user:pass@", StringComparison.Ordinal), "diagnostic log should redact credentialed URLs");
 
         var localSettingsShape = ReadZipEntryText(zipPath, "Release/settings.local.shape.json");
+        AssertContains(localSettingsShape, "\"schema_version\":  1");
         AssertContains(localSettingsShape, "\"encrypted_format\":  \"app-protected-v3\"");
         AssertContains(localSettingsShape, "\"has_payload\":  true");
         AssertContains(localSettingsShape, "\"payload_length\":");
@@ -3338,6 +3462,7 @@ static void WithCopiedPublishDirectory(Action<string> action)
         LocalSettingsUtility.SaveEncryptedSettings(publishedSettingsPath, fixtureSettings);
         WriteReleaseRuntimeInventory(directoryPath);
         WriteReleaseManifest(directoryPath);
+        WriteReleaseProvenance(directoryPath);
         action(directoryPath);
     }
     finally
@@ -4233,10 +4358,24 @@ static Dictionary<string, string> CreateValidAppSettings(bool includeCredentials
 static void WriteSettingsJson(string directoryPath, IReadOnlyDictionary<string, string> settings)
 {
     Directory.CreateDirectory(directoryPath);
+    var schemaVersionedSettings = new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase)
+    {
+        ["schema_version"] = 1
+    };
+    foreach (var setting in settings)
+    {
+        if (string.Equals(setting.Key, "schema_version", StringComparison.OrdinalIgnoreCase))
+        {
+            continue;
+        }
+
+        schemaVersionedSettings[setting.Key] = setting.Value;
+    }
+
     File.WriteAllText(
         Path.Combine(directoryPath, "settings.json"),
         System.Text.Json.JsonSerializer.Serialize(
-            settings,
+            schemaVersionedSettings,
             new System.Text.Json.JsonSerializerOptions { WriteIndented = true }));
 }
 
@@ -4286,6 +4425,7 @@ static void WriteManifestedRuntime(string directoryPath)
     File.WriteAllText(Path.Combine(directoryPath, ".playwright", "package", "browsers.json"), "{}");
     WriteReleaseRuntimeInventory(directoryPath);
     WriteReleaseManifest(directoryPath);
+    WriteReleaseProvenance(directoryPath);
 }
 
 static void WriteReleaseRuntimeInventory(string directoryPath)
@@ -4380,6 +4520,58 @@ static void WriteReleaseManifest(string directoryPath)
         Path.Combine(directoryPath, "release-manifest.json"),
         System.Text.Json.JsonSerializer.Serialize(
             manifest,
+            new System.Text.Json.JsonSerializerOptions { WriteIndented = true }));
+}
+
+static void WriteReleaseProvenance(string directoryPath)
+{
+    var project = XDocument.Load(Path.Combine(GetRepositoryRoot(), "player-assistant.csproj"));
+    string GetProjectProperty(string name)
+    {
+        return project
+            .Descendants()
+            .FirstOrDefault(element => element.Name.LocalName == name)
+            ?.Value
+            ?? string.Empty;
+    }
+
+    var manifestEntry = GetReleaseManifestEntry(directoryPath, "release-manifest.json");
+    var inventoryEntry = GetReleaseManifestEntry(directoryPath, "release-runtime-inventory.json");
+    var provenance = new
+    {
+        schema_version = 1,
+        generated_at = DateTimeOffset.UtcNow.ToString("O"),
+        app = new
+        {
+            version = GetProjectProperty("Version"),
+            file_version = GetProjectProperty("FileVersion"),
+            product_version = GetProjectProperty("InformationalVersion")
+        },
+        git = new
+        {
+            commit = new string('a', 40),
+            commit_short = new string('a', 12),
+            branch = "test",
+            tags_at_commit = Array.Empty<string>(),
+            dirty = true,
+            status_count = 1,
+            status_sha256 = new string('B', 64)
+        },
+        release_manifest = manifestEntry,
+        runtime_inventory = inventoryEntry,
+        executable_signature = new
+        {
+            status = "NotSigned",
+            signer_subject = (string?)null,
+            thumbprint = (string?)null
+        },
+        hash_algorithm = "SHA256"
+    };
+
+    File.WriteAllText(
+        Path.Combine(directoryPath, "release-provenance.json"),
+        System.Text.Json.JsonSerializer.Serialize(
+            provenance,
             new System.Text.Json.JsonSerializerOptions { WriteIndented = true }));
 }
 

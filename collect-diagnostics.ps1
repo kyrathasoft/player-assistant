@@ -19,6 +19,7 @@ $StartupRemediationFileName = 'startup-remediation.txt'
 $SettingsFileName = 'settings.json'
 $SettingsLocalFileName = 'settings.local.json'
 $RuntimeInventoryFileName = 'release-runtime-inventory.json'
+$ReleaseProvenanceFileName = 'release-provenance.json'
 $ForbiddenFileNames = @(
     'rpol-storage-state.json',
     'cookies.json',
@@ -31,6 +32,7 @@ $ForbiddenDirectoryNames = @(
 $RuntimeSidecars = @(
     'release-manifest.json',
     'release-runtime-inventory.json',
+    'release-provenance.json',
     'keyword-index.json',
     'game-posts-key-terms.md',
     'sitemap.xml',
@@ -299,6 +301,7 @@ function Write-LocalSettingsShape {
         $properties = @($json.PSObject.Properties.Name)
         $shape['json_valid'] = $true
         $shape['property_count'] = $properties.Count
+        $shape['schema_version'] = if ($json.PSObject.Properties['schema_version']) { $json.schema_version } else { $null }
         $shape['encrypted_format'] = if ($json.PSObject.Properties['format']) { [string]$json.format } else { $null }
         $shape['has_payload'] = [bool]$json.PSObject.Properties['payload']
         $shape['payload_length'] = if ($json.PSObject.Properties['payload']) { ([string]$json.payload).Length } else { $null }
@@ -575,6 +578,8 @@ try {
     Write-LocalSettingsShape -SourcePath (Join-Path $resolvedPublishDir $SettingsLocalFileName) -DestinationPath (Join-Path $stagingDirectory 'publish\settings.local.shape.json')
     Write-RedactedJsonCopy -SourcePath (Join-Path $resolvedReleaseDir $RuntimeInventoryFileName) -DestinationPath (Join-Path $stagingDirectory 'Release\release-runtime-inventory.json')
     Write-RedactedJsonCopy -SourcePath (Join-Path $resolvedPublishDir $RuntimeInventoryFileName) -DestinationPath (Join-Path $stagingDirectory 'publish\release-runtime-inventory.json')
+    Write-RedactedJsonCopy -SourcePath (Join-Path $resolvedReleaseDir $ReleaseProvenanceFileName) -DestinationPath (Join-Path $stagingDirectory 'Release\release-provenance.json')
+    Write-RedactedJsonCopy -SourcePath (Join-Path $resolvedPublishDir $ReleaseProvenanceFileName) -DestinationPath (Join-Path $stagingDirectory 'publish\release-provenance.json')
 
     $sidecarSummary = [ordered]@{
         release = @($RuntimeSidecars | ForEach-Object { Get-FileSummary -BaseDirectory $resolvedReleaseDir -RelativePath $_ })

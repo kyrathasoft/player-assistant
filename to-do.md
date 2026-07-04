@@ -56,3 +56,41 @@
 - [x] Strengthen `settings.local.json` key separation with a per-machine or per-install derivation path.
 - [x] Add network allowlist validation for configured and fetched RPOL/Obsidian URLs.
 - [x] Add RC checklist self-tests for secret scan, health failure, manifest mismatch, and expected-path handling.
+
+## Additional hardening backlog
+
+- [x] Add signed release provenance with commit, tag, manifest, runtime inventory, script hash, and executable signature metadata.
+- [x] Add config/schema versioning for `settings.json` and `settings.local.json`.
+  - [x] Add `schema_version: 1` metadata to checked-in `settings.json`.
+  - [x] Treat missing schema versions as legacy-compatible version `0`.
+  - [x] Reject invalid or future schema versions in app startup settings load.
+  - [x] Emit `schema_version: 1` for encrypted `settings.local.json` envelopes.
+  - [x] Migrate legacy/plaintext local settings to the current encrypted schema envelope.
+  - [x] Validate config schema versions during publish verification.
+  - [x] Include local-settings schema metadata in diagnostic bundle shape output.
+  - [x] Add focused regression tests for current/future settings schemas, local settings schemas, publish verification, and diagnostics.
+
+## Future hardening implementation tasks
+
+- [ ] Add network response content limits for HTML, markdown, JSON cache, and image downloads.
+  - [ ] Define per-content-type maximum byte limits and sensible defaults.
+  - [ ] Enforce limits while streaming HTTP responses instead of after full buffering.
+  - [ ] Apply limits to RPOL HTML fetches, Obsidian markdown fetches, keyword/sitemap JSON cache downloads, and hero/image downloads.
+  - [ ] Log/quarantine partial or oversized runtime artifacts without replacing last known good files.
+  - [ ] Add tests for oversized HTML, markdown, JSON, and image responses.
+- [ ] Validate sitemap and keyword-index URL entries against the network allowlist before storing them.
+  - [ ] Validate every sitemap URL before writing `sitemap.xml`.
+  - [ ] Validate keyword-index URL lists before writing `sitemap-keyword-urls.json` or `keyword-index.json`.
+  - [ ] Reject credentialed URLs, non-HTTP(S) schemes, escaped hosts, and non-allowlisted RPOL/Obsidian hosts.
+  - [ ] Preserve the previous good index when fetched data contains rejected URLs.
+  - [ ] Add regression coverage for poisoned sitemap and keyword-index entries.
+- [ ] Add a full RC dry-run mode that writes a structured JSON summary and exits nonzero on any failure.
+  - [ ] Add a `-DryRunJson` or equivalent mode to the RC checklist script.
+  - [ ] Capture each checklist step with status, elapsed time, command, artifact paths, and failure summary.
+  - [ ] Exit nonzero when any required check fails while still writing the summary file.
+  - [ ] Add tests for passing, failing, and invalid-output dry-run summaries.
+- [ ] Add dependency freshness and vulnerability checks to the RC checklist.
+  - [ ] Inventory NuGet package versions, .NET SDK/runtime version, Playwright package/browser versions, and bundled Node runtime versions.
+  - [ ] Run `dotnet list package --vulnerable` or equivalent vulnerability checks during RC verification.
+  - [ ] Record dependency check results in diagnostics and RC dry-run JSON output.
+  - [ ] Add self-tests or fixture tests that prove stale/vulnerable dependency output fails the RC checklist.

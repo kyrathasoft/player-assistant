@@ -12,6 +12,8 @@ namespace PlayerAssistant
         private const string GameIntroSettingsKey = "Game Intro";
         private const string TheCastSettingsKey = "The Cast";
         private const string ObsidianGameVaultSettingsKey = "Obsidian Game Vault";
+        private const string SchemaVersionSettingsKey = "schema_version";
+        private const int CurrentSettingsSchemaVersion = 1;
         private static readonly Lazy<IReadOnlyDictionary<string, string>> Settings = new(LoadSettings);
 
         public static string GameForumUrl => Settings.Value[RpolSiteSettingsKey];
@@ -69,16 +71,54 @@ namespace PlayerAssistant
             }
 
             using var settingsStream = File.OpenRead(settingsPath);
-            var settings = JsonSerializer.Deserialize<Dictionary<string, string>>(
-                settingsStream,
-                new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
-
-            if (settings is null)
+            using var settingsDocument = JsonDocument.Parse(settingsStream);
+            if (settingsDocument.RootElement.ValueKind != JsonValueKind.Object)
             {
                 throw new InvalidOperationException($"Settings file '{SettingsFileName}' is empty or invalid.");
             }
 
+            ValidateSchemaVersion(settingsDocument.RootElement, SettingsFileName);
+
+            var settings = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var property in settingsDocument.RootElement.EnumerateObject())
+            {
+                if (string.Equals(property.Name, SchemaVersionSettingsKey, StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
+                if (property.Value.ValueKind != JsonValueKind.String)
+                {
+                    throw new InvalidOperationException(
+                        $"Settings file '{SettingsFileName}' value '{property.Name}' must be a string.");
+                }
+
+                settings[property.Name] = property.Value.GetString() ?? string.Empty;
+            }
+
             return settings;
+        }
+
+        private static void ValidateSchemaVersion(JsonElement root, string fileName)
+        {
+            if (!root.TryGetProperty(SchemaVersionSettingsKey, out var schemaVersionElement))
+            {
+                return;
+            }
+
+            if (schemaVersionElement.ValueKind != JsonValueKind.Number
+                || !schemaVersionElement.TryGetInt32(out var schemaVersion)
+                || schemaVersion < 0)
+            {
+                throw new InvalidOperationException(
+                    $"Settings file '{fileName}' has an invalid '{SchemaVersionSettingsKey}' value.");
+            }
+
+            if (schemaVersion > CurrentSettingsSchemaVersion)
+            {
+                throw new InvalidOperationException(
+                    $"Settings file '{fileName}' uses unsupported schema version {schemaVersion}. This app supports schema version {CurrentSettingsSchemaVersion}.");
+            }
         }
 
         private static bool IsRecoverableLocalSettingsException(Exception ex)

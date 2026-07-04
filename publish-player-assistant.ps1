@@ -12,6 +12,8 @@ $SettingsFormat = 'app-protected-v3'
 $PreviousSettingsFormat = 'app-protected-v2'
 $V1SettingsFormat = 'app-protected-v1'
 $LegacySettingsFormat = 'dpapi-current-user'
+$SettingsSchemaVersionPropertyName = 'schema_version'
+$SettingsSchemaVersion = 1
 $SettingsEncryptionSeed = 'PlayerAssistant.LocalSettings.v1'
 $KeywordIndexFileName = 'keyword-index.json'
 $KeywordTermsFileName = 'game-posts-key-terms.md'
@@ -19,6 +21,7 @@ $SitemapFileName = 'sitemap.xml'
 $SitemapKeywordUrlsFileName = 'sitemap-keyword-urls.json'
 $ReleaseManifestFileName = 'release-manifest.json'
 $RuntimeInventoryFileName = 'release-runtime-inventory.json'
+$ReleaseProvenanceFileName = 'release-provenance.json'
 $ReleaseScriptFileNames = @(
     'publish-player-assistant.ps1',
     'verify-rc-checklist.ps1',
@@ -240,6 +243,62 @@ function Test-FixedTimeEquals {
     return $difference -eq 0
 }
 
+function Get-SettingsSchemaVersion {
+    param(
+        [Parameter(Mandatory = $true)]
+        [object]$Settings,
+
+        [Parameter(Mandatory = $true)]
+        [string]$Description
+    )
+
+    $property = $Settings.PSObject.Properties[$SettingsSchemaVersionPropertyName]
+    if ($null -eq $property) {
+        return 0
+    }
+
+    $value = $property.Value
+    $schemaVersion = 0
+    if ($value -isnot [int] -and $value -isnot [long] -and $value -isnot [decimal]) {
+        throw "$Description has an invalid '$SettingsSchemaVersionPropertyName' value."
+    }
+
+    try {
+        $schemaVersion = [int]$value
+    }
+    catch {
+        throw "$Description has an invalid '$SettingsSchemaVersionPropertyName' value."
+    }
+
+    if ($schemaVersion -lt 0 -or $schemaVersion -ne [decimal]$value) {
+        throw "$Description has an invalid '$SettingsSchemaVersionPropertyName' value."
+    }
+
+    if ($schemaVersion -gt $SettingsSchemaVersion) {
+        throw "$Description uses unsupported schema version $schemaVersion. This verifier supports schema version $SettingsSchemaVersion."
+    }
+
+    return $schemaVersion
+}
+
+function ConvertTo-PlainSettingsObject {
+    param(
+        [Parameter(Mandatory = $true)]
+        [object]$Settings
+    )
+
+    $plainSettings = [ordered]@{}
+    foreach ($property in $Settings.PSObject.Properties) {
+        if ($property.Name -eq $SettingsSchemaVersionPropertyName) {
+            continue
+        }
+
+        $plainSettings[$property.Name] = [string]$property.Value
+    }
+
+    return [pscustomobject]$plainSettings
+}
+
 function ConvertFrom-AppEncryptedLocalSettings {
     param(
         [Parameter(Mandatory = $true)]
@@ -248,6 +307,7 @@ function ConvertFrom-AppEncryptedLocalSettings {
 
     $raw = Get-Content -Raw -LiteralPath $SettingsPath
     $envelope = $raw | ConvertFrom-Json
+    [void](Get-SettingsSchemaVersion -Settings $envelope -Description $SettingsLocalFileName)
     if ($envelope.format -ne $SettingsFormat -and $envelope.format -ne $PreviousSettingsFormat -and $envelope.format -ne $V1SettingsFormat) {
         throw "$SettingsLocalFileName must use encrypted format '$SettingsFormat', '$PreviousSettingsFormat', or '$V1SettingsFormat', but found '$($envelope.format)'."
     }
@@ -313,7 +373,7 @@ function ConvertFrom-AppEncryptedLocalSettings {
         }
 
         $plaintextJson = [System.Text.Encoding]::UTF8.GetString($plaintextBytes)
-        return $plaintextJson | ConvertFrom-Json
+        return ConvertTo-PlainSettingsObject -Settings ($plaintextJson | ConvertFrom-Json)
     }
 
     if ($payloadBytes.Length -lt 17) {
@@ -344,7 +404,7 @@ function ConvertFrom-AppEncryptedLocalSettings {
     }
 
     $plaintextJson = [System.Text.Encoding]::UTF8.GetString($plaintextBytes)
-    return $plaintextJson | ConvertFrom-Json
+    return ConvertTo-PlainSettingsObject -Settings ($plaintextJson | ConvertFrom-Json)
 }
 
 function ConvertFrom-LegacyDpapiLocalSettings {
@@ -369,7 +429,7 @@ function ConvertFrom-LegacyDpapiLocalSettings {
         $null,
         [System.Security.Cryptography.DataProtectionScope]::CurrentUser)
     $plaintextJson = [System.Text.Encoding]::UTF8.GetString($plaintextBytes)
-    return $plaintextJson | ConvertFrom-Json
+    return ConvertTo-PlainSettingsObject -Settings ($plaintextJson | ConvertFrom-Json)
 }
 
 function Test-IsEncryptedLocalSettings {
@@ -398,7 +458,8 @@ function ConvertFrom-LocalSettingsFile {
         return ConvertFrom-LegacyDpapiLocalSettings -SettingsPath $SettingsPath
     }
 
-    return $settings
+    [void](Get-SettingsSchemaVersion -Settings $settings -Description $SettingsLocalFileName)
+    return ConvertTo-PlainSettingsObject -Settings $settings
 }
 
 function Write-AppEncryptedLocalSettings {
@@ -458,13 +519,14 @@ function Write-AppEncryptedLocalSettings {
     [System.Buffer]::BlockCopy($protectedContent, 0, $payloadBytes, 0, $protectedContent.Length)
     [System.Buffer]::BlockCopy($tag, 0, $payloadBytes, $protectedContent.Length, $tag.Length)
 
-    $envelope = [pscustomobject]@{
+    $envelope = [ordered]@{
+        schema_version = $SettingsSchemaVersion
         format = $SettingsFormat
         payload = [Convert]::ToBase64String($payloadBytes)
         key_scope = Get-SettingsKeyScope -SettingsPath $DestinationPath
     }
 
-    $envelope | ConvertTo-Json -Depth 4 | Set-Content -LiteralPath $DestinationPath -Encoding UTF8
+    [pscustomobject]$envelope | ConvertTo-Json -Depth 4 | Set-Content -LiteralPath $DestinationPath -Encoding UTF8
 }
 
 function Assert-EncryptedLocalSettings {
@@ -485,6 +547,11 @@ function Assert-EncryptedLocalSettings {
 
     $sourceSettings = ConvertFrom-LocalSettingsFile -SettingsPath $SourcePath
     $publishedSettings = ConvertFrom-AppEncryptedLocalSettings -SettingsPath $PublishedPath
+    $publishedEnvelope = Read-JsonFile -Path $PublishedPath -Description "published $SettingsLocalFileName"
+    $publishedSchemaVersion = Get-SettingsSchemaVersion -Settings $publishedEnvelope -Description "published $SettingsLocalFileName"
+    if ($publishedSchemaVersion -ne $SettingsSchemaVersion) {
+        throw "Published $SettingsLocalFileName must declare schema version $SettingsSchemaVersion."
+    }
 
     foreach ($property in $sourceSettings.PSObject.Properties) {
         $publishedProperty = $publishedSettings.PSObject.Properties[$property.Name]
@@ -593,6 +660,7 @@ function Assert-PublishedSettingsJson {
     )
 
     $settings = Read-JsonFile -Path $Path -Description 'published settings.json'
+    [void](Get-SettingsSchemaVersion -Settings $settings -Description 'published settings.json')
     foreach ($settingsKey in $RequiredSettingsUrlKeys) {
         $property = $settings.PSObject.Properties[$settingsKey]
         if ($null -eq $property -or [string]::IsNullOrWhiteSpace([string]$property.Value)) {
@@ -837,6 +905,15 @@ function Get-ScopedSha256Bytes {
     }
 }
 
+function Convert-BytesToHex {
+    param(
+        [Parameter(Mandatory = $true)]
+        [byte[]]$Bytes
+    )
+
+    return [System.BitConverter]::ToString($Bytes).Replace('-', '')
+}
+
 function Get-SettingsV3EncryptionKey {
     param(
         [Parameter(Mandatory = $true)]
@@ -885,6 +962,177 @@ function Get-ReleaseScriptHashEntries {
             }
         }
     })
+}
+
+function Invoke-GitOutput {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string[]]$Arguments
+    )
+
+    $startInfo = [System.Diagnostics.ProcessStartInfo]::new()
+    $startInfo.FileName = 'git'
+    $startInfo.Arguments = ConvertTo-ProcessArguments -Arguments $Arguments
+    $startInfo.WorkingDirectory = $PSScriptRoot
+    $startInfo.RedirectStandardOutput = $true
+    $startInfo.RedirectStandardError = $true
+    $startInfo.UseShellExecute = $false
+
+    try {
+        $process = [System.Diagnostics.Process]::Start($startInfo)
+        if ($null -eq $process) {
+            return $null
+        }
+
+        $standardOutput = $process.StandardOutput.ReadToEnd()
+        $process.StandardError.ReadToEnd() | Out-Null
+        $process.WaitForExit()
+        if ($process.ExitCode -ne 0) {
+            return $null
+        }
+
+        return $standardOutput.Trim()
+    }
+    catch {
+        return $null
+    }
+}
+
+function ConvertTo-ProcessArguments {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string[]]$Arguments
+    )
+
+    $escapedArguments = $Arguments | ForEach-Object {
+        if ($_ -match '[\s"]') {
+            '"' + ($_ -replace '"', '\"') + '"'
+        }
+        else {
+            $_
+        }
+    }
+
+    return ($escapedArguments -join ' ')
+}
+
+function Get-GitProvenanceInfo {
+    $status = Invoke-GitOutput -Arguments @('status', '--short')
+    $statusLines = if ([string]::IsNullOrWhiteSpace($status)) {
+        @()
+    }
+    else {
+        @($status -split "`r?`n" | Where-Object { ![string]::IsNullOrWhiteSpace($_) })
+    }
+
+    $commit = Invoke-GitOutput -Arguments @('rev-parse', 'HEAD')
+    $tags = Invoke-GitOutput -Arguments @('tag', '--points-at', 'HEAD')
+    $tagList = [System.Collections.Generic.List[string]]::new()
+    if (![string]::IsNullOrWhiteSpace($tags)) {
+        @($tags -split "`r?`n" | Where-Object { ![string]::IsNullOrWhiteSpace($_) }) |
+            ForEach-Object { [void]$tagList.Add($_) }
+    }
+
+    return [ordered]@{
+        commit = $commit
+        commit_short = if (![string]::IsNullOrWhiteSpace($commit) -and $commit.Length -ge 12) { $commit.Substring(0, 12) } else { $commit }
+        branch = Invoke-GitOutput -Arguments @('branch', '--show-current')
+        tags_at_commit = [string[]]$tagList.ToArray()
+        dirty = $statusLines.Count -gt 0
+        status_count = $statusLines.Count
+        status_sha256 = if ($statusLines.Count -gt 0) { Convert-BytesToHex -Bytes (Get-ScopedSha256Bytes -Value ($statusLines -join "`n")) } else { $null }
+    }
+}
+
+function Get-AuthenticodeSignatureSummary {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Path
+    )
+
+    $signature = Get-AuthenticodeSignature -LiteralPath $Path
+    return [ordered]@{
+        status = [string]$signature.Status
+        signer_subject = if ($signature.SignerCertificate) { $signature.SignerCertificate.Subject } else { $null }
+        thumbprint = if ($signature.SignerCertificate) { $signature.SignerCertificate.Thumbprint } else { $null }
+    }
+}
+
+function Write-ReleaseProvenance {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Directory
+    )
+
+    $projectVersion = Get-ProjectVersionInfo
+    $manifestEntry = Get-ManifestFileEntry -Directory $Directory -RelativePath $ReleaseManifestFileName
+    $inventoryEntry = Get-ManifestFileEntry -Directory $Directory -RelativePath $RuntimeInventoryFileName
+    $executablePath = Join-Path $Directory 'player-assistant.exe'
+    $provenance = [ordered]@{
+        schema_version = 1
+        generated_at = (Get-Date).ToString('O')
+        app = [ordered]@{
+            version = $projectVersion.Version
+            file_version = $projectVersion.FileVersion
+            product_version = $projectVersion.InformationalVersion
+        }
+        git = Get-GitProvenanceInfo
+        release_manifest = $manifestEntry
+        runtime_inventory = $inventoryEntry
+        executable_signature = Get-AuthenticodeSignatureSummary -Path $executablePath
+        hash_algorithm = 'SHA256'
+    }
+
+    $provenancePath = Join-Path $Directory $ReleaseProvenanceFileName
+    $provenance | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $provenancePath -Encoding UTF8
+    Assert-RequiredFile -Path $provenancePath -Description $ReleaseProvenanceFileName
+}
+
+function Assert-ReleaseProvenance {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Directory
+    )
+
+    $provenance = Read-JsonFile -Path (Join-Path $Directory $ReleaseProvenanceFileName) -Description $ReleaseProvenanceFileName
+    if ($provenance.schema_version -ne 1) {
+        throw "$ReleaseProvenanceFileName schema_version '$($provenance.schema_version)' is not supported."
+    }
+
+    if ($provenance.hash_algorithm -ne 'SHA256') {
+        throw "$ReleaseProvenanceFileName must use SHA256 hashes."
+    }
+
+    $expectedVersion = Get-ProjectVersionInfo
+    if ($provenance.app.version -ne $expectedVersion.Version -or
+        $provenance.app.file_version -ne $expectedVersion.FileVersion -or
+        $provenance.app.product_version -ne $expectedVersion.InformationalVersion) {
+        throw "$ReleaseProvenanceFileName app version does not match $ProjectFileName."
+    }
+
+    if ([string]::IsNullOrWhiteSpace([string]$provenance.git.commit)) {
+        throw "$ReleaseProvenanceFileName is missing the Git commit."
+    }
+
+    foreach ($entryProperty in @('release_manifest', 'runtime_inventory')) {
+        $entry = $provenance.$entryProperty
+        $relativePath = [string]$entry.relative_path
+        $path = Join-Path $Directory $relativePath
+        Assert-RequiredFile -Path $path -Description "$ReleaseProvenanceFileName referenced $relativePath"
+        $item = Get-Item -LiteralPath $path
+        if ([long]$entry.length -ne [long]$item.Length) {
+            throw "$ReleaseProvenanceFileName length mismatch for '$relativePath'."
+        }
+
+        $actualHash = (Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash
+        if ($actualHash -ne [string]$entry.sha256) {
+            throw "$ReleaseProvenanceFileName SHA256 mismatch for '$relativePath'."
+        }
+    }
+
+    if ($null -eq $provenance.PSObject.Properties['executable_signature']) {
+        throw "$ReleaseProvenanceFileName is missing executable signature status."
+    }
 }
 
 function Write-ReleaseRuntimeInventory {
@@ -1065,6 +1313,7 @@ function Assert-PublishOutput {
     Assert-NoForbiddenPublishArtifacts -Directory $Directory
     Assert-NoPlaintextCredentialMarkers -Directory $Directory
     Assert-ReleaseIntegrityManifest -Directory $Directory
+    Assert-ReleaseProvenance -Directory $Directory
 }
 
 function Invoke-ProcessLockDiagnostics {
@@ -1136,6 +1385,7 @@ Copy-Item -LiteralPath (Join-Path $PSScriptRoot "Release\$SitemapKeywordUrlsFile
 Write-AppEncryptedLocalSettings -SourcePath (Join-Path $PSScriptRoot $SettingsLocalFileName) -DestinationPath (Join-Path $resolvedOutputDir $SettingsLocalFileName)
 Write-ReleaseRuntimeInventory -Directory $resolvedOutputDir
 Write-ReleaseIntegrityManifest -Directory $resolvedOutputDir
+Write-ReleaseProvenance -Directory $resolvedOutputDir
 
 Assert-PublishOutput -Directory $resolvedOutputDir -SourceSettingsPath $SourceSettingsPath
 Write-Output "Publish verified: $resolvedOutputDir"

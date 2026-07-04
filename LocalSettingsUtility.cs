@@ -14,6 +14,8 @@ namespace PlayerAssistant
         private const string FormatPropertyName = "format";
         private const string PayloadPropertyName = "payload";
         private const string KeyScopePropertyName = "key_scope";
+        private const string SchemaVersionPropertyName = "schema_version";
+        private const int CurrentSchemaVersion = 1;
         private const string EncryptionKeySeed = "PlayerAssistant.LocalSettings.v1";
         private const int AesIvSizeBytes = 16;
         private const int HmacSizeBytes = 32;
@@ -41,7 +43,8 @@ namespace PlayerAssistant
             if (TryReadEncryptedEnvelope(document.RootElement, out var envelope))
             {
                 var decryptedSettings = DecryptSettings(envelope, settingsPath);
-                if (!string.Equals(envelope.Format, EncryptedFormat, StringComparison.Ordinal))
+                if (!string.Equals(envelope.Format, EncryptedFormat, StringComparison.Ordinal)
+                    || envelope.SchemaVersion != CurrentSchemaVersion)
                 {
                     SaveEncryptedSettings(settingsPath, decryptedSettings);
                 }
@@ -49,14 +52,7 @@ namespace PlayerAssistant
                 return decryptedSettings;
             }
 
-            var plaintextSettings = JsonSerializer.Deserialize<Dictionary<string, string>>(
-                document.RootElement.GetRawText(),
-                JsonOptions);
-
-            if (plaintextSettings is null)
-            {
-                throw new InvalidOperationException($"Settings file '{settingsPath}' is empty or invalid.");
-            }
+            var plaintextSettings = ReadPlaintextSettings(document.RootElement, settingsPath);
 
             SaveEncryptedSettings(settingsPath, plaintextSettings);
             return plaintextSettings;
@@ -230,6 +226,7 @@ namespace PlayerAssistant
             Buffer.BlockCopy(tag, 0, payloadBytes, protectedContent.Length, tag.Length);
 
             return new EncryptedSettingsEnvelope(
+                CurrentSchemaVersion,
                 EncryptedFormat,
                 Convert.ToBase64String(payloadBytes),
                 GetKeyScope(settingsPath));
@@ -303,6 +300,8 @@ namespace PlayerAssistant
                 return false;
             }
 
+            var schemaVersion = ReadSchemaVersion(root, "encrypted settings file");
+
             KeyScope? keyScope = null;
             if (root.TryGetProperty(KeyScopePropertyName, out var keyScopeElement)
                 && keyScopeElement.ValueKind == JsonValueKind.Object)
@@ -310,11 +309,65 @@ namespace PlayerAssistant
                 keyScope = keyScopeElement.Deserialize<KeyScope>(JsonOptions);
             }
 
-            envelope = new EncryptedSettingsEnvelope(format, payload, keyScope);
+            envelope = new EncryptedSettingsEnvelope(schemaVersion, format, payload, keyScope);
             return true;
         }
 
+        private static Dictionary<string, string> ReadPlaintextSettings(JsonElement root, string settingsPath)
+        {
+            if (root.ValueKind != JsonValueKind.Object)
+            {
+                throw new InvalidOperationException($"Settings file '{settingsPath}' is empty or invalid.");
+            }
+
+            _ = ReadSchemaVersion(root, "plaintext settings file");
+
+            var settings = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var property in root.EnumerateObject())
+            {
+                if (string.Equals(property.Name, SchemaVersionPropertyName, StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
+                if (property.Value.ValueKind != JsonValueKind.String)
+                {
+                    throw new InvalidOperationException(
+                        $"Settings file '{settingsPath}' value '{property.Name}' must be a string.");
+                }
+
+                settings[property.Name] = property.Value.GetString() ?? string.Empty;
+            }
+
+            return settings;
+        }
+
+        private static int ReadSchemaVersion(JsonElement root, string description)
+        {
+            if (!root.TryGetProperty(SchemaVersionPropertyName, out var schemaVersionElement))
+            {
+                return 0;
+            }
+
+            if (schemaVersionElement.ValueKind != JsonValueKind.Number
+                || !schemaVersionElement.TryGetInt32(out var schemaVersion)
+                || schemaVersion < 0)
+            {
+                throw new InvalidOperationException(
+                    $"The {description} has an invalid '{SchemaVersionPropertyName}' value.");
+            }
+
+            if (schemaVersion > CurrentSchemaVersion)
+            {
+                throw new InvalidOperationException(
+                    $"The {description} uses unsupported schema version {schemaVersion}. This app supports schema version {CurrentSchemaVersion}.");
+            }
+
+            return schemaVersion;
+        }
+
         private sealed record EncryptedSettingsEnvelope(
+            [property: JsonPropertyName(SchemaVersionPropertyName)] int SchemaVersion,
             [property: JsonPropertyName(FormatPropertyName)] string Format,
             [property: JsonPropertyName(PayloadPropertyName)] string Payload,
             [property: JsonPropertyName(KeyScopePropertyName)] KeyScope? KeyScope = null);
