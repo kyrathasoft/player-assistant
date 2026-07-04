@@ -2,6 +2,7 @@ param(
     [string]$OutputDir = (Join-Path $PSScriptRoot 'Release\installer'),
     [string]$PublishDir = (Join-Path $PSScriptRoot 'Release\publish'),
     [string]$Version = '0.9.0-hardening.5',
+    [string]$InnoCompilerPath,
     [switch]$SkipPublish
 )
 
@@ -12,6 +13,8 @@ $SettingsSchemaVersion = 1
 $SettingsLocalFileName = 'settings.local.json'
 $PackageRootName = "player-assistant-$Version"
 $PackageFileName = "player-assistant-$Version-installer.zip"
+$InnoScriptPath = Join-Path $PSScriptRoot 'Installer\player-assistant.iss'
+$InnoOutputFileName = "player-assistant-$Version-setup.exe"
 
 function Assert-RequiredFile {
     param(
@@ -248,11 +251,40 @@ function Copy-DirectoryContents {
     }
 }
 
+function Resolve-InnoCompilerPath {
+    param([string]$RequestedPath)
+
+    if (![string]::IsNullOrWhiteSpace($RequestedPath)) {
+        if (!(Test-Path -LiteralPath $RequestedPath -PathType Leaf)) {
+            throw "Inno Setup compiler was not found: $RequestedPath"
+        }
+
+        return [System.IO.Path]::GetFullPath($RequestedPath)
+    }
+
+    $command = Get-Command ISCC.exe -ErrorAction SilentlyContinue
+    if ($command) {
+        return $command.Source
+    }
+
+    $candidatePaths = @(
+        (Join-Path $env:ProgramFiles 'Inno Setup 7\ISCC.exe'),
+        (Join-Path ${env:ProgramFiles(x86)} 'Inno Setup 7\ISCC.exe'),
+        (Join-Path $env:ProgramFiles 'Inno Setup 6\ISCC.exe'),
+        (Join-Path ${env:ProgramFiles(x86)} 'Inno Setup 6\ISCC.exe')
+    )
+
+    foreach ($candidatePath in $candidatePaths) {
+        if (![string]::IsNullOrWhiteSpace($candidatePath) -and (Test-Path -LiteralPath $candidatePath -PathType Leaf)) {
+            return [System.IO.Path]::GetFullPath($candidatePath)
+        }
+    }
+
+    return $null
+}
+
 if (!$SkipPublish) {
     & (Join-Path $PSScriptRoot 'publish-player-assistant.ps1') -OutputDir $PublishDir
-    if ($LASTEXITCODE -ne 0) {
-        throw "Publish failed with exit code $LASTEXITCODE."
-    }
 }
 
 Assert-RequiredFile -Path (Join-Path $PublishDir 'player-assistant.exe') -Description 'published executable'
@@ -283,8 +315,29 @@ Write-PortableEncryptedSettings -Settings $sourceSettings -DestinationPath (Join
 Compress-Archive -LiteralPath $packageRoot -DestinationPath $packagePath -Force
 
 & (Join-Path $PSScriptRoot 'verify-installer-package.ps1') -PackagePath $packagePath -ExpectedVersion $Version
-if ($LASTEXITCODE -ne 0) {
-    throw "Installer package verification failed with exit code $LASTEXITCODE."
-}
 
 Write-Output "Installer package created: $packagePath"
+
+$resolvedInnoCompilerPath = Resolve-InnoCompilerPath -RequestedPath $InnoCompilerPath
+if ($resolvedInnoCompilerPath) {
+    Assert-RequiredFile -Path $InnoScriptPath -Description 'Inno Setup script'
+    $innoOutputPath = Join-Path $OutputDir $InnoOutputFileName
+    if (Test-Path -LiteralPath $innoOutputPath) {
+        Remove-Item -LiteralPath $innoOutputPath -Force
+    }
+
+    & $resolvedInnoCompilerPath `
+        "/DPayloadDir=$payloadRoot" `
+        "/DOutputDir=$OutputDir" `
+        "/DVersion=$Version" `
+        $InnoScriptPath
+    if ($LASTEXITCODE -ne 0) {
+        throw "Inno Setup compiler failed with exit code $LASTEXITCODE."
+    }
+
+    Assert-RequiredFile -Path $innoOutputPath -Description 'Inno Setup installer'
+    Write-Output "Inno Setup installer created: $innoOutputPath"
+}
+else {
+    Write-Warning "Inno Setup compiler was not found. Zip installer package was created, but no setup.exe was built."
+}

@@ -37,6 +37,7 @@ $ReleaseScriptFileNames = @(
     'diagnose-player-assistant-locks.ps1',
     'build-installer.ps1',
     'verify-installer-package.ps1',
+    'Installer\player-assistant.iss',
     'Installer\install-player-assistant.ps1',
     'Installer\install-player-assistant.cmd'
 )
@@ -1210,9 +1211,9 @@ function Write-ReleaseRuntimeInventory {
             target_framework = $runtimeInfo.TargetFramework
             runtime_identifier = $runtimeInfo.RuntimeIdentifier
             self_contained = $runtimeInfo.SelfContained
-            publish_single_file = $runtimeInfo.PublishSingleFile
+            publish_single_file = 'false'
             publish_runtime_identifier = 'win-x64'
-            publish_self_contained = 'true'
+            publish_self_contained = 'false'
         }
         packages = @($runtimeInfo.Packages)
         scripts = @(Get-ReleaseScriptHashEntries)
@@ -1418,19 +1419,20 @@ $publishArguments = @(
     '--runtime',
     'win-x64',
     '--self-contained',
-    'true',
-    '-p:PublishSingleFile=true',
+    'false',
+    '-p:PublishSingleFile=false',
     '-p:IncludeNativeLibrariesForSelfExtract=true',
-    '-p:EnableCompressionInSingleFile=true',
+    '-p:EnableCompressionInSingleFile=false',
     '-p:DebugType=None',
     '-p:DebugSymbols=false',
     '--output',
     $resolvedOutputDir
 )
 & dotnet @publishArguments
-if ($LASTEXITCODE -ne 0) {
+$publishExitCode = $LASTEXITCODE
+if ($publishExitCode -ne 0) {
     Invoke-ProcessLockDiagnostics -PublishDirectory $resolvedOutputDir
-    throw "dotnet publish failed with exit code $LASTEXITCODE."
+    throw "dotnet publish failed with exit code $publishExitCode."
 }
 
 Get-ChildItem -Path $resolvedOutputDir -Filter *.pdb -File | Remove-Item -Force
