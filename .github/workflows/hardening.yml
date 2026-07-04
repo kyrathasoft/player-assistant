@@ -211,9 +211,21 @@ jobs:
         shell: pwsh
         run: .\verify-rc-self-tests.ps1 -ReleaseDir $env:RELEASE_DIR -PublishDir $env:PUBLISH_DIR
 
-      - name: Diagnostics bundle verification
+      - name: Collect diagnostics bundle
         shell: pwsh
         run: .\collect-diagnostics.ps1 -ReleaseDir $env:RELEASE_DIR -PublishDir $env:PUBLISH_DIR -OutputDir $env:DIAGNOSTICS_DIR
+
+      - name: Verify diagnostics bundle
+        shell: pwsh
+        run: |
+          $bundle = Get-ChildItem -LiteralPath $env:DIAGNOSTICS_DIR -Filter 'player-assistant-diagnostics-*.zip' -File |
+            Sort-Object LastWriteTimeUtc -Descending |
+            Select-Object -First 1
+          if ($null -eq $bundle) {
+            throw "No diagnostics bundle zip was produced in $env:DIAGNOSTICS_DIR."
+          }
+
+          .\collect-diagnostics.ps1 -OutputDir $env:DIAGNOSTICS_DIR -VerifyOnly $bundle.FullName
 
       - name: RC checklist dry-run
         shell: pwsh

@@ -6,7 +6,8 @@ param(
     [switch]$NoPublishVerification,
     [switch]$NoPlanOutputs,
     [switch]$NoRetentionCleanup,
-    [switch]$KeepStaging
+    [switch]$KeepStaging,
+    [int]$ChildCommandTimeoutSeconds = 120
 )
 
 $ErrorActionPreference = 'Stop'
@@ -54,6 +55,23 @@ $UnredactedCredentialPatterns = @(
     'https?://(?!\[REDACTED\]:\[REDACTED\]@)[^/\s:@]+:[^/\s@]+@'
 )
 
+function Write-StepLog {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Message
+    )
+
+    $line = "[$((Get-Date).ToString('O'))] $Message"
+    Write-Output $line
+    if (![string]::IsNullOrWhiteSpace($Script:DiagnosticTracePath)) {
+        try {
+            Add-Content -LiteralPath $Script:DiagnosticTracePath -Value $line -Encoding UTF8
+        }
+        catch {
+        }
+    }
+}
+
 function Resolve-FullPath {
     param(
         [Parameter(Mandatory = $true)]
@@ -75,6 +93,39 @@ function Get-PowerShellExecutable {
     }
 
     throw 'Neither pwsh.exe nor powershell.exe is available.'
+}
+
+function Invoke-ScriptBlockWithTimeout {
+    param(
+        [Parameter(Mandatory = $true)]
+        [scriptblock]$ScriptBlock,
+
+        [Parameter(Mandatory = $true)]
+        [object[]]$ArgumentList = @(),
+
+        [Parameter(Mandatory = $true)]
+        [int]$TimeoutSeconds,
+
+        [Parameter(Mandatory = $true)]
+        [string]$Description
+    )
+
+    $job = Start-Job -ScriptBlock $ScriptBlock -ArgumentList $ArgumentList
+    if ($null -eq $job) {
+        throw "Unable to start timed operation: $Description"
+    }
+
+    try {
+        if (-not (Wait-Job -Job $job -Timeout $TimeoutSeconds)) {
+            Stop-Job -Job $job -ErrorAction SilentlyContinue | Out-Null
+            throw "$Description timed out after $TimeoutSeconds seconds."
+        }
+
+        return Receive-Job -Job $job -ErrorAction Stop
+    }
+    finally {
+        Remove-Job -Job $job -Force -ErrorAction SilentlyContinue | Out-Null
+    }
 }
 
 function Assert-PathInsideRepo {
@@ -160,6 +211,15 @@ function ConvertTo-PlainObject {
         return $result
     }
 
+    if ($Value -is [pscustomobject]) {
+        $result = [ordered]@{}
+        foreach ($property in $Value.PSObject.Properties) {
+            $result[$property.Name] = ConvertTo-PlainObject -Value $property.Value
+        }
+
+        return $result
+    }
+
     if ($Value -is [System.Collections.IEnumerable] -and $Value -isnot [string]) {
         $items = @()
         foreach ($item in $Value) {
@@ -167,15 +227,6 @@ function ConvertTo-PlainObject {
         }
 
         return $items
-    }
-
-    if ($Value.PSObject -and $Value.PSObject.Properties.Count -gt 0) {
-        $result = [ordered]@{}
-        foreach ($property in $Value.PSObject.Properties) {
-            $result[$property.Name] = ConvertTo-PlainObject -Value $property.Value
-        }
-
-        return $result
     }
 
     return [string]$Value
@@ -200,6 +251,21 @@ function Redact-Object {
             }
             else {
                 $result[$keyText] = Redact-Object -Value $Value[$key]
+            }
+        }
+
+        return $result
+    }
+
+    if ($Value -is [pscustomobject]) {
+        $result = [ordered]@{}
+        foreach ($property in $Value.PSObject.Properties) {
+            $propertyName = [string]$property.Name
+            if ($propertyName -match $SensitiveKeyPattern) {
+                $result[$propertyName] = '[REDACTED]'
+            }
+            else {
+                $result[$propertyName] = Redact-Object -Value $property.Value
             }
         }
 
@@ -258,6 +324,7 @@ function Write-RedactedTextCopy {
         return
     }
 
+    Write-StepLog "Redacting text copy: $SourcePath -> $DestinationPath"
     $contents = Get-Content -Raw -LiteralPath $SourcePath
     Write-Utf8File -Path $DestinationPath -Contents (Redact-Text -Text $contents)
 }
@@ -277,12 +344,14 @@ function Write-RedactedJsonCopy {
     }
 
     try {
+        Write-StepLog "Redacting JSON copy: $SourcePath -> $DestinationPath"
         $json = Get-Content -Raw -LiteralPath $SourcePath | ConvertFrom-Json
         $plain = ConvertTo-PlainObject -Value $json
         $redacted = Redact-Object -Value $plain
         Write-Utf8File -Path $DestinationPath -Contents (($redacted | ConvertTo-Json -Depth 20) + "`r`n")
     }
     catch {
+        Write-StepLog "Falling back to text redaction for: $SourcePath"
         Write-RedactedTextCopy -SourcePath $SourcePath -DestinationPath $DestinationPath
     }
 }
@@ -386,9 +455,18 @@ function Get-ExecutableVersionSummary {
         }
     }
 
+    Write-StepLog "Collecting executable version summary for $Label ($Path)"
     $item = Get-Item -LiteralPath $Path
     $version = [System.Diagnostics.FileVersionInfo]::GetVersionInfo($Path)
-    $signature = Get-AuthenticodeSignature -LiteralPath $Path
+    $signature = Invoke-ScriptBlockWithTimeout `
+        -ScriptBlock {
+            param($ExecutablePath)
+            Get-AuthenticodeSignature -LiteralPath $ExecutablePath |
+                Select-Object Status, SignerCertificate, TimeStamperCertificate
+        } `
+        -ArgumentList @($Path) `
+        -TimeoutSeconds $ChildCommandTimeoutSeconds `
+        -Description "Get-AuthenticodeSignature for $Path"
     return [pscustomobject]@{
         label = $Label
         path = $Path
@@ -427,15 +505,44 @@ function Invoke-CapturedCommand {
         [string]$OutputPath
     )
 
+    $resolvedFileName = if ($FileName -ieq 'powershell.exe') { Get-PowerShellExecutable } else { $FileName }
+    Write-StepLog "Starting child command: $resolvedFileName $($Arguments -join ' ')"
+
     try {
-        $resolvedFileName = if ($FileName -ieq 'powershell.exe') { Get-PowerShellExecutable } else { $FileName }
-        Push-Location $WorkingDirectory
+        $stdoutPath = Join-Path ([System.IO.Path]::GetTempPath()) "player-assistant-diagnostics-stdout-$([Guid]::NewGuid().ToString('N')).txt"
+        $stderrPath = Join-Path ([System.IO.Path]::GetTempPath()) "player-assistant-diagnostics-stderr-$([Guid]::NewGuid().ToString('N')).txt"
         try {
-            $combinedOutput = & $resolvedFileName @Arguments 2>&1 | Out-String
-            $exitCode = if ($null -ne $LASTEXITCODE) { [int]$LASTEXITCODE } else { 0 }
+            $process = Start-Process `
+                -FilePath $resolvedFileName `
+                -ArgumentList $Arguments `
+                -WorkingDirectory $WorkingDirectory `
+                -NoNewWindow `
+                -PassThru `
+                -RedirectStandardOutput $stdoutPath `
+                -RedirectStandardError $stderrPath
+
+            if ($null -eq $process) {
+                throw "Unable to start child command: $resolvedFileName"
+            }
+
+            if (-not $process.WaitForExit($ChildCommandTimeoutSeconds * 1000)) {
+                try {
+                    $process.Kill()
+                    $process.WaitForExit()
+                }
+                catch {
+                }
+
+                throw "Child command timed out after $ChildCommandTimeoutSeconds seconds: $resolvedFileName $($Arguments -join ' ')"
+            }
+
+            $standardOutput = if (Test-Path -LiteralPath $stdoutPath -PathType Leaf) { Get-Content -Raw -LiteralPath $stdoutPath } else { '' }
+            $standardError = if (Test-Path -LiteralPath $stderrPath -PathType Leaf) { Get-Content -Raw -LiteralPath $stderrPath } else { '' }
+            $combinedOutput = (($standardOutput, $standardError) -join [Environment]::NewLine)
+            $exitCode = $process.ExitCode
         }
         finally {
-            Pop-Location
+            Remove-Item -LiteralPath $stdoutPath, $stderrPath -Force -ErrorAction SilentlyContinue
         }
 
         $report = [ordered]@{
@@ -446,6 +553,7 @@ function Invoke-CapturedCommand {
         }
 
         Write-Utf8File -Path $OutputPath -Contents (($report | ConvertTo-Json -Depth 6) + "`r`n")
+        Write-StepLog "Completed child command with exit code ${exitCode}: $resolvedFileName $($Arguments -join ' ')"
     }
     catch {
         $report = [ordered]@{
@@ -534,6 +642,10 @@ function Assert-DiagnosticZipIsRedacted {
 
 $resolvedOutputDir = Resolve-FullPath $OutputDir
 Assert-PathInsideRepo -Path $resolvedOutputDir -Description 'diagnostic output directory'
+$Script:DiagnosticTracePath = Join-Path $resolvedOutputDir 'collect-diagnostics-trace.log'
+New-Item -ItemType Directory -Force -Path $resolvedOutputDir | Out-Null
+Remove-Item -LiteralPath $Script:DiagnosticTracePath -Force -ErrorAction SilentlyContinue
+Write-StepLog 'Initialized collect-diagnostics trace'
 
 if (![string]::IsNullOrWhiteSpace($VerifyOnly)) {
     $resolvedVerifyOnly = Resolve-FullPath $VerifyOnly
@@ -549,10 +661,12 @@ Assert-PathInsideRepo -Path $resolvedReleaseDir -Description 'Release directory'
 Assert-PathInsideRepo -Path $resolvedPublishDir -Description 'publish directory'
 
 if (!$NoRetentionCleanup) {
+    Write-StepLog 'Starting diagnostics retention cleanup'
     $retentionScriptPath = Join-Path $PSScriptRoot 'clean-diagnostics-retention.ps1'
     if (Test-Path -LiteralPath $retentionScriptPath -PathType Leaf) {
         & (Get-PowerShellExecutable) -NoProfile -ExecutionPolicy Bypass -File $retentionScriptPath -ScratchDir (Join-Path $PSScriptRoot 'codex-scratch')
     }
+    Write-StepLog 'Completed diagnostics retention cleanup'
 }
 
 $timestamp = Get-Date -Format 'yyyyMMdd-HHmmss'
@@ -562,6 +676,7 @@ New-Item -ItemType Directory -Force -Path $resolvedOutputDir | Out-Null
 New-DirectoryClean -Path $stagingDirectory
 
 try {
+    Write-StepLog 'Writing metadata.json'
     $metadata = [ordered]@{
         collected_at = (Get-Date).ToString('O')
         repo_root = (Resolve-FullPath $PSScriptRoot)
@@ -574,12 +689,14 @@ try {
     }
     Write-Utf8File -Path (Join-Path $stagingDirectory 'metadata.json') -Contents (($metadata | ConvertTo-Json -Depth 6) + "`r`n")
 
+    Write-StepLog 'Writing version-metadata.json'
     $versionSummary = @(
         Get-ExecutableVersionSummary -Path (Join-Path $resolvedReleaseDir $ExecutableFileName) -Label 'Release'
         Get-ExecutableVersionSummary -Path (Join-Path $resolvedPublishDir $ExecutableFileName) -Label 'Publish'
     )
     Write-Utf8File -Path (Join-Path $stagingDirectory 'version-metadata.json') -Contents (($versionSummary | ConvertTo-Json -Depth 6) + "`r`n")
 
+    Write-StepLog 'Writing redacted runtime diagnostics'
     Write-RedactedJsonCopy -SourcePath (Join-Path $resolvedReleaseDir $StartupHealthFileName) -DestinationPath (Join-Path $stagingDirectory 'Release\startup-health.json')
     Write-RedactedTextCopy -SourcePath (Join-Path $resolvedReleaseDir $StartupLogFileName) -DestinationPath (Join-Path $stagingDirectory 'Release\startup-errors.log')
     Write-RedactedJsonCopy -SourcePath (Join-Path $resolvedReleaseDir $LastCrashFileName) -DestinationPath (Join-Path $stagingDirectory 'Release\last-crash.json')
@@ -589,15 +706,18 @@ try {
     Write-RedactedJsonCopy -SourcePath (Join-Path $resolvedPublishDir $LastCrashFileName) -DestinationPath (Join-Path $stagingDirectory 'publish\last-crash.json')
     Write-RedactedTextCopy -SourcePath (Join-Path $resolvedPublishDir $StartupRemediationFileName) -DestinationPath (Join-Path $stagingDirectory 'publish\startup-remediation.txt')
 
+    Write-StepLog 'Writing redacted settings files'
     Write-RedactedJsonCopy -SourcePath (Join-Path $resolvedReleaseDir $SettingsFileName) -DestinationPath (Join-Path $stagingDirectory 'Release\settings.redacted.json')
     Write-RedactedJsonCopy -SourcePath (Join-Path $resolvedPublishDir $SettingsFileName) -DestinationPath (Join-Path $stagingDirectory 'publish\settings.redacted.json')
     Write-LocalSettingsShape -SourcePath (Join-Path $resolvedReleaseDir $SettingsLocalFileName) -DestinationPath (Join-Path $stagingDirectory 'Release\settings.local.shape.json')
     Write-LocalSettingsShape -SourcePath (Join-Path $resolvedPublishDir $SettingsLocalFileName) -DestinationPath (Join-Path $stagingDirectory 'publish\settings.local.shape.json')
+    Write-StepLog 'Writing runtime inventory and provenance copies'
     Write-RedactedJsonCopy -SourcePath (Join-Path $resolvedReleaseDir $RuntimeInventoryFileName) -DestinationPath (Join-Path $stagingDirectory 'Release\release-runtime-inventory.json')
     Write-RedactedJsonCopy -SourcePath (Join-Path $resolvedPublishDir $RuntimeInventoryFileName) -DestinationPath (Join-Path $stagingDirectory 'publish\release-runtime-inventory.json')
     Write-RedactedJsonCopy -SourcePath (Join-Path $resolvedReleaseDir $ReleaseProvenanceFileName) -DestinationPath (Join-Path $stagingDirectory 'Release\release-provenance.json')
     Write-RedactedJsonCopy -SourcePath (Join-Path $resolvedPublishDir $ReleaseProvenanceFileName) -DestinationPath (Join-Path $stagingDirectory 'publish\release-provenance.json')
 
+    Write-StepLog 'Writing runtime-sidecars.json'
     $sidecarSummary = [ordered]@{
         release = @($RuntimeSidecars | ForEach-Object { Get-FileSummary -BaseDirectory $resolvedReleaseDir -RelativePath $_ })
         publish = @($RuntimeSidecars | ForEach-Object { Get-FileSummary -BaseDirectory $resolvedPublishDir -RelativePath $_ })
@@ -631,18 +751,22 @@ try {
             -OutputPath (Join-Path $stagingDirectory 'verification\publish-runtime-integrity-plan.json')
     }
 
+    Write-StepLog 'Validating staged diagnostic contents'
     Assert-DiagnosticStagingIsRedacted -Directory $stagingDirectory
 
     if (Test-Path -LiteralPath $zipPath -PathType Leaf) {
         Remove-Item -LiteralPath $zipPath -Force
     }
 
+    Write-StepLog 'Creating diagnostic zip archive'
     Compress-Archive -Path (Join-Path $stagingDirectory '*') -DestinationPath $zipPath -Force
     if (!(Test-Path -LiteralPath $zipPath -PathType Leaf)) {
         throw "Diagnostic bundle was not created: $zipPath"
     }
 
+    Write-StepLog 'Validating diagnostic zip archive'
     Assert-DiagnosticZipIsRedacted -ZipPath $zipPath
+    Write-StepLog 'Re-validating staged diagnostic contents'
     Assert-DiagnosticStagingIsRedacted -Directory $stagingDirectory
 
     Write-Output "Diagnostic bundle created: $zipPath"
