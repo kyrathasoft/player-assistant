@@ -6,6 +6,8 @@ namespace PlayerAssistant
 
     internal static class XpTrackingUtility
     {
+        private const string TrackingPageLabel = "XP Tracking page";
+
         public static async Task<IReadOnlyList<PcXpTotal>> GetCurrentXpTotalsAsync(
             CancellationToken cancellationToken = default)
         {
@@ -60,6 +62,40 @@ namespace PlayerAssistant
             }
 
             throw new InvalidOperationException("XP tracking markdown does not contain an 'As of' date section.");
+        }
+
+        internal static string FormatUserFacingFailureMessage(Exception exception)
+        {
+            ArgumentNullException.ThrowIfNull(exception);
+
+            return string.Join(
+                Environment.NewLine + Environment.NewLine,
+                $"XP totals could not be loaded from the {TrackingPageLabel}.",
+                "The page may be unavailable, changed, or in an unexpected format. Please contact the DM so they can confirm the XP Tracking page and app configuration.",
+                $"Technical detail: {SanitizeUserFacingDetail(exception.Message)}");
+        }
+
+        internal static string FormatMissingPcFailureMessage(string characterName)
+        {
+            var displayName = string.IsNullOrWhiteSpace(characterName) ? "the requested character" : $"'{characterName.Trim()}'";
+            return string.Join(
+                Environment.NewLine + Environment.NewLine,
+                $"No XP total was found for {displayName}.",
+                "Please contact the DM so they can confirm the XP Tracking page contains your current PC row.");
+        }
+
+        private static string SanitizeUserFacingDetail(string detail)
+        {
+            if (string.IsNullOrWhiteSpace(detail))
+            {
+                return "No additional detail was available.";
+            }
+
+            return System.Text.RegularExpressions.Regex.Replace(
+                detail,
+                @"https?://\S+",
+                $"the {TrackingPageLabel}",
+                System.Text.RegularExpressions.RegexOptions.IgnoreCase);
         }
 
         private static bool TryGetDateLabel(string line, out string dateLabel)

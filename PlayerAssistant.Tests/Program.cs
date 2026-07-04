@@ -134,6 +134,8 @@ var tests = new (string Name, Action Test)[]
     ("xp display stores multiple totals for dungeon master", XpDisplayStoresMultipleTotalsForDungeonMaster),
     ("xp tracking parser reads latest table totals", XpTrackingParserReadsLatestTableTotals),
     ("xp tracking parser rejects missing latest table", XpTrackingParserRejectsMissingLatestTable),
+    ("xp tracking failure message hides url and directs players to dm", XpTrackingFailureMessageHidesUrlAndDirectsPlayersToDm),
+    ("xp tracking missing pc message directs players to dm", XpTrackingMissingPcMessageDirectsPlayersToDm),
     ("external url launch policy accepts http and https", ExternalUrlLaunchPolicyAcceptsHttpAndHttps),
     ("external url launch policy rejects unsafe inputs", ExternalUrlLaunchPolicyRejectsUnsafeInputs),
     ("hero image paths follow listing markdown table", HeroImagePathsFollowListingMarkdownTable),
@@ -3065,6 +3067,28 @@ static void XpTrackingParserRejectsMissingLatestTable()
     AssertContains(exception.Message, "latest XP tracking date does not have a markdown table");
 }
 
+static void XpTrackingFailureMessageHidesUrlAndDirectsPlayersToDm()
+{
+    const string trackingUrl = "https://publish.obsidian.md/scarlethorizons/Intentional+Orphans/XP+Tracking";
+    var message = XpTrackingUtility.FormatUserFacingFailureMessage(
+        new InvalidOperationException($"XP tracking markdown could not be fetched from {trackingUrl}."));
+
+    AssertContains(message, "XP totals could not be loaded from the XP Tracking page.");
+    AssertContains(message, "Please contact the DM");
+    AssertContains(message, "Technical detail:");
+    AssertFalse(message.Contains(trackingUrl, StringComparison.Ordinal), "XP failure dialog should not expose the unlisted tracking URL");
+    AssertFalse(message.Contains("https://", StringComparison.OrdinalIgnoreCase), "XP failure dialog should not expose URL-shaped text");
+}
+
+static void XpTrackingMissingPcMessageDirectsPlayersToDm()
+{
+    var message = XpTrackingUtility.FormatMissingPcFailureMessage("Kelpie");
+
+    AssertContains(message, "No XP total was found for 'Kelpie'.");
+    AssertContains(message, "Please contact the DM");
+    AssertFalse(message.Contains("https://", StringComparison.OrdinalIgnoreCase), "missing-PC message should not expose URL-shaped text");
+}
+
 static void ExternalUrlLaunchPolicyAcceptsHttpAndHttps()
 {
     var http = ExternalUrlLaunchUtility.Validate(" http://rpol.net/path?q=one ");
@@ -3609,11 +3633,13 @@ static void InstallerScriptsTargetProgramFilesInstallPath()
 {
     var installerPath = Path.Combine(GetRepositoryRoot(), "Installer", "install-player-assistant.ps1");
     var launcherPath = Path.Combine(GetRepositoryRoot(), "Installer", "install-player-assistant.cmd");
+    var innoScriptPath = Path.Combine(GetRepositoryRoot(), "Installer", "player-assistant.iss");
     var builderPath = Path.Combine(GetRepositoryRoot(), "build-installer.ps1");
     var verifierPath = Path.Combine(GetRepositoryRoot(), "verify-installer-package.ps1");
 
     AssertTrue(File.Exists(installerPath), "installer script should exist");
     AssertTrue(File.Exists(launcherPath), "installer launcher should exist");
+    AssertTrue(File.Exists(innoScriptPath), "Inno Setup script should exist");
     AssertTrue(File.Exists(builderPath), "installer package builder should exist");
     AssertTrue(File.Exists(verifierPath), "installer package verifier should exist");
 
@@ -3621,6 +3647,14 @@ static void InstallerScriptsTargetProgramFilesInstallPath()
     AssertContains(installer, "kyrathasoft\\player-assistant");
     AssertContains(installer, "CommonPrograms");
     AssertContains(installer, "Uninstall\\KyrathaSoft Player Assistant");
+    var innoScript = File.ReadAllText(innoScriptPath);
+    AssertContains(innoScript, "DefaultDirName={autopf}\\kyrathasoft\\player-assistant");
+    AssertContains(innoScript, "ArchitecturesInstallIn64BitMode=x64compatible");
+    AssertContains(innoScript, ".NET Desktop Runtime 10 x64");
+    AssertContains(innoScript, "https://dotnet.microsoft.com/en-us/download/dotnet/10.0");
+    AssertContains(innoScript, "IsRequiredRuntimeInstalled");
+    AssertContains(innoScript, "Microsoft.WindowsDesktop.App");
+    AssertContains(File.ReadAllText(builderPath), "ISCC.exe");
     AssertContains(File.ReadAllText(builderPath), "app-protected-v2");
     AssertContains(File.ReadAllText(verifierPath), "app-protected-v2");
 }
@@ -4918,9 +4952,9 @@ static void WriteReleaseRuntimeInventory(string directoryPath)
             target_framework = GetProjectProperty("TargetFramework"),
             runtime_identifier = GetProjectProperty("RuntimeIdentifier"),
             self_contained = GetProjectProperty("SelfContained"),
-            publish_single_file = GetProjectProperty("PublishSingleFile"),
+            publish_single_file = "false",
             publish_runtime_identifier = "win-x64",
-            publish_self_contained = "true"
+            publish_self_contained = "false"
         },
         packages,
         scripts = new[]

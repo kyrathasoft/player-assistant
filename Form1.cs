@@ -827,11 +827,11 @@ namespace PlayerAssistant
                     xpToolStripMenuItem.Enabled = true;
                     MessageBox.Show(
                         this,
-                        $"No XP total was found for '{characterName}'.",
+                        XpTrackingUtility.FormatMissingPcFailureMessage(characterName),
                         "XP",
                         MessageBoxButtons.OK,
-                        MessageBoxIcon.Information);
-                    SetStatusBarMessage($"XP total unavailable for {characterName}.");
+                        MessageBoxIcon.Warning);
+                    SetStatusBarMessage($"XP total unavailable for {characterName}. Contact the DM.");
                     return;
                 }
 
@@ -840,12 +840,9 @@ namespace PlayerAssistant
             catch (Exception ex)
             {
                 xpToolStripMenuItem.Enabled = true;
-                await ReportOperationFailureAsync(
-                    "XP display",
-                    "XP total unavailable",
-                    "XP Error",
-                    ex,
-                    showDialog: true);
+                await AppendStartupErrorLogAsync("XP display", ex);
+                SetStatusBarMessage("XP total unavailable. Contact the DM.");
+                ShowWarningDialog("XP Error", XpTrackingUtility.FormatUserFacingFailureMessage(ex));
             }
         }
 
