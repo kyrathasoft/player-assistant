@@ -5,6 +5,8 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
+$RuntimeSidecarVerificationScriptPath = Join-Path $PSScriptRoot 'verify-runtime-sidecars.ps1'
+
 function Assert-RequiredFile {
     param(
         [Parameter(Mandatory = $true)][string]$Path,
@@ -65,6 +67,7 @@ function Test-InstallerDirectory {
 
     Assert-RequiredFile -Path (Join-Path $Directory 'install-player-assistant.ps1') -Description 'installer script'
     Assert-RequiredFile -Path (Join-Path $Directory 'install-player-assistant.cmd') -Description 'installer launcher'
+    Assert-RequiredFile -Path $RuntimeSidecarVerificationScriptPath -Description 'runtime sidecar verification script'
 
     $installerScript = Get-Content -Raw -LiteralPath (Join-Path $Directory 'install-player-assistant.ps1')
     if (!$installerScript.Contains("kyrathasoft\player-assistant")) {
@@ -98,6 +101,17 @@ function Test-InstallerDirectory {
 
     Assert-EncryptedEnvelope -Path (Join-Path $payloadDirectory 'settings.local.json') -Description 'payload settings.local.json'
     Assert-EncryptedEnvelope -Path (Join-Path $payloadDirectory 'xp-passwords.json') -Description 'payload xp-passwords.json'
+    & powershell.exe `
+        -NoProfile `
+        -ExecutionPolicy Bypass `
+        -File $RuntimeSidecarVerificationScriptPath `
+        -AppDir $payloadDirectory `
+        -RequireReadOnlyAttribute `
+        -RequireInstallerScriptProtection `
+        -InstallerScriptPath (Join-Path $Directory 'install-player-assistant.ps1')
+    if ($LASTEXITCODE -ne 0) {
+        throw "Installer package runtime sidecar verification failed."
+    }
 
     $versionInfo = [System.Diagnostics.FileVersionInfo]::GetVersionInfo((Join-Path $payloadDirectory 'player-assistant.exe'))
     if ($versionInfo.ProductVersion -ne $ExpectedVersion) {

@@ -31,6 +31,7 @@ $ReleaseScriptFileNames = @(
     'verify-published-health.ps1',
     'verify-release-publish-parity.ps1',
     'verify-publish-runtime-integrity.ps1',
+    'verify-runtime-sidecars.ps1',
     'verify-release-startup-smoke.ps1',
     'collect-diagnostics.ps1',
     'clean-diagnostics-retention.ps1',
@@ -71,6 +72,32 @@ $RequiredSettingsUrlKeys = @(
     'Obsidian Game Vault'
 )
 $ProcessLockDiagnosticsScriptPath = Join-Path $PSScriptRoot 'diagnose-player-assistant-locks.ps1'
+$RuntimeSidecarVerificationScriptPath = Join-Path $PSScriptRoot 'verify-runtime-sidecars.ps1'
+
+function Protect-RuntimeSidecarFiles {
+    param([Parameter(Mandatory = $true)][string]$Directory)
+
+    foreach ($fileName in @($SettingsLocalFileName, $XpPasswordFileName)) {
+        $path = Join-Path $Directory $fileName
+        Assert-RequiredFile -Path $path -Description "published runtime sidecar $fileName"
+        Set-ItemProperty -LiteralPath $path -Name IsReadOnly -Value $true
+    }
+}
+
+function Invoke-RuntimeSidecarVerification {
+    param([Parameter(Mandatory = $true)][string]$Directory)
+
+    Assert-RequiredFile -Path $RuntimeSidecarVerificationScriptPath -Description 'runtime sidecar verification script'
+    & powershell.exe `
+        -NoProfile `
+        -ExecutionPolicy Bypass `
+        -File $RuntimeSidecarVerificationScriptPath `
+        -AppDir $Directory `
+        -RequireReadOnlyAttribute
+    if ($LASTEXITCODE -ne 0) {
+        throw "Runtime sidecar verification failed for $Directory."
+    }
+}
 
 function Get-ProjectVersionInfo {
     $projectPath = Join-Path $PSScriptRoot $ProjectFileName
@@ -1372,6 +1399,7 @@ function Assert-PublishOutput {
     Assert-NoPlaintextCredentialMarkers -Directory $Directory
     Assert-ReleaseIntegrityManifest -Directory $Directory
     Assert-ReleaseProvenance -Directory $Directory
+    Invoke-RuntimeSidecarVerification -Directory $Directory
 }
 
 function Invoke-ProcessLockDiagnostics {
@@ -1443,6 +1471,7 @@ Copy-Item -LiteralPath (Join-Path $PSScriptRoot "Release\$SitemapFileName") -Des
 Copy-Item -LiteralPath (Join-Path $PSScriptRoot "Release\$SitemapKeywordUrlsFileName") -Destination (Join-Path $resolvedOutputDir $SitemapKeywordUrlsFileName) -Force
 Copy-Item -LiteralPath (Join-Path $PSScriptRoot $XpPasswordFileName) -Destination (Join-Path $resolvedOutputDir $XpPasswordFileName) -Force
 Write-AppEncryptedLocalSettings -SourcePath (Join-Path $PSScriptRoot $SettingsLocalFileName) -DestinationPath (Join-Path $resolvedOutputDir $SettingsLocalFileName)
+Protect-RuntimeSidecarFiles -Directory $resolvedOutputDir
 Write-ReleaseRuntimeInventory -Directory $resolvedOutputDir
 Write-ReleaseIntegrityManifest -Directory $resolvedOutputDir
 Write-ReleaseProvenance -Directory $resolvedOutputDir

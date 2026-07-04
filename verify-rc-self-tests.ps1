@@ -9,6 +9,7 @@ $SecretScanScriptPath = Join-Path $PSScriptRoot 'verify-secret-scan.ps1'
 $RcChecklistScriptPath = Join-Path $PSScriptRoot 'verify-rc-checklist.ps1'
 $PublishScriptPath = Join-Path $PSScriptRoot 'publish-player-assistant.ps1'
 $PublishRuntimeIntegrityScriptPath = Join-Path $PSScriptRoot 'verify-publish-runtime-integrity.ps1'
+$RuntimeSidecarScriptPath = Join-Path $PSScriptRoot 'verify-runtime-sidecars.ps1'
 $SelfTestRoot = Join-Path $PSScriptRoot '.rc-self-tests'
 $DependencyInventoryPath = Join-Path $PSScriptRoot 'codex-scratch\rc-dependency-inventory.json'
 
@@ -350,6 +351,7 @@ function Invoke-ExpectedPathSelfTest {
             (Resolve-FullPath $PublishDir),
             '-ExpectedChangedPath',
             '__missing_expected_path_for_rc_self_test__.txt',
+            '-SkipGitDiffCheck',
             '-SkipSelfTests',
             '-SkipSecretScan',
             '-SkipTests',
@@ -357,7 +359,8 @@ function Invoke-ExpectedPathSelfTest {
             '-SkipPublishedHealth',
             '-SkipPublishRuntimeIntegrity',
             '-SkipDiagnostics',
-            '-SkipDependencyChecks'
+            '-SkipDependencyChecks',
+            '-SkipRuntimeSidecarChecks'
         ) `
         -ExpectedText 'Git status does not match ExpectedChangedPath.'
 }
@@ -384,7 +387,8 @@ function Invoke-DryRunJsonPassingSelfTest {
         '-SkipPublishedHealth',
         '-SkipPublishRuntimeIntegrity',
         '-SkipDiagnostics',
-        '-SkipDependencyChecks'
+        '-SkipDependencyChecks',
+        '-SkipRuntimeSidecarChecks'
     )
 
     Assert-CommandPasses `
@@ -415,6 +419,7 @@ function Invoke-DryRunJsonFailingSelfTest {
             '__missing_expected_path_for_rc_dry_run_self_test__.txt',
             '-DryRunJson',
             $summaryPath,
+            '-SkipGitDiffCheck',
             '-SkipSelfTests',
             '-SkipSecretScan',
             '-SkipTests',
@@ -422,7 +427,8 @@ function Invoke-DryRunJsonFailingSelfTest {
             '-SkipPublishedHealth',
             '-SkipPublishRuntimeIntegrity',
             '-SkipDiagnostics',
-            '-SkipDependencyChecks'
+            '-SkipDependencyChecks',
+            '-SkipRuntimeSidecarChecks'
         ) `
         -ExpectedText 'RC checklist dry-run failed.'
 
@@ -465,7 +471,8 @@ Project `player-assistant` has the following vulnerable packages
                 '-SkipReleasePublishParity',
                 '-SkipPublishedHealth',
                 '-SkipPublishRuntimeIntegrity',
-                '-SkipDiagnostics'
+                '-SkipDiagnostics',
+                '-SkipRuntimeSidecarChecks'
             ) `
             -ExpectedText 'RC checklist dry-run failed.'
 
@@ -482,6 +489,62 @@ Project `player-assistant` has the following vulnerable packages
     }
 }
 
+function New-EncryptedSidecarFixture {
+    param([Parameter(Mandatory = $true)][string]$Path)
+
+    [pscustomobject]@{
+        schema_version = 1
+        format = 'app-protected-v2'
+        payload = [Convert]::ToBase64String([System.Text.Encoding]::UTF8.GetBytes('fixture-payload'))
+    } | ConvertTo-Json -Depth 4 | Set-Content -LiteralPath $Path -Encoding UTF8
+}
+
+function Invoke-RuntimeSidecarSelfTest {
+    $missingSidecarDir = Join-Path $SelfTestRoot 'missing-sidecar-payload'
+    New-DirectoryClean -Path $missingSidecarDir
+    New-EncryptedSidecarFixture -Path (Join-Path $missingSidecarDir 'settings.local.json')
+
+    Assert-CommandFailsWith `
+        -Name 'runtime sidecar verifier catches missing XP sidecar' `
+        -FileName 'powershell.exe' `
+        -Arguments @(
+            '-NoProfile',
+            '-ExecutionPolicy',
+            'Bypass',
+            '-File',
+            $RuntimeSidecarScriptPath,
+            '-AppDir',
+            $missingSidecarDir
+        ) `
+        -ExpectedText 'Required runtime sidecar xp-passwords.json is missing'
+
+    $plaintextSidecarDir = Join-Path $SelfTestRoot 'plaintext-sidecar-payload'
+    New-DirectoryClean -Path $plaintextSidecarDir
+    New-EncryptedSidecarFixture -Path (Join-Path $plaintextSidecarDir 'settings.local.json')
+    @'
+{
+  "schema_version": 1,
+  "format": "app-protected-v2",
+  "payload": "Lucian99!",
+  "Dungeon Master": "Lucian99!"
+}
+'@ | Set-Content -LiteralPath (Join-Path $plaintextSidecarDir 'xp-passwords.json') -Encoding UTF8
+
+    Assert-CommandFailsWith `
+        -Name 'runtime sidecar verifier catches plaintext XP sidecar' `
+        -FileName 'powershell.exe' `
+        -Arguments @(
+            '-NoProfile',
+            '-ExecutionPolicy',
+            'Bypass',
+            '-File',
+            $RuntimeSidecarScriptPath,
+            '-AppDir',
+            $plaintextSidecarDir
+        ) `
+        -ExpectedText "Runtime sidecar xp-passwords.json contains plaintext sensitive marker"
+}
+
 Assert-PathInsideRepo -Path $SelfTestRoot -Description 'RC self-test workspace'
 
 try {
@@ -493,6 +556,7 @@ try {
     Invoke-DryRunJsonPassingSelfTest
     Invoke-DryRunJsonFailingSelfTest
     Invoke-DependencyVulnerabilitySelfTest
+    Invoke-RuntimeSidecarSelfTest
 }
 finally {
     if (Test-Path -LiteralPath $SelfTestRoot) {

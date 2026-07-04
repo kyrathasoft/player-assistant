@@ -11,6 +11,7 @@ $ErrorActionPreference = 'Stop'
 $SettingsEncryptionSeed = 'PlayerAssistant.LocalSettings.v1'
 $SettingsSchemaVersion = 1
 $SettingsLocalFileName = 'settings.local.json'
+$XpPasswordFileName = 'xp-passwords.json'
 $PackageRootName = "player-assistant-$Version"
 $PackageFileName = "player-assistant-$Version-installer.zip"
 $InnoScriptPath = Join-Path $PSScriptRoot 'Installer\player-assistant.iss'
@@ -28,6 +29,16 @@ function Assert-RequiredFile {
 
     if ((Get-Item -LiteralPath $Path).Length -le 0) {
         throw "Required $Description is empty: $Path"
+    }
+}
+
+function Protect-RuntimeSidecarFiles {
+    param([Parameter(Mandatory = $true)][string]$Directory)
+
+    foreach ($fileName in @($SettingsLocalFileName, $XpPasswordFileName)) {
+        $path = Join-Path $Directory $fileName
+        Assert-RequiredFile -Path $path -Description "installer payload runtime sidecar $fileName"
+        Set-ItemProperty -LiteralPath $path -Name IsReadOnly -Value $true
     }
 }
 
@@ -311,6 +322,7 @@ Copy-DirectoryContents -Source $PublishDir -Destination $payloadRoot
 
 $sourceSettings = ConvertFrom-SettingsFile -Path (Join-Path $PSScriptRoot $SettingsLocalFileName)
 Write-PortableEncryptedSettings -Settings $sourceSettings -DestinationPath (Join-Path $payloadRoot $SettingsLocalFileName)
+Protect-RuntimeSidecarFiles -Directory $payloadRoot
 
 Compress-Archive -LiteralPath $packageRoot -DestinationPath $packagePath -Force
 

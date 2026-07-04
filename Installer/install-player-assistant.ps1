@@ -13,6 +13,10 @@ $Publisher = 'KyrathaSoft'
 $Version = '0.9.0-hardening.5'
 $ExecutableName = 'player-assistant.exe'
 $UninstallKeyPath = 'HKLM:\Software\Microsoft\Windows\CurrentVersion\Uninstall\KyrathaSoft Player Assistant'
+$EncryptedSidecarFileNames = @(
+    'settings.local.json',
+    'xp-passwords.json'
+)
 
 function Test-IsAdministrator {
     $identity = [Security.Principal.WindowsIdentity]::GetCurrent()
@@ -153,6 +157,37 @@ function Grant-AppDirectoryAccess {
     }
 }
 
+function Protect-EncryptedSidecars {
+    param([Parameter(Mandatory = $true)][string]$Directory)
+
+    $systemSid = '*S-1-5-18'
+    $administratorsSid = '*S-1-5-32-544'
+    $usersSid = '*S-1-5-32-545'
+
+    foreach ($fileName in $EncryptedSidecarFileNames) {
+        $path = Join-Path $Directory $fileName
+        Assert-RequiredFile -Path $path -Description "installed encrypted sidecar $fileName"
+        Set-ItemProperty -LiteralPath $path -Name IsReadOnly -Value $true
+
+        & icacls.exe $path /inheritance:r /grant:r "${systemSid}:F" "${administratorsSid}:F" "${usersSid}:RX" | Out-Null
+        if ($LASTEXITCODE -ne 0) {
+            throw "Unable to restrict standard Users write access to $path."
+        }
+    }
+}
+
+function Assert-ProtectedEncryptedSidecars {
+    param([Parameter(Mandatory = $true)][string]$Directory)
+
+    foreach ($fileName in $EncryptedSidecarFileNames) {
+        $path = Join-Path $Directory $fileName
+        Assert-RequiredFile -Path $path -Description "installed encrypted sidecar $fileName"
+        if (!(Get-Item -LiteralPath $path).IsReadOnly) {
+            throw "Installed encrypted sidecar $fileName was not marked read-only."
+        }
+    }
+}
+
 function New-Shortcut {
     param(
         [Parameter(Mandatory = $true)][string]$ShortcutPath,
@@ -246,6 +281,8 @@ function Install-PlayerAssistant {
 
         Write-Step 'Applying application directory permissions...'
         Grant-AppDirectoryAccess -Directory $resolvedInstallDir
+        Protect-EncryptedSidecars -Directory $resolvedInstallDir
+        Assert-ProtectedEncryptedSidecars -Directory $resolvedInstallDir
 
         $executablePath = Join-Path $resolvedInstallDir $ExecutableName
         Write-Step 'Creating shortcuts...'

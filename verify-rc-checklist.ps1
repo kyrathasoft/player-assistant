@@ -13,6 +13,7 @@ param(
     [string]$DryRunJson,
     [switch]$SkipSecretScan,
     [switch]$SkipGit,
+    [switch]$SkipGitDiffCheck,
     [switch]$SkipSelfTests,
     [switch]$SkipTests,
     [switch]$SkipReleasePublishParity,
@@ -20,6 +21,7 @@ param(
     [switch]$SkipPublishRuntimeIntegrity,
     [switch]$SkipDiagnostics,
     [switch]$SkipDependencyChecks,
+    [switch]$SkipRuntimeSidecarChecks,
     [string]$DependencyVulnerabilityOutputFixture
 )
 
@@ -35,6 +37,7 @@ $ReleasePublishParityScriptPath = Join-Path $PSScriptRoot 'verify-release-publis
 $PublishedHealthScriptPath = Join-Path $PSScriptRoot 'verify-published-health.ps1'
 $PublishRuntimeIntegrityScriptPath = Join-Path $PSScriptRoot 'verify-publish-runtime-integrity.ps1'
 $DiagnosticsScriptPath = Join-Path $PSScriptRoot 'collect-diagnostics.ps1'
+$RuntimeSidecarScriptPath = Join-Path $PSScriptRoot 'verify-runtime-sidecars.ps1'
 $DependencyInventoryPath = Join-Path $PSScriptRoot 'codex-scratch\rc-dependency-inventory.json'
 $RcDryRunSteps = [System.Collections.Generic.List[object]]::new()
 $RcDryRunFailed = $false
@@ -302,8 +305,13 @@ function Test-GitReady {
         return
     }
 
-    Write-Output "Checking working tree diff hygiene..."
-    [void](Invoke-GitCommand -Arguments @('diff', '--check'))
+    if ($SkipGitDiffCheck) {
+        Write-Output "Skipping git diff --check because -SkipGitDiffCheck was supplied."
+    }
+    else {
+        Write-Output "Checking working tree diff hygiene..."
+        [void](Invoke-ExternalCommand -FileName 'git' -Arguments @('diff', '--check'))
+    }
 
     $status = Invoke-GitCommand -Arguments @('status', '--short')
     $statusLines = @()
@@ -971,6 +979,30 @@ function Invoke-DiagnosticsBundleCheck {
     }
 }
 
+function Invoke-RuntimeSidecarCheck {
+    if ($SkipRuntimeSidecarChecks) {
+        Write-Output "Skipping runtime sidecar checks because -SkipRuntimeSidecarChecks was supplied."
+        return
+    }
+
+    Assert-RequiredFile -Path $RuntimeSidecarScriptPath -Description 'runtime sidecar verification script'
+    [void](Invoke-ExternalCommand `
+        -FileName 'powershell.exe' `
+        -Arguments @(
+            '-NoProfile',
+            '-ExecutionPolicy',
+            'Bypass',
+            '-File',
+            $RuntimeSidecarScriptPath,
+            '-AppDir',
+            $resolvedPublishDir,
+            '-RequireReadOnlyAttribute',
+            '-RequireInstallerScriptProtection',
+            '-InstallerScriptPath',
+            (Join-Path $PSScriptRoot 'Installer\install-player-assistant.ps1')
+        ))
+}
+
 function Write-ReleaseCommands {
     param(
         [Parameter(Mandatory = $true)]
@@ -1072,6 +1104,17 @@ Invoke-RcChecklistStep `
     -Command "powershell.exe -NoProfile -ExecutionPolicy Bypass -File $PublishRuntimeIntegrityScriptPath -ReleaseDir $resolvedReleaseDir -PublishDir $resolvedPublishDir" `
     -Artifacts @($PublishRuntimeIntegrityScriptPath, $resolvedReleaseDir, $resolvedPublishDir) `
     -Action { Invoke-PublishRuntimeIntegrityCheck }
+
+Invoke-RcChecklistStep `
+    -Name 'runtime sidecar ACL and path validation' `
+    -Command "powershell.exe -NoProfile -ExecutionPolicy Bypass -File $RuntimeSidecarScriptPath -AppDir $resolvedPublishDir -RequireReadOnlyAttribute -RequireInstallerScriptProtection" `
+    -Artifacts @(
+        $RuntimeSidecarScriptPath,
+        (Join-Path $resolvedPublishDir 'settings.local.json'),
+        (Join-Path $resolvedPublishDir 'xp-passwords.json'),
+        (Join-Path $PSScriptRoot 'Installer\install-player-assistant.ps1')
+    ) `
+    -Action { Invoke-RuntimeSidecarCheck }
 
 Invoke-RcChecklistStep `
     -Name 'diagnostic bundle' `
