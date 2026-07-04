@@ -12,6 +12,7 @@ namespace PlayerAssistant
         private const string GameIntroSettingsKey = "Game Intro";
         private const string TheCastSettingsKey = "The Cast";
         private const string ObsidianGameVaultSettingsKey = "Obsidian Game Vault";
+        private const string XpTrackingSettingsKey = "XP Tracking";
         private const string SchemaVersionSettingsKey = "schema_version";
         private const int CurrentSettingsSchemaVersion = 1;
         private static readonly Lazy<IReadOnlyDictionary<string, string>> Settings = new(LoadSettings);
@@ -22,6 +23,7 @@ namespace PlayerAssistant
         public static string GameIntroUrl => Settings.Value[GameIntroSettingsKey];
         public static string TheCastUrl => Settings.Value[TheCastSettingsKey];
         public static string ObsidianGameVaultUrl => Settings.Value[ObsidianGameVaultSettingsKey].TrimEnd('/');
+        public static string XpTrackingUrl => Settings.Value[XpTrackingSettingsKey];
 
         public static void Load()
         {
@@ -59,6 +61,7 @@ namespace PlayerAssistant
             ValidateHttpUrlSetting(settings, GameIntroSettingsKey, NetworkUrlPurpose.Rpol);
             ValidateHttpUrlSetting(settings, TheCastSettingsKey, NetworkUrlPurpose.Rpol);
             ValidateHttpUrlSetting(settings, ObsidianGameVaultSettingsKey, NetworkUrlPurpose.ObsidianPublish);
+            ValidateHttpUrlSetting(settings, XpTrackingSettingsKey, NetworkUrlPurpose.ObsidianPublish);
 
             return settings;
         }

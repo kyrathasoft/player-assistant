@@ -14,7 +14,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("PlayerAssistantLauncher")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Release")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+05e0d716f7d02bd472b88804b32cb986edbca0d2")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+c00d5dc0f4baeb3e6e13e53827938c2aac722246")]
 [assembly: System.Reflection.AssemblyProductAttribute("PlayerAssistantLauncher")]
 [assembly: System.Reflection.AssemblyTitleAttribute("PlayerAssistantLauncher")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]

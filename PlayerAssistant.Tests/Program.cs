@@ -37,6 +37,9 @@ var tests = new (string Name, Action Test)[]
     ("app configuration validation accepts complete runtime", AppConfigurationValidationAcceptsCompleteRuntime),
     ("settings json accepts current schema version", SettingsJsonAcceptsCurrentSchemaVersion),
     ("settings json rejects future schema version", SettingsJsonRejectsFutureSchemaVersion),
+    ("app settings loads encrypted xp tracking url", AppSettingsLoadsEncryptedXpTrackingUrl),
+    ("xp password store loads encrypted sidecar", XpPasswordStoreLoadsEncryptedSidecar),
+    ("xp password store rejects plaintext sidecar", XpPasswordStoreRejectsPlaintextSidecar),
     ("app configuration validation reports missing url", AppConfigurationValidationReportsMissingUrl),
     ("app configuration validation rejects disallowed network host", AppConfigurationValidationRejectsDisallowedNetworkHost),
     ("app configuration validation writes repair guidance", AppConfigurationValidationWritesRepairGuidance),
@@ -121,11 +124,16 @@ var tests = new (string Name, Action Test)[]
     ("keyword search keeps quoted phrases together", KeywordSearchKeepsQuotedPhrasesTogether),
     ("keyword search accepts url source metadata", KeywordSearchAcceptsUrlSourceMetadata),
     ("keyword search filters rpol hero metadata-only hits", KeywordSearchFiltersRpolHeroMetadataOnlyHits),
+    ("show menu contains xp item", ShowMenuContainsXpItem),
     ("search enter triggers click when enabled", SearchEnterTriggersClickWhenEnabled),
     ("keyword search offers online fallback on local miss", KeywordSearchOffersOnlineFallbackOnLocalMiss),
     ("keyword search cancels previous online fallback", KeywordSearchCancelsPreviousOnlineFallback),
     ("keyword search rpol scope excludes obsidian-only whiteheart", KeywordSearchRpolScopeExcludesObsidianOnlyWhiteheart),
     ("keyword search rpol scope excludes obsidian-only whiteheart stiffwhiskers", KeywordSearchRpolScopeExcludesObsidianOnlyWhiteheartStiffwhiskers),
+    ("xp display recognizes dungeon master access", XpDisplayRecognizesDungeonMasterAccess),
+    ("xp display stores multiple totals for dungeon master", XpDisplayStoresMultipleTotalsForDungeonMaster),
+    ("xp tracking parser reads latest table totals", XpTrackingParserReadsLatestTableTotals),
+    ("xp tracking parser rejects missing latest table", XpTrackingParserRejectsMissingLatestTable),
     ("external url launch policy accepts http and https", ExternalUrlLaunchPolicyAcceptsHttpAndHttps),
     ("external url launch policy rejects unsafe inputs", ExternalUrlLaunchPolicyRejectsUnsafeInputs),
     ("hero image paths follow listing markdown table", HeroImagePathsFollowListingMarkdownTable),
@@ -146,6 +154,8 @@ var tests = new (string Name, Action Test)[]
     ("publish verification rejects malformed settings json", PublishVerificationRejectsMalformedSettingsJson),
     ("publish verification rejects future settings schema", PublishVerificationRejectsFutureSettingsSchema),
     ("publish verification rejects future local settings schema", PublishVerificationRejectsFutureLocalSettingsSchema),
+    ("publish verification rejects missing xp password sidecar", PublishVerificationRejectsMissingXpPasswordSidecar),
+    ("publish verification rejects plaintext xp password sidecar", PublishVerificationRejectsPlaintextXpPasswordSidecar),
     ("publish verification rejects malformed keyword index", PublishVerificationRejectsMalformedKeywordIndex),
     ("publish verification rejects malformed sitemap", PublishVerificationRejectsMalformedSitemap),
     ("publish verification rejects incomplete playwright runtime", PublishVerificationRejectsIncompletePlaywrightRuntime),
@@ -457,7 +467,8 @@ static void SettingsJsonAcceptsCurrentSchemaVersion()
           "RPOL Site": "https://rpol.net/game.php?gi=80170",
           "Game Intro": "https://rpol.net/gameinfo.php?gi=80170",
           "The Cast": "https://rpol.net/gameinfo.php?action=cast&gi=80170",
-          "Obsidian Game Vault": "https://publish.obsidian.md/scarlethorizons"
+          "Obsidian Game Vault": "https://publish.obsidian.md/scarlethorizons",
+          "XP Tracking": "https://publish.obsidian.md/scarlethorizons/Intentional+Orphans/XP+Tracking"
         }
         """);
 
@@ -478,13 +489,89 @@ static void SettingsJsonRejectsFutureSchemaVersion()
           "RPOL Site": "https://rpol.net/game.php?gi=80170",
           "Game Intro": "https://rpol.net/gameinfo.php?gi=80170",
           "The Cast": "https://rpol.net/gameinfo.php?action=cast&gi=80170",
-          "Obsidian Game Vault": "https://publish.obsidian.md/scarlethorizons"
+          "Obsidian Game Vault": "https://publish.obsidian.md/scarlethorizons",
+          "XP Tracking": "https://publish.obsidian.md/scarlethorizons/Intentional+Orphans/XP+Tracking"
         }
         """);
 
     var exception = AssertThrows<InvalidOperationException>(() =>
         AppSettingsUtility.LoadSettings(directory.Path));
     AssertContains(exception.Message, "unsupported schema version 99");
+}
+
+static void AppSettingsLoadsEncryptedXpTrackingUrl()
+{
+    using var directory = TemporaryDirectory.Create();
+    File.WriteAllText(
+        Path.Combine(directory.Path, "settings.json"),
+        """
+        {
+          "schema_version": 1,
+          "RPOL Site": "https://rpol.net/game.php?gi=80170",
+          "Game Intro": "https://rpol.net/gameinfo.php?gi=80170",
+          "The Cast": "https://rpol.net/gameinfo.php?action=cast&gi=80170",
+          "Obsidian Game Vault": "https://publish.obsidian.md/scarlethorizons"
+        }
+        """);
+
+    var localSettingsPath = Path.Combine(directory.Path, "settings.local.json");
+    LocalSettingsUtility.SaveEncryptedSettings(
+        localSettingsPath,
+        new Dictionary<string, string>
+        {
+            ["XP Tracking"] = "https://publish.obsidian.md/scarlethorizons/Intentional+Orphans/XP+Tracking"
+        });
+
+    var settings = AppSettingsUtility.LoadSettings(directory.Path);
+
+    AssertEqual(
+        "https://publish.obsidian.md/scarlethorizons/Intentional+Orphans/XP+Tracking",
+        settings["XP Tracking"],
+        "encrypted local settings should provide the XP Tracking URL");
+    AssertTrue(LocalSettingsUtility.IsEncryptedSettingsFile(localSettingsPath), "XP Tracking URL should be stored in encrypted local settings");
+}
+
+static void XpPasswordStoreLoadsEncryptedSidecar()
+{
+    using var directory = TemporaryDirectory.Create();
+    var sidecarPath = Path.Combine(directory.Path, XpPasswordStoreUtility.FileName);
+    LocalSettingsUtility.SavePortableEncryptedSettings(
+        sidecarPath,
+        new Dictionary<string, string>
+        {
+            ["Kelpie"] = "gemstone",
+            ["Jelb"] = "spell-component"
+        });
+
+    var passwords = XpPasswordStoreUtility.LoadPasswords(directory.Path);
+
+    AssertEqual("gemstone", passwords["Kelpie"], "unexpected Kelpie XP password");
+    AssertTrue(
+        XpPasswordStoreUtility.ValidatePassword("Kelpie", "gemstone", directory.Path),
+        "matching XP password should validate");
+    AssertFalse(
+        XpPasswordStoreUtility.ValidatePassword("Kelpie", "wrong", directory.Path),
+        "wrong XP password should be rejected");
+    AssertFalse(
+        File.ReadAllText(sidecarPath).Contains("gemstone", StringComparison.Ordinal),
+        "encrypted XP password sidecar should not contain plaintext password material");
+}
+
+static void XpPasswordStoreRejectsPlaintextSidecar()
+{
+    using var directory = TemporaryDirectory.Create();
+    File.WriteAllText(
+        Path.Combine(directory.Path, XpPasswordStoreUtility.FileName),
+        """
+        {
+          "Kelpie": "gemstone"
+        }
+        """);
+
+    var exception = AssertThrows<InvalidOperationException>(() =>
+        XpPasswordStoreUtility.LoadPasswords(directory.Path));
+
+    AssertContains(exception.Message, "authenticated encrypted envelope");
 }
 
 static void AppConfigurationValidationReportsMissingUrl()
@@ -2661,6 +2748,23 @@ static void KeywordSearchFiltersRpolHeroMetadataOnlyHits()
     });
 }
 
+static void ShowMenuContainsXpItem()
+{
+    RunOnStaThread(() =>
+    {
+        using var form = new Form1(suppressHeroImagesForThisRun: true);
+        var showMenuItem = (ToolStripMenuItem)(GetPrivateField(form, "showToolStripMenuItem")
+            ?? throw new InvalidOperationException("showToolStripMenuItem was null."));
+        var xpMenuItem = (ToolStripMenuItem)(GetPrivateField(form, "xpToolStripMenuItem")
+            ?? throw new InvalidOperationException("xpToolStripMenuItem was null."));
+
+        AssertEqual("XP", xpMenuItem.Text ?? string.Empty, "unexpected XP menu item text");
+        AssertTrue(
+            showMenuItem.DropDownItems.Cast<ToolStripItem>().Contains(xpMenuItem),
+            "Show menu should contain the XP item");
+    });
+}
+
 static void SearchEnterTriggersClickWhenEnabled()
 {
     RunOnStaThread(() =>
@@ -2877,6 +2981,86 @@ static void KeywordSearchRpolScopeExcludesObsidianOnlyWhiteheartStiffwhiskers()
         var results = lstSearchResults.Items.Cast<object>().Select(item => item?.ToString()).ToArray();
         AssertEqual(0, results.Length, "expected RPOL-only search to exclude the Obsidian-only whiteheart stiffwhiskers entry");
     });
+}
+
+static void XpDisplayRecognizesDungeonMasterAccess()
+{
+    AssertTrue(
+        (bool)(InvokeStaticMethod(typeof(Form1), "IsDungeonMasterXpAccess", "Dungeon Master") ?? false),
+        "Dungeon Master should unlock all XP totals");
+    AssertTrue(
+        (bool)(InvokeStaticMethod(typeof(Form1), "IsDungeonMasterXpAccess", "dungeon master") ?? false),
+        "Dungeon Master XP access should be case-insensitive");
+    AssertFalse(
+        (bool)(InvokeStaticMethod(typeof(Form1), "IsDungeonMasterXpAccess", "Kelpie") ?? true),
+        "ordinary PCs should not unlock all XP totals");
+}
+
+static void XpDisplayStoresMultipleTotalsForDungeonMaster()
+{
+    RunOnStaThread(() =>
+    {
+        using var form = new Form1(suppressHeroImagesForThisRun: true);
+        var totals = new PcXpTotal[]
+        {
+            new("Kelpie", 7062),
+            new("Jelb", 8575)
+        };
+
+        InvokePrivateMethod(form, "ShowXpTotals", "As of 7.04.2026", totals);
+
+        var storedTotals = (IReadOnlyList<PcXpTotal>)(GetPrivateField(form, "_xpTotals")
+            ?? throw new InvalidOperationException("_xpTotals was null."));
+        AssertEqual(2, storedTotals.Count, "Dungeon Master XP display should retain all requested totals");
+        AssertEqual(new PcXpTotal("Kelpie", 7062), storedTotals[0], "unexpected first stored XP total");
+        AssertTrue((bool)(GetPrivateField(form, "_showXpTotal") ?? false), "XP display should be active");
+    });
+}
+
+static void XpTrackingParserReadsLatestTableTotals()
+{
+    const string markdown =
+        """
+        ---
+        status: XP
+        ---
+        As of 7.04.2026
+
+        | Name     | Class       | Level | XP Total |
+        | -------- | ----------- | ----- | -------- |
+        | Kelpie   | Fighter     | 3     | 7,062    |
+        | Jelb     | Illusionist | 2     | 8,575    |
+        | Max      | Theurge     | 1     | 3,175    |
+        | Geoffroy | Cleric      | 2     | 2,950    |
+
+        As of 7.01.2026
+
+        | Name     | Class       | Level | XP Total |
+        | -------- | ----------- | ----- | -------- |
+        | Kelpie   | Fighter     | 3     | 6,562    |
+        | Jelb     | Illusionist | 2     | 8,075    |
+        """;
+
+    var totals = XpTrackingUtility.ParseCurrentXpTotals(markdown).ToArray();
+
+    AssertEqual(4, totals.Length, "expected latest XP table to contain four current PCs");
+    AssertEqual(new PcXpTotal("Kelpie", 7062), totals[0], "unexpected Kelpie XP total");
+    AssertEqual(new PcXpTotal("Jelb", 8575), totals[1], "unexpected Jelb XP total");
+    AssertEqual(new PcXpTotal("Max", 3175), totals[2], "unexpected Max XP total");
+    AssertEqual(new PcXpTotal("Geoffroy", 2950), totals[3], "unexpected Geoffroy XP total");
+}
+
+static void XpTrackingParserRejectsMissingLatestTable()
+{
+    var exception = AssertThrows<InvalidOperationException>(() =>
+        XpTrackingUtility.ParseCurrentXpTotals(
+            """
+            As of 7.04.2026
+
+            No table today.
+            """));
+
+    AssertContains(exception.Message, "latest XP tracking date does not have a markdown table");
 }
 
 static void ExternalUrlLaunchPolicyAcceptsHttpAndHttps()
@@ -3269,6 +3453,38 @@ static void PublishVerificationRejectsFutureLocalSettingsSchema()
 
         AssertFalse(output.ExitCode == 0, "publish verification should fail when settings.local.json uses a future schema");
         AssertContains(output.Output, "settings.local.json uses unsupported schema version 99");
+    });
+}
+
+static void PublishVerificationRejectsMissingXpPasswordSidecar()
+{
+    WithCopiedPublishDirectory(directoryPath =>
+    {
+        File.Delete(Path.Combine(directoryPath, XpPasswordStoreUtility.FileName));
+
+        var output = RunPublishVerification(directoryPath);
+
+        AssertFalse(output.ExitCode == 0, "publish verification should fail when xp-passwords.json is missing");
+        AssertContains(output.Output, XpPasswordStoreUtility.FileName);
+    });
+}
+
+static void PublishVerificationRejectsPlaintextXpPasswordSidecar()
+{
+    WithCopiedPublishDirectory(directoryPath =>
+    {
+        File.WriteAllText(
+            Path.Combine(directoryPath, XpPasswordStoreUtility.FileName),
+            """
+            {
+              "Kelpie": "gemstone"
+            }
+            """);
+
+        var output = RunPublishVerification(directoryPath);
+
+        AssertFalse(output.ExitCode == 0, "publish verification should fail when xp-passwords.json is plaintext");
+        AssertContains(output.Output, "encrypted app-protected format");
     });
 }
 
@@ -4521,7 +4737,8 @@ static Dictionary<string, string> CreateValidAppSettings(bool includeCredentials
         ["RPOL Site"] = "https://rpol.net/game.php?gi=80170",
         ["Game Intro"] = "https://rpol.net/gameinfo.php?gi=80170",
         ["The Cast"] = "https://rpol.net/gameinfo.php?action=cast&gi=80170",
-        ["Obsidian Game Vault"] = "https://publish.obsidian.md/scarlethorizons"
+        ["Obsidian Game Vault"] = "https://publish.obsidian.md/scarlethorizons",
+        ["XP Tracking"] = "https://publish.obsidian.md/scarlethorizons/Intentional+Orphans/XP+Tracking"
     };
 
     if (includeCredentials)
@@ -4579,6 +4796,12 @@ static void WriteRequiredRuntimeSidecars(string directoryPath)
     File.WriteAllText(Path.Combine(directoryPath, KeywordTermsFileUtility.FileName), "scarlet");
     File.WriteAllText(Path.Combine(directoryPath, "sitemap.xml"), "<urlset />");
     File.WriteAllText(Path.Combine(directoryPath, "sitemap-keyword-urls.json"), "{}");
+    LocalSettingsUtility.SavePortableEncryptedSettings(
+        Path.Combine(directoryPath, XpPasswordStoreUtility.FileName),
+        new Dictionary<string, string>
+        {
+            ["Kelpie"] = "gemstone"
+        });
 }
 
 static void WriteManifestedRuntime(string directoryPath)
@@ -4760,6 +4983,7 @@ static string[] GetReleaseManifestRelativePaths()
         "player-assistant.exe",
         "settings.json",
         "settings.local.json",
+        XpPasswordStoreUtility.FileName,
         "release-runtime-inventory.json",
         "keyword-index.json",
         KeywordTermsFileUtility.FileName,

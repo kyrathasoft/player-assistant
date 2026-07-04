@@ -78,3 +78,43 @@ System.Net.Http.HttpRequestException: RPoL request to 'https://rpol.net/game.php
    at PlayerAssistant.KeywordIndexCrawler.DiscoverRpolUrlsAsync(CancellationToken cancellationToken)
    at PlayerAssistant.KeywordIndexCrawler.BuildIndexAsync(IProgress`1 progress, CancellationToken cancellationToken)
    at PlayerAssistant.Form1.<>c__DisplayClass110_0.<<StartKeywordIndexCrawler>b__0>d.MoveNext()
+[2026-07-04T08:12:31.9713810-05:00] RPOL authentication
+PlayerAssistant.RpolAuthException: RPoL blocked authenticated access to 'https://rpol.net/game.php?gi=80170' with status 403. Check credentials, account access, rate limits, or site-side blocking.
+   at PlayerAssistant.RpolAuthUtility.EnsureSuccessfulResponse(Uri uri, IResponse response)
+   at PlayerAssistant.RpolAuthUtility.GetPageHtmlAsync(IBrowserContext context, Uri uri, CancellationToken cancellationToken)
+   at PlayerAssistant.RpolAuthUtility.GetPageHtmlAsync(IBrowserContext context, Uri uri, CancellationToken cancellationToken)
+   at PlayerAssistant.RpolAuthUtility.GetHtmlFromUrlAsync(Uri uri, CancellationToken cancellationToken)
+[2026-07-04T08:12:32.3061458-05:00] game forum startup
+PlayerAssistant.RpolAuthException: RPoL blocked authenticated access to 'https://rpol.net/game.php?gi=80170' with status 403. Check credentials, account access, rate limits, or site-side blocking.
+   at PlayerAssistant.RpolAuthUtility.GetHtmlFromUrlAsync(Uri uri, CancellationToken cancellationToken)
+   at PlayerAssistant.HtmlUtility.GetHtmlFromUrlAsync(Uri uri, CancellationToken cancellationToken)
+   at PlayerAssistant.HtmlUtility.GetHtmlFromUrlAsync(Uri uri, CancellationToken cancellationToken)
+   at PlayerAssistant.HtmlUtility.GetHyperlinksFromUrlAsync(Uri uri, CancellationToken cancellationToken)
+   at PlayerAssistant.HtmlUtility.GetHyperlinksFromUrlAsync(Uri uri, CancellationToken cancellationToken)
+   at PlayerAssistant.HtmlUtility.GetHyperlinksFromUrlAsync(String url, CancellationToken cancellationToken)
+   at PlayerAssistant.HtmlUtility.GetHyperlinksFromUrlAsync(String url, CancellationToken cancellationToken)
+   at PlayerAssistant.Form1.LoadGameForumChapterPrefixesAsync(CancellationToken cancellationToken)
+   at PlayerAssistant.KeywordIndexCrawler.DiscoverRpolUrlsAsync(CancellationToken cancellationToken)
+   at PlayerAssistant.KeywordIndexCrawler.BuildIndexAsync(IProgress`1 progress, CancellationToken cancellationToken)
+   at PlayerAssistant.Form1.<StartKeywordIndexCrawler>b__113_0(CancellationToken cancellationToken)
+   at PlayerAssistant.Form1.<>c__DisplayClass114_0.<<StartBackgroundTask>b__0>d.MoveNext()
+--- End of stack trace from previous location ---
+   at PlayerAssistant.BackgroundTaskSupervisor.RunAsync(String phase, Func`2 action, BackgroundTaskHandle handle)
+[2026-07-04T08:15:56.1129754-05:00] RPOL authentication
+PlayerAssistant.RpolAuthException: RPoL blocked authenticated access to 'https://rpol.net/game.php?gi=80170' with status 403. Check credentials, account access, rate limits, or site-side blocking.
+   at PlayerAssistant.RpolAuthUtility.EnsureSuccessfulResponse(Uri uri, IResponse response)
+   at PlayerAssistant.RpolAuthUtility.GetPageHtmlAsync(IBrowserContext context, Uri uri, CancellationToken cancellationToken)
+   at PlayerAssistant.RpolAuthUtility.GetPageHtmlAsync(IBrowserContext context, Uri uri, CancellationToken cancellationToken)
+   at PlayerAssistant.RpolAuthUtility.GetHtmlFromUrlAsync(Uri uri, CancellationToken cancellationToken)
+[2026-07-04T08:15:56.4751466-05:00] game forum startup
+PlayerAssistant.RpolAuthException: RPoL blocked authenticated access to 'https://rpol.net/game.php?gi=80170' with status 403. Check credentials, account access, rate limits, or site-side blocking.
+   at PlayerAssistant.RpolAuthUtility.GetHtmlFromUrlAsync(Uri uri, CancellationToken cancellationToken)
+   at PlayerAssistant.HtmlUtility.GetHtmlFromUrlAsync(Uri uri, CancellationToken cancellationToken)
+   at PlayerAssistant.HtmlUtility.GetHyperlinksFromUrlAsync(Uri uri, CancellationToken cancellationToken)
+   at PlayerAssistant.HtmlUtility.GetHyperlinksFromUrlAsync(String url, CancellationToken cancellationToken)
+   at PlayerAssistant.KeywordIndexCrawler.DiscoverRpolUrlsAsync(CancellationToken cancellationToken)
+   at PlayerAssistant.KeywordIndexCrawler.BuildIndexAsync(IProgress`1 progress, CancellationToken cancellationToken)
+   at PlayerAssistant.Form1.<StartKeywordIndexCrawler>b__114_0(CancellationToken cancellationToken)
+   at PlayerAssistant.Form1.<>c__DisplayClass115_0.<<StartBackgroundTask>b__0>d.MoveNext()
+--- End of stack trace from previous location ---
+   at System.Runtime.CompilerServices.TaskAwaiter.HandleNonSuccessAndDebuggerNotification(Task task, ConfigureAwaitOptions options)

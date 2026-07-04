@@ -15,6 +15,7 @@ $LegacySettingsFormat = 'dpapi-current-user'
 $SettingsSchemaVersionPropertyName = 'schema_version'
 $SettingsSchemaVersion = 1
 $SettingsEncryptionSeed = 'PlayerAssistant.LocalSettings.v1'
+$XpPasswordFileName = 'xp-passwords.json'
 $KeywordIndexFileName = 'keyword-index.json'
 $KeywordTermsFileName = 'game-posts-key-terms.md'
 $SitemapFileName = 'sitemap.xml'
@@ -569,6 +570,55 @@ function Assert-EncryptedLocalSettings {
     }
 }
 
+function Assert-PublishedXpPasswordSidecar {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Path
+    )
+
+    Assert-RequiredFile -Path $Path -Description "published $XpPasswordFileName"
+
+    $publishedRaw = Get-Content -Raw -LiteralPath $Path
+    $envelope = Read-JsonFile -Path $Path -Description "published $XpPasswordFileName"
+    [void](Get-SettingsSchemaVersion -Settings $envelope -Description "published $XpPasswordFileName")
+
+    if ($envelope.format -ne $SettingsFormat -and $envelope.format -ne $PreviousSettingsFormat -and $envelope.format -ne $V1SettingsFormat) {
+        throw "Published $XpPasswordFileName must use an encrypted app-protected format."
+    }
+
+    if ([string]::IsNullOrWhiteSpace([string]$envelope.payload)) {
+        throw "Published $XpPasswordFileName has an empty encrypted payload."
+    }
+
+    if ($publishedRaw -match '"Dungeon Master"\s*:' -or
+        $publishedRaw -match '"Kelpie"\s*:' -or
+        $publishedRaw -match '"Jelb"\s*:' -or
+        $publishedRaw -match '"Geoffroy"\s*:' -or
+        $publishedRaw -match '"Maximilian"\s*:') {
+        throw "Published $XpPasswordFileName appears to contain plaintext PC password entries."
+    }
+
+    $passwords = ConvertFrom-AppEncryptedLocalSettings -SettingsPath $Path
+    $entries = @($passwords.PSObject.Properties)
+    if ($entries.Count -eq 0) {
+        throw "Published $XpPasswordFileName does not contain any decrypted PC password entries."
+    }
+
+    foreach ($entry in $entries) {
+        if ([string]::IsNullOrWhiteSpace([string]$entry.Name)) {
+            throw "Published $XpPasswordFileName contains a blank PC name."
+        }
+
+        if ([string]::IsNullOrWhiteSpace([string]$entry.Value)) {
+            throw "Published $XpPasswordFileName contains a blank password for '$($entry.Name)'."
+        }
+
+        if ($publishedRaw.Contains([string]$entry.Value)) {
+            throw "Published $XpPasswordFileName contains plaintext password material."
+        }
+    }
+}
+
 function Assert-NoSensitiveFiles {
     param(
         [Parameter(Mandatory = $true)]
@@ -851,6 +901,7 @@ function Assert-PublishInputs {
     Assert-RequiredFile -Path (Join-Path $PSScriptRoot "Release\$SitemapFileName") -Description 'Release sitemap'
     Assert-RequiredFile -Path (Join-Path $PSScriptRoot "Release\$SitemapKeywordUrlsFileName") -Description 'Release sitemap keyword URL library'
     Assert-RequiredFile -Path (Join-Path $PSScriptRoot $SettingsLocalFileName) -Description $SettingsLocalFileName
+    Assert-RequiredFile -Path (Join-Path $PSScriptRoot $XpPasswordFileName) -Description $XpPasswordFileName
 }
 
 function Get-ManifestFileEntry {
@@ -1215,6 +1266,7 @@ function Get-ReleaseManifestFileList {
         'player-assistant.exe',
         'settings.json',
         $SettingsLocalFileName,
+        $XpPasswordFileName,
         $RuntimeInventoryFileName,
         $KeywordIndexFileName,
         $KeywordTermsFileName,
@@ -1308,6 +1360,7 @@ function Assert-PublishOutput {
     [void](Read-JsonFile -Path (Join-Path $Directory $SitemapKeywordUrlsFileName) -Description 'published sitemap keyword URL library')
     Assert-PublishedPlaywrightRuntime -Directory (Join-Path $Directory '.playwright')
     Assert-EncryptedLocalSettings -SourcePath $SourceSettingsPath -PublishedPath $settingsPath
+    Assert-PublishedXpPasswordSidecar -Path (Join-Path $Directory $XpPasswordFileName)
     Assert-PublishedRuntimeInventory -Directory $Directory
     Assert-NoSensitiveFiles -Directory $Directory
     Assert-NoForbiddenPublishArtifacts -Directory $Directory
@@ -1382,6 +1435,7 @@ Copy-Item -LiteralPath (Join-Path $PSScriptRoot "Release\$KeywordIndexFileName")
 Copy-Item -LiteralPath (Join-Path $PSScriptRoot "Release\$KeywordTermsFileName") -Destination (Join-Path $resolvedOutputDir $KeywordTermsFileName) -Force
 Copy-Item -LiteralPath (Join-Path $PSScriptRoot "Release\$SitemapFileName") -Destination (Join-Path $resolvedOutputDir $SitemapFileName) -Force
 Copy-Item -LiteralPath (Join-Path $PSScriptRoot "Release\$SitemapKeywordUrlsFileName") -Destination (Join-Path $resolvedOutputDir $SitemapKeywordUrlsFileName) -Force
+Copy-Item -LiteralPath (Join-Path $PSScriptRoot $XpPasswordFileName) -Destination (Join-Path $resolvedOutputDir $XpPasswordFileName) -Force
 Write-AppEncryptedLocalSettings -SourcePath (Join-Path $PSScriptRoot $SettingsLocalFileName) -DestinationPath (Join-Path $resolvedOutputDir $SettingsLocalFileName)
 Write-ReleaseRuntimeInventory -Directory $resolvedOutputDir
 Write-ReleaseIntegrityManifest -Directory $resolvedOutputDir

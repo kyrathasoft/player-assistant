@@ -4,6 +4,9 @@
 - [x] string[] SearchTerms should accept the output of method GetSearchTerms()
 - [x] code a method that, given a search term, will return a list of URLs from the JSON library file 'sitemap-keyword-urls.json' that match the search term
 - [x] add terms from Locations index (on obisidian wiki) to game-posts-key-terms.md
+- [x] Store the XP Tracking URL in encrypted local settings and add a parser/fetch helper for current PC XP totals.
+- [x] Add `Show > XP` with encrypted per-PC password sidecar validation before displaying a character's XP date and total.
+- [x] Allow the Dungeon Master XP credential to display dates and XP totals for all PCs.
 
 ## Hardening completed in this session
 

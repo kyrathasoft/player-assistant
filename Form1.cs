@@ -2,6 +2,7 @@ using System.Drawing;
 using System.Drawing.Drawing2D;
 using System.Drawing.Imaging;
 using System.Diagnostics;
+using System.Globalization;
 using System.IO;
 using System.Reflection;
 using System.Runtime.InteropServices;
@@ -52,6 +53,7 @@ namespace PlayerAssistant
         private const string DiceRollsHtmlFileName = "dice-rolls.html";
         private const string RegionalMapFileName = "northernreaches.png";
         private const string KeywordIndexFileName = "keyword-index.json";
+        private const string DungeonMasterXpAccessName = "Dungeon Master";
         private static readonly TimeSpan HeroImageShowcaseStartDelay = TimeSpan.FromMilliseconds(2500);
         private static readonly TimeSpan HeroImageIntroDuration = TimeSpan.FromSeconds(1);
         private static readonly TimeSpan HeroImageFadeInDuration = TimeSpan.FromMilliseconds(200);
@@ -82,8 +84,11 @@ namespace PlayerAssistant
         private string _playerCharacterListingHtml = string.Empty;
         private TheCastLoginInfo[] _loginInfoRows = [];
         private PostTotalsSummary? _postTotalsSummary;
+        private IReadOnlyList<PcXpTotal> _xpTotals = [];
+        private string _xpDateLabel = string.Empty;
         private bool _showLoginInfo;
         private bool _showPostTotals;
+        private bool _showXpTotal;
         private bool _showWelcomeText = true;
         private bool _showHeroIntroText;
         private bool _showAttributionText;
@@ -601,6 +606,12 @@ namespace PlayerAssistant
                 return;
             }
 
+            if (_showXpTotal)
+            {
+                DrawXpTotal(e.Graphics);
+                return;
+            }
+
             if (_showWelcomeText || _showHeroIntroText)
             {
                 e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
@@ -631,6 +642,7 @@ namespace PlayerAssistant
         {
             EnableLoginInfoMenuItem();
             EnableShowPostTotalsMenuItem();
+            EnableXpMenuItem();
             Close();
         }
 
@@ -649,8 +661,9 @@ namespace PlayerAssistant
             EnableLoginInfoMenuItem();
             EnableShowPostTotalsMenuItem();
             EnableShowDiceRollsMenuItem();
+            EnableXpMenuItem();
 
-            if (_regionalMapActive || _showLoginInfo || _showPostTotals || _diceRollsListBox is not null)
+            if (_regionalMapActive || _showLoginInfo || _showPostTotals || _showXpTotal || _diceRollsListBox is not null)
             {
                 ClearDisplaySurfaceForRegionalMap();
                 Refresh();
@@ -665,6 +678,7 @@ namespace PlayerAssistant
             HideSearchPanel();
             EnableShowPostTotalsMenuItem();
             EnableShowDiceRollsMenuItem();
+            EnableXpMenuItem();
             loginInfoToolStripMenuItem.Enabled = false;
             _loginInfoRefreshTarget = LoginInfoDisplayMode.LoginInfo;
 
@@ -699,6 +713,7 @@ namespace PlayerAssistant
             HideSearchPanel();
             EnableLoginInfoMenuItem();
             EnableShowDiceRollsMenuItem();
+            EnableXpMenuItem();
             showPostTotalsToolStripMenuItem.Enabled = false;
             _loginInfoRefreshTarget = LoginInfoDisplayMode.PostTotals;
 
@@ -741,6 +756,7 @@ namespace PlayerAssistant
             HideSearchPanel();
             EnableLoginInfoMenuItem();
             EnableShowPostTotalsMenuItem();
+            EnableXpMenuItem();
 
             var diceRollsPath = GetDiceRollsHtmlPath();
             if (!TryLoadDiceRollEntries(diceRollsPath, out var entries) || entries.Length == 0)
@@ -764,8 +780,160 @@ namespace PlayerAssistant
                     "Dice rolls unavailable",
                     "Dice Rolls Error",
                     ex,
+                showDialog: true);
+            }
+        }
+
+        private async void XpToolStripMenuItem_Click(object? sender, EventArgs e)
+        {
+            ClearDiceRollsDisplayIfVisible();
+            HideSearchPanel();
+            EnableLoginInfoMenuItem();
+            EnableShowPostTotalsMenuItem();
+            EnableShowDiceRollsMenuItem();
+
+            if (!TryPromptForXpCredentials(out var characterName, out var password))
+            {
+                return;
+            }
+
+            if (!XpPasswordStoreUtility.ValidatePassword(characterName, password, AppContext.BaseDirectory))
+            {
+                MessageBox.Show(
+                    this,
+                    "The character name and XP password did not match.",
+                    "XP",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Warning);
+                SetStatusBarMessage("XP access denied.");
+                return;
+            }
+
+            xpToolStripMenuItem.Enabled = false;
+            try
+            {
+                SetStatusBarMessage("Loading XP total...");
+                var snapshot = await XpTrackingUtility.GetCurrentXpSnapshotAsync();
+                if (IsDungeonMasterXpAccess(characterName))
+                {
+                    ShowXpTotals(snapshot.DateLabel, snapshot.Totals);
+                    return;
+                }
+
+                var total = snapshot.Totals.FirstOrDefault(row =>
+                    string.Equals(row.Name, characterName, StringComparison.OrdinalIgnoreCase));
+                if (total is null)
+                {
+                    xpToolStripMenuItem.Enabled = true;
+                    MessageBox.Show(
+                        this,
+                        $"No XP total was found for '{characterName}'.",
+                        "XP",
+                        MessageBoxButtons.OK,
+                        MessageBoxIcon.Information);
+                    SetStatusBarMessage($"XP total unavailable for {characterName}.");
+                    return;
+                }
+
+                ShowXpTotals(snapshot.DateLabel, [total]);
+            }
+            catch (Exception ex)
+            {
+                xpToolStripMenuItem.Enabled = true;
+                await ReportOperationFailureAsync(
+                    "XP display",
+                    "XP total unavailable",
+                    "XP Error",
+                    ex,
                     showDialog: true);
             }
+        }
+
+        private bool TryPromptForXpCredentials(out string characterName, out string password)
+        {
+            using var dialog = new Form
+            {
+                Text = "XP",
+                FormBorderStyle = FormBorderStyle.FixedDialog,
+                StartPosition = FormStartPosition.CenterParent,
+                MinimizeBox = false,
+                MaximizeBox = false,
+                ShowInTaskbar = false,
+                ClientSize = new Size(360, 158)
+            };
+
+            using var characterLabel = new Label
+            {
+                AutoSize = true,
+                Location = new Point(18, 22),
+                Text = "Character name:"
+            };
+            using var characterTextBox = new TextBox
+            {
+                Location = new Point(138, 18),
+                Size = new Size(198, 23)
+            };
+            using var passwordLabel = new Label
+            {
+                AutoSize = true,
+                Location = new Point(18, 62),
+                Text = "XP password:"
+            };
+            using var passwordTextBox = new TextBox
+            {
+                Location = new Point(138, 58),
+                PasswordChar = '*',
+                Size = new Size(198, 23)
+            };
+            using var okButton = new Button
+            {
+                DialogResult = DialogResult.OK,
+                Location = new Point(180, 108),
+                Size = new Size(75, 26),
+                Text = "OK"
+            };
+            using var cancelButton = new Button
+            {
+                DialogResult = DialogResult.Cancel,
+                Location = new Point(261, 108),
+                Size = new Size(75, 26),
+                Text = "Cancel"
+            };
+
+            dialog.Controls.AddRange(
+                [
+                    characterLabel,
+                    characterTextBox,
+                    passwordLabel,
+                    passwordTextBox,
+                    okButton,
+                    cancelButton
+                ]);
+            dialog.AcceptButton = okButton;
+            dialog.CancelButton = cancelButton;
+
+            characterName = string.Empty;
+            password = string.Empty;
+
+            if (dialog.ShowDialog(this) != DialogResult.OK)
+            {
+                return false;
+            }
+
+            characterName = characterTextBox.Text.Trim();
+            password = passwordTextBox.Text;
+            if (!string.IsNullOrWhiteSpace(characterName) && password.Length > 0)
+            {
+                return true;
+            }
+
+            MessageBox.Show(
+                this,
+                "Enter both character name and XP password.",
+                "XP",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Warning);
+            return false;
         }
 
         private async void RegionalMapToolStripMenuItem_Click(object? sender, EventArgs e)
@@ -774,9 +942,11 @@ namespace PlayerAssistant
             EnableLoginInfoMenuItem();
             EnableShowPostTotalsMenuItem();
             EnableShowDiceRollsMenuItem();
+            EnableXpMenuItem();
             var searchPanelWasHidden = HideSearchPanel();
             var shouldRefreshBeforeShowingMap = searchPanelWasHidden
                 || _showLoginInfo
+                || _showXpTotal
                 || _showWelcomeText
                 || _showHeroIntroText
                 || _showAttributionText;
@@ -816,6 +986,7 @@ namespace PlayerAssistant
                 _regionalMapTransitionPending = false;
                 loginInfoToolStripMenuItem.Enabled = true;
                 showPostTotalsToolStripMenuItem.Enabled = true;
+                EnableXpMenuItem();
                 UpdateRegionalMapMenuItem();
                 SetStatusBarMessage($"Regional map loaded: {RegionalMapFileName}.");
                 Invalidate();
@@ -1802,6 +1973,9 @@ namespace PlayerAssistant
             ClearDisplaySurfaceForLoginInfo();
             _showLoginInfo = true;
             _showPostTotals = false;
+            _showXpTotal = false;
+            _xpTotals = [];
+            _xpDateLabel = string.Empty;
             _postTotalsSummary = null;
             SetStatusBarMessage($"Login info: {_loginInfoRows.Length} {source} rows loaded.");
             Invalidate();
@@ -1814,7 +1988,26 @@ namespace PlayerAssistant
             ClearDisplaySurfaceForLoginInfo();
             _showLoginInfo = false;
             _showPostTotals = true;
+            _showXpTotal = false;
+            _xpTotals = [];
+            _xpDateLabel = string.Empty;
             SetStatusBarMessage($"Post totals: {_postTotalsSummary.Rows.Count} {source} rows loaded.");
+            Invalidate();
+        }
+
+        private void ShowXpTotals(string dateLabel, IReadOnlyList<PcXpTotal> totals)
+        {
+            ClearDisplaySurfaceForLoginInfo();
+            _showLoginInfo = false;
+            _showPostTotals = false;
+            _showXpTotal = true;
+            _postTotalsSummary = null;
+            _xpDateLabel = dateLabel;
+            _xpTotals = totals.ToArray();
+            xpToolStripMenuItem.Enabled = false;
+            SetStatusBarMessage(_xpTotals.Count == 1
+                ? $"XP total: {_xpTotals[0].Name} has {_xpTotals[0].XpTotal:N0} XP."
+                : $"XP totals: {_xpTotals.Count} PCs loaded.");
             Invalidate();
         }
 
@@ -1930,6 +2123,9 @@ namespace PlayerAssistant
             ClearMainDisplaySurface();
             _showLoginInfo = false;
             _showPostTotals = false;
+            _showXpTotal = false;
+            _xpTotals = [];
+            _xpDateLabel = string.Empty;
         }
 
         private void ClearMainDisplaySurface()
@@ -1940,6 +2136,9 @@ namespace PlayerAssistant
             _showWelcomeText = false;
             _showHeroIntroText = false;
             _showAttributionText = false;
+            _showXpTotal = false;
+            _xpTotals = [];
+            _xpDateLabel = string.Empty;
             _regionalMapActive = false;
             _regionalMapImage?.Dispose();
             _regionalMapImage = null;
@@ -2521,6 +2720,7 @@ namespace PlayerAssistant
             showDiceRollsToolStripMenuItem.Enabled = showMenuItemsEnabled
                 && _diceRollsListBox is null
                 && HasDiceRollEntries(GetDiceRollsHtmlPath());
+            xpToolStripMenuItem.Enabled = showMenuItemsEnabled && !_showXpTotal;
             UpdateRegionalMapMenuItem();
         }
 
@@ -2552,6 +2752,16 @@ namespace PlayerAssistant
             }
 
             showDiceRollsToolStripMenuItem.Enabled = _diceRollsListBox is null && HasDiceRollEntries(GetDiceRollsHtmlPath());
+        }
+
+        private void EnableXpMenuItem()
+        {
+            if (_heroImageIntroStarted || _heroImageShowcaseStarted)
+            {
+                return;
+            }
+
+            xpToolStripMenuItem.Enabled = true;
         }
 
         private async Task PreloadRegionalMapImageAsync(CancellationToken cancellationToken = default)
@@ -3496,6 +3706,101 @@ namespace PlayerAssistant
             }
         }
 
+        private void DrawXpTotal(Graphics graphics)
+        {
+            graphics.Clear(BackColor);
+            graphics.SmoothingMode = SmoothingMode.AntiAlias;
+            graphics.TextRenderingHint = System.Drawing.Text.TextRenderingHint.ClearTypeGridFit;
+
+            if (_xpTotals.Count == 0)
+            {
+                return;
+            }
+
+            var contentBounds = GetHeroImageDisplayBounds();
+            var left = contentBounds.Left + 32;
+            var top = contentBounds.Top + 32;
+            var width = Math.Max(320, contentBounds.Width - 64);
+            var rowHeight = 38;
+            var columns = GetXpTotalColumns(width);
+
+            using var titleFont = new Font("Segoe UI", 22, FontStyle.Bold);
+            using var noteFont = new Font("Segoe UI", 11, FontStyle.Bold);
+            using var headerFont = new Font("Segoe UI", 11, FontStyle.Bold);
+            using var rowFont = new Font("Segoe UI", 12, FontStyle.Bold);
+            using var textBrush = new SolidBrush(Color.FromArgb(35, 35, 35));
+            using var mutedBrush = new SolidBrush(Color.FromArgb(105, 105, 105));
+            using var headerTextBrush = new SolidBrush(Color.White);
+            using var headerBackBrush = new SolidBrush(Color.Black);
+            using var alternateBackBrush = new SolidBrush(Color.FromArgb(248, 249, 251));
+            using var linePen = new Pen(Color.FromArgb(215, 218, 224));
+            using var textFormat = new StringFormat
+            {
+                Alignment = StringAlignment.Near,
+                LineAlignment = StringAlignment.Center,
+                Trimming = StringTrimming.EllipsisCharacter,
+                FormatFlags = StringFormatFlags.NoWrap
+            };
+            using var rightTextFormat = new StringFormat
+            {
+                Alignment = StringAlignment.Far,
+                LineAlignment = StringAlignment.Center,
+                Trimming = StringTrimming.EllipsisCharacter,
+                FormatFlags = StringFormatFlags.NoWrap
+            };
+
+            graphics.DrawString("XP", titleFont, textBrush, new PointF(left, top));
+            top += 42;
+            graphics.DrawString(_xpDateLabel, noteFont, mutedBrush, new RectangleF(left, top, width, 32));
+            top += 46;
+
+            DrawLoginInfoRow(
+                graphics,
+                columns,
+                top,
+                rowHeight,
+                ["Character", "XP Total"],
+                headerFont,
+                headerTextBrush,
+                headerBackBrush,
+                linePen,
+                left,
+                textFormat,
+                rightTextFormat,
+                rightAlignedColumnIndexes: [1]);
+            top += rowHeight;
+
+            for (var index = 0; index < _xpTotals.Count; index++)
+            {
+                var total = _xpTotals[index];
+                DrawLoginInfoRow(
+                    graphics,
+                    columns,
+                    top,
+                    rowHeight,
+                    [total.Name, total.XpTotal.ToString("N0", CultureInfo.InvariantCulture)],
+                    rowFont,
+                    textBrush,
+                    index % 2 == 0 ? Brushes.White : alternateBackBrush,
+                    linePen,
+                    left,
+                    textFormat,
+                    rightTextFormat,
+                    rightAlignedColumnIndexes: [1]);
+                top += rowHeight;
+
+                if (top + rowHeight > contentBounds.Bottom - 16)
+                {
+                    break;
+                }
+            }
+        }
+
+        private static bool IsDungeonMasterXpAccess(string characterName)
+        {
+            return string.Equals(characterName, DungeonMasterXpAccessName, StringComparison.OrdinalIgnoreCase);
+        }
+
         private static RectangleF[] GetLoginInfoColumns(int width)
         {
             var characterWidth = width * 0.32f;
@@ -3539,6 +3844,16 @@ namespace PlayerAssistant
                 Next(columnWidth),
                 Next(columnWidth),
                 Next(width - (columnWidth * 2))
+            ];
+        }
+
+        private static RectangleF[] GetXpTotalColumns(int width)
+        {
+            var characterWidth = width * 0.68f;
+            return
+            [
+                new RectangleF(0, 0, characterWidth, 0),
+                new RectangleF(characterWidth, 0, width - characterWidth, 0)
             ];
         }
 

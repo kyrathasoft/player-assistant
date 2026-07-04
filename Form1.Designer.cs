@@ -35,6 +35,7 @@ namespace PlayerAssistant
             loginInfoToolStripMenuItem = new ToolStripMenuItem();
             showPostTotalsToolStripMenuItem = new ToolStripMenuItem();
             showDiceRollsToolStripMenuItem = new ToolStripMenuItem();
+            xpToolStripMenuItem = new ToolStripMenuItem();
             regionalMapToolStripMenuItem = new ToolStripMenuItem();
             searchToolStripMenuItem = new ToolStripMenuItem();
             settingsToolStripMenuItem = new ToolStripMenuItem();
@@ -85,7 +86,7 @@ namespace PlayerAssistant
             // 
             // showToolStripMenuItem
             // 
-            showToolStripMenuItem.DropDownItems.AddRange(new ToolStripItem[] { loginInfoToolStripMenuItem, showPostTotalsToolStripMenuItem, showDiceRollsToolStripMenuItem, regionalMapToolStripMenuItem });
+            showToolStripMenuItem.DropDownItems.AddRange(new ToolStripItem[] { loginInfoToolStripMenuItem, showPostTotalsToolStripMenuItem, showDiceRollsToolStripMenuItem, xpToolStripMenuItem, regionalMapToolStripMenuItem });
             showToolStripMenuItem.Name = "showToolStripMenuItem";
             showToolStripMenuItem.Size = new Size(48, 20);
             showToolStripMenuItem.Text = "Show";
@@ -111,6 +112,13 @@ namespace PlayerAssistant
             showDiceRollsToolStripMenuItem.Size = new Size(163, 22);
             showDiceRollsToolStripMenuItem.Text = "Show Dice Rolls";
             showDiceRollsToolStripMenuItem.Click += ShowDiceRollsToolStripMenuItem_Click;
+            //
+            // xpToolStripMenuItem
+            //
+            xpToolStripMenuItem.Name = "xpToolStripMenuItem";
+            xpToolStripMenuItem.Size = new Size(163, 22);
+            xpToolStripMenuItem.Text = "XP";
+            xpToolStripMenuItem.Click += XpToolStripMenuItem_Click;
             // 
             // regionalMapToolStripMenuItem
             // 
@@ -339,6 +347,7 @@ namespace PlayerAssistant
         private ToolStripMenuItem loginInfoToolStripMenuItem;
         private ToolStripMenuItem showPostTotalsToolStripMenuItem;
         private ToolStripMenuItem showDiceRollsToolStripMenuItem;
+        private ToolStripMenuItem xpToolStripMenuItem;
         private ToolStripMenuItem regionalMapToolStripMenuItem;
         private ToolStripMenuItem exitToolStripMenuItem;
         private ToolStripMenuItem settingsToolStripMenuItem;

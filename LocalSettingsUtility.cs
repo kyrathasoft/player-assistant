@@ -70,6 +70,36 @@ namespace PlayerAssistant
             AtomicFileUtility.WriteAllText(settingsPath, encryptedJson);
         }
 
+        public static Dictionary<string, string> LoadPortableEncryptedSettings(string settingsPath)
+        {
+            ArgumentNullException.ThrowIfNull(settingsPath);
+
+            if (!File.Exists(settingsPath))
+            {
+                throw new FileNotFoundException("Encrypted settings sidecar file not found.", settingsPath);
+            }
+
+            var fileContents = File.ReadAllText(settingsPath);
+            using var document = JsonDocument.Parse(fileContents);
+            if (!TryReadEncryptedEnvelope(document.RootElement, out var envelope))
+            {
+                throw new InvalidOperationException("Encrypted settings sidecar file must use an authenticated encrypted envelope.");
+            }
+
+            return DecryptSettings(envelope, settingsPath);
+        }
+
+        public static void SavePortableEncryptedSettings(string settingsPath, IReadOnlyDictionary<string, string> settings)
+        {
+            ArgumentNullException.ThrowIfNull(settingsPath);
+            ArgumentNullException.ThrowIfNull(settings);
+
+            var plaintextBytes = JsonSerializer.SerializeToUtf8Bytes(settings, JsonOptions);
+            var encryptedEnvelope = CreatePortableEncryptedEnvelope(plaintextBytes);
+            var encryptedJson = JsonSerializer.Serialize(encryptedEnvelope, JsonOptions);
+            AtomicFileUtility.WriteAllText(settingsPath, encryptedJson);
+        }
+
         public static bool IsEncryptedSettingsFile(string settingsPath)
         {
             if (!File.Exists(settingsPath))
@@ -230,6 +260,39 @@ namespace PlayerAssistant
                 EncryptedFormat,
                 Convert.ToBase64String(payloadBytes),
                 GetKeyScope(settingsPath));
+        }
+
+        private static EncryptedSettingsEnvelope CreatePortableEncryptedEnvelope(byte[] plaintextBytes)
+        {
+            var iv = RandomNumberGenerator.GetBytes(AesIvSizeBytes);
+
+            using var aes = Aes.Create();
+            aes.Key = V2EncryptionKey;
+            aes.IV = iv;
+            aes.Mode = CipherMode.CBC;
+            aes.Padding = PaddingMode.PKCS7;
+
+            using var encryptor = aes.CreateEncryptor();
+            var ciphertext = encryptor.TransformFinalBlock(plaintextBytes, 0, plaintextBytes.Length);
+
+            var protectedContent = new byte[iv.Length + ciphertext.Length];
+            Buffer.BlockCopy(iv, 0, protectedContent, 0, iv.Length);
+            Buffer.BlockCopy(ciphertext, 0, protectedContent, iv.Length, ciphertext.Length);
+
+            byte[] tag;
+            using (var hmac = new HMACSHA256(V2AuthenticationKey))
+            {
+                tag = hmac.ComputeHash(protectedContent);
+            }
+
+            var payloadBytes = new byte[protectedContent.Length + tag.Length];
+            Buffer.BlockCopy(protectedContent, 0, payloadBytes, 0, protectedContent.Length);
+            Buffer.BlockCopy(tag, 0, payloadBytes, protectedContent.Length, tag.Length);
+
+            return new EncryptedSettingsEnvelope(
+                CurrentSchemaVersion,
+                V2EncryptedFormat,
+                Convert.ToBase64String(payloadBytes));
         }
 
         private static KeySet GetKeySet(string format, string settingsPath)

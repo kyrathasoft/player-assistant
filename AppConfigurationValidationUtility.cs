@@ -66,13 +66,15 @@ namespace PlayerAssistant
         private const string GameIntroSettingsKey = "Game Intro";
         private const string TheCastSettingsKey = "The Cast";
         private const string ObsidianGameVaultSettingsKey = "Obsidian Game Vault";
+        private const string XpTrackingSettingsKey = "XP Tracking";
 
         private static readonly string[] RequiredRuntimeSidecars =
         [
             "keyword-index.json",
             KeywordTermsFileUtility.FileName,
             "sitemap.xml",
-            "sitemap-keyword-urls.json"
+            "sitemap-keyword-urls.json",
+            XpPasswordStoreUtility.FileName
         ];
 
         public static AppConfigurationValidationReport LatestReport { get; private set; } = new([]);
@@ -84,7 +86,8 @@ namespace PlayerAssistant
                 [RpolSiteSettingsKey] = AppSettingsUtility.GameForumUrl,
                 [GameIntroSettingsKey] = AppSettingsUtility.GameIntroUrl,
                 [TheCastSettingsKey] = AppSettingsUtility.TheCastUrl,
-                [ObsidianGameVaultSettingsKey] = AppSettingsUtility.ObsidianGameVaultUrl
+                [ObsidianGameVaultSettingsKey] = AppSettingsUtility.ObsidianGameVaultUrl,
+                [XpTrackingSettingsKey] = AppSettingsUtility.XpTrackingUrl
             };
 
             if (!string.IsNullOrWhiteSpace(AppSettingsUtility.RpolUserName))
@@ -143,6 +146,7 @@ namespace PlayerAssistant
             ValidateHttpUrlSetting(settings, GameIntroSettingsKey, NetworkUrlPurpose.Rpol, issues);
             ValidateHttpUrlSetting(settings, TheCastSettingsKey, NetworkUrlPurpose.Rpol, issues);
             ValidateHttpUrlSetting(settings, ObsidianGameVaultSettingsKey, NetworkUrlPurpose.ObsidianPublish, issues);
+            ValidateHttpUrlSetting(settings, XpTrackingSettingsKey, NetworkUrlPurpose.ObsidianPublish, issues);
             ValidateRpolCredentials(settings, issues);
             ValidateRuntimeDirectory(runtimeDirectory, issues);
             ValidateRuntimeSidecars(runtimeDirectory, issues);
@@ -163,7 +167,7 @@ namespace PlayerAssistant
                 issues.Add(new AppConfigurationIssue(
                     AppConfigurationIssueSeverity.Error,
                     $"{settingsKey} is missing or empty.",
-                    $"Set '{settingsKey}' in settings.json to the expected absolute HTTP or HTTPS URL, then restart the app."));
+                    $"Set '{settingsKey}' in {GetSettingsRepairFileName(settingsKey)} to the expected absolute HTTP or HTTPS URL, then restart the app."));
                 return;
             }
 
@@ -173,8 +177,15 @@ namespace PlayerAssistant
                 issues.Add(new AppConfigurationIssue(
                     AppConfigurationIssueSeverity.Error,
                     $"{settingsKey} is not on the allowed network host list: {validation.RejectionReason}",
-                    $"Edit settings.json and replace '{settingsKey}' with the expected RPOL or Obsidian Publish URL."));
+                    $"Edit {GetSettingsRepairFileName(settingsKey)} and replace '{settingsKey}' with the expected RPOL or Obsidian Publish URL."));
             }
+        }
+
+        private static string GetSettingsRepairFileName(string settingsKey)
+        {
+            return string.Equals(settingsKey, XpTrackingSettingsKey, StringComparison.Ordinal)
+                ? "settings.local.json"
+                : "settings.json";
         }
 
         private static void ValidateRpolCredentials(
