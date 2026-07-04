@@ -119,10 +119,10 @@
   - [ ] Persist source hashes for last-known-good downloaded markdown, sitemap, keyword, and RPOL export inputs.
   - [ ] Detect unexpected structural changes and show player-safe recovery guidance.
   - [ ] Keep previous good content available when newly fetched content fails integrity or shape checks.
-- [ ] Add backup/restore hardening for user-writable runtime data.
-  - [ ] Create bounded rotating backups before modifying user settings, indexes, exports, and encrypted sidecars.
-  - [ ] Add startup recovery that can restore the newest valid backup after corruption or interrupted writes.
-  - [ ] Add focused tests for backup selection, rollback, and retention limits.
+- [x] Add backup/restore hardening for user-writable runtime data.
+  - [x] Create bounded rotating backups before modifying user settings, indexes, exports, and encrypted sidecars.
+  - [x] Add startup recovery that can restore the newest valid backup after corruption or interrupted writes.
+  - [x] Add focused tests for backup selection, rollback, and retention limits.
 - [ ] Add CI/release pipeline enforcement for the local hardening scripts.
   - [ ] Run publish verification, RC self-tests, secret scan, dependency checks, and diagnostics verification in CI.
   - [ ] Upload redacted verification artifacts for failed CI runs.

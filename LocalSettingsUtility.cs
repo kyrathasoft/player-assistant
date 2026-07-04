@@ -30,18 +30,44 @@ namespace PlayerAssistant
 
         public static Dictionary<string, string> LoadSettings(string settingsPath)
         {
-            return LoadSettings(settingsPath, migrateToCurrentFormat: true);
+            return LoadSettingsWithBackupRestore(settingsPath, migrateToCurrentFormat: true);
         }
 
         internal static Dictionary<string, string> LoadSettingsWithoutMigration(string settingsPath)
         {
-            return LoadSettings(settingsPath, migrateToCurrentFormat: false);
+            return LoadSettingsWithBackupRestore(settingsPath, migrateToCurrentFormat: false);
         }
 
-        private static Dictionary<string, string> LoadSettings(string settingsPath, bool migrateToCurrentFormat)
+        private static Dictionary<string, string> LoadSettingsWithBackupRestore(string settingsPath, bool migrateToCurrentFormat)
+        {
+            try
+            {
+                return LoadSettingsCore(settingsPath, migrateToCurrentFormat);
+            }
+            catch (Exception ex) when (IsRecoverableSettingsException(ex))
+            {
+                if (RuntimeBackupUtility.TryRestoreLatestValidBackup(
+                        settingsPath,
+                        candidatePath => CanLoadSettingsBackup(candidatePath, settingsPath),
+                        "local settings backup restore",
+                        ex,
+                        out _))
+                {
+                    return LoadSettingsCore(settingsPath, migrateToCurrentFormat);
+                }
+
+                throw;
+            }
+        }
+
+        private static Dictionary<string, string> LoadSettingsCore(
+            string settingsPath,
+            bool migrateToCurrentFormat,
+            string? decryptionScopePath = null)
         {
             ArgumentNullException.ThrowIfNull(settingsPath);
 
+            var resolvedDecryptionScopePath = decryptionScopePath ?? settingsPath;
             if (!File.Exists(settingsPath))
             {
                 throw new FileNotFoundException("Settings file not found.", settingsPath);
@@ -52,7 +78,7 @@ namespace PlayerAssistant
 
             if (TryReadEncryptedEnvelope(document.RootElement, out var envelope))
             {
-                var decryptedSettings = DecryptSettings(envelope, settingsPath);
+                var decryptedSettings = DecryptSettings(envelope, resolvedDecryptionScopePath);
                 if (migrateToCurrentFormat
                     && (!string.Equals(envelope.Format, EncryptedFormat, StringComparison.Ordinal)
                         || envelope.SchemaVersion != CurrentSchemaVersion))
@@ -71,6 +97,19 @@ namespace PlayerAssistant
             }
 
             return plaintextSettings;
+        }
+
+        private static bool CanLoadSettingsBackup(string settingsPath, string decryptionScopePath)
+        {
+            try
+            {
+                _ = LoadSettingsCore(settingsPath, migrateToCurrentFormat: false, decryptionScopePath);
+                return true;
+            }
+            catch (Exception ex) when (IsRecoverableSettingsException(ex))
+            {
+                return false;
+            }
         }
 
         public static void SaveEncryptedSettings(string settingsPath, IReadOnlyDictionary<string, string> settings)
@@ -340,6 +379,16 @@ namespace PlayerAssistant
                 UserBound: true,
                 InstallPathBound: true,
                 ScopeHash: Convert.ToHexString(scopeHash));
+        }
+
+        private static bool IsRecoverableSettingsException(Exception ex)
+        {
+            return ex is IOException
+                or UnauthorizedAccessException
+                or InvalidOperationException
+                or JsonException
+                or FormatException
+                or CryptographicException;
         }
 
         private static bool TryReadEncryptedEnvelope(JsonElement root, out EncryptedSettingsEnvelope envelope)

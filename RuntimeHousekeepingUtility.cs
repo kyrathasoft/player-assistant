@@ -21,6 +21,7 @@ namespace PlayerAssistant
             CleanTempDirectory(rootDirectory, resolvedNow, resolvedOptions, report);
             CleanOrphanedAtomicFiles(rootDirectory, resolvedNow, resolvedOptions, report);
             CleanQuarantinedJsonFiles(rootDirectory, resolvedNow, resolvedOptions, report);
+            CleanRuntimeBackupFiles(rootDirectory, resolvedNow, resolvedOptions, report);
             RotateStartupLog(rootDirectory, resolvedNow, resolvedOptions, report);
 
             return report;
@@ -82,6 +83,21 @@ namespace PlayerAssistant
                 if (fileName.Contains(".bad-", StringComparison.OrdinalIgnoreCase))
                 {
                     DeleteIfStale(path, now, options.QuarantinedJsonRetention, report);
+                }
+            }
+        }
+
+        private static void CleanRuntimeBackupFiles(
+            string rootDirectory,
+            DateTimeOffset now,
+            RuntimeHousekeepingOptions options,
+            RuntimeHousekeepingReport report)
+        {
+            foreach (var path in EnumerateFilesSafely(rootDirectory, "*"))
+            {
+                if (RuntimeBackupUtility.IsBackupFile(path))
+                {
+                    DeleteIfStale(path, now, options.RuntimeBackupRetention, report);
                 }
             }
         }
@@ -231,6 +247,8 @@ namespace PlayerAssistant
         public TimeSpan OrphanedAtomicFileAge { get; init; } = TimeSpan.FromDays(1);
 
         public TimeSpan QuarantinedJsonRetention { get; init; } = TimeSpan.FromDays(14);
+
+        public TimeSpan RuntimeBackupRetention { get; init; } = TimeSpan.FromDays(30);
 
         public long MaxStartupLogBytes { get; init; } = 1_048_576;
     }

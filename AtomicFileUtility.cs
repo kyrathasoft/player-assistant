@@ -141,6 +141,13 @@ namespace PlayerAssistant
                 Directory.CreateDirectory(destinationDirectory);
             }
 
+            var shouldPruneBackups = false;
+            if (File.Exists(destinationPath))
+            {
+                RuntimeBackupUtility.CreateBackupBeforeWrite(destinationPath);
+                shouldPruneBackups = true;
+            }
+
             for (var attempt = 0; ; attempt++)
             {
                 cancellationToken.ThrowIfCancellationRequested();
@@ -153,6 +160,11 @@ namespace PlayerAssistant
                     else
                     {
                         File.Move(tempPath, destinationPath);
+                    }
+
+                    if (shouldPruneBackups)
+                    {
+                        RuntimeBackupUtility.PruneBackups(destinationPath);
                     }
 
                     return;

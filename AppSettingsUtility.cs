@@ -39,7 +39,10 @@ namespace PlayerAssistant
         {
             ArgumentException.ThrowIfNullOrWhiteSpace(runtimeDirectory);
 
-            var settings = LoadSettingsFile(RuntimePathUtility.ResolveApplicationFileForRead(SettingsFileName));
+            var runtimeSettingsPath = RuntimePathUtility.CombineUnderBase(runtimeDirectory, SettingsFileName);
+            var settings = LoadSettingsFile(File.Exists(runtimeSettingsPath)
+                ? runtimeSettingsPath
+                : RuntimePathUtility.ResolveApplicationFileForRead(SettingsFileName));
             var preferredLocalSettingsPath = RuntimePathUtility.GetUserDataPath(LocalSettingsFileName);
             var localSettingsPath = ResolveLocalSettingsPath(preferredLocalSettingsPath, runtimeDirectory);
 
@@ -82,15 +85,15 @@ namespace PlayerAssistant
 
         private static string ResolveLocalSettingsPath(string preferredLocalSettingsPath, string runtimeDirectory)
         {
-            if (File.Exists(preferredLocalSettingsPath))
-            {
-                return preferredLocalSettingsPath;
-            }
-
             var runtimeLocalSettingsPath = RuntimePathUtility.CombineUnderBase(runtimeDirectory, LocalSettingsFileName);
             if (File.Exists(runtimeLocalSettingsPath))
             {
                 return runtimeLocalSettingsPath;
+            }
+
+            if (File.Exists(preferredLocalSettingsPath))
+            {
+                return preferredLocalSettingsPath;
             }
 
             return RuntimePathUtility.ResolveUserDataFileForRead(LocalSettingsFileName);

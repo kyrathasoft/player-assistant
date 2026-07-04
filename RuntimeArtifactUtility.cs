@@ -51,6 +51,11 @@ namespace PlayerAssistant
             }
             catch (Exception ex) when (IsRecoverableArtifactException(ex))
             {
+                if (TryRestoreJsonBackup<T>(path, phase, options, ex, out value))
+                {
+                    return true;
+                }
+
                 QuarantineAndLog(path, phase, ex);
                 return false;
             }
@@ -77,6 +82,11 @@ namespace PlayerAssistant
             }
             catch (Exception ex) when (IsRecoverableArtifactException(ex))
             {
+                if (TryRestoreJsonBackup<T>(path, phase, options, ex, out var restoredValue))
+                {
+                    return restoredValue;
+                }
+
                 QuarantineAndLog(path, phase, ex);
                 return default;
             }
@@ -100,6 +110,50 @@ namespace PlayerAssistant
                 FileMode.Open,
                 FileAccess.Read,
                 FileShare.ReadWrite | FileShare.Delete);
+        }
+
+        private static bool TryRestoreJsonBackup<T>(
+            string path,
+            string phase,
+            JsonSerializerOptions? options,
+            Exception originalException,
+            out T? value)
+        {
+            value = default;
+            if (!RuntimeBackupUtility.TryRestoreLatestValidBackup(
+                    path,
+                    candidatePath => CanDeserializeJson<T>(candidatePath, options),
+                    phase,
+                    originalException,
+                    out _))
+            {
+                return false;
+            }
+
+            try
+            {
+                using var stream = OpenSharedRead(path);
+                value = JsonSerializer.Deserialize<T>(stream, options);
+                return value is not null;
+            }
+            catch (Exception ex) when (IsRecoverableArtifactException(ex))
+            {
+                StartupLoggingUtility.Append("runtime backup restore verification", ex);
+                return false;
+            }
+        }
+
+        private static bool CanDeserializeJson<T>(string path, JsonSerializerOptions? options)
+        {
+            try
+            {
+                using var stream = OpenSharedRead(path);
+                return JsonSerializer.Deserialize<T>(stream, options) is not null;
+            }
+            catch (Exception ex) when (IsRecoverableArtifactException(ex))
+            {
+                return false;
+            }
         }
 
         private static bool IsRecoverableArtifactException(Exception ex)

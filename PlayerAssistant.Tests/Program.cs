@@ -63,6 +63,7 @@ var tests = new (string Name, Action Test)[]
     ("runtime housekeeping removes stale temp and atomic files", RuntimeHousekeepingRemovesStaleTempAndAtomicFiles),
     ("runtime housekeeping preserves fresh and unrelated tmp files", RuntimeHousekeepingPreservesFreshAndUnrelatedTmpFiles),
     ("runtime housekeeping removes old quarantined json only", RuntimeHousekeepingRemovesOldQuarantinedJsonOnly),
+    ("runtime housekeeping removes old backup files only", RuntimeHousekeepingRemovesOldBackupFilesOnly),
     ("runtime housekeeping rotates oversized startup log", RuntimeHousekeepingRotatesOversizedStartupLog),
     ("runtime housekeeping skips locked files", RuntimeHousekeepingSkipsLockedFiles),
     ("ui operation failure reporter logs status and dialog", UiOperationFailureReporterLogsStatusAndDialog),
@@ -70,6 +71,7 @@ var tests = new (string Name, Action Test)[]
     ("background task supervisor logs failures", BackgroundTaskSupervisorLogsFailures),
     ("background task supervisor cancels running tasks on dispose", BackgroundTaskSupervisorCancelsRunningTasksOnDispose),
     ("atomic file promotion preserves existing destination on locked replacement", AtomicFilePromotionPreservesExistingDestinationOnLockedReplacement),
+    ("atomic file promotion creates bounded runtime backups", AtomicFilePromotionCreatesBoundedRuntimeBackups),
     ("network request retries transient failures", NetworkRequestRetriesTransientFailures),
     ("network request rejects disallowed host before send", NetworkRequestRejectsDisallowedHostBeforeSend),
     ("network request does not retry unauthorized", NetworkRequestDoesNotRetryUnauthorized),
@@ -86,6 +88,7 @@ var tests = new (string Name, Action Test)[]
     ("network response limit rejects oversized image header", NetworkResponseLimitRejectsOversizedImageHeader),
     ("markdown async fetch preserves caller cancellation", MarkdownAsyncFetchPreservesCallerCancellation),
     ("runtime artifact loader quarantines malformed json", RuntimeArtifactLoaderQuarantinesMalformedJson),
+    ("runtime artifact loader restores newest valid backup", RuntimeArtifactLoaderRestoresNewestValidBackup),
     ("startup dependency matrix logs locked runtime artifact failures", StartupDependencyMatrixLogsLockedRuntimeArtifactFailures),
     ("login info cache load returns empty for malformed json", LoginInfoCacheLoadReturnsEmptyForMalformedJson),
     ("asset manifest load returns empty for malformed json", AssetManifestLoadReturnsEmptyForMalformedJson),
@@ -147,6 +150,7 @@ var tests = new (string Name, Action Test)[]
     ("local settings rejects future schema version", LocalSettingsRejectsFutureSchemaVersion),
     ("scoped local settings reject copied install path", ScopedLocalSettingsRejectCopiedInstallPath),
     ("authenticated local settings reject tampered payload", AuthenticatedLocalSettingsRejectTamperedPayload),
+    ("local settings restores newest valid backup", LocalSettingsRestoresNewestValidBackup),
     ("runtime path utility rejects escaped paths", RuntimePathUtilityRejectsEscapedPaths),
     ("health argument returns startup health summary", HealthArgumentReturnsStartupHealthSummary),
     ("publish verification accepts current output", PublishVerificationAcceptsCurrentOutput),
@@ -1087,6 +1091,34 @@ static void RuntimeHousekeepingRemovesOldQuarantinedJsonOnly()
     AssertEqual(1, report.RemovedFileCount, "unexpected removed quarantine count");
 }
 
+static void RuntimeHousekeepingRemovesOldBackupFilesOnly()
+{
+    using var directory = TemporaryDirectory.Create();
+    var now = new DateTimeOffset(2026, 7, 2, 12, 0, 0, TimeSpan.Zero);
+    var oldBackupPath = Path.Combine(directory.Path, "keyword-index.bak-20260601-010203-004.json");
+    var freshBackupPath = Path.Combine(directory.Path, "settings.bak-20260702-010203-004.json");
+    var normalJsonPath = Path.Combine(directory.Path, "settings.json");
+    File.WriteAllText(oldBackupPath, "{}");
+    File.WriteAllText(freshBackupPath, "{}");
+    File.WriteAllText(normalJsonPath, "{}");
+    SetLastWriteTimeUtc(oldBackupPath, now - TimeSpan.FromDays(31));
+    SetLastWriteTimeUtc(freshBackupPath, now - TimeSpan.FromDays(1));
+    SetLastWriteTimeUtc(normalJsonPath, now - TimeSpan.FromDays(60));
+
+    var report = RuntimeHousekeepingUtility.Clean(
+        directory.Path,
+        now,
+        new RuntimeHousekeepingOptions
+        {
+            RuntimeBackupRetention = TimeSpan.FromDays(30)
+        });
+
+    AssertFalse(File.Exists(oldBackupPath), "old backup should be removed");
+    AssertTrue(File.Exists(freshBackupPath), "fresh backup should be preserved");
+    AssertTrue(File.Exists(normalJsonPath), "normal json should be preserved");
+    AssertEqual(1, report.RemovedFileCount, "unexpected removed backup count");
+}
+
 static void RuntimeHousekeepingRotatesOversizedStartupLog()
 {
     using var directory = TemporaryDirectory.Create();
@@ -1301,6 +1333,29 @@ static void AtomicFilePromotionPreservesExistingDestinationOnLockedReplacement()
 
     AssertEqual("old cache", File.ReadAllText(destinationPath), "existing cache should survive failed promotion");
     AssertTrue(File.Exists(tempPath), "temp file should remain for caller cleanup after failed promotion");
+}
+
+static void AtomicFilePromotionCreatesBoundedRuntimeBackups()
+{
+    using var directory = TemporaryDirectory.Create();
+    var destinationPath = Path.Combine(directory.Path, "keyword-index.json");
+    File.WriteAllText(destinationPath, """{"version":0}""");
+
+    for (var index = 1; index <= 7; index++)
+    {
+        AtomicFileUtility.WriteAllText(destinationPath, $$"""{"version":{{index}}}""");
+        Thread.Sleep(2);
+    }
+
+    AssertEqual("""{"version":7}""", File.ReadAllText(destinationPath), "destination should contain newest content");
+    var backups = Directory.GetFiles(directory.Path, "keyword-index.bak-*.json");
+    AssertEqual(5, backups.Length, "runtime backup retention should keep the newest five backups");
+    AssertTrue(
+        backups.Any(path => File.ReadAllText(path).Contains("\"version\":6", StringComparison.Ordinal)),
+        "newest previous content should be backed up");
+    AssertFalse(
+        backups.Any(path => File.ReadAllText(path).Contains("\"version\":0", StringComparison.Ordinal)),
+        "oldest backup should be pruned");
 }
 
 static void NetworkRequestRetriesTransientFailures()
@@ -1623,6 +1678,40 @@ static void RuntimeArtifactLoaderQuarantinesMalformedJson()
             File.Delete(startupLogPath);
         }
     }
+}
+
+static void RuntimeArtifactLoaderRestoresNewestValidBackup()
+{
+    using var directory = TemporaryDirectory.Create();
+    var artifactPath = Path.Combine(directory.Path, "runtime-cache.json");
+    var olderBackupPath = Path.Combine(directory.Path, "runtime-cache.bak-20260701-010203-001.json");
+    var invalidBackupPath = Path.Combine(directory.Path, "runtime-cache.bak-20260702-010203-001.json");
+    var newestBackupPath = Path.Combine(directory.Path, "runtime-cache.bak-20260703-010203-001.json");
+    File.WriteAllText(artifactPath, "{ not valid json");
+    File.WriteAllText(olderBackupPath, """{"value":"old"}""");
+    File.WriteAllText(invalidBackupPath, "{ also invalid");
+    File.WriteAllText(newestBackupPath, """{"value":"restored"}""");
+    SetLastWriteTimeUtc(olderBackupPath, new DateTimeOffset(2026, 7, 1, 1, 2, 3, TimeSpan.Zero));
+    SetLastWriteTimeUtc(invalidBackupPath, new DateTimeOffset(2026, 7, 2, 1, 2, 3, TimeSpan.Zero));
+    SetLastWriteTimeUtc(newestBackupPath, new DateTimeOffset(2026, 7, 3, 1, 2, 3, TimeSpan.Zero));
+
+    WithPreservedStartupLog(() =>
+    {
+        var loaded = RuntimeArtifactUtility.TryLoadJson<Dictionary<string, string>>(
+            artifactPath,
+            "runtime artifact restore test",
+            out var value);
+
+        AssertTrue(loaded, "malformed runtime artifact should restore from the newest valid backup");
+        AssertTrue(value is not null, "restored runtime artifact should return a value");
+        AssertEqual("restored", value!["value"], "unexpected restored value");
+        AssertEqual("""{"value":"restored"}""", File.ReadAllText(artifactPath), "active artifact should be restored from backup");
+        AssertEqual(0, Directory.GetFiles(directory.Path, "runtime-cache.bad-*.json").Length, "restored artifact should not be quarantined");
+
+        var startupLog = File.ReadAllText(GetStartupLogPath());
+        AssertContains(startupLog, "runtime artifact restore test");
+        AssertContains(startupLog, "Restored runtime artifact");
+    });
 }
 
 static void StartupDependencyMatrixLogsLockedRuntimeArtifactFailures()
@@ -3353,6 +3442,40 @@ static void AuthenticatedLocalSettingsRejectTamperedPayload()
     AssertContains(exception.Message, "authenticate or decrypt");
 }
 
+static void LocalSettingsRestoresNewestValidBackup()
+{
+    using var directory = TemporaryDirectory.Create();
+    var localSettingsPath = Path.Combine(directory.Path, "settings.local.json");
+    var validBackupPath = Path.Combine(directory.Path, "settings.local.bak-20260701-010203-001.json");
+    var invalidBackupPath = Path.Combine(directory.Path, "settings.local.bak-20260702-010203-001.json");
+
+    LocalSettingsUtility.SaveEncryptedSettings(
+        localSettingsPath,
+        new Dictionary<string, string>
+        {
+            ["RPOL user name"] = "restored-user",
+            ["RPOL password"] = "restored-password"
+        });
+    File.Copy(localSettingsPath, validBackupPath);
+    File.WriteAllText(invalidBackupPath, "{ not valid settings");
+    File.WriteAllText(localSettingsPath, "{ corrupt active settings");
+    SetLastWriteTimeUtc(validBackupPath, new DateTimeOffset(2026, 7, 1, 1, 2, 3, TimeSpan.Zero));
+    SetLastWriteTimeUtc(invalidBackupPath, new DateTimeOffset(2026, 7, 2, 1, 2, 3, TimeSpan.Zero));
+
+    WithPreservedStartupLog(() =>
+    {
+        var settings = LocalSettingsUtility.LoadSettings(localSettingsPath);
+
+        AssertEqual("restored-user", settings["RPOL user name"], "unexpected restored user name");
+        AssertEqual("restored-password", settings["RPOL password"], "unexpected restored password");
+        AssertFalse(File.ReadAllText(localSettingsPath).Contains("corrupt active", StringComparison.Ordinal), "corrupt active settings should be replaced");
+
+        var startupLog = File.ReadAllText(GetStartupLogPath());
+        AssertContains(startupLog, "local settings backup restore");
+        AssertContains(startupLog, "Restored runtime artifact");
+    });
+}
+
 static void RuntimePathUtilityRejectsEscapedPaths()
 {
     using var directory = TemporaryDirectory.Create();
@@ -3935,6 +4058,7 @@ static void WithCopiedPublishDirectory(Action<string> action)
         var fixtureSettings = CreateValidAppSettings(includeCredentials: true);
 
         CopyDirectory(GetCurrentPublishDirectory(), directoryPath);
+        ClearReadOnlyAttributes(directoryPath);
         WriteRequiredRuntimeSidecars(directoryPath);
         LocalSettingsUtility.SaveEncryptedSettings(sourceSettingsPath, fixtureSettings);
         LocalSettingsUtility.SaveEncryptedSettings(publishedSettingsPath, fixtureSettings);
@@ -3947,6 +4071,7 @@ static void WithCopiedPublishDirectory(Action<string> action)
     {
         if (Directory.Exists(directoryPath))
         {
+            ClearReadOnlyAttributes(directoryPath);
             Directory.Delete(directoryPath, recursive: true);
         }
 
@@ -3954,6 +4079,19 @@ static void WithCopiedPublishDirectory(Action<string> action)
         {
             File.Delete(sourceSettingsPath);
         }
+    }
+}
+
+static void ClearReadOnlyAttributes(string directoryPath)
+{
+    if (!Directory.Exists(directoryPath))
+    {
+        return;
+    }
+
+    foreach (var path in Directory.EnumerateFiles(directoryPath, "*", SearchOption.AllDirectories))
+    {
+        File.SetAttributes(path, File.GetAttributes(path) & ~FileAttributes.ReadOnly);
     }
 }
 
