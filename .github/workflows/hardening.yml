@@ -48,6 +48,129 @@ jobs:
         shell: pwsh
         run: dotnet build .\player-assistant.csproj --configuration Release --nologo
 
+      - name: Seed Release runtime artifacts
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $releaseDir = $env:RELEASE_DIR
+          New-Item -ItemType Directory -Force -Path $releaseDir | Out-Null
+
+          $settings = Get-Content -Raw -LiteralPath .\settings.json | ConvertFrom-Json
+          $vaultUrl = ([string]$settings.'Obsidian Game Vault').TrimEnd('/')
+          if ([string]::IsNullOrWhiteSpace($vaultUrl)) {
+            throw "settings.json is missing 'Obsidian Game Vault'."
+          }
+
+          $sitemapUrl = "$vaultUrl/sitemap.xml"
+          $sitemapPath = Join-Path $releaseDir 'sitemap.xml'
+          $keywordUrlPath = Join-Path $releaseDir 'sitemap-keyword-urls.json'
+          $keywordIndexPath = Join-Path $releaseDir 'keyword-index.json'
+          $keywordTermsPath = Join-Path $releaseDir 'game-posts-key-terms.md'
+
+          Invoke-WebRequest -Uri $sitemapUrl -OutFile $sitemapPath
+          [xml]$sitemap = Get-Content -Raw -LiteralPath $sitemapPath
+
+          $urls = @(
+            $sitemap.urlset.url |
+              ForEach-Object { [string]$_.loc } |
+              Where-Object { ![string]::IsNullOrWhiteSpace($_) } |
+              Sort-Object -Unique
+          )
+          if ($urls.Count -le 0) {
+            throw "No URLs were found in $sitemapUrl."
+          }
+
+          $urlSources = [ordered]@{}
+          $keywordUrls = [ordered]@{}
+          $keywordWords = [ordered]@{}
+          $termSet = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
+          $generatedAt = (Get-Date).ToString('O')
+
+          foreach ($url in $urls) {
+            $urlSources[$url] = [ordered]@{ source = 'obsidian' }
+
+            $uri = [System.Uri]$url
+            $segments = @($uri.AbsolutePath -split '/')
+            $slug = ($segments | Where-Object { $_ } | Select-Object -Last 1)
+            if ([string]::IsNullOrWhiteSpace($slug)) {
+              continue
+            }
+
+            $decodedSlug = [System.Uri]::UnescapeDataString($slug)
+            $candidateTerms = @(
+              $decodedSlug
+              ($decodedSlug -replace '[-_]+', ' ')
+            )
+
+            foreach ($candidate in $candidateTerms) {
+              foreach ($part in ($candidate -split '[^A-Za-z0-9]+')) {
+                $term = $part.Trim()
+                if ($term.Length -lt 3) {
+                  continue
+                }
+
+                if ($termSet.Add($term)) {
+                  $keywordUrls[$term] = @($url)
+                  $keywordWords[$term] = [ordered]@{
+                    total_occurrences = 1
+                    matches = @(
+                      [ordered]@{
+                        url = $url
+                        count = 1
+                        last_indexed = $generatedAt
+                      }
+                    )
+                  }
+                }
+                else {
+                  $existingUrls = [System.Collections.Generic.List[string]]::new()
+                  foreach ($existingUrl in @($keywordUrls[$term])) {
+                    [void]$existingUrls.Add([string]$existingUrl)
+                  }
+                  if (-not $existingUrls.Contains($url)) {
+                    [void]$existingUrls.Add($url)
+                    $keywordUrls[$term] = @($existingUrls.ToArray())
+                  }
+
+                  $entry = $keywordWords[$term]
+                  $entry.total_occurrences = [int]$entry.total_occurrences + 1
+                  $matches = [System.Collections.Generic.List[object]]::new()
+                  foreach ($match in @($entry.matches)) {
+                    $matches.Add($match) | Out-Null
+                  }
+                  $matches.Add([ordered]@{
+                    url = $url
+                    count = 1
+                    last_indexed = $generatedAt
+                  }) | Out-Null
+                  $entry.matches = @($matches.ToArray())
+                  $keywordWords[$term] = $entry
+                }
+              }
+            }
+          }
+
+          if ($termSet.Count -le 0) {
+            throw "No keyword terms were derived from $sitemapUrl."
+          }
+
+          $terms = [string[]]@($termSet)
+          [Array]::Sort($terms, [System.StringComparer]::OrdinalIgnoreCase)
+
+          $keywordUrlDocument = $keywordUrls | ConvertTo-Json -Depth 20
+          $keywordIndexDocument = [ordered]@{
+            index_metadata = [ordered]@{
+              generated_at = $generatedAt
+              total_words_indexed = $terms.Count
+            }
+            urls = $urlSources
+            words = $keywordWords
+          } | ConvertTo-Json -Depth 20
+
+          [System.IO.File]::WriteAllText($keywordUrlPath, $keywordUrlDocument + "`n", [System.Text.UTF8Encoding]::new($false))
+          [System.IO.File]::WriteAllText($keywordIndexPath, $keywordIndexDocument + "`n", [System.Text.UTF8Encoding]::new($false))
+          [System.IO.File]::WriteAllLines($keywordTermsPath, $terms, [System.Text.UTF8Encoding]::new($false))
+
       - name: Publish and verify
         shell: pwsh
         run: .\publish-player-assistant.ps1 -OutputDir $env:PUBLISH_DIR
