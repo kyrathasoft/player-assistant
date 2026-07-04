@@ -457,10 +457,14 @@ namespace PlayerAssistant
                     $"loading '{uri}'",
                     cancellationToken);
                 EnsureSuccessfulResponse(uri, response);
-                return await WaitForPlaywrightAsync(
+                var html = await WaitForPlaywrightAsync(
                     page.ContentAsync(),
                     $"reading HTML from '{uri}'",
                     cancellationToken);
+                NetworkRequestUtility.EnsureByteCountWithinLimit(
+                    Encoding.UTF8.GetByteCount(html),
+                    NetworkResponseContentLimit.Html);
+                return html;
             }
             finally
             {
@@ -492,11 +496,17 @@ namespace PlayerAssistant
                     ? headerValue
                     : null;
 
+                var body = await WaitForPlaywrightAsync(
+                    response.BodyAsync(),
+                    $"reading the response body from '{uri}'",
+                    cancellationToken);
+                var limit = contentType is not null && contentType.StartsWith("image/", StringComparison.OrdinalIgnoreCase)
+                    ? NetworkResponseContentLimit.Image
+                    : NetworkResponseContentLimit.Html;
+                NetworkRequestUtility.EnsureByteCountWithinLimit(body.Length, limit);
+
                 return new RpolResponse(
-                    await WaitForPlaywrightAsync(
-                        response.BodyAsync(),
-                        $"reading the response body from '{uri}'",
-                        cancellationToken),
+                    body,
                     contentType);
             }
             finally

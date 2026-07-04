@@ -44,7 +44,11 @@ namespace PlayerAssistant
             {
                 await AtomicFileUtility.WriteFileAsync(
                     destinationPath,
-                    destination => source.CopyToAsync(destination, cancellationToken),
+                    destination => NetworkRequestUtility.CopyToAsync(
+                        source,
+                        destination,
+                        NetworkResponseContentLimit.JsonCache,
+                        cancellationToken),
                     cancellationToken);
             }
 

@@ -1,4 +1,5 @@
 using System.Net;
+using System.Text;
 
 namespace PlayerAssistant
 {
@@ -28,8 +29,38 @@ namespace PlayerAssistant
             TimeSpan.FromMilliseconds(500));
     }
 
+    internal sealed record NetworkResponseContentLimit(string Description, long MaxBytes)
+    {
+        public static NetworkResponseContentLimit Html { get; } = new("HTML response", 5L * 1024L * 1024L);
+        public static NetworkResponseContentLimit Markdown { get; } = new("markdown response", 2L * 1024L * 1024L);
+        public static NetworkResponseContentLimit JsonCache { get; } = new("JSON cache response", 10L * 1024L * 1024L);
+        public static NetworkResponseContentLimit Image { get; } = new("image response", 25L * 1024L * 1024L);
+    }
+
+    internal sealed class NetworkResponseTooLargeException : InvalidOperationException
+    {
+        public NetworkResponseTooLargeException(NetworkResponseContentLimit limit, long actualBytes)
+            : base($"{limit.Description} exceeded the {FormatByteCount(limit.MaxBytes)} limit ({FormatByteCount(actualBytes)} received).")
+        {
+            Limit = limit;
+            ActualBytes = actualBytes;
+        }
+
+        public NetworkResponseContentLimit Limit { get; }
+
+        public long ActualBytes { get; }
+
+        private static string FormatByteCount(long bytes)
+        {
+            return bytes >= 1024L * 1024L
+                ? $"{bytes / 1024d / 1024d:0.#} MB"
+                : $"{bytes / 1024d:0.#} KB";
+        }
+    }
+
     internal static class NetworkRequestUtility
     {
+        private const int CopyBufferSize = 81920;
         private const int CircuitBreakerFailureThreshold = 2;
         private static readonly TimeSpan CircuitBreakerCooldown = TimeSpan.FromMinutes(5);
         private static readonly object CircuitBreakerSyncRoot = new();
@@ -165,6 +196,87 @@ namespace PlayerAssistant
             return httpClient;
         }
 
+        public static async Task<string> ReadStringAsync(
+            HttpContent content,
+            NetworkResponseContentLimit limit,
+            CancellationToken cancellationToken = default)
+        {
+            var bytes = await ReadBytesAsync(content, limit, cancellationToken).ConfigureAwait(false);
+            return GetEncoding(content).GetString(bytes);
+        }
+
+        public static async Task<byte[]> ReadBytesAsync(
+            HttpContent content,
+            NetworkResponseContentLimit limit,
+            CancellationToken cancellationToken = default)
+        {
+            ArgumentNullException.ThrowIfNull(content);
+            ArgumentNullException.ThrowIfNull(limit);
+            ValidateLimit(limit);
+            ThrowIfContentLengthExceedsLimit(content, limit);
+
+            await using var source = await content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false);
+            using var destination = new MemoryStream();
+            await CopyToAsync(source, destination, limit, cancellationToken).ConfigureAwait(false);
+            return destination.ToArray();
+        }
+
+        public static async Task CopyToAsync(
+            HttpContent content,
+            Stream destination,
+            NetworkResponseContentLimit limit,
+            CancellationToken cancellationToken = default)
+        {
+            ArgumentNullException.ThrowIfNull(content);
+            ThrowIfContentLengthExceedsLimit(content, limit);
+
+            await using var source = await content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false);
+            await CopyToAsync(source, destination, limit, cancellationToken).ConfigureAwait(false);
+        }
+
+        public static async Task CopyToAsync(
+            Stream source,
+            Stream destination,
+            NetworkResponseContentLimit limit,
+            CancellationToken cancellationToken = default)
+        {
+            ArgumentNullException.ThrowIfNull(source);
+            ArgumentNullException.ThrowIfNull(destination);
+            ArgumentNullException.ThrowIfNull(limit);
+            ValidateLimit(limit);
+
+            var buffer = new byte[CopyBufferSize];
+            long totalBytes = 0;
+            while (true)
+            {
+                var bytesRead = await source.ReadAsync(buffer, cancellationToken).ConfigureAwait(false);
+                if (bytesRead == 0)
+                {
+                    return;
+                }
+
+                totalBytes += bytesRead;
+                if (totalBytes > limit.MaxBytes)
+                {
+                    throw new NetworkResponseTooLargeException(limit, totalBytes);
+                }
+
+                await destination.WriteAsync(buffer.AsMemory(0, bytesRead), cancellationToken).ConfigureAwait(false);
+            }
+        }
+
+        public static void EnsureByteCountWithinLimit(
+            long actualBytes,
+            NetworkResponseContentLimit limit)
+        {
+            ArgumentNullException.ThrowIfNull(limit);
+            ValidateLimit(limit);
+            if (actualBytes > limit.MaxBytes)
+            {
+                throw new NetworkResponseTooLargeException(limit, actualBytes);
+            }
+        }
+
         internal static HttpClient CreateHttpClient(HttpMessageHandler handler)
         {
             var httpClient = new HttpClient(handler)
@@ -173,6 +285,43 @@ namespace PlayerAssistant
             };
             httpClient.DefaultRequestHeaders.UserAgent.ParseAdd("PlayerAssistant/1.0");
             return httpClient;
+        }
+
+        private static void ThrowIfContentLengthExceedsLimit(HttpContent content, NetworkResponseContentLimit limit)
+        {
+            ArgumentNullException.ThrowIfNull(content);
+            ArgumentNullException.ThrowIfNull(limit);
+            ValidateLimit(limit);
+
+            if (content.Headers.ContentLength is { } contentLength)
+            {
+                EnsureByteCountWithinLimit(contentLength, limit);
+            }
+        }
+
+        private static Encoding GetEncoding(HttpContent content)
+        {
+            var charset = content.Headers.ContentType?.CharSet;
+            if (!string.IsNullOrWhiteSpace(charset))
+            {
+                try
+                {
+                    return Encoding.GetEncoding(charset.Trim('"'));
+                }
+                catch (ArgumentException)
+                {
+                }
+            }
+
+            return Encoding.UTF8;
+        }
+
+        private static void ValidateLimit(NetworkResponseContentLimit limit)
+        {
+            if (limit.MaxBytes <= 0)
+            {
+                throw new ArgumentOutOfRangeException(nameof(limit), "Network response content limits must be greater than zero.");
+            }
         }
 
         internal static void ResetCircuitBreakersForTests()

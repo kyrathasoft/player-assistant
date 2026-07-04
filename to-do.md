@@ -72,12 +72,12 @@
 
 ## Future hardening implementation tasks
 
-- [ ] Add network response content limits for HTML, markdown, JSON cache, and image downloads.
-  - [ ] Define per-content-type maximum byte limits and sensible defaults.
-  - [ ] Enforce limits while streaming HTTP responses instead of after full buffering.
-  - [ ] Apply limits to RPOL HTML fetches, Obsidian markdown fetches, keyword/sitemap JSON cache downloads, and hero/image downloads.
-  - [ ] Log/quarantine partial or oversized runtime artifacts without replacing last known good files.
-  - [ ] Add tests for oversized HTML, markdown, JSON, and image responses.
+- [x] Add network response content limits for HTML, markdown, JSON cache, and image downloads.
+  - [x] Define per-content-type maximum byte limits and sensible defaults.
+  - [x] Enforce limits while streaming HTTP responses instead of after full buffering.
+  - [x] Apply limits to RPOL HTML fetches, Obsidian markdown fetches, keyword/sitemap JSON cache downloads, and hero/image downloads.
+  - [x] Preserve last known good files by failing bounded downloads before atomic promotion.
+  - [x] Add tests for oversized HTML, markdown, JSON, and image responses.
 - [ ] Validate sitemap and keyword-index URL entries against the network allowlist before storing them.
   - [ ] Validate every sitemap URL before writing `sitemap.xml`.
   - [ ] Validate keyword-index URL lists before writing `sitemap-keyword-urls.json` or `keyword-index.json`.

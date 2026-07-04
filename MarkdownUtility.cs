@@ -1,4 +1,5 @@
 using System.Net.Http.Headers;
+using System.Text;
 using System.Text.RegularExpressions;
 
 namespace PlayerAssistant
@@ -198,10 +199,15 @@ namespace PlayerAssistant
             using (response)
             {
                 response.EnsureSuccessStatusCode();
-                var content = response.Content.ReadAsStringAsync().GetAwaiter().GetResult();
+                var initialLimit = GetInitialResponseLimit(response);
+                var content = NetworkRequestUtility.ReadStringAsync(
+                    response.Content,
+                    initialLimit,
+                    CancellationToken.None).GetAwaiter().GetResult();
 
                 if (!IsHtmlResponse(response, content))
                 {
+                    EnsureMarkdownContentWithinLimit(content, initialLimit);
                     return content;
                 }
 
@@ -222,7 +228,10 @@ namespace PlayerAssistant
                     });
                 markdownResponse.EnsureSuccessStatusCode();
 
-                return markdownResponse.Content.ReadAsStringAsync().GetAwaiter().GetResult();
+                return NetworkRequestUtility.ReadStringAsync(
+                    markdownResponse.Content,
+                    NetworkResponseContentLimit.Markdown,
+                    CancellationToken.None).GetAwaiter().GetResult();
             }
         }
 
@@ -232,10 +241,15 @@ namespace PlayerAssistant
             CancellationToken cancellationToken)
         {
             response.EnsureSuccessStatusCode();
-            var content = await response.Content.ReadAsStringAsync(cancellationToken);
+            var initialLimit = GetInitialResponseLimit(response);
+            var content = await NetworkRequestUtility.ReadStringAsync(
+                response.Content,
+                initialLimit,
+                cancellationToken);
 
             if (!IsHtmlResponse(response, content))
             {
+                EnsureMarkdownContentWithinLimit(content, initialLimit);
                 return content;
             }
 
@@ -257,7 +271,10 @@ namespace PlayerAssistant
                 cancellationToken: cancellationToken);
             markdownResponse.EnsureSuccessStatusCode();
 
-            return await markdownResponse.Content.ReadAsStringAsync(cancellationToken);
+            return await NetworkRequestUtility.ReadStringAsync(
+                markdownResponse.Content,
+                NetworkResponseContentLimit.Markdown,
+                cancellationToken);
         }
 
         private static bool IsHtmlResponse(HttpResponseMessage response, string content)
@@ -266,6 +283,28 @@ namespace PlayerAssistant
             return string.Equals(mediaType, "text/html", StringComparison.OrdinalIgnoreCase)
                 || content.TrimStart().StartsWith("<!doctype html", StringComparison.OrdinalIgnoreCase)
                 || content.TrimStart().StartsWith("<html", StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static NetworkResponseContentLimit GetInitialResponseLimit(HttpResponseMessage response)
+        {
+            var mediaType = response.Content.Headers.ContentType?.MediaType;
+            return string.Equals(mediaType, "text/html", StringComparison.OrdinalIgnoreCase)
+                ? NetworkResponseContentLimit.Html
+                : NetworkResponseContentLimit.Markdown;
+        }
+
+        private static void EnsureMarkdownContentWithinLimit(
+            string content,
+            NetworkResponseContentLimit appliedLimit)
+        {
+            if (ReferenceEquals(appliedLimit, NetworkResponseContentLimit.Markdown))
+            {
+                return;
+            }
+
+            NetworkRequestUtility.EnsureByteCountWithinLimit(
+                Encoding.UTF8.GetByteCount(content),
+                NetworkResponseContentLimit.Markdown);
         }
 
         private static Uri? GetObsidianPublishMarkdownUrl(string html)

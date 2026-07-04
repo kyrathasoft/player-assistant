@@ -50,7 +50,10 @@ namespace PlayerAssistant
                 cancellationToken: cancellationToken);
             response.EnsureSuccessStatusCode();
 
-            return await response.Content.ReadAsStringAsync(cancellationToken);
+            return await NetworkRequestUtility.ReadStringAsync(
+                response.Content,
+                NetworkResponseContentLimit.Html,
+                cancellationToken);
         }
 
         public static Task<Hyperlink[]> GetRpolGameHyperlinksAsync(CancellationToken cancellationToken = default)

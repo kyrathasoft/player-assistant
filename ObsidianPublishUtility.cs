@@ -85,8 +85,11 @@ namespace PlayerAssistant
                 cancellationToken: cancellationToken);
             response.EnsureSuccessStatusCode();
 
-            await using var cacheStream = await response.Content.ReadAsStreamAsync(cancellationToken);
-            using var cacheJson = await JsonDocument.ParseAsync(cacheStream, cancellationToken: cancellationToken);
+            var cacheBytes = await NetworkRequestUtility.ReadBytesAsync(
+                response.Content,
+                NetworkResponseContentLimit.JsonCache,
+                cancellationToken);
+            using var cacheJson = JsonDocument.Parse(cacheBytes);
 
             return cacheJson.RootElement
                 .EnumerateObject()

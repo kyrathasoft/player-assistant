@@ -28,6 +28,9 @@ namespace PlayerAssistant
             {
                 var rpolResponse = await RpolAuthUtility.GetResponseAsync(uri, cancellationToken);
                 EnsureImageContentType(rpolResponse.ContentType);
+                NetworkRequestUtility.EnsureByteCountWithinLimit(
+                    rpolResponse.Body.Length,
+                    NetworkResponseContentLimit.Image);
 
                 await using var rpolImageStream = new MemoryStream(rpolResponse.Body, writable: false);
                 using var rpolImage = Image.FromStream(rpolImageStream);
@@ -47,7 +50,11 @@ namespace PlayerAssistant
                 throw new InvalidOperationException($"The URI did not return an image. Content type: {mediaType}");
             }
 
-            await using var imageStream = await response.Content.ReadAsStreamAsync(cancellationToken);
+            var imageBytes = await NetworkRequestUtility.ReadBytesAsync(
+                response.Content,
+                NetworkResponseContentLimit.Image,
+                cancellationToken);
+            await using var imageStream = new MemoryStream(imageBytes, writable: false);
             using var image = Image.FromStream(imageStream);
             return new Bitmap(image);
         }
@@ -87,6 +94,9 @@ namespace PlayerAssistant
             {
                 var rpolResponse = await RpolAuthUtility.GetResponseAsync(uri, cancellationToken);
                 EnsureImageContentType(rpolResponse.ContentType);
+                NetworkRequestUtility.EnsureByteCountWithinLimit(
+                    rpolResponse.Body.Length,
+                    NetworkResponseContentLimit.Image);
                 await WriteBytesToFileAsync(destinationPath, rpolResponse.Body, cancellationToken);
                 return;
             }
@@ -108,7 +118,11 @@ namespace PlayerAssistant
             {
                 await AtomicFileUtility.WriteFileAsync(
                     destinationPath,
-                    outputStream => imageStream.CopyToAsync(outputStream, cancellationToken),
+                    outputStream => NetworkRequestUtility.CopyToAsync(
+                        imageStream,
+                        outputStream,
+                        NetworkResponseContentLimit.Image,
+                        cancellationToken),
                     cancellationToken);
             }
 
@@ -150,6 +164,9 @@ namespace PlayerAssistant
             {
                 var rpolResponse = await RpolAuthUtility.GetResponseAsync(uri, cancellationToken);
                 EnsureImageContentType(rpolResponse.ContentType);
+                NetworkRequestUtility.EnsureByteCountWithinLimit(
+                    rpolResponse.Body.Length,
+                    NetworkResponseContentLimit.Image);
                 await WritePngBytesToFileAsync(destinationPath, rpolResponse.Body, cancellationToken);
                 return;
             }
@@ -180,7 +197,11 @@ namespace PlayerAssistant
                         bufferSize: 81920,
                         useAsync: true))
                     {
-                        await imageStream.CopyToAsync(sourceStream, cancellationToken);
+                        await NetworkRequestUtility.CopyToAsync(
+                            imageStream,
+                            sourceStream,
+                            NetworkResponseContentLimit.Image,
+                            cancellationToken);
                     }
 
                     using var bitmap = SKBitmap.Decode(tempSourcePath)

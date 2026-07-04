@@ -75,6 +75,11 @@ var tests = new (string Name, Action Test)[]
     ("startup dependency matrix classifies terminal network failure", StartupDependencyMatrixClassifiesTerminalNetworkFailure),
     ("network request wraps timeout", NetworkRequestWrapsTimeout),
     ("network request preserves caller cancellation", NetworkRequestPreservesCallerCancellation),
+    ("network response limits define defaults", NetworkResponseLimitsDefineDefaults),
+    ("network response limit rejects oversized html header", NetworkResponseLimitRejectsOversizedHtmlHeader),
+    ("network response limit rejects oversized markdown stream", NetworkResponseLimitRejectsOversizedMarkdownStream),
+    ("network response limit rejects oversized json cache stream", NetworkResponseLimitRejectsOversizedJsonCacheStream),
+    ("network response limit rejects oversized image header", NetworkResponseLimitRejectsOversizedImageHeader),
     ("markdown async fetch preserves caller cancellation", MarkdownAsyncFetchPreservesCallerCancellation),
     ("runtime artifact loader quarantines malformed json", RuntimeArtifactLoaderQuarantinesMalformedJson),
     ("startup dependency matrix logs locked runtime artifact failures", StartupDependencyMatrixLogsLockedRuntimeArtifactFailures),
@@ -1393,6 +1398,68 @@ static void NetworkRequestPreservesCallerCancellation()
             () => new HttpRequestMessage(HttpMethod.Get, "https://rpol.net/cancel"),
             policy: new NetworkRequestPolicy(TimeSpan.FromSeconds(1), MaxAttempts: 3, TimeSpan.Zero),
             cancellationToken: cancellation.Token).GetAwaiter().GetResult());
+}
+
+static void NetworkResponseLimitsDefineDefaults()
+{
+    AssertTrue(NetworkResponseContentLimit.Html.MaxBytes > 0, "HTML response limit should be positive");
+    AssertTrue(NetworkResponseContentLimit.Markdown.MaxBytes > 0, "markdown response limit should be positive");
+    AssertTrue(NetworkResponseContentLimit.JsonCache.MaxBytes > 0, "JSON cache response limit should be positive");
+    AssertTrue(NetworkResponseContentLimit.Image.MaxBytes > 0, "image response limit should be positive");
+    AssertTrue(
+        NetworkResponseContentLimit.Image.MaxBytes > NetworkResponseContentLimit.Markdown.MaxBytes,
+        "image downloads should allow larger payloads than markdown documents");
+}
+
+static void NetworkResponseLimitRejectsOversizedHtmlHeader()
+{
+    using var content = new ByteArrayContent([]);
+    content.Headers.ContentLength = NetworkResponseContentLimit.Html.MaxBytes + 1;
+
+    var exception = AssertThrows<NetworkResponseTooLargeException>(() =>
+        NetworkRequestUtility.ReadStringAsync(
+            content,
+            NetworkResponseContentLimit.Html).GetAwaiter().GetResult());
+
+    AssertContains(exception.Message, "HTML response");
+}
+
+static void NetworkResponseLimitRejectsOversizedMarkdownStream()
+{
+    using var source = new MemoryStream(System.Text.Encoding.UTF8.GetBytes("abcdef"));
+    using var destination = new MemoryStream();
+    var limit = new NetworkResponseContentLimit("markdown response", 5);
+
+    var exception = AssertThrows<NetworkResponseTooLargeException>(() =>
+        NetworkRequestUtility.CopyToAsync(source, destination, limit).GetAwaiter().GetResult());
+
+    AssertContains(exception.Message, "markdown response");
+    AssertEqual(0L, destination.Length, "oversized markdown stream should not be written after limit breach");
+}
+
+static void NetworkResponseLimitRejectsOversizedJsonCacheStream()
+{
+    using var content = new ChunkedHttpContent(System.Text.Encoding.UTF8.GetBytes("""{"oversized":true}"""));
+    var limit = new NetworkResponseContentLimit("JSON cache response", 8);
+
+    var exception = AssertThrows<NetworkResponseTooLargeException>(() =>
+        NetworkRequestUtility.ReadBytesAsync(content, limit).GetAwaiter().GetResult());
+
+    AssertContains(exception.Message, "JSON cache response");
+}
+
+static void NetworkResponseLimitRejectsOversizedImageHeader()
+{
+    using var content = new ByteArrayContent([]);
+    content.Headers.ContentLength = NetworkResponseContentLimit.Image.MaxBytes + 1;
+
+    var exception = AssertThrows<NetworkResponseTooLargeException>(() =>
+        NetworkRequestUtility.CopyToAsync(
+            content,
+            Stream.Null,
+            NetworkResponseContentLimit.Image).GetAwaiter().GetResult());
+
+    AssertContains(exception.Message, "image response");
 }
 
 static void MarkdownAsyncFetchPreservesCallerCancellation()
@@ -4773,5 +4840,31 @@ internal sealed class ScriptedHttpMessageHandler : HttpMessageHandler
         CancellationToken cancellationToken)
     {
         return _handler(request, cancellationToken);
+    }
+}
+
+internal sealed class ChunkedHttpContent : HttpContent
+{
+    private readonly byte[] _bytes;
+
+    public ChunkedHttpContent(byte[] bytes)
+    {
+        _bytes = bytes;
+    }
+
+    protected override Task SerializeToStreamAsync(Stream stream, TransportContext? context)
+    {
+        return stream.WriteAsync(_bytes, 0, _bytes.Length);
+    }
+
+    protected override bool TryComputeLength(out long length)
+    {
+        length = 0;
+        return false;
+    }
+
+    protected override Stream CreateContentReadStream(CancellationToken cancellationToken)
+    {
+        return new MemoryStream(_bytes, writable: false);
     }
 }
