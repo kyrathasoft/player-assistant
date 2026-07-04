@@ -45,6 +45,17 @@ $ExcludedContentPathPatterns = @(
     '(^|/)graphify-out/'
 )
 
+$AllowedFixtureMatches = @(
+    [pscustomobject]@{
+        PathPattern = '^verify-rc-self-tests\.ps1$'
+        LinePattern = 'OPENAI_API_KEY=sk-test-abcdefghijklmnopqrstuvwxyz123456'
+    },
+    [pscustomobject]@{
+        PathPattern = '^verify-secret-scan\.ps1$'
+        LinePattern = 'OPENAI_API_KEY=sk-test-abcdefghijklmnopqrstuvwxyz123456'
+    }
+)
+
 $GitGrepContentPathspec = @(
     '.',
     ':(exclude)bin/**',
@@ -189,6 +200,25 @@ function Test-IsContentPathIncluded {
     return $true
 }
 
+function Test-IsAllowedFixtureMatch {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Path,
+
+        [Parameter(Mandatory = $true)]
+        [string]$Line
+    )
+
+    $normalizedPath = $Path.Replace('\', '/')
+    foreach ($fixture in $AllowedFixtureMatches) {
+        if ($normalizedPath -match $fixture.PathPattern -and $Line -match $fixture.LinePattern) {
+            return $true
+        }
+    }
+
+    return $false
+}
+
 function Test-TrackedContent {
     param(
         [Parameter(Mandatory = $true)]
@@ -212,6 +242,10 @@ function Test-TrackedContent {
             $lineNumber++
             foreach ($secretPattern in $SecretPatterns) {
                 if ($line -match $secretPattern.Pattern) {
+                    if (Test-IsAllowedFixtureMatch -Path $path -Line $line) {
+                        continue
+                    }
+
                     Add-Finding -Findings $Findings -Message "$($secretPattern.Name): ${path}:$lineNumber"
                 }
             }
@@ -236,7 +270,19 @@ function Test-HistoryContent {
             if ($grepOutput.ExitCode -eq 0 -and ![string]::IsNullOrWhiteSpace($grepOutput.Output)) {
                 $grepOutput.Output.TrimEnd() -split "`r?`n" |
                     ForEach-Object {
-                        Add-Finding -Findings $Findings -Message "$($secretPattern.Name): $_"
+                        $allowedFixture = $false
+                        $parts = $_ -split ':', 4
+                        if ($parts.Length -ge 4) {
+                            $path = $parts[1]
+                            $line = $parts[3]
+                            if (Test-IsAllowedFixtureMatch -Path $path -Line $line) {
+                                $allowedFixture = $true
+                            }
+                        }
+
+                        if (!$allowedFixture) {
+                            Add-Finding -Findings $Findings -Message "$($secretPattern.Name): $_"
+                        }
                     }
             }
         }
