@@ -26,7 +26,10 @@ param(
     [string]$ExpectedSignerSubject = $env:PLAYER_ASSISTANT_RELEASE_SIGNER_SUBJECT,
     [string]$ExpectedSignerThumbprint = $env:PLAYER_ASSISTANT_RELEASE_SIGNER_THUMBPRINT,
     [string]$InstallerPath,
-    [string]$DependencyVulnerabilityOutputFixture
+    [string]$DependencyVulnerabilityOutputFixture,
+    [string]$DependencyFreshnessMetadataFixture,
+    [int]$DependencyFreshnessMaxAgeDays = 365,
+    [switch]$WarnOnlyDependencyFreshness
 )
 
 $ErrorActionPreference = 'Stop'
@@ -718,17 +721,28 @@ function ConvertTo-SimpleJsonString {
         $builder = [System.Text.StringBuilder]::new()
         [void]$builder.Append('"')
         foreach ($character in $Value.ToCharArray()) {
-            switch ($character) {
-                '"' { [void]$builder.Append('\"'); continue }
-                '\' { [void]$builder.Append('\\'); continue }
-                "`b" { [void]$builder.Append('\b'); continue }
-                "`f" { [void]$builder.Append('\f'); continue }
-                "`n" { [void]$builder.Append('\n'); continue }
-                "`r" { [void]$builder.Append('\r'); continue }
-                "`t" { [void]$builder.Append('\t'); continue }
+            if ($character -eq '"') {
+                [void]$builder.Append('\"')
             }
-
-            if ([int][char]$character -lt 32) {
+            elseif ($character -eq '\') {
+                [void]$builder.Append('\\')
+            }
+            elseif ($character -eq "`b") {
+                [void]$builder.Append('\b')
+            }
+            elseif ($character -eq "`f") {
+                [void]$builder.Append('\f')
+            }
+            elseif ($character -eq "`n") {
+                [void]$builder.Append('\n')
+            }
+            elseif ($character -eq "`r") {
+                [void]$builder.Append('\r')
+            }
+            elseif ($character -eq "`t") {
+                [void]$builder.Append('\t')
+            }
+            elseif ([int][char]$character -lt 32) {
                 [void]$builder.Append('\u')
                 [void]$builder.Append(([int][char]$character).ToString('x4'))
             }
@@ -796,6 +810,272 @@ function Get-NuGetPackageInventory {
         direct = $directOutput
         transitive = $transitiveOutput
     }
+}
+
+function Get-ProjectPackageReferences {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$ProjectPath
+    )
+
+    [xml]$project = Get-Content -Raw -LiteralPath $ProjectPath
+    return @($project.Project.ItemGroup |
+        ForEach-Object { $_.PackageReference } |
+        Where-Object { $_ -and $_.Include } |
+        ForEach-Object {
+            [pscustomobject]@{
+                name = [string]$_.Include
+                version = [string]$_.Version
+                source = 'project'
+            }
+        })
+}
+
+function ConvertTo-ComparableVersion {
+    param([string]$Version)
+
+    if ([string]::IsNullOrWhiteSpace($Version)) {
+        return $null
+    }
+
+    $versionText = ($Version -replace '\+.*$', '' -replace '-.*$', '')
+    try {
+        return [version]$versionText
+    }
+    catch {
+        return $null
+    }
+}
+
+function Get-NuGetPackageMetadataFromFeed {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$PackageName
+    )
+
+    $packageId = $PackageName.ToLowerInvariant()
+    $registrationUri = "https://api.nuget.org/v3/registration5-semver1/$packageId/index.json"
+    $registration = Invoke-RestMethod -Uri $registrationUri -Method Get -TimeoutSec 30
+    $entries = @()
+
+    foreach ($page in @($registration.items)) {
+        $pageItems = @($page.items)
+        if ($pageItems.Count -eq 0 -and $page.'@id') {
+            $pageItems = @((Invoke-RestMethod -Uri $page.'@id' -Method Get -TimeoutSec 30).items)
+        }
+
+        foreach ($item in $pageItems) {
+            $catalogEntry = $item.catalogEntry
+            if ($null -eq $catalogEntry) {
+                continue
+            }
+
+            $versionText = [string]$catalogEntry.version
+            $comparableVersion = ConvertTo-ComparableVersion -Version $versionText
+            if ($null -eq $comparableVersion) {
+                continue
+            }
+
+            $isPrerelease = $versionText.Contains('-')
+            $listed = if ($null -ne $catalogEntry.PSObject.Properties['listed']) { [bool]$catalogEntry.listed } else { $true }
+            $published = $null
+            if (![string]::IsNullOrWhiteSpace([string]$catalogEntry.published)) {
+                $published = ([datetimeoffset]::Parse([string]$catalogEntry.published)).ToString('O')
+            }
+
+            $entries += [pscustomobject]@{
+                version = $versionText
+                comparable_version = $comparableVersion
+                published = $published
+                listed = $listed
+                prerelease = $isPrerelease
+            }
+        }
+    }
+
+    $latestStable = @($entries |
+        Where-Object { $_.listed -and !$_.prerelease } |
+        Sort-Object -Property comparable_version -Descending |
+        Select-Object -First 1)
+
+    return [pscustomobject]@{
+        source = $registrationUri
+        versions = $entries
+        latest_stable = if ($latestStable.Count -gt 0) { $latestStable[0] } else { $null }
+    }
+}
+
+function Get-DependencyFreshnessMetadata {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string[]]$PackageNames
+    )
+
+    $metadataByName = @{}
+    if (![string]::IsNullOrWhiteSpace($DependencyFreshnessMetadataFixture)) {
+        Assert-RequiredFile -Path $DependencyFreshnessMetadataFixture -Description 'dependency freshness metadata fixture'
+        $fixture = Get-Content -Raw -LiteralPath $DependencyFreshnessMetadataFixture | ConvertFrom-Json
+        foreach ($package in @($fixture.packages)) {
+            $metadataByName[[string]$package.name] = [pscustomobject]@{
+                source = 'fixture'
+                versions = @()
+                latest_stable = [pscustomobject]@{
+                    version = [string]$package.latest_version
+                    comparable_version = ConvertTo-ComparableVersion -Version ([string]$package.latest_version)
+                    published = [string]$package.latest_published
+                    listed = $true
+                    prerelease = $false
+                }
+                current_published = [string]$package.current_published
+            }
+        }
+
+        return $metadataByName
+    }
+
+    foreach ($packageName in $PackageNames | Sort-Object -Unique) {
+        $metadataByName[$packageName] = Get-NuGetPackageMetadataFromFeed -PackageName $packageName
+    }
+
+    return $metadataByName
+}
+
+function Get-PackageCurrentPublishedDate {
+    param(
+        [Parameter(Mandatory = $true)]
+        [object]$Metadata,
+
+        [Parameter(Mandatory = $true)]
+        [string]$CurrentVersion
+    )
+
+    if ($Metadata.PSObject.Properties['current_published'] -and
+        ![string]::IsNullOrWhiteSpace([string]$Metadata.current_published)) {
+        return [string]$Metadata.current_published
+    }
+
+    $currentComparableVersion = ConvertTo-ComparableVersion -Version $CurrentVersion
+    $currentEntry = @($Metadata.versions |
+        Where-Object {
+            [string]$_.version -eq $CurrentVersion -or
+            ($null -ne $currentComparableVersion -and $null -ne $_.comparable_version -and $_.comparable_version -eq $currentComparableVersion)
+        } |
+        Select-Object -First 1)
+
+    if ($currentEntry.Count -eq 0) {
+        return $null
+    }
+
+    return [string]$currentEntry[0].published
+}
+
+function Get-DependencyFreshnessFindings {
+    param(
+        [Parameter(Mandatory = $true)]
+        [object[]]$PackageReferences,
+
+        [object]$PlaywrightInventory
+    )
+
+    if ($DependencyFreshnessMaxAgeDays -le 0) {
+        throw "DependencyFreshnessMaxAgeDays must be greater than zero."
+    }
+
+    $freshnessInputs = @($PackageReferences)
+    if ($null -ne $PlaywrightInventory -and
+        ![string]::IsNullOrWhiteSpace([string]$PlaywrightInventory.playwright_package_version)) {
+        $freshnessInputs += [pscustomobject]@{
+            name = 'Microsoft.Playwright'
+            version = [string]$PlaywrightInventory.playwright_package_version
+            source = 'published Playwright runtime'
+        }
+    }
+
+    $metadataByName = Get-DependencyFreshnessMetadata -PackageNames @($freshnessInputs | ForEach-Object { [string]$_.name })
+    $now = [datetimeoffset]::UtcNow
+    $findings = @()
+
+    foreach ($package in $freshnessInputs) {
+        $name = [string]$package.name
+        $version = [string]$package.version
+        $metadata = $metadataByName[$name]
+        if ($null -eq $metadata) {
+            $findings += [pscustomobject]@{
+                name = $name
+                current_version = $version
+                source = [string]$package.source
+                status = 'failed'
+                failure_summary = 'No package metadata was available for freshness comparison.'
+            }
+            continue
+        }
+
+        $latest = $metadata.latest_stable
+        $currentPublished = Get-PackageCurrentPublishedDate -Metadata $metadata -CurrentVersion $version
+        $currentComparableVersion = ConvertTo-ComparableVersion -Version $version
+        $latestComparableVersion = if ($null -ne $latest) { ConvertTo-ComparableVersion -Version ([string]$latest.version) } else { $null }
+        $ageDays = $null
+        if (![string]::IsNullOrWhiteSpace($currentPublished)) {
+            $ageDays = [math]::Floor(($now - [datetimeoffset]::Parse($currentPublished)).TotalDays)
+        }
+
+        $updateAvailable = $false
+        if ($null -ne $currentComparableVersion -and $null -ne $latestComparableVersion) {
+            $updateAvailable = $latestComparableVersion -gt $currentComparableVersion
+        }
+
+        $status = 'passed'
+        $failureSummary = $null
+        if ($null -eq $latest -or $null -eq $latestComparableVersion) {
+            $status = 'failed'
+            $failureSummary = 'No latest stable package version was available for freshness comparison.'
+        }
+        elseif ([string]::IsNullOrWhiteSpace($currentPublished) -or $null -eq $ageDays) {
+            $status = 'failed'
+            $failureSummary = "No published date was available for $name $version."
+        }
+        elseif ($updateAvailable -and $ageDays -gt $DependencyFreshnessMaxAgeDays) {
+            $status = 'failed'
+            $failureSummary = "$name $version is $ageDays days old and latest stable is $([string]$latest.version); approved maximum age is $DependencyFreshnessMaxAgeDays days."
+        }
+
+        $findings += [pscustomobject]@{
+            name = $name
+            current_version = $version
+            current_published = $currentPublished
+            latest_stable_version = if ($null -ne $latest) { [string]$latest.version } else { $null }
+            latest_stable_published = if ($null -ne $latest) { [string]$latest.published } else { $null }
+            update_available = $updateAvailable
+            age_days = $ageDays
+            max_age_days = $DependencyFreshnessMaxAgeDays
+            source = [string]$package.source
+            metadata_source = [string]$metadata.source
+            status = $status
+            failure_summary = $failureSummary
+        }
+    }
+
+    return $findings
+}
+
+function Assert-DependencyFreshness {
+    param(
+        [Parameter(Mandatory = $true)]
+        [object[]]$Findings
+    )
+
+    $failedFindings = @($Findings | Where-Object { [string]$_.status -ne 'passed' })
+    if ($failedFindings.Count -eq 0) {
+        return
+    }
+
+    $summary = (($failedFindings | ForEach-Object { [string]$_.failure_summary }) -join ' ')
+    if ($WarnOnlyDependencyFreshness) {
+        Write-Warning "Dependency freshness policy warnings: $summary"
+        return
+    }
+
+    throw "Dependency freshness policy failed. $summary"
 }
 
 function Assert-NoVulnerablePackages {
@@ -894,6 +1174,8 @@ function Invoke-DependencyFreshnessAndVulnerabilityCheck {
         New-Item -ItemType Directory -Force -Path $inventoryDirectory | Out-Null
     }
 
+    $packageReferences = Get-ProjectPackageReferences -ProjectPath $projectPath
+
     if (![string]::IsNullOrWhiteSpace($DependencyVulnerabilityOutputFixture)) {
         Write-DependencyTrace -Message 'fixture mode selected'
         Assert-RequiredFile -Path $DependencyVulnerabilityOutputFixture -Description 'dependency vulnerability output fixture'
@@ -939,15 +1221,37 @@ function Invoke-DependencyFreshnessAndVulnerabilityCheck {
     }
 
     Write-DependencyTrace -Message 'playwright inventory decision started'
-    $playwrightInventory = if ($vulnerabilityStatus -eq 'passed') {
+    $playwrightInventory = if ($vulnerabilityStatus -eq 'passed' -and [string]::IsNullOrWhiteSpace($DependencyVulnerabilityOutputFixture)) {
         Get-PlaywrightRuntimeInventory -PublishDirectory $resolvedPublishDir
     }
     else {
         [pscustomobject]@{
-            skipped = 'Playwright runtime inventory skipped because dependency vulnerability verification failed.'
+            skipped = 'Playwright runtime inventory skipped because dependency vulnerability fixture mode was used or vulnerability verification failed.'
         }
     }
     Write-DependencyTrace -Message 'playwright inventory decision completed'
+
+    $freshnessStatus = 'passed'
+    $freshnessFailure = $null
+    $freshnessFindings = @()
+    if ($vulnerabilityStatus -ne 'passed') {
+        $freshnessStatus = 'skipped'
+        $freshnessFailure = 'Dependency freshness verification skipped because dependency vulnerability verification failed.'
+        Write-DependencyTrace -Message 'freshness assertion skipped after vulnerability failure'
+    }
+    else {
+        try {
+            Write-DependencyTrace -Message 'freshness assertion started'
+            $freshnessFindings = @(Get-DependencyFreshnessFindings -PackageReferences $packageReferences -PlaywrightInventory $playwrightInventory)
+            Assert-DependencyFreshness -Findings $freshnessFindings
+            Write-DependencyTrace -Message 'freshness assertion passed'
+        }
+        catch {
+            $freshnessStatus = if ($WarnOnlyDependencyFreshness) { 'warning' } else { 'failed' }
+            $freshnessFailure = $_.Exception.Message
+            Write-DependencyTrace -Message "freshness assertion failed: $freshnessFailure"
+        }
+    }
 
     $inventory = [pscustomobject]@{
         schema_version = 1
@@ -958,12 +1262,21 @@ function Invoke-DependencyFreshnessAndVulnerabilityCheck {
             runtimes = $dotnetRuntimes
         }
         nuget = [pscustomobject]@{
+            package_references = $packageReferences
             package_list = $packageInventory
             vulnerability_check = [pscustomobject]@{
                 source = if (![string]::IsNullOrWhiteSpace($DependencyVulnerabilityOutputFixture)) { 'fixture' } else { 'dotnet list package --vulnerable --include-transitive' }
                 status = $vulnerabilityStatus
                 failure_summary = $vulnerabilityFailure
                 output = $vulnerabilityOutput
+            }
+            freshness_policy = [pscustomobject]@{
+                source = if (![string]::IsNullOrWhiteSpace($DependencyFreshnessMetadataFixture)) { 'fixture' } else { 'nuget.org registration metadata' }
+                status = $freshnessStatus
+                failure_summary = $freshnessFailure
+                max_age_days = $DependencyFreshnessMaxAgeDays
+                warn_only = [bool]$WarnOnlyDependencyFreshness
+                findings = $freshnessFindings
             }
         }
         playwright = $playwrightInventory
@@ -976,6 +1289,11 @@ function Invoke-DependencyFreshnessAndVulnerabilityCheck {
     if ($vulnerabilityStatus -ne 'passed') {
         Write-DependencyTrace -Message 'throwing dependency vulnerability failure'
         throw $vulnerabilityFailure
+    }
+
+    if ($freshnessStatus -eq 'failed') {
+        Write-DependencyTrace -Message 'throwing dependency freshness failure'
+        throw $freshnessFailure
     }
 }
 
@@ -1197,7 +1515,7 @@ Invoke-RcChecklistStep `
 
 Invoke-RcChecklistStep `
     -Name 'dependency freshness and vulnerability checks' `
-    -Command 'dotnet --version; dotnet --list-runtimes; dotnet list package; dotnet list package --vulnerable --include-transitive; inspect Playwright runtime' `
+    -Command 'dotnet --version; dotnet --list-runtimes; dotnet list package; dotnet list package --vulnerable --include-transitive; compare NuGet/Playwright versions with latest metadata; inspect Playwright runtime' `
     -Artifacts @(
         (Join-Path $PSScriptRoot $ProjectFileName),
         (Join-Path $resolvedPublishDir '.playwright\package\package.json'),

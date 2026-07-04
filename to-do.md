@@ -111,10 +111,10 @@
   - [x] Verify encrypted runtime sidecars are installed read-only for normal users where appropriate.
   - [x] Verify writable runtime directories live under the approved per-user or ProgramData fallback locations.
   - [x] Add installer verification that rejects missing encrypted XP/settings sidecars.
-- [ ] Add automated dependency freshness policy checks beyond vulnerability scanning.
-  - [ ] Compare NuGet and Playwright versions against the latest available package metadata.
-  - [ ] Warn or fail RC verification when dependencies exceed an approved age threshold.
-  - [ ] Record stale dependency findings in dependency inventory JSON.
+- [x] Add automated dependency freshness policy checks beyond vulnerability scanning.
+  - [x] Compare NuGet and Playwright versions against the latest available package metadata.
+  - [x] Warn or fail RC verification when dependencies exceed an approved age threshold.
+  - [x] Record stale dependency findings in dependency inventory JSON.
 - [ ] Add authenticated-source tamper detection for fetched Obsidian/RPOL content.
   - [ ] Persist source hashes for last-known-good downloaded markdown, sitemap, keyword, and RPOL export inputs.
   - [ ] Detect unexpected structural changes and show player-safe recovery guidance.

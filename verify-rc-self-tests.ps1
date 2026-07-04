@@ -360,6 +360,7 @@ function Invoke-ExpectedPathSelfTest {
             '-SkipPublishRuntimeIntegrity',
             '-SkipDiagnostics',
             '-SkipDependencyChecks',
+            '-SkipCodeSigning',
             '-SkipRuntimeSidecarChecks'
         ) `
         -ExpectedText 'Git status does not match ExpectedChangedPath.'
@@ -388,6 +389,7 @@ function Invoke-DryRunJsonPassingSelfTest {
         '-SkipPublishRuntimeIntegrity',
         '-SkipDiagnostics',
         '-SkipDependencyChecks',
+        '-SkipCodeSigning',
         '-SkipRuntimeSidecarChecks'
     )
 
@@ -428,6 +430,7 @@ function Invoke-DryRunJsonFailingSelfTest {
             '-SkipPublishRuntimeIntegrity',
             '-SkipDiagnostics',
             '-SkipDependencyChecks',
+            '-SkipCodeSigning',
             '-SkipRuntimeSidecarChecks'
         ) `
         -ExpectedText 'RC checklist dry-run failed.'
@@ -472,6 +475,7 @@ Project `player-assistant` has the following vulnerable packages
                 '-SkipPublishedHealth',
                 '-SkipPublishRuntimeIntegrity',
                 '-SkipDiagnostics',
+                '-SkipCodeSigning',
                 '-SkipRuntimeSidecarChecks'
             ) `
             -ExpectedText 'RC checklist dry-run failed.'
@@ -480,6 +484,84 @@ Project `player-assistant` has the following vulnerable packages
         Assert-FileContains `
             -Path $DependencyInventoryPath `
             -ExpectedText 'Dependency vulnerability check reported vulnerable packages.' `
+            -Description 'dependency inventory'
+    }
+    finally {
+        if (Test-Path -LiteralPath $DependencyInventoryPath) {
+            Remove-Item -LiteralPath $DependencyInventoryPath -Force
+        }
+    }
+}
+
+function Invoke-DependencyFreshnessSelfTest {
+    $vulnerabilityFixturePath = Join-Path $SelfTestRoot 'clean-packages.txt'
+    $freshnessFixturePath = Join-Path $SelfTestRoot 'stale-package-metadata.json'
+    $summaryPath = Join-Path $SelfTestRoot 'dependency-freshness-rc-dry-run.json'
+
+    @'
+The given project `player-assistant` has no vulnerable packages given the current sources.
+'@ | Set-Content -LiteralPath $vulnerabilityFixturePath -Encoding UTF8
+
+    [pscustomobject]@{
+        packages = @(
+            [pscustomobject]@{
+                name = 'Microsoft.Playwright'
+                current_published = '2024-01-01T00:00:00.0000000Z'
+                latest_version = '1.99.0'
+                latest_published = '2026-01-01T00:00:00.0000000Z'
+            },
+            [pscustomobject]@{
+                name = 'SkiaSharp'
+                current_published = '2024-01-01T00:00:00.0000000Z'
+                latest_version = '9.99.0'
+                latest_published = '2026-01-01T00:00:00.0000000Z'
+            }
+        )
+    } | ConvertTo-Json -Depth 4 | Set-Content -LiteralPath $freshnessFixturePath -Encoding UTF8
+
+    try {
+        Assert-CommandFailsWith `
+            -Name 'RC checklist fails on stale dependency freshness output' `
+            -FileName 'powershell.exe' `
+            -Arguments @(
+                '-NoProfile',
+                '-ExecutionPolicy',
+                'Bypass',
+                '-File',
+                $RcChecklistScriptPath,
+                '-ReleaseDir',
+                (Resolve-FullPath $ReleaseDir),
+                '-PublishDir',
+                (Resolve-FullPath $PublishDir),
+                '-DryRunJson',
+                $summaryPath,
+                '-DependencyVulnerabilityOutputFixture',
+                $vulnerabilityFixturePath,
+                '-DependencyFreshnessMetadataFixture',
+                $freshnessFixturePath,
+                '-DependencyFreshnessMaxAgeDays',
+                '30',
+                '-SkipGit',
+                '-SkipSelfTests',
+                '-SkipSecretScan',
+                '-SkipTests',
+                '-SkipReleasePublishParity',
+                '-SkipPublishedHealth',
+                '-SkipPublishRuntimeIntegrity',
+                '-SkipDiagnostics',
+                '-SkipCodeSigning',
+                '-SkipRuntimeSidecarChecks'
+            ) `
+            -ExpectedText 'RC checklist dry-run failed.'
+
+        Assert-RcDryRunSummary -Path $summaryPath -ExpectedStatus 'failed'
+        Assert-FileContains `
+            -Path $DependencyInventoryPath `
+            -ExpectedText 'Dependency freshness policy failed.' `
+            -Description 'dependency inventory'
+        Assert-FileContains `
+            -Path $DependencyInventoryPath `
+            -ExpectedText 'latest_stable_version' `
             -Description 'dependency inventory'
     }
     finally {
@@ -556,6 +638,7 @@ try {
     Invoke-DryRunJsonPassingSelfTest
     Invoke-DryRunJsonFailingSelfTest
     Invoke-DependencyVulnerabilitySelfTest
+    Invoke-DependencyFreshnessSelfTest
     Invoke-RuntimeSidecarSelfTest
 }
 finally {
