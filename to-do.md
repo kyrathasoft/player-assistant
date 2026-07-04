@@ -52,7 +52,7 @@
 ## Follow-up hardening backlog
 
 - [x] Add secret scanning to the RC checklist for tracked files and reachable history.
-- [ ] Add a dependency/runtime version inventory to publish output and diagnostics.
-- [ ] Strengthen `settings.local.json` key separation with a per-machine or per-install derivation path.
-- [ ] Add network allowlist validation for configured and fetched RPOL/Obsidian URLs.
-- [ ] Add RC checklist self-tests for secret scan, health failure, manifest mismatch, and expected-path handling.
+- [x] Add a dependency/runtime version inventory to publish output and diagnostics.
+- [x] Strengthen `settings.local.json` key separation with a per-machine or per-install derivation path.
+- [x] Add network allowlist validation for configured and fetched RPOL/Obsidian URLs.
+- [x] Add RC checklist self-tests for secret scan, health failure, manifest mismatch, and expected-path handling.
