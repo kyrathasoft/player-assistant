@@ -10,6 +10,7 @@ $RcChecklistScriptPath = Join-Path $PSScriptRoot 'verify-rc-checklist.ps1'
 $PublishScriptPath = Join-Path $PSScriptRoot 'publish-player-assistant.ps1'
 $PublishRuntimeIntegrityScriptPath = Join-Path $PSScriptRoot 'verify-publish-runtime-integrity.ps1'
 $SelfTestRoot = Join-Path $PSScriptRoot '.rc-self-tests'
+$DependencyInventoryPath = Join-Path $PSScriptRoot 'codex-scratch\rc-dependency-inventory.json'
 
 function Resolve-FullPath {
     param(
@@ -149,6 +150,28 @@ function Assert-CommandPasses {
     }
 
     Write-Output "RC self-test passed: $Name"
+}
+
+function Assert-FileContains {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Path,
+
+        [Parameter(Mandatory = $true)]
+        [string]$ExpectedText,
+
+        [Parameter(Mandatory = $true)]
+        [string]$Description
+    )
+
+    if (!(Test-Path -LiteralPath $Path -PathType Leaf)) {
+        throw "Expected $Description file is missing: $Path"
+    }
+
+    $content = Get-Content -Raw -LiteralPath $Path
+    if ($content -notlike "*$ExpectedText*") {
+        throw "$Description did not contain expected text '$ExpectedText'."
+    }
 }
 
 function Assert-RcDryRunSummary {
@@ -333,7 +356,8 @@ function Invoke-ExpectedPathSelfTest {
             '-SkipReleasePublishParity',
             '-SkipPublishedHealth',
             '-SkipPublishRuntimeIntegrity',
-            '-SkipDiagnostics'
+            '-SkipDiagnostics',
+            '-SkipDependencyChecks'
         ) `
         -ExpectedText 'Git status does not match ExpectedChangedPath.'
 }
@@ -359,7 +383,8 @@ function Invoke-DryRunJsonPassingSelfTest {
         '-SkipReleasePublishParity',
         '-SkipPublishedHealth',
         '-SkipPublishRuntimeIntegrity',
-        '-SkipDiagnostics'
+        '-SkipDiagnostics',
+        '-SkipDependencyChecks'
     )
 
     Assert-CommandPasses `
@@ -396,11 +421,65 @@ function Invoke-DryRunJsonFailingSelfTest {
             '-SkipReleasePublishParity',
             '-SkipPublishedHealth',
             '-SkipPublishRuntimeIntegrity',
-            '-SkipDiagnostics'
+            '-SkipDiagnostics',
+            '-SkipDependencyChecks'
         ) `
         -ExpectedText 'RC checklist dry-run failed.'
 
     Assert-RcDryRunSummary -Path $summaryPath -ExpectedStatus 'failed'
+}
+
+function Invoke-DependencyVulnerabilitySelfTest {
+    $fixturePath = Join-Path $SelfTestRoot 'vulnerable-packages.txt'
+    $summaryPath = Join-Path $SelfTestRoot 'dependency-vulnerability-rc-dry-run.json'
+
+    @'
+Project `player-assistant` has the following vulnerable packages
+   [net10.0-windows]:
+   Top-level Package      Requested   Resolved   Severity   Advisory URL
+   > SkiaSharp            3.119.4     3.119.4    High       https://example.invalid/advisory
+'@ | Set-Content -LiteralPath $fixturePath -Encoding UTF8
+
+    try {
+        Assert-CommandFailsWith `
+            -Name 'RC checklist fails on vulnerable dependency output' `
+            -FileName 'powershell.exe' `
+            -Arguments @(
+                '-NoProfile',
+                '-ExecutionPolicy',
+                'Bypass',
+                '-File',
+                $RcChecklistScriptPath,
+                '-ReleaseDir',
+                (Resolve-FullPath $ReleaseDir),
+                '-PublishDir',
+                (Resolve-FullPath $PublishDir),
+                '-DryRunJson',
+                $summaryPath,
+                '-DependencyVulnerabilityOutputFixture',
+                $fixturePath,
+                '-SkipGit',
+                '-SkipSelfTests',
+                '-SkipSecretScan',
+                '-SkipTests',
+                '-SkipReleasePublishParity',
+                '-SkipPublishedHealth',
+                '-SkipPublishRuntimeIntegrity',
+                '-SkipDiagnostics'
+            ) `
+            -ExpectedText 'RC checklist dry-run failed.'
+
+        Assert-RcDryRunSummary -Path $summaryPath -ExpectedStatus 'failed'
+        Assert-FileContains `
+            -Path $DependencyInventoryPath `
+            -ExpectedText 'Dependency vulnerability check reported vulnerable packages.' `
+            -Description 'dependency inventory'
+    }
+    finally {
+        if (Test-Path -LiteralPath $DependencyInventoryPath) {
+            Remove-Item -LiteralPath $DependencyInventoryPath -Force
+        }
+    }
 }
 
 Assert-PathInsideRepo -Path $SelfTestRoot -Description 'RC self-test workspace'
@@ -413,6 +492,7 @@ try {
     Invoke-ExpectedPathSelfTest
     Invoke-DryRunJsonPassingSelfTest
     Invoke-DryRunJsonFailingSelfTest
+    Invoke-DependencyVulnerabilitySelfTest
 }
 finally {
     if (Test-Path -LiteralPath $SelfTestRoot) {

@@ -96,8 +96,8 @@
   - [x] Capture each checklist step with status, elapsed time, command, artifact paths, and failure summary.
   - [x] Exit nonzero when any required check fails while still writing the summary file.
   - [x] Add tests for passing and failing dry-run summaries.
-- [ ] Add dependency freshness and vulnerability checks to the RC checklist.
-  - [ ] Inventory NuGet package versions, .NET SDK/runtime version, Playwright package/browser versions, and bundled Node runtime versions.
-  - [ ] Run `dotnet list package --vulnerable` or equivalent vulnerability checks during RC verification.
-  - [ ] Record dependency check results in diagnostics and RC dry-run JSON output.
-  - [ ] Add self-tests or fixture tests that prove stale/vulnerable dependency output fails the RC checklist.
+- [x] Add dependency freshness and vulnerability checks to the RC checklist.
+  - [x] Inventory NuGet package versions, .NET SDK/runtime version, Playwright package/browser versions, and bundled Node runtime versions.
+  - [x] Run `dotnet list package --vulnerable` or equivalent vulnerability checks during RC verification.
+  - [x] Record dependency check results in diagnostics and RC dry-run JSON output.
+  - [x] Add self-tests or fixture tests that prove stale/vulnerable dependency output fails the RC checklist.

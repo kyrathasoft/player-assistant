@@ -18,7 +18,9 @@ param(
     [switch]$SkipReleasePublishParity,
     [switch]$SkipPublishedHealth,
     [switch]$SkipPublishRuntimeIntegrity,
-    [switch]$SkipDiagnostics
+    [switch]$SkipDiagnostics,
+    [switch]$SkipDependencyChecks,
+    [string]$DependencyVulnerabilityOutputFixture
 )
 
 $ErrorActionPreference = 'Stop'
@@ -33,6 +35,7 @@ $ReleasePublishParityScriptPath = Join-Path $PSScriptRoot 'verify-release-publis
 $PublishedHealthScriptPath = Join-Path $PSScriptRoot 'verify-published-health.ps1'
 $PublishRuntimeIntegrityScriptPath = Join-Path $PSScriptRoot 'verify-publish-runtime-integrity.ps1'
 $DiagnosticsScriptPath = Join-Path $PSScriptRoot 'collect-diagnostics.ps1'
+$DependencyInventoryPath = Join-Path $PSScriptRoot 'codex-scratch\rc-dependency-inventory.json'
 $RcDryRunSteps = [System.Collections.Generic.List[object]]::new()
 $RcDryRunFailed = $false
 
@@ -534,6 +537,314 @@ function Invoke-RcSelfTests {
         ))
 }
 
+function ConvertFrom-JsonFileIfPresent {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Path,
+
+        [Parameter(Mandatory = $true)]
+        [string]$Description
+    )
+
+    Assert-RequiredFile -Path $Path -Description $Description
+    try {
+        return Get-Content -Raw -LiteralPath $Path | ConvertFrom-Json
+    }
+    catch {
+        throw "Unable to parse $Description as JSON: $Path. $($_.Exception.Message)"
+    }
+}
+
+function Write-DependencyTrace {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Message
+    )
+
+    if ([string]::IsNullOrWhiteSpace($env:PLAYER_ASSISTANT_RC_TRACE)) {
+        return
+    }
+
+    $tracePath = Join-Path $PSScriptRoot 'codex-scratch\rc-dependency-trace.txt'
+    New-Item -ItemType Directory -Force -Path (Split-Path -Parent $tracePath) | Out-Null
+    Add-Content -LiteralPath $tracePath -Value "$(Get-Date -Format O) $Message" -Encoding UTF8
+}
+
+function ConvertTo-SimpleJsonString {
+    param(
+        [AllowNull()]
+        [object]$Value
+    )
+
+    if ($null -eq $Value) {
+        return 'null'
+    }
+
+    if ($Value -is [string]) {
+        $builder = [System.Text.StringBuilder]::new()
+        [void]$builder.Append('"')
+        foreach ($character in $Value.ToCharArray()) {
+            switch ($character) {
+                '"' { [void]$builder.Append('\"'); continue }
+                '\' { [void]$builder.Append('\\'); continue }
+                "`b" { [void]$builder.Append('\b'); continue }
+                "`f" { [void]$builder.Append('\f'); continue }
+                "`n" { [void]$builder.Append('\n'); continue }
+                "`r" { [void]$builder.Append('\r'); continue }
+                "`t" { [void]$builder.Append('\t'); continue }
+            }
+
+            if ([int][char]$character -lt 32) {
+                [void]$builder.Append('\u')
+                [void]$builder.Append(([int][char]$character).ToString('x4'))
+            }
+            else {
+                [void]$builder.Append($character)
+            }
+        }
+
+        [void]$builder.Append('"')
+        return $builder.ToString()
+    }
+
+    if ($Value -is [bool]) {
+        return $(if ($Value) { 'true' } else { 'false' })
+    }
+
+    if ($Value -is [int] -or
+        $Value -is [long] -or
+        $Value -is [double] -or
+        $Value -is [decimal]) {
+        return [string]::Format([System.Globalization.CultureInfo]::InvariantCulture, '{0}', $Value)
+    }
+
+    if ($Value -is [System.Collections.IDictionary]) {
+        $properties = @()
+        foreach ($key in $Value.Keys) {
+            $properties += "$(ConvertTo-SimpleJsonString ([string]$key)):$(ConvertTo-SimpleJsonString $Value[$key])"
+        }
+
+        return '{' + ($properties -join ',') + '}'
+    }
+
+    if ($Value -is [System.Collections.IEnumerable]) {
+        $items = @()
+        foreach ($item in $Value) {
+            $items += ConvertTo-SimpleJsonString $item
+        }
+
+        return '[' + ($items -join ',') + ']'
+    }
+
+    $objectProperties = @()
+    foreach ($property in $Value.PSObject.Properties) {
+        $objectProperties += "$(ConvertTo-SimpleJsonString $property.Name):$(ConvertTo-SimpleJsonString $property.Value)"
+    }
+
+    return '{' + ($objectProperties -join ',') + '}'
+}
+
+function Get-NuGetPackageInventory {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$ProjectPath
+    )
+
+    $directOutput = (Invoke-ExternalCommand `
+        -FileName 'dotnet' `
+        -Arguments @('list', $ProjectPath, 'package')).Output
+
+    $transitiveOutput = (Invoke-ExternalCommand `
+        -FileName 'dotnet' `
+        -Arguments @('list', $ProjectPath, 'package', '--include-transitive')).Output
+
+    return [pscustomobject]@{
+        direct = $directOutput
+        transitive = $transitiveOutput
+    }
+}
+
+function Assert-NoVulnerablePackages {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$VulnerabilityOutput
+    )
+
+    $outputLines = @($VulnerabilityOutput -split "`r?`n")
+    $reportedVulnerabilitySummary = $false
+    $reportedVulnerabilityRow = $false
+    $reportedCleanResult = $false
+    foreach ($rawLine in $outputLines) {
+        if ($rawLine.IndexOf('has the following vulnerable packages', [System.StringComparison]::OrdinalIgnoreCase) -ge 0) {
+            $reportedVulnerabilitySummary = $true
+        }
+
+        if ($rawLine.IndexOf('has no vulnerable packages', [System.StringComparison]::OrdinalIgnoreCase) -ge 0) {
+            $reportedCleanResult = $true
+        }
+
+        $line = $rawLine.Trim()
+        if ($line.StartsWith('> ', [System.StringComparison]::Ordinal) -and
+            ($line.IndexOf(' Low ', [System.StringComparison]::OrdinalIgnoreCase) -ge 0 -or
+            $line.IndexOf(' Moderate ', [System.StringComparison]::OrdinalIgnoreCase) -ge 0 -or
+            $line.IndexOf(' High ', [System.StringComparison]::OrdinalIgnoreCase) -ge 0 -or
+            $line.IndexOf(' Critical ', [System.StringComparison]::OrdinalIgnoreCase) -ge 0)) {
+            $reportedVulnerabilityRow = $true
+        }
+    }
+
+    if ($reportedVulnerabilitySummary -or $reportedVulnerabilityRow) {
+        throw "Dependency vulnerability check reported vulnerable packages."
+    }
+
+    if (!$reportedCleanResult) {
+        throw "Dependency vulnerability check did not confirm that packages have no known vulnerabilities."
+    }
+}
+
+function Get-PlaywrightRuntimeInventory {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$PublishDirectory
+    )
+
+    $playwrightRoot = Join-Path $PublishDirectory '.playwright'
+    $packageJsonPath = Join-Path $playwrightRoot 'package\package.json'
+    $browsersJsonPath = Join-Path $playwrightRoot 'package\browsers.json'
+    $nodeExePath = Join-Path $playwrightRoot 'node\win32_x64\node.exe'
+
+    $packageJson = ConvertFrom-JsonFileIfPresent -Path $packageJsonPath -Description 'Playwright package metadata'
+    $browsersJson = ConvertFrom-JsonFileIfPresent -Path $browsersJsonPath -Description 'Playwright browser metadata'
+    Assert-RequiredFile -Path $nodeExePath -Description 'bundled Playwright Node runtime'
+
+    $nodeVersion = (Invoke-ExternalCommand `
+        -FileName $nodeExePath `
+        -Arguments @('--version') `
+        -WorkingDirectory $PublishDirectory).Output.Trim()
+
+    $browsers = @()
+    if ($browsersJson.browsers) {
+        $browsers = @($browsersJson.browsers | ForEach-Object {
+            [pscustomobject]@{
+                name = [string]$_.name
+                revision = [string]$_.revision
+                browser_version = [string]$_.browserVersion
+            }
+        })
+    }
+
+    return [pscustomobject]@{
+        playwright_package_path = $packageJsonPath
+        playwright_package_version = [string]$packageJson.version
+        browsers_path = $browsersJsonPath
+        browsers = $browsers
+        node_path = $nodeExePath
+        node_version = $nodeVersion
+    }
+}
+
+function Invoke-DependencyFreshnessAndVulnerabilityCheck {
+    if ($SkipDependencyChecks) {
+        Write-Output "Skipping dependency checks because -SkipDependencyChecks was supplied."
+        return
+    }
+
+    $projectPath = Join-Path $PSScriptRoot $ProjectFileName
+    Write-DependencyTrace -Message 'dependency check started'
+    Assert-RequiredFile -Path $projectPath -Description $ProjectFileName
+    Assert-PathInsideRepo -Path $DependencyInventoryPath -Description 'dependency inventory output'
+    Write-DependencyTrace -Message 'dependency paths validated'
+
+    $inventoryDirectory = Split-Path -Parent $DependencyInventoryPath
+    if (![string]::IsNullOrWhiteSpace($inventoryDirectory)) {
+        New-Item -ItemType Directory -Force -Path $inventoryDirectory | Out-Null
+    }
+
+    if (![string]::IsNullOrWhiteSpace($DependencyVulnerabilityOutputFixture)) {
+        Write-DependencyTrace -Message 'fixture mode selected'
+        Assert-RequiredFile -Path $DependencyVulnerabilityOutputFixture -Description 'dependency vulnerability output fixture'
+        $dotnetSdkVersion = 'Skipped because -DependencyVulnerabilityOutputFixture was supplied.'
+        $dotnetRuntimes = @()
+        $packageInventory = [pscustomobject]@{
+            direct = 'Skipped because -DependencyVulnerabilityOutputFixture was supplied.'
+            transitive = 'Skipped because -DependencyVulnerabilityOutputFixture was supplied.'
+        }
+        $vulnerabilityOutput = Get-Content -Raw -LiteralPath $DependencyVulnerabilityOutputFixture
+        Write-DependencyTrace -Message 'fixture vulnerability output loaded'
+    }
+    else {
+        Write-DependencyTrace -Message 'live dependency inventory selected'
+        $dotnetSdkVersion = (Invoke-ExternalCommand `
+            -FileName 'dotnet' `
+            -Arguments @('--version')).Output.Trim()
+
+        $runtimeOutput = (Invoke-ExternalCommand `
+            -FileName 'dotnet' `
+            -Arguments @('--list-runtimes')).Output
+
+        $dotnetRuntimes = @($runtimeOutput -split "`r?`n" |
+            Where-Object { ![string]::IsNullOrWhiteSpace($_) })
+
+        $packageInventory = Get-NuGetPackageInventory -ProjectPath $projectPath
+        $vulnerabilityOutput = (Invoke-ExternalCommand `
+            -FileName 'dotnet' `
+            -Arguments @('list', $projectPath, 'package', '--vulnerable', '--include-transitive')).Output
+    }
+
+    $vulnerabilityStatus = 'passed'
+    $vulnerabilityFailure = $null
+    try {
+        Write-DependencyTrace -Message 'vulnerability assertion started'
+        Assert-NoVulnerablePackages -VulnerabilityOutput $vulnerabilityOutput
+        Write-DependencyTrace -Message 'vulnerability assertion passed'
+    }
+    catch {
+        $vulnerabilityStatus = 'failed'
+        $vulnerabilityFailure = $_.Exception.Message
+        Write-DependencyTrace -Message "vulnerability assertion failed: $vulnerabilityFailure"
+    }
+
+    Write-DependencyTrace -Message 'playwright inventory decision started'
+    $playwrightInventory = if ($vulnerabilityStatus -eq 'passed') {
+        Get-PlaywrightRuntimeInventory -PublishDirectory $resolvedPublishDir
+    }
+    else {
+        [pscustomobject]@{
+            skipped = 'Playwright runtime inventory skipped because dependency vulnerability verification failed.'
+        }
+    }
+    Write-DependencyTrace -Message 'playwright inventory decision completed'
+
+    $inventory = [pscustomobject]@{
+        schema_version = 1
+        generated_at = (Get-Date).ToString('O')
+        project = $projectPath
+        dotnet = [pscustomobject]@{
+            sdk_version = $dotnetSdkVersion
+            runtimes = $dotnetRuntimes
+        }
+        nuget = [pscustomobject]@{
+            package_list = $packageInventory
+            vulnerability_check = [pscustomobject]@{
+                source = if (![string]::IsNullOrWhiteSpace($DependencyVulnerabilityOutputFixture)) { 'fixture' } else { 'dotnet list package --vulnerable --include-transitive' }
+                status = $vulnerabilityStatus
+                failure_summary = $vulnerabilityFailure
+                output = $vulnerabilityOutput
+            }
+        }
+        playwright = $playwrightInventory
+    }
+
+    ConvertTo-SimpleJsonString $inventory | Set-Content -LiteralPath $DependencyInventoryPath -Encoding UTF8
+    Write-DependencyTrace -Message 'dependency inventory written'
+    Write-Output "Dependency inventory written: $DependencyInventoryPath"
+
+    if ($vulnerabilityStatus -ne 'passed') {
+        Write-DependencyTrace -Message 'throwing dependency vulnerability failure'
+        throw $vulnerabilityFailure
+    }
+}
+
 function Invoke-PublishRuntimeIntegrityCheck {
     if ($SkipPublishRuntimeIntegrity) {
         Write-Output "Skipping published-folder runtime integrity check because -SkipPublishRuntimeIntegrity was supplied."
@@ -725,6 +1036,18 @@ Invoke-RcChecklistStep `
     -Command "powershell.exe -NoProfile -ExecutionPolicy Bypass -File $RcSelfTestsScriptPath -ReleaseDir $resolvedReleaseDir -PublishDir $resolvedPublishDir" `
     -Artifacts @($RcSelfTestsScriptPath) `
     -Action { Invoke-RcSelfTests }
+
+Invoke-RcChecklistStep `
+    -Name 'dependency freshness and vulnerability checks' `
+    -Command 'dotnet --version; dotnet --list-runtimes; dotnet list package; dotnet list package --vulnerable --include-transitive; inspect Playwright runtime' `
+    -Artifacts @(
+        (Join-Path $PSScriptRoot $ProjectFileName),
+        (Join-Path $resolvedPublishDir '.playwright\package\package.json'),
+        (Join-Path $resolvedPublishDir '.playwright\package\browsers.json'),
+        (Join-Path $resolvedPublishDir '.playwright\node\win32_x64\node.exe'),
+        $DependencyInventoryPath
+    ) `
+    -Action { Invoke-DependencyFreshnessAndVulnerabilityCheck }
 
 Invoke-RcChecklistStep `
     -Name 'focused hardening tests' `
