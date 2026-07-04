@@ -7,7 +7,10 @@
 - [x] Store the XP Tracking URL in encrypted local settings and add a parser/fetch helper for current PC XP totals.
 - [x] Add `Show > XP` with encrypted per-PC password sidecar validation before displaying a character's XP date and total.
 - [x] Allow the Dungeon Master XP credential to display dates and XP totals for all PCs.
+- [x] Show player-safe XP Tracking failure messages that hide the unlisted URL and direct users to contact the DM.
 - [x] Add a polished installer package workflow for `0.9.0-hardening.5` targeting `C:\Program Files\kyrathasoft\player-assistant`.
+- [x] Add an Inno Setup installer that installs to Program Files and guides users to the .NET Desktop Runtime 10 x64 download when the required runtime is missing.
+- [x] Switch publish output to framework-dependent multi-file now that the Inno installer checks for the .NET Desktop Runtime.
 
 ## Hardening completed in this session
 
@@ -88,11 +91,11 @@
   - [x] Reject credentialed URLs, non-HTTP(S) schemes, escaped hosts, and non-allowlisted RPOL/Obsidian hosts.
   - [x] Preserve the previous good index when fetched data contains rejected URLs.
   - [x] Add regression coverage for poisoned sitemap and keyword-index entries.
-- [ ] Add a full RC dry-run mode that writes a structured JSON summary and exits nonzero on any failure.
-  - [ ] Add a `-DryRunJson` or equivalent mode to the RC checklist script.
-  - [ ] Capture each checklist step with status, elapsed time, command, artifact paths, and failure summary.
-  - [ ] Exit nonzero when any required check fails while still writing the summary file.
-  - [ ] Add tests for passing, failing, and invalid-output dry-run summaries.
+- [x] Add a full RC dry-run mode that writes a structured JSON summary and exits nonzero on any failure.
+  - [x] Add a `-DryRunJson` or equivalent mode to the RC checklist script.
+  - [x] Capture each checklist step with status, elapsed time, command, artifact paths, and failure summary.
+  - [x] Exit nonzero when any required check fails while still writing the summary file.
+  - [x] Add tests for passing and failing dry-run summaries.
 - [ ] Add dependency freshness and vulnerability checks to the RC checklist.
   - [ ] Inventory NuGet package versions, .NET SDK/runtime version, Playwright package/browser versions, and bundled Node runtime versions.
   - [ ] Run `dotnet list package --vulnerable` or equivalent vulnerability checks during RC verification.

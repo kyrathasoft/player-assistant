@@ -122,6 +122,70 @@ function Assert-CommandFailsWith {
     Write-Output "RC self-test passed: $Name"
 }
 
+function Assert-CommandPasses {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Name,
+
+        [Parameter(Mandatory = $true)]
+        [string]$FileName,
+
+        [Parameter(Mandatory = $true)]
+        [string[]]$Arguments,
+
+        [Parameter(Mandatory = $true)]
+        [string]$ExpectedText,
+
+        [string]$WorkingDirectory = $PSScriptRoot
+    )
+
+    $result = Invoke-ExternalCommand -FileName $FileName -Arguments $Arguments -WorkingDirectory $WorkingDirectory
+    if ($result.ExitCode -ne 0) {
+        throw "$Name self-test expected success, but command failed. Output: $($result.Output)"
+    }
+
+    if ($result.Output -notlike "*$ExpectedText*") {
+        throw "$Name self-test did not report expected text '$ExpectedText'. Output: $($result.Output)"
+    }
+
+    Write-Output "RC self-test passed: $Name"
+}
+
+function Assert-RcDryRunSummary {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Path,
+
+        [Parameter(Mandatory = $true)]
+        [string]$ExpectedStatus
+    )
+
+    if (!(Test-Path -LiteralPath $Path -PathType Leaf)) {
+        throw "Expected RC dry-run JSON was not written: $Path"
+    }
+
+    $summary = Get-Content -Raw -LiteralPath $Path | ConvertFrom-Json
+    if ($summary.schema_version -ne 1) {
+        throw "RC dry-run JSON schema_version should be 1."
+    }
+
+    if ($summary.status -ne $ExpectedStatus) {
+        throw "RC dry-run JSON status '$($summary.status)' did not match expected '$ExpectedStatus'."
+    }
+
+    if ($summary.step_count -le 0 -or @($summary.steps).Count -le 0) {
+        throw "RC dry-run JSON should include recorded checklist steps."
+    }
+
+    foreach ($step in @($summary.steps)) {
+        foreach ($propertyName in @('name', 'status', 'elapsed_ms', 'command', 'artifacts')) {
+            if (!$step.PSObject.Properties[$propertyName]) {
+                throw "RC dry-run JSON step is missing '$propertyName'."
+            }
+        }
+    }
+}
+
 function Invoke-Git {
     param(
         [Parameter(Mandatory = $true)]
@@ -274,6 +338,71 @@ function Invoke-ExpectedPathSelfTest {
         -ExpectedText 'Git status does not match ExpectedChangedPath.'
 }
 
+function Invoke-DryRunJsonPassingSelfTest {
+    $summaryPath = Join-Path $SelfTestRoot 'passing-rc-dry-run.json'
+    $arguments = @(
+        '-NoProfile',
+        '-ExecutionPolicy',
+        'Bypass',
+        '-File',
+        $RcChecklistScriptPath,
+        '-ReleaseDir',
+        (Resolve-FullPath $ReleaseDir),
+        '-PublishDir',
+        (Resolve-FullPath $PublishDir),
+        '-DryRunJson',
+        $summaryPath,
+        '-SkipGit',
+        '-SkipSelfTests',
+        '-SkipSecretScan',
+        '-SkipTests',
+        '-SkipReleasePublishParity',
+        '-SkipPublishedHealth',
+        '-SkipPublishRuntimeIntegrity',
+        '-SkipDiagnostics'
+    )
+
+    Assert-CommandPasses `
+        -Name 'RC checklist writes passing dry-run JSON summary' `
+        -FileName 'powershell.exe' `
+        -Arguments $arguments `
+        -ExpectedText 'RC dry-run JSON written:'
+
+    Assert-RcDryRunSummary -Path $summaryPath -ExpectedStatus 'passed'
+}
+
+function Invoke-DryRunJsonFailingSelfTest {
+    $summaryPath = Join-Path $SelfTestRoot 'failing-rc-dry-run.json'
+    Assert-CommandFailsWith `
+        -Name 'RC checklist writes failing dry-run JSON summary' `
+        -FileName 'powershell.exe' `
+        -Arguments @(
+            '-NoProfile',
+            '-ExecutionPolicy',
+            'Bypass',
+            '-File',
+            $RcChecklistScriptPath,
+            '-ReleaseDir',
+            (Resolve-FullPath $ReleaseDir),
+            '-PublishDir',
+            (Resolve-FullPath $PublishDir),
+            '-ExpectedChangedPath',
+            '__missing_expected_path_for_rc_dry_run_self_test__.txt',
+            '-DryRunJson',
+            $summaryPath,
+            '-SkipSelfTests',
+            '-SkipSecretScan',
+            '-SkipTests',
+            '-SkipReleasePublishParity',
+            '-SkipPublishedHealth',
+            '-SkipPublishRuntimeIntegrity',
+            '-SkipDiagnostics'
+        ) `
+        -ExpectedText 'RC checklist dry-run failed.'
+
+    Assert-RcDryRunSummary -Path $summaryPath -ExpectedStatus 'failed'
+}
+
 Assert-PathInsideRepo -Path $SelfTestRoot -Description 'RC self-test workspace'
 
 try {
@@ -282,6 +411,8 @@ try {
     Invoke-StartupHealthSelfTest
     Invoke-ReleaseManifestSelfTest
     Invoke-ExpectedPathSelfTest
+    Invoke-DryRunJsonPassingSelfTest
+    Invoke-DryRunJsonFailingSelfTest
 }
 finally {
     if (Test-Path -LiteralPath $SelfTestRoot) {
