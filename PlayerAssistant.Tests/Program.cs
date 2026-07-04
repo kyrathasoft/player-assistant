@@ -128,6 +128,14 @@ var tests = new (string Name, Action Test)[]
     ("keyword search accepts url source metadata", KeywordSearchAcceptsUrlSourceMetadata),
     ("keyword search filters rpol hero metadata-only hits", KeywordSearchFiltersRpolHeroMetadataOnlyHits),
     ("show menu contains xp item", ShowMenuContainsXpItem),
+    ("about menu contains author and update items", AboutMenuContainsAuthorAndUpdateItems),
+    ("about author text lists developer info", AboutAuthorTextListsDeveloperInfo),
+    ("about version text shows app version", AboutVersionTextShowsAppVersion),
+    ("update check parses p-assist archive version", UpdateCheckParsesPAssistArchiveVersion),
+    ("update check chooses newest archive", UpdateCheckChoosesNewestArchive),
+    ("update check compares against current app version", UpdateCheckComparesAgainstCurrentAppVersion),
+    ("update check reports latest version message", UpdateCheckReportsLatestVersionMessage),
+    ("update check fetches from allowed update host", UpdateCheckFetchesFromAllowedUpdateHost),
     ("search enter triggers click when enabled", SearchEnterTriggersClickWhenEnabled),
     ("keyword search offers online fallback on local miss", KeywordSearchOffersOnlineFallbackOnLocalMiss),
     ("keyword search cancels previous online fallback", KeywordSearchCancelsPreviousOnlineFallback),
@@ -2860,6 +2868,147 @@ static void ShowMenuContainsXpItem()
     });
 }
 
+static void AboutMenuContainsAuthorAndUpdateItems()
+{
+    RunOnStaThread(() =>
+    {
+        using var form = new Form1(suppressHeroImagesForThisRun: true);
+        var menuStrip = (MenuStrip)(GetPrivateField(form, "menuStrip")
+            ?? throw new InvalidOperationException("menuStrip was null."));
+        var settingsMenuItem = (ToolStripMenuItem)(GetPrivateField(form, "settingsToolStripMenuItem")
+            ?? throw new InvalidOperationException("settingsToolStripMenuItem was null."));
+        var aboutMenuItem = (ToolStripMenuItem)(GetPrivateField(form, "aboutToolStripMenuItem")
+            ?? throw new InvalidOperationException("aboutToolStripMenuItem was null."));
+        var authorMenuItem = (ToolStripMenuItem)(GetPrivateField(form, "authorToolStripMenuItem")
+            ?? throw new InvalidOperationException("authorToolStripMenuItem was null."));
+        var checkForUpdateMenuItem = (ToolStripMenuItem)(GetPrivateField(form, "checkForUpdateToolStripMenuItem")
+            ?? throw new InvalidOperationException("checkForUpdateToolStripMenuItem was null."));
+        var versionMenuItem = (ToolStripMenuItem)(GetPrivateField(form, "versionToolStripMenuItem")
+            ?? throw new InvalidOperationException("versionToolStripMenuItem was null."));
+
+        var topLevelItems = menuStrip.Items.Cast<ToolStripItem>().ToArray();
+        AssertEqual("About", aboutMenuItem.Text ?? string.Empty, "unexpected About menu text");
+        AssertEqual(
+            Array.IndexOf(topLevelItems, settingsMenuItem) + 1,
+            Array.IndexOf(topLevelItems, aboutMenuItem),
+            "About menu should be immediately to the right of Settings");
+        AssertEqual("Author", authorMenuItem.Text ?? string.Empty, "unexpected Author menu item text");
+        AssertEqual("Check for Updates", checkForUpdateMenuItem.Text ?? string.Empty, "unexpected update menu item text");
+        AssertEqual("Version", versionMenuItem.Text ?? string.Empty, "unexpected version menu item text");
+        AssertTrue(
+            aboutMenuItem.DropDownItems.Cast<ToolStripItem>().SequenceEqual([authorMenuItem, checkForUpdateMenuItem, versionMenuItem]),
+            "About menu should contain Author, Check for Updates, then Version");
+    });
+}
+
+static void AboutAuthorTextListsDeveloperInfo()
+{
+    var authorText = (string)(InvokeStaticMethod(typeof(Form1), "GetAuthorInfoText")
+        ?? throw new InvalidOperationException("GetAuthorInfoText returned null."));
+    AssertEqual(
+        string.Join(Environment.NewLine, "Bryan Miller", "kyrathasoft@gmail.com", "bryanmiller.us"),
+        authorText,
+        "author info text should list developer details on separate lines");
+}
+
+static void AboutVersionTextShowsAppVersion()
+{
+    var versionText = (string)(InvokeStaticMethod(typeof(Form1), "GetAppVersionText")
+        ?? throw new InvalidOperationException("GetAppVersionText returned null."));
+    AssertEqual("RPOL Scarlet Horizon Campaign Assistant 0.9.0", versionText, "unexpected About Version text");
+}
+
+static void UpdateCheckParsesPAssistArchiveVersion()
+{
+    var update = PlayerAssistantUpdateUtility.FindLatestUpdate(
+        """
+        <html>
+          <body>
+            <a href="https://bryanmiller.us/scarlethorizons/p-assist-0.9.0.zip">download</a>
+          </body>
+        </html>
+        """,
+        PlayerAssistantUpdateUtility.UpdateListingUri);
+
+    AssertTrue(update is not null, "expected update archive to be detected");
+    AssertEqual("0.9.0", update!.VersionText, "unexpected parsed update version text");
+    AssertEqual(new Version(0, 9, 0), update.Version, "unexpected parsed update version");
+    AssertEqual(
+        "https://bryanmiller.us/scarlethorizons/p-assist-0.9.0.zip",
+        update.DownloadUri.AbsoluteUri,
+        "unexpected update download URL");
+}
+
+static void UpdateCheckChoosesNewestArchive()
+{
+    var update = PlayerAssistantUpdateUtility.FindLatestUpdate(
+        """
+        <a href="p-assist-0.9.0.zip">old</a>
+        <a href="p-assist-0.10.0.zip">new</a>
+        <a href="notes.txt">ignore</a>
+        <a href="https://unexpected.example.test/p-assist-99.0.0.zip">ignore disallowed host</a>
+        """,
+        PlayerAssistantUpdateUtility.UpdateListingUri);
+
+    AssertTrue(update is not null, "expected latest update archive to be detected");
+    AssertEqual("0.10.0", update!.VersionText, "expected newest allowed archive version");
+    AssertEqual(
+        "https://bryanmiller.us/scarlethorizons/p-assist-0.10.0.zip",
+        update.DownloadUri.AbsoluteUri,
+        "unexpected newest update URL");
+}
+
+static void UpdateCheckComparesAgainstCurrentAppVersion()
+{
+    var currentVersion = PlayerAssistantUpdateUtility.GetCurrentAppVersion();
+    AssertEqual(new Version(0, 9, 0), currentVersion, "unexpected current app update-comparison version");
+
+    var sameVersion = new PlayerAssistantUpdateInfo(
+        new Version(0, 9, 0),
+        "0.9.0",
+        new Uri("https://bryanmiller.us/scarlethorizons/p-assist-0.9.0.zip"));
+    var newerVersion = new PlayerAssistantUpdateInfo(
+        new Version(0, 9, 1),
+        "0.9.1",
+        new Uri("https://bryanmiller.us/scarlethorizons/p-assist-0.9.1.zip"));
+
+    AssertFalse(sameVersion.IsNewerThan(currentVersion), "same version should not be offered as an update");
+    AssertTrue(newerVersion.IsNewerThan(currentVersion), "newer version should be offered as an update");
+}
+
+static void UpdateCheckReportsLatestVersionMessage()
+{
+    var message = (string)(InvokeStaticMethod(typeof(Form1), "GetLatestVersionMessage")
+        ?? throw new InvalidOperationException("GetLatestVersionMessage returned null."));
+    AssertEqual(
+        "You are using the latest version of this software.",
+        message,
+        "unexpected no-update message text");
+}
+
+static void UpdateCheckFetchesFromAllowedUpdateHost()
+{
+    using var httpClient = NetworkRequestUtility.CreateHttpClient(new ScriptedHttpMessageHandler((request, _) =>
+    {
+        AssertEqual(
+            PlayerAssistantUpdateUtility.UpdateListingUri.AbsoluteUri,
+            request.RequestUri?.AbsoluteUri ?? string.Empty,
+            "unexpected update listing request URL");
+
+        return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StringContent("""<a href="p-assist-0.9.1.zip">download</a>""")
+        });
+    }));
+
+    var update = PlayerAssistantUpdateUtility.CheckForLatestUpdateAsync(httpClient).GetAwaiter().GetResult();
+    AssertTrue(update is not null, "expected update archive from scripted listing");
+    AssertEqual("0.9.1", update!.VersionText, "unexpected fetched update version");
+
+    var launchValidation = ExternalUrlLaunchUtility.Validate(update.DownloadUri.AbsoluteUri);
+    AssertTrue(launchValidation.IsAllowed, launchValidation.RejectionReason ?? "update download URL should be launchable");
+}
+
 static void SearchEnterTriggersClickWhenEnabled()
 {
     RunOnStaThread(() =>
@@ -3786,11 +3935,15 @@ static void InstallerScriptsTargetProgramFilesInstallPath()
     var innoScript = File.ReadAllText(innoScriptPath);
     AssertContains(innoScript, "DefaultDirName={autopf}\\kyrathasoft\\player-assistant");
     AssertContains(innoScript, "ArchitecturesInstallIn64BitMode=x64compatible");
+    AssertContains(innoScript, "#define InstallerVersion Version");
+    AssertContains(innoScript, "OutputBaseFilename=p-assist-{#InstallerVersion}");
     AssertContains(innoScript, ".NET Desktop Runtime 10 x64");
     AssertContains(innoScript, "https://dotnet.microsoft.com/en-us/download/dotnet/10.0");
     AssertContains(innoScript, "IsRequiredRuntimeInstalled");
     AssertContains(innoScript, "Microsoft.WindowsDesktop.App");
     AssertContains(File.ReadAllText(builderPath), "ISCC.exe");
+    AssertContains(File.ReadAllText(builderPath), "Get-InstallerVersion");
+    AssertContains(File.ReadAllText(builderPath), "p-assist-$InstallerVersion.exe");
     AssertContains(File.ReadAllText(builderPath), "app-protected-v2");
     AssertContains(File.ReadAllText(verifierPath), "app-protected-v2");
 }

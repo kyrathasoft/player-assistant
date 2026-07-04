@@ -361,6 +361,16 @@ function Assert-ExecutableVersion {
     Write-Output "$Description version verified: FileVersion=$($versionInfo.FileVersion), ProductVersion=$($versionInfo.ProductVersion)"
 }
 
+function Get-InstallerVersion {
+    param([Parameter(Mandatory = $true)][string]$Version)
+
+    if ($Version -match '^(\d+\.\d+\.\d+)') {
+        return $Matches[1]
+    }
+
+    throw "Version '$Version' does not start with a numeric major.minor.patch segment for installer naming."
+}
+
 function Get-AuthenticodeSignatureSummary {
     param(
         [Parameter(Mandatory = $true)]
@@ -465,7 +475,7 @@ function Invoke-CodeSigningCheck {
         Resolve-FullPath $InstallerPath
     }
     else {
-        Join-Path $PSScriptRoot "Release\installer\player-assistant-$($projectVersion.Version)-setup.exe"
+        Join-Path $PSScriptRoot "Release\installer\p-assist-$(Get-InstallerVersion -Version $projectVersion.Version).exe"
     }
 
     Assert-AuthenticodeSignatureMatchesPolicy -Path $resolvedInstallerPath -Description 'Inno Setup installer'
@@ -1240,7 +1250,7 @@ Invoke-RcChecklistStep `
         (Join-Path $resolvedPublishDir $ExecutableFileName),
         (Join-Path $resolvedReleaseDir $ReleaseProvenanceFileName),
         (Join-Path $resolvedPublishDir $ReleaseProvenanceFileName),
-        $(if (![string]::IsNullOrWhiteSpace($InstallerPath)) { $InstallerPath } else { Join-Path $PSScriptRoot "Release\installer\player-assistant-$($projectVersion.Version)-setup.exe" })
+        $(if (![string]::IsNullOrWhiteSpace($InstallerPath)) { $InstallerPath } else { Join-Path $PSScriptRoot "Release\installer\p-assist-$(Get-InstallerVersion -Version $projectVersion.Version).exe" })
     ) `
     -Action { Invoke-CodeSigningCheck }
 

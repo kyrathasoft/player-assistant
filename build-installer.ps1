@@ -18,7 +18,19 @@ $XpPasswordFileName = 'xp-passwords.json'
 $PackageRootName = "player-assistant-$Version"
 $PackageFileName = "player-assistant-$Version-installer.zip"
 $InnoScriptPath = Join-Path $PSScriptRoot 'Installer\player-assistant.iss'
-$InnoOutputFileName = "player-assistant-$Version-setup.exe"
+
+function Get-InstallerVersion {
+    param([Parameter(Mandatory = $true)][string]$Version)
+
+    if ($Version -match '^(\d+\.\d+\.\d+)') {
+        return $Matches[1]
+    }
+
+    throw "Version '$Version' does not start with a numeric major.minor.patch segment for installer naming."
+}
+
+$InstallerVersion = Get-InstallerVersion -Version $Version
+$InnoOutputFileName = "p-assist-$InstallerVersion.exe"
 
 function Assert-RequiredFile {
     param(
@@ -343,15 +355,17 @@ function Assert-AuthenticodeSignatureMatchesPolicy {
 }
 
 if (!$SkipPublish) {
-    $publishArguments = @('-OutputDir', $PublishDir)
+    $publishArguments = @{
+        OutputDir = $PublishDir
+    }
     if ($RequireCodeSigning) {
-        $publishArguments += '-RequireCodeSigning'
+        $publishArguments['RequireCodeSigning'] = $true
     }
     if (![string]::IsNullOrWhiteSpace($ExpectedSignerSubject)) {
-        $publishArguments += @('-ExpectedSignerSubject', $ExpectedSignerSubject)
+        $publishArguments['ExpectedSignerSubject'] = $ExpectedSignerSubject
     }
     if (![string]::IsNullOrWhiteSpace($ExpectedSignerThumbprint)) {
-        $publishArguments += @('-ExpectedSignerThumbprint', $ExpectedSignerThumbprint)
+        $publishArguments['ExpectedSignerThumbprint'] = $ExpectedSignerThumbprint
     }
 
     & (Join-Path $PSScriptRoot 'publish-player-assistant.ps1') @publishArguments
@@ -380,20 +394,38 @@ Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'Installer\install-player-assist
 Copy-DirectoryContents -Source $PublishDir -Destination $payloadRoot
 
 $sourceSettings = ConvertFrom-SettingsFile -Path (Join-Path $PSScriptRoot $SettingsLocalFileName)
-Write-PortableEncryptedSettings -Settings $sourceSettings -DestinationPath (Join-Path $payloadRoot $SettingsLocalFileName)
+$payloadSettingsPath = Join-Path $payloadRoot $SettingsLocalFileName
+if (Test-Path -LiteralPath $payloadSettingsPath -PathType Leaf) {
+    Set-ItemProperty -LiteralPath $payloadSettingsPath -Name IsReadOnly -Value $false
+}
+Write-PortableEncryptedSettings -Settings $sourceSettings -DestinationPath $payloadSettingsPath
 Protect-RuntimeSidecarFiles -Directory $payloadRoot
+& powershell.exe `
+    -NoProfile `
+    -ExecutionPolicy Bypass `
+    -File (Join-Path $PSScriptRoot 'verify-runtime-sidecars.ps1') `
+    -AppDir $payloadRoot `
+    -RequireReadOnlyAttribute `
+    -RequireInstallerScriptProtection `
+    -InstallerScriptPath (Join-Path $packageRoot 'install-player-assistant.ps1')
+if ($LASTEXITCODE -ne 0) {
+    throw "Installer staging runtime sidecar verification failed."
+}
 
 Compress-Archive -LiteralPath $packageRoot -DestinationPath $packagePath -Force
 
-$verifyInstallerArguments = @('-PackagePath', $packagePath, '-ExpectedVersion', $Version)
+$verifyInstallerArguments = @{
+    PackagePath = $packagePath
+    ExpectedVersion = $Version
+}
 if ($RequireCodeSigning) {
-    $verifyInstallerArguments += '-RequireCodeSigning'
+    $verifyInstallerArguments['RequireCodeSigning'] = $true
 }
 if (![string]::IsNullOrWhiteSpace($ExpectedSignerSubject)) {
-    $verifyInstallerArguments += @('-ExpectedSignerSubject', $ExpectedSignerSubject)
+    $verifyInstallerArguments['ExpectedSignerSubject'] = $ExpectedSignerSubject
 }
 if (![string]::IsNullOrWhiteSpace($ExpectedSignerThumbprint)) {
-    $verifyInstallerArguments += @('-ExpectedSignerThumbprint', $ExpectedSignerThumbprint)
+    $verifyInstallerArguments['ExpectedSignerThumbprint'] = $ExpectedSignerThumbprint
 }
 
 & (Join-Path $PSScriptRoot 'verify-installer-package.ps1') @verifyInstallerArguments
@@ -412,6 +444,7 @@ if ($resolvedInnoCompilerPath) {
         "/DPayloadDir=$payloadRoot" `
         "/DOutputDir=$OutputDir" `
         "/DVersion=$Version" `
+        "/DInstallerVersion=$InstallerVersion" `
         $InnoScriptPath
     if ($LASTEXITCODE -ne 0) {
         throw "Inno Setup compiler failed with exit code $LASTEXITCODE."

@@ -10,6 +10,10 @@
 #define Version "0.9.0-hardening.5"
 #endif
 
+#ifndef InstallerVersion
+#define InstallerVersion Version
+#endif
+
 [Setup]
 AppId={{E8A3143B-6B8D-44EA-93D2-3AC69061D311}
 AppName=Player Assistant
@@ -24,7 +28,7 @@ PrivilegesRequired=admin
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
 OutputDir={#OutputDir}
-OutputBaseFilename=player-assistant-{#Version}-setup
+OutputBaseFilename=p-assist-{#InstallerVersion}
 SetupIconFile=..\Assets\dragon-icon.ico
 UninstallDisplayIcon={app}\player-assistant.exe
 Compression=lzma2/ultra64

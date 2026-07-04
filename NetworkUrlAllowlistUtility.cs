@@ -4,7 +4,8 @@ namespace PlayerAssistant
     {
         Generic,
         Rpol,
-        ObsidianPublish
+        ObsidianPublish,
+        PlayerAssistantUpdate
     }
 
     internal sealed record NetworkUrlAllowlistValidation(
@@ -79,7 +80,10 @@ namespace PlayerAssistant
                 NetworkUrlPurpose.ObsidianPublish => IsObsidianPublishHost(uri)
                     ? NetworkUrlAllowlistValidation.Allowed(uri)
                     : NetworkUrlAllowlistValidation.Rejected("Obsidian Publish URLs must use publish.obsidian.md or an obsidian.md subdomain."),
-                _ => IsRpolHost(uri) || IsObsidianPublishHost(uri)
+                NetworkUrlPurpose.PlayerAssistantUpdate => IsPlayerAssistantUpdateHost(uri)
+                    ? NetworkUrlAllowlistValidation.Allowed(uri)
+                    : NetworkUrlAllowlistValidation.Rejected("Player Assistant update URLs must use bryanmiller.us."),
+                _ => IsRpolHost(uri) || IsObsidianPublishHost(uri) || IsPlayerAssistantUpdateHost(uri)
                     ? NetworkUrlAllowlistValidation.Allowed(uri)
                     : NetworkUrlAllowlistValidation.Rejected("URL host is not on the Player Assistant network allowlist.")
             };
@@ -111,6 +115,14 @@ namespace PlayerAssistant
 
             return string.Equals(uri.Host, "publish.obsidian.md", StringComparison.OrdinalIgnoreCase)
                 || uri.Host.EndsWith(".obsidian.md", StringComparison.OrdinalIgnoreCase);
+        }
+
+        public static bool IsPlayerAssistantUpdateHost(Uri uri)
+        {
+            ArgumentNullException.ThrowIfNull(uri);
+
+            return string.Equals(uri.Host, "bryanmiller.us", StringComparison.OrdinalIgnoreCase)
+                || uri.Host.EndsWith(".bryanmiller.us", StringComparison.OrdinalIgnoreCase);
         }
     }
 }

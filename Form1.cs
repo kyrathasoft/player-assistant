@@ -1032,6 +1032,114 @@ namespace PlayerAssistant
                     : "Hero images will play on the next startup.");
         }
 
+        private void AuthorToolStripMenuItem_Click(object? sender, EventArgs e)
+        {
+            MessageBox.Show(
+                this,
+                GetAuthorInfoText(),
+                "Author",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Information);
+        }
+
+        private async void CheckForUpdateToolStripMenuItem_Click(object? sender, EventArgs e)
+        {
+            checkForUpdateToolStripMenuItem.Enabled = false;
+            try
+            {
+                SetStatusBarMessage("Checking for updates...");
+                using var httpClient = NetworkRequestUtility.CreateHttpClient();
+                var update = await PlayerAssistantUpdateUtility.CheckForLatestUpdateAsync(httpClient);
+                var currentVersion = PlayerAssistantUpdateUtility.GetCurrentAppVersion();
+                if (update is null)
+                {
+                    MessageBox.Show(
+                        this,
+                        "No Player Assistant update archive was found.",
+                        "Check for Update",
+                        MessageBoxButtons.OK,
+                        MessageBoxIcon.Information);
+                    SetStatusBarMessage("No update archive found.");
+                    return;
+                }
+
+                if (!update.IsNewerThan(currentVersion))
+                {
+                    MessageBox.Show(
+                        this,
+                        GetLatestVersionMessage(),
+                        "Check for Update",
+                        MessageBoxButtons.OK,
+                        MessageBoxIcon.Information);
+                    SetStatusBarMessage($"Player Assistant is up to date ({currentVersion}).");
+                    return;
+                }
+
+                var result = MessageBox.Show(
+                    this,
+                    $"Player Assistant {update.VersionText} is available.{Environment.NewLine}{Environment.NewLine}Current version: {currentVersion}{Environment.NewLine}{Environment.NewLine}Download the update now?",
+                    "Update Available",
+                    MessageBoxButtons.YesNo,
+                    MessageBoxIcon.Information);
+                if (result != DialogResult.Yes)
+                {
+                    SetStatusBarMessage($"Update available: {update.VersionText}.");
+                    return;
+                }
+
+                var launchValidation = ExternalUrlLaunchUtility.Validate(update.DownloadUri.AbsoluteUri);
+                if (!launchValidation.IsAllowed)
+                {
+                    throw new InvalidOperationException(launchValidation.RejectionReason ?? "The update URL is not allowed.");
+                }
+
+                Process.Start(ExternalUrlLaunchUtility.CreateStartInfo(launchValidation));
+                SetStatusBarMessage($"Opening update download: {update.VersionText}.");
+            }
+            catch (Exception ex)
+            {
+                await ReportOperationFailureAsync(
+                    "update check",
+                    "Update check unavailable",
+                    "Check for Update",
+                    ex,
+                    showDialog: true);
+            }
+            finally
+            {
+                checkForUpdateToolStripMenuItem.Enabled = true;
+            }
+        }
+
+        private void VersionToolStripMenuItem_Click(object? sender, EventArgs e)
+        {
+            MessageBox.Show(
+                this,
+                GetAppVersionText(),
+                "Version",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Information);
+        }
+
+        private static string GetAuthorInfoText()
+        {
+            return string.Join(
+                Environment.NewLine,
+                "Bryan Miller",
+                "kyrathasoft@gmail.com",
+                "bryanmiller.us");
+        }
+
+        private static string GetLatestVersionMessage()
+        {
+            return "You are using the latest version of this software.";
+        }
+
+        private static string GetAppVersionText()
+        {
+            return $"RPOL Scarlet Horizon Campaign Assistant {PlayerAssistantUpdateUtility.GetCurrentAppVersion()}";
+        }
+
         private void ShowSearchPanel()
         {
             UpdateSearchPanelBounds();

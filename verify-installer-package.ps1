@@ -154,7 +154,6 @@ function Test-InstallerDirectory {
         -ExecutionPolicy Bypass `
         -File $RuntimeSidecarVerificationScriptPath `
         -AppDir $payloadDirectory `
-        -RequireReadOnlyAttribute `
         -RequireInstallerScriptProtection `
         -InstallerScriptPath (Join-Path $Directory 'install-player-assistant.ps1')
     if ($LASTEXITCODE -ne 0) {

@@ -41,6 +41,10 @@ namespace PlayerAssistant
             settingsToolStripMenuItem = new ToolStripMenuItem();
             skipHeroImageParadeAtStartupToolStripMenuItem = new ToolStripMenuItem();
             whiteMarbleBackgroundTilingToolStripMenuItem = new ToolStripMenuItem();
+            aboutToolStripMenuItem = new ToolStripMenuItem();
+            authorToolStripMenuItem = new ToolStripMenuItem();
+            checkForUpdateToolStripMenuItem = new ToolStripMenuItem();
+            versionToolStripMenuItem = new ToolStripMenuItem();
             statusStrip = new StatusStrip();
             statusToolStripStatusLabel = new ToolStripStatusLabel();
             pnlSearch = new Panel();
@@ -63,7 +67,7 @@ namespace PlayerAssistant
             // 
             // menuStrip
             // 
-            menuStrip.Items.AddRange(new ToolStripItem[] { fileToolStripMenuItem, showToolStripMenuItem, searchToolStripMenuItem, settingsToolStripMenuItem });
+            menuStrip.Items.AddRange(new ToolStripItem[] { fileToolStripMenuItem, showToolStripMenuItem, searchToolStripMenuItem, settingsToolStripMenuItem, aboutToolStripMenuItem });
             menuStrip.Location = new Point(0, 0);
             menuStrip.Name = "menuStrip";
             menuStrip.Size = new Size(1024, 24);
@@ -161,6 +165,35 @@ namespace PlayerAssistant
             whiteMarbleBackgroundTilingToolStripMenuItem.Text = "White Marble Background Tiling";
             whiteMarbleBackgroundTilingToolStripMenuItem.CheckedChanged += WhiteMarbleBackgroundTilingToolStripMenuItem_CheckedChanged;
             whiteMarbleBackgroundTilingToolStripMenuItem.Click += WhiteMarbleBackgroundTilingToolStripMenuItem_Click;
+            // 
+            // aboutToolStripMenuItem
+            // 
+            aboutToolStripMenuItem.DropDownItems.AddRange(new ToolStripItem[] { authorToolStripMenuItem, checkForUpdateToolStripMenuItem, versionToolStripMenuItem });
+            aboutToolStripMenuItem.Name = "aboutToolStripMenuItem";
+            aboutToolStripMenuItem.Size = new Size(52, 20);
+            aboutToolStripMenuItem.Text = "About";
+            aboutToolStripMenuItem.DropDownOpening += NonSearchToolStripMenuItem_DropDownOpening;
+            // 
+            // authorToolStripMenuItem
+            // 
+            authorToolStripMenuItem.Name = "authorToolStripMenuItem";
+            authorToolStripMenuItem.Size = new Size(167, 22);
+            authorToolStripMenuItem.Text = "Author";
+            authorToolStripMenuItem.Click += AuthorToolStripMenuItem_Click;
+            // 
+            // checkForUpdateToolStripMenuItem
+            // 
+            checkForUpdateToolStripMenuItem.Name = "checkForUpdateToolStripMenuItem";
+            checkForUpdateToolStripMenuItem.Size = new Size(167, 22);
+            checkForUpdateToolStripMenuItem.Text = "Check for Updates";
+            checkForUpdateToolStripMenuItem.Click += CheckForUpdateToolStripMenuItem_Click;
+            // 
+            // versionToolStripMenuItem
+            // 
+            versionToolStripMenuItem.Name = "versionToolStripMenuItem";
+            versionToolStripMenuItem.Size = new Size(167, 22);
+            versionToolStripMenuItem.Text = "Version";
+            versionToolStripMenuItem.Click += VersionToolStripMenuItem_Click;
             // 
             // statusStrip
             // 
@@ -353,6 +386,10 @@ namespace PlayerAssistant
         private ToolStripMenuItem settingsToolStripMenuItem;
         private ToolStripMenuItem skipHeroImageParadeAtStartupToolStripMenuItem;
         private ToolStripMenuItem whiteMarbleBackgroundTilingToolStripMenuItem;
+        private ToolStripMenuItem aboutToolStripMenuItem;
+        private ToolStripMenuItem authorToolStripMenuItem;
+        private ToolStripMenuItem checkForUpdateToolStripMenuItem;
+        private ToolStripMenuItem versionToolStripMenuItem;
         private StatusStrip statusStrip;
         private ToolStripStatusLabel statusToolStripStatusLabel;
         private Panel pnlSearch;
