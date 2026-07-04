@@ -74,6 +74,9 @@ $RequiredSettingsUrlKeys = @(
     'The Cast',
     'Obsidian Game Vault'
 )
+$RequiredLocalSettingsUrlKeys = @(
+    'XP Tracking'
+)
 $ProcessLockDiagnosticsScriptPath = Join-Path $PSScriptRoot 'diagnose-player-assistant-locks.ps1'
 $RuntimeSidecarVerificationScriptPath = Join-Path $PSScriptRoot 'verify-runtime-sidecars.ps1'
 
@@ -723,6 +726,24 @@ function Assert-EncryptedLocalSettings {
     $publishedSchemaVersion = Get-SettingsSchemaVersion -Settings $publishedEnvelope -Description "published $SettingsLocalFileName"
     if ($publishedSchemaVersion -ne $SettingsSchemaVersion) {
         throw "Published $SettingsLocalFileName must declare schema version $SettingsSchemaVersion."
+    }
+
+    foreach ($settingsKey in $RequiredLocalSettingsUrlKeys) {
+        $sourceProperty = $sourceSettings.PSObject.Properties[$settingsKey]
+        if ($null -eq $sourceProperty -or [string]::IsNullOrWhiteSpace([string]$sourceProperty.Value)) {
+            throw "Source $SettingsLocalFileName is missing required URL setting '$settingsKey'."
+        }
+
+        $publishedProperty = $publishedSettings.PSObject.Properties[$settingsKey]
+        if ($null -eq $publishedProperty -or [string]::IsNullOrWhiteSpace([string]$publishedProperty.Value)) {
+            throw "Published $SettingsLocalFileName is missing required URL setting '$settingsKey'."
+        }
+
+        $uri = $null
+        if (![System.Uri]::TryCreate([string]$publishedProperty.Value, [System.UriKind]::Absolute, [ref]$uri) -or
+            ($uri.Scheme -ne [System.Uri]::UriSchemeHttp -and $uri.Scheme -ne [System.Uri]::UriSchemeHttps)) {
+            throw "Published $SettingsLocalFileName value '$settingsKey' must be an absolute HTTP or HTTPS URL."
+        }
     }
 
     foreach ($property in $sourceSettings.PSObject.Properties) {

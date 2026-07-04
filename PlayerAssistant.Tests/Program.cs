@@ -173,6 +173,7 @@ var tests = new (string Name, Action Test)[]
     ("publish verification rejects malformed settings json", PublishVerificationRejectsMalformedSettingsJson),
     ("publish verification rejects future settings schema", PublishVerificationRejectsFutureSettingsSchema),
     ("publish verification rejects future local settings schema", PublishVerificationRejectsFutureLocalSettingsSchema),
+    ("publish verification rejects missing xp tracking local setting", PublishVerificationRejectsMissingXpTrackingLocalSetting),
     ("publish verification rejects missing xp password sidecar", PublishVerificationRejectsMissingXpPasswordSidecar),
     ("publish verification rejects plaintext xp password sidecar", PublishVerificationRejectsPlaintextXpPasswordSidecar),
     ("publish verification rejects malformed keyword index", PublishVerificationRejectsMalformedKeywordIndex),
@@ -3903,6 +3904,28 @@ static void PublishVerificationRejectsFutureLocalSettingsSchema()
 
         AssertFalse(output.ExitCode == 0, "publish verification should fail when settings.local.json uses a future schema");
         AssertContains(output.Output, "settings.local.json uses unsupported schema version 99");
+    });
+}
+
+static void PublishVerificationRejectsMissingXpTrackingLocalSetting()
+{
+    WithCopiedPublishDirectory(directoryPath =>
+    {
+        var sourceSettingsPath = Path.Combine(
+            Path.GetDirectoryName(directoryPath) ?? GetRepositoryRoot(),
+            $"{Path.GetFileName(directoryPath)}.source.settings.local.json");
+        LocalSettingsUtility.SaveEncryptedSettings(
+            sourceSettingsPath,
+            new Dictionary<string, string>
+            {
+                ["RPOL user name"] = "example-user",
+                ["RPOL password"] = "example-password"
+            });
+
+        var output = RunPublishVerification(directoryPath);
+
+        AssertFalse(output.ExitCode == 0, "publish verification should fail when settings.local.json omits XP Tracking");
+        AssertContains(output.Output, "Source settings.local.json is missing required URL setting 'XP Tracking'.");
     });
 }
 
