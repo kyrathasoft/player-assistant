@@ -331,7 +331,9 @@ namespace PlayerAssistant
                     useAsync: true);
                 return await JsonSerializer.DeserializeAsync<KeywordIndexDocument>(
                     stream,
-                    cancellationToken: cancellationToken).ConfigureAwait(false);
+                    cancellationToken: cancellationToken).ConfigureAwait(false) is { } document
+                    ? ValidateKeywordIndexDocument(document)
+                    : null;
             }
             catch (Exception ex) when (ex is JsonException or InvalidOperationException or IOException)
             {
@@ -343,6 +345,14 @@ namespace PlayerAssistant
                         ex)).ConfigureAwait(false);
                 return null;
             }
+        }
+
+        internal static void ValidateKeywordIndexJson(string keywordIndexJson)
+        {
+            ArgumentNullException.ThrowIfNull(keywordIndexJson);
+            var document = JsonSerializer.Deserialize<KeywordIndexDocument>(keywordIndexJson, JsonOptions)
+                ?? throw new InvalidOperationException("Keyword index JSON is empty or invalid.");
+            ValidateKeywordIndexDocument(document);
         }
 
         private static string PreserveBadIndexFile(string outputPath)
@@ -632,6 +642,7 @@ namespace PlayerAssistant
                 string source,
                 CancellationToken cancellationToken)
             {
+                ValidateStoredUrl(url, source, "keyword-index urls");
                 await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
                 try
                 {
@@ -667,6 +678,11 @@ namespace PlayerAssistant
                 int totalObsidianUrlCount,
                 bool reportUpdates)
             {
+                foreach (var match in matches)
+                {
+                    ValidateStoredUrl(match.Url, null, $"keyword-index matches for '{term}'");
+                }
+
                 await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
                 try
                 {
@@ -748,6 +764,7 @@ namespace PlayerAssistant
                 int totalRpolUrlCount,
                 int totalObsidianUrlCount)
             {
+                ValidateStoredUrl(match.Url, null, $"keyword-index match for '{term}'");
                 await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
                 try
                 {
@@ -820,6 +837,7 @@ namespace PlayerAssistant
                                     match.LastIndexed))
                                 .ToArray()),
                         StringComparer.OrdinalIgnoreCase));
+                ValidateKeywordIndexDocument(document);
 
                 var tempOutputPath = AtomicFileUtility.CreateTempPath(_outputPath);
                 try
@@ -844,6 +862,43 @@ namespace PlayerAssistant
                         File.Delete(tempOutputPath);
                     }
                 }
+            }
+        }
+
+        private static KeywordIndexDocument ValidateKeywordIndexDocument(KeywordIndexDocument document)
+        {
+            if (document.Urls is not null)
+            {
+                foreach (var pair in document.Urls)
+                {
+                    ValidateStoredUrl(pair.Key, pair.Value.Source, "keyword-index urls");
+                }
+            }
+
+            foreach (var word in document.Words)
+            {
+                foreach (var match in word.Value.Matches)
+                {
+                    ValidateStoredUrl(match.Url, null, $"keyword-index matches for '{word.Key}'");
+                }
+            }
+
+            return document;
+        }
+
+        private static void ValidateStoredUrl(string url, string? source, string description)
+        {
+            var purpose = source switch
+            {
+                KeywordIndexUrlSource.Rpol => NetworkUrlPurpose.Rpol,
+                KeywordIndexUrlSource.ObsidianWiki => NetworkUrlPurpose.ObsidianPublish,
+                _ => NetworkUrlPurpose.Generic
+            };
+            var validation = NetworkUrlAllowlistUtility.Validate(url, purpose);
+            if (!validation.IsAllowed)
+            {
+                throw new InvalidOperationException(
+                    $"{description} contains a URL that is not allowed: {url}. {validation.RejectionReason}");
             }
         }
 

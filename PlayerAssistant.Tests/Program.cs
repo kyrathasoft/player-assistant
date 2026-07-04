@@ -75,6 +75,7 @@ var tests = new (string Name, Action Test)[]
     ("startup dependency matrix classifies terminal network failure", StartupDependencyMatrixClassifiesTerminalNetworkFailure),
     ("network request wraps timeout", NetworkRequestWrapsTimeout),
     ("network request preserves caller cancellation", NetworkRequestPreservesCallerCancellation),
+    ("network allowlist rejects credentialed and escaped hosts", NetworkAllowlistRejectsCredentialedAndEscapedHosts),
     ("network response limits define defaults", NetworkResponseLimitsDefineDefaults),
     ("network response limit rejects oversized html header", NetworkResponseLimitRejectsOversizedHtmlHeader),
     ("network response limit rejects oversized markdown stream", NetworkResponseLimitRejectsOversizedMarkdownStream),
@@ -89,6 +90,10 @@ var tests = new (string Name, Action Test)[]
     ("player character refresh cancellation clears in progress flag", PlayerCharacterRefreshCancellationClearsInProgressFlag),
     ("game forum startup cancellation writes no manifests", GameForumStartupCancellationWritesNoManifests),
     ("keyword index loader quarantines malformed json", KeywordIndexLoaderQuarantinesMalformedJson),
+    ("sitemap validation rejects poisoned url", SitemapValidationRejectsPoisonedUrl),
+    ("sitemap keyword dictionary preserves existing output on rejected url", SitemapKeywordDictionaryPreservesExistingOutputOnRejectedUrl),
+    ("keyword index validation rejects poisoned url entries", KeywordIndexValidationRejectsPoisonedUrlEntries),
+    ("keyword index validation rejects poisoned match urls", KeywordIndexValidationRejectsPoisonedMatchUrls),
     ("keyword terms release copy generates from keyword index", KeywordTermsReleaseCopyGeneratesFromKeywordIndex),
     ("keyword terms publish copy preserves parent release terms", KeywordTermsPublishCopyPreservesParentReleaseTerms),
     ("rpol auth detects login page fallback", RpolAuthDetectsLoginPageFallback),
@@ -1400,6 +1405,16 @@ static void NetworkRequestPreservesCallerCancellation()
             cancellationToken: cancellation.Token).GetAwaiter().GetResult());
 }
 
+static void NetworkAllowlistRejectsCredentialedAndEscapedHosts()
+{
+    var credentialed = NetworkUrlAllowlistUtility.Validate("https://user:password@rpol.net/game.php", NetworkUrlPurpose.Rpol);
+    var escapedHost = NetworkUrlAllowlistUtility.Validate("https://rpol%2enet/game.php", NetworkUrlPurpose.Rpol);
+
+    AssertFalse(credentialed.IsAllowed, "credentialed URLs should not be allowed");
+    AssertContains(credentialed.RejectionReason ?? string.Empty, "credentials");
+    AssertFalse(escapedHost.IsAllowed, "escaped host URLs should not be allowed");
+}
+
 static void NetworkResponseLimitsDefineDefaults()
 {
     AssertTrue(NetworkResponseContentLimit.Html.MaxBytes > 0, "HTML response limit should be positive");
@@ -1771,6 +1786,102 @@ static void KeywordIndexLoaderQuarantinesMalformedJson()
             File.Delete(startupLogPath);
         }
     }
+}
+
+static void SitemapValidationRejectsPoisonedUrl()
+{
+    var exception = AssertThrows<InvalidOperationException>(() =>
+        SitemapUtility.ValidateSitemapXml(
+            """
+            <urlset>
+              <url>
+                <loc>https://user:password@publish.obsidian.md/scarlethorizons/Poison</loc>
+              </url>
+            </urlset>
+            """));
+
+    AssertContains(exception.Message, "sitemap.xml contains a URL that is not allowed");
+    AssertContains(exception.Message, "embedded credentials");
+}
+
+static void SitemapKeywordDictionaryPreservesExistingOutputOnRejectedUrl()
+{
+    using var directory = TemporaryDirectory.Create();
+    var sitemapPath = Path.Combine(directory.Path, "sitemap.xml");
+    var dictionaryPath = Path.Combine(directory.Path, "sitemap-keyword-urls.json");
+    File.WriteAllText(dictionaryPath, """{"safe":"https://publish.obsidian.md/scarlethorizons/Safe"}""");
+    File.WriteAllText(
+        sitemapPath,
+        """
+        <urlset>
+          <url>
+            <loc>https://evil.example.test/Poison</loc>
+          </url>
+        </urlset>
+        """);
+
+    var exception = AssertThrows<InvalidOperationException>(() =>
+        SitemapUtility.WriteKeywordUrlDictionaryAsync(sitemapPath, dictionaryPath).GetAwaiter().GetResult());
+
+    AssertContains(exception.Message, "sitemap.xml contains a URL that is not allowed");
+    AssertContains(File.ReadAllText(dictionaryPath), "https://publish.obsidian.md/scarlethorizons/Safe");
+}
+
+static void KeywordIndexValidationRejectsPoisonedUrlEntries()
+{
+    var exception = AssertThrows<InvalidOperationException>(() =>
+        KeywordIndexCrawler.ValidateKeywordIndexJson(
+            """
+            {
+              "index_metadata": {
+                "generated_at": "2026-07-04T00:00:00Z",
+                "total_words_indexed": 0
+              },
+              "urls": {
+                "https://evil.example.test/Poison": {
+                  "source": "Obsidian wiki"
+                }
+              },
+              "words": {}
+            }
+            """));
+
+    AssertContains(exception.Message, "keyword-index urls contains a URL that is not allowed");
+    AssertContains(exception.Message, "Obsidian Publish URLs");
+}
+
+static void KeywordIndexValidationRejectsPoisonedMatchUrls()
+{
+    var exception = AssertThrows<InvalidOperationException>(() =>
+        KeywordIndexCrawler.ValidateKeywordIndexJson(
+            """
+            {
+              "index_metadata": {
+                "generated_at": "2026-07-04T00:00:00Z",
+                "total_words_indexed": 1
+              },
+              "urls": {
+                "https://publish.obsidian.md/scarlethorizons/Safe": {
+                  "source": "Obsidian wiki"
+                }
+              },
+              "words": {
+                "safe": {
+                  "total_occurrences": 1,
+                  "matches": [
+                    {
+                      "url": "file:///C:/secret.txt",
+                      "count": 1,
+                      "last_indexed": "2026-07-04T00:00:00Z"
+                    }
+                  ]
+                }
+              }
+            }
+            """));
+
+    AssertContains(exception.Message, "keyword-index matches for 'safe' contains a URL that is not allowed");
+    AssertContains(exception.Message, "Only HTTP and HTTPS");
 }
 
 static void KeywordTermsReleaseCopyGeneratesFromKeywordIndex()

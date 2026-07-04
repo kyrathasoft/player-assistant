@@ -78,12 +78,12 @@
   - [x] Apply limits to RPOL HTML fetches, Obsidian markdown fetches, keyword/sitemap JSON cache downloads, and hero/image downloads.
   - [x] Preserve last known good files by failing bounded downloads before atomic promotion.
   - [x] Add tests for oversized HTML, markdown, JSON, and image responses.
-- [ ] Validate sitemap and keyword-index URL entries against the network allowlist before storing them.
-  - [ ] Validate every sitemap URL before writing `sitemap.xml`.
-  - [ ] Validate keyword-index URL lists before writing `sitemap-keyword-urls.json` or `keyword-index.json`.
-  - [ ] Reject credentialed URLs, non-HTTP(S) schemes, escaped hosts, and non-allowlisted RPOL/Obsidian hosts.
-  - [ ] Preserve the previous good index when fetched data contains rejected URLs.
-  - [ ] Add regression coverage for poisoned sitemap and keyword-index entries.
+- [x] Validate sitemap and keyword-index URL entries against the network allowlist before storing them.
+  - [x] Validate every sitemap URL before writing `sitemap.xml`.
+  - [x] Validate keyword-index URL lists before writing `sitemap-keyword-urls.json` or `keyword-index.json`.
+  - [x] Reject credentialed URLs, non-HTTP(S) schemes, escaped hosts, and non-allowlisted RPOL/Obsidian hosts.
+  - [x] Preserve the previous good index when fetched data contains rejected URLs.
+  - [x] Add regression coverage for poisoned sitemap and keyword-index entries.
 - [ ] Add a full RC dry-run mode that writes a structured JSON summary and exits nonzero on any failure.
   - [ ] Add a `-DryRunJson` or equivalent mode to the RC checklist script.
   - [ ] Capture each checklist step with status, elapsed time, command, artifact paths, and failure summary.

@@ -66,6 +66,11 @@ namespace PlayerAssistant
                 return NetworkUrlAllowlistValidation.Rejected("URL must include a host.");
             }
 
+            if (uri.Host.Contains('%', StringComparison.Ordinal))
+            {
+                return NetworkUrlAllowlistValidation.Rejected("URL hosts may not contain escaped characters.");
+            }
+
             return purpose switch
             {
                 NetworkUrlPurpose.Rpol => IsRpolHost(uri)

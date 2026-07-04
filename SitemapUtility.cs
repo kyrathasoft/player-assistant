@@ -1,6 +1,7 @@
 using System.Net.Http.Headers;
 using System.Text.Encodings.Web;
 using System.Text.Json;
+using System.Text;
 using System.Xml.Linq;
 
 namespace PlayerAssistant
@@ -40,17 +41,13 @@ namespace PlayerAssistant
                 cancellationToken: cancellationToken);
             response.EnsureSuccessStatusCode();
 
-            await using (var source = await response.Content.ReadAsStreamAsync(cancellationToken))
-            {
-                await AtomicFileUtility.WriteFileAsync(
-                    destinationPath,
-                    destination => NetworkRequestUtility.CopyToAsync(
-                        source,
-                        destination,
-                        NetworkResponseContentLimit.JsonCache,
-                        cancellationToken),
-                    cancellationToken);
-            }
+            var sitemapBytes = await NetworkRequestUtility.ReadBytesAsync(
+                response.Content,
+                NetworkResponseContentLimit.JsonCache,
+                cancellationToken);
+            ValidateSitemapXml(sitemapBytes);
+
+            await AtomicFileUtility.WriteAllBytesAsync(destinationPath, sitemapBytes, cancellationToken);
 
             FileDownloadCounters.AddCompletedDownload(destinationPath);
         }
@@ -89,6 +86,7 @@ namespace PlayerAssistant
         {
             using var sitemapStream = File.OpenRead(sitemapPath);
             var document = XDocument.Load(sitemapStream);
+            ValidateSitemapDocument(document);
             var keywordUrls = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
             var nodeCount = 0;
 
@@ -112,6 +110,7 @@ namespace PlayerAssistant
         {
             using var sitemapStream = File.OpenRead(sitemapPath);
             var document = XDocument.Load(sitemapStream);
+            ValidateSitemapDocument(document);
 
             return document.Descendants()
                 .Where(element => element.Name.LocalName == "loc")
@@ -138,6 +137,36 @@ namespace PlayerAssistant
             }
 
             return Uri.UnescapeDataString(pageSegment.Replace('+', ' ')).Trim();
+        }
+
+        internal static void ValidateSitemapXml(string sitemapXml)
+        {
+            ArgumentNullException.ThrowIfNull(sitemapXml);
+            ValidateSitemapDocument(XDocument.Parse(sitemapXml));
+        }
+
+        internal static void ValidateSitemapXml(byte[] sitemapBytes)
+        {
+            ArgumentNullException.ThrowIfNull(sitemapBytes);
+            ValidateSitemapXml(Encoding.UTF8.GetString(sitemapBytes));
+        }
+
+        private static void ValidateSitemapDocument(XDocument document)
+        {
+            foreach (var loc in document.Descendants().Where(element => element.Name.LocalName == "loc"))
+            {
+                ValidateStoredUrl(loc.Value.Trim(), "sitemap.xml");
+            }
+        }
+
+        private static void ValidateStoredUrl(string url, string description)
+        {
+            var validation = NetworkUrlAllowlistUtility.Validate(url);
+            if (!validation.IsAllowed)
+            {
+                throw new InvalidOperationException(
+                    $"{description} contains a URL that is not allowed: {url}. {validation.RejectionReason}");
+            }
         }
 
         private static HttpClient CreateHttpClient()
