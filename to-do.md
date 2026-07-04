@@ -123,7 +123,7 @@
   - [x] Create bounded rotating backups before modifying user settings, indexes, exports, and encrypted sidecars.
   - [x] Add startup recovery that can restore the newest valid backup after corruption or interrupted writes.
   - [x] Add focused tests for backup selection, rollback, and retention limits.
-- [ ] Add CI/release pipeline enforcement for the local hardening scripts.
-  - [ ] Run publish verification, RC self-tests, secret scan, dependency checks, and diagnostics verification in CI.
-  - [ ] Upload redacted verification artifacts for failed CI runs.
-  - [ ] Block release tags unless the RC checklist passes.
+- [x] Add CI/release pipeline enforcement for the local hardening scripts.
+  - [x] Run publish verification, RC self-tests, secret scan, dependency checks, and diagnostics verification in CI.
+  - [x] Upload redacted verification artifacts for failed CI runs.
+  - [x] Block release tags unless the RC checklist passes.
