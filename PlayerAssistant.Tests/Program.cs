@@ -4788,9 +4788,10 @@ static (int ExitCode, string Output) RunGit(string workingDirectory, params stri
 
 static (int ExitCode, string Output) RunPowerShell(IEnumerable<string> arguments, TimeSpan timeout)
 {
+    var powerShellExecutable = ResolvePowerShellExecutable();
     var startInfo = new ProcessStartInfo
     {
-        FileName = "powershell",
+        FileName = powerShellExecutable,
         WorkingDirectory = GetRepositoryRoot(),
         RedirectStandardOutput = true,
         RedirectStandardError = true,
@@ -4813,6 +4814,56 @@ static (int ExitCode, string Output) RunPowerShell(IEnumerable<string> arguments
     }
 
     return (process.ExitCode, output);
+}
+
+static string ResolvePowerShellExecutable()
+{
+    var candidates = new[]
+    {
+        Environment.ProcessPath,
+        Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.System), "WindowsPowerShell", "v1.0", "powershell.exe"),
+        Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+            "Microsoft",
+            "WindowsApps",
+            "pwsh.exe")
+    };
+
+    foreach (var candidate in candidates)
+    {
+        if (IsPowerShellExecutablePath(candidate))
+        {
+            return candidate;
+        }
+    }
+
+    foreach (var commandName in new[] { "pwsh.exe", "powershell.exe", "powershell" })
+    {
+        var resolved = Environment.GetEnvironmentVariable("PATH")?
+            .Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries)
+            .Select(path => Path.Combine(path.Trim(), commandName))
+            .FirstOrDefault(IsPowerShellExecutablePath);
+        if (!string.IsNullOrWhiteSpace(resolved))
+        {
+            return resolved;
+        }
+    }
+
+    throw new InvalidOperationException("Unable to locate a PowerShell executable.");
+}
+
+static bool IsPowerShellExecutablePath(string? path)
+{
+    if (string.IsNullOrWhiteSpace(path) || !File.Exists(path))
+    {
+        return false;
+    }
+
+    var fileName = Path.GetFileName(path);
+    return string.Equals(fileName, "pwsh.exe", StringComparison.OrdinalIgnoreCase)
+        || string.Equals(fileName, "powershell.exe", StringComparison.OrdinalIgnoreCase)
+        || string.Equals(fileName, "powershell", StringComparison.OrdinalIgnoreCase)
+        || string.Equals(fileName, "pwsh", StringComparison.OrdinalIgnoreCase);
 }
 
 static string GetRepositoryRoot()

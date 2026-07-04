@@ -91,7 +91,127 @@ function Get-PowerShellExecutable {
     throw 'Neither pwsh.exe nor powershell.exe is available.'
 }
 
+function Get-WindowsPowerShellExecutable {
+    $systemDirectory = [Environment]::GetFolderPath([Environment+SpecialFolder]::System)
+    if ([string]::IsNullOrWhiteSpace($systemDirectory)) {
+        $systemDirectory = Join-Path $env:WINDIR 'System32'
+    }
+
+    $systemPowerShell = Join-Path $systemDirectory 'WindowsPowerShell\v1.0\powershell.exe'
+    if (Test-Path -LiteralPath $systemPowerShell -PathType Leaf) {
+        return $systemPowerShell
+    }
+
+    $windowsPowerShell = Get-Command powershell.exe -ErrorAction SilentlyContinue
+    if ($windowsPowerShell) {
+        return $windowsPowerShell.Source
+    }
+
+    throw 'Windows PowerShell is required for Authenticode inspection but was not found.'
+}
+
+function Get-Sha256Hash {
+    param([Parameter(Mandatory = $true)][string]$Path)
+
+    $stream = $null
+    try {
+        $stream = [System.IO.File]::OpenRead($Path)
+        $sha256 = [System.Security.Cryptography.SHA256]::Create()
+        try {
+            return ([System.BitConverter]::ToString($sha256.ComputeHash($stream))).Replace('-', '')
+        }
+        finally {
+            $sha256.Dispose()
+        }
+    }
+    finally {
+        if ($null -ne $stream) {
+            $stream.Dispose()
+        }
+    }
+}
+
 $PowerShellExecutable = Get-PowerShellExecutable
+$WindowsPowerShellExecutable = Get-WindowsPowerShellExecutable
+
+function Get-AuthenticodeSignatureObject {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Path
+    )
+
+    $signatureCommand = Get-Command Get-AuthenticodeSignature -ErrorAction SilentlyContinue
+    if ($signatureCommand) {
+        try {
+            return Get-AuthenticodeSignature -LiteralPath $Path -ErrorAction Stop
+        }
+        catch {
+        }
+    }
+
+    $payload = @{
+        Path = $Path
+    } | ConvertTo-Json -Compress
+    $encodedPayload = [Convert]::ToBase64String([System.Text.Encoding]::UTF8.GetBytes($payload))
+    $fallbackScript = @'
+param([string]$PayloadBase64)
+$json = [System.Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($PayloadBase64))
+$request = $json | ConvertFrom-Json
+$signature = Get-AuthenticodeSignature -LiteralPath $request.Path
+[pscustomobject]@{
+    Status = [string]$signature.Status
+    StatusMessage = [string]$signature.StatusMessage
+    Path = [string]$signature.Path
+    SignerCertificate = if ($signature.SignerCertificate) {
+        [pscustomobject]@{
+            Subject = [string]$signature.SignerCertificate.Subject
+            Thumbprint = [string]$signature.SignerCertificate.Thumbprint
+            Issuer = [string]$signature.SignerCertificate.Issuer
+            NotBefore = $signature.SignerCertificate.NotBefore.ToString('O')
+            NotAfter = $signature.SignerCertificate.NotAfter.ToString('O')
+        }
+    } else {
+        $null
+    }
+    TimeStamperCertificate = if ($signature.TimeStamperCertificate) {
+        [pscustomobject]@{
+            Subject = [string]$signature.TimeStamperCertificate.Subject
+        }
+    } else {
+        $null
+    }
+} | ConvertTo-Json -Compress -Depth 6
+'@
+    $stdoutPath = Join-Path ([System.IO.Path]::GetTempPath()) "player-assistant-authenticode-stdout-$([Guid]::NewGuid().ToString('N')).txt"
+    $stderrPath = Join-Path ([System.IO.Path]::GetTempPath()) "player-assistant-authenticode-stderr-$([Guid]::NewGuid().ToString('N')).txt"
+    try {
+        $process = Start-Process `
+            -FilePath $WindowsPowerShellExecutable `
+            -ArgumentList @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-Command', $fallbackScript, '-PayloadBase64', $encodedPayload) `
+            -NoNewWindow `
+            -PassThru `
+            -Wait `
+            -RedirectStandardOutput $stdoutPath `
+            -RedirectStandardError $stderrPath
+
+        $stdout = if (Test-Path -LiteralPath $stdoutPath) { Get-Content -Raw -LiteralPath $stdoutPath } else { '' }
+        $stderr = if (Test-Path -LiteralPath $stderrPath) { Get-Content -Raw -LiteralPath $stderrPath } else { '' }
+        if ($process.ExitCode -ne 0) {
+            return [pscustomobject]@{
+                Status = 'Unknown'
+                StatusMessage = "Unable to inspect Authenticode signature. $stderr $stdout"
+                Path = $Path
+                SignerCertificate = $null
+                TimeStamperCertificate = $null
+            }
+        }
+    }
+    finally {
+        Remove-Item -LiteralPath $stdoutPath, $stderrPath -Force -ErrorAction SilentlyContinue
+    }
+
+    return $stdout | ConvertFrom-Json
+}
 
 function Protect-RuntimeSidecarFiles {
     param([Parameter(Mandatory = $true)][string]$Directory)
@@ -970,7 +1090,7 @@ function Get-ManifestFileEntry {
     return [ordered]@{
         relative_path = $RelativePath
         length = $item.Length
-        sha256 = (Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash
+        sha256 = Get-Sha256Hash -Path $path
     }
 }
 
@@ -1060,7 +1180,7 @@ function Get-ReleaseScriptHashEntries {
             [ordered]@{
                 relative_path = $relativePath
                 length = $item.Length
-                sha256 = (Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash
+                sha256 = Get-Sha256Hash -Path $path
             }
         }
     })
@@ -1152,7 +1272,7 @@ function Get-AuthenticodeSignatureSummary {
         [string]$Path
     )
 
-    $signature = Get-AuthenticodeSignature -LiteralPath $Path
+    $signature = Get-AuthenticodeSignatureObject -Path $Path
     return [ordered]@{
         status = [string]$signature.Status
         signer_subject = if ($signature.SignerCertificate) { $signature.SignerCertificate.Subject } else { $null }
@@ -1184,7 +1304,7 @@ function Assert-AuthenticodeSignatureMatchesPolicy {
     }
 
     Assert-RequiredFile -Path $Path -Description $Description
-    $signature = Get-AuthenticodeSignature -LiteralPath $Path
+    $signature = Get-AuthenticodeSignatureObject -Path $Path
     if ($signature.Status -ne 'Valid') {
         throw "$Description Authenticode signature status '$($signature.Status)' is not valid."
     }
@@ -1277,7 +1397,7 @@ function Assert-ReleaseProvenance {
             throw "$ReleaseProvenanceFileName length mismatch for '$relativePath'."
         }
 
-        $actualHash = (Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash
+        $actualHash = Get-Sha256Hash -Path $path
         if ($actualHash -ne [string]$entry.sha256) {
             throw "$ReleaseProvenanceFileName SHA256 mismatch for '$relativePath'."
         }
@@ -1447,7 +1567,7 @@ function Assert-ReleaseIntegrityManifest {
             throw "$ReleaseManifestFileName length mismatch for '$relativePath'."
         }
 
-        $actualHash = (Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash
+        $actualHash = Get-Sha256Hash -Path $path
         if ($actualHash -ne [string]$entry[0].sha256) {
             throw "$ReleaseManifestFileName SHA256 mismatch for '$relativePath'."
         }
