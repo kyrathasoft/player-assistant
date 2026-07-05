@@ -7,7 +7,7 @@
 #endif
 
 #ifndef Version
-#define Version "0.9.0-hardening.5"
+#define Version "0.9.1-hardening.1"
 #endif
 
 #ifndef InstallerVersion

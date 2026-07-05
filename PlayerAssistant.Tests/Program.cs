@@ -6,6 +6,8 @@ using System.IO.Compression;
 using System.Net;
 using System.Reflection;
 using System.Security.Cryptography;
+using System.Security.Cryptography.X509Certificates;
+using System.Net.Security;
 using System.Windows.Forms;
 using System.Xml.Linq;
 
@@ -142,6 +144,12 @@ var tests = new (string Name, Action Test)[]
     ("update check compares against current app version", UpdateCheckComparesAgainstCurrentAppVersion),
     ("update check reports latest version message", UpdateCheckReportsLatestVersionMessage),
     ("update check fetches signed manifest from allowed update host", UpdateCheckFetchesSignedManifestFromAllowedUpdateHost),
+    ("update host certificate pinning accepts trusted leaf pin", UpdateHostCertificatePinningAcceptsTrustedLeafPin),
+    ("update host certificate pinning accepts trusted intermediate pin", UpdateHostCertificatePinningAcceptsTrustedIntermediatePin),
+    ("update host certificate pinning rejects mismatched pin", UpdateHostCertificatePinningRejectsMismatchedPin),
+    ("verified updater downloads installer to controlled path", VerifiedUpdaterDownloadsInstallerToControlledPath),
+    ("verified updater rejects installer sha256 mismatch", VerifiedUpdaterRejectsInstallerSha256Mismatch),
+    ("verified updater rejects installer signer mismatch", VerifiedUpdaterRejectsInstallerSignerMismatch),
     ("search enter triggers click when enabled", SearchEnterTriggersClickWhenEnabled),
     ("keyword search offers online fallback on local miss", KeywordSearchOffersOnlineFallbackOnLocalMiss),
     ("keyword search cancels previous online fallback", KeywordSearchCancelsPreviousOnlineFallback),
@@ -862,9 +870,9 @@ static void ApplicationVersionMetadataMatchesHardeningRelease()
         .InformationalVersion;
     var fileVersion = FileVersionInfo.GetVersionInfo(assembly.Location).FileVersion;
 
-    AssertEqual(new Version(0, 9, 0, 0), name.Version!, "unexpected assembly version");
-    AssertEqual("0.9.0.5", fileVersion!, "unexpected file version");
-    AssertEqual("0.9.0-hardening.5", informationalVersion, "unexpected informational version");
+    AssertEqual(new Version(0, 9, 1, 0), name.Version!, "unexpected assembly version");
+    AssertEqual("0.9.1.1", fileVersion!, "unexpected file version");
+    AssertEqual("0.9.1-hardening.1", informationalVersion, "unexpected informational version");
 }
 
 static void ApplicationVersionArgumentReturnsVersionText()
@@ -885,7 +893,7 @@ static void ApplicationVersionArgumentReturnsVersionText()
     var versionText = (string?)InvokeStaticMethod(programType, "GetVersionText")
         ?? throw new InvalidOperationException("GetVersionText returned null.");
     AssertContains(versionText, "player-assistant");
-    AssertContains(versionText, "0.9.0-hardening.5");
+    AssertContains(versionText, "0.9.1-hardening.1");
 }
 
 static void StartupManifestStatusDistinguishesSkippedAndFailed()
@@ -3067,7 +3075,7 @@ static void AboutVersionTextShowsAppVersion()
 {
     var versionText = (string)(InvokeStaticMethod(typeof(Form1), "GetAppVersionText")
         ?? throw new InvalidOperationException("GetAppVersionText returned null."));
-    AssertEqual("RPOL Scarlet Horizon Campaign Assistant 0.9.0", versionText, "unexpected About Version text");
+    AssertEqual("RPOL Scarlet Horizon Campaign Assistant 0.9.1", versionText, "unexpected About Version text");
 }
 
 static void UpdateCheckVerifiesSignedPAssistManifest()
@@ -3080,7 +3088,9 @@ static void UpdateCheckVerifiesSignedPAssistManifest()
             {
               "version": "0.9.0",
               "url": "https://bryanmiller.us/scarlethorizons/p-assist-0.9.0.zip",
-              "sha256": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+              "sha256": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+              "installer_url": "https://bryanmiller.us/scarlethorizons/p-assist-0.9.0.exe",
+              "installer_sha256": "BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB"
             }
           ]
         }
@@ -3102,6 +3112,14 @@ static void UpdateCheckVerifiesSignedPAssistManifest()
         "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
         update.Sha256,
         "unexpected update SHA256");
+    AssertEqual(
+        "https://bryanmiller.us/scarlethorizons/p-assist-0.9.0.exe",
+        update.InstallerUri.AbsoluteUri,
+        "unexpected installer URL");
+    AssertEqual(
+        "BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB",
+        update.InstallerSha256,
+        "unexpected installer SHA256");
 }
 
 static void UpdateCheckChoosesNewestSignedManifestEntry()
@@ -3114,22 +3132,30 @@ static void UpdateCheckChoosesNewestSignedManifestEntry()
             {
               "version": "0.9.0",
               "url": "p-assist-0.9.0.zip",
-              "sha256": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+              "sha256": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+              "installer_url": "p-assist-0.9.0.exe",
+              "installer_sha256": "BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB"
             },
             {
               "version": "0.10.0",
               "url": "p-assist-0.10.0.zip",
-              "sha256": "BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB"
+              "sha256": "CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC",
+              "installer_url": "p-assist-0.10.0.exe",
+              "installer_sha256": "DDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDD"
             },
             {
               "version": "99.0.0",
               "url": "https://unexpected.example.test/p-assist-99.0.0.zip",
-              "sha256": "CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC"
+              "sha256": "EEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEE",
+              "installer_url": "https://unexpected.example.test/p-assist-99.0.0.exe",
+              "installer_sha256": "FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF"
             },
             {
               "version": "0.11.0",
               "url": "p-assist-0.10.0.zip",
-              "sha256": "DDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDD"
+              "sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+              "installer_url": "p-assist-0.11.0.exe",
+              "installer_sha256": "2222222222222222222222222222222222222222222222222222222222222222"
             }
           ]
         }
@@ -3147,9 +3173,9 @@ static void UpdateCheckChoosesNewestSignedManifestEntry()
         update.DownloadUri.AbsoluteUri,
         "unexpected newest update URL");
     AssertEqual(
-        "BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB",
-        update.Sha256,
-        "unexpected newest update SHA256");
+        "DDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDD",
+        update.InstallerSha256,
+        "unexpected newest installer SHA256");
 }
 
 static void UpdateCheckRejectsTamperedSignedManifest()
@@ -3162,7 +3188,9 @@ static void UpdateCheckRejectsTamperedSignedManifest()
             {
               "version": "0.9.0",
               "url": "p-assist-0.9.0.zip",
-              "sha256": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+              "sha256": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+              "installer_url": "p-assist-0.9.0.exe",
+              "installer_sha256": "BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB"
             }
           ]
         }
@@ -3183,18 +3211,22 @@ static void UpdateCheckRejectsTamperedSignedManifest()
 static void UpdateCheckComparesAgainstCurrentAppVersion()
 {
     var currentVersion = PlayerAssistantUpdateUtility.GetCurrentAppVersion();
-    AssertEqual(new Version(0, 9, 0), currentVersion, "unexpected current app update-comparison version");
+    AssertEqual(new Version(0, 9, 1), currentVersion, "unexpected current app update-comparison version");
 
     var sameVersion = new PlayerAssistantUpdateInfo(
-        new Version(0, 9, 0),
-        "0.9.0",
-        new Uri("https://bryanmiller.us/scarlethorizons/p-assist-0.9.0.zip"),
-        new string('A', 64));
-    var newerVersion = new PlayerAssistantUpdateInfo(
         new Version(0, 9, 1),
         "0.9.1",
         new Uri("https://bryanmiller.us/scarlethorizons/p-assist-0.9.1.zip"),
+        new string('A', 64),
+        new Uri("https://bryanmiller.us/scarlethorizons/p-assist-0.9.1.exe"),
         new string('B', 64));
+    var newerVersion = new PlayerAssistantUpdateInfo(
+        new Version(0, 9, 2),
+        "0.9.2",
+        new Uri("https://bryanmiller.us/scarlethorizons/p-assist-0.9.2.zip"),
+        new string('C', 64),
+        new Uri("https://bryanmiller.us/scarlethorizons/p-assist-0.9.2.exe"),
+        new string('D', 64));
 
     AssertFalse(sameVersion.IsNewerThan(currentVersion), "same version should not be offered as an update");
     AssertTrue(newerVersion.IsNewerThan(currentVersion), "newer version should be offered as an update");
@@ -3220,7 +3252,9 @@ static void UpdateCheckFetchesSignedManifestFromAllowedUpdateHost()
             {
               "version": "0.9.1",
               "url": "p-assist-0.9.1.zip",
-              "sha256": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+              "sha256": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+              "installer_url": "p-assist-0.9.1.exe",
+              "installer_sha256": "BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB"
             }
           ]
         }
@@ -3266,9 +3300,155 @@ static void UpdateCheckFetchesSignedManifestFromAllowedUpdateHost()
         "unexpected update manifest signature request URL");
     AssertTrue(update is not null, "expected update archive from scripted signed manifest");
     AssertEqual("0.9.1", update!.VersionText, "unexpected fetched update version");
+    AssertEqual(
+        "https://bryanmiller.us/scarlethorizons/p-assist-0.9.1.exe",
+        update.InstallerUri.AbsoluteUri,
+        "unexpected fetched installer URL");
 
     var launchValidation = ExternalUrlLaunchUtility.Validate(update.DownloadUri.AbsoluteUri);
     AssertTrue(launchValidation.IsAllowed, launchValidation.RejectionReason ?? "update download URL should be launchable");
+}
+
+static void VerifiedUpdaterDownloadsInstallerToControlledPath()
+{
+    using var directory = TemporaryDirectory.Create();
+    var update = new PlayerAssistantUpdateInfo(
+        new Version(0, 9, 1),
+        "0.9.1",
+        new Uri("https://bryanmiller.us/scarlethorizons/p-assist-0.9.1.zip"),
+        new string('A', 64),
+        new Uri("https://bryanmiller.us/scarlethorizons/p-assist-0.9.1.exe"),
+        new string('B', 64));
+    var installerBytes = System.Text.Encoding.UTF8.GetBytes("signed installer bytes");
+    var installerSha256 = Convert.ToHexString(SHA256.HashData(installerBytes));
+    update = update with { InstallerSha256 = installerSha256 };
+
+    using var httpClient = NetworkRequestUtility.CreateHttpClient(new ScriptedHttpMessageHandler((request, _) =>
+    {
+        AssertEqual(update.InstallerUri.AbsoluteUri, request.RequestUri?.AbsoluteUri ?? string.Empty, "unexpected installer download URL");
+        return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new ByteArrayContent(installerBytes)
+        });
+    }));
+
+    var result = VerifiedInstallerUpdateUtility.DownloadVerifiedInstallerAsync(
+        httpClient,
+        update,
+        new AuthenticodeSignaturePolicy("CN=KyrathaSoft", "ABC123"),
+        _ => new AuthenticodeSignatureInfo("Valid", "CN=KyrathaSoft LLC", "ABC123"),
+        directory.Path).GetAwaiter().GetResult();
+
+    AssertTrue(result.InstallerPath.StartsWith(directory.Path, StringComparison.OrdinalIgnoreCase), "installer should download under the controlled directory");
+    AssertTrue(File.Exists(result.InstallerPath), "verified installer should exist on disk");
+    AssertEqual(installerSha256, result.Sha256, "unexpected downloaded installer SHA256");
+    AssertFalse(result.ReusedExistingFile, "fresh installer download should not report reuse");
+}
+
+static void UpdateHostCertificatePinningAcceptsTrustedLeafPin()
+{
+    var isValid = CertificatePinningUtility.ValidatePinnedRequest(
+        new Uri("https://bryanmiller.us/scarlethorizons/p-assist-updates.json"),
+        ["Cs2RWBFFnGtCidcPrPVbM4awHfkwOQAdfcF2KohmJFc="],
+        SslPolicyErrors.None,
+        new CertificatePinningPolicy(
+            "bryanmiller.us",
+            [
+                "Cs2RWBFFnGtCidcPrPVbM4awHfkwOQAdfcF2KohmJFc=",
+                "nWN7PSep5XDQdge5zK24CnCRXHr3KvzhKEGxsdqCX9E="
+            ]));
+
+    AssertTrue(isValid, "expected trusted leaf pin to satisfy update host pinning");
+}
+
+static void UpdateHostCertificatePinningAcceptsTrustedIntermediatePin()
+{
+    var isValid = CertificatePinningUtility.ValidatePinnedRequest(
+        new Uri("https://bryanmiller.us/scarlethorizons/p-assist-updates.json"),
+        ["nWN7PSep5XDQdge5zK24CnCRXHr3KvzhKEGxsdqCX9E="],
+        SslPolicyErrors.None,
+        new CertificatePinningPolicy(
+            "bryanmiller.us",
+            [
+                "Cs2RWBFFnGtCidcPrPVbM4awHfkwOQAdfcF2KohmJFc=",
+                "nWN7PSep5XDQdge5zK24CnCRXHr3KvzhKEGxsdqCX9E="
+            ]));
+
+    AssertTrue(isValid, "expected trusted intermediate pin to satisfy update host pinning");
+}
+
+static void UpdateHostCertificatePinningRejectsMismatchedPin()
+{
+    var isValid = CertificatePinningUtility.ValidatePinnedRequest(
+        new Uri("https://bryanmiller.us/scarlethorizons/p-assist-updates.json"),
+        ["AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="],
+        SslPolicyErrors.None,
+        new CertificatePinningPolicy(
+            "bryanmiller.us",
+            [
+                "Cs2RWBFFnGtCidcPrPVbM4awHfkwOQAdfcF2KohmJFc=",
+                "nWN7PSep5XDQdge5zK24CnCRXHr3KvzhKEGxsdqCX9E="
+            ]));
+
+    AssertFalse(isValid, "expected mismatched pin to be rejected for update host");
+}
+
+static void VerifiedUpdaterRejectsInstallerSha256Mismatch()
+{
+    using var directory = TemporaryDirectory.Create();
+    var update = new PlayerAssistantUpdateInfo(
+        new Version(0, 9, 1),
+        "0.9.1",
+        new Uri("https://bryanmiller.us/scarlethorizons/p-assist-0.9.1.zip"),
+        new string('A', 64),
+        new Uri("https://bryanmiller.us/scarlethorizons/p-assist-0.9.1.exe"),
+        new string('B', 64));
+    var installerBytes = System.Text.Encoding.UTF8.GetBytes("mismatched installer bytes");
+
+    using var httpClient = NetworkRequestUtility.CreateHttpClient(new ScriptedHttpMessageHandler((_, _) =>
+        Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new ByteArrayContent(installerBytes)
+        })));
+
+    var exception = AssertThrows<InvalidOperationException>(() =>
+        VerifiedInstallerUpdateUtility.DownloadVerifiedInstallerAsync(
+            httpClient,
+            update,
+            new AuthenticodeSignaturePolicy("CN=KyrathaSoft", "ABC123"),
+            _ => new AuthenticodeSignatureInfo("Valid", "CN=KyrathaSoft LLC", "ABC123"),
+            directory.Path).GetAwaiter().GetResult());
+
+    AssertContains(exception.Message, "SHA256");
+}
+
+static void VerifiedUpdaterRejectsInstallerSignerMismatch()
+{
+    using var directory = TemporaryDirectory.Create();
+    var installerBytes = System.Text.Encoding.UTF8.GetBytes("signed installer bytes");
+    var update = new PlayerAssistantUpdateInfo(
+        new Version(0, 9, 1),
+        "0.9.1",
+        new Uri("https://bryanmiller.us/scarlethorizons/p-assist-0.9.1.zip"),
+        new string('A', 64),
+        new Uri("https://bryanmiller.us/scarlethorizons/p-assist-0.9.1.exe"),
+        Convert.ToHexString(SHA256.HashData(installerBytes)));
+
+    using var httpClient = NetworkRequestUtility.CreateHttpClient(new ScriptedHttpMessageHandler((_, _) =>
+        Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new ByteArrayContent(installerBytes)
+        })));
+
+    var exception = AssertThrows<InvalidOperationException>(() =>
+        VerifiedInstallerUpdateUtility.DownloadVerifiedInstallerAsync(
+            httpClient,
+            update,
+            new AuthenticodeSignaturePolicy("CN=KyrathaSoft", "ABC123"),
+            _ => new AuthenticodeSignatureInfo("Valid", "CN=KyrathaSoft LLC", "XYZ999"),
+            directory.Path).GetAwaiter().GetResult());
+
+    AssertContains(exception.Message, "thumbprint");
 }
 
 static (string ManifestJson, string SignatureText, string PublicKeyPem) CreateSignedUpdateManifest(string manifestJson)
@@ -4249,7 +4429,7 @@ static void InstallerPackageVerificationAcceptsCurrentPackage()
         GetRepositoryRoot(),
         "Release",
         "installer",
-        "player-assistant-0.9.0-hardening.5-installer.zip");
+        "player-assistant-0.9.1-hardening.1-installer.zip");
     if (!File.Exists(packagePath))
     {
         return;
@@ -4277,7 +4457,7 @@ static void InstallerPackageVerificationRejectsUnsignedPayloadWhenSigningRequire
         GetRepositoryRoot(),
         "Release",
         "installer",
-        "player-assistant-0.9.0-hardening.5-installer.zip");
+        "player-assistant-0.9.1-hardening.1-installer.zip");
     if (!File.Exists(packagePath))
     {
         return;

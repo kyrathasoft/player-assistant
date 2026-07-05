@@ -12,7 +12,9 @@ namespace PlayerAssistant
         Version Version,
         string VersionText,
         Uri DownloadUri,
-        string Sha256)
+        string Sha256,
+        Uri InstallerUri,
+        string InstallerSha256)
     {
         public bool IsNewerThan(Version currentVersion)
         {
@@ -243,7 +245,7 @@ namespace PlayerAssistant
                 return null;
             }
 
-            return new PlayerAssistantUpdateInfo(version, match.Groups["version"].Value, uri, string.Empty);
+            return new PlayerAssistantUpdateInfo(version, match.Groups["version"].Value, uri, string.Empty, uri, string.Empty);
         }
 
         private static PlayerAssistantUpdateInfo? TryCreateUpdateInfo(UpdateManifestEntry entry, Uri manifestUri)
@@ -251,24 +253,38 @@ namespace PlayerAssistant
             if (string.IsNullOrWhiteSpace(entry.Version) ||
                 string.IsNullOrWhiteSpace(entry.Url) ||
                 string.IsNullOrWhiteSpace(entry.Sha256) ||
+                string.IsNullOrWhiteSpace(entry.InstallerUrl) ||
+                string.IsNullOrWhiteSpace(entry.InstallerSha256) ||
                 !Uri.TryCreate(manifestUri, entry.Url.Trim(), out var uri))
             {
                 return null;
             }
 
+            if (!Uri.TryCreate(manifestUri, entry.InstallerUrl.Trim(), out var installerUri))
+            {
+                return null;
+            }
+
             var allowlistValidation = NetworkUrlAllowlistUtility.Validate(uri, NetworkUrlPurpose.PlayerAssistantUpdate);
-            if (!allowlistValidation.IsAllowed)
+            var installerAllowlistValidation = NetworkUrlAllowlistUtility.Validate(installerUri, NetworkUrlPurpose.PlayerAssistantUpdate);
+            if (!allowlistValidation.IsAllowed || !installerAllowlistValidation.IsAllowed)
             {
                 return null;
             }
 
             var fileName = Path.GetFileName(uri.LocalPath);
+            var installerFileName = Path.GetFileName(installerUri.LocalPath);
             var match = ArchiveFileNameRegex().Match(fileName);
+            var installerMatch = InstallerFileNameRegex().Match(installerFileName);
             if (!match.Success ||
+                !installerMatch.Success ||
                 !Version.TryParse(match.Groups["version"].Value, out var fileVersion) ||
+                !Version.TryParse(installerMatch.Groups["version"].Value, out var installerVersion) ||
                 !Version.TryParse(entry.Version.Trim(), out var manifestVersion) ||
                 fileVersion != manifestVersion ||
-                !IsSha256Hex(entry.Sha256))
+                installerVersion != manifestVersion ||
+                !IsSha256Hex(entry.Sha256) ||
+                !IsSha256Hex(entry.InstallerSha256))
             {
                 return null;
             }
@@ -277,7 +293,9 @@ namespace PlayerAssistant
                 manifestVersion,
                 entry.Version.Trim(),
                 uri,
-                entry.Sha256.Trim().ToUpperInvariant());
+                entry.Sha256.Trim().ToUpperInvariant(),
+                installerUri,
+                entry.InstallerSha256.Trim().ToUpperInvariant());
         }
 
         private static UpdateManifest ParseUpdateManifest(byte[] manifestBytes)
@@ -351,6 +369,9 @@ namespace PlayerAssistant
         [GeneratedRegex(@"^p-assist-(?<version>\d+\.\d+\.\d+)[^/\\]*\.zip$", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
         private static partial Regex ArchiveFileNameRegex();
 
+        [GeneratedRegex(@"^p-assist-(?<version>\d+\.\d+\.\d+)[^/\\]*\.exe$", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
+        private static partial Regex InstallerFileNameRegex();
+
         [GeneratedRegex(@"^[0-9a-fA-F]{64}$", RegexOptions.CultureInvariant)]
         private static partial Regex Sha256Regex();
 
@@ -361,6 +382,8 @@ namespace PlayerAssistant
         private sealed record UpdateManifestEntry(
             [property: JsonPropertyName("version")] string Version,
             [property: JsonPropertyName("url")] string Url,
-            [property: JsonPropertyName("sha256")] string Sha256);
+            [property: JsonPropertyName("sha256")] string Sha256,
+            [property: JsonPropertyName("installer_url")] string InstallerUrl,
+            [property: JsonPropertyName("installer_sha256")] string InstallerSha256);
     }
 }
