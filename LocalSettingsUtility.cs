@@ -162,10 +162,17 @@ namespace PlayerAssistant
             ArgumentNullException.ThrowIfNull(settingsPath);
             ArgumentNullException.ThrowIfNull(settings);
 
+            var encryptedJson = CreatePortableEncryptedSettingsJson(settings);
+            AtomicFileUtility.WriteAllText(settingsPath, encryptedJson);
+        }
+
+        internal static string CreatePortableEncryptedSettingsJson(IReadOnlyDictionary<string, string> settings)
+        {
+            ArgumentNullException.ThrowIfNull(settings);
+
             var plaintextBytes = JsonSerializer.SerializeToUtf8Bytes(settings, JsonOptions);
             var encryptedEnvelope = CreatePortableEncryptedEnvelope(plaintextBytes);
-            var encryptedJson = JsonSerializer.Serialize(encryptedEnvelope, JsonOptions);
-            AtomicFileUtility.WriteAllText(settingsPath, encryptedJson);
+            return JsonSerializer.Serialize(encryptedEnvelope, JsonOptions);
         }
 
         internal static void SaveScopedProtectedJson<T>(string path, T value)

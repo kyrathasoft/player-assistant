@@ -43,6 +43,10 @@ var tests = new (string Name, Action Test)[]
     ("settings json rejects future schema version", SettingsJsonRejectsFutureSchemaVersion),
     ("app settings loads hosted encrypted xp tracking url", AppSettingsLoadsHostedEncryptedXpTrackingUrl),
     ("app settings loads hosted encrypted xp tracking url from fixture server", AppSettingsLoadsHostedEncryptedXpTrackingUrlFromFixtureServer),
+    ("hosted settings trusted version is encrypted at rest", HostedSettingsTrustedVersionIsEncryptedAtRest),
+    ("hosted settings trusted version rejects tampered payload", HostedSettingsTrustedVersionRejectsTamperedPayload),
+    ("hosted settings rejects rollback below trusted version floor", HostedSettingsRejectsRollbackBelowTrustedVersionFloor),
+    ("hosted settings rejects unexpected signed content identity", HostedSettingsRejectsUnexpectedSignedContentIdentity),
     ("app settings hosted settings failure logs tampered envelope", AppSettingsHostedSettingsFailureLogsTamperedEnvelope),
     ("app settings hosted settings failure logs plaintext payload", AppSettingsHostedSettingsFailureLogsPlaintextPayload),
     ("app settings hosted settings failure logs oversized payload", AppSettingsHostedSettingsFailureLogsOversizedPayload),
@@ -564,15 +568,11 @@ static void SettingsJsonRejectsFutureSchemaVersion()
 static void AppSettingsLoadsHostedEncryptedXpTrackingUrl()
 {
     using var directory = TemporaryDirectory.Create();
-    using var hostedSettingsDirectory = TemporaryDirectory.Create();
-    var hostedSettingsPath = Path.Combine(hostedSettingsDirectory.Path, "settings.local.json");
-    LocalSettingsUtility.SavePortableEncryptedSettings(
-        hostedSettingsPath,
+    var hostedSettings = CreateSignedHostedSettingsArtifact(
         new Dictionary<string, string>
         {
             ["XP Tracking"] = "https://publish.obsidian.md/scarlethorizons/Intentional+Orphans/XP+Tracking"
         });
-    var hostedSettingsJson = File.ReadAllText(hostedSettingsPath);
 
     File.WriteAllText(
         Path.Combine(directory.Path, "settings.json"),
@@ -587,18 +587,18 @@ static void AppSettingsLoadsHostedEncryptedXpTrackingUrl()
         }
         """);
 
+    string? requestedHostedSettingsUrl = null;
     using var httpClientScope = AppSettingsUtility.UseHttpClientFactoryForTests(() =>
         NetworkRequestUtility.CreateHttpClient(new ScriptedHttpMessageHandler((request, _) =>
         {
-            AssertEqual(
-                "https://bryanmiller.us/scarlethorizons/settings.local.json",
-                request.RequestUri?.AbsoluteUri ?? string.Empty,
-                "unexpected hosted local settings URL");
+            requestedHostedSettingsUrl = request.RequestUri?.AbsoluteUri;
             return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
             {
-                Content = new StringContent(hostedSettingsJson)
+                Content = new StringContent(hostedSettings.HostedSettingsJson)
             });
         })));
+    using var trustedHostedSettingsKeysScope = HostedSettingsTrustUtility.UseTrustedSigningKeysForTests(
+        [CreateActiveHostedSettingsSigningKey(hostedSettings.PublicKeyPem)]);
 
     Dictionary<string, string> settings = null!;
     WithHostedSettingsIsolation(() =>
@@ -608,6 +608,10 @@ static void AppSettingsLoadsHostedEncryptedXpTrackingUrl()
         "https://publish.obsidian.md/scarlethorizons/Intentional+Orphans/XP+Tracking",
         settings["XP Tracking"],
         "hosted encrypted local settings should provide the XP Tracking URL");
+    AssertEqual(
+        "https://bryanmiller.us/scarlethorizons/settings.local.json",
+        requestedHostedSettingsUrl ?? string.Empty,
+        "unexpected hosted local settings URL");
     AssertFalse(
         File.Exists(Path.Combine(directory.Path, "settings.local.json")),
         "hosted local settings should not be persisted into the runtime directory");
@@ -616,17 +620,13 @@ static void AppSettingsLoadsHostedEncryptedXpTrackingUrl()
 static void AppSettingsMigrateHostedRpolCredentialsIntoCredentialManager()
 {
     using var directory = TemporaryDirectory.Create();
-    using var hostedSettingsDirectory = TemporaryDirectory.Create();
-    var hostedSettingsPath = Path.Combine(hostedSettingsDirectory.Path, "settings.local.json");
-    LocalSettingsUtility.SavePortableEncryptedSettings(
-        hostedSettingsPath,
+    var hostedSettings = CreateSignedHostedSettingsArtifact(
         new Dictionary<string, string>
         {
             ["XP Tracking"] = "https://publish.obsidian.md/scarlethorizons/Intentional+Orphans/XP+Tracking",
             ["RPOL user name"] = "example-user",
             ["RPOL password"] = "example-password"
         });
-    var hostedSettingsJson = File.ReadAllText(hostedSettingsPath);
 
     File.WriteAllText(
         Path.Combine(directory.Path, "settings.json"),
@@ -641,18 +641,18 @@ static void AppSettingsMigrateHostedRpolCredentialsIntoCredentialManager()
         }
         """);
 
+    string? requestedHostedSettingsUrl = null;
     using var httpClientScope = AppSettingsUtility.UseHttpClientFactoryForTests(() =>
         NetworkRequestUtility.CreateHttpClient(new ScriptedHttpMessageHandler((request, _) =>
         {
-            AssertEqual(
-                "https://bryanmiller.us/scarlethorizons/settings.local.json",
-                request.RequestUri?.AbsoluteUri ?? string.Empty,
-                "unexpected hosted local settings URL");
+            requestedHostedSettingsUrl = request.RequestUri?.AbsoluteUri;
             return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
             {
-                Content = new StringContent(hostedSettingsJson)
+                Content = new StringContent(hostedSettings.HostedSettingsJson)
             });
         })));
+    using var trustedHostedSettingsKeysScope = HostedSettingsTrustUtility.UseTrustedSigningKeysForTests(
+        [CreateActiveHostedSettingsSigningKey(hostedSettings.PublicKeyPem)]);
 
     Dictionary<string, string> settings = null!;
     WithHostedSettingsIsolation(() =>
@@ -664,6 +664,10 @@ static void AppSettingsMigrateHostedRpolCredentialsIntoCredentialManager()
         "https://publish.obsidian.md/scarlethorizons/Intentional+Orphans/XP+Tracking",
         settings["XP Tracking"],
         "xp tracking should remain available after hosted local settings load");
+    AssertEqual(
+        "https://bryanmiller.us/scarlethorizons/settings.local.json",
+        requestedHostedSettingsUrl ?? string.Empty,
+        "unexpected hosted local settings URL");
     AssertEqual("example-user", RuntimeSecretStoreUtility.GetRpolUserName()!, "credential manager should store RPOL user name");
     AssertEqual("example-password", RuntimeSecretStoreUtility.GetRpolPassword()!, "credential manager should store RPOL password");
     AssertFalse(
@@ -674,17 +678,13 @@ static void AppSettingsMigrateHostedRpolCredentialsIntoCredentialManager()
 static void AppSettingsLoadsHostedEncryptedXpTrackingUrlFromFixtureServer()
 {
     using var directory = TemporaryDirectory.Create();
-    using var hostedSettingsDirectory = TemporaryDirectory.Create();
-    var hostedSettingsPath = Path.Combine(hostedSettingsDirectory.Path, "settings.local.json");
-    LocalSettingsUtility.SavePortableEncryptedSettings(
-        hostedSettingsPath,
+    var hostedSettings = CreateSignedHostedSettingsArtifact(
         new Dictionary<string, string>
         {
             ["XP Tracking"] = "https://publish.obsidian.md/scarlethorizons/Intentional+Orphans/XP+Tracking"
         });
-    var hostedSettingsJson = File.ReadAllText(hostedSettingsPath);
 
-    using var fixtureServer = new LoopbackHttpServer("/scarlethorizons/settings.local.json", hostedSettingsJson);
+    using var fixtureServer = new LoopbackHttpServer("/scarlethorizons/settings.local.json", hostedSettings.HostedSettingsJson);
 
     File.WriteAllText(
         Path.Combine(directory.Path, "settings.json"),
@@ -709,6 +709,8 @@ static void AppSettingsLoadsHostedEncryptedXpTrackingUrlFromFixtureServer()
 
         return null;
     });
+    using var trustedHostedSettingsKeysScope = HostedSettingsTrustUtility.UseTrustedSigningKeysForTests(
+        [CreateActiveHostedSettingsSigningKey(hostedSettings.PublicKeyPem)]);
 
     Dictionary<string, string> settings = null!;
     WithHostedSettingsIsolation(() =>
@@ -727,20 +729,18 @@ static void AppSettingsLoadsHostedEncryptedXpTrackingUrlFromFixtureServer()
 
 static void AppSettingsHostedSettingsFailureLogsTamperedEnvelope()
 {
-    using var hostedSettingsDirectory = TemporaryDirectory.Create();
-    var hostedSettingsPath = Path.Combine(hostedSettingsDirectory.Path, "settings.local.json");
-    LocalSettingsUtility.SavePortableEncryptedSettings(
-        hostedSettingsPath,
+    var hostedSettings = CreateSignedHostedSettingsArtifact(
         new Dictionary<string, string>
         {
             ["XP Tracking"] = "https://publish.obsidian.md/scarlethorizons/Intentional+Orphans/XP+Tracking"
         });
-    var tamperedJson = CorruptHostedSettingsPayload(File.ReadAllText(hostedSettingsPath));
+    var tamperedJson = CorruptHostedSettingsSignature(hostedSettings.HostedSettingsJson);
 
     using var fixtureServer = new LoopbackHttpServer("/scarlethorizons/settings.local.json", tamperedJson);
     AssertHostedSettingsFailure(
         fixtureServer.Url,
-        "authenticate or decrypt",
+        "signature",
+        [CreateActiveHostedSettingsSigningKey(hostedSettings.PublicKeyPem)],
         expectedRequestCount: 1,
         expectedRequestPath: "/scarlethorizons/settings.local.json");
 }
@@ -757,7 +757,7 @@ static void AppSettingsHostedSettingsFailureLogsPlaintextPayload()
     using var fixtureServer = new LoopbackHttpServer("/scarlethorizons/settings.local.json", plaintextJson);
     AssertHostedSettingsFailure(
         fixtureServer.Url,
-        "authenticated encrypted envelope",
+        "signed envelope",
         expectedRequestCount: 1,
         expectedRequestPath: "/scarlethorizons/settings.local.json");
 }
@@ -785,6 +785,105 @@ static void AppSettingsHostedSettingsFailureLogsUnreachableFixtureServer()
     AssertHostedSettingsFailure(
         fixtureUrl,
         "The network request failed:");
+}
+
+static void HostedSettingsTrustedVersionIsEncryptedAtRest()
+{
+    using var directory = TemporaryDirectory.Create();
+    var statePath = Path.Combine(directory.Path, "trusted-hosted-settings-state.json");
+
+    HostedSettingsTrustUtility.ApplyTrustedHostedSettingsVersionPolicy(
+        new Version(1, 0, 1),
+        statePath);
+
+    var encryptedJson = File.ReadAllText(statePath);
+    AssertContains(encryptedJson, "\"format\": \"app-protected-v3\"");
+    AssertContains(encryptedJson, "\"key_scope\":");
+    AssertFalse(encryptedJson.Contains("1.0.1", StringComparison.Ordinal), "trusted hosted settings version should not be stored in plaintext");
+}
+
+static void HostedSettingsTrustedVersionRejectsTamperedPayload()
+{
+    using var directory = TemporaryDirectory.Create();
+    var statePath = Path.Combine(directory.Path, "trusted-hosted-settings-state.json");
+
+    HostedSettingsTrustUtility.ApplyTrustedHostedSettingsVersionPolicy(
+        new Version(1, 0, 1),
+        statePath);
+
+    using (var document = System.Text.Json.JsonDocument.Parse(File.ReadAllText(statePath)))
+    {
+        var payload = document.RootElement.GetProperty("payload").GetString() ?? string.Empty;
+        var payloadBytes = Convert.FromBase64String(payload);
+        payloadBytes[^1] ^= 0x7F;
+        File.WriteAllText(
+            statePath,
+            $$"""
+            {
+              "schema_version": 1,
+              "format": "app-protected-v3",
+              "payload": "{{Convert.ToBase64String(payloadBytes)}}"
+            }
+            """);
+    }
+
+    var exception = AssertThrows<InvalidOperationException>(() =>
+        HostedSettingsTrustUtility.TryReadTrustedHostedSettingsVersion(statePath));
+    AssertContains(exception.Message, "authenticate or decrypt");
+}
+
+static void HostedSettingsRejectsRollbackBelowTrustedVersionFloor()
+{
+    using var directory = TemporaryDirectory.Create();
+    var statePath = Path.Combine(directory.Path, "trusted-hosted-settings-state.json");
+    var signedV2 = CreateSignedHostedSettingsArtifact(
+        new Dictionary<string, string>
+        {
+            ["XP Tracking"] = "https://publish.obsidian.md/scarlethorizons/Intentional+Orphans/XP+Tracking"
+        },
+        version: "1.0.2");
+    var signedV1 = CreateSignedHostedSettingsArtifact(
+        new Dictionary<string, string>
+        {
+            ["XP Tracking"] = "https://publish.obsidian.md/scarlethorizons/Intentional+Orphans/XP+Tracking"
+        },
+        version: "1.0.1");
+
+    _ = HostedSettingsTrustUtility.LoadAndVerifyHostedSettings(
+        signedV2.HostedSettingsJson,
+        "https://bryanmiller.us/scarlethorizons/settings.local.json",
+        [CreateActiveHostedSettingsSigningKey(signedV2.PublicKeyPem)],
+        statePath);
+    var exception = AssertThrows<InvalidOperationException>(() =>
+        HostedSettingsTrustUtility.LoadAndVerifyHostedSettings(
+            signedV1.HostedSettingsJson,
+            "https://bryanmiller.us/scarlethorizons/settings.local.json",
+            [CreateActiveHostedSettingsSigningKey(signedV1.PublicKeyPem)],
+            statePath));
+
+    AssertContains(exception.Message, "downgrade");
+    AssertContains(exception.Message, "1.0.2");
+}
+
+static void HostedSettingsRejectsUnexpectedSignedContentIdentity()
+{
+    var signedHostedSettings = CreateSignedHostedSettingsArtifact(
+        new Dictionary<string, string>
+        {
+            ["XP Tracking"] = "https://publish.obsidian.md/scarlethorizons/Intentional+Orphans/XP+Tracking"
+        },
+        contentId: "unexpected-hosted-settings",
+        version: "1.0.0");
+
+    var exception = AssertThrows<InvalidOperationException>(() =>
+        HostedSettingsTrustUtility.LoadAndVerifyHostedSettings(
+            signedHostedSettings.HostedSettingsJson,
+            "https://bryanmiller.us/scarlethorizons/settings.local.json",
+            [CreateActiveHostedSettingsSigningKey(signedHostedSettings.PublicKeyPem)],
+            trustedHostedSettingsStatePath: null));
+
+    AssertContains(exception.Message, "content identity");
+    AssertContains(exception.Message, HostedSettingsTrustUtility.HostedSettingsContentId);
 }
 
 static void XpPasswordStoreLoadsEncryptedSidecar()
@@ -4051,6 +4150,22 @@ static UpdateManifestSigningKeyTrustEntry CreateActiveSigningKey(string publicKe
     return new UpdateManifestSigningKeyTrustEntry("test-key", publicKeyPem);
 }
 
+static (string HostedSettingsJson, string PublicKeyPem) CreateSignedHostedSettingsArtifact(
+    IReadOnlyDictionary<string, string> settings,
+    string version = "1.0.0",
+    string contentId = HostedSettingsTrustUtility.HostedSettingsContentId)
+{
+    using var rsa = RSA.Create(2048);
+    return (
+        HostedSettingsTrustUtility.CreateSignedHostedSettingsJson(settings, version, rsa, contentId),
+        rsa.ExportSubjectPublicKeyInfoPem());
+}
+
+static HostedSettingsSigningKeyTrustEntry CreateActiveHostedSettingsSigningKey(string publicKeyPem)
+{
+    return new HostedSettingsSigningKeyTrustEntry("hosted-settings-test-key", publicKeyPem);
+}
+
 static void SearchEnterTriggersClickWhenEnabled()
 {
     RunOnStaThread(() =>
@@ -6412,7 +6527,9 @@ static void WithHostedSettingsIsolation(Action action)
         RuntimePathUtility.GetApplicationPath("settings.local.json"),
         () => WithPreservedFileAbsent(
             RuntimePathUtility.GetUserDataPath("settings.local.json"),
-            action));
+            () => WithPreservedFileAbsent(
+                RuntimePathUtility.GetUserDataPath("trusted-hosted-settings-state.json"),
+                action)));
 }
 
 static void WithPreservedStartupHealth(Action action)
@@ -6956,6 +7073,7 @@ static void WriteSettingsJsonWithHostedLocalSettings(string directoryPath, strin
 static void AssertHostedSettingsFailure(
     string hostedLocalSettingsUrl,
     string expectedLogFragment,
+    IReadOnlyList<HostedSettingsSigningKeyTrustEntry>? trustedSigningKeys = null,
     int? expectedRequestCount = null,
     string? expectedRequestPath = null)
 {
@@ -6972,6 +7090,9 @@ static void AssertHostedSettingsFailure(
 
         return null;
     });
+    using var trustedHostedSettingsKeysScope = trustedSigningKeys is null
+        ? null
+        : HostedSettingsTrustUtility.UseTrustedSigningKeysForTests(trustedSigningKeys);
 
     WithHostedSettingsIsolation(() =>
         WithPreservedStartupLog(() =>
@@ -7006,21 +7127,24 @@ static void AssertHostedSettingsFailure(
     }
 }
 
-static string CorruptHostedSettingsPayload(string hostedSettingsJson)
+static string CorruptHostedSettingsSignature(string hostedSettingsJson)
 {
     using var document = System.Text.Json.JsonDocument.Parse(hostedSettingsJson);
     var root = document.RootElement;
-    var payload = root.GetProperty("payload").GetString()
-        ?? throw new InvalidOperationException("Hosted settings payload was missing.");
-    var payloadBytes = Convert.FromBase64String(payload);
-    payloadBytes[^1] ^= 0x01;
-    var tamperedPayload = Convert.ToBase64String(payloadBytes);
+    var signature = root.GetProperty("signature").GetString()
+        ?? throw new InvalidOperationException("Hosted settings signature was missing.");
+    var signatureBytes = Convert.FromBase64String(signature);
+    signatureBytes[^1] ^= 0x01;
+    var tamperedSignature = Convert.ToBase64String(signatureBytes);
 
     return $$"""
         {
           "schema_version": {{root.GetProperty("schema_version").GetInt32()}},
           "format": "{{root.GetProperty("format").GetString()}}",
-          "payload": "{{tamperedPayload}}"
+          "content_id": "{{root.GetProperty("content_id").GetString()}}",
+          "version": "{{root.GetProperty("version").GetString()}}",
+          "encrypted_settings": {{System.Text.Json.JsonSerializer.Serialize(root.GetProperty("encrypted_settings").GetString())}},
+          "signature": "{{tamperedSignature}}"
         }
         """;
 }

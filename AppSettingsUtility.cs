@@ -205,7 +205,7 @@ namespace PlayerAssistant
             var fileContents = NetworkRequestUtility.ReadStringAsync(
                 response.Content,
                 NetworkResponseContentLimit.JsonCache).GetAwaiter().GetResult();
-            return LocalSettingsUtility.LoadPortableEncryptedSettingsFromContents(
+            return HostedSettingsTrustUtility.LoadAndVerifyHostedSettings(
                 fileContents,
                 hostedLocalSettingsUrl);
         }
