@@ -1753,7 +1753,7 @@ static void StartupDependencyMatrixClassifiesTerminalNetworkFailure()
     var exception = AssertThrows<NetworkRequestException>(() =>
         NetworkRequestUtility.SendAsync(
             httpClient,
-            () => new HttpRequestMessage(HttpMethod.Get, "https://rpol.net/failure"),
+            () => new HttpRequestMessage(HttpMethod.Get, "https://rpol.net/game.php?gi=80170"),
             policy: new NetworkRequestPolicy(
                 TimeSpan.FromSeconds(1),
                 MaxAttempts: 1,
