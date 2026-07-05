@@ -87,6 +87,8 @@ var tests = new (string Name, Action Test)[]
     ("atomic file promotion preserves existing destination on locked replacement", AtomicFilePromotionPreservesExistingDestinationOnLockedReplacement),
     ("atomic file promotion creates bounded runtime backups", AtomicFilePromotionCreatesBoundedRuntimeBackups),
     ("network request retries transient failures", NetworkRequestRetriesTransientFailures),
+    ("outbound network diagnostics records sanitized success endpoint", OutboundNetworkDiagnosticsRecordsSanitizedSuccessEndpoint),
+    ("outbound network diagnostics records failure counts", OutboundNetworkDiagnosticsRecordsFailureCounts),
     ("network request rejects disallowed host before send", NetworkRequestRejectsDisallowedHostBeforeSend),
     ("network request does not retry unauthorized", NetworkRequestDoesNotRetryUnauthorized),
     ("network circuit breaker opens after repeated terminal failures", NetworkCircuitBreakerOpensAfterRepeatedTerminalFailures),
@@ -207,6 +209,7 @@ var tests = new (string Name, Action Test)[]
     ("publish verification accepts current output", PublishVerificationAcceptsCurrentOutput),
     ("publish verification rejects stale startup log", PublishVerificationRejectsStaleStartupLog),
     ("publish verification rejects startup health artifact", PublishVerificationRejectsStartupHealthArtifact),
+    ("publish verification rejects outbound network diagnostics artifact", PublishVerificationRejectsOutboundNetworkDiagnosticsArtifact),
     ("publish verification rejects last crash artifact", PublishVerificationRejectsLastCrashArtifact),
     ("publish verification rejects malformed settings json", PublishVerificationRejectsMalformedSettingsJson),
     ("publish verification rejects future settings schema", PublishVerificationRejectsFutureSettingsSchema),
@@ -1727,6 +1730,89 @@ static void NetworkRequestRetriesTransientFailures()
 
     AssertEqual(HttpStatusCode.OK, response.StatusCode, "expected retry to return successful response");
     AssertEqual(2, attempts, "expected transient response to be retried once");
+}
+
+static void OutboundNetworkDiagnosticsRecordsSanitizedSuccessEndpoint()
+{
+    var diagnosticsPath = Path.Combine(
+        Path.GetDirectoryName(typeof(NetworkRequestUtility).Assembly.Location)
+            ?? throw new InvalidOperationException("Unable to resolve test assembly directory."),
+        OutboundNetworkDiagnosticsUtility.DiagnosticsFileName);
+    WithPreservedFileAbsent(diagnosticsPath, () =>
+    {
+        OutboundNetworkDiagnosticsUtility.Reset();
+        using var allowlistScope = NetworkUrlAllowlistUtility.UseValidationOverrideForTests((uri, purpose) =>
+        {
+            if (purpose == NetworkUrlPurpose.Generic
+                && string.Equals(uri.Host, "example.test", StringComparison.OrdinalIgnoreCase))
+            {
+                return NetworkUrlAllowlistValidation.Allowed(uri);
+            }
+
+            return null;
+        });
+        using var httpClient = NetworkRequestUtility.CreateHttpClient(new ScriptedHttpMessageHandler((_, _) =>
+            Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent("ok")
+            })));
+
+        using var response = NetworkRequestUtility.SendAsync(
+            httpClient,
+            () => new HttpRequestMessage(HttpMethod.Get, "https://example.test/search/path?token=secret-token&password=secret-password"),
+            policy: new NetworkRequestPolicy(TimeSpan.FromSeconds(1), MaxAttempts: 1, TimeSpan.Zero)).GetAwaiter().GetResult();
+
+        AssertEqual(HttpStatusCode.OK, response.StatusCode, "expected successful response");
+        var diagnosticsJson = File.ReadAllText(diagnosticsPath);
+        AssertFalse(diagnosticsJson.Contains("secret-token", StringComparison.Ordinal), "outbound diagnostics should not persist token query values");
+        AssertFalse(diagnosticsJson.Contains("secret-password", StringComparison.Ordinal), "outbound diagnostics should not persist password query values");
+
+        using var document = System.Text.Json.JsonDocument.Parse(diagnosticsJson);
+        var endpoint = document.RootElement.GetProperty("endpoints")[0];
+        AssertEqual("Generic", endpoint.GetProperty("purpose").GetString() ?? string.Empty, "unexpected network purpose");
+        AssertEqual("example.test", endpoint.GetProperty("host").GetString() ?? string.Empty, "unexpected host");
+        AssertEqual("/search/path", endpoint.GetProperty("path").GetString() ?? string.Empty, "diagnostics should record path without query values");
+        AssertTrue(endpoint.GetProperty("query_present").GetBoolean(), "diagnostics should remember that a query string existed");
+        AssertEqual(1, endpoint.GetProperty("total_requests").GetInt32(), "expected one recorded request");
+        AssertEqual(1, endpoint.GetProperty("success_count").GetInt32(), "expected one successful request");
+        AssertEqual(0, endpoint.GetProperty("failure_count").GetInt32(), "expected no failures");
+    });
+}
+
+static void OutboundNetworkDiagnosticsRecordsFailureCounts()
+{
+    var diagnosticsPath = Path.Combine(
+        Path.GetDirectoryName(typeof(NetworkRequestUtility).Assembly.Location)
+            ?? throw new InvalidOperationException("Unable to resolve test assembly directory."),
+        OutboundNetworkDiagnosticsUtility.DiagnosticsFileName);
+    WithPreservedFileAbsent(diagnosticsPath, () =>
+    {
+        OutboundNetworkDiagnosticsUtility.Reset();
+        using var httpClient = NetworkRequestUtility.CreateHttpClient(new ScriptedHttpMessageHandler((_, _) =>
+            Task.FromResult(new HttpResponseMessage(HttpStatusCode.ServiceUnavailable)
+            {
+                ReasonPhrase = "Service Unavailable"
+            })));
+
+        using var response = NetworkRequestUtility.SendAsync(
+            httpClient,
+            () => new HttpRequestMessage(HttpMethod.Get, "https://rpol.net/game.php?gi=80170"),
+            policy: new NetworkRequestPolicy(TimeSpan.FromSeconds(1), MaxAttempts: 1, TimeSpan.Zero),
+            purpose: NetworkUrlPurpose.Rpol).GetAwaiter().GetResult();
+
+        AssertEqual(HttpStatusCode.ServiceUnavailable, response.StatusCode, "expected terminal 503 response");
+
+        using var document = System.Text.Json.JsonDocument.Parse(File.ReadAllText(diagnosticsPath));
+        var endpoint = document.RootElement.GetProperty("endpoints")[0];
+        AssertEqual("Rpol", endpoint.GetProperty("purpose").GetString() ?? string.Empty, "unexpected network purpose");
+        AssertEqual("/game.php", endpoint.GetProperty("path").GetString() ?? string.Empty, "unexpected RPOL path");
+        AssertEqual(1, endpoint.GetProperty("total_requests").GetInt32(), "expected one recorded request");
+        AssertEqual(0, endpoint.GetProperty("success_count").GetInt32(), "expected no successes");
+        AssertEqual(1, endpoint.GetProperty("failure_count").GetInt32(), "expected one failure");
+        AssertEqual(503, endpoint.GetProperty("last_status_code").GetInt32(), "expected terminal HTTP status to be recorded");
+        AssertEqual("failure", endpoint.GetProperty("last_outcome").GetString() ?? string.Empty, "expected failure outcome");
+        AssertTrue(endpoint.GetProperty("last_failure_summary").GetString()?.Contains("HTTP 503", StringComparison.Ordinal) ?? false, "expected failure summary to capture status");
+    });
 }
 
 static void NetworkRequestRejectsDisallowedHostBeforeSend()
@@ -4913,6 +4999,19 @@ static void PublishVerificationRejectsStartupHealthArtifact()
     });
 }
 
+static void PublishVerificationRejectsOutboundNetworkDiagnosticsArtifact()
+{
+    WithCopiedPublishDirectory(directoryPath =>
+    {
+        File.WriteAllText(Path.Combine(directoryPath, OutboundNetworkDiagnosticsUtility.DiagnosticsFileName), "{}");
+
+        var output = RunPublishVerification(directoryPath);
+
+        AssertFalse(output.ExitCode == 0, "publish verification should fail when outbound-network-diagnostics.json is present");
+        AssertContains(output.Output, OutboundNetworkDiagnosticsUtility.DiagnosticsFileName);
+    });
+}
+
 static void PublishVerificationRejectsLastCrashArtifact()
 {
     WithCopiedPublishDirectory(directoryPath =>
@@ -5510,6 +5609,7 @@ static void DiagnosticBundleRedactsSensitiveValues()
             "metadata.json",
             "version-metadata.json",
             "runtime-sidecars.json",
+            "Release/outbound-network-diagnostics.json",
             "Release/release-provenance.json",
             "Release/release-runtime-inventory.json",
             "Release/settings.redacted.json",
@@ -5517,6 +5617,7 @@ static void DiagnosticBundleRedactsSensitiveValues()
             "Release/startup-health.json",
             "Release/last-crash.json",
             "Release/startup-remediation.txt",
+            "publish/outbound-network-diagnostics.json",
             "publish/release-provenance.json",
             "publish/release-runtime-inventory.json",
             "publish/settings.redacted.json",
@@ -5544,6 +5645,24 @@ static void DiagnosticBundleRedactsSensitiveValues()
         AssertFalse(releaseLog.Contains("Bearer abc123", StringComparison.Ordinal), "diagnostic log should redact bearer tokens");
         AssertFalse(releaseLog.Contains("sessionid=abc123", StringComparison.Ordinal), "diagnostic log should redact cookie headers");
         AssertFalse(releaseLog.Contains("user:pass@", StringComparison.Ordinal), "diagnostic log should redact credentialed URLs");
+
+        var outboundDiagnostics = ReadZipEntryText(zipPath, "Release/outbound-network-diagnostics.json");
+        using (var outboundDiagnosticsDocument = System.Text.Json.JsonDocument.Parse(outboundDiagnostics))
+        {
+            var endpointsElement = outboundDiagnosticsDocument.RootElement.GetProperty("endpoints");
+            var endpointElement = endpointsElement.ValueKind == System.Text.Json.JsonValueKind.Array
+                ? endpointsElement[0]
+                : endpointsElement;
+            var purpose = endpointElement.GetProperty("purpose").GetString();
+            AssertTrue(
+                string.Equals("PlayerAssistantHostedSettings", purpose, StringComparison.Ordinal),
+                "outbound diagnostics should preserve endpoint purpose metadata");
+        }
+        AssertFalse(outboundDiagnostics.Contains("secret-password", StringComparison.Ordinal), "outbound diagnostics should redact password query values");
+        AssertFalse(outboundDiagnostics.Contains("secret-token", StringComparison.Ordinal), "outbound diagnostics should redact token query values");
+        AssertFalse(outboundDiagnostics.Contains("Bearer abc123", StringComparison.Ordinal), "outbound diagnostics should redact bearer tokens");
+        AssertFalse(outboundDiagnostics.Contains("sessionid=abc123", StringComparison.Ordinal), "outbound diagnostics should redact cookie headers");
+        AssertFalse(outboundDiagnostics.Contains("user:pass@", StringComparison.Ordinal), "outbound diagnostics should redact credentialed URLs");
 
         var versionMetadata = ReadZipEntryText(zipPath, "version-metadata.json");
         AssertContains(versionMetadata, "\"authenticode_signature\":");
@@ -5651,8 +5770,34 @@ static void WithCopiedPublishDirectory(Action<string> action)
 
     try
     {
-        CopyDirectory(GetCurrentPublishDirectory(), directoryPath);
-        ClearReadOnlyAttributes(directoryPath);
+        var currentPublishDirectory = GetCurrentPublishDirectory();
+        var currentPublishExecutablePath = Path.Combine(currentPublishDirectory, "player-assistant.exe");
+        if (File.Exists(currentPublishExecutablePath))
+        {
+            CopyDirectory(currentPublishDirectory, directoryPath);
+            ClearReadOnlyAttributes(directoryPath);
+        }
+        else
+        {
+            WriteManifestedRuntime(directoryPath);
+            var currentReleaseDirectory = GetCurrentReleaseDirectory();
+            foreach (var fileName in new[]
+            {
+                "player-assistant.exe",
+                "player-assistant.dll",
+                "player-assistant.deps.json",
+                "player-assistant.runtimeconfig.json",
+                "playwright.ps1",
+                "Microsoft.Playwright.dll"
+            })
+            {
+                var sourcePath = Path.Combine(currentReleaseDirectory, fileName);
+                if (File.Exists(sourcePath))
+                {
+                    File.Copy(sourcePath, Path.Combine(directoryPath, fileName), overwrite: true);
+                }
+            }
+        }
         File.Copy(
             Path.Combine(GetRepositoryRoot(), "settings.json"),
             Path.Combine(directoryPath, "settings.json"),
@@ -5739,6 +5884,35 @@ static void WriteDiagnosticsRuntime(string directoryPath, bool includeSensitiveL
         {
           "schema_version": 1,
           "phases": []
+        }
+        """);
+    File.WriteAllText(
+        Path.Combine(directoryPath, OutboundNetworkDiagnosticsUtility.DiagnosticsFileName),
+        """
+        {
+          "schema_version": 1,
+          "started_at": "2026-07-05T00:00:00.0000000+00:00",
+          "updated_at": "2026-07-05T00:00:01.0000000+00:00",
+          "endpoints": [
+            {
+              "method": "GET",
+              "purpose": "PlayerAssistantHostedSettings",
+              "scheme": "https",
+              "host": "bryanmiller.us",
+              "path": "/scarlethorizons/settings.local.json",
+              "query_present": true,
+              "total_requests": 2,
+              "success_count": 1,
+              "failure_count": 1,
+              "retry_count": 1,
+              "last_outcome": "failure",
+              "last_status_code": null,
+              "last_failure_kind": "Unavailable",
+              "last_failure_summary": "The network request failed: https://user:pass@example.test/path?password=secret-password&token=secret-token Authorization: Bearer abc123 Cookie: sessionid=abc123",
+              "first_observed_at": "2026-07-05T00:00:00.0000000+00:00",
+              "last_observed_at": "2026-07-05T00:00:01.0000000+00:00"
+            }
+          ]
         }
         """);
     File.WriteAllText(

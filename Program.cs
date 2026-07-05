@@ -81,6 +81,7 @@ namespace PlayerAssistant
             // To customize application configuration such as set high DPI settings or default font,
             // see https://aka.ms/applicationconfiguration.
             StartupHealthUtility.Reset();
+            OutboundNetworkDiagnosticsUtility.Reset();
             StartupLoggingUtility.RunRequiredPhase("settings load", AppSettingsUtility.Load);
             UserPreferencesUtility.Load();
             FileDownloadCounters.Reset();
