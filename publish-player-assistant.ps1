@@ -61,6 +61,10 @@ $ForbiddenPlaintextPatterns = @(
     '"RPOL password"\s*:',
     '"RPOL user name"\s*:'
 )
+$ForbiddenPublishedLocalSettingsKeys = @(
+    'RPOL user name',
+    'RPOL password'
+)
 $IgnoredKeywordTermsSourceDirectories = @(
     '.git',
     'bin',
@@ -747,6 +751,14 @@ function Assert-EncryptedLocalSettings {
     }
 
     foreach ($property in $sourceSettings.PSObject.Properties) {
+        if ($ForbiddenPublishedLocalSettingsKeys -contains [string]$property.Name) {
+            if (![string]::IsNullOrWhiteSpace([string]$property.Value)) {
+                throw "Source $SettingsLocalFileName must not contain '$($property.Name)'. Store RPOL credentials in Windows Credential Manager instead."
+            }
+
+            continue
+        }
+
         $publishedProperty = $publishedSettings.PSObject.Properties[$property.Name]
         if ($null -eq $publishedProperty) {
             throw "Published $SettingsLocalFileName is missing decrypted setting '$($property.Name)'."
@@ -758,6 +770,12 @@ function Assert-EncryptedLocalSettings {
 
         if (![string]::IsNullOrWhiteSpace([string]$property.Value) -and $publishedRaw.Contains([string]$property.Value)) {
             throw "Published $SettingsLocalFileName contains plaintext value for '$($property.Name)'."
+        }
+    }
+
+    foreach ($forbiddenKey in $ForbiddenPublishedLocalSettingsKeys) {
+        if ($null -ne $publishedSettings.PSObject.Properties[$forbiddenKey]) {
+            throw "Published $SettingsLocalFileName must not contain '$forbiddenKey'. Store RPOL credentials in Windows Credential Manager instead."
         }
     }
 }

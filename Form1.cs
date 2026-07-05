@@ -1032,6 +1032,41 @@ namespace PlayerAssistant
                     : "Hero images will play on the next startup.");
         }
 
+        private void RpolCredentialsToolStripMenuItem_Click(object? sender, EventArgs e)
+        {
+            using var dialog = new RpolCredentialsDialog(
+                RuntimeSecretStoreUtility.GetRpolUserName(),
+                RuntimeSecretStoreUtility.GetRpolPassword());
+            var result = dialog.ShowDialog(this);
+            if (result == DialogResult.Cancel)
+            {
+                return;
+            }
+
+            if (result == DialogResult.Abort)
+            {
+                RuntimeSecretStoreUtility.DeleteRpolCredentials();
+                RpolAuthUtility.ResetAuthenticationState();
+                SetStatusBarMessage("RPOL credentials removed from Windows Credential Manager.");
+                return;
+            }
+
+            if (string.IsNullOrWhiteSpace(dialog.UserName) || string.IsNullOrWhiteSpace(dialog.Password))
+            {
+                MessageBox.Show(
+                    this,
+                    "Provide both RPOL user name and RPOL password, or choose Remove.",
+                    "RPOL Credentials",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Warning);
+                return;
+            }
+
+            RuntimeSecretStoreUtility.SaveRpolCredentials(dialog.UserName, dialog.Password);
+            RpolAuthUtility.ResetAuthenticationState();
+            SetStatusBarMessage("RPOL credentials saved to Windows Credential Manager.");
+        }
+
         private void AuthorToolStripMenuItem_Click(object? sender, EventArgs e)
         {
             MessageBox.Show(

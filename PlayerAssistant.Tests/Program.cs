@@ -47,6 +47,7 @@ var tests = new (string Name, Action Test)[]
     ("app configuration validation writes repair guidance", AppConfigurationValidationWritesRepairGuidance),
     ("app configuration validation warns about missing rpol credentials", AppConfigurationValidationWarnsAboutMissingRpolCredentials),
     ("app configuration validation warns about missing sidecars", AppConfigurationValidationWarnsAboutMissingSidecars),
+    ("app settings migrate rpol credentials into credential manager", AppSettingsMigrateRpolCredentialsIntoCredentialManager),
     ("app configuration validation accepts valid release manifest", AppConfigurationValidationAcceptsValidReleaseManifest),
     ("app configuration validation rejects missing manifest file", AppConfigurationValidationRejectsMissingManifestFile),
     ("app configuration validation rejects manifest hash mismatch", AppConfigurationValidationRejectsManifestHashMismatch),
@@ -135,6 +136,7 @@ var tests = new (string Name, Action Test)[]
     ("keyword search accepts url source metadata", KeywordSearchAcceptsUrlSourceMetadata),
     ("keyword search filters rpol hero metadata-only hits", KeywordSearchFiltersRpolHeroMetadataOnlyHits),
     ("show menu contains xp item", ShowMenuContainsXpItem),
+    ("settings menu contains rpol credentials item", SettingsMenuContainsRpolCredentialsItem),
     ("about menu contains author and update items", AboutMenuContainsAuthorAndUpdateItems),
     ("about author text lists developer info", AboutAuthorTextListsDeveloperInfo),
     ("about version text shows app version", AboutVersionTextShowsAppVersion),
@@ -183,6 +185,7 @@ var tests = new (string Name, Action Test)[]
     ("publish verification rejects future settings schema", PublishVerificationRejectsFutureSettingsSchema),
     ("publish verification rejects future local settings schema", PublishVerificationRejectsFutureLocalSettingsSchema),
     ("publish verification rejects missing xp tracking local setting", PublishVerificationRejectsMissingXpTrackingLocalSetting),
+    ("publish verification rejects rpol credentials in local settings", PublishVerificationRejectsRpolCredentialsInLocalSettings),
     ("publish verification rejects missing xp password sidecar", PublishVerificationRejectsMissingXpPasswordSidecar),
     ("publish verification rejects plaintext xp password sidecar", PublishVerificationRejectsPlaintextXpPasswordSidecar),
     ("publish verification rejects malformed keyword index", PublishVerificationRejectsMalformedKeywordIndex),
@@ -219,6 +222,7 @@ foreach (var (name, test) in tests)
 {
     try
     {
+        using var credentialStoreScope = RuntimeSecretStoreUtility.UseBackendForTests(new InMemoryWindowsCredentialStoreBackend());
         test();
         Console.WriteLine($"PASS {name}");
     }
@@ -562,6 +566,46 @@ static void AppSettingsLoadsEncryptedXpTrackingUrl()
         settings["XP Tracking"],
         "encrypted local settings should provide the XP Tracking URL");
     AssertTrue(LocalSettingsUtility.IsEncryptedSettingsFile(localSettingsPath), "XP Tracking URL should be stored in encrypted local settings");
+}
+
+static void AppSettingsMigrateRpolCredentialsIntoCredentialManager()
+{
+    using var directory = TemporaryDirectory.Create();
+    File.WriteAllText(
+        Path.Combine(directory.Path, "settings.json"),
+        """
+        {
+          "schema_version": 1,
+          "RPOL Site": "https://rpol.net/game.php?gi=80170",
+          "Game Intro": "https://rpol.net/gameinfo.php?gi=80170",
+          "The Cast": "https://rpol.net/gameinfo.php?action=cast&gi=80170",
+          "Obsidian Game Vault": "https://publish.obsidian.md/scarlethorizons"
+        }
+        """);
+
+    var localSettingsPath = Path.Combine(directory.Path, "settings.local.json");
+    LocalSettingsUtility.SaveEncryptedSettings(
+        localSettingsPath,
+        new Dictionary<string, string>
+        {
+            ["XP Tracking"] = "https://publish.obsidian.md/scarlethorizons/Intentional+Orphans/XP+Tracking",
+            ["RPOL user name"] = "example-user",
+            ["RPOL password"] = "example-password"
+        });
+
+    var settings = AppSettingsUtility.LoadSettings(directory.Path);
+    var sanitizedLocalSettings = LocalSettingsUtility.LoadSettingsWithoutMigration(localSettingsPath);
+
+    AssertEqual("example-user", settings["RPOL user name"], "unexpected migrated RPOL user name");
+    AssertEqual("example-password", settings["RPOL password"], "unexpected migrated RPOL password");
+    AssertFalse(sanitizedLocalSettings.ContainsKey("RPOL user name"), "local settings should no longer keep RPOL user name");
+    AssertFalse(sanitizedLocalSettings.ContainsKey("RPOL password"), "local settings should no longer keep RPOL password");
+    AssertEqual(
+        "https://publish.obsidian.md/scarlethorizons/Intentional+Orphans/XP+Tracking",
+        sanitizedLocalSettings["XP Tracking"],
+        "xp tracking should remain in local settings");
+    AssertEqual("example-user", RuntimeSecretStoreUtility.GetRpolUserName()!, "credential manager should store RPOL user name");
+    AssertEqual("example-password", RuntimeSecretStoreUtility.GetRpolPassword()!, "credential manager should store RPOL password");
 }
 
 static void XpPasswordStoreLoadsEncryptedSidecar()
@@ -3028,6 +3072,23 @@ static void ShowMenuContainsXpItem()
     });
 }
 
+static void SettingsMenuContainsRpolCredentialsItem()
+{
+    RunOnStaThread(() =>
+    {
+        using var form = new Form1(suppressHeroImagesForThisRun: true);
+        var settingsMenuItem = (ToolStripMenuItem)(GetPrivateField(form, "settingsToolStripMenuItem")
+            ?? throw new InvalidOperationException("settingsToolStripMenuItem was null."));
+        var rpolCredentialsMenuItem = (ToolStripMenuItem)(GetPrivateField(form, "rpolCredentialsToolStripMenuItem")
+            ?? throw new InvalidOperationException("rpolCredentialsToolStripMenuItem was null."));
+
+        AssertEqual("RPOL Credentials", rpolCredentialsMenuItem.Text ?? string.Empty, "unexpected RPOL credentials menu item text");
+        AssertTrue(
+            settingsMenuItem.DropDownItems.Cast<ToolStripItem>().Contains(rpolCredentialsMenuItem),
+            "Settings menu should contain the RPOL Credentials item");
+    });
+}
+
 static void AboutMenuContainsAuthorAndUpdateItems()
 {
     RunOnStaThread(() =>
@@ -4216,18 +4277,35 @@ static void PublishVerificationRejectsMissingXpTrackingLocalSetting()
         var sourceSettingsPath = Path.Combine(
             Path.GetDirectoryName(directoryPath) ?? GetRepositoryRoot(),
             $"{Path.GetFileName(directoryPath)}.source.settings.local.json");
+        LocalSettingsUtility.SaveEncryptedSettings(sourceSettingsPath, new Dictionary<string, string>());
+
+        var output = RunPublishVerification(directoryPath);
+
+        AssertFalse(output.ExitCode == 0, "publish verification should fail when settings.local.json omits XP Tracking");
+        AssertContains(output.Output, "Source settings.local.json is missing required URL setting 'XP Tracking'.");
+    });
+}
+
+static void PublishVerificationRejectsRpolCredentialsInLocalSettings()
+{
+    WithCopiedPublishDirectory(directoryPath =>
+    {
+        var sourceSettingsPath = Path.Combine(
+            Path.GetDirectoryName(directoryPath) ?? GetRepositoryRoot(),
+            $"{Path.GetFileName(directoryPath)}.source.settings.local.json");
         LocalSettingsUtility.SaveEncryptedSettings(
             sourceSettingsPath,
             new Dictionary<string, string>
             {
+                ["XP Tracking"] = "https://publish.obsidian.md/scarlethorizons/Intentional+Orphans/XP+Tracking",
                 ["RPOL user name"] = "example-user",
                 ["RPOL password"] = "example-password"
             });
 
         var output = RunPublishVerification(directoryPath);
 
-        AssertFalse(output.ExitCode == 0, "publish verification should fail when settings.local.json omits XP Tracking");
-        AssertContains(output.Output, "Source settings.local.json is missing required URL setting 'XP Tracking'.");
+        AssertFalse(output.ExitCode == 0, "publish verification should fail when settings.local.json contains RPOL credentials");
+        AssertContains(output.Output, "Windows Credential Manager");
     });
 }
 
@@ -4729,7 +4807,7 @@ static void WithCopiedPublishDirectory(Action<string> action)
     try
     {
         var publishedSettingsPath = Path.Combine(directoryPath, "settings.local.json");
-        var fixtureSettings = CreateValidAppSettings(includeCredentials: true);
+        var fixtureSettings = CreateValidAppSettings(includeCredentials: false);
 
         CopyDirectory(GetCurrentPublishDirectory(), directoryPath);
         ClearReadOnlyAttributes(directoryPath);
@@ -6172,5 +6250,32 @@ internal sealed class ChunkedHttpContent : HttpContent
     protected override Stream CreateContentReadStream(CancellationToken cancellationToken)
     {
         return new MemoryStream(_bytes, writable: false);
+    }
+}
+
+internal sealed class InMemoryWindowsCredentialStoreBackend : IWindowsCredentialStoreBackend
+{
+    private readonly Dictionary<string, StoredSecret> _secrets = new(StringComparer.Ordinal);
+
+    public bool TryRead(string targetName, out StoredSecret? storedSecret)
+    {
+        if (_secrets.TryGetValue(targetName, out var existingSecret))
+        {
+            storedSecret = existingSecret with { SecretBytes = [.. existingSecret.SecretBytes] };
+            return true;
+        }
+
+        storedSecret = null;
+        return false;
+    }
+
+    public void Write(string targetName, byte[] secretBytes, string? comment = null)
+    {
+        _secrets[targetName] = new StoredSecret([.. secretBytes], DateTimeOffset.UtcNow);
+    }
+
+    public void Delete(string targetName)
+    {
+        _secrets.Remove(targetName);
     }
 }
