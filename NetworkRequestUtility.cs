@@ -1,4 +1,5 @@
 using System.Net;
+using System.Net.Security;
 using System.Text;
 
 namespace PlayerAssistant
@@ -35,6 +36,7 @@ namespace PlayerAssistant
         public static NetworkResponseContentLimit Markdown { get; } = new("markdown response", 2L * 1024L * 1024L);
         public static NetworkResponseContentLimit JsonCache { get; } = new("JSON cache response", 10L * 1024L * 1024L);
         public static NetworkResponseContentLimit Image { get; } = new("image response", 25L * 1024L * 1024L);
+        public static NetworkResponseContentLimit InstallerPackage { get; } = new("installer package", 250L * 1024L * 1024L);
     }
 
     internal sealed class NetworkResponseTooLargeException : InvalidOperationException
@@ -188,12 +190,16 @@ namespace PlayerAssistant
 
         public static HttpClient CreateHttpClient()
         {
-            var httpClient = new HttpClient
+            var handler = new HttpClientHandler
             {
-                Timeout = Timeout.InfiniteTimeSpan
+                ServerCertificateCustomValidationCallback = static (requestMessage, certificate, chain, sslPolicyErrors) =>
+                    CertificatePinningUtility.ValidateServerCertificate(
+                        requestMessage,
+                        certificate,
+                        chain,
+                        sslPolicyErrors)
             };
-            httpClient.DefaultRequestHeaders.UserAgent.ParseAdd("PlayerAssistant/1.0");
-            return httpClient;
+            return CreateHttpClient(handler);
         }
 
         public static async Task<string> ReadStringAsync(

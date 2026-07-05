@@ -1087,14 +1087,25 @@ namespace PlayerAssistant
                     return;
                 }
 
-                var launchValidation = ExternalUrlLaunchUtility.Validate(update.DownloadUri.AbsoluteUri);
-                if (!launchValidation.IsAllowed)
+                SetStatusBarMessage($"Downloading verified installer: {update.VersionText}...");
+                var installer = await VerifiedInstallerUpdateUtility.DownloadVerifiedInstallerAsync(httpClient, update);
+                var launchInstallerResult = MessageBox.Show(
+                    this,
+                    $"Player Assistant {update.VersionText} was downloaded and verified.{Environment.NewLine}{Environment.NewLine}Installer: {installer.InstallerPath}{Environment.NewLine}{Environment.NewLine}Run the installer now?",
+                    "Verified Update Ready",
+                    MessageBoxButtons.YesNo,
+                    MessageBoxIcon.Information);
+                if (launchInstallerResult != DialogResult.Yes)
                 {
-                    throw new InvalidOperationException(launchValidation.RejectionReason ?? "The update URL is not allowed.");
+                    SetStatusBarMessage($"Verified installer ready: {update.VersionText}.");
+                    return;
                 }
 
-                Process.Start(ExternalUrlLaunchUtility.CreateStartInfo(launchValidation));
-                SetStatusBarMessage($"Opening update download: {update.VersionText}.");
+                Process.Start(new ProcessStartInfo(installer.InstallerPath)
+                {
+                    UseShellExecute = true
+                });
+                SetStatusBarMessage($"Launching verified installer: {update.VersionText}.");
             }
             catch (Exception ex)
             {
