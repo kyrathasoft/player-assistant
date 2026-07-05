@@ -146,6 +146,8 @@ var tests = new (string Name, Action Test)[]
     ("update check compares against current app version", UpdateCheckComparesAgainstCurrentAppVersion),
     ("update check reports latest version message", UpdateCheckReportsLatestVersionMessage),
     ("update check fetches signed manifest from allowed update host", UpdateCheckFetchesSignedManifestFromAllowedUpdateHost),
+    ("update check remembers highest trusted version observed", UpdateCheckRemembersHighestTrustedVersionObserved),
+    ("update check rejects signed manifest rollback below trusted version floor", UpdateCheckRejectsSignedManifestRollbackBelowTrustedVersionFloor),
     ("update host certificate pinning accepts trusted leaf pin", UpdateHostCertificatePinningAcceptsTrustedLeafPin),
     ("update host certificate pinning accepts trusted intermediate pin", UpdateHostCertificatePinningAcceptsTrustedIntermediatePin),
     ("update host certificate pinning rejects mismatched pin", UpdateHostCertificatePinningRejectsMismatchedPin),
@@ -3368,6 +3370,55 @@ static void UpdateCheckFetchesSignedManifestFromAllowedUpdateHost()
 
     var launchValidation = ExternalUrlLaunchUtility.Validate(update.DownloadUri.AbsoluteUri);
     AssertTrue(launchValidation.IsAllowed, launchValidation.RejectionReason ?? "update download URL should be launchable");
+}
+
+static void UpdateCheckRemembersHighestTrustedVersionObserved()
+{
+    using var directory = TemporaryDirectory.Create();
+    var statePath = Path.Combine(directory.Path, "trusted-update-state.json");
+    var currentVersion = new Version(0, 9, 1);
+    var update = new PlayerAssistantUpdateInfo(
+        new Version(0, 9, 2),
+        "0.9.2",
+        new Uri("https://bryanmiller.us/scarlethorizons/p-assist-0.9.2.zip"),
+        new string('A', 64),
+        new Uri("https://bryanmiller.us/scarlethorizons/p-assist-0.9.2.exe"),
+        new string('B', 64));
+
+    var result = PlayerAssistantUpdateUtility.ApplyTrustedUpdateVersionPolicy(update, currentVersion, statePath);
+    var storedVersion = PlayerAssistantUpdateUtility.TryReadTrustedUpdateVersion(statePath);
+
+    AssertTrue(result is not null, "expected trusted update to remain available");
+    AssertEqual("0.9.2", result!.VersionText, "unexpected trusted update version");
+    AssertEqual(new Version(0, 9, 2), storedVersion!, "expected highest trusted version to be recorded");
+}
+
+static void UpdateCheckRejectsSignedManifestRollbackBelowTrustedVersionFloor()
+{
+    using var directory = TemporaryDirectory.Create();
+    var statePath = Path.Combine(directory.Path, "trusted-update-state.json");
+    var currentVersion = new Version(0, 9, 1);
+    var newerTrustedUpdate = new PlayerAssistantUpdateInfo(
+        new Version(0, 9, 2),
+        "0.9.2",
+        new Uri("https://bryanmiller.us/scarlethorizons/p-assist-0.9.2.zip"),
+        new string('A', 64),
+        new Uri("https://bryanmiller.us/scarlethorizons/p-assist-0.9.2.exe"),
+        new string('B', 64));
+    var rolledBackUpdate = new PlayerAssistantUpdateInfo(
+        new Version(0, 9, 1),
+        "0.9.1",
+        new Uri("https://bryanmiller.us/scarlethorizons/p-assist-0.9.1.zip"),
+        new string('C', 64),
+        new Uri("https://bryanmiller.us/scarlethorizons/p-assist-0.9.1.exe"),
+        new string('D', 64));
+
+    PlayerAssistantUpdateUtility.ApplyTrustedUpdateVersionPolicy(newerTrustedUpdate, currentVersion, statePath);
+    var exception = AssertThrows<InvalidOperationException>(() =>
+        PlayerAssistantUpdateUtility.ApplyTrustedUpdateVersionPolicy(rolledBackUpdate, currentVersion, statePath));
+
+    AssertContains(exception.Message, "downgrade");
+    AssertContains(exception.Message, "0.9.2");
 }
 
 static void VerifiedUpdaterDownloadsInstallerToControlledPath()
