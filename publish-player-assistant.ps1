@@ -1710,7 +1710,7 @@ Copy-Item -LiteralPath (Join-Path $PSScriptRoot "Release\$KeywordTermsFileName")
 Copy-Item -LiteralPath (Join-Path $PSScriptRoot "Release\$SitemapFileName") -Destination (Join-Path $resolvedOutputDir $SitemapFileName) -Force
 Copy-Item -LiteralPath (Join-Path $PSScriptRoot "Release\$SitemapKeywordUrlsFileName") -Destination (Join-Path $resolvedOutputDir $SitemapKeywordUrlsFileName) -Force
 Copy-Item -LiteralPath (Join-Path $PSScriptRoot $XpPasswordFileName) -Destination (Join-Path $resolvedOutputDir $XpPasswordFileName) -Force
-Write-AppEncryptedLocalSettings -SourcePath (Join-Path $PSScriptRoot $SettingsLocalFileName) -DestinationPath (Join-Path $resolvedOutputDir $SettingsLocalFileName)
+Write-AppEncryptedLocalSettings -SourcePath $SourceSettingsPath -DestinationPath (Join-Path $resolvedOutputDir $SettingsLocalFileName)
 Protect-RuntimeSidecarFiles -Directory $resolvedOutputDir
 Write-ReleaseRuntimeInventory -Directory $resolvedOutputDir
 Write-ReleaseIntegrityManifest -Directory $resolvedOutputDir
