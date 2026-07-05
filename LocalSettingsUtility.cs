@@ -134,13 +134,27 @@ namespace PlayerAssistant
             }
 
             var fileContents = File.ReadAllText(settingsPath);
+            return LoadPortableEncryptedSettingsFromContents(fileContents, settingsPath);
+        }
+
+        internal static Dictionary<string, string> LoadPortableEncryptedSettingsFromContents(string fileContents, string sourceDescription)
+        {
+            ArgumentNullException.ThrowIfNull(fileContents);
+            ArgumentException.ThrowIfNullOrWhiteSpace(sourceDescription);
+
             using var document = JsonDocument.Parse(fileContents);
             if (!TryReadEncryptedEnvelope(document.RootElement, out var envelope))
             {
-                throw new InvalidOperationException("Encrypted settings sidecar file must use an authenticated encrypted envelope.");
+                throw new InvalidOperationException($"{sourceDescription} must use an authenticated encrypted envelope.");
             }
 
-            return DecryptSettings(envelope, settingsPath);
+            if (!string.Equals(envelope.Format, V2EncryptedFormat, StringComparison.Ordinal))
+            {
+                throw new InvalidOperationException(
+                    $"{sourceDescription} must use the portable authenticated encrypted format '{V2EncryptedFormat}'.");
+            }
+
+            return DecryptSettings(envelope, sourceDescription);
         }
 
         public static void SavePortableEncryptedSettings(string settingsPath, IReadOnlyDictionary<string, string> settings)

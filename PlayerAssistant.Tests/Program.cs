@@ -4,10 +4,12 @@ using System.Drawing;
 using System.Drawing.Imaging;
 using System.IO.Compression;
 using System.Net;
+using System.Net.Sockets;
 using System.Reflection;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 using System.Net.Security;
+using System.Diagnostics.CodeAnalysis;
 using System.Windows.Forms;
 using System.Xml.Linq;
 
@@ -39,7 +41,12 @@ var tests = new (string Name, Action Test)[]
     ("app configuration validation accepts complete runtime", AppConfigurationValidationAcceptsCompleteRuntime),
     ("settings json accepts current schema version", SettingsJsonAcceptsCurrentSchemaVersion),
     ("settings json rejects future schema version", SettingsJsonRejectsFutureSchemaVersion),
-    ("app settings loads encrypted xp tracking url", AppSettingsLoadsEncryptedXpTrackingUrl),
+    ("app settings loads hosted encrypted xp tracking url", AppSettingsLoadsHostedEncryptedXpTrackingUrl),
+    ("app settings loads hosted encrypted xp tracking url from fixture server", AppSettingsLoadsHostedEncryptedXpTrackingUrlFromFixtureServer),
+    ("app settings hosted settings failure logs tampered envelope", AppSettingsHostedSettingsFailureLogsTamperedEnvelope),
+    ("app settings hosted settings failure logs plaintext payload", AppSettingsHostedSettingsFailureLogsPlaintextPayload),
+    ("app settings hosted settings failure logs oversized payload", AppSettingsHostedSettingsFailureLogsOversizedPayload),
+    ("app settings hosted settings failure logs unreachable fixture server", AppSettingsHostedSettingsFailureLogsUnreachableFixtureServer),
     ("xp password store loads encrypted sidecar", XpPasswordStoreLoadsEncryptedSidecar),
     ("xp password store rejects plaintext sidecar", XpPasswordStoreRejectsPlaintextSidecar),
     ("app configuration validation reports missing url", AppConfigurationValidationReportsMissingUrl),
@@ -47,7 +54,7 @@ var tests = new (string Name, Action Test)[]
     ("app configuration validation writes repair guidance", AppConfigurationValidationWritesRepairGuidance),
     ("app configuration validation warns about missing rpol credentials", AppConfigurationValidationWarnsAboutMissingRpolCredentials),
     ("app configuration validation warns about missing sidecars", AppConfigurationValidationWarnsAboutMissingSidecars),
-    ("app settings migrate rpol credentials into credential manager", AppSettingsMigrateRpolCredentialsIntoCredentialManager),
+    ("app settings migrate hosted rpol credentials into credential manager", AppSettingsMigrateHostedRpolCredentialsIntoCredentialManager),
     ("app configuration validation accepts valid release manifest", AppConfigurationValidationAcceptsValidReleaseManifest),
     ("app configuration validation rejects missing manifest file", AppConfigurationValidationRejectsMissingManifestFile),
     ("app configuration validation rejects manifest hash mismatch", AppConfigurationValidationRejectsManifestHashMismatch),
@@ -84,6 +91,9 @@ var tests = new (string Name, Action Test)[]
     ("network request wraps timeout", NetworkRequestWrapsTimeout),
     ("network request preserves caller cancellation", NetworkRequestPreservesCallerCancellation),
     ("network allowlist rejects credentialed and escaped hosts", NetworkAllowlistRejectsCredentialedAndEscapedHosts),
+    ("network allowlist rejects unexpected hosted settings path", NetworkAllowlistRejectsUnexpectedHostedSettingsPath),
+    ("network allowlist rejects unexpected update path", NetworkAllowlistRejectsUnexpectedUpdatePath),
+    ("network allowlist generic policy rejects unrelated update host paths", NetworkAllowlistGenericPolicyRejectsUnrelatedUpdateHostPaths),
     ("network response limits define defaults", NetworkResponseLimitsDefineDefaults),
     ("network response limit rejects oversized html header", NetworkResponseLimitRejectsOversizedHtmlHeader),
     ("network response limit rejects oversized markdown stream", NetworkResponseLimitRejectsOversizedMarkdownStream),
@@ -160,6 +170,9 @@ var tests = new (string Name, Action Test)[]
     ("verified updater downloads installer to controlled path", VerifiedUpdaterDownloadsInstallerToControlledPath),
     ("verified updater rejects installer sha256 mismatch", VerifiedUpdaterRejectsInstallerSha256Mismatch),
     ("verified updater rejects installer signer mismatch", VerifiedUpdaterRejectsInstallerSignerMismatch),
+    ("verified installer launch re-verifies before execution", VerifiedInstallerLaunchReverifiesBeforeExecution),
+    ("verified installer launch rejects signer changes after verification", VerifiedInstallerLaunchRejectsSignerChangesAfterVerification),
+    ("verified installer launch rejects elevation changes after verification", VerifiedInstallerLaunchRejectsElevationChangesAfterVerification),
     ("search enter triggers click when enabled", SearchEnterTriggersClickWhenEnabled),
     ("keyword search offers online fallback on local miss", KeywordSearchOffersOnlineFallbackOnLocalMiss),
     ("keyword search cancels previous online fallback", KeywordSearchCancelsPreviousOnlineFallback),
@@ -179,6 +192,8 @@ var tests = new (string Name, Action Test)[]
     ("v1 local settings migrate to authenticated encryption", V1LocalSettingsMigrateToAuthenticatedEncryption),
     ("v2 local settings migrate to scoped encryption", V2LocalSettingsMigrateToScopedEncryption),
     ("local settings are encrypted on load", LocalSettingsAreEncryptedOnLoad),
+    ("local settings encrypt command writes portable envelope", LocalSettingsEncryptCommandWritesPortableEnvelope),
+    ("local settings decrypt command writes plaintext json", LocalSettingsDecryptCommandWritesPlaintextJson),
     ("local settings rejects future schema version", LocalSettingsRejectsFutureSchemaVersion),
     ("scoped local settings reject copied install path", ScopedLocalSettingsRejectCopiedInstallPath),
     ("authenticated local settings reject tampered payload", AuthenticatedLocalSettingsRejectTamperedPayload),
@@ -191,9 +206,8 @@ var tests = new (string Name, Action Test)[]
     ("publish verification rejects last crash artifact", PublishVerificationRejectsLastCrashArtifact),
     ("publish verification rejects malformed settings json", PublishVerificationRejectsMalformedSettingsJson),
     ("publish verification rejects future settings schema", PublishVerificationRejectsFutureSettingsSchema),
-    ("publish verification rejects future local settings schema", PublishVerificationRejectsFutureLocalSettingsSchema),
-    ("publish verification rejects missing xp tracking local setting", PublishVerificationRejectsMissingXpTrackingLocalSetting),
-    ("publish verification rejects rpol credentials in local settings", PublishVerificationRejectsRpolCredentialsInLocalSettings),
+    ("publish verification rejects shipped local settings", PublishVerificationRejectsShippedLocalSettings),
+    ("publish verification rejects missing hosted local settings url", PublishVerificationRejectsMissingHostedLocalSettingsUrl),
     ("publish verification rejects missing xp password sidecar", PublishVerificationRejectsMissingXpPasswordSidecar),
     ("publish verification rejects plaintext xp password sidecar", PublishVerificationRejectsPlaintextXpPasswordSidecar),
     ("publish verification rejects malformed keyword index", PublishVerificationRejectsMalformedKeywordIndex),
@@ -207,6 +221,9 @@ var tests = new (string Name, Action Test)[]
     ("installer scripts target program files install path", InstallerScriptsTargetProgramFilesInstallPath),
     ("installer package verification accepts current package", InstallerPackageVerificationAcceptsCurrentPackage),
     ("installer package verification rejects unsigned payload when signing required", InstallerPackageVerificationRejectsUnsignedPayloadWhenSigningRequired),
+    ("release update artifact verification accepts generated signed manifest", ReleaseUpdateArtifactVerificationAcceptsGeneratedSignedManifest),
+    ("release update artifact verification rejects manifest hash mismatch", ReleaseUpdateArtifactVerificationRejectsManifestHashMismatch),
+    ("hardening workflow builds and uploads signed release update artifacts", HardeningWorkflowBuildsAndUploadsSignedReleaseUpdateArtifacts),
     ("published health verification accepts current output", PublishedHealthVerificationAcceptsCurrentOutput),
     ("secret scan accepts current repository", SecretScanAcceptsCurrentRepository),
     ("secret scan rejects tracked env secret", SecretScanRejectsTrackedEnvSecret),
@@ -544,46 +561,25 @@ static void SettingsJsonRejectsFutureSchemaVersion()
     AssertContains(exception.Message, "unsupported schema version 99");
 }
 
-static void AppSettingsLoadsEncryptedXpTrackingUrl()
+static void AppSettingsLoadsHostedEncryptedXpTrackingUrl()
 {
     using var directory = TemporaryDirectory.Create();
-    File.WriteAllText(
-        Path.Combine(directory.Path, "settings.json"),
-        """
-        {
-          "schema_version": 1,
-          "RPOL Site": "https://rpol.net/game.php?gi=80170",
-          "Game Intro": "https://rpol.net/gameinfo.php?gi=80170",
-          "The Cast": "https://rpol.net/gameinfo.php?action=cast&gi=80170",
-          "Obsidian Game Vault": "https://publish.obsidian.md/scarlethorizons"
-        }
-        """);
-
-    var localSettingsPath = Path.Combine(directory.Path, "settings.local.json");
-    LocalSettingsUtility.SaveEncryptedSettings(
-        localSettingsPath,
+    using var hostedSettingsDirectory = TemporaryDirectory.Create();
+    var hostedSettingsPath = Path.Combine(hostedSettingsDirectory.Path, "settings.local.json");
+    LocalSettingsUtility.SavePortableEncryptedSettings(
+        hostedSettingsPath,
         new Dictionary<string, string>
         {
             ["XP Tracking"] = "https://publish.obsidian.md/scarlethorizons/Intentional+Orphans/XP+Tracking"
         });
+    var hostedSettingsJson = File.ReadAllText(hostedSettingsPath);
 
-    var settings = AppSettingsUtility.LoadSettings(directory.Path);
-
-    AssertEqual(
-        "https://publish.obsidian.md/scarlethorizons/Intentional+Orphans/XP+Tracking",
-        settings["XP Tracking"],
-        "encrypted local settings should provide the XP Tracking URL");
-    AssertTrue(LocalSettingsUtility.IsEncryptedSettingsFile(localSettingsPath), "XP Tracking URL should be stored in encrypted local settings");
-}
-
-static void AppSettingsMigrateRpolCredentialsIntoCredentialManager()
-{
-    using var directory = TemporaryDirectory.Create();
     File.WriteAllText(
         Path.Combine(directory.Path, "settings.json"),
-        """
+        $$"""
         {
           "schema_version": 1,
+          "Hosted Local Settings": "https://bryanmiller.us/scarlethorizons/settings.local.json",
           "RPOL Site": "https://rpol.net/game.php?gi=80170",
           "Game Intro": "https://rpol.net/gameinfo.php?gi=80170",
           "The Cast": "https://rpol.net/gameinfo.php?action=cast&gi=80170",
@@ -591,29 +587,204 @@ static void AppSettingsMigrateRpolCredentialsIntoCredentialManager()
         }
         """);
 
-    var localSettingsPath = Path.Combine(directory.Path, "settings.local.json");
-    LocalSettingsUtility.SaveEncryptedSettings(
-        localSettingsPath,
+    using var httpClientScope = AppSettingsUtility.UseHttpClientFactoryForTests(() =>
+        NetworkRequestUtility.CreateHttpClient(new ScriptedHttpMessageHandler((request, _) =>
+        {
+            AssertEqual(
+                "https://bryanmiller.us/scarlethorizons/settings.local.json",
+                request.RequestUri?.AbsoluteUri ?? string.Empty,
+                "unexpected hosted local settings URL");
+            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent(hostedSettingsJson)
+            });
+        })));
+
+    Dictionary<string, string> settings = null!;
+    WithHostedSettingsIsolation(() =>
+        settings = new Dictionary<string, string>(AppSettingsUtility.LoadSettings(directory.Path), StringComparer.OrdinalIgnoreCase));
+
+    AssertEqual(
+        "https://publish.obsidian.md/scarlethorizons/Intentional+Orphans/XP+Tracking",
+        settings["XP Tracking"],
+        "hosted encrypted local settings should provide the XP Tracking URL");
+    AssertFalse(
+        File.Exists(Path.Combine(directory.Path, "settings.local.json")),
+        "hosted local settings should not be persisted into the runtime directory");
+}
+
+static void AppSettingsMigrateHostedRpolCredentialsIntoCredentialManager()
+{
+    using var directory = TemporaryDirectory.Create();
+    using var hostedSettingsDirectory = TemporaryDirectory.Create();
+    var hostedSettingsPath = Path.Combine(hostedSettingsDirectory.Path, "settings.local.json");
+    LocalSettingsUtility.SavePortableEncryptedSettings(
+        hostedSettingsPath,
         new Dictionary<string, string>
         {
             ["XP Tracking"] = "https://publish.obsidian.md/scarlethorizons/Intentional+Orphans/XP+Tracking",
             ["RPOL user name"] = "example-user",
             ["RPOL password"] = "example-password"
         });
+    var hostedSettingsJson = File.ReadAllText(hostedSettingsPath);
 
-    var settings = AppSettingsUtility.LoadSettings(directory.Path);
-    var sanitizedLocalSettings = LocalSettingsUtility.LoadSettingsWithoutMigration(localSettingsPath);
+    File.WriteAllText(
+        Path.Combine(directory.Path, "settings.json"),
+        """
+        {
+          "schema_version": 1,
+          "Hosted Local Settings": "https://bryanmiller.us/scarlethorizons/settings.local.json",
+          "RPOL Site": "https://rpol.net/game.php?gi=80170",
+          "Game Intro": "https://rpol.net/gameinfo.php?gi=80170",
+          "The Cast": "https://rpol.net/gameinfo.php?action=cast&gi=80170",
+          "Obsidian Game Vault": "https://publish.obsidian.md/scarlethorizons"
+        }
+        """);
+
+    using var httpClientScope = AppSettingsUtility.UseHttpClientFactoryForTests(() =>
+        NetworkRequestUtility.CreateHttpClient(new ScriptedHttpMessageHandler((request, _) =>
+        {
+            AssertEqual(
+                "https://bryanmiller.us/scarlethorizons/settings.local.json",
+                request.RequestUri?.AbsoluteUri ?? string.Empty,
+                "unexpected hosted local settings URL");
+            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent(hostedSettingsJson)
+            });
+        })));
+
+    Dictionary<string, string> settings = null!;
+    WithHostedSettingsIsolation(() =>
+        settings = new Dictionary<string, string>(AppSettingsUtility.LoadSettings(directory.Path), StringComparer.OrdinalIgnoreCase));
 
     AssertEqual("example-user", settings["RPOL user name"], "unexpected migrated RPOL user name");
     AssertEqual("example-password", settings["RPOL password"], "unexpected migrated RPOL password");
-    AssertFalse(sanitizedLocalSettings.ContainsKey("RPOL user name"), "local settings should no longer keep RPOL user name");
-    AssertFalse(sanitizedLocalSettings.ContainsKey("RPOL password"), "local settings should no longer keep RPOL password");
     AssertEqual(
         "https://publish.obsidian.md/scarlethorizons/Intentional+Orphans/XP+Tracking",
-        sanitizedLocalSettings["XP Tracking"],
-        "xp tracking should remain in local settings");
+        settings["XP Tracking"],
+        "xp tracking should remain available after hosted local settings load");
     AssertEqual("example-user", RuntimeSecretStoreUtility.GetRpolUserName()!, "credential manager should store RPOL user name");
     AssertEqual("example-password", RuntimeSecretStoreUtility.GetRpolPassword()!, "credential manager should store RPOL password");
+    AssertFalse(
+        File.Exists(Path.Combine(directory.Path, "settings.local.json")),
+        "hosted local settings should not be persisted after credential migration");
+}
+
+static void AppSettingsLoadsHostedEncryptedXpTrackingUrlFromFixtureServer()
+{
+    using var directory = TemporaryDirectory.Create();
+    using var hostedSettingsDirectory = TemporaryDirectory.Create();
+    var hostedSettingsPath = Path.Combine(hostedSettingsDirectory.Path, "settings.local.json");
+    LocalSettingsUtility.SavePortableEncryptedSettings(
+        hostedSettingsPath,
+        new Dictionary<string, string>
+        {
+            ["XP Tracking"] = "https://publish.obsidian.md/scarlethorizons/Intentional+Orphans/XP+Tracking"
+        });
+    var hostedSettingsJson = File.ReadAllText(hostedSettingsPath);
+
+    using var fixtureServer = new LoopbackHttpServer("/scarlethorizons/settings.local.json", hostedSettingsJson);
+
+    File.WriteAllText(
+        Path.Combine(directory.Path, "settings.json"),
+        $$"""
+        {
+          "schema_version": 1,
+          "Hosted Local Settings": "{{fixtureServer.Url}}",
+          "RPOL Site": "https://rpol.net/game.php?gi=80170",
+          "Game Intro": "https://rpol.net/gameinfo.php?gi=80170",
+          "The Cast": "https://rpol.net/gameinfo.php?action=cast&gi=80170",
+          "Obsidian Game Vault": "https://publish.obsidian.md/scarlethorizons"
+        }
+        """);
+
+    using var allowlistScope = NetworkUrlAllowlistUtility.UseValidationOverrideForTests((uri, purpose) =>
+    {
+        if (purpose == NetworkUrlPurpose.PlayerAssistantHostedSettings
+            && string.Equals(uri.AbsoluteUri, fixtureServer.Url, StringComparison.Ordinal))
+        {
+            return NetworkUrlAllowlistValidation.Allowed(uri);
+        }
+
+        return null;
+    });
+
+    Dictionary<string, string> settings = null!;
+    WithHostedSettingsIsolation(() =>
+        settings = new Dictionary<string, string>(AppSettingsUtility.LoadSettings(directory.Path), StringComparer.OrdinalIgnoreCase));
+
+    AssertEqual(
+        "https://publish.obsidian.md/scarlethorizons/Intentional+Orphans/XP+Tracking",
+        settings["XP Tracking"],
+        "fixture-hosted encrypted local settings should provide the XP Tracking URL");
+    AssertEqual(1, fixtureServer.RequestCount, "fixture server should receive exactly one hosted settings request");
+    AssertEqual("/scarlethorizons/settings.local.json", fixtureServer.LastRequestPath, "fixture server should receive the hosted settings path");
+    AssertFalse(
+        File.Exists(Path.Combine(directory.Path, "settings.local.json")),
+        "fixture-hosted local settings should not be persisted into the runtime directory");
+}
+
+static void AppSettingsHostedSettingsFailureLogsTamperedEnvelope()
+{
+    using var hostedSettingsDirectory = TemporaryDirectory.Create();
+    var hostedSettingsPath = Path.Combine(hostedSettingsDirectory.Path, "settings.local.json");
+    LocalSettingsUtility.SavePortableEncryptedSettings(
+        hostedSettingsPath,
+        new Dictionary<string, string>
+        {
+            ["XP Tracking"] = "https://publish.obsidian.md/scarlethorizons/Intentional+Orphans/XP+Tracking"
+        });
+    var tamperedJson = CorruptHostedSettingsPayload(File.ReadAllText(hostedSettingsPath));
+
+    using var fixtureServer = new LoopbackHttpServer("/scarlethorizons/settings.local.json", tamperedJson);
+    AssertHostedSettingsFailure(
+        fixtureServer.Url,
+        "authenticate or decrypt",
+        expectedRequestCount: 1,
+        expectedRequestPath: "/scarlethorizons/settings.local.json");
+}
+
+static void AppSettingsHostedSettingsFailureLogsPlaintextPayload()
+{
+    const string plaintextJson =
+        """
+        {
+          "XP Tracking": "https://publish.obsidian.md/scarlethorizons/Intentional+Orphans/XP+Tracking"
+        }
+        """;
+
+    using var fixtureServer = new LoopbackHttpServer("/scarlethorizons/settings.local.json", plaintextJson);
+    AssertHostedSettingsFailure(
+        fixtureServer.Url,
+        "authenticated encrypted envelope",
+        expectedRequestCount: 1,
+        expectedRequestPath: "/scarlethorizons/settings.local.json");
+}
+
+static void AppSettingsHostedSettingsFailureLogsOversizedPayload()
+{
+    var oversizedPayload = new string('A', checked((int)NetworkResponseContentLimit.JsonCache.MaxBytes + 1024));
+
+    using var fixtureServer = new LoopbackHttpServer("/scarlethorizons/settings.local.json", oversizedPayload);
+    AssertHostedSettingsFailure(
+        fixtureServer.Url,
+        "JSON cache response exceeded",
+        expectedRequestCount: 1,
+        expectedRequestPath: "/scarlethorizons/settings.local.json");
+}
+
+static void AppSettingsHostedSettingsFailureLogsUnreachableFixtureServer()
+{
+    string fixtureUrl;
+    using (var fixtureServer = new LoopbackHttpServer("/scarlethorizons/settings.local.json", "{}"))
+    {
+        fixtureUrl = fixtureServer.Url;
+    }
+
+    AssertHostedSettingsFailure(
+        fixtureUrl,
+        "The network request failed:");
 }
 
 static void XpPasswordStoreLoadsEncryptedSidecar()
@@ -1582,7 +1753,7 @@ static void StartupDependencyMatrixClassifiesTerminalNetworkFailure()
     var exception = AssertThrows<NetworkRequestException>(() =>
         NetworkRequestUtility.SendAsync(
             httpClient,
-            () => new HttpRequestMessage(HttpMethod.Get, "https://rpol.net/failure"),
+            () => new HttpRequestMessage(HttpMethod.Get, "https://rpol.net/game.php?gi=80170"),
             policy: new NetworkRequestPolicy(
                 TimeSpan.FromSeconds(1),
                 MaxAttempts: 1,
@@ -1636,6 +1807,47 @@ static void NetworkAllowlistRejectsCredentialedAndEscapedHosts()
     AssertFalse(credentialed.IsAllowed, "credentialed URLs should not be allowed");
     AssertContains(credentialed.RejectionReason ?? string.Empty, "credentials");
     AssertFalse(escapedHost.IsAllowed, "escaped host URLs should not be allowed");
+}
+
+static void NetworkAllowlistRejectsUnexpectedHostedSettingsPath()
+{
+    var allowed = NetworkUrlAllowlistUtility.Validate(
+        "https://bryanmiller.us/scarlethorizons/settings.local.json",
+        NetworkUrlPurpose.PlayerAssistantHostedSettings);
+    var rejected = NetworkUrlAllowlistUtility.Validate(
+        "https://bryanmiller.us/scarlethorizons/other-settings.json",
+        NetworkUrlPurpose.PlayerAssistantHostedSettings);
+
+    AssertTrue(allowed.IsAllowed, "expected the configured hosted settings path to remain allowed");
+    AssertFalse(rejected.IsAllowed, "unexpected hosted settings paths should be rejected");
+    AssertContains(rejected.RejectionReason ?? string.Empty, "settings.local.json");
+}
+
+static void NetworkAllowlistRejectsUnexpectedUpdatePath()
+{
+    var allowedManifest = NetworkUrlAllowlistUtility.Validate(
+        "https://bryanmiller.us/scarlethorizons/p-assist-updates.json",
+        NetworkUrlPurpose.PlayerAssistantUpdate);
+    var allowedArchive = NetworkUrlAllowlistUtility.Validate(
+        "https://bryanmiller.us/scarlethorizons/p-assist-0.9.1.zip",
+        NetworkUrlPurpose.PlayerAssistantUpdate);
+    var rejected = NetworkUrlAllowlistUtility.Validate(
+        "https://bryanmiller.us/private/p-assist-0.9.1.zip",
+        NetworkUrlPurpose.PlayerAssistantUpdate);
+
+    AssertTrue(allowedManifest.IsAllowed, "expected the signed update manifest path to remain allowed");
+    AssertTrue(allowedArchive.IsAllowed, "expected approved update archive paths to remain allowed");
+    AssertFalse(rejected.IsAllowed, "unexpected update paths should be rejected");
+    AssertContains(rejected.RejectionReason ?? string.Empty, "/scarlethorizons/");
+}
+
+static void NetworkAllowlistGenericPolicyRejectsUnrelatedUpdateHostPaths()
+{
+    var genericAllowed = NetworkUrlAllowlistUtility.Validate("https://bryanmiller.us/scarlethorizons/p-assist-0.9.1.exe");
+    var genericRejected = NetworkUrlAllowlistUtility.Validate("https://bryanmiller.us/random-note.txt");
+
+    AssertTrue(genericAllowed.IsAllowed, "generic allowlist should still permit approved update artifact paths");
+    AssertFalse(genericRejected.IsAllowed, "generic allowlist should reject unrelated paths on an otherwise approved host");
 }
 
 static void NetworkResponseLimitsDefineDefaults()
@@ -3731,6 +3943,98 @@ static void VerifiedUpdaterRejectsInstallerSignerMismatch()
     AssertContains(exception.Message, "thumbprint");
 }
 
+static void VerifiedInstallerLaunchReverifiesBeforeExecution()
+{
+    using var directory = TemporaryDirectory.Create();
+    var installerPath = Path.Combine(directory.Path, "p-assist-0.9.1.exe");
+    var installerBytes = System.Text.Encoding.UTF8.GetBytes("signed installer bytes");
+    File.WriteAllBytes(installerPath, installerBytes);
+
+    var signature = new AuthenticodeSignatureInfo("Valid", "CN=KyrathaSoft LLC", "ABC123");
+    var policy = new AuthenticodeSignaturePolicy("CN=KyrathaSoft", "ABC123");
+    var download = new VerifiedInstallerDownloadResult(
+        installerPath,
+        Convert.ToHexString(SHA256.HashData(installerBytes)),
+        signature,
+        ReusedExistingFile: false);
+
+    var ticket = VerifiedInstallerLaunchUtility.CreateLaunchTicket(
+        download,
+        policy,
+        _ => signature,
+        () => InstallerLaunchElevationContext.StandardUser);
+    var startInfo = VerifiedInstallerLaunchUtility.CreateStartInfo(
+        ticket,
+        _ => signature,
+        () => InstallerLaunchElevationContext.StandardUser);
+
+    AssertEqual(Path.GetFullPath(installerPath), startInfo.FileName, "unexpected verified installer launch path");
+    AssertTrue(startInfo.UseShellExecute, "verified installer launch should use shell execute");
+    AssertEqual("open", startInfo.Verb, "verified installer launch should preserve the shell open verb");
+    AssertEqual(directory.Path, startInfo.WorkingDirectory, "verified installer launch should use the installer directory as the working directory");
+}
+
+static void VerifiedInstallerLaunchRejectsSignerChangesAfterVerification()
+{
+    using var directory = TemporaryDirectory.Create();
+    var installerPath = Path.Combine(directory.Path, "p-assist-0.9.1.exe");
+    var installerBytes = System.Text.Encoding.UTF8.GetBytes("signed installer bytes");
+    File.WriteAllBytes(installerPath, installerBytes);
+
+    var initialSignature = new AuthenticodeSignatureInfo("Valid", "CN=KyrathaSoft LLC", "ABC123");
+    var changedSignature = new AuthenticodeSignatureInfo("Valid", "CN=KyrathaSoft LLC", "XYZ999");
+    var policy = new AuthenticodeSignaturePolicy("CN=KyrathaSoft", null);
+    var download = new VerifiedInstallerDownloadResult(
+        installerPath,
+        Convert.ToHexString(SHA256.HashData(installerBytes)),
+        initialSignature,
+        ReusedExistingFile: false);
+
+    var ticket = VerifiedInstallerLaunchUtility.CreateLaunchTicket(
+        download,
+        policy,
+        _ => initialSignature,
+        () => InstallerLaunchElevationContext.StandardUser);
+
+    var exception = AssertThrows<InvalidOperationException>(() =>
+        VerifiedInstallerLaunchUtility.CreateStartInfo(
+            ticket,
+            _ => changedSignature,
+            () => InstallerLaunchElevationContext.StandardUser));
+
+    AssertContains(exception.Message, "signer details changed");
+}
+
+static void VerifiedInstallerLaunchRejectsElevationChangesAfterVerification()
+{
+    using var directory = TemporaryDirectory.Create();
+    var installerPath = Path.Combine(directory.Path, "p-assist-0.9.1.exe");
+    var installerBytes = System.Text.Encoding.UTF8.GetBytes("signed installer bytes");
+    File.WriteAllBytes(installerPath, installerBytes);
+
+    var signature = new AuthenticodeSignatureInfo("Valid", "CN=KyrathaSoft LLC", "ABC123");
+    var policy = new AuthenticodeSignaturePolicy("CN=KyrathaSoft", "ABC123");
+    var download = new VerifiedInstallerDownloadResult(
+        installerPath,
+        Convert.ToHexString(SHA256.HashData(installerBytes)),
+        signature,
+        ReusedExistingFile: false);
+
+    var ticket = VerifiedInstallerLaunchUtility.CreateLaunchTicket(
+        download,
+        policy,
+        _ => signature,
+        () => InstallerLaunchElevationContext.StandardUser);
+
+    var exception = AssertThrows<InvalidOperationException>(() =>
+        VerifiedInstallerLaunchUtility.CreateStartInfo(
+            ticket,
+            _ => signature,
+            () => InstallerLaunchElevationContext.ElevatedAdministrator));
+
+    AssertContains(exception.Message, "elevation context changed");
+}
+
 static (string ManifestJson, string SignatureText, string PublicKeyPem) CreateSignedUpdateManifest(string manifestJson)
 {
     using var rsa = RSA.Create(2048);
@@ -4188,6 +4492,73 @@ static void LocalSettingsAreEncryptedOnLoad()
     AssertContains(encryptedJson, "\"install_path_bound\": true");
 }
 
+static void LocalSettingsEncryptCommandWritesPortableEnvelope()
+{
+    using var directory = TemporaryDirectory.Create();
+    var localSettingsPath = Path.Combine(directory.Path, "settings.local.json");
+    File.WriteAllText(
+        localSettingsPath,
+        """
+        {
+          "XP Tracking": "https://publish.obsidian.md/scarlethorizons/Intentional+Orphans/XP+Tracking"
+        }
+        """);
+
+    var programType = typeof(PlayerAssistant.Form1).Assembly.GetType("PlayerAssistant.Program")
+        ?? throw new InvalidOperationException("Unable to find PlayerAssistant.Program type.");
+    using var output = new StringWriter();
+    var handled = (bool)InvokeStaticMethod(
+        programType,
+        "TryRunLocalSettingsCommand",
+        new[] { "--encrypt-local-settings", localSettingsPath },
+        output)!;
+
+    AssertTrue(handled, "expected encrypt-local-settings command to be handled");
+    var encryptedJson = File.ReadAllText(localSettingsPath);
+    AssertContains(encryptedJson, "\"format\": \"app-protected-v2\"");
+    AssertFalse(
+        encryptedJson.Contains("Intentional+Orphans/XP+Tracking", StringComparison.Ordinal),
+        "portable encrypted settings should not keep the plaintext URL on disk");
+
+    var settings = LocalSettingsUtility.LoadPortableEncryptedSettings(localSettingsPath);
+    AssertEqual(
+        "https://publish.obsidian.md/scarlethorizons/Intentional+Orphans/XP+Tracking",
+        settings["XP Tracking"],
+        "unexpected XP Tracking value after portable encryption");
+}
+
+static void LocalSettingsDecryptCommandWritesPlaintextJson()
+{
+    using var directory = TemporaryDirectory.Create();
+    var localSettingsPath = Path.Combine(directory.Path, "settings.local.json");
+    var outputPath = Path.Combine(directory.Path, "settings.local.plaintext.json");
+    LocalSettingsUtility.SavePortableEncryptedSettings(
+        localSettingsPath,
+        new Dictionary<string, string>
+        {
+            ["XP Tracking"] = "https://publish.obsidian.md/scarlethorizons/Intentional+Orphans/XP+Tracking"
+        });
+
+    var programType = typeof(PlayerAssistant.Form1).Assembly.GetType("PlayerAssistant.Program")
+        ?? throw new InvalidOperationException("Unable to find PlayerAssistant.Program type.");
+    using var output = new StringWriter();
+    var handled = (bool)InvokeStaticMethod(
+        programType,
+        "TryRunLocalSettingsCommand",
+        new[] { "--decrypt-local-settings", localSettingsPath, outputPath },
+        output)!;
+
+    AssertTrue(handled, "expected decrypt-local-settings command to be handled");
+    var plaintextJson = File.ReadAllText(outputPath);
+    AssertContains(plaintextJson, "\"schema_version\": 1");
+    using var document = System.Text.Json.JsonDocument.Parse(plaintextJson);
+    AssertEqual(
+        "https://publish.obsidian.md/scarlethorizons/Intentional+Orphans/XP+Tracking",
+        document.RootElement.GetProperty("XP Tracking").GetString() ?? string.Empty,
+        "unexpected XP Tracking value in decrypted plaintext json");
+    AssertFalse(plaintextJson.Contains("\"payload\":", StringComparison.Ordinal), "decrypted output should not keep the encrypted payload envelope");
+}
+
 static void LocalSettingsRejectsFutureSchemaVersion()
 {
     using var directory = TemporaryDirectory.Create();
@@ -4476,60 +4847,42 @@ static void PublishVerificationRejectsFutureSettingsSchema()
     });
 }
 
-static void PublishVerificationRejectsFutureLocalSettingsSchema()
+static void PublishVerificationRejectsShippedLocalSettings()
 {
     WithCopiedPublishDirectory(directoryPath =>
     {
-        var localSettingsPath = Path.Combine(directoryPath, "settings.local.json");
-        var localSettingsJson = File.ReadAllText(localSettingsPath);
-        AssertContains(localSettingsJson, "\"schema_version\": 1");
-        File.WriteAllText(
-            localSettingsPath,
-            localSettingsJson.Replace("\"schema_version\": 1", "\"schema_version\": 99", StringComparison.Ordinal));
-
-        var output = RunPublishVerification(directoryPath);
-
-        AssertFalse(output.ExitCode == 0, "publish verification should fail when settings.local.json uses a future schema");
-        AssertContains(output.Output, "settings.local.json uses unsupported schema version 99");
-    });
-}
-
-static void PublishVerificationRejectsMissingXpTrackingLocalSetting()
-{
-    WithCopiedPublishDirectory(directoryPath =>
-    {
-        var sourceSettingsPath = Path.Combine(
-            Path.GetDirectoryName(directoryPath) ?? GetRepositoryRoot(),
-            $"{Path.GetFileName(directoryPath)}.source.settings.local.json");
-        LocalSettingsUtility.SaveEncryptedSettings(sourceSettingsPath, new Dictionary<string, string>());
-
-        var output = RunPublishVerification(directoryPath);
-
-        AssertFalse(output.ExitCode == 0, "publish verification should fail when settings.local.json omits XP Tracking");
-        AssertContains(output.Output, "Source settings.local.json is missing required URL setting 'XP Tracking'.");
-    });
-}
-
-static void PublishVerificationRejectsRpolCredentialsInLocalSettings()
-{
-    WithCopiedPublishDirectory(directoryPath =>
-    {
-        var sourceSettingsPath = Path.Combine(
-            Path.GetDirectoryName(directoryPath) ?? GetRepositoryRoot(),
-            $"{Path.GetFileName(directoryPath)}.source.settings.local.json");
         LocalSettingsUtility.SaveEncryptedSettings(
-            sourceSettingsPath,
+            Path.Combine(directoryPath, "settings.local.json"),
             new Dictionary<string, string>
             {
-                ["XP Tracking"] = "https://publish.obsidian.md/scarlethorizons/Intentional+Orphans/XP+Tracking",
-                ["RPOL user name"] = "example-user",
-                ["RPOL password"] = "example-password"
+                ["XP Tracking"] = "https://publish.obsidian.md/scarlethorizons/Intentional+Orphans/XP+Tracking"
             });
 
         var output = RunPublishVerification(directoryPath);
 
-        AssertFalse(output.ExitCode == 0, "publish verification should fail when settings.local.json contains RPOL credentials");
-        AssertContains(output.Output, "Windows Credential Manager");
+        AssertFalse(output.ExitCode == 0, "publish verification should fail when settings.local.json ships in published output");
+        AssertContains(output.Output, "must not ship settings.local.json");
+    });
+}
+
+static void PublishVerificationRejectsMissingHostedLocalSettingsUrl()
+{
+    WithCopiedPublishDirectory(directoryPath =>
+    {
+        var settingsPath = Path.Combine(directoryPath, "settings.json");
+        File.WriteAllText(
+            settingsPath,
+            File.ReadAllText(settingsPath).Replace(
+                """
+  "Hosted Local Settings": "https://bryanmiller.us/scarlethorizons/settings.local.json",
+""",
+                string.Empty,
+                StringComparison.Ordinal));
+
+        var output = RunPublishVerification(directoryPath);
+
+        AssertFalse(output.ExitCode == 0, "publish verification should fail when settings.json omits Hosted Local Settings");
+        AssertContains(output.Output, "Published settings.json is missing required URL setting 'Hosted Local Settings'.");
     });
 }
 
@@ -4782,6 +5135,172 @@ static void InstallerPackageVerificationRejectsUnsignedPayloadWhenSigningRequire
     AssertContains(output.Output, "Payload executable Authenticode signature status");
 }
 
+static void ReleaseUpdateArtifactVerificationAcceptsGeneratedSignedManifest()
+{
+    WithCopiedPublishDirectory(publishDirectory =>
+    {
+        using var outputDirectory = TemporaryDirectory.Create();
+        var installerPath = Path.Combine(outputDirectory.Path, "p-assist-0.9.1.exe");
+        File.Copy(Path.Combine(publishDirectory, "player-assistant.exe"), installerPath, overwrite: true);
+
+        var buildOutput = RunPowerShell(
+            [
+                "-NoProfile",
+                "-ExecutionPolicy",
+                "Bypass",
+                "-File",
+                Path.Combine(GetRepositoryRoot(), "build-release-update-artifacts.ps1"),
+                "-OutputDir",
+                outputDirectory.Path,
+                "-PublishDir",
+                publishDirectory,
+                "-InstallerPath",
+                installerPath,
+                "-GenerateEphemeralSigningKey"
+            ],
+            TimeSpan.FromSeconds(60));
+
+        AssertEqual(0, buildOutput.ExitCode, $"release update artifact build should pass. Output: {buildOutput.Output}");
+
+        var verifyOutput = RunPowerShell(
+            [
+                "-NoProfile",
+                "-ExecutionPolicy",
+                "Bypass",
+                "-File",
+                Path.Combine(GetRepositoryRoot(), "verify-release-update-artifacts.ps1"),
+                "-PublishArchivePath",
+                Path.Combine(outputDirectory.Path, "p-assist-0.9.1.zip"),
+                "-InstallerPath",
+                installerPath,
+                "-ManifestPath",
+                Path.Combine(outputDirectory.Path, "p-assist-updates.json"),
+                "-SignaturePath",
+                Path.Combine(outputDirectory.Path, "p-assist-updates.json.sig"),
+                "-PublicKeyXmlPath",
+                Path.Combine(outputDirectory.Path, "p-assist-updates.public-key.xml")
+            ],
+            TimeSpan.FromSeconds(60));
+
+        AssertEqual(0, verifyOutput.ExitCode, $"release update artifact verification should pass. Output: {verifyOutput.Output}");
+        AssertContains(verifyOutput.Output, "Release update artifacts verification passed:");
+    });
+}
+
+static void ReleaseUpdateArtifactVerificationRejectsManifestHashMismatch()
+{
+    WithCopiedPublishDirectory(publishDirectory =>
+    {
+        using var outputDirectory = TemporaryDirectory.Create();
+        var installerPath = Path.Combine(outputDirectory.Path, "p-assist-0.9.1.exe");
+        File.Copy(Path.Combine(publishDirectory, "player-assistant.exe"), installerPath, overwrite: true);
+
+        var buildOutput = RunPowerShell(
+            [
+                "-NoProfile",
+                "-ExecutionPolicy",
+                "Bypass",
+                "-File",
+                Path.Combine(GetRepositoryRoot(), "build-release-update-artifacts.ps1"),
+                "-OutputDir",
+                outputDirectory.Path,
+                "-PublishDir",
+                publishDirectory,
+                "-InstallerPath",
+                installerPath,
+                "-GenerateEphemeralSigningKey"
+            ],
+            TimeSpan.FromSeconds(60));
+
+        AssertEqual(0, buildOutput.ExitCode, $"release update artifact build should pass. Output: {buildOutput.Output}");
+
+        var manifestPath = Path.Combine(outputDirectory.Path, "p-assist-updates.json");
+        var manifest = File.ReadAllText(manifestPath);
+        var marker = @"""installer_sha256"": ";
+        var markerIndex = manifest.IndexOf(marker, StringComparison.Ordinal);
+        if (markerIndex < 0)
+        {
+            throw new InvalidOperationException("p-assist-updates.json did not contain installer_sha256.");
+        }
+
+        var valueStart = manifest.IndexOf('"', markerIndex + marker.Length);
+        var valueEnd = manifest.IndexOf('"', valueStart + 1);
+        var tamperedManifest = manifest[..(valueStart + 1)]
+            + new string('0', valueEnd - valueStart - 1)
+            + manifest[valueEnd..];
+        File.WriteAllText(manifestPath, tamperedManifest);
+
+        var verifyOutput = RunPowerShell(
+            [
+                "-NoProfile",
+                "-ExecutionPolicy",
+                "Bypass",
+                "-File",
+                Path.Combine(GetRepositoryRoot(), "verify-release-update-artifacts.ps1"),
+                "-PublishArchivePath",
+                Path.Combine(outputDirectory.Path, "p-assist-0.9.1.zip"),
+                "-InstallerPath",
+                installerPath,
+                "-ManifestPath",
+                manifestPath,
+                "-SignaturePath",
+                Path.Combine(outputDirectory.Path, "p-assist-updates.json.sig"),
+                "-PublicKeyXmlPath",
+                Path.Combine(outputDirectory.Path, "p-assist-updates.public-key.xml")
+            ],
+            TimeSpan.FromSeconds(60));
+
+        AssertFalse(verifyOutput.ExitCode == 0, "release update artifact verification should fail when the signed manifest hash is tampered");
+        AssertContains(verifyOutput.Output, "signature verification failed");
+    });
+}
+
+static void HardeningWorkflowBuildsAndUploadsSignedReleaseUpdateArtifacts()
+{
+    var workflowPath = Path.Combine(GetRepositoryRoot(), ".github", "workflows", "hardening.yml");
+    var builderPath = Path.Combine(GetRepositoryRoot(), "build-release-update-artifacts.ps1");
+    var verifierPath = Path.Combine(GetRepositoryRoot(), "verify-release-update-artifacts.ps1");
+    var publishScriptPath = Path.Combine(GetRepositoryRoot(), "publish-player-assistant.ps1");
+
+    AssertTrue(File.Exists(workflowPath), "hardening workflow should exist");
+    AssertTrue(File.Exists(builderPath), "release update artifact builder should exist");
+    AssertTrue(File.Exists(verifierPath), "release update artifact verifier should exist");
+    AssertTrue(File.Exists(publishScriptPath), "publish verification script should exist");
+
+    var workflow = File.ReadAllText(workflowPath);
+    AssertContains(workflow, "Build signed release update artifacts");
+    AssertContains(workflow, ".\\build-release-update-artifacts.ps1");
+    AssertContains(workflow, "Verify signed release update artifacts");
+    AssertContains(workflow, ".\\verify-release-update-artifacts.ps1");
+    AssertContains(workflow, "Upload release installer artifacts");
+    AssertContains(workflow, "p-assist-updates.json");
+    AssertContains(workflow, "p-assist-updates.json.sig");
+    AssertContains(workflow, "p-assist-updates.public-key.xml");
+    AssertContains(workflow, "p-assist-0.9.1.zip");
+    AssertContains(workflow, "p-assist-0.9.1.exe");
+    AssertContains(workflow, "Build Release test harness");
+    AssertContains(workflow, "Verify hosted settings fetch and decrypt path");
+    AssertContains(workflow, "app settings loads hosted encrypted xp tracking url from fixture server");
+    AssertContains(workflow, "Verify hosted settings negative paths");
+    AssertContains(workflow, "hosted settings failure");
+
+    var builder = File.ReadAllText(builderPath);
+    AssertContains(builder, "p-assist-$installerVersion.zip");
+    AssertContains(builder, "p-assist-updates.json");
+    AssertContains(builder, "GenerateEphemeralSigningKey");
+    AssertContains(builder, "installer_sha256");
+
+    var verifier = File.ReadAllText(verifierPath);
+    AssertContains(verifier, "Signed update manifest");
+    AssertContains(verifier, "p-assist-$installerVersion.zip");
+    AssertContains(verifier, "p-assist-$installerVersion.exe");
+    AssertContains(verifier, "Release update artifacts verification passed:");
+
+    var publishScript = File.ReadAllText(publishScriptPath);
+    AssertContains(publishScript, "build-release-update-artifacts.ps1");
+    AssertContains(publishScript, "verify-release-update-artifacts.ps1");
+}
+
 static void PublishedHealthVerificationAcceptsCurrentOutput()
 {
     var output = RunPublishedHealthVerification(GetCurrentPublishDirectory());
@@ -4879,7 +5398,6 @@ static void DiagnosticBundleRedactsSensitiveValues()
             "Release/release-provenance.json",
             "Release/release-runtime-inventory.json",
             "Release/settings.redacted.json",
-            "Release/settings.local.shape.json",
             "Release/startup-errors.log",
             "Release/startup-health.json",
             "Release/last-crash.json",
@@ -4887,7 +5405,6 @@ static void DiagnosticBundleRedactsSensitiveValues()
             "publish/release-provenance.json",
             "publish/release-runtime-inventory.json",
             "publish/settings.redacted.json",
-            "publish/settings.local.shape.json",
             "publish/startup-errors.log",
             "publish/startup-health.json",
             "publish/last-crash.json",
@@ -4912,14 +5429,6 @@ static void DiagnosticBundleRedactsSensitiveValues()
         AssertFalse(releaseLog.Contains("Bearer abc123", StringComparison.Ordinal), "diagnostic log should redact bearer tokens");
         AssertFalse(releaseLog.Contains("sessionid=abc123", StringComparison.Ordinal), "diagnostic log should redact cookie headers");
         AssertFalse(releaseLog.Contains("user:pass@", StringComparison.Ordinal), "diagnostic log should redact credentialed URLs");
-
-        var localSettingsShape = ReadZipEntryText(zipPath, "Release/settings.local.shape.json");
-        AssertContains(localSettingsShape, "\"schema_version\":  1");
-        AssertContains(localSettingsShape, "\"encrypted_format\":  \"app-protected-v3\"");
-        AssertContains(localSettingsShape, "\"has_payload\":  true");
-        AssertContains(localSettingsShape, "\"payload_length\":");
-        AssertContains(localSettingsShape, "\"install_path_bound\":  true");
-        AssertFalse(localSettingsShape.Contains("very-secret-payload", StringComparison.Ordinal), "diagnostic bundle should summarize encrypted payloads instead of copying them");
 
         var versionMetadata = ReadZipEntryText(zipPath, "version-metadata.json");
         AssertContains(versionMetadata, "\"authenticode_signature\":");
@@ -5024,20 +5533,21 @@ static void WithCopiedPublishDirectory(Action<string> action)
         GetRepositoryRoot(),
         "codex-scratch",
         $"publish-verification-{Guid.NewGuid():N}");
-    var sourceSettingsPath = Path.Combine(
-        Path.GetDirectoryName(directoryPath) ?? GetRepositoryRoot(),
-        $"{Path.GetFileName(directoryPath)}.source.settings.local.json");
 
     try
     {
-        var publishedSettingsPath = Path.Combine(directoryPath, "settings.local.json");
-        var fixtureSettings = CreateValidAppSettings(includeCredentials: false);
-
         CopyDirectory(GetCurrentPublishDirectory(), directoryPath);
         ClearReadOnlyAttributes(directoryPath);
+        File.Copy(
+            Path.Combine(GetRepositoryRoot(), "settings.json"),
+            Path.Combine(directoryPath, "settings.json"),
+            overwrite: true);
         WriteRequiredRuntimeSidecars(directoryPath);
-        LocalSettingsUtility.SaveEncryptedSettings(sourceSettingsPath, fixtureSettings);
-        LocalSettingsUtility.SaveEncryptedSettings(publishedSettingsPath, fixtureSettings);
+        var shippedLocalSettingsPath = Path.Combine(directoryPath, "settings.local.json");
+        if (File.Exists(shippedLocalSettingsPath))
+        {
+            File.Delete(shippedLocalSettingsPath);
+        }
         WriteReleaseRuntimeInventory(directoryPath);
         WriteReleaseManifest(directoryPath);
         WriteReleaseProvenance(directoryPath);
@@ -5049,11 +5559,6 @@ static void WithCopiedPublishDirectory(Action<string> action)
         {
             ClearReadOnlyAttributes(directoryPath);
             Directory.Delete(directoryPath, recursive: true);
-        }
-
-        if (File.Exists(sourceSettingsPath))
-        {
-            File.Delete(sourceSettingsPath);
         }
     }
 }
@@ -5073,7 +5578,7 @@ static void ClearReadOnlyAttributes(string directoryPath)
 
 static void SetRuntimeSidecarsReadOnly(string directoryPath)
 {
-    foreach (var fileName in new[] { "settings.local.json", XpPasswordStoreUtility.FileName })
+    foreach (var fileName in new[] { XpPasswordStoreUtility.FileName })
     {
         var path = Path.Combine(directoryPath, fileName);
         if (File.Exists(path))
@@ -5113,13 +5618,6 @@ static void WriteDiagnosticsRuntime(string directoryPath, bool includeSensitiveL
     Directory.CreateDirectory(directoryPath);
     File.WriteAllText(Path.Combine(directoryPath, "player-assistant.exe"), "fake executable");
     WriteSettingsJson(directoryPath, CreateValidAppSettings(includeCredentials: true));
-    LocalSettingsUtility.SaveEncryptedSettings(
-        Path.Combine(directoryPath, "settings.local.json"),
-        new Dictionary<string, string>
-        {
-            ["RPOL user name"] = "example-user",
-            ["RPOL password"] = "very-secret-payload"
-        });
     File.WriteAllText(
         Path.Combine(directoryPath, "startup-health.json"),
         """
@@ -5367,11 +5865,7 @@ static (int ExitCode, string Output) RunPublishVerification(string outputDirecto
             scriptPath,
             "-VerifyOnly",
             "-OutputDir",
-            outputDirectory,
-            "-SourceSettingsPath",
-            Path.Combine(
-                Path.GetDirectoryName(outputDirectory) ?? GetRepositoryRoot(),
-                $"{Path.GetFileName(outputDirectory)}.source.settings.local.json")
+            outputDirectory
     };
     arguments.AddRange(extraArguments);
 
@@ -5466,11 +5960,11 @@ static string ResolvePowerShellExecutable()
 
     foreach (var commandName in new[] { "pwsh.exe", "powershell.exe", "powershell" })
     {
-        var resolved = Environment.GetEnvironmentVariable("PATH")?
+        string? resolved = Environment.GetEnvironmentVariable("PATH")?
             .Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries)
             .Select(path => Path.Combine(path.Trim(), commandName))
             .FirstOrDefault(IsPowerShellExecutablePath);
-        if (!string.IsNullOrWhiteSpace(resolved))
+        if (resolved is not null)
         {
             return resolved;
         }
@@ -5479,7 +5973,7 @@ static string ResolvePowerShellExecutable()
     throw new InvalidOperationException("Unable to locate a PowerShell executable.");
 }
 
-static bool IsPowerShellExecutablePath(string? path)
+static bool IsPowerShellExecutablePath([NotNullWhen(true)] string? path)
 {
     if (string.IsNullOrWhiteSpace(path) || !File.Exists(path))
     {
@@ -5888,6 +6382,39 @@ static void WithPreservedStartupLog(Action action)
     }
 }
 
+static void WithPreservedFileAbsent(string filePath, Action action)
+{
+    var hadFile = File.Exists(filePath);
+    var originalContents = hadFile ? File.ReadAllBytes(filePath) : null;
+
+    try
+    {
+        if (hadFile)
+        {
+            File.Delete(filePath);
+        }
+
+        action();
+    }
+    finally
+    {
+        if (hadFile)
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(filePath)!);
+            File.WriteAllBytes(filePath, originalContents!);
+        }
+    }
+}
+
+static void WithHostedSettingsIsolation(Action action)
+{
+    WithPreservedFileAbsent(
+        RuntimePathUtility.GetApplicationPath("settings.local.json"),
+        () => WithPreservedFileAbsent(
+            RuntimePathUtility.GetUserDataPath("settings.local.json"),
+            action));
+}
+
 static void WithPreservedStartupHealth(Action action)
 {
     var startupHealthPath = GetStartupHealthPath();
@@ -6075,14 +6602,6 @@ static void WriteManifestedRuntime(string directoryPath)
     WriteRequiredRuntimeSidecars(directoryPath);
     File.WriteAllText(Path.Combine(directoryPath, "player-assistant.exe"), "synthetic executable");
     File.WriteAllText(Path.Combine(directoryPath, "settings.json"), "{}");
-    File.WriteAllText(
-        Path.Combine(directoryPath, "settings.local.json"),
-        """
-        {
-          "format": "app-protected-v2",
-          "payload": "synthetic"
-        }
-        """);
 
     Directory.CreateDirectory(Path.Combine(directoryPath, ".playwright", "node", "win32_x64"));
     Directory.CreateDirectory(Path.Combine(directoryPath, ".playwright", "package"));
@@ -6155,6 +6674,16 @@ static void WriteReleaseRuntimeInventory(string directoryPath)
 static void WriteReleaseManifest(string directoryPath)
 {
     var assembly = typeof(Program).Assembly;
+    var project = XDocument.Load(Path.Combine(GetRepositoryRoot(), "player-assistant.csproj"));
+    string GetProjectProperty(string name)
+    {
+        return project
+            .Descendants()
+            .FirstOrDefault(element => element.Name.LocalName == name)
+            ?.Value
+            ?? string.Empty;
+    }
+
     var fileVersion = assembly
         .GetCustomAttributes(typeof(AssemblyFileVersionAttribute), inherit: false)
         .OfType<AssemblyFileVersionAttribute>()
@@ -6175,7 +6704,7 @@ static void WriteReleaseManifest(string directoryPath)
     {
         schema_version = 1,
         generated_at = DateTimeOffset.UtcNow.ToString("O"),
-        app_version = assembly.GetName().Version?.ToString() ?? string.Empty,
+        app_version = GetProjectProperty("Version"),
         file_version = fileVersion,
         product_version = informationalVersion,
         hash_algorithm = "SHA256",
@@ -6247,7 +6776,6 @@ static string[] GetReleaseManifestRelativePaths()
     [
         "player-assistant.exe",
         "settings.json",
-        "settings.local.json",
         XpPasswordStoreUtility.FileName,
         "release-runtime-inventory.json",
         "keyword-index.json",
@@ -6409,6 +6937,94 @@ static string CreateV2LocalSettingsEnvelope(string userName, string password)
         """;
 }
 
+static void WriteSettingsJsonWithHostedLocalSettings(string directoryPath, string hostedLocalSettingsUrl)
+{
+    File.WriteAllText(
+        Path.Combine(directoryPath, "settings.json"),
+        $$"""
+        {
+          "schema_version": 1,
+          "Hosted Local Settings": "{{hostedLocalSettingsUrl}}",
+          "RPOL Site": "https://rpol.net/game.php?gi=80170",
+          "Game Intro": "https://rpol.net/gameinfo.php?gi=80170",
+          "The Cast": "https://rpol.net/gameinfo.php?action=cast&gi=80170",
+          "Obsidian Game Vault": "https://publish.obsidian.md/scarlethorizons"
+        }
+        """);
+}
+
+static void AssertHostedSettingsFailure(
+    string hostedLocalSettingsUrl,
+    string expectedLogFragment,
+    int? expectedRequestCount = null,
+    string? expectedRequestPath = null)
+{
+    using var directory = TemporaryDirectory.Create();
+    WriteSettingsJsonWithHostedLocalSettings(directory.Path, hostedLocalSettingsUrl);
+
+    using var allowlistScope = NetworkUrlAllowlistUtility.UseValidationOverrideForTests((uri, purpose) =>
+    {
+        if (purpose == NetworkUrlPurpose.PlayerAssistantHostedSettings
+            && string.Equals(uri.AbsoluteUri, hostedLocalSettingsUrl, StringComparison.Ordinal))
+        {
+            return NetworkUrlAllowlistValidation.Allowed(uri);
+        }
+
+        return null;
+    });
+
+    WithHostedSettingsIsolation(() =>
+        WithPreservedStartupLog(() =>
+        {
+            var exception = AssertThrows<InvalidOperationException>(() =>
+                AppSettingsUtility.LoadSettings(directory.Path));
+
+            AssertContains(exception.Message, "XP Tracking");
+            var startupLog = File.ReadAllText(GetStartupLogPath());
+            AssertContains(startupLog, "hosted local settings load");
+            AssertContains(startupLog, hostedLocalSettingsUrl);
+            AssertContains(startupLog, expectedLogFragment);
+            AssertFalse(
+                File.Exists(Path.Combine(directory.Path, "settings.local.json")),
+                "failed hosted local settings should not be persisted into the runtime directory");
+        }));
+
+    if (expectedRequestCount is not null || expectedRequestPath is not null)
+    {
+        var requestObservation = LoopbackHttpServer.GetObservation(hostedLocalSettingsUrl);
+        AssertTrue(requestObservation is not null, "expected fixture server observation for hosted settings request");
+
+        if (expectedRequestCount is not null)
+        {
+            AssertEqual(expectedRequestCount.Value, requestObservation!.RequestCount, "unexpected hosted settings fixture request count");
+        }
+
+        if (expectedRequestPath is not null)
+        {
+            AssertEqual(expectedRequestPath, requestObservation!.LastRequestPath, "unexpected hosted settings fixture request path");
+        }
+    }
+}
+
+static string CorruptHostedSettingsPayload(string hostedSettingsJson)
+{
+    using var document = System.Text.Json.JsonDocument.Parse(hostedSettingsJson);
+    var root = document.RootElement;
+    var payload = root.GetProperty("payload").GetString()
+        ?? throw new InvalidOperationException("Hosted settings payload was missing.");
+    var payloadBytes = Convert.FromBase64String(payload);
+    payloadBytes[^1] ^= 0x01;
+    var tamperedPayload = Convert.ToBase64String(payloadBytes);
+
+    return $$"""
+        {
+          "schema_version": {{root.GetProperty("schema_version").GetInt32()}},
+          "format": "{{root.GetProperty("format").GetString()}}",
+          "payload": "{{tamperedPayload}}"
+        }
+        """;
+}
+
 internal sealed class TemporaryDirectory : IDisposable
 {
     private TemporaryDirectory(string path)
@@ -6475,6 +7091,115 @@ internal sealed class ChunkedHttpContent : HttpContent
     {
         return new MemoryStream(_bytes, writable: false);
     }
+}
+
+internal sealed class LoopbackHttpServer : IDisposable
+{
+    private static readonly object ObservationSyncRoot = new();
+    private static readonly Dictionary<string, RequestObservation> Observations = new(StringComparer.Ordinal);
+    private readonly TcpListener _listener;
+    private readonly Task _serverTask;
+    private readonly string _expectedPath;
+    private readonly byte[] _responseBytes;
+    private readonly string _contentType;
+    private int _requestCount;
+
+    public LoopbackHttpServer(string expectedPath, string responseBody, string contentType = "application/json; charset=utf-8")
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(expectedPath);
+        ArgumentNullException.ThrowIfNull(responseBody);
+        ArgumentException.ThrowIfNullOrWhiteSpace(contentType);
+
+        _expectedPath = expectedPath;
+        _responseBytes = System.Text.Encoding.UTF8.GetBytes(responseBody);
+        _contentType = contentType;
+        _listener = new TcpListener(IPAddress.Loopback, 0);
+        _listener.Start();
+        var port = ((IPEndPoint)_listener.LocalEndpoint).Port;
+        Url = $"http://127.0.0.1:{port}{expectedPath}";
+        _serverTask = Task.Run(ServeSingleRequest);
+    }
+
+    public string Url { get; }
+
+    public int RequestCount => Volatile.Read(ref _requestCount);
+
+    public string LastRequestPath { get; private set; } = string.Empty;
+
+    public static RequestObservation? GetObservation(string url)
+    {
+        lock (ObservationSyncRoot)
+        {
+            return Observations.TryGetValue(url, out var observation)
+                ? observation
+                : null;
+        }
+    }
+
+    public void Dispose()
+    {
+        _listener.Stop();
+
+        try
+        {
+            _serverTask.GetAwaiter().GetResult();
+        }
+        catch (SocketException)
+        {
+        }
+        catch (ObjectDisposedException)
+        {
+        }
+        catch (InvalidOperationException)
+        {
+        }
+    }
+
+    private void ServeSingleRequest()
+    {
+        using var client = _listener.AcceptTcpClient();
+        using var stream = client.GetStream();
+        using var reader = new StreamReader(stream, System.Text.Encoding.ASCII, detectEncodingFromByteOrderMarks: false, bufferSize: 1024, leaveOpen: true);
+        var requestLine = reader.ReadLine() ?? throw new InvalidOperationException("Fixture server did not receive an HTTP request line.");
+        var requestParts = requestLine.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        LastRequestPath = requestParts.Length >= 2 ? requestParts[1] : string.Empty;
+
+        string? headerLine;
+        do
+        {
+            headerLine = reader.ReadLine();
+        }
+        while (!string.IsNullOrEmpty(headerLine));
+
+        Interlocked.Increment(ref _requestCount);
+        lock (ObservationSyncRoot)
+        {
+            Observations[Url] = new RequestObservation(RequestCount, LastRequestPath);
+        }
+
+        var statusLine = string.Equals(LastRequestPath, _expectedPath, StringComparison.Ordinal)
+            ? "HTTP/1.1 200 OK"
+            : "HTTP/1.1 404 Not Found";
+        var responseBody = string.Equals(LastRequestPath, _expectedPath, StringComparison.Ordinal)
+            ? _responseBytes
+            : System.Text.Encoding.UTF8.GetBytes("not found");
+        var responseHeaders = string.Join(
+            "\r\n",
+            [
+                statusLine,
+                $"Content-Type: {_contentType}",
+                $"Content-Length: {responseBody.Length}",
+                "Connection: close",
+                string.Empty,
+                string.Empty
+            ]);
+        var headerBytes = System.Text.Encoding.ASCII.GetBytes(responseHeaders);
+        stream.Write(headerBytes, 0, headerBytes.Length);
+        stream.Write(responseBody, 0, responseBody.Length);
+        stream.Flush();
+    }
+
+    internal sealed record RequestObservation(int RequestCount, string LastRequestPath);
 }
 
 internal sealed class InMemoryWindowsCredentialStoreBackend : IWindowsCredentialStoreBackend

@@ -7,8 +7,8 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
+$SettingsLocalFileName = 'settings.local.json'
 $RequiredSidecarFileNames = @(
-    'settings.local.json',
     'xp-passwords.json'
 )
 $AllowedEncryptedFormats = @(
@@ -159,8 +159,8 @@ function Assert-InstallerProtectsSidecars {
     foreach ($requiredText in @(
         'Protect-EncryptedSidecars',
         'Assert-ProtectedEncryptedSidecars',
-        'settings.local.json',
         'xp-passwords.json',
+        'settings.local.json',
         'icacls.exe',
         'S-1-5-32-545'
     )) {
@@ -177,6 +177,12 @@ foreach ($fileName in $RequiredSidecarFileNames) {
     $path = Join-Path $resolvedAppDir $fileName
     Assert-EncryptedSidecar -Path $path -FileName $fileName
     Assert-SidecarReadOnlyAttribute -Path $path -FileName $fileName
+}
+
+if ($RequireInstallerScriptProtection) {
+    $settingsLocalPath = Join-Path $resolvedAppDir $SettingsLocalFileName
+    Assert-EncryptedSidecar -Path $settingsLocalPath -FileName $SettingsLocalFileName
+    Assert-SidecarReadOnlyAttribute -Path $settingsLocalPath -FileName $SettingsLocalFileName
 }
 
 Assert-NoForbiddenRuntimeFiles -Directory $resolvedAppDir

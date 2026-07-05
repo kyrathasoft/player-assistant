@@ -140,6 +140,15 @@
   - [x] Support update-signing key rotation and explicit revocation.
   - [x] Fail closed if a manifest is signed by a retired key.
 - [x] Protect the anti-downgrade trusted-version floor and related updater state against tampering, not just corruption.
-- [ ] Re-verify the installer immediately before execution and refuse launch if path, signer, or elevation context changes after initial verification.
-- [ ] Produce and verify release installer artifacts in CI, including filename/version/signature/hash checks against the signed manifest.
-- [ ] Further minimize outbound network trust by centralizing per-purpose host/path allowlists and auditing every allowed endpoint.
+- [x] Re-verify the installer immediately before execution and refuse launch if path, signer, or elevation context changes after initial verification.
+- [x] Produce and verify release installer artifacts in CI, including filename/version/signature/hash checks against the signed manifest.
+- [x] Further minimize outbound network trust by centralizing per-purpose host/path allowlists and auditing every allowed endpoint.
+- [x] Add end-to-end CI verification that exercises the hosted settings.local.json fetch/decrypt path against a controlled fixture server.
+
+## New backlog
+
+- [x] Add negative-path CI coverage for hosted settings fetch/decrypt failures, including tampered envelopes, plaintext JSON, oversized payloads, and unreachable fixture-server responses.
+- [ ] Add signed metadata for hosted settings so the app verifies content identity and version, not just transport and URL allowlist membership.
+- [ ] Add runtime diagnostics for outbound allowlisted requests, recording per-purpose endpoint usage and failure counts without logging secret-bearing values.
+- [ ] Reduce plaintext secret lifetime in memory for decrypted hosted settings and RPOL credentials where practical.
+- [ ] Add a clean-machine installer smoke path in CI that verifies first launch, hosted settings download, credential migration, and updater preflight behavior after install.

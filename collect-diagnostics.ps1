@@ -18,7 +18,6 @@ $StartupLogFileName = 'startup-errors.log'
 $LastCrashFileName = 'last-crash.json'
 $StartupRemediationFileName = 'startup-remediation.txt'
 $SettingsFileName = 'settings.json'
-$SettingsLocalFileName = 'settings.local.json'
 $RuntimeInventoryFileName = 'release-runtime-inventory.json'
 $ReleaseProvenanceFileName = 'release-provenance.json'
 $ForbiddenFileNames = @(
@@ -284,6 +283,32 @@ function Redact-Object {
     return $Value
 }
 
+function Get-Sha256HashText {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Path
+    )
+
+    $getFileHashCommand = Get-Command Get-FileHash -ErrorAction SilentlyContinue
+    if ($getFileHashCommand) {
+        return (Get-FileHash -LiteralPath $Path -Algorithm SHA256).Hash
+    }
+
+    $stream = [System.IO.File]::OpenRead($Path)
+    try {
+        $sha256 = [System.Security.Cryptography.SHA256]::Create()
+        try {
+            return ([System.BitConverter]::ToString($sha256.ComputeHash($stream))).Replace('-', '')
+        }
+        finally {
+            $sha256.Dispose()
+        }
+    }
+    finally {
+        $stream.Dispose()
+    }
+}
+
 function Redact-Text {
     param(
         [AllowNull()]
@@ -376,7 +401,7 @@ function Write-LocalSettingsShape {
         exists = $true
         length = $item.Length
         last_write_time_utc = $item.LastWriteTimeUtc.ToString('O')
-        sha256 = (Get-FileHash -LiteralPath $SourcePath -Algorithm SHA256).Hash
+        sha256 = Get-Sha256HashText -Path $SourcePath
     }
 
     try {
@@ -434,7 +459,7 @@ function Get-FileSummary {
         exists = $true
         length = $item.Length
         last_write_time_utc = $item.LastWriteTimeUtc.ToString('O')
-        sha256 = (Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash
+        sha256 = Get-Sha256HashText -Path $path
     }
 }
 
@@ -458,22 +483,41 @@ function Get-ExecutableVersionSummary {
     Write-StepLog "Collecting executable version summary for $Label ($Path)"
     $item = Get-Item -LiteralPath $Path
     $version = [System.Diagnostics.FileVersionInfo]::GetVersionInfo($Path)
-    $signature = Invoke-ScriptBlockWithTimeout `
-        -ScriptBlock {
-            param($ExecutablePath)
-            Get-AuthenticodeSignature -LiteralPath $ExecutablePath |
-                Select-Object Status, SignerCertificate, TimeStamperCertificate
-        } `
-        -ArgumentList @($Path) `
-        -TimeoutSeconds $ChildCommandTimeoutSeconds `
-        -Description "Get-AuthenticodeSignature for $Path"
+    try {
+        $signature = Invoke-ScriptBlockWithTimeout `
+            -ScriptBlock {
+                param($ExecutablePath)
+                $command = Get-Command Get-AuthenticodeSignature -ErrorAction SilentlyContinue
+                if ($null -eq $command) {
+                    return [pscustomobject]@{
+                        Status = 'Unavailable'
+                        SignerCertificate = $null
+                        TimeStamperCertificate = $null
+                    }
+                }
+
+                Get-AuthenticodeSignature -LiteralPath $ExecutablePath |
+                    Select-Object Status, SignerCertificate, TimeStamperCertificate
+            } `
+            -ArgumentList @($Path) `
+            -TimeoutSeconds $ChildCommandTimeoutSeconds `
+            -Description "Get-AuthenticodeSignature for $Path"
+    }
+    catch {
+        $signature = [pscustomobject]@{
+            Status = 'Unavailable'
+            SignerCertificate = $null
+            TimeStamperCertificate = $null
+        }
+    }
+
     return [pscustomobject]@{
         label = $Label
         path = $Path
         exists = $true
         length = $item.Length
         last_write_time_utc = $item.LastWriteTimeUtc.ToString('O')
-        sha256 = (Get-FileHash -LiteralPath $Path -Algorithm SHA256).Hash
+        sha256 = Get-Sha256HashText -Path $Path
         file_version = $version.FileVersion
         product_version = $version.ProductVersion
         product_name = $version.ProductName
@@ -709,8 +753,6 @@ try {
     Write-StepLog 'Writing redacted settings files'
     Write-RedactedJsonCopy -SourcePath (Join-Path $resolvedReleaseDir $SettingsFileName) -DestinationPath (Join-Path $stagingDirectory 'Release\settings.redacted.json')
     Write-RedactedJsonCopy -SourcePath (Join-Path $resolvedPublishDir $SettingsFileName) -DestinationPath (Join-Path $stagingDirectory 'publish\settings.redacted.json')
-    Write-LocalSettingsShape -SourcePath (Join-Path $resolvedReleaseDir $SettingsLocalFileName) -DestinationPath (Join-Path $stagingDirectory 'Release\settings.local.shape.json')
-    Write-LocalSettingsShape -SourcePath (Join-Path $resolvedPublishDir $SettingsLocalFileName) -DestinationPath (Join-Path $stagingDirectory 'publish\settings.local.shape.json')
     Write-StepLog 'Writing runtime inventory and provenance copies'
     Write-RedactedJsonCopy -SourcePath (Join-Path $resolvedReleaseDir $RuntimeInventoryFileName) -DestinationPath (Join-Path $stagingDirectory 'Release\release-runtime-inventory.json')
     Write-RedactedJsonCopy -SourcePath (Join-Path $resolvedPublishDir $RuntimeInventoryFileName) -DestinationPath (Join-Path $stagingDirectory 'publish\release-runtime-inventory.json')

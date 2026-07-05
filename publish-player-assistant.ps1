@@ -1,7 +1,6 @@
 param(
     [string]$OutputDir = (Join-Path $PSScriptRoot 'Release\publish'),
     [switch]$VerifyOnly,
-    [string]$SourceSettingsPath = (Join-Path $PSScriptRoot 'settings.local.json'),
     [string]$ExpectedSignerSubject = $env:PLAYER_ASSISTANT_RELEASE_SIGNER_SUBJECT,
     [string]$ExpectedSignerThumbprint = $env:PLAYER_ASSISTANT_RELEASE_SIGNER_THUMBPRINT,
     [switch]$RequireCodeSigning
@@ -41,6 +40,8 @@ $ReleaseScriptFileNames = @(
     'diagnose-player-assistant-locks.ps1',
     'build-installer.ps1',
     'verify-installer-package.ps1',
+    'build-release-update-artifacts.ps1',
+    'verify-release-update-artifacts.ps1',
     'Installer\player-assistant.iss',
     'Installer\install-player-assistant.ps1',
     'Installer\install-player-assistant.cmd'
@@ -73,6 +74,7 @@ $IgnoredKeywordTermsSourceDirectories = @(
     'Release'
 )
 $RequiredSettingsUrlKeys = @(
+    'Hosted Local Settings',
     'RPOL Site',
     'Game Intro',
     'The Cast',
@@ -223,7 +225,7 @@ $signature = Get-AuthenticodeSignature -LiteralPath $request.Path
 function Protect-RuntimeSidecarFiles {
     param([Parameter(Mandatory = $true)][string]$Directory)
 
-    foreach ($fileName in @($SettingsLocalFileName, $XpPasswordFileName)) {
+    foreach ($fileName in @($XpPasswordFileName)) {
         $path = Join-Path $Directory $fileName
         Assert-RequiredFile -Path $path -Description "published runtime sidecar $fileName"
         Set-ItemProperty -LiteralPath $path -Name IsReadOnly -Value $true
@@ -1110,7 +1112,6 @@ function Assert-PublishInputs {
     Assert-RequiredFile -Path (Join-Path $PSScriptRoot "Release\$KeywordTermsFileName") -Description 'keyword terms file'
     Assert-RequiredFile -Path (Join-Path $PSScriptRoot "Release\$SitemapFileName") -Description 'Release sitemap'
     Assert-RequiredFile -Path (Join-Path $PSScriptRoot "Release\$SitemapKeywordUrlsFileName") -Description 'Release sitemap keyword URL library'
-    Assert-RequiredFile -Path (Join-Path $PSScriptRoot $SettingsLocalFileName) -Description $SettingsLocalFileName
     Assert-RequiredFile -Path (Join-Path $PSScriptRoot $XpPasswordFileName) -Description $XpPasswordFileName
 }
 
@@ -1537,7 +1538,6 @@ function Get-ReleaseManifestFileList {
     return @(
         'player-assistant.exe',
         'settings.json',
-        $SettingsLocalFileName,
         $XpPasswordFileName,
         $RuntimeInventoryFileName,
         $KeywordIndexFileName,
@@ -1616,13 +1616,8 @@ function Assert-ReleaseIntegrityManifest {
 function Assert-PublishOutput {
     param(
         [Parameter(Mandatory = $true)]
-        [string]$Directory,
-
-        [Parameter(Mandatory = $true)]
-        [string]$SourceSettingsPath
+        [string]$Directory
     )
-
-    $settingsPath = Join-Path $Directory $SettingsLocalFileName
 
     Assert-PublishedExecutableVersion -Path (Join-Path $Directory 'player-assistant.exe')
     Assert-PublishedSettingsJson -Path (Join-Path $Directory 'settings.json')
@@ -1631,7 +1626,9 @@ function Assert-PublishOutput {
     Assert-PublishedSitemap -Path (Join-Path $Directory $SitemapFileName)
     [void](Read-JsonFile -Path (Join-Path $Directory $SitemapKeywordUrlsFileName) -Description 'published sitemap keyword URL library')
     Assert-PublishedPlaywrightRuntime -Directory (Join-Path $Directory '.playwright')
-    Assert-EncryptedLocalSettings -SourcePath $SourceSettingsPath -PublishedPath $settingsPath
+    if (Test-Path -LiteralPath (Join-Path $Directory $SettingsLocalFileName) -PathType Leaf) {
+        throw "Published output must not ship $SettingsLocalFileName. Hosted local settings must be downloaded at runtime instead."
+    }
     Assert-PublishedXpPasswordSidecar -Path (Join-Path $Directory $XpPasswordFileName)
     Assert-PublishedRuntimeInventory -Directory $Directory
     Assert-NoSensitiveFiles -Directory $Directory
@@ -1665,7 +1662,7 @@ Assert-PathInsideRepo -Path $resolvedOutputDir -Description 'publish output dire
 
 if ($VerifyOnly) {
     Assert-PublishInputs
-    Assert-PublishOutput -Directory $resolvedOutputDir -SourceSettingsPath $SourceSettingsPath
+    Assert-PublishOutput -Directory $resolvedOutputDir
     Write-Output "Publish verification passed: $resolvedOutputDir"
     return
 }
@@ -1710,11 +1707,10 @@ Copy-Item -LiteralPath (Join-Path $PSScriptRoot "Release\$KeywordTermsFileName")
 Copy-Item -LiteralPath (Join-Path $PSScriptRoot "Release\$SitemapFileName") -Destination (Join-Path $resolvedOutputDir $SitemapFileName) -Force
 Copy-Item -LiteralPath (Join-Path $PSScriptRoot "Release\$SitemapKeywordUrlsFileName") -Destination (Join-Path $resolvedOutputDir $SitemapKeywordUrlsFileName) -Force
 Copy-Item -LiteralPath (Join-Path $PSScriptRoot $XpPasswordFileName) -Destination (Join-Path $resolvedOutputDir $XpPasswordFileName) -Force
-Write-AppEncryptedLocalSettings -SourcePath $SourceSettingsPath -DestinationPath (Join-Path $resolvedOutputDir $SettingsLocalFileName)
 Protect-RuntimeSidecarFiles -Directory $resolvedOutputDir
 Write-ReleaseRuntimeInventory -Directory $resolvedOutputDir
 Write-ReleaseIntegrityManifest -Directory $resolvedOutputDir
 Write-ReleaseProvenance -Directory $resolvedOutputDir
 
-Assert-PublishOutput -Directory $resolvedOutputDir -SourceSettingsPath $SourceSettingsPath
+Assert-PublishOutput -Directory $resolvedOutputDir
 Write-Output "Publish verified: $resolvedOutputDir"

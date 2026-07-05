@@ -82,6 +82,7 @@ namespace PlayerAssistant
             using var response = await NetworkRequestUtility.SendAsync(
                 HttpClient,
                 () => new HttpRequestMessage(HttpMethod.Get, cacheUrl),
+                purpose: NetworkUrlPurpose.ObsidianPublish,
                 cancellationToken: cancellationToken);
             response.EnsureSuccessStatusCode();
 

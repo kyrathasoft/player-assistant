@@ -7,6 +7,7 @@ param(
 $ErrorActionPreference = 'Stop'
 
 $ExecutableFileName = 'player-assistant.exe'
+$LocalSettingsFileName = 'settings.local.json'
 $DiagnosticsToRestore = @(
     'startup-errors.log',
     'startup-remediation.txt'
@@ -194,6 +195,54 @@ function Restore-Diagnostics {
     }
 }
 
+function Backup-LocalSettingsSidecar {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$PublishDirectory,
+
+        [Parameter(Mandatory = $true)]
+        [string]$BackupDirectory
+    )
+
+    $publishLocalSettingsPath = Join-Path $PublishDirectory $LocalSettingsFileName
+    $repoLocalSettingsPath = Join-Path $PSScriptRoot $LocalSettingsFileName
+    $backupPath = Join-Path $BackupDirectory $LocalSettingsFileName
+    $state = [pscustomobject]@{
+        PublishPath = $publishLocalSettingsPath
+        BackupPath = $backupPath
+        HadOriginal = $false
+        InjectedFromRepo = $false
+    }
+
+    if (Test-Path -LiteralPath $publishLocalSettingsPath -PathType Leaf) {
+        Copy-Item -LiteralPath $publishLocalSettingsPath -Destination $backupPath -Force
+        Remove-Item -LiteralPath $publishLocalSettingsPath -Force
+        $state.HadOriginal = $true
+    }
+
+    if (Test-Path -LiteralPath $repoLocalSettingsPath -PathType Leaf) {
+        Copy-Item -LiteralPath $repoLocalSettingsPath -Destination $publishLocalSettingsPath -Force
+        $state.InjectedFromRepo = $true
+    }
+
+    return $state
+}
+
+function Restore-LocalSettingsSidecar {
+    param(
+        [Parameter(Mandatory = $true)]
+        [object]$State
+    )
+
+    if (Test-Path -LiteralPath $State.PublishPath -PathType Leaf) {
+        Remove-Item -LiteralPath $State.PublishPath -Force
+    }
+
+    if ($State.HadOriginal -and (Test-Path -LiteralPath $State.BackupPath -PathType Leaf)) {
+        Copy-Item -LiteralPath $State.BackupPath -Destination $State.PublishPath -Force
+    }
+}
+
 $resolvedPublishDir = Resolve-FullPath $PublishDir
 Assert-PathInsideRepo -Path $resolvedPublishDir -Description 'publish directory'
 
@@ -202,16 +251,22 @@ Assert-RequiredFile -Path $exePath -Description 'published player-assistant.exe'
 
 $backupDirectory = Join-Path $PSScriptRoot "codex-scratch\published-health-backup-$([Guid]::NewGuid().ToString('N'))"
 $backedUpDiagnostics = [string[]]@()
+$localSettingsState = $null
 
 try {
     New-Item -ItemType Directory -Force -Path $backupDirectory | Out-Null
     $backedUpDiagnostics = Backup-Diagnostics -Directory $resolvedPublishDir -BackupDirectory $backupDirectory
+    $localSettingsState = Backup-LocalSettingsSidecar -PublishDirectory $resolvedPublishDir -BackupDirectory $backupDirectory
 
     $result = Invoke-HealthCommand -ExecutablePath $exePath -WorkingDirectory $resolvedPublishDir -TimeoutSeconds $TimeoutSeconds
     $status = Assert-HealthOutput -Result $result
 }
 finally {
     if (Test-Path -LiteralPath $backupDirectory) {
+        if ($null -ne $localSettingsState) {
+            Restore-LocalSettingsSidecar -State $localSettingsState
+        }
+
         Restore-Diagnostics -Directory $resolvedPublishDir -BackupDirectory $backupDirectory -BackedUpPaths ([string[]]$backedUpDiagnostics)
         Remove-Item -LiteralPath $backupDirectory -Recurse -Force
     }

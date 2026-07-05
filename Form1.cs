@@ -1124,6 +1124,7 @@ namespace PlayerAssistant
 
                 SetStatusBarMessage($"Downloading verified installer: {update.VersionText}...");
                 var installer = await VerifiedInstallerUpdateUtility.DownloadVerifiedInstallerAsync(httpClient, update);
+                var installerLaunchTicket = VerifiedInstallerLaunchUtility.CreateLaunchTicket(installer);
                 var launchInstallerResult = MessageBox.Show(
                     this,
                     $"Player Assistant {update.VersionText} was downloaded and verified.{Environment.NewLine}{Environment.NewLine}Installer: {installer.InstallerPath}{Environment.NewLine}{Environment.NewLine}Run the installer now?",
@@ -1136,10 +1137,7 @@ namespace PlayerAssistant
                     return;
                 }
 
-                Process.Start(new ProcessStartInfo(installer.InstallerPath)
-                {
-                    UseShellExecute = true
-                });
+                Process.Start(VerifiedInstallerLaunchUtility.CreateStartInfo(installerLaunchTicket));
                 SetStatusBarMessage($"Launching verified installer: {update.VersionText}.");
             }
             catch (Exception ex)

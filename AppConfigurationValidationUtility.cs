@@ -63,6 +63,7 @@ namespace PlayerAssistant
         private const string RpolSiteSettingsKey = "RPOL Site";
         private const string RpolUserNameSettingsKey = "RPOL user name";
         private const string RpolPasswordSettingsKey = "RPOL password";
+        private const string HostedLocalSettingsSettingsKey = "Hosted Local Settings";
         private const string GameIntroSettingsKey = "Game Intro";
         private const string TheCastSettingsKey = "The Cast";
         private const string ObsidianGameVaultSettingsKey = "Obsidian Game Vault";
@@ -84,6 +85,7 @@ namespace PlayerAssistant
             var settings = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
             {
                 [RpolSiteSettingsKey] = AppSettingsUtility.GameForumUrl,
+                [HostedLocalSettingsSettingsKey] = AppSettingsUtility.HostedLocalSettingsUrl,
                 [GameIntroSettingsKey] = AppSettingsUtility.GameIntroUrl,
                 [TheCastSettingsKey] = AppSettingsUtility.TheCastUrl,
                 [ObsidianGameVaultSettingsKey] = AppSettingsUtility.ObsidianGameVaultUrl,
@@ -142,6 +144,7 @@ namespace PlayerAssistant
 
             var issues = new List<AppConfigurationIssue>();
 
+            ValidateOptionalHttpUrlSetting(settings, HostedLocalSettingsSettingsKey, NetworkUrlPurpose.PlayerAssistantHostedSettings, issues);
             ValidateHttpUrlSetting(settings, RpolSiteSettingsKey, NetworkUrlPurpose.Rpol, issues);
             ValidateHttpUrlSetting(settings, GameIntroSettingsKey, NetworkUrlPurpose.Rpol, issues);
             ValidateHttpUrlSetting(settings, TheCastSettingsKey, NetworkUrlPurpose.Rpol, issues);
@@ -178,6 +181,28 @@ namespace PlayerAssistant
                     AppConfigurationIssueSeverity.Error,
                     $"{settingsKey} is not on the allowed network host list: {validation.RejectionReason}",
                     $"Edit {GetSettingsRepairFileName(settingsKey)} and replace '{settingsKey}' with the expected RPOL or Obsidian Publish URL."));
+            }
+        }
+
+        private static void ValidateOptionalHttpUrlSetting(
+            IReadOnlyDictionary<string, string> settings,
+            string settingsKey,
+            NetworkUrlPurpose purpose,
+            List<AppConfigurationIssue> issues)
+        {
+            if (!settings.TryGetValue(settingsKey, out var value)
+                || string.IsNullOrWhiteSpace(value))
+            {
+                return;
+            }
+
+            var validation = NetworkUrlAllowlistUtility.Validate(value, purpose);
+            if (!validation.IsAllowed)
+            {
+                issues.Add(new AppConfigurationIssue(
+                    AppConfigurationIssueSeverity.Error,
+                    $"{settingsKey} is not on the allowed network host list: {validation.RejectionReason}",
+                    $"Edit settings.json and replace '{settingsKey}' with the expected hosted Player Assistant settings URL."));
             }
         }
 

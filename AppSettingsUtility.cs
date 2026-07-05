@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Net.Http;
 
 namespace PlayerAssistant
 {
@@ -6,6 +7,7 @@ namespace PlayerAssistant
     {
         private const string SettingsFileName = "settings.json";
         private const string LocalSettingsFileName = "settings.local.json";
+        private const string HostedLocalSettingsSettingsKey = "Hosted Local Settings";
         private const string RpolSiteSettingsKey = "RPOL Site";
         private const string GameIntroSettingsKey = "Game Intro";
         private const string TheCastSettingsKey = "The Cast";
@@ -13,12 +15,19 @@ namespace PlayerAssistant
         private const string XpTrackingSettingsKey = "XP Tracking";
         private const string SchemaVersionSettingsKey = "schema_version";
         private const int CurrentSettingsSchemaVersion = 1;
+        private static readonly NetworkRequestPolicy HostedLocalSettingsRequestPolicy = new(
+            TimeSpan.FromSeconds(5),
+            MaxAttempts: 1,
+            TimeSpan.Zero);
         private static readonly Lazy<IReadOnlyDictionary<string, string>> Settings = new(LoadSettings);
+        private static Func<HttpClient>? HttpClientFactoryOverride;
+        private static Func<string, NetworkUrlAllowlistValidation>? HostedLocalSettingsValidationOverride;
 
         public const string RpolUserNameSettingsKey = "RPOL user name";
         public const string RpolPasswordSettingsKey = "RPOL password";
 
         public static string GameForumUrl => Settings.Value[RpolSiteSettingsKey];
+        public static string HostedLocalSettingsUrl => Settings.Value[HostedLocalSettingsSettingsKey];
         public static string? RpolUserName => RuntimeSecretStoreUtility.GetRpolUserName() ?? GetOptionalSetting(RpolUserNameSettingsKey);
         public static string? RpolPassword => RuntimeSecretStoreUtility.GetRpolPassword() ?? GetOptionalSetting(RpolPasswordSettingsKey);
         public static string GameIntroUrl => Settings.Value[GameIntroSettingsKey];
@@ -98,6 +107,9 @@ namespace PlayerAssistant
                 }
             }
 
+            MergeHostedLocalSettings(settings);
+
+            ValidateHostedLocalSettingsSetting(settings);
             ValidateHttpUrlSetting(settings, RpolSiteSettingsKey, NetworkUrlPurpose.Rpol);
             ValidateHttpUrlSetting(settings, GameIntroSettingsKey, NetworkUrlPurpose.Rpol);
             ValidateHttpUrlSetting(settings, TheCastSettingsKey, NetworkUrlPurpose.Rpol);
@@ -121,6 +133,81 @@ namespace PlayerAssistant
             }
 
             return RuntimePathUtility.ResolveUserDataFileForRead(LocalSettingsFileName);
+        }
+
+        private static void MergeHostedLocalSettings(Dictionary<string, string> settings)
+        {
+            if (!settings.TryGetValue(HostedLocalSettingsSettingsKey, out var hostedLocalSettingsUrl)
+                || string.IsNullOrWhiteSpace(hostedLocalSettingsUrl))
+            {
+                return;
+            }
+
+            try
+            {
+                var hostedLocalSettings = LoadHostedLocalSettings(hostedLocalSettingsUrl);
+
+                try
+                {
+                    _ = RuntimeSecretStoreUtility.TryMigrateRpolSecretsFromSettings(hostedLocalSettings);
+                }
+                catch (Exception ex) when (IsRecoverableLocalSettingsException(ex))
+                {
+                    StartupLoggingUtility.Append(
+                        "hosted local settings secret-store migration",
+                        new InvalidOperationException(
+                            $"Unable to migrate RPOL credentials from hosted local settings '{hostedLocalSettingsUrl}' into Windows Credential Manager. Continuing with hosted values for this run.",
+                            ex));
+                }
+
+                foreach (var pair in hostedLocalSettings)
+                {
+                    settings[pair.Key] = pair.Value;
+                }
+
+                if (RuntimeSecretStoreUtility.GetRpolUserName() is { Length: > 0 } storedUserName)
+                {
+                    settings[RpolUserNameSettingsKey] = storedUserName;
+                }
+
+                if (RuntimeSecretStoreUtility.GetRpolPassword() is { Length: > 0 } storedPassword)
+                {
+                    settings[RpolPasswordSettingsKey] = storedPassword;
+                }
+            }
+            catch (Exception ex) when (IsRecoverableHostedLocalSettingsException(ex))
+            {
+                StartupLoggingUtility.Append(
+                    "hosted local settings load",
+                    new InvalidOperationException(
+                        $"Unable to load hosted local settings from '{hostedLocalSettingsUrl}'. Continuing without hosted local settings for this run.",
+                        ex));
+            }
+        }
+
+        private static Dictionary<string, string> LoadHostedLocalSettings(string hostedLocalSettingsUrl)
+        {
+            var validation = ValidateHostedLocalSettingsUrl(hostedLocalSettingsUrl);
+            if (!validation.IsAllowed || validation.Uri is null)
+            {
+                throw new InvalidOperationException(
+                    $"Hosted local settings URL is not allowed: {validation.RejectionReason}");
+            }
+
+            using var httpClient = CreateHttpClient();
+            using var response = NetworkRequestUtility.Send(
+                httpClient,
+                () => new HttpRequestMessage(HttpMethod.Get, validation.Uri),
+                HttpCompletionOption.ResponseHeadersRead,
+                HostedLocalSettingsRequestPolicy,
+                purpose: NetworkUrlPurpose.PlayerAssistantHostedSettings);
+            response.EnsureSuccessStatusCode();
+            var fileContents = NetworkRequestUtility.ReadStringAsync(
+                response.Content,
+                NetworkResponseContentLimit.JsonCache).GetAwaiter().GetResult();
+            return LocalSettingsUtility.LoadPortableEncryptedSettingsFromContents(
+                fileContents,
+                hostedLocalSettingsUrl);
         }
 
         private static Dictionary<string, string> LoadSettingsFile(string settingsPath)
@@ -189,6 +276,39 @@ namespace PlayerAssistant
                 or JsonException;
         }
 
+        private static bool IsRecoverableHostedLocalSettingsException(Exception ex)
+        {
+            return ex is InvalidOperationException
+                or JsonException
+                or HttpRequestException
+                or NetworkRequestException;
+        }
+
+        private static HttpClient CreateHttpClient()
+        {
+            return HttpClientFactoryOverride?.Invoke()
+                ?? NetworkRequestUtility.CreateHttpClient();
+        }
+
+        internal static IDisposable UseHttpClientFactoryForTests(Func<HttpClient> factory)
+        {
+            ArgumentNullException.ThrowIfNull(factory);
+
+            var previousFactory = HttpClientFactoryOverride;
+            HttpClientFactoryOverride = factory;
+            return new DelegateDisposable(() => HttpClientFactoryOverride = previousFactory);
+        }
+
+        internal static IDisposable UseHostedLocalSettingsValidationOverrideForTests(
+            Func<string, NetworkUrlAllowlistValidation> validator)
+        {
+            ArgumentNullException.ThrowIfNull(validator);
+
+            var previousValidator = HostedLocalSettingsValidationOverride;
+            HostedLocalSettingsValidationOverride = validator;
+            return new DelegateDisposable(() => HostedLocalSettingsValidationOverride = previousValidator);
+        }
+
         private static string? GetOptionalSetting(string settingsKey)
         {
             return Settings.Value.TryGetValue(settingsKey, out var value) && !string.IsNullOrWhiteSpace(value)
@@ -213,6 +333,55 @@ namespace PlayerAssistant
             {
                 throw new InvalidOperationException(
                     $"Settings value '{settingsKey}' is not allowed: {validation.RejectionReason}");
+            }
+        }
+
+        private static void ValidateOptionalHttpUrlSetting(
+            IReadOnlyDictionary<string, string> settings,
+            string settingsKey,
+            NetworkUrlPurpose purpose)
+        {
+            if (!settings.TryGetValue(settingsKey, out var value) || string.IsNullOrWhiteSpace(value))
+            {
+                return;
+            }
+
+            var validation = NetworkUrlAllowlistUtility.Validate(value, purpose);
+            if (!validation.IsAllowed)
+            {
+                throw new InvalidOperationException(
+                    $"Settings value '{settingsKey}' is not allowed: {validation.RejectionReason}");
+            }
+        }
+
+        private static void ValidateHostedLocalSettingsSetting(IReadOnlyDictionary<string, string> settings)
+        {
+            if (!settings.TryGetValue(HostedLocalSettingsSettingsKey, out var value) || string.IsNullOrWhiteSpace(value))
+            {
+                return;
+            }
+
+            var validation = ValidateHostedLocalSettingsUrl(value);
+            if (!validation.IsAllowed)
+            {
+                throw new InvalidOperationException(
+                    $"Settings value '{HostedLocalSettingsSettingsKey}' is not allowed: {validation.RejectionReason}");
+            }
+        }
+
+        private static NetworkUrlAllowlistValidation ValidateHostedLocalSettingsUrl(string value)
+        {
+            return HostedLocalSettingsValidationOverride?.Invoke(value)
+                ?? NetworkUrlAllowlistUtility.Validate(value, NetworkUrlPurpose.PlayerAssistantHostedSettings);
+        }
+
+        private sealed class DelegateDisposable(Action onDispose) : IDisposable
+        {
+            private Action? onDispose = onDispose;
+
+            public void Dispose()
+            {
+                Interlocked.Exchange(ref onDispose, null)?.Invoke();
             }
         }
     }

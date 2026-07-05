@@ -50,7 +50,10 @@ namespace PlayerAssistant
                             request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("text/plain"));
                             request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("*/*", 0.1));
                             return request;
-                        }),
+                        },
+                        purpose: NetworkUrlAllowlistUtility.IsObsidianPublishHost(uri)
+                            ? NetworkUrlPurpose.ObsidianPublish
+                            : NetworkUrlPurpose.Generic),
                     originalUrl: url);
             }
             catch (HttpRequestException)
@@ -89,6 +92,9 @@ namespace PlayerAssistant
                         request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("*/*", 0.1));
                         return request;
                     },
+                    purpose: NetworkUrlAllowlistUtility.IsObsidianPublishHost(uri)
+                        ? NetworkUrlPurpose.ObsidianPublish
+                        : NetworkUrlPurpose.Generic,
                     cancellationToken: cancellationToken);
 
                 return await GetMarkdownFromResponseAsync(response, url, cancellationToken);
@@ -225,7 +231,8 @@ namespace PlayerAssistant
                         markdownRequest.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("text/markdown"));
                         markdownRequest.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("text/plain"));
                         return markdownRequest;
-                    });
+                    },
+                    purpose: NetworkUrlPurpose.ObsidianPublish);
                 markdownResponse.EnsureSuccessStatusCode();
 
                 return NetworkRequestUtility.ReadStringAsync(
@@ -268,6 +275,7 @@ namespace PlayerAssistant
                     markdownRequest.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("text/plain"));
                     return markdownRequest;
                 },
+                purpose: NetworkUrlPurpose.ObsidianPublish,
                 cancellationToken: cancellationToken);
             markdownResponse.EnsureSuccessStatusCode();
 
