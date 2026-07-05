@@ -13,6 +13,7 @@ $ErrorActionPreference = 'Stop'
 
 $SettingsEncryptionSeed = 'PlayerAssistant.LocalSettings.v1'
 $SettingsSchemaVersion = 1
+$SettingsLocalFileName = 'settings.local.json'
 $XpPasswordFileName = 'xp-passwords.json'
 $PackageRootName = "player-assistant-$Version"
 $PackageFileName = "player-assistant-$Version-installer.zip"
@@ -49,7 +50,7 @@ function Assert-RequiredFile {
 function Protect-RuntimeSidecarFiles {
     param([Parameter(Mandatory = $true)][string]$Directory)
 
-    foreach ($fileName in @($XpPasswordFileName)) {
+    foreach ($fileName in @($XpPasswordFileName, $SettingsLocalFileName)) {
         $path = Join-Path $Directory $fileName
         Assert-RequiredFile -Path $path -Description "installer payload runtime sidecar $fileName"
         Set-ItemProperty -LiteralPath $path -Name IsReadOnly -Value $true
