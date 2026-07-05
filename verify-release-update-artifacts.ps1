@@ -233,8 +233,9 @@ if ($installerSha256 -ne [string]$entry[0].installer_sha256) {
 }
 
 $installerVersionInfo = [System.Diagnostics.FileVersionInfo]::GetVersionInfo($resolvedInstallerPath)
-if ($installerVersionInfo.ProductVersion -ne $Version) {
-    throw "Release installer executable ProductVersion '$($installerVersionInfo.ProductVersion)' did not match expected version '$Version'."
+$installerProductVersion = ([string]$installerVersionInfo.ProductVersion).Trim()
+if ($installerProductVersion -ne $Version) {
+    throw "Release installer executable ProductVersion '$installerProductVersion' did not match expected version '$Version'."
 }
 
 Assert-AuthenticodeSignatureMatchesPolicy -Path $resolvedInstallerPath -Description 'Release installer executable'
