@@ -15,6 +15,10 @@ namespace PlayerAssistant
         private const string XpTrackingSettingsKey = "XP Tracking";
         private const string SchemaVersionSettingsKey = "schema_version";
         private const int CurrentSettingsSchemaVersion = 1;
+        private static readonly NetworkRequestPolicy HostedLocalSettingsRequestPolicy = new(
+            TimeSpan.FromSeconds(5),
+            MaxAttempts: 1,
+            TimeSpan.Zero);
         private static readonly Lazy<IReadOnlyDictionary<string, string>> Settings = new(LoadSettings);
         private static Func<HttpClient>? HttpClientFactoryOverride;
         private static Func<string, NetworkUrlAllowlistValidation>? HostedLocalSettingsValidationOverride;
@@ -195,6 +199,7 @@ namespace PlayerAssistant
                 httpClient,
                 () => new HttpRequestMessage(HttpMethod.Get, validation.Uri),
                 HttpCompletionOption.ResponseHeadersRead,
+                HostedLocalSettingsRequestPolicy,
                 purpose: NetworkUrlPurpose.PlayerAssistantHostedSettings);
             response.EnsureSuccessStatusCode();
             var fileContents = NetworkRequestUtility.ReadStringAsync(
