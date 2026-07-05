@@ -133,5 +133,5 @@
 
 - [x] Add a verified in-app updater that downloads the installer to a controlled temp location, verifies its SHA256 against the signed update manifest, verifies its Authenticode signer against the current release certificate policy, and only then offers execution.
 - [x] Add certificate pinning or equivalent transport trust hardening for the update host beyond the current allowlist and HTTPS validation.
-- [ ] Move update and RPOL-sensitive runtime secrets out of app-adjacent sidecars into a Windows-backed secret store such as Credential Manager.
+- [x] Move update and RPOL-sensitive runtime secrets out of app-adjacent sidecars into a Windows-backed secret store such as Credential Manager.
 - [ ] Add anti-downgrade tracking so the updater refuses older-but-valid signed releases after a newer trusted version has been observed.

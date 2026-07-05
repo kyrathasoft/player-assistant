@@ -183,6 +183,12 @@ namespace PlayerAssistant
 
         private static string GetSettingsRepairFileName(string settingsKey)
         {
+            if (string.Equals(settingsKey, RpolUserNameSettingsKey, StringComparison.Ordinal)
+                || string.Equals(settingsKey, RpolPasswordSettingsKey, StringComparison.Ordinal))
+            {
+                return "Windows Credential Manager";
+            }
+
             return string.Equals(settingsKey, XpTrackingSettingsKey, StringComparison.Ordinal)
                 ? "settings.local.json"
                 : "settings.json";
@@ -205,7 +211,7 @@ namespace PlayerAssistant
             issues.Add(new AppConfigurationIssue(
                 AppConfigurationIssueSeverity.Warning,
                 "RPOL credentials are incomplete; authenticated RPOL downloads will be unavailable.",
-                "Open the app settings and provide both RPOL user name and RPOL password, or leave both blank if authenticated RPOL downloads are not needed."));
+                "Open Settings > RPOL Credentials and provide both RPOL user name and RPOL password, or remove both stored credentials if authenticated RPOL downloads are not needed."));
         }
 
         private static void ValidateRuntimeDirectory(string runtimeDirectory, List<AppConfigurationIssue> issues)

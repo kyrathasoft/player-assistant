@@ -7,8 +7,6 @@ namespace PlayerAssistant
         private const string SettingsFileName = "settings.json";
         private const string LocalSettingsFileName = "settings.local.json";
         private const string RpolSiteSettingsKey = "RPOL Site";
-        private const string RpolUserNameSettingsKey = "RPOL user name";
-        private const string RpolPasswordSettingsKey = "RPOL password";
         private const string GameIntroSettingsKey = "Game Intro";
         private const string TheCastSettingsKey = "The Cast";
         private const string ObsidianGameVaultSettingsKey = "Obsidian Game Vault";
@@ -17,9 +15,12 @@ namespace PlayerAssistant
         private const int CurrentSettingsSchemaVersion = 1;
         private static readonly Lazy<IReadOnlyDictionary<string, string>> Settings = new(LoadSettings);
 
+        public const string RpolUserNameSettingsKey = "RPOL user name";
+        public const string RpolPasswordSettingsKey = "RPOL password";
+
         public static string GameForumUrl => Settings.Value[RpolSiteSettingsKey];
-        public static string? RpolUserName => GetOptionalSetting(RpolUserNameSettingsKey);
-        public static string? RpolPassword => GetOptionalSetting(RpolPasswordSettingsKey);
+        public static string? RpolUserName => RuntimeSecretStoreUtility.GetRpolUserName() ?? GetOptionalSetting(RpolUserNameSettingsKey);
+        public static string? RpolPassword => RuntimeSecretStoreUtility.GetRpolPassword() ?? GetOptionalSetting(RpolPasswordSettingsKey);
         public static string GameIntroUrl => Settings.Value[GameIntroSettingsKey];
         public static string TheCastUrl => Settings.Value[TheCastSettingsKey];
         public static string ObsidianGameVaultUrl => Settings.Value[ObsidianGameVaultSettingsKey].TrimEnd('/');
@@ -57,9 +58,32 @@ namespace PlayerAssistant
                             ? LocalSettingsUtility.LoadSettings(localSettingsPath)
                             : LocalSettingsUtility.LoadSettingsWithoutMigration(localSettingsPath);
 
+                    try
+                    {
+                        _ = RuntimeSecretStoreUtility.TryMigrateRpolSecretsFromLocalSettings(localSettings, localSettingsPath);
+                    }
+                    catch (Exception ex) when (IsRecoverableLocalSettingsException(ex))
+                    {
+                        StartupLoggingUtility.Append(
+                            "local settings secret-store migration",
+                            new InvalidOperationException(
+                                $"Unable to migrate RPOL credentials from '{localSettingsPath}' into Windows Credential Manager. Continuing with legacy sidecar values for this run.",
+                                ex));
+                    }
+
                     foreach (var pair in localSettings)
                     {
                         settings[pair.Key] = pair.Value;
+                    }
+
+                    if (RuntimeSecretStoreUtility.GetRpolUserName() is { Length: > 0 } storedUserName)
+                    {
+                        settings[RpolUserNameSettingsKey] = storedUserName;
+                    }
+
+                    if (RuntimeSecretStoreUtility.GetRpolPassword() is { Length: > 0 } storedPassword)
+                    {
+                        settings[RpolPasswordSettingsKey] = storedPassword;
                     }
 
                     if (!string.Equals(localSettingsPath, preferredLocalSettingsPath, StringComparison.OrdinalIgnoreCase))

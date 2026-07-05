@@ -55,8 +55,6 @@ jobs:
             @'
           {
             "schema_version": 1,
-            "RPOL user name": "ci-fixture-user",
-            "RPOL password": "ci-fixture-password",
             "XP Tracking": "https://publish.obsidian.md/scarlethorizons/Intentional+Orphans/XP+Tracking"
           }
           '@ | Set-Content -LiteralPath .\settings.local.json -Encoding UTF8

@@ -29,8 +29,6 @@ namespace PlayerAssistant
 
     internal static class RpolAuthUtility
     {
-        private const string SettingsLocalFileName = "settings.local.json";
-        private const string StorageStateFileName = "rpol-storage-state.json";
         private const string DesktopChromeUserAgent =
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36";
         private static readonly TimeSpan StorageStateMaxAge = TimeSpan.FromDays(30);
@@ -133,7 +131,6 @@ namespace PlayerAssistant
         private static async Task<RpolBrowserSession> CreateAuthenticatedSessionAsync(CancellationToken cancellationToken)
         {
             var (userName, password) = GetCredentials();
-            var storageStatePath = GetStorageStatePath();
             Environment.SetEnvironmentVariable("NODE_OPTIONS", "--use-system-ca");
             IPlaywright playwright;
             IBrowser browser;
@@ -165,23 +162,32 @@ namespace PlayerAssistant
  
             try
             {
-                var useStorageState = TryPrepareStorageStateFile(storageStatePath);
-                var contextOptions = useStorageState
-                    ? new BrowserNewContextOptions
-                    {
-                        IgnoreHTTPSErrors = true,
-                        StorageStatePath = storageStatePath,
-                        UserAgent = DesktopChromeUserAgent
-                    }
-                    : new BrowserNewContextOptions
-                    {
-                        IgnoreHTTPSErrors = true,
-                        UserAgent = DesktopChromeUserAgent
-                    };
-                var context = await WaitForPlaywrightAsync(
-                    browser.NewContextAsync(contextOptions),
-                    "creating the RPOL browser context",
-                    cancellationToken);
+                var preparedStorageStatePath = TryCreatePreparedStorageStateFile();
+                IBrowserContext context;
+                try
+                {
+                    var contextOptions = preparedStorageStatePath is not null
+                        ? new BrowserNewContextOptions
+                        {
+                            IgnoreHTTPSErrors = true,
+                            StorageStatePath = preparedStorageStatePath,
+                            UserAgent = DesktopChromeUserAgent
+                        }
+                        : new BrowserNewContextOptions
+                        {
+                            IgnoreHTTPSErrors = true,
+                            UserAgent = DesktopChromeUserAgent
+                        };
+                    context = await WaitForPlaywrightAsync(
+                        browser.NewContextAsync(contextOptions),
+                        "creating the RPOL browser context",
+                        cancellationToken);
+                }
+                finally
+                {
+                    DeleteTemporaryStorageStateFile(preparedStorageStatePath);
+                }
+
                 await WaitForPlaywrightAsync(
                     context.AddInitScriptAsync("""
                     Object.defineProperty(navigator, 'webdriver', {
@@ -192,13 +198,7 @@ namespace PlayerAssistant
                     cancellationToken);
 
                 await EnsureLoggedInAsync(context, userName, password, cancellationToken);
-                await WaitForPlaywrightAsync(
-                    context.StorageStateAsync(new BrowserContextStorageStateOptions
-                    {
-                        Path = storageStatePath
-                    }),
-                    "saving the RPOL browser storage state",
-                    cancellationToken);
+                await SaveStorageStateSecretAsync(context, cancellationToken);
 
                 return new RpolBrowserSession(playwright, browser, context);
             }
@@ -287,7 +287,7 @@ namespace PlayerAssistant
             {
                 throw new RpolAuthException(
                     RpolAuthFailureKind.MissingCredentials,
-                    $"Missing RPoL credentials. Add 'RPOL user name' and 'RPOL password' to '{SettingsLocalFileName}'.");
+                    "Missing RPoL credentials. Open Settings > RPOL Credentials and store both values in Windows Credential Manager.");
             }
 
             return (userName, password);
@@ -311,9 +311,106 @@ namespace PlayerAssistant
                 && html.Contains("name='password'", StringComparison.OrdinalIgnoreCase);
         }
 
-        private static string GetStorageStatePath()
+        public static void ResetAuthenticationState()
         {
-            return Path.Combine(AppContext.BaseDirectory, StorageStateFileName);
+            ResetAuthenticationStateAsync().GetAwaiter().GetResult();
+        }
+
+        private static async Task ResetAuthenticationStateAsync(CancellationToken cancellationToken = default)
+        {
+            _cachedFatalAuthFailure = null;
+            _cachedFatalAuthFailureLogged = false;
+            RuntimeSecretStoreUtility.DeleteRpolStorageState();
+            await ResetSessionAsync(cancellationToken);
+        }
+
+        private static string? TryCreatePreparedStorageStateFile()
+        {
+            try
+            {
+                if (!RuntimeSecretStoreUtility.TryGetRpolStorageState(out var storageStateJson, out var lastWritten)
+                    || string.IsNullOrWhiteSpace(storageStateJson))
+                {
+                    return null;
+                }
+
+                var tempDirectory = RuntimePathUtility.GetUserDataPath("temp");
+                Directory.CreateDirectory(tempDirectory);
+                var tempPath = RuntimePathUtility.CombineUnderBase(
+                    tempDirectory,
+                    $"rpol-storage-state-{Guid.NewGuid():N}.json");
+                File.WriteAllText(tempPath, storageStateJson);
+                File.SetLastWriteTimeUtc(tempPath, lastWritten.UtcDateTime);
+
+                if (!TryPrepareStorageStateFile(tempPath, DateTimeOffset.Now))
+                {
+                    DeleteTemporaryStorageStateFile(tempPath);
+                    RuntimeSecretStoreUtility.DeleteRpolStorageState();
+                    return null;
+                }
+
+                return tempPath;
+            }
+            catch (Exception ex) when (ex is IOException
+                or UnauthorizedAccessException
+                or InvalidDataException
+                or JsonException
+                or InvalidOperationException)
+            {
+                RuntimeSecretStoreUtility.DeleteRpolStorageState();
+                StartupLoggingUtility.Append(
+                    "RPOL storage state validation",
+                    new InvalidOperationException(
+                        "Deleted malformed RPOL browser auth state from Windows Credential Manager. A fresh login will be attempted.",
+                        ex));
+                return null;
+            }
+        }
+
+        private static async Task SaveStorageStateSecretAsync(
+            IBrowserContext context,
+            CancellationToken cancellationToken)
+        {
+            var tempDirectory = RuntimePathUtility.GetUserDataPath("temp");
+            Directory.CreateDirectory(tempDirectory);
+            var tempPath = RuntimePathUtility.CombineUnderBase(
+                tempDirectory,
+                $"rpol-storage-state-save-{Guid.NewGuid():N}.json");
+
+            try
+            {
+                await WaitForPlaywrightAsync(
+                    context.StorageStateAsync(new BrowserContextStorageStateOptions
+                    {
+                        Path = tempPath
+                    }),
+                    "saving the RPOL browser storage state",
+                    cancellationToken);
+                RuntimeSecretStoreUtility.SaveRpolStorageState(File.ReadAllText(tempPath));
+            }
+            finally
+            {
+                DeleteTemporaryStorageStateFile(tempPath);
+            }
+        }
+
+        private static void DeleteTemporaryStorageStateFile(string? path)
+        {
+            if (string.IsNullOrWhiteSpace(path))
+            {
+                return;
+            }
+
+            try
+            {
+                if (File.Exists(path))
+                {
+                    File.Delete(path);
+                }
+            }
+            catch
+            {
+            }
         }
 
         internal static bool TryPrepareStorageStateFile(
