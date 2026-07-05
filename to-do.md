@@ -148,7 +148,7 @@
 ## New backlog
 
 - [x] Add negative-path CI coverage for hosted settings fetch/decrypt failures, including tampered envelopes, plaintext JSON, oversized payloads, and unreachable fixture-server responses.
-- [ ] Add signed metadata for hosted settings so the app verifies content identity and version, not just transport and URL allowlist membership.
+- [x] Add signed metadata for hosted settings so the app verifies content identity and version, not just transport and URL allowlist membership.
 - [ ] Add runtime diagnostics for outbound allowlisted requests, recording per-purpose endpoint usage and failure counts without logging secret-bearing values.
 - [ ] Reduce plaintext secret lifetime in memory for decrypted hosted settings and RPOL credentials where practical.
 - [ ] Add a clean-machine installer smoke path in CI that verifies first launch, hosted settings download, credential migration, and updater preflight behavior after install.
