@@ -5,7 +5,8 @@ namespace PlayerAssistant
         Generic,
         Rpol,
         ObsidianPublish,
-        PlayerAssistantUpdate
+        PlayerAssistantUpdate,
+        PlayerAssistantHostedSettings
     }
 
     internal sealed record NetworkUrlAllowlistValidation(
@@ -24,8 +25,59 @@ namespace PlayerAssistant
         }
     }
 
-    internal static class NetworkUrlAllowlistUtility
+    internal static partial class NetworkUrlAllowlistUtility
     {
+        private static Func<Uri, NetworkUrlPurpose, NetworkUrlAllowlistValidation?>? ValidationOverrideForTests;
+        private static readonly NetworkUrlPolicyRule[] Rules =
+        [
+            new(
+                NetworkUrlPurpose.Rpol,
+                "RPOL thread and game page URLs must use rpol.net with '/game.php' or '/gameinfo.php'.",
+                uri => IsHost(uri, "rpol.net") && (PathEquals(uri, "/game.php") || PathEquals(uri, "/gameinfo.php"))),
+            new(
+                NetworkUrlPurpose.Rpol,
+                "RPOL hosted image URLs must use rpol.net with the '/c-webp/' path.",
+                uri => IsHost(uri, "rpol.net") && PathStartsWith(uri, "/c-webp/")),
+            new(
+                NetworkUrlPurpose.ObsidianPublish,
+                "Obsidian Publish page and note URLs must use publish.obsidian.md or an obsidian.md subdomain.",
+                uri => IsHost(uri, "publish.obsidian.md", allowSubdomains: true) && HasNonEmptyPath(uri)),
+            new(
+                NetworkUrlPurpose.ObsidianPublish,
+                "Obsidian Publish cache URLs must use an obsidian.md host with the '/cache/' path.",
+                uri => IsHost(uri, "publish.obsidian.md", allowSubdomains: true) && PathStartsWith(uri, "/cache/")),
+            new(
+                NetworkUrlPurpose.ObsidianPublish,
+                "Obsidian Publish asset access URLs must use an obsidian.md host with the '/access/' path.",
+                uri => IsHost(uri, "publish.obsidian.md", allowSubdomains: true) && PathStartsWith(uri, "/access/")),
+            new(
+                NetworkUrlPurpose.ObsidianPublish,
+                "Obsidian Publish markdown URLs must use an obsidian.md host and end with '.md'.",
+                uri => IsHost(uri, "publish.obsidian.md", allowSubdomains: true)
+                    && uri.AbsolutePath.EndsWith(".md", StringComparison.OrdinalIgnoreCase)),
+            new(
+                NetworkUrlPurpose.PlayerAssistantUpdate,
+                "Player Assistant update listing must use bryanmiller.us with the '/scarlethorizons/' path.",
+                uri => IsHost(uri, "bryanmiller.us", allowSubdomains: true) && PathEquals(uri, "/scarlethorizons/")),
+            new(
+                NetworkUrlPurpose.PlayerAssistantUpdate,
+                "Player Assistant update manifests must use bryanmiller.us under '/scarlethorizons/'.",
+                uri => IsHost(uri, "bryanmiller.us", allowSubdomains: true)
+                    && (PathEquals(uri, "/scarlethorizons/p-assist-updates.json")
+                        || PathEquals(uri, "/scarlethorizons/p-assist-updates.json.sig"))),
+            new(
+                NetworkUrlPurpose.PlayerAssistantUpdate,
+                "Player Assistant update packages must use bryanmiller.us under '/scarlethorizons/' with approved archive names.",
+                uri => IsHost(uri, "bryanmiller.us", allowSubdomains: true)
+                    && PathStartsWith(uri, "/scarlethorizons/")
+                    && UpdateArtifactFileNameRegex().IsMatch(Path.GetFileName(uri.AbsolutePath))),
+            new(
+                NetworkUrlPurpose.PlayerAssistantHostedSettings,
+                "Hosted Player Assistant settings must use bryanmiller.us at '/scarlethorizons/settings.local.json'.",
+                uri => IsHost(uri, "bryanmiller.us", allowSubdomains: true)
+                    && PathEquals(uri, "/scarlethorizons/settings.local.json"))
+        ];
+
         public static NetworkUrlAllowlistValidation Validate(
             string? value,
             NetworkUrlPurpose purpose = NetworkUrlPurpose.Generic)
@@ -72,21 +124,31 @@ namespace PlayerAssistant
                 return NetworkUrlAllowlistValidation.Rejected("URL hosts may not contain escaped characters.");
             }
 
-            return purpose switch
+            var overrideValidation = ValidationOverrideForTests?.Invoke(uri, purpose);
+            if (overrideValidation is not null)
             {
-                NetworkUrlPurpose.Rpol => IsRpolHost(uri)
+                return overrideValidation;
+            }
+
+            if (purpose == NetworkUrlPurpose.Generic)
+            {
+                return Rules.Any(rule => rule.IsMatch(uri))
                     ? NetworkUrlAllowlistValidation.Allowed(uri)
-                    : NetworkUrlAllowlistValidation.Rejected("RPOL URLs must use rpol.net or a subdomain of rpol.net."),
-                NetworkUrlPurpose.ObsidianPublish => IsObsidianPublishHost(uri)
-                    ? NetworkUrlAllowlistValidation.Allowed(uri)
-                    : NetworkUrlAllowlistValidation.Rejected("Obsidian Publish URLs must use publish.obsidian.md or an obsidian.md subdomain."),
-                NetworkUrlPurpose.PlayerAssistantUpdate => IsPlayerAssistantUpdateHost(uri)
-                    ? NetworkUrlAllowlistValidation.Allowed(uri)
-                    : NetworkUrlAllowlistValidation.Rejected("Player Assistant update URLs must use bryanmiller.us."),
-                _ => IsRpolHost(uri) || IsObsidianPublishHost(uri) || IsPlayerAssistantUpdateHost(uri)
-                    ? NetworkUrlAllowlistValidation.Allowed(uri)
-                    : NetworkUrlAllowlistValidation.Rejected("URL host is not on the Player Assistant network allowlist.")
-            };
+                    : NetworkUrlAllowlistValidation.Rejected("URL host/path is not on the Player Assistant network allowlist.");
+            }
+
+            var matchingRules = Rules
+                .Where(rule => rule.Purpose == purpose)
+                .ToArray();
+            if (matchingRules.Any(rule => rule.IsMatch(uri)))
+            {
+                return NetworkUrlAllowlistValidation.Allowed(uri);
+            }
+
+            var rejectionReason = matchingRules.Length == 0
+                ? $"No network allowlist rules are configured for purpose '{purpose}'."
+                : string.Join(" ", matchingRules.Select(rule => rule.RejectionMessage).Distinct(StringComparer.Ordinal));
+            return NetworkUrlAllowlistValidation.Rejected(rejectionReason);
         }
 
         public static void EnsureAllowed(
@@ -105,24 +167,73 @@ namespace PlayerAssistant
         {
             ArgumentNullException.ThrowIfNull(uri);
 
-            return string.Equals(uri.Host, "rpol.net", StringComparison.OrdinalIgnoreCase)
-                || uri.Host.EndsWith(".rpol.net", StringComparison.OrdinalIgnoreCase);
+            return IsHost(uri, "rpol.net");
         }
 
         public static bool IsObsidianPublishHost(Uri uri)
         {
             ArgumentNullException.ThrowIfNull(uri);
 
-            return string.Equals(uri.Host, "publish.obsidian.md", StringComparison.OrdinalIgnoreCase)
-                || uri.Host.EndsWith(".obsidian.md", StringComparison.OrdinalIgnoreCase);
+            return IsHost(uri, "publish.obsidian.md", allowSubdomains: true);
         }
 
         public static bool IsPlayerAssistantUpdateHost(Uri uri)
         {
             ArgumentNullException.ThrowIfNull(uri);
 
-            return string.Equals(uri.Host, "bryanmiller.us", StringComparison.OrdinalIgnoreCase)
-                || uri.Host.EndsWith(".bryanmiller.us", StringComparison.OrdinalIgnoreCase);
+            return IsHost(uri, "bryanmiller.us", allowSubdomains: true);
         }
+
+        internal static IDisposable UseValidationOverrideForTests(
+            Func<Uri, NetworkUrlPurpose, NetworkUrlAllowlistValidation?> validator)
+        {
+            ArgumentNullException.ThrowIfNull(validator);
+
+            var previousValidator = ValidationOverrideForTests;
+            ValidationOverrideForTests = validator;
+            return new DelegateDisposable(() => ValidationOverrideForTests = previousValidator);
+        }
+
+        private static bool IsHost(Uri uri, string host, bool allowSubdomains = true)
+        {
+            ArgumentNullException.ThrowIfNull(uri);
+            ArgumentException.ThrowIfNullOrWhiteSpace(host);
+
+            return string.Equals(uri.Host, host, StringComparison.OrdinalIgnoreCase)
+                || (allowSubdomains && uri.Host.EndsWith($".{host}", StringComparison.OrdinalIgnoreCase));
+        }
+
+        private static bool HasNonEmptyPath(Uri uri)
+        {
+            return !string.IsNullOrWhiteSpace(uri.AbsolutePath);
+        }
+
+        private static bool PathEquals(Uri uri, string expectedPath)
+        {
+            return string.Equals(uri.AbsolutePath, expectedPath, StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static bool PathStartsWith(Uri uri, string expectedPrefix)
+        {
+            return uri.AbsolutePath.StartsWith(expectedPrefix, StringComparison.OrdinalIgnoreCase);
+        }
+
+        [System.Text.RegularExpressions.GeneratedRegex(@"^p-assist-\d+\.\d+\.\d+(?:\.\d+)?\.(zip|exe)$", System.Text.RegularExpressions.RegexOptions.IgnoreCase)]
+        private static partial System.Text.RegularExpressions.Regex UpdateArtifactFileNameRegex();
+
+        private sealed class DelegateDisposable(Action onDispose) : IDisposable
+        {
+            private Action? _onDispose = onDispose;
+
+            public void Dispose()
+            {
+                Interlocked.Exchange(ref _onDispose, null)?.Invoke();
+            }
+        }
+
+        private sealed record NetworkUrlPolicyRule(
+            NetworkUrlPurpose Purpose,
+            string RejectionMessage,
+            Func<Uri, bool> IsMatch);
     }
 }
