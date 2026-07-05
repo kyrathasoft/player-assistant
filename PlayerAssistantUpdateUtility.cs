@@ -103,6 +103,7 @@ namespace PlayerAssistant
             using var response = await NetworkRequestUtility.SendAsync(
                 httpClient,
                 () => new HttpRequestMessage(HttpMethod.Get, UpdateManifestUri),
+                purpose: NetworkUrlPurpose.PlayerAssistantUpdate,
                 cancellationToken: cancellationToken).ConfigureAwait(false);
             response.EnsureSuccessStatusCode();
 
@@ -119,6 +120,7 @@ namespace PlayerAssistant
             using var response = await NetworkRequestUtility.SendAsync(
                 httpClient,
                 () => new HttpRequestMessage(HttpMethod.Get, UpdateManifestSignatureUri),
+                purpose: NetworkUrlPurpose.PlayerAssistantUpdate,
                 cancellationToken: cancellationToken).ConfigureAwait(false);
             response.EnsureSuccessStatusCode();
 

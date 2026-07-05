@@ -10,8 +10,9 @@
 - Inspect `.sln`, `.csproj`, `.props`, `.targets`, and `.cs` files before making language/framework assumptions.
 - Build the executable and related output files under the repository root `Release` folder instead of under `Debug`.
 - At the beginning of each coding session, read `to-do.md` so current completed hardening work, active backlog notes, and project priorities are in context before making changes.
-- When committing hardening or implementation work, always include `to-do.md` in the commit if it has been updated.
+- When committing work from the to-do.md backlog, always include `to-do.md` in the commit if it has been updated.
 - Never commit installer files unless the user specifically tells you to commit installer files.
+- When explaining code you have written, just give me bullet points, not full sentences unless I ask you to expand the text.
 
 # graphify
 
@@ -40,3 +41,17 @@ Rules:
 - When a new term has multiple plausible senses, preserve nuance with tags and grammar classes that support context-aware selection in `ToOrcish/Program.cs` rather than collapsing distinct meanings into one entry.
 - Use `codex-scratch\candidates.txt` as the current curated backlog for Orcish lexicon work; remove an item only when the exact remaining candidate has been covered, not merely a related root word.
 - After lexicon edits, verify representative terms with `to-orcish`; if Debug outputs are locked, use a Release build artifact for confirmation instead of assuming the change worked.
+
+
+Do not display executed commands, command output, grep results, line-number lookups, or file-inspection transcripts.
+
+Never include blocks beginning with:
+- Ran
+- Executed
+- Command
+
+Report only:
+- Files modified
+- Files inspected (if relevant)
+- Results and conclusions
+

@@ -602,7 +602,6 @@ function New-EncryptedSidecarFixture {
 function Invoke-RuntimeSidecarSelfTest {
     $missingSidecarDir = Join-Path $SelfTestRoot 'missing-sidecar-payload'
     New-DirectoryClean -Path $missingSidecarDir
-    New-EncryptedSidecarFixture -Path (Join-Path $missingSidecarDir 'settings.local.json')
 
     Assert-CommandFailsWith `
         -Name 'runtime sidecar verifier catches missing XP sidecar' `
@@ -620,7 +619,6 @@ function Invoke-RuntimeSidecarSelfTest {
 
     $plaintextSidecarDir = Join-Path $SelfTestRoot 'plaintext-sidecar-payload'
     New-DirectoryClean -Path $plaintextSidecarDir
-    New-EncryptedSidecarFixture -Path (Join-Path $plaintextSidecarDir 'settings.local.json')
     @'
 {
   "schema_version": 1,

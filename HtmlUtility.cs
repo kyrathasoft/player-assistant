@@ -47,6 +47,9 @@ namespace PlayerAssistant
                     request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("*/*", 0.1));
                     return request;
                 },
+                purpose: NetworkUrlAllowlistUtility.IsObsidianPublishHost(uri)
+                    ? NetworkUrlPurpose.ObsidianPublish
+                    : NetworkUrlPurpose.Generic,
                 cancellationToken: cancellationToken);
             response.EnsureSuccessStatusCode();
 

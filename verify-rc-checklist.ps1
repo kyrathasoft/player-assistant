@@ -1569,7 +1569,6 @@ Invoke-RcChecklistStep `
     -Command "powershell.exe -NoProfile -ExecutionPolicy Bypass -File $RuntimeSidecarScriptPath -AppDir $resolvedPublishDir -RequireReadOnlyAttribute -RequireInstallerScriptProtection" `
     -Artifacts @(
         $RuntimeSidecarScriptPath,
-        (Join-Path $resolvedPublishDir 'settings.local.json'),
         (Join-Path $resolvedPublishDir 'xp-passwords.json'),
         (Join-Path $PSScriptRoot 'Installer\install-player-assistant.ps1')
     ) `

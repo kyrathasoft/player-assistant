@@ -73,6 +73,7 @@ namespace PlayerAssistant
             Func<HttpRequestMessage> createRequest,
             HttpCompletionOption completionOption = HttpCompletionOption.ResponseContentRead,
             NetworkRequestPolicy? policy = null,
+            NetworkUrlPurpose purpose = NetworkUrlPurpose.Generic,
             CancellationToken cancellationToken = default)
         {
             ArgumentNullException.ThrowIfNull(httpClient);
@@ -96,7 +97,7 @@ namespace PlayerAssistant
                     using var request = createRequest();
                     if (request.RequestUri is not null)
                     {
-                        NetworkUrlAllowlistUtility.EnsureAllowed(request.RequestUri);
+                        NetworkUrlAllowlistUtility.EnsureAllowed(request.RequestUri, purpose);
                     }
 
                     var circuitBreakerKey = GetCircuitBreakerKey(request);
@@ -107,7 +108,7 @@ namespace PlayerAssistant
                         timeoutCancellation.Token).ConfigureAwait(false);
                     if (response.RequestMessage?.RequestUri is not null)
                     {
-                        NetworkUrlAllowlistUtility.EnsureAllowed(response.RequestMessage.RequestUri);
+                        NetworkUrlAllowlistUtility.EnsureAllowed(response.RequestMessage.RequestUri, purpose);
                     }
 
                     if (ShouldRetry(response.StatusCode) && attempt < policy.MaxAttempts)
@@ -178,13 +179,15 @@ namespace PlayerAssistant
             HttpClient httpClient,
             Func<HttpRequestMessage> createRequest,
             HttpCompletionOption completionOption = HttpCompletionOption.ResponseContentRead,
-            NetworkRequestPolicy? policy = null)
+            NetworkRequestPolicy? policy = null,
+            NetworkUrlPurpose purpose = NetworkUrlPurpose.Generic)
         {
             return SendAsync(
                 httpClient,
                 createRequest,
                 completionOption,
                 policy,
+                purpose,
                 CancellationToken.None).GetAwaiter().GetResult();
         }
 

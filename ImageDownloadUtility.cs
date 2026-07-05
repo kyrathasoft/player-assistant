@@ -41,6 +41,9 @@ namespace PlayerAssistant
                 HttpClient,
                 () => new HttpRequestMessage(HttpMethod.Get, uri),
                 HttpCompletionOption.ResponseHeadersRead,
+                purpose: NetworkUrlAllowlistUtility.IsObsidianPublishHost(uri)
+                    ? NetworkUrlPurpose.ObsidianPublish
+                    : NetworkUrlPurpose.Generic,
                 cancellationToken: cancellationToken);
             response.EnsureSuccessStatusCode();
 
@@ -105,6 +108,9 @@ namespace PlayerAssistant
                 HttpClient,
                 () => new HttpRequestMessage(HttpMethod.Get, uri),
                 HttpCompletionOption.ResponseHeadersRead,
+                purpose: NetworkUrlAllowlistUtility.IsObsidianPublishHost(uri)
+                    ? NetworkUrlPurpose.ObsidianPublish
+                    : NetworkUrlPurpose.Generic,
                 cancellationToken: cancellationToken);
             response.EnsureSuccessStatusCode();
 
@@ -175,6 +181,9 @@ namespace PlayerAssistant
                 HttpClient,
                 () => new HttpRequestMessage(HttpMethod.Get, uri),
                 HttpCompletionOption.ResponseHeadersRead,
+                purpose: NetworkUrlAllowlistUtility.IsObsidianPublishHost(uri)
+                    ? NetworkUrlPurpose.ObsidianPublish
+                    : NetworkUrlPurpose.Generic,
                 cancellationToken: cancellationToken);
             response.EnsureSuccessStatusCode();
 

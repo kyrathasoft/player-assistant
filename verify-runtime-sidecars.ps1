@@ -8,7 +8,6 @@ param(
 $ErrorActionPreference = 'Stop'
 
 $RequiredSidecarFileNames = @(
-    'settings.local.json',
     'xp-passwords.json'
 )
 $AllowedEncryptedFormats = @(
@@ -31,6 +30,7 @@ $ForbiddenPlaintextMarkers = @(
     'mystic-cleric'
 )
 $ForbiddenRuntimeFileNames = @(
+    'settings.local.json',
     'rpol-storage-state.json',
     'startup-errors.log',
     'startup-health.json',
@@ -159,7 +159,6 @@ function Assert-InstallerProtectsSidecars {
     foreach ($requiredText in @(
         'Protect-EncryptedSidecars',
         'Assert-ProtectedEncryptedSidecars',
-        'settings.local.json',
         'xp-passwords.json',
         'icacls.exe',
         'S-1-5-32-545'

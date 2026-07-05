@@ -88,11 +88,17 @@ namespace PlayerAssistant
             IDictionary<string, string> localSettings,
             string localSettingsPath)
         {
-            ArgumentNullException.ThrowIfNull(localSettings);
-            ArgumentException.ThrowIfNullOrWhiteSpace(localSettingsPath);
+            return TryMigrateRpolSecretsFromSettings(localSettings, localSettingsPath);
+        }
 
-            var hasUserName = localSettings.TryGetValue(AppSettingsUtility.RpolUserNameSettingsKey, out var userName);
-            var hasPassword = localSettings.TryGetValue(AppSettingsUtility.RpolPasswordSettingsKey, out var password);
+        public static bool TryMigrateRpolSecretsFromSettings(
+            IDictionary<string, string> settings,
+            string? persistedSettingsPath = null)
+        {
+            ArgumentNullException.ThrowIfNull(settings);
+
+            var hasUserName = settings.TryGetValue(AppSettingsUtility.RpolUserNameSettingsKey, out var userName);
+            var hasPassword = settings.TryGetValue(AppSettingsUtility.RpolPasswordSettingsKey, out var password);
             if (!hasUserName && !hasPassword)
             {
                 return false;
@@ -116,11 +122,15 @@ namespace PlayerAssistant
                 WindowsCredentialManagerUtility.DeleteSecret(RpolPasswordTarget);
             }
 
-            localSettings.Remove(AppSettingsUtility.RpolUserNameSettingsKey);
-            localSettings.Remove(AppSettingsUtility.RpolPasswordSettingsKey);
-            LocalSettingsUtility.SaveEncryptedSettings(
-                localSettingsPath,
-                new Dictionary<string, string>(localSettings, StringComparer.OrdinalIgnoreCase));
+            settings.Remove(AppSettingsUtility.RpolUserNameSettingsKey);
+            settings.Remove(AppSettingsUtility.RpolPasswordSettingsKey);
+            if (!string.IsNullOrWhiteSpace(persistedSettingsPath))
+            {
+                LocalSettingsUtility.SaveEncryptedSettings(
+                    persistedSettingsPath,
+                    new Dictionary<string, string>(settings, StringComparer.OrdinalIgnoreCase));
+            }
+
             return true;
         }
 

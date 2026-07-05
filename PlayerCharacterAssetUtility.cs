@@ -459,6 +459,7 @@ namespace PlayerAssistant
                 HttpClient,
                 () => new HttpRequestMessage(HttpMethod.Get, url),
                 HttpCompletionOption.ResponseHeadersRead,
+                purpose: NetworkUrlPurpose.ObsidianPublish,
                 cancellationToken: cancellationToken);
             response.EnsureSuccessStatusCode();
 
