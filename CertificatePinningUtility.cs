@@ -1,23 +1,29 @@
-using System.Net.Security;
 using System.Formats.Asn1;
+using System.Net.Security;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 
 namespace PlayerAssistant
 {
+    internal sealed record CertificatePinTrustEntry(
+        string PinSha256,
+        DateTimeOffset? NotBeforeUtc = null,
+        DateTimeOffset? NotAfterUtc = null,
+        bool IsRevoked = false);
+
     internal sealed record CertificatePinningPolicy(
         string HostSuffix,
-        IReadOnlyList<string> TrustedSpkiSha256Pins);
+        IReadOnlyList<CertificatePinTrustEntry> TrustedPins);
 
     internal static class CertificatePinningUtility
     {
         // Current bryanmiller.us leaf pin plus the active Let's Encrypt YR2 intermediate pin.
-        // Keeping both allows routine leaf renewals while still rejecting unexpected chains.
+        // Rotation windows allow overlap during normal certificate renewals without trusting retired pins indefinitely.
         private static readonly CertificatePinningPolicy PlayerAssistantUpdatePolicy = new(
             "bryanmiller.us",
             [
-                "Cs2RWBFFnGtCidcPrPVbM4awHfkwOQAdfcF2KohmJFc=",
-                "nWN7PSep5XDQdge5zK24CnCRXHr3KvzhKEGxsdqCX9E="
+                new CertificatePinTrustEntry("Cs2RWBFFnGtCidcPrPVbM4awHfkwOQAdfcF2KohmJFc="),
+                new CertificatePinTrustEntry("nWN7PSep5XDQdge5zK24CnCRXHr3KvzhKEGxsdqCX9E=")
             ]);
 
         public static bool ValidateServerCertificate(
@@ -32,14 +38,16 @@ namespace PlayerAssistant
                 requestMessage.RequestUri,
                 GetPresentedPins(certificate, chain),
                 sslPolicyErrors,
-                PlayerAssistantUpdatePolicy);
+                PlayerAssistantUpdatePolicy,
+                DateTimeOffset.UtcNow);
         }
 
         internal static bool ValidatePinnedRequest(
             Uri? requestUri,
             IReadOnlyCollection<string> presentedPins,
             SslPolicyErrors sslPolicyErrors,
-            CertificatePinningPolicy policy)
+            CertificatePinningPolicy policy,
+            DateTimeOffset? nowUtc = null)
         {
             ArgumentNullException.ThrowIfNull(policy);
 
@@ -58,9 +66,12 @@ namespace PlayerAssistant
                 return false;
             }
 
+            var effectiveNow = nowUtc ?? DateTimeOffset.UtcNow;
             return presentedPins.Any(pin =>
-                policy.TrustedSpkiSha256Pins.Any(trustedPin =>
-                    string.Equals(pin, trustedPin, StringComparison.Ordinal)));
+                policy.TrustedPins.Any(entry =>
+                    !entry.IsRevoked
+                    && IsWithinRotationWindow(entry, effectiveNow)
+                    && string.Equals(pin, entry.PinSha256, StringComparison.Ordinal)));
         }
 
         internal static IReadOnlyCollection<string> GetPresentedPins(
@@ -86,6 +97,21 @@ namespace PlayerAssistant
         {
             return string.Equals(requestUri.Host, hostSuffix, StringComparison.OrdinalIgnoreCase)
                 || requestUri.Host.EndsWith($".{hostSuffix}", StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static bool IsWithinRotationWindow(CertificatePinTrustEntry entry, DateTimeOffset nowUtc)
+        {
+            if (entry.NotBeforeUtc is not null && nowUtc < entry.NotBeforeUtc.Value)
+            {
+                return false;
+            }
+
+            if (entry.NotAfterUtc is not null && nowUtc > entry.NotAfterUtc.Value)
+            {
+                return false;
+            }
+
+            return true;
         }
 
         private static void AddPin(X509Certificate2? certificate, ISet<string> pins)

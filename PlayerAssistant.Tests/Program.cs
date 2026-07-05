@@ -143,13 +143,19 @@ var tests = new (string Name, Action Test)[]
     ("update check verifies signed p-assist manifest", UpdateCheckVerifiesSignedPAssistManifest),
     ("update check chooses newest signed manifest entry", UpdateCheckChoosesNewestSignedManifestEntry),
     ("update check rejects tampered signed manifest", UpdateCheckRejectsTamperedSignedManifest),
+    ("update check rejects retired manifest signing key", UpdateCheckRejectsRetiredManifestSigningKey),
     ("update check compares against current app version", UpdateCheckComparesAgainstCurrentAppVersion),
     ("update check reports latest version message", UpdateCheckReportsLatestVersionMessage),
     ("update check fetches signed manifest from allowed update host", UpdateCheckFetchesSignedManifestFromAllowedUpdateHost),
     ("update check remembers highest trusted version observed", UpdateCheckRemembersHighestTrustedVersionObserved),
+    ("legacy trusted update state migrates to protected format", LegacyTrustedUpdateStateMigratesToProtectedFormat),
+    ("trusted update state is encrypted at rest", TrustedUpdateStateIsEncryptedAtRest),
+    ("trusted update state rejects tampered payload", TrustedUpdateStateRejectsTamperedPayload),
     ("update check rejects signed manifest rollback below trusted version floor", UpdateCheckRejectsSignedManifestRollbackBelowTrustedVersionFloor),
     ("update host certificate pinning accepts trusted leaf pin", UpdateHostCertificatePinningAcceptsTrustedLeafPin),
     ("update host certificate pinning accepts trusted intermediate pin", UpdateHostCertificatePinningAcceptsTrustedIntermediatePin),
+    ("update host certificate pinning supports rotation window", UpdateHostCertificatePinningSupportsRotationWindow),
+    ("update host certificate pinning rejects retired pin", UpdateHostCertificatePinningRejectsRetiredPin),
     ("update host certificate pinning rejects mismatched pin", UpdateHostCertificatePinningRejectsMismatchedPin),
     ("verified updater downloads installer to controlled path", VerifiedUpdaterDownloadsInstallerToControlledPath),
     ("verified updater rejects installer sha256 mismatch", VerifiedUpdaterRejectsInstallerSha256Mismatch),
@@ -3162,7 +3168,7 @@ static void UpdateCheckVerifiesSignedPAssistManifest()
         signed.ManifestJson,
         signed.SignatureText,
         PlayerAssistantUpdateUtility.UpdateManifestUri,
-        [signed.PublicKeyPem]);
+        [CreateActiveSigningKey(signed.PublicKeyPem)]);
 
     AssertTrue(update is not null, "expected signed update archive to be detected");
     AssertEqual("0.9.0", update!.VersionText, "unexpected parsed update version text");
@@ -3227,7 +3233,7 @@ static void UpdateCheckChoosesNewestSignedManifestEntry()
         signed.ManifestJson,
         signed.SignatureText,
         PlayerAssistantUpdateUtility.UpdateManifestUri,
-        [signed.PublicKeyPem]);
+        [CreateActiveSigningKey(signed.PublicKeyPem)]);
 
     AssertTrue(update is not null, "expected latest signed update archive to be detected");
     AssertEqual("0.10.0", update!.VersionText, "expected newest valid allowed archive version");
@@ -3266,9 +3272,47 @@ static void UpdateCheckRejectsTamperedSignedManifest()
             tamperedManifestJson,
             signed.SignatureText,
             PlayerAssistantUpdateUtility.UpdateManifestUri,
-            [signed.PublicKeyPem]));
+            [CreateActiveSigningKey(signed.PublicKeyPem)]));
 
     AssertContains(exception.Message, "signature");
+}
+
+static void UpdateCheckRejectsRetiredManifestSigningKey()
+{
+    var signed = CreateSignedUpdateManifest(
+        """
+        {
+          "schema_version": 1,
+          "updates": [
+            {
+              "version": "0.9.1",
+              "url": "p-assist-0.9.1.zip",
+              "sha256": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+              "installer_url": "p-assist-0.9.1.exe",
+              "installer_sha256": "BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB"
+            }
+          ]
+        }
+        """);
+    var retiredKeys = new[]
+    {
+        new UpdateManifestSigningKeyTrustEntry(
+            "retired-key",
+            signed.PublicKeyPem,
+            NotAfterUtc: new DateTimeOffset(2026, 1, 1, 0, 0, 0, TimeSpan.Zero))
+    };
+    var nowUtc = new DateTimeOffset(2026, 7, 4, 0, 0, 0, TimeSpan.Zero);
+
+    var exception = AssertThrows<InvalidOperationException>(() =>
+        PlayerAssistantUpdateUtility.FindLatestUpdateFromSignedManifest(
+            System.Text.Encoding.UTF8.GetBytes(signed.ManifestJson),
+            signed.SignatureText,
+            PlayerAssistantUpdateUtility.UpdateManifestUri,
+            retiredKeys,
+            nowUtc));
+
+    AssertContains(exception.Message, "retired");
+    AssertContains(exception.Message, "retired-key");
 }
 
 static void UpdateCheckComparesAgainstCurrentAppVersion()
@@ -3349,7 +3393,7 @@ static void UpdateCheckFetchesSignedManifestFromAllowedUpdateHost()
     }));
 
     var update = PlayerAssistantUpdateUtility
-        .CheckForLatestUpdateAsync(httpClient, [signed.PublicKeyPem])
+        .CheckForLatestUpdateAsync(httpClient, [CreateActiveSigningKey(signed.PublicKeyPem)])
         .GetAwaiter()
         .GetResult();
     AssertEqual(2, requestUris.Count, "expected manifest and signature requests");
@@ -3391,6 +3435,87 @@ static void UpdateCheckRemembersHighestTrustedVersionObserved()
     AssertTrue(result is not null, "expected trusted update to remain available");
     AssertEqual("0.9.2", result!.VersionText, "unexpected trusted update version");
     AssertEqual(new Version(0, 9, 2), storedVersion!, "expected highest trusted version to be recorded");
+}
+
+static void LegacyTrustedUpdateStateMigratesToProtectedFormat()
+{
+    using var directory = TemporaryDirectory.Create();
+    var statePath = Path.Combine(directory.Path, "trusted-update-state.json");
+    File.WriteAllText(
+        statePath,
+        """
+        {
+          "schema_version": 1,
+          "highest_trusted_version": "0.9.2",
+          "recorded_at": "2026-07-04T00:00:00.0000000+00:00"
+        }
+        """);
+
+    var version = PlayerAssistantUpdateUtility.TryReadTrustedUpdateVersion(statePath);
+    var protectedJson = File.ReadAllText(statePath);
+
+    AssertEqual(new Version(0, 9, 2), version!, "unexpected migrated trusted update version");
+    AssertContains(protectedJson, "\"format\": \"app-protected-v3\"");
+    AssertContains(protectedJson, "\"key_scope\":");
+}
+
+static void TrustedUpdateStateIsEncryptedAtRest()
+{
+    using var directory = TemporaryDirectory.Create();
+    var statePath = Path.Combine(directory.Path, "trusted-update-state.json");
+
+    PlayerAssistantUpdateUtility.ApplyTrustedUpdateVersionPolicy(
+        new PlayerAssistantUpdateInfo(
+            new Version(0, 9, 2),
+            "0.9.2",
+            new Uri("https://bryanmiller.us/scarlethorizons/p-assist-0.9.2.zip"),
+            new string('A', 64),
+            new Uri("https://bryanmiller.us/scarlethorizons/p-assist-0.9.2.exe"),
+            new string('B', 64)),
+        new Version(0, 9, 1),
+        statePath);
+
+    var encryptedJson = File.ReadAllText(statePath);
+    AssertContains(encryptedJson, "\"format\": \"app-protected-v3\"");
+    AssertContains(encryptedJson, "\"key_scope\":");
+    AssertFalse(encryptedJson.Contains("0.9.2", StringComparison.Ordinal), "trusted version should not be stored in plaintext");
+}
+
+static void TrustedUpdateStateRejectsTamperedPayload()
+{
+    using var directory = TemporaryDirectory.Create();
+    var statePath = Path.Combine(directory.Path, "trusted-update-state.json");
+
+    PlayerAssistantUpdateUtility.ApplyTrustedUpdateVersionPolicy(
+        new PlayerAssistantUpdateInfo(
+            new Version(0, 9, 2),
+            "0.9.2",
+            new Uri("https://bryanmiller.us/scarlethorizons/p-assist-0.9.2.zip"),
+            new string('A', 64),
+            new Uri("https://bryanmiller.us/scarlethorizons/p-assist-0.9.2.exe"),
+            new string('B', 64)),
+        new Version(0, 9, 1),
+        statePath);
+
+    using (var document = System.Text.Json.JsonDocument.Parse(File.ReadAllText(statePath)))
+    {
+        var payload = document.RootElement.GetProperty("payload").GetString() ?? string.Empty;
+        var payloadBytes = Convert.FromBase64String(payload);
+        payloadBytes[^1] ^= 0x7F;
+        File.WriteAllText(
+            statePath,
+            $$"""
+            {
+              "schema_version": 1,
+              "format": "app-protected-v3",
+              "payload": "{{Convert.ToBase64String(payloadBytes)}}"
+            }
+            """);
+    }
+
+    var exception = AssertThrows<InvalidOperationException>(() =>
+        PlayerAssistantUpdateUtility.TryReadTrustedUpdateVersion(statePath));
+    AssertContains(exception.Message, "authenticate or decrypt");
 }
 
 static void UpdateCheckRejectsSignedManifestRollbackBelowTrustedVersionFloor()
@@ -3466,8 +3591,8 @@ static void UpdateHostCertificatePinningAcceptsTrustedLeafPin()
         new CertificatePinningPolicy(
             "bryanmiller.us",
             [
-                "Cs2RWBFFnGtCidcPrPVbM4awHfkwOQAdfcF2KohmJFc=",
-                "nWN7PSep5XDQdge5zK24CnCRXHr3KvzhKEGxsdqCX9E="
+                new CertificatePinTrustEntry("Cs2RWBFFnGtCidcPrPVbM4awHfkwOQAdfcF2KohmJFc="),
+                new CertificatePinTrustEntry("nWN7PSep5XDQdge5zK24CnCRXHr3KvzhKEGxsdqCX9E=")
             ]));
 
     AssertTrue(isValid, "expected trusted leaf pin to satisfy update host pinning");
@@ -3482,11 +3607,54 @@ static void UpdateHostCertificatePinningAcceptsTrustedIntermediatePin()
         new CertificatePinningPolicy(
             "bryanmiller.us",
             [
-                "Cs2RWBFFnGtCidcPrPVbM4awHfkwOQAdfcF2KohmJFc=",
-                "nWN7PSep5XDQdge5zK24CnCRXHr3KvzhKEGxsdqCX9E="
+                new CertificatePinTrustEntry("Cs2RWBFFnGtCidcPrPVbM4awHfkwOQAdfcF2KohmJFc="),
+                new CertificatePinTrustEntry("nWN7PSep5XDQdge5zK24CnCRXHr3KvzhKEGxsdqCX9E=")
             ]));
 
     AssertTrue(isValid, "expected trusted intermediate pin to satisfy update host pinning");
+}
+
+static void UpdateHostCertificatePinningSupportsRotationWindow()
+{
+    var now = new DateTimeOffset(2026, 7, 4, 0, 0, 0, TimeSpan.Zero);
+    var isValid = CertificatePinningUtility.ValidatePinnedRequest(
+        new Uri("https://bryanmiller.us/scarlethorizons/p-assist-updates.json"),
+        ["ROTATEDPINAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="],
+        SslPolicyErrors.None,
+        new CertificatePinningPolicy(
+            "bryanmiller.us",
+            [
+                new CertificatePinTrustEntry(
+                    "OLDPINAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
+                    NotAfterUtc: now.AddDays(7)),
+                new CertificatePinTrustEntry(
+                    "ROTATEDPINAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
+                    NotBeforeUtc: now.AddDays(-7))
+            ]),
+        now);
+
+    AssertTrue(isValid, "expected rotated pin within overlap window to be trusted");
+}
+
+static void UpdateHostCertificatePinningRejectsRetiredPin()
+{
+    var isValid = CertificatePinningUtility.ValidatePinnedRequest(
+        new Uri("https://bryanmiller.us/scarlethorizons/p-assist-updates.json"),
+        ["OLDPINAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="],
+        SslPolicyErrors.None,
+        new CertificatePinningPolicy(
+            "bryanmiller.us",
+            [
+                new CertificatePinTrustEntry(
+                    "OLDPINAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
+                    NotAfterUtc: new DateTimeOffset(2026, 1, 1, 0, 0, 0, TimeSpan.Zero)),
+                new CertificatePinTrustEntry(
+                    "NEWPINAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
+                    NotBeforeUtc: new DateTimeOffset(2026, 1, 2, 0, 0, 0, TimeSpan.Zero))
+            ]),
+        new DateTimeOffset(2026, 7, 4, 0, 0, 0, TimeSpan.Zero));
+
+    AssertFalse(isValid, "expected retired pin outside its rotation window to be rejected");
 }
 
 static void UpdateHostCertificatePinningRejectsMismatchedPin()
@@ -3498,8 +3666,8 @@ static void UpdateHostCertificatePinningRejectsMismatchedPin()
         new CertificatePinningPolicy(
             "bryanmiller.us",
             [
-                "Cs2RWBFFnGtCidcPrPVbM4awHfkwOQAdfcF2KohmJFc=",
-                "nWN7PSep5XDQdge5zK24CnCRXHr3KvzhKEGxsdqCX9E="
+                new CertificatePinTrustEntry("Cs2RWBFFnGtCidcPrPVbM4awHfkwOQAdfcF2KohmJFc="),
+                new CertificatePinTrustEntry("nWN7PSep5XDQdge5zK24CnCRXHr3KvzhKEGxsdqCX9E=")
             ]));
 
     AssertFalse(isValid, "expected mismatched pin to be rejected for update host");
@@ -3572,6 +3740,11 @@ static (string ManifestJson, string SignatureText, string PublicKeyPem) CreateSi
         HashAlgorithmName.SHA256,
         RSASignaturePadding.Pkcs1);
     return (manifestJson, Convert.ToBase64String(signatureBytes), rsa.ExportSubjectPublicKeyInfoPem());
+}
+
+static UpdateManifestSigningKeyTrustEntry CreateActiveSigningKey(string publicKeyPem)
+{
+    return new UpdateManifestSigningKeyTrustEntry("test-key", publicKeyPem);
 }
 
 static void SearchEnterTriggersClickWhenEnabled()

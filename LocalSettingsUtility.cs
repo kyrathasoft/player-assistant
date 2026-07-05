@@ -154,6 +154,38 @@ namespace PlayerAssistant
             AtomicFileUtility.WriteAllText(settingsPath, encryptedJson);
         }
 
+        internal static void SaveScopedProtectedJson<T>(string path, T value)
+        {
+            ArgumentException.ThrowIfNullOrWhiteSpace(path);
+            ArgumentNullException.ThrowIfNull(value);
+
+            var plaintextBytes = JsonSerializer.SerializeToUtf8Bytes(value, JsonOptions);
+            var encryptedEnvelope = CreateEncryptedEnvelope(plaintextBytes, path);
+            var encryptedJson = JsonSerializer.Serialize(encryptedEnvelope, JsonOptions);
+            AtomicFileUtility.WriteAllText(path, encryptedJson);
+        }
+
+        internal static T LoadScopedProtectedJson<T>(string path)
+        {
+            ArgumentException.ThrowIfNullOrWhiteSpace(path);
+
+            if (!File.Exists(path))
+            {
+                throw new FileNotFoundException("Protected settings file not found.", path);
+            }
+
+            var fileContents = File.ReadAllText(path);
+            using var document = JsonDocument.Parse(fileContents);
+            if (!TryReadEncryptedEnvelope(document.RootElement, out var envelope))
+            {
+                throw new InvalidOperationException("Protected settings file must use an authenticated encrypted envelope.");
+            }
+
+            var plaintextBytes = DecryptEnvelopePayload(envelope, path);
+            return JsonSerializer.Deserialize<T>(plaintextBytes, JsonOptions)
+                ?? throw new InvalidOperationException("Protected settings payload could not be parsed.");
+        }
+
         public static bool IsEncryptedSettingsFile(string settingsPath)
         {
             if (!File.Exists(settingsPath))
@@ -168,14 +200,21 @@ namespace PlayerAssistant
 
         private static Dictionary<string, string> DecryptSettings(EncryptedSettingsEnvelope envelope, string settingsPath)
         {
+            var plaintextBytes = DecryptEnvelopePayload(envelope, settingsPath);
+            return JsonSerializer.Deserialize<Dictionary<string, string>>(plaintextBytes, JsonOptions)
+                ?? throw new InvalidOperationException("The authenticated encrypted settings payload could not be parsed.");
+        }
+
+        private static byte[] DecryptEnvelopePayload(EncryptedSettingsEnvelope envelope, string settingsPath)
+        {
             try
             {
                 return envelope.Format switch
                 {
-                    EncryptedFormat => DecryptAuthenticatedAesCbcSettings(envelope.Payload, settingsPath, EncryptedFormat),
-                    V2EncryptedFormat => DecryptAuthenticatedAesCbcSettings(envelope.Payload, settingsPath, V2EncryptedFormat),
-                    V1EncryptedFormat => DecryptAesCbcSettings(envelope.Payload),
-                    LegacyEncryptedFormat => DecryptDpapiSettings(envelope.Payload),
+                    EncryptedFormat => DecryptAuthenticatedAesCbcPayload(envelope.Payload, settingsPath, EncryptedFormat),
+                    V2EncryptedFormat => DecryptAuthenticatedAesCbcPayload(envelope.Payload, settingsPath, V2EncryptedFormat),
+                    V1EncryptedFormat => DecryptAesCbcPayload(envelope.Payload),
+                    LegacyEncryptedFormat => DecryptDpapiPayload(envelope.Payload),
                     _ => throw new InvalidOperationException(
                         $"Unsupported encrypted settings format '{envelope.Format}'.")
                 };
@@ -186,7 +225,7 @@ namespace PlayerAssistant
             }
         }
 
-        private static Dictionary<string, string> DecryptAuthenticatedAesCbcSettings(string payload, string settingsPath, string format)
+        private static byte[] DecryptAuthenticatedAesCbcPayload(string payload, string settingsPath, string format)
         {
             try
             {
@@ -218,10 +257,7 @@ namespace PlayerAssistant
                 aes.Padding = PaddingMode.PKCS7;
 
                 using var decryptor = aes.CreateDecryptor();
-                var plaintextBytes = decryptor.TransformFinalBlock(ciphertext, 0, ciphertext.Length);
-
-                return JsonSerializer.Deserialize<Dictionary<string, string>>(plaintextBytes, JsonOptions)
-                    ?? throw new InvalidOperationException("The authenticated encrypted settings payload could not be parsed.");
+                return decryptor.TransformFinalBlock(ciphertext, 0, ciphertext.Length);
             }
             catch (CryptographicException ex)
             {
@@ -231,7 +267,7 @@ namespace PlayerAssistant
             }
         }
 
-        private static Dictionary<string, string> DecryptAesCbcSettings(string payload)
+        private static byte[] DecryptAesCbcPayload(string payload)
         {
             try
             {
@@ -251,10 +287,7 @@ namespace PlayerAssistant
                 aes.Padding = PaddingMode.PKCS7;
 
                 using var decryptor = aes.CreateDecryptor();
-                var plaintextBytes = decryptor.TransformFinalBlock(ciphertext, 0, ciphertext.Length);
-
-                return JsonSerializer.Deserialize<Dictionary<string, string>>(plaintextBytes, JsonOptions)
-                    ?? throw new InvalidOperationException("The encrypted settings payload could not be parsed.");
+                return decryptor.TransformFinalBlock(ciphertext, 0, ciphertext.Length);
             }
             catch (CryptographicException ex)
             {
@@ -264,14 +297,12 @@ namespace PlayerAssistant
             }
         }
 
-        private static Dictionary<string, string> DecryptDpapiSettings(string payload)
+        private static byte[] DecryptDpapiPayload(string payload)
         {
             try
             {
                 var protectedBytes = Convert.FromBase64String(payload);
-                var plaintextBytes = ProtectedData.Unprotect(protectedBytes, optionalEntropy: null, DataProtectionScope.CurrentUser);
-                return JsonSerializer.Deserialize<Dictionary<string, string>>(plaintextBytes, JsonOptions)
-                    ?? throw new InvalidOperationException("The encrypted settings payload could not be parsed.");
+                return ProtectedData.Unprotect(protectedBytes, optionalEntropy: null, DataProtectionScope.CurrentUser);
             }
             catch (CryptographicException ex)
             {

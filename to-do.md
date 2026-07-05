@@ -135,3 +135,11 @@
 - [x] Add certificate pinning or equivalent transport trust hardening for the update host beyond the current allowlist and HTTPS validation.
 - [x] Move update and RPOL-sensitive runtime secrets out of app-adjacent sidecars into a Windows-backed secret store such as Credential Manager.
 - [x] Add anti-downgrade tracking so the updater refuses older-but-valid signed releases after a newer trusted version has been observed.
+- [x] Add revocation and rotation handling for update trust material.
+  - [x] Support pinned-certificate rotation windows.
+  - [x] Support update-signing key rotation and explicit revocation.
+  - [x] Fail closed if a manifest is signed by a retired key.
+- [x] Protect the anti-downgrade trusted-version floor and related updater state against tampering, not just corruption.
+- [ ] Re-verify the installer immediately before execution and refuse launch if path, signer, or elevation context changes after initial verification.
+- [ ] Produce and verify release installer artifacts in CI, including filename/version/signature/hash checks against the signed manifest.
+- [ ] Further minimize outbound network trust by centralizing per-purpose host/path allowlists and auditing every allowed endpoint.

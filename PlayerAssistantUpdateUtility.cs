@@ -30,21 +30,22 @@ namespace PlayerAssistant
         private const string UpdateManifestFileName = "p-assist-updates.json";
         private const string UpdateManifestSignatureFileName = "p-assist-updates.json.sig";
         private const string TrustedUpdateStateFileName = "trusted-update-state.json";
-        private static readonly JsonSerializerOptions TrustedUpdateStateJsonOptions = new() { WriteIndented = true };
-        // Public verification keys only. Keep the matching private update-signing key outside the repository.
-        private static readonly string[] TrustedUpdateManifestPublicKeys =
+        // Public verification keys only. Keep matching private signing keys outside the repository.
+        private static readonly UpdateManifestSigningKeyTrustEntry[] TrustedUpdateManifestKeys =
         [
-            """
-            -----BEGIN PUBLIC KEY-----
-            MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA1O6Lb1iZWkxwzEE69NiX
-            t3Dhyf0ZK2tr7UrJZNGJ3wmS8SyKWi4PYn1ymWxpJ3QmyqJhem3d52B3C6Prp8oq
-            0RpBZia7K2qo4VRoNqQfxGGHHkZv18v5Q+NOhIZET8LRG6RwOuKvP3vg76hylgBj
-            wC/WlNaxXPg981j0UAh2tLwJAN2+GroBzVMCwX4LEfUwZ6pqN+TgOJ1ZFHowvH3F
-            IZ9EBqQAM/HGiTHb8gA5YMZj/UApeek6T7Mkw9WUYE3CR10kMFqzgiNirCNJHbs6
-            h5sx4M4HZoAMWcd4317uuayoOeue+Ggq7q1UVj4w274x3N51wHKT61cHyx5GdSW/
-            2QIDAQAB
-            -----END PUBLIC KEY-----
-            """
+            new(
+                "update-signing-2026-primary",
+                """
+                -----BEGIN PUBLIC KEY-----
+                MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA1O6Lb1iZWkxwzEE69NiX
+                t3Dhyf0ZK2tr7UrJZNGJ3wmS8SyKWi4PYn1ymWxpJ3QmyqJhem3d52B3C6Prp8oq
+                0RpBZia7K2qo4VRoNqQfxGGHHkZv18v5Q+NOhIZET8LRG6RwOuKvP3vg76hylgBj
+                wC/WlNaxXPg981j0UAh2tLwJAN2+GroBzVMCwX4LEfUwZ6pqN+TgOJ1ZFHowvH3F
+                IZ9EBqQAM/HGiTHb8gA5YMZj/UApeek6T7Mkw9WUYE3CR10kMFqzgiNirCNJHbs6
+                h5sx4M4HZoAMWcd4317uuayoOeue+Ggq7q1UVj4w274x3N51wHKT61cHyx5GdSW/
+                2QIDAQAB
+                -----END PUBLIC KEY-----
+                """)
         ];
 
         public static Uri UpdateListingUri { get; } = new("https://bryanmiller.us/scarlethorizons/");
@@ -57,30 +58,30 @@ namespace PlayerAssistant
         {
             return await CheckForLatestUpdateAsync(
                 httpClient,
-                TrustedUpdateManifestPublicKeys,
+                TrustedUpdateManifestKeys,
                 cancellationToken).ConfigureAwait(false);
         }
 
         internal static async Task<PlayerAssistantUpdateInfo?> CheckForLatestUpdateAsync(
             HttpClient httpClient,
-            IReadOnlyList<string> trustedPublicKeys,
+            IReadOnlyList<UpdateManifestSigningKeyTrustEntry> trustedSigningKeys,
             CancellationToken cancellationToken = default)
         {
             return await CheckForLatestUpdateAsync(
                 httpClient,
-                trustedPublicKeys,
+                trustedSigningKeys,
                 trustedUpdateStatePath: null,
                 cancellationToken).ConfigureAwait(false);
         }
 
         internal static async Task<PlayerAssistantUpdateInfo?> CheckForLatestUpdateAsync(
             HttpClient httpClient,
-            IReadOnlyList<string> trustedPublicKeys,
+            IReadOnlyList<UpdateManifestSigningKeyTrustEntry> trustedSigningKeys,
             string? trustedUpdateStatePath,
             CancellationToken cancellationToken = default)
         {
             ArgumentNullException.ThrowIfNull(httpClient);
-            ArgumentNullException.ThrowIfNull(trustedPublicKeys);
+            ArgumentNullException.ThrowIfNull(trustedSigningKeys);
 
             var manifestBytes = await FetchUpdateManifestBytesAsync(httpClient, cancellationToken).ConfigureAwait(false);
             var signatureText = await FetchUpdateManifestSignatureAsync(httpClient, cancellationToken).ConfigureAwait(false);
@@ -88,7 +89,7 @@ namespace PlayerAssistant
                 manifestBytes,
                 signatureText,
                 UpdateManifestUri,
-                trustedPublicKeys);
+                trustedSigningKeys);
             return ApplyTrustedUpdateVersionPolicy(
                 latestUpdate,
                 GetCurrentAppVersion(),
@@ -131,34 +132,35 @@ namespace PlayerAssistant
             string manifestJson,
             string signatureText,
             Uri manifestUri,
-            IReadOnlyList<string> trustedPublicKeys)
+            IReadOnlyList<UpdateManifestSigningKeyTrustEntry> trustedSigningKeys)
         {
             ArgumentNullException.ThrowIfNull(manifestJson);
             return FindLatestUpdateFromSignedManifest(
                 Encoding.UTF8.GetBytes(manifestJson),
                 signatureText,
                 manifestUri,
-                trustedPublicKeys);
+                trustedSigningKeys);
         }
 
         internal static PlayerAssistantUpdateInfo? FindLatestUpdateFromSignedManifest(
             byte[] manifestBytes,
             string signatureText,
             Uri manifestUri,
-            IReadOnlyList<string> trustedPublicKeys)
+            IReadOnlyList<UpdateManifestSigningKeyTrustEntry> trustedSigningKeys,
+            DateTimeOffset? nowUtc = null)
         {
             ArgumentNullException.ThrowIfNull(manifestBytes);
             ArgumentException.ThrowIfNullOrWhiteSpace(signatureText);
             ArgumentNullException.ThrowIfNull(manifestUri);
-            ArgumentNullException.ThrowIfNull(trustedPublicKeys);
+            ArgumentNullException.ThrowIfNull(trustedSigningKeys);
 
-            if (trustedPublicKeys.Count == 0)
+            if (trustedSigningKeys.Count == 0)
             {
                 throw new InvalidOperationException("No trusted update manifest signing keys are configured.");
             }
 
             NetworkUrlAllowlistUtility.EnsureAllowed(manifestUri, NetworkUrlPurpose.PlayerAssistantUpdate);
-            VerifyManifestSignature(manifestBytes, signatureText, trustedPublicKeys);
+            VerifyManifestSignature(manifestBytes, signatureText, trustedSigningKeys, nowUtc ?? DateTimeOffset.UtcNow);
 
             var manifest = ParseUpdateManifest(manifestBytes);
             if (manifest.SchemaVersion != UpdateManifestSchemaVersion)
@@ -263,20 +265,46 @@ namespace PlayerAssistant
                 return null;
             }
 
+            var state = TryLoadLegacyTrustedUpdateState(statePath);
+            if (state is not null)
+            {
+                LocalSettingsUtility.SaveScopedProtectedJson(statePath, state);
+            }
+            else
+            {
+                state = LocalSettingsUtility.LoadScopedProtectedJson<TrustedUpdateState>(statePath);
+            }
+
+            if (state.SchemaVersion != TrustedUpdateStateSchemaVersion)
+            {
+                throw new InvalidOperationException(
+                    $"Trusted update state schema version {state.SchemaVersion} is not supported.");
+            }
+
+            if (!Version.TryParse(state.HighestTrustedVersion, out var version))
+            {
+                throw new InvalidOperationException("Trusted update state contains an invalid highest trusted version.");
+            }
+
+            return version;
+        }
+
+        private static TrustedUpdateState? TryLoadLegacyTrustedUpdateState(string statePath)
+        {
             try
             {
-                var state = JsonSerializer.Deserialize<TrustedUpdateState>(
-                    File.ReadAllText(statePath),
-                    TrustedUpdateStateJsonOptions);
-                return state is not null &&
-                    state.SchemaVersion == TrustedUpdateStateSchemaVersion &&
-                    Version.TryParse(state.HighestTrustedVersion, out var version)
-                    ? version
-                    : null;
+                using var document = JsonDocument.Parse(File.ReadAllText(statePath));
+                if (document.RootElement.ValueKind != JsonValueKind.Object
+                    || document.RootElement.TryGetProperty("format", out _)
+                    || document.RootElement.TryGetProperty("payload", out _))
+                {
+                    return null;
+                }
+
+                return document.RootElement.Deserialize<TrustedUpdateState>();
             }
-            catch (Exception ex) when (ex is JsonException or IOException or UnauthorizedAccessException)
+            catch (JsonException)
             {
-                StartupLoggingUtility.Append("trusted update state load", ex);
                 return null;
             }
         }
@@ -308,9 +336,7 @@ namespace PlayerAssistant
                 TrustedUpdateStateSchemaVersion,
                 highestTrustedVersion.ToString(),
                 DateTimeOffset.UtcNow.ToString("O"));
-            AtomicFileUtility.WriteAllText(
-                statePath,
-                JsonSerializer.Serialize(state, TrustedUpdateStateJsonOptions));
+            LocalSettingsUtility.SaveScopedProtectedJson(statePath, state);
         }
 
         private static IEnumerable<string> EnumerateArchiveReferences(string listingContent)
@@ -416,24 +442,53 @@ namespace PlayerAssistant
         private static void VerifyManifestSignature(
             byte[] manifestBytes,
             string signatureText,
-            IReadOnlyList<string> trustedPublicKeys)
+            IReadOnlyList<UpdateManifestSigningKeyTrustEntry> trustedSigningKeys,
+            DateTimeOffset nowUtc)
         {
             var signatureBytes = ParseSignature(signatureText);
-            foreach (var publicKey in trustedPublicKeys)
+            UpdateManifestSigningKeyTrustEntry? retiredMatch = null;
+            foreach (var trustedSigningKey in trustedSigningKeys)
             {
                 using var rsa = RSA.Create();
-                rsa.ImportFromPem(publicKey);
+                rsa.ImportFromPem(trustedSigningKey.PublicKeyPem);
                 if (rsa.VerifyData(
                         manifestBytes,
                         signatureBytes,
                         HashAlgorithmName.SHA256,
                         RSASignaturePadding.Pkcs1))
                 {
-                    return;
+                    if (!trustedSigningKey.IsRevoked && IsWithinTrustWindow(trustedSigningKey, nowUtc))
+                    {
+                        return;
+                    }
+
+                    retiredMatch = trustedSigningKey;
                 }
             }
 
+            if (retiredMatch is not null)
+            {
+                var status = retiredMatch.IsRevoked ? "revoked" : "retired";
+                throw new InvalidOperationException(
+                    $"Update manifest signature matched a {status} signing key ('{retiredMatch.KeyId}').");
+            }
+
             throw new InvalidOperationException("Update manifest signature could not be verified with a trusted signing key.");
+        }
+
+        private static bool IsWithinTrustWindow(UpdateManifestSigningKeyTrustEntry trustedSigningKey, DateTimeOffset nowUtc)
+        {
+            if (trustedSigningKey.NotBeforeUtc is not null && nowUtc < trustedSigningKey.NotBeforeUtc.Value)
+            {
+                return false;
+            }
+
+            if (trustedSigningKey.NotAfterUtc is not null && nowUtc > trustedSigningKey.NotAfterUtc.Value)
+            {
+                return false;
+            }
+
+            return true;
         }
 
         private static byte[] ParseSignature(string signatureText)
@@ -493,4 +548,11 @@ namespace PlayerAssistant
             [property: JsonPropertyName("highest_trusted_version")] string HighestTrustedVersion,
             [property: JsonPropertyName("recorded_at")] string RecordedAt);
     }
+
+    internal sealed record UpdateManifestSigningKeyTrustEntry(
+        string KeyId,
+        string PublicKeyPem,
+        DateTimeOffset? NotBeforeUtc = null,
+        DateTimeOffset? NotAfterUtc = null,
+        bool IsRevoked = false);
 }
