@@ -136,11 +136,12 @@ var tests = new (string Name, Action Test)[]
     ("about menu contains author and update items", AboutMenuContainsAuthorAndUpdateItems),
     ("about author text lists developer info", AboutAuthorTextListsDeveloperInfo),
     ("about version text shows app version", AboutVersionTextShowsAppVersion),
-    ("update check parses p-assist archive version", UpdateCheckParsesPAssistArchiveVersion),
-    ("update check chooses newest archive", UpdateCheckChoosesNewestArchive),
+    ("update check verifies signed p-assist manifest", UpdateCheckVerifiesSignedPAssistManifest),
+    ("update check chooses newest signed manifest entry", UpdateCheckChoosesNewestSignedManifestEntry),
+    ("update check rejects tampered signed manifest", UpdateCheckRejectsTamperedSignedManifest),
     ("update check compares against current app version", UpdateCheckComparesAgainstCurrentAppVersion),
     ("update check reports latest version message", UpdateCheckReportsLatestVersionMessage),
-    ("update check fetches from allowed update host", UpdateCheckFetchesFromAllowedUpdateHost),
+    ("update check fetches signed manifest from allowed update host", UpdateCheckFetchesSignedManifestFromAllowedUpdateHost),
     ("search enter triggers click when enabled", SearchEnterTriggersClickWhenEnabled),
     ("keyword search offers online fallback on local miss", KeywordSearchOffersOnlineFallbackOnLocalMiss),
     ("keyword search cancels previous online fallback", KeywordSearchCancelsPreviousOnlineFallback),
@@ -3069,44 +3070,114 @@ static void AboutVersionTextShowsAppVersion()
     AssertEqual("RPOL Scarlet Horizon Campaign Assistant 0.9.0", versionText, "unexpected About Version text");
 }
 
-static void UpdateCheckParsesPAssistArchiveVersion()
+static void UpdateCheckVerifiesSignedPAssistManifest()
 {
-    var update = PlayerAssistantUpdateUtility.FindLatestUpdate(
+    var signed = CreateSignedUpdateManifest(
         """
-        <html>
-          <body>
-            <a href="https://bryanmiller.us/scarlethorizons/p-assist-0.9.0.zip">download</a>
-          </body>
-        </html>
-        """,
-        PlayerAssistantUpdateUtility.UpdateListingUri);
+        {
+          "schema_version": 1,
+          "updates": [
+            {
+              "version": "0.9.0",
+              "url": "https://bryanmiller.us/scarlethorizons/p-assist-0.9.0.zip",
+              "sha256": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+            }
+          ]
+        }
+        """);
+    var update = PlayerAssistantUpdateUtility.FindLatestUpdateFromSignedManifest(
+        signed.ManifestJson,
+        signed.SignatureText,
+        PlayerAssistantUpdateUtility.UpdateManifestUri,
+        [signed.PublicKeyPem]);
 
-    AssertTrue(update is not null, "expected update archive to be detected");
+    AssertTrue(update is not null, "expected signed update archive to be detected");
     AssertEqual("0.9.0", update!.VersionText, "unexpected parsed update version text");
     AssertEqual(new Version(0, 9, 0), update.Version, "unexpected parsed update version");
     AssertEqual(
         "https://bryanmiller.us/scarlethorizons/p-assist-0.9.0.zip",
         update.DownloadUri.AbsoluteUri,
         "unexpected update download URL");
+    AssertEqual(
+        "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+        update.Sha256,
+        "unexpected update SHA256");
 }
 
-static void UpdateCheckChoosesNewestArchive()
+static void UpdateCheckChoosesNewestSignedManifestEntry()
 {
-    var update = PlayerAssistantUpdateUtility.FindLatestUpdate(
+    var signed = CreateSignedUpdateManifest(
         """
-        <a href="p-assist-0.9.0.zip">old</a>
-        <a href="p-assist-0.10.0.zip">new</a>
-        <a href="notes.txt">ignore</a>
-        <a href="https://unexpected.example.test/p-assist-99.0.0.zip">ignore disallowed host</a>
-        """,
-        PlayerAssistantUpdateUtility.UpdateListingUri);
+        {
+          "schema_version": 1,
+          "updates": [
+            {
+              "version": "0.9.0",
+              "url": "p-assist-0.9.0.zip",
+              "sha256": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+            },
+            {
+              "version": "0.10.0",
+              "url": "p-assist-0.10.0.zip",
+              "sha256": "BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB"
+            },
+            {
+              "version": "99.0.0",
+              "url": "https://unexpected.example.test/p-assist-99.0.0.zip",
+              "sha256": "CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC"
+            },
+            {
+              "version": "0.11.0",
+              "url": "p-assist-0.10.0.zip",
+              "sha256": "DDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDD"
+            }
+          ]
+        }
+        """);
+    var update = PlayerAssistantUpdateUtility.FindLatestUpdateFromSignedManifest(
+        signed.ManifestJson,
+        signed.SignatureText,
+        PlayerAssistantUpdateUtility.UpdateManifestUri,
+        [signed.PublicKeyPem]);
 
-    AssertTrue(update is not null, "expected latest update archive to be detected");
-    AssertEqual("0.10.0", update!.VersionText, "expected newest allowed archive version");
+    AssertTrue(update is not null, "expected latest signed update archive to be detected");
+    AssertEqual("0.10.0", update!.VersionText, "expected newest valid allowed archive version");
     AssertEqual(
         "https://bryanmiller.us/scarlethorizons/p-assist-0.10.0.zip",
         update.DownloadUri.AbsoluteUri,
         "unexpected newest update URL");
+    AssertEqual(
+        "BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB",
+        update.Sha256,
+        "unexpected newest update SHA256");
+}
+
+static void UpdateCheckRejectsTamperedSignedManifest()
+{
+    const string manifestJson =
+        """
+        {
+          "schema_version": 1,
+          "updates": [
+            {
+              "version": "0.9.0",
+              "url": "p-assist-0.9.0.zip",
+              "sha256": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+            }
+          ]
+        }
+        """;
+    var signed = CreateSignedUpdateManifest(manifestJson);
+    var tamperedManifestJson = manifestJson.Replace("0.9.0", "0.9.1", StringComparison.Ordinal);
+
+    var exception = AssertThrows<InvalidOperationException>(() =>
+        PlayerAssistantUpdateUtility.FindLatestUpdateFromSignedManifest(
+            tamperedManifestJson,
+            signed.SignatureText,
+            PlayerAssistantUpdateUtility.UpdateManifestUri,
+            [signed.PublicKeyPem]));
+
+    AssertContains(exception.Message, "signature");
 }
 
 static void UpdateCheckComparesAgainstCurrentAppVersion()
@@ -3117,11 +3188,13 @@ static void UpdateCheckComparesAgainstCurrentAppVersion()
     var sameVersion = new PlayerAssistantUpdateInfo(
         new Version(0, 9, 0),
         "0.9.0",
-        new Uri("https://bryanmiller.us/scarlethorizons/p-assist-0.9.0.zip"));
+        new Uri("https://bryanmiller.us/scarlethorizons/p-assist-0.9.0.zip"),
+        new string('A', 64));
     var newerVersion = new PlayerAssistantUpdateInfo(
         new Version(0, 9, 1),
         "0.9.1",
-        new Uri("https://bryanmiller.us/scarlethorizons/p-assist-0.9.1.zip"));
+        new Uri("https://bryanmiller.us/scarlethorizons/p-assist-0.9.1.zip"),
+        new string('B', 64));
 
     AssertFalse(sameVersion.IsNewerThan(currentVersion), "same version should not be offered as an update");
     AssertTrue(newerVersion.IsNewerThan(currentVersion), "newer version should be offered as an update");
@@ -3137,27 +3210,76 @@ static void UpdateCheckReportsLatestVersionMessage()
         "unexpected no-update message text");
 }
 
-static void UpdateCheckFetchesFromAllowedUpdateHost()
+static void UpdateCheckFetchesSignedManifestFromAllowedUpdateHost()
 {
+    var signed = CreateSignedUpdateManifest(
+        """
+        {
+          "schema_version": 1,
+          "updates": [
+            {
+              "version": "0.9.1",
+              "url": "p-assist-0.9.1.zip",
+              "sha256": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+            }
+          ]
+        }
+        """);
+    var requestUris = new List<string>();
     using var httpClient = NetworkRequestUtility.CreateHttpClient(new ScriptedHttpMessageHandler((request, _) =>
     {
-        AssertEqual(
-            PlayerAssistantUpdateUtility.UpdateListingUri.AbsoluteUri,
-            request.RequestUri?.AbsoluteUri ?? string.Empty,
-            "unexpected update listing request URL");
-
-        return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+        requestUris.Add(request.RequestUri?.AbsoluteUri ?? string.Empty);
+        if (request.RequestUri == PlayerAssistantUpdateUtility.UpdateManifestUri)
         {
-            Content = new StringContent("""<a href="p-assist-0.9.1.zip">download</a>""")
+            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new ByteArrayContent(System.Text.Encoding.UTF8.GetBytes(signed.ManifestJson))
+            });
+        }
+
+        if (request.RequestUri == PlayerAssistantUpdateUtility.UpdateManifestSignatureUri)
+        {
+            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent(signed.SignatureText)
+            });
+        }
+
+        return Task.FromResult(new HttpResponseMessage(HttpStatusCode.NotFound)
+        {
+            RequestMessage = request
         });
     }));
 
-    var update = PlayerAssistantUpdateUtility.CheckForLatestUpdateAsync(httpClient).GetAwaiter().GetResult();
-    AssertTrue(update is not null, "expected update archive from scripted listing");
+    var update = PlayerAssistantUpdateUtility
+        .CheckForLatestUpdateAsync(httpClient, [signed.PublicKeyPem])
+        .GetAwaiter()
+        .GetResult();
+    AssertEqual(2, requestUris.Count, "expected manifest and signature requests");
+    AssertEqual(
+        PlayerAssistantUpdateUtility.UpdateManifestUri.AbsoluteUri,
+        requestUris[0],
+        "unexpected update manifest request URL");
+    AssertEqual(
+        PlayerAssistantUpdateUtility.UpdateManifestSignatureUri.AbsoluteUri,
+        requestUris[1],
+        "unexpected update manifest signature request URL");
+    AssertTrue(update is not null, "expected update archive from scripted signed manifest");
     AssertEqual("0.9.1", update!.VersionText, "unexpected fetched update version");
 
     var launchValidation = ExternalUrlLaunchUtility.Validate(update.DownloadUri.AbsoluteUri);
     AssertTrue(launchValidation.IsAllowed, launchValidation.RejectionReason ?? "update download URL should be launchable");
+}
+
+static (string ManifestJson, string SignatureText, string PublicKeyPem) CreateSignedUpdateManifest(string manifestJson)
+{
+    using var rsa = RSA.Create(2048);
+    var manifestBytes = System.Text.Encoding.UTF8.GetBytes(manifestJson);
+    var signatureBytes = rsa.SignData(
+        manifestBytes,
+        HashAlgorithmName.SHA256,
+        RSASignaturePadding.Pkcs1);
+    return (manifestJson, Convert.ToBase64String(signatureBytes), rsa.ExportSubjectPublicKeyInfoPem());
 }
 
 static void SearchEnterTriggersClickWhenEnabled()

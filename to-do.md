@@ -127,3 +127,4 @@
   - [x] Run publish verification, RC self-tests, secret scan, dependency checks, and diagnostics verification in CI.
   - [x] Upload redacted verification artifacts for failed CI runs.
   - [x] Block release tags unless the RC checklist passes.
+- [x] Harden the update channel with a signed JSON manifest, pinned public-key verification, update SHA256 metadata, and tests that reject tampered manifests before offering downloads.
