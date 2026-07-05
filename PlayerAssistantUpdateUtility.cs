@@ -26,8 +26,11 @@ namespace PlayerAssistant
     internal static partial class PlayerAssistantUpdateUtility
     {
         private const int UpdateManifestSchemaVersion = 1;
+        private const int TrustedUpdateStateSchemaVersion = 1;
         private const string UpdateManifestFileName = "p-assist-updates.json";
         private const string UpdateManifestSignatureFileName = "p-assist-updates.json.sig";
+        private const string TrustedUpdateStateFileName = "trusted-update-state.json";
+        private static readonly JsonSerializerOptions TrustedUpdateStateJsonOptions = new() { WriteIndented = true };
         // Public verification keys only. Keep the matching private update-signing key outside the repository.
         private static readonly string[] TrustedUpdateManifestPublicKeys =
         [
@@ -63,16 +66,33 @@ namespace PlayerAssistant
             IReadOnlyList<string> trustedPublicKeys,
             CancellationToken cancellationToken = default)
         {
+            return await CheckForLatestUpdateAsync(
+                httpClient,
+                trustedPublicKeys,
+                trustedUpdateStatePath: null,
+                cancellationToken).ConfigureAwait(false);
+        }
+
+        internal static async Task<PlayerAssistantUpdateInfo?> CheckForLatestUpdateAsync(
+            HttpClient httpClient,
+            IReadOnlyList<string> trustedPublicKeys,
+            string? trustedUpdateStatePath,
+            CancellationToken cancellationToken = default)
+        {
             ArgumentNullException.ThrowIfNull(httpClient);
             ArgumentNullException.ThrowIfNull(trustedPublicKeys);
 
             var manifestBytes = await FetchUpdateManifestBytesAsync(httpClient, cancellationToken).ConfigureAwait(false);
             var signatureText = await FetchUpdateManifestSignatureAsync(httpClient, cancellationToken).ConfigureAwait(false);
-            return FindLatestUpdateFromSignedManifest(
+            var latestUpdate = FindLatestUpdateFromSignedManifest(
                 manifestBytes,
                 signatureText,
                 UpdateManifestUri,
                 trustedPublicKeys);
+            return ApplyTrustedUpdateVersionPolicy(
+                latestUpdate,
+                GetCurrentAppVersion(),
+                trustedUpdateStatePath);
         }
 
         private static async Task<byte[]> FetchUpdateManifestBytesAsync(
@@ -209,6 +229,88 @@ namespace PlayerAssistant
 
             version = parsed;
             return true;
+        }
+
+        internal static PlayerAssistantUpdateInfo? ApplyTrustedUpdateVersionPolicy(
+            PlayerAssistantUpdateInfo? latestUpdate,
+            Version currentVersion,
+            string? trustedUpdateStatePath = null)
+        {
+            ArgumentNullException.ThrowIfNull(currentVersion);
+
+            var statePath = ResolveTrustedUpdateStatePath(trustedUpdateStatePath);
+            var highestTrustedVersion = GetHighestTrustedVersion(statePath, currentVersion);
+            if (latestUpdate is not null && latestUpdate.Version.CompareTo(highestTrustedVersion) < 0)
+            {
+                throw new InvalidOperationException(
+                    $"Signed update channel downgrade detected. Highest trusted version {highestTrustedVersion} has already been observed, but the latest signed manifest version is {latestUpdate.VersionText}.");
+            }
+
+            if (latestUpdate is not null && latestUpdate.Version.CompareTo(highestTrustedVersion) > 0)
+            {
+                highestTrustedVersion = latestUpdate.Version;
+            }
+
+            PersistHighestTrustedVersion(statePath, highestTrustedVersion);
+            return latestUpdate;
+        }
+
+        internal static Version? TryReadTrustedUpdateVersion(string? trustedUpdateStatePath = null)
+        {
+            var statePath = ResolveTrustedUpdateStatePath(trustedUpdateStatePath);
+            if (!File.Exists(statePath))
+            {
+                return null;
+            }
+
+            try
+            {
+                var state = JsonSerializer.Deserialize<TrustedUpdateState>(
+                    File.ReadAllText(statePath),
+                    TrustedUpdateStateJsonOptions);
+                return state is not null &&
+                    state.SchemaVersion == TrustedUpdateStateSchemaVersion &&
+                    Version.TryParse(state.HighestTrustedVersion, out var version)
+                    ? version
+                    : null;
+            }
+            catch (Exception ex) when (ex is JsonException or IOException or UnauthorizedAccessException)
+            {
+                StartupLoggingUtility.Append("trusted update state load", ex);
+                return null;
+            }
+        }
+
+        private static string ResolveTrustedUpdateStatePath(string? trustedUpdateStatePath)
+        {
+            return string.IsNullOrWhiteSpace(trustedUpdateStatePath)
+                ? RuntimePathUtility.GetUserDataPath(TrustedUpdateStateFileName)
+                : trustedUpdateStatePath;
+        }
+
+        private static Version GetHighestTrustedVersion(string statePath, Version currentVersion)
+        {
+            var storedVersion = TryReadTrustedUpdateVersion(statePath);
+            return storedVersion is not null && storedVersion.CompareTo(currentVersion) > 0
+                ? storedVersion
+                : currentVersion;
+        }
+
+        private static void PersistHighestTrustedVersion(string statePath, Version highestTrustedVersion)
+        {
+            var storedVersion = TryReadTrustedUpdateVersion(statePath);
+            if (storedVersion is not null && storedVersion.CompareTo(highestTrustedVersion) >= 0)
+            {
+                return;
+            }
+
+            var state = new TrustedUpdateState(
+                TrustedUpdateStateSchemaVersion,
+                highestTrustedVersion.ToString(),
+                DateTimeOffset.UtcNow.ToString("O"));
+            AtomicFileUtility.WriteAllText(
+                statePath,
+                JsonSerializer.Serialize(state, TrustedUpdateStateJsonOptions));
         }
 
         private static IEnumerable<string> EnumerateArchiveReferences(string listingContent)
@@ -385,5 +487,10 @@ namespace PlayerAssistant
             [property: JsonPropertyName("sha256")] string Sha256,
             [property: JsonPropertyName("installer_url")] string InstallerUrl,
             [property: JsonPropertyName("installer_sha256")] string InstallerSha256);
+
+        private sealed record TrustedUpdateState(
+            [property: JsonPropertyName("schema_version")] int SchemaVersion,
+            [property: JsonPropertyName("highest_trusted_version")] string HighestTrustedVersion,
+            [property: JsonPropertyName("recorded_at")] string RecordedAt);
     }
 }
