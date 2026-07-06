@@ -5516,15 +5516,19 @@ static void HardeningWorkflowBuildsAndUploadsSignedReleaseUpdateArtifacts()
     var builderPath = Path.Combine(GetRepositoryRoot(), "build-release-update-artifacts.ps1");
     var verifierPath = Path.Combine(GetRepositoryRoot(), "verify-release-update-artifacts.ps1");
     var publishScriptPath = Path.Combine(GetRepositoryRoot(), "publish-player-assistant.ps1");
+    var installerSmokeScriptPath = Path.Combine(GetRepositoryRoot(), "verify-installer-clean-machine-smoke.ps1");
 
     AssertTrue(File.Exists(workflowPath), "hardening workflow should exist");
     AssertTrue(File.Exists(builderPath), "release update artifact builder should exist");
     AssertTrue(File.Exists(verifierPath), "release update artifact verifier should exist");
     AssertTrue(File.Exists(publishScriptPath), "publish verification script should exist");
+    AssertTrue(File.Exists(installerSmokeScriptPath), "installer clean-machine smoke script should exist");
 
     var workflow = File.ReadAllText(workflowPath);
     AssertContains(workflow, "Build signed release update artifacts");
     AssertContains(workflow, ".\\build-release-update-artifacts.ps1");
+    AssertContains(workflow, "Installer clean-machine smoke");
+    AssertContains(workflow, ".\\verify-installer-clean-machine-smoke.ps1");
     AssertContains(workflow, "Verify signed release update artifacts");
     AssertContains(workflow, ".\\verify-release-update-artifacts.ps1");
     AssertContains(workflow, "Upload release installer artifacts");
@@ -5554,6 +5558,13 @@ static void HardeningWorkflowBuildsAndUploadsSignedReleaseUpdateArtifacts()
     var publishScript = File.ReadAllText(publishScriptPath);
     AssertContains(publishScript, "build-release-update-artifacts.ps1");
     AssertContains(publishScript, "verify-release-update-artifacts.ps1");
+
+    var installerSmokeScript = File.ReadAllText(installerSmokeScriptPath);
+    AssertContains(installerSmokeScript, "--health");
+    AssertContains(installerSmokeScript, "--update-preflight");
+    AssertContains(installerSmokeScript, "PlayerAssistant/RPOL/UserName");
+    AssertContains(installerSmokeScript, "settings.local.json");
+    AssertContains(installerSmokeScript, "p-assist-updates.json");
 }
 
 static void PublishedHealthVerificationAcceptsCurrentOutput()

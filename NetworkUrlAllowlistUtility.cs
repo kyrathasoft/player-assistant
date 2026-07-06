@@ -27,6 +27,8 @@ namespace PlayerAssistant
 
     internal static partial class NetworkUrlAllowlistUtility
     {
+        private const string HostedLocalSettingsOverrideEnvironmentVariable = "PLAYER_ASSISTANT_HOSTED_LOCAL_SETTINGS_URL_OVERRIDE";
+        private const string UpdateBaseUrlOverrideEnvironmentVariable = "PLAYER_ASSISTANT_UPDATE_BASE_URL";
         private static Func<Uri, NetworkUrlPurpose, NetworkUrlAllowlistValidation?>? ValidationOverrideForTests;
         private static readonly NetworkUrlPolicyRule[] Rules =
         [
@@ -130,6 +132,12 @@ namespace PlayerAssistant
                 return overrideValidation;
             }
 
+            var environmentOverrideValidation = ValidateEnvironmentOverride(uri, purpose);
+            if (environmentOverrideValidation is not null)
+            {
+                return environmentOverrideValidation;
+            }
+
             if (purpose == NetworkUrlPurpose.Generic)
             {
                 return Rules.Any(rule => rule.IsMatch(uri))
@@ -182,6 +190,75 @@ namespace PlayerAssistant
             ArgumentNullException.ThrowIfNull(uri);
 
             return IsHost(uri, "bryanmiller.us", allowSubdomains: true);
+        }
+
+        private static NetworkUrlAllowlistValidation? ValidateEnvironmentOverride(Uri uri, NetworkUrlPurpose purpose)
+        {
+            if (purpose == NetworkUrlPurpose.PlayerAssistantHostedSettings
+                && TryGetAbsoluteEnvironmentUri(HostedLocalSettingsOverrideEnvironmentVariable) is { } hostedSettingsOverrideUri)
+            {
+                return UriEquals(uri, hostedSettingsOverrideUri)
+                    ? NetworkUrlAllowlistValidation.Allowed(uri)
+                    : null;
+            }
+
+            if (purpose == NetworkUrlPurpose.PlayerAssistantUpdate
+                && TryGetAbsoluteEnvironmentUri(UpdateBaseUrlOverrideEnvironmentVariable) is { } updateBaseOverrideUri)
+            {
+                return IsEnvironmentOverrideUpdateUri(uri, updateBaseOverrideUri)
+                    ? NetworkUrlAllowlistValidation.Allowed(uri)
+                    : null;
+            }
+
+            return null;
+        }
+
+        private static Uri? TryGetAbsoluteEnvironmentUri(string environmentVariableName)
+        {
+            var value = Environment.GetEnvironmentVariable(environmentVariableName);
+            return Uri.TryCreate(value, UriKind.Absolute, out var uri) && uri.IsAbsoluteUri
+                ? uri
+                : null;
+        }
+
+        private static bool IsEnvironmentOverrideUpdateUri(Uri candidateUri, Uri baseOverrideUri)
+        {
+            if (!string.Equals(candidateUri.Scheme, baseOverrideUri.Scheme, StringComparison.OrdinalIgnoreCase)
+                || !string.Equals(candidateUri.Host, baseOverrideUri.Host, StringComparison.OrdinalIgnoreCase)
+                || candidateUri.Port != baseOverrideUri.Port)
+            {
+                return false;
+            }
+
+            var basePath = baseOverrideUri.AbsolutePath;
+            if (!basePath.EndsWith("/", StringComparison.Ordinal))
+            {
+                basePath += "/";
+            }
+
+            if (!candidateUri.AbsolutePath.StartsWith(basePath, StringComparison.OrdinalIgnoreCase))
+            {
+                return false;
+            }
+
+            var relativePath = candidateUri.AbsolutePath[basePath.Length..];
+            if (relativePath.Length == 0)
+            {
+                return true;
+            }
+
+            return string.Equals(relativePath, "p-assist-updates.json", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(relativePath, "p-assist-updates.json.sig", StringComparison.OrdinalIgnoreCase)
+                || UpdateArtifactFileNameRegex().IsMatch(Path.GetFileName(candidateUri.AbsolutePath));
+        }
+
+        private static bool UriEquals(Uri left, Uri right)
+        {
+            return string.Equals(left.Scheme, right.Scheme, StringComparison.OrdinalIgnoreCase)
+                && string.Equals(left.Host, right.Host, StringComparison.OrdinalIgnoreCase)
+                && left.Port == right.Port
+                && string.Equals(left.AbsolutePath, right.AbsolutePath, StringComparison.OrdinalIgnoreCase)
+                && string.Equals(left.Query, right.Query, StringComparison.Ordinal);
         }
 
         internal static IDisposable UseValidationOverrideForTests(

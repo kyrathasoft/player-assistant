@@ -218,6 +218,10 @@ jobs:
         shell: pwsh
         run: .\build-installer.ps1 -OutputDir $env:INSTALLER_DIR -PublishDir $env:PUBLISH_DIR -SkipPublish
 
+      - name: Installer clean-machine smoke
+        shell: pwsh
+        run: .\verify-installer-clean-machine-smoke.ps1
+
       - name: Build signed release update artifacts
         shell: pwsh
         env:
