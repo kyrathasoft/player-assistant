@@ -52,6 +52,7 @@ $SensitiveFileNames = @(
 $ForbiddenPublishFileNames = @(
     'startup-errors.log',
     'startup-health.json',
+    'outbound-network-diagnostics.json',
     'last-crash.json',
     'startup-remediation.txt'
 )

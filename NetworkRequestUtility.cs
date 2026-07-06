@@ -113,6 +113,7 @@ namespace PlayerAssistant
 
                     if (ShouldRetry(response.StatusCode) && attempt < policy.MaxAttempts)
                     {
+                        OutboundNetworkDiagnosticsUtility.RecordRetry(request, purpose);
                         response.Dispose();
                         await DelayBeforeRetryAsync(policy, cancellationToken).ConfigureAwait(false);
                         continue;
@@ -120,6 +121,12 @@ namespace PlayerAssistant
 
                     if (ShouldRetry(response.StatusCode))
                     {
+                        OutboundNetworkDiagnosticsUtility.RecordFailure(
+                            request,
+                            purpose,
+                            failureKind: null,
+                            response.StatusCode,
+                            $"HTTP {(int)response.StatusCode} {response.ReasonPhrase}".Trim());
                         RecordCircuitFailure(
                             circuitBreakerKey,
                             $"HTTP {(int)response.StatusCode} {response.ReasonPhrase}".Trim(),
@@ -127,6 +134,7 @@ namespace PlayerAssistant
                     }
                     else
                     {
+                        OutboundNetworkDiagnosticsUtility.RecordSuccess(request, purpose, response.StatusCode);
                         RecordCircuitSuccess(circuitBreakerKey);
                     }
 
@@ -140,18 +148,22 @@ namespace PlayerAssistant
                             NetworkFailureKind.TimedOut,
                             $"The network request timed out after {policy.Timeout.TotalSeconds:0.#} seconds.",
                             ex);
+                        RecordOutboundFailureFromException(createRequest, purpose, exception);
                         RecordCircuitFailureFromException(createRequest, exception);
                         throw exception;
                     }
 
+                    RecordOutboundRetry(createRequest, purpose);
                     await DelayBeforeRetryAsync(policy, cancellationToken).ConfigureAwait(false);
                 }
                 catch (HttpRequestException) when (attempt < policy.MaxAttempts)
                 {
+                    RecordOutboundRetry(createRequest, purpose);
                     await DelayBeforeRetryAsync(policy, cancellationToken).ConfigureAwait(false);
                 }
                 catch (IOException) when (attempt < policy.MaxAttempts)
                 {
+                    RecordOutboundRetry(createRequest, purpose);
                     await DelayBeforeRetryAsync(policy, cancellationToken).ConfigureAwait(false);
                 }
                 catch (HttpRequestException ex)
@@ -160,6 +172,7 @@ namespace PlayerAssistant
                         NetworkFailureKind.Unavailable,
                         $"The network request failed: {ex.Message}",
                         ex);
+                    RecordOutboundFailureFromException(createRequest, purpose, exception);
                     RecordCircuitFailureFromException(createRequest, exception);
                     throw exception;
                 }
@@ -169,6 +182,7 @@ namespace PlayerAssistant
                         NetworkFailureKind.Unavailable,
                         $"The network request failed: {ex.Message}",
                         ex);
+                    RecordOutboundFailureFromException(createRequest, purpose, exception);
                     RecordCircuitFailureFromException(createRequest, exception);
                     throw exception;
                 }
@@ -419,6 +433,28 @@ namespace PlayerAssistant
                 GetCircuitBreakerKey(request),
                 exception.Message,
                 DateTimeOffset.Now);
+        }
+
+        private static void RecordOutboundFailureFromException(
+            Func<HttpRequestMessage> createRequest,
+            NetworkUrlPurpose purpose,
+            NetworkRequestException exception)
+        {
+            using var request = createRequest();
+            OutboundNetworkDiagnosticsUtility.RecordFailure(
+                request,
+                purpose,
+                exception.Kind,
+                statusCode: null,
+                exception.Message);
+        }
+
+        private static void RecordOutboundRetry(
+            Func<HttpRequestMessage> createRequest,
+            NetworkUrlPurpose purpose)
+        {
+            using var request = createRequest();
+            OutboundNetworkDiagnosticsUtility.RecordRetry(request, purpose);
         }
 
         private static bool ShouldRetry(HttpStatusCode statusCode)

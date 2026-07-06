@@ -20,6 +20,7 @@ $StartupRemediationFileName = 'startup-remediation.txt'
 $SettingsFileName = 'settings.json'
 $RuntimeInventoryFileName = 'release-runtime-inventory.json'
 $ReleaseProvenanceFileName = 'release-provenance.json'
+$OutboundNetworkDiagnosticsFileName = 'outbound-network-diagnostics.json'
 $ForbiddenFileNames = @(
     'rpol-storage-state.json',
     'cookies.json',
@@ -239,6 +240,10 @@ function Redact-Object {
 
     if ($null -eq $Value) {
         return $null
+    }
+
+    if ($Value -is [string]) {
+        return Redact-Text -Text $Value
     }
 
     if ($Value -is [System.Collections.IDictionary]) {
@@ -742,10 +747,12 @@ try {
 
     Write-StepLog 'Writing redacted runtime diagnostics'
     Write-RedactedJsonCopy -SourcePath (Join-Path $resolvedReleaseDir $StartupHealthFileName) -DestinationPath (Join-Path $stagingDirectory 'Release\startup-health.json')
+    Write-RedactedJsonCopy -SourcePath (Join-Path $resolvedReleaseDir $OutboundNetworkDiagnosticsFileName) -DestinationPath (Join-Path $stagingDirectory 'Release\outbound-network-diagnostics.json')
     Write-RedactedTextCopy -SourcePath (Join-Path $resolvedReleaseDir $StartupLogFileName) -DestinationPath (Join-Path $stagingDirectory 'Release\startup-errors.log')
     Write-RedactedJsonCopy -SourcePath (Join-Path $resolvedReleaseDir $LastCrashFileName) -DestinationPath (Join-Path $stagingDirectory 'Release\last-crash.json')
     Write-RedactedTextCopy -SourcePath (Join-Path $resolvedReleaseDir $StartupRemediationFileName) -DestinationPath (Join-Path $stagingDirectory 'Release\startup-remediation.txt')
     Write-RedactedJsonCopy -SourcePath (Join-Path $resolvedPublishDir $StartupHealthFileName) -DestinationPath (Join-Path $stagingDirectory 'publish\startup-health.json')
+    Write-RedactedJsonCopy -SourcePath (Join-Path $resolvedPublishDir $OutboundNetworkDiagnosticsFileName) -DestinationPath (Join-Path $stagingDirectory 'publish\outbound-network-diagnostics.json')
     Write-RedactedTextCopy -SourcePath (Join-Path $resolvedPublishDir $StartupLogFileName) -DestinationPath (Join-Path $stagingDirectory 'publish\startup-errors.log')
     Write-RedactedJsonCopy -SourcePath (Join-Path $resolvedPublishDir $LastCrashFileName) -DestinationPath (Join-Path $stagingDirectory 'publish\last-crash.json')
     Write-RedactedTextCopy -SourcePath (Join-Path $resolvedPublishDir $StartupRemediationFileName) -DestinationPath (Join-Path $stagingDirectory 'publish\startup-remediation.txt')

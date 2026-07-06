@@ -10,6 +10,7 @@ $ExecutableFileName = 'player-assistant.exe'
 $RuntimeOnlyPublishFileNames = @(
     'startup-errors.log',
     'startup-health.json',
+    'outbound-network-diagnostics.json',
     'last-crash.json',
     'startup-remediation.txt',
     'rpol-storage-state.json'
