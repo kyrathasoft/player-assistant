@@ -7223,7 +7223,6 @@ static string[] GetReleaseManifestRelativePaths()
     [
         "player-assistant.exe",
         "settings.json",
-        "settings.local.json",
         XpPasswordStoreUtility.FileName,
         "release-runtime-inventory.json",
         "keyword-index.json",

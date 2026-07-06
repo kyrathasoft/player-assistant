@@ -1516,7 +1516,6 @@ function Get-ReleaseManifestFileList {
     return @(
         'player-assistant.exe',
         'settings.json',
-        $SettingsLocalFileName,
         $XpPasswordFileName,
         $RuntimeInventoryFileName,
         $KeywordIndexFileName,
