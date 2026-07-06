@@ -16,6 +16,7 @@ namespace PlayerAssistant
         private const int LocalSettingsSchemaVersion = 1;
         private static readonly string[] VersionArguments = ["--version", "/version"];
         private static readonly string[] HealthArguments = ["--health", "/health"];
+        private static readonly string[] UpdatePreflightArguments = ["--update-preflight", "/update-preflight"];
         private static readonly string[] EncryptLocalSettingsArguments = ["--encrypt-local-settings", "/encrypt-local-settings"];
         private static readonly string[] DecryptLocalSettingsArguments = ["--decrypt-local-settings", "/decrypt-local-settings"];
 
@@ -58,6 +59,14 @@ namespace PlayerAssistant
                 var healthText = GetHealthText();
                 Console.WriteLine(healthText);
                 StartupLoggingUtility.Append("health", healthText);
+                return;
+            }
+
+            if (args.Any(IsUpdatePreflightArgument))
+            {
+                var updatePreflightText = GetUpdatePreflightText();
+                Console.WriteLine(updatePreflightText);
+                StartupLoggingUtility.Append("update preflight", updatePreflightText);
                 return;
             }
 
@@ -153,6 +162,12 @@ namespace PlayerAssistant
         {
             return HealthArguments.Any(healthArgument =>
                 string.Equals(argument, healthArgument, StringComparison.OrdinalIgnoreCase));
+        }
+
+        internal static bool IsUpdatePreflightArgument(string argument)
+        {
+            return UpdatePreflightArguments.Any(updatePreflightArgument =>
+                string.Equals(argument, updatePreflightArgument, StringComparison.OrdinalIgnoreCase));
         }
 
         internal static bool IsEncryptLocalSettingsArgument(string argument)
@@ -279,6 +294,7 @@ namespace PlayerAssistant
         {
             return IsVersionArgument(value)
                 || IsHealthArgument(value)
+                || IsUpdatePreflightArgument(value)
                 || IsEncryptLocalSettingsArgument(value)
                 || IsDecryptLocalSettingsArgument(value);
         }
@@ -323,6 +339,49 @@ namespace PlayerAssistant
                     Environment.NewLine,
                     GetVersionText(),
                     $"runtime: {AppContext.BaseDirectory}",
+                    "status: error",
+                    $"Error: {SensitiveTextRedactionUtility.Redact(ex.Message)}");
+            }
+        }
+
+        internal static string GetUpdatePreflightText()
+        {
+            try
+            {
+                using var httpClient = NetworkRequestUtility.CreateHttpClient();
+                var update = PlayerAssistantUpdateUtility
+                    .CheckForLatestUpdateAsync(httpClient)
+                    .GetAwaiter()
+                    .GetResult();
+                var currentVersion = PlayerAssistantUpdateUtility.GetCurrentAppVersion();
+                var lines = new List<string>
+                {
+                    GetVersionText(),
+                    $"update-manifest: {PlayerAssistantUpdateUtility.UpdateManifestUri}",
+                    $"update-signature: {PlayerAssistantUpdateUtility.UpdateManifestSignatureUri}",
+                    $"current-version: {currentVersion}"
+                };
+
+                if (update is null)
+                {
+                    lines.Add("status: no-update");
+                }
+                else
+                {
+                    lines.Add(update.IsNewerThan(currentVersion) ? "status: update-available" : "status: current");
+                    lines.Add($"latest-version: {update.VersionText}");
+                    lines.Add($"installer: {update.InstallerUri}");
+                }
+
+                return string.Join(Environment.NewLine, lines);
+            }
+            catch (Exception ex)
+            {
+                return string.Join(
+                    Environment.NewLine,
+                    GetVersionText(),
+                    $"update-manifest: {PlayerAssistantUpdateUtility.UpdateManifestUri}",
+                    $"update-signature: {PlayerAssistantUpdateUtility.UpdateManifestSignatureUri}",
                     "status: error",
                     $"Error: {SensitiveTextRedactionUtility.Redact(ex.Message)}");
             }

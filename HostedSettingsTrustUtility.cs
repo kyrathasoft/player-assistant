@@ -9,6 +9,7 @@ namespace PlayerAssistant
     {
         internal const string SignedEnvelopeFormat = "signed-hosted-settings-v1";
         internal const string HostedSettingsContentId = "player-assistant-hosted-settings";
+        private const string AdditionalTrustedKeyPemEnvironmentVariable = "PLAYER_ASSISTANT_HOSTED_SETTINGS_PUBLIC_KEY_PEM";
 
         private const int SignedEnvelopeSchemaVersion = 1;
         private const int TrustedHostedSettingsStateSchemaVersion = 1;
@@ -49,7 +50,7 @@ namespace PlayerAssistant
             return LoadAndVerifyHostedSettings(
                 signedHostedSettingsUtf8,
                 sourceDescription,
-                TrustedHostedSettingsKeysOverrideForTests ?? TrustedHostedSettingsKeys,
+                GetTrustedSigningKeys(),
                 trustedHostedSettingsStatePath: null,
                 nowUtc: null);
         }
@@ -233,6 +234,26 @@ namespace PlayerAssistant
             var previousTrustedKeys = TrustedHostedSettingsKeysOverrideForTests;
             TrustedHostedSettingsKeysOverrideForTests = trustedSigningKeys;
             return new DelegateDisposable(() => TrustedHostedSettingsKeysOverrideForTests = previousTrustedKeys);
+        }
+
+        private static IReadOnlyList<HostedSettingsSigningKeyTrustEntry> GetTrustedSigningKeys()
+        {
+            if (TrustedHostedSettingsKeysOverrideForTests is not null)
+            {
+                return TrustedHostedSettingsKeysOverrideForTests;
+            }
+
+            var additionalTrustedKeyPem = Environment.GetEnvironmentVariable(AdditionalTrustedKeyPemEnvironmentVariable);
+            if (string.IsNullOrWhiteSpace(additionalTrustedKeyPem))
+            {
+                return TrustedHostedSettingsKeys;
+            }
+
+            return
+            [
+                .. TrustedHostedSettingsKeys,
+                new HostedSettingsSigningKeyTrustEntry("environment-hosted-settings-signing-key", additionalTrustedKeyPem.Trim())
+            ];
         }
 
         private static SignedHostedSettingsEnvelope ParseSignedEnvelope(byte[] signedHostedSettingsUtf8)

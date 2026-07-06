@@ -8,6 +8,7 @@ namespace PlayerAssistant
         private const string SettingsFileName = "settings.json";
         private const string LocalSettingsFileName = "settings.local.json";
         private const string HostedLocalSettingsSettingsKey = "Hosted Local Settings";
+        private const string HostedLocalSettingsOverrideEnvironmentVariable = "PLAYER_ASSISTANT_HOSTED_LOCAL_SETTINGS_URL_OVERRIDE";
         private const string RpolSiteSettingsKey = "RPOL Site";
         private const string GameIntroSettingsKey = "Game Intro";
         private const string TheCastSettingsKey = "The Cast";
@@ -27,7 +28,7 @@ namespace PlayerAssistant
         public const string RpolPasswordSettingsKey = "RPOL password";
 
         public static string GameForumUrl => Settings.Value[RpolSiteSettingsKey];
-        public static string HostedLocalSettingsUrl => Settings.Value[HostedLocalSettingsSettingsKey];
+        public static string HostedLocalSettingsUrl => GetEffectiveHostedLocalSettingsUrl(Settings.Value);
         public static string? RpolUserName => RuntimeSecretStoreUtility.GetRpolUserName() ?? GetOptionalSetting(RpolUserNameSettingsKey);
         public static string? RpolPassword => RuntimeSecretStoreUtility.GetRpolPassword() ?? GetOptionalSetting(RpolPasswordSettingsKey);
         public static string GameIntroUrl => Settings.Value[GameIntroSettingsKey];
@@ -137,8 +138,8 @@ namespace PlayerAssistant
 
         private static void MergeHostedLocalSettings(Dictionary<string, string> settings)
         {
-            if (!settings.TryGetValue(HostedLocalSettingsSettingsKey, out var hostedLocalSettingsUrl)
-                || string.IsNullOrWhiteSpace(hostedLocalSettingsUrl))
+            var hostedLocalSettingsUrl = GetEffectiveHostedLocalSettingsUrl(settings);
+            if (string.IsNullOrWhiteSpace(hostedLocalSettingsUrl))
             {
                 return;
             }
@@ -208,6 +209,19 @@ namespace PlayerAssistant
             return HostedSettingsTrustUtility.LoadAndVerifyHostedSettings(
                 fileContentsUtf8,
                 hostedLocalSettingsUrl);
+        }
+
+        private static string GetEffectiveHostedLocalSettingsUrl(IReadOnlyDictionary<string, string> settings)
+        {
+            var overrideValue = Environment.GetEnvironmentVariable(HostedLocalSettingsOverrideEnvironmentVariable);
+            if (!string.IsNullOrWhiteSpace(overrideValue))
+            {
+                return overrideValue.Trim();
+            }
+
+            return settings.TryGetValue(HostedLocalSettingsSettingsKey, out var hostedLocalSettingsUrl)
+                ? hostedLocalSettingsUrl
+                : string.Empty;
         }
 
         internal static bool TryGetRpolCredentials(out string? userName, out string? password)

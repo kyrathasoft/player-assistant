@@ -25,6 +25,8 @@ namespace PlayerAssistant
 
     internal static partial class PlayerAssistantUpdateUtility
     {
+        private const string UpdateBaseUrlOverrideEnvironmentVariable = "PLAYER_ASSISTANT_UPDATE_BASE_URL";
+        private const string AdditionalTrustedKeyPemEnvironmentVariable = "PLAYER_ASSISTANT_UPDATE_MANIFEST_PUBLIC_KEY_PEM";
         private const int UpdateManifestSchemaVersion = 1;
         private const int TrustedUpdateStateSchemaVersion = 1;
         private const string UpdateManifestFileName = "p-assist-updates.json";
@@ -48,9 +50,9 @@ namespace PlayerAssistant
                 """)
         ];
 
-        public static Uri UpdateListingUri { get; } = new("https://bryanmiller.us/scarlethorizons/");
-        public static Uri UpdateManifestUri { get; } = new(UpdateListingUri, UpdateManifestFileName);
-        public static Uri UpdateManifestSignatureUri { get; } = new(UpdateListingUri, UpdateManifestSignatureFileName);
+        public static Uri UpdateListingUri => GetUpdateListingUri();
+        public static Uri UpdateManifestUri => new(UpdateListingUri, UpdateManifestFileName);
+        public static Uri UpdateManifestSignatureUri => new(UpdateListingUri, UpdateManifestSignatureFileName);
 
         public static async Task<PlayerAssistantUpdateInfo?> CheckForLatestUpdateAsync(
             HttpClient httpClient,
@@ -58,7 +60,7 @@ namespace PlayerAssistant
         {
             return await CheckForLatestUpdateAsync(
                 httpClient,
-                TrustedUpdateManifestKeys,
+                GetTrustedUpdateManifestKeys(),
                 cancellationToken).ConfigureAwait(false);
         }
 
@@ -339,6 +341,35 @@ namespace PlayerAssistant
                 highestTrustedVersion.ToString(),
                 DateTimeOffset.UtcNow.ToString("O"));
             LocalSettingsUtility.SaveScopedProtectedJson(statePath, state);
+        }
+
+        private static IReadOnlyList<UpdateManifestSigningKeyTrustEntry> GetTrustedUpdateManifestKeys()
+        {
+            var additionalTrustedKeyPem = Environment.GetEnvironmentVariable(AdditionalTrustedKeyPemEnvironmentVariable);
+            if (string.IsNullOrWhiteSpace(additionalTrustedKeyPem))
+            {
+                return TrustedUpdateManifestKeys;
+            }
+
+            return
+            [
+                .. TrustedUpdateManifestKeys,
+                new UpdateManifestSigningKeyTrustEntry("environment-update-signing-key", additionalTrustedKeyPem.Trim())
+            ];
+        }
+
+        private static Uri GetUpdateListingUri()
+        {
+            var overrideValue = Environment.GetEnvironmentVariable(UpdateBaseUrlOverrideEnvironmentVariable);
+            if (Uri.TryCreate(overrideValue, UriKind.Absolute, out var overrideUri)
+                && overrideUri.IsAbsoluteUri)
+            {
+                return overrideUri.AbsolutePath.EndsWith("/", StringComparison.Ordinal)
+                    ? overrideUri
+                    : new Uri($"{overrideUri.AbsoluteUri.TrimEnd('/')}/");
+            }
+
+            return new Uri("https://bryanmiller.us/scarlethorizons/");
         }
 
         private static IEnumerable<string> EnumerateArchiveReferences(string listingContent)
