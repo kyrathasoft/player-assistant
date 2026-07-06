@@ -73,30 +73,37 @@ namespace PlayerAssistant
                 throw new FileNotFoundException("Settings file not found.", settingsPath);
             }
 
-            var fileContents = File.ReadAllText(settingsPath);
-            using var document = JsonDocument.Parse(fileContents);
-
-            if (TryReadEncryptedEnvelope(document.RootElement, out var envelope))
+            var fileContentsUtf8 = File.ReadAllBytes(settingsPath);
+            try
             {
-                var decryptedSettings = DecryptSettings(envelope, resolvedDecryptionScopePath);
-                if (migrateToCurrentFormat
-                    && (!string.Equals(envelope.Format, EncryptedFormat, StringComparison.Ordinal)
-                        || envelope.SchemaVersion != CurrentSchemaVersion))
+                using var document = JsonDocument.Parse(fileContentsUtf8);
+
+                if (TryReadEncryptedEnvelope(document.RootElement, out var envelope))
                 {
-                    SaveEncryptedSettings(settingsPath, decryptedSettings);
+                    var decryptedSettings = DecryptSettings(envelope, resolvedDecryptionScopePath);
+                    if (migrateToCurrentFormat
+                        && (!string.Equals(envelope.Format, EncryptedFormat, StringComparison.Ordinal)
+                            || envelope.SchemaVersion != CurrentSchemaVersion))
+                    {
+                        SaveEncryptedSettings(settingsPath, decryptedSettings);
+                    }
+
+                    return decryptedSettings;
                 }
 
-                return decryptedSettings;
+                var plaintextSettings = ReadPlaintextSettings(document.RootElement, settingsPath);
+
+                if (migrateToCurrentFormat)
+                {
+                    SaveEncryptedSettings(settingsPath, plaintextSettings);
+                }
+
+                return plaintextSettings;
             }
-
-            var plaintextSettings = ReadPlaintextSettings(document.RootElement, settingsPath);
-
-            if (migrateToCurrentFormat)
+            finally
             {
-                SaveEncryptedSettings(settingsPath, plaintextSettings);
+                ZeroMemory(fileContentsUtf8);
             }
-
-            return plaintextSettings;
         }
 
         private static bool CanLoadSettingsBackup(string settingsPath, string decryptionScopePath)
@@ -118,10 +125,16 @@ namespace PlayerAssistant
             ArgumentNullException.ThrowIfNull(settings);
 
             var plaintextBytes = JsonSerializer.SerializeToUtf8Bytes(settings, JsonOptions);
-            var encryptedEnvelope = CreateEncryptedEnvelope(plaintextBytes, settingsPath);
-
-            var encryptedJson = JsonSerializer.Serialize(encryptedEnvelope, JsonOptions);
-            AtomicFileUtility.WriteAllText(settingsPath, encryptedJson);
+            try
+            {
+                var encryptedEnvelope = CreateEncryptedEnvelope(plaintextBytes, settingsPath);
+                var encryptedJson = JsonSerializer.Serialize(encryptedEnvelope, JsonOptions);
+                AtomicFileUtility.WriteAllText(settingsPath, encryptedJson);
+            }
+            finally
+            {
+                ZeroMemory(plaintextBytes);
+            }
         }
 
         public static Dictionary<string, string> LoadPortableEncryptedSettings(string settingsPath)
@@ -133,8 +146,7 @@ namespace PlayerAssistant
                 throw new FileNotFoundException("Encrypted settings sidecar file not found.", settingsPath);
             }
 
-            var fileContents = File.ReadAllText(settingsPath);
-            return LoadPortableEncryptedSettingsFromContents(fileContents, settingsPath);
+            return LoadPortableEncryptedSettingsFromUtf8Bytes(File.ReadAllBytes(settingsPath), settingsPath);
         }
 
         internal static Dictionary<string, string> LoadPortableEncryptedSettingsFromContents(string fileContents, string sourceDescription)
@@ -142,19 +154,34 @@ namespace PlayerAssistant
             ArgumentNullException.ThrowIfNull(fileContents);
             ArgumentException.ThrowIfNullOrWhiteSpace(sourceDescription);
 
-            using var document = JsonDocument.Parse(fileContents);
-            if (!TryReadEncryptedEnvelope(document.RootElement, out var envelope))
-            {
-                throw new InvalidOperationException($"{sourceDescription} must use an authenticated encrypted envelope.");
-            }
+            return LoadPortableEncryptedSettingsFromUtf8Bytes(Encoding.UTF8.GetBytes(fileContents), sourceDescription);
+        }
 
-            if (!string.Equals(envelope.Format, V2EncryptedFormat, StringComparison.Ordinal))
-            {
-                throw new InvalidOperationException(
-                    $"{sourceDescription} must use the portable authenticated encrypted format '{V2EncryptedFormat}'.");
-            }
+        internal static Dictionary<string, string> LoadPortableEncryptedSettingsFromUtf8Bytes(byte[] fileContentsUtf8, string sourceDescription)
+        {
+            ArgumentNullException.ThrowIfNull(fileContentsUtf8);
+            ArgumentException.ThrowIfNullOrWhiteSpace(sourceDescription);
 
-            return DecryptSettings(envelope, sourceDescription);
+            try
+            {
+                using var document = JsonDocument.Parse(fileContentsUtf8);
+                if (!TryReadEncryptedEnvelope(document.RootElement, out var envelope))
+                {
+                    throw new InvalidOperationException($"{sourceDescription} must use an authenticated encrypted envelope.");
+                }
+
+                if (!string.Equals(envelope.Format, V2EncryptedFormat, StringComparison.Ordinal))
+                {
+                    throw new InvalidOperationException(
+                        $"{sourceDescription} must use the portable authenticated encrypted format '{V2EncryptedFormat}'.");
+                }
+
+                return DecryptSettings(envelope, sourceDescription);
+            }
+            finally
+            {
+                ZeroMemory(fileContentsUtf8);
+            }
         }
 
         public static void SavePortableEncryptedSettings(string settingsPath, IReadOnlyDictionary<string, string> settings)
@@ -171,8 +198,15 @@ namespace PlayerAssistant
             ArgumentNullException.ThrowIfNull(settings);
 
             var plaintextBytes = JsonSerializer.SerializeToUtf8Bytes(settings, JsonOptions);
-            var encryptedEnvelope = CreatePortableEncryptedEnvelope(plaintextBytes);
-            return JsonSerializer.Serialize(encryptedEnvelope, JsonOptions);
+            try
+            {
+                var encryptedEnvelope = CreatePortableEncryptedEnvelope(plaintextBytes);
+                return JsonSerializer.Serialize(encryptedEnvelope, JsonOptions);
+            }
+            finally
+            {
+                ZeroMemory(plaintextBytes);
+            }
         }
 
         internal static void SaveScopedProtectedJson<T>(string path, T value)
@@ -181,9 +215,16 @@ namespace PlayerAssistant
             ArgumentNullException.ThrowIfNull(value);
 
             var plaintextBytes = JsonSerializer.SerializeToUtf8Bytes(value, JsonOptions);
-            var encryptedEnvelope = CreateEncryptedEnvelope(plaintextBytes, path);
-            var encryptedJson = JsonSerializer.Serialize(encryptedEnvelope, JsonOptions);
-            AtomicFileUtility.WriteAllText(path, encryptedJson);
+            try
+            {
+                var encryptedEnvelope = CreateEncryptedEnvelope(plaintextBytes, path);
+                var encryptedJson = JsonSerializer.Serialize(encryptedEnvelope, JsonOptions);
+                AtomicFileUtility.WriteAllText(path, encryptedJson);
+            }
+            finally
+            {
+                ZeroMemory(plaintextBytes);
+            }
         }
 
         internal static T LoadScopedProtectedJson<T>(string path)
@@ -195,16 +236,30 @@ namespace PlayerAssistant
                 throw new FileNotFoundException("Protected settings file not found.", path);
             }
 
-            var fileContents = File.ReadAllText(path);
-            using var document = JsonDocument.Parse(fileContents);
-            if (!TryReadEncryptedEnvelope(document.RootElement, out var envelope))
+            var fileContentsUtf8 = File.ReadAllBytes(path);
+            try
             {
-                throw new InvalidOperationException("Protected settings file must use an authenticated encrypted envelope.");
-            }
+                using var document = JsonDocument.Parse(fileContentsUtf8);
+                if (!TryReadEncryptedEnvelope(document.RootElement, out var envelope))
+                {
+                    throw new InvalidOperationException("Protected settings file must use an authenticated encrypted envelope.");
+                }
 
-            var plaintextBytes = DecryptEnvelopePayload(envelope, path);
-            return JsonSerializer.Deserialize<T>(plaintextBytes, JsonOptions)
-                ?? throw new InvalidOperationException("Protected settings payload could not be parsed.");
+                var plaintextBytes = DecryptEnvelopePayload(envelope, path);
+                try
+                {
+                    return JsonSerializer.Deserialize<T>(plaintextBytes, JsonOptions)
+                        ?? throw new InvalidOperationException("Protected settings payload could not be parsed.");
+                }
+                finally
+                {
+                    ZeroMemory(plaintextBytes);
+                }
+            }
+            finally
+            {
+                ZeroMemory(fileContentsUtf8);
+            }
         }
 
         public static bool IsEncryptedSettingsFile(string settingsPath)
@@ -222,8 +277,15 @@ namespace PlayerAssistant
         private static Dictionary<string, string> DecryptSettings(EncryptedSettingsEnvelope envelope, string settingsPath)
         {
             var plaintextBytes = DecryptEnvelopePayload(envelope, settingsPath);
-            return JsonSerializer.Deserialize<Dictionary<string, string>>(plaintextBytes, JsonOptions)
-                ?? throw new InvalidOperationException("The authenticated encrypted settings payload could not be parsed.");
+            try
+            {
+                return JsonSerializer.Deserialize<Dictionary<string, string>>(plaintextBytes, JsonOptions)
+                    ?? throw new InvalidOperationException("The authenticated encrypted settings payload could not be parsed.");
+            }
+            finally
+            {
+                ZeroMemory(plaintextBytes);
+            }
         }
 
         private static byte[] DecryptEnvelopePayload(EncryptedSettingsEnvelope envelope, string settingsPath)
@@ -346,26 +408,37 @@ namespace PlayerAssistant
 
             using var encryptor = aes.CreateEncryptor();
             var ciphertext = encryptor.TransformFinalBlock(plaintextBytes, 0, plaintextBytes.Length);
-
-            var protectedContent = new byte[iv.Length + ciphertext.Length];
-            Buffer.BlockCopy(iv, 0, protectedContent, 0, iv.Length);
-            Buffer.BlockCopy(ciphertext, 0, protectedContent, iv.Length, ciphertext.Length);
-
-            byte[] tag;
-            using (var hmac = new HMACSHA256(keySet.AuthenticationKey))
+            byte[]? protectedContent = null;
+            byte[]? tag = null;
+            byte[]? payloadBytes = null;
+            try
             {
-                tag = hmac.ComputeHash(protectedContent);
+                protectedContent = new byte[iv.Length + ciphertext.Length];
+                Buffer.BlockCopy(iv, 0, protectedContent, 0, iv.Length);
+                Buffer.BlockCopy(ciphertext, 0, protectedContent, iv.Length, ciphertext.Length);
+
+                using (var hmac = new HMACSHA256(keySet.AuthenticationKey))
+                {
+                    tag = hmac.ComputeHash(protectedContent);
+                }
+
+                payloadBytes = new byte[protectedContent.Length + tag.Length];
+                Buffer.BlockCopy(protectedContent, 0, payloadBytes, 0, protectedContent.Length);
+                Buffer.BlockCopy(tag, 0, payloadBytes, protectedContent.Length, tag.Length);
+
+                return new EncryptedSettingsEnvelope(
+                    CurrentSchemaVersion,
+                    EncryptedFormat,
+                    Convert.ToBase64String(payloadBytes),
+                    GetKeyScope(settingsPath));
             }
-
-            var payloadBytes = new byte[protectedContent.Length + tag.Length];
-            Buffer.BlockCopy(protectedContent, 0, payloadBytes, 0, protectedContent.Length);
-            Buffer.BlockCopy(tag, 0, payloadBytes, protectedContent.Length, tag.Length);
-
-            return new EncryptedSettingsEnvelope(
-                CurrentSchemaVersion,
-                EncryptedFormat,
-                Convert.ToBase64String(payloadBytes),
-                GetKeyScope(settingsPath));
+            finally
+            {
+                ZeroMemory(ciphertext);
+                ZeroMemory(protectedContent);
+                ZeroMemory(tag);
+                ZeroMemory(payloadBytes);
+            }
         }
 
         private static EncryptedSettingsEnvelope CreatePortableEncryptedEnvelope(byte[] plaintextBytes)
@@ -380,25 +453,44 @@ namespace PlayerAssistant
 
             using var encryptor = aes.CreateEncryptor();
             var ciphertext = encryptor.TransformFinalBlock(plaintextBytes, 0, plaintextBytes.Length);
-
-            var protectedContent = new byte[iv.Length + ciphertext.Length];
-            Buffer.BlockCopy(iv, 0, protectedContent, 0, iv.Length);
-            Buffer.BlockCopy(ciphertext, 0, protectedContent, iv.Length, ciphertext.Length);
-
-            byte[] tag;
-            using (var hmac = new HMACSHA256(V2AuthenticationKey))
+            byte[]? protectedContent = null;
+            byte[]? tag = null;
+            byte[]? payloadBytes = null;
+            try
             {
-                tag = hmac.ComputeHash(protectedContent);
+                protectedContent = new byte[iv.Length + ciphertext.Length];
+                Buffer.BlockCopy(iv, 0, protectedContent, 0, iv.Length);
+                Buffer.BlockCopy(ciphertext, 0, protectedContent, iv.Length, ciphertext.Length);
+
+                using (var hmac = new HMACSHA256(V2AuthenticationKey))
+                {
+                    tag = hmac.ComputeHash(protectedContent);
+                }
+
+                payloadBytes = new byte[protectedContent.Length + tag.Length];
+                Buffer.BlockCopy(protectedContent, 0, payloadBytes, 0, protectedContent.Length);
+                Buffer.BlockCopy(tag, 0, payloadBytes, protectedContent.Length, tag.Length);
+
+                return new EncryptedSettingsEnvelope(
+                    CurrentSchemaVersion,
+                    V2EncryptedFormat,
+                    Convert.ToBase64String(payloadBytes));
             }
+            finally
+            {
+                ZeroMemory(ciphertext);
+                ZeroMemory(protectedContent);
+                ZeroMemory(tag);
+                ZeroMemory(payloadBytes);
+            }
+        }
 
-            var payloadBytes = new byte[protectedContent.Length + tag.Length];
-            Buffer.BlockCopy(protectedContent, 0, payloadBytes, 0, protectedContent.Length);
-            Buffer.BlockCopy(tag, 0, payloadBytes, protectedContent.Length, tag.Length);
-
-            return new EncryptedSettingsEnvelope(
-                CurrentSchemaVersion,
-                V2EncryptedFormat,
-                Convert.ToBase64String(payloadBytes));
+        private static void ZeroMemory(byte[]? bytes)
+        {
+            if (bytes is { Length: > 0 })
+            {
+                CryptographicOperations.ZeroMemory(bytes);
+            }
         }
 
         private static KeySet GetKeySet(string format, string settingsPath)

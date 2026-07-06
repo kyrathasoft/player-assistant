@@ -24,8 +24,18 @@ namespace PlayerAssistant
 
             if (TryReadSecret(targetName, out var secretBytes, out lastWritten))
             {
-                secret = Encoding.UTF8.GetString(secretBytes);
-                return true;
+                try
+                {
+                    secret = Encoding.UTF8.GetString(secretBytes);
+                    return true;
+                }
+                finally
+                {
+                    if (secretBytes.Length > 0)
+                    {
+                        Array.Clear(secretBytes, 0, secretBytes.Length);
+                    }
+                }
             }
 
             secret = null;
@@ -54,7 +64,18 @@ namespace PlayerAssistant
             ArgumentException.ThrowIfNullOrWhiteSpace(targetName);
             ArgumentNullException.ThrowIfNull(secret);
 
-            WriteSecret(targetName, Encoding.UTF8.GetBytes(secret), comment);
+            var secretBytes = Encoding.UTF8.GetBytes(secret);
+            try
+            {
+                WriteSecret(targetName, secretBytes, comment);
+            }
+            finally
+            {
+                if (secretBytes.Length > 0)
+                {
+                    Array.Clear(secretBytes, 0, secretBytes.Length);
+                }
+            }
         }
 
         public static void WriteSecret(string targetName, byte[] secretBytes, string? comment = null)

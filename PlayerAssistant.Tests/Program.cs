@@ -198,6 +198,8 @@ var tests = new (string Name, Action Test)[]
     ("v1 local settings migrate to authenticated encryption", V1LocalSettingsMigrateToAuthenticatedEncryption),
     ("v2 local settings migrate to scoped encryption", V2LocalSettingsMigrateToScopedEncryption),
     ("local settings are encrypted on load", LocalSettingsAreEncryptedOnLoad),
+    ("portable encrypted settings byte loader clears source buffer", PortableEncryptedSettingsByteLoaderClearsSourceBuffer),
+    ("credential manager utf8 helpers clear transient buffers", CredentialManagerUtf8HelpersClearTransientBuffers),
     ("local settings encrypt command writes portable envelope", LocalSettingsEncryptCommandWritesPortableEnvelope),
     ("local settings decrypt command writes plaintext json", LocalSettingsDecryptCommandWritesPlaintextJson),
     ("local settings rejects future schema version", LocalSettingsRejectsFutureSchemaVersion),
@@ -4693,6 +4695,45 @@ static void LocalSettingsAreEncryptedOnLoad()
     AssertContains(encryptedJson, "\"install_path_bound\": true");
 }
 
+static void PortableEncryptedSettingsByteLoaderClearsSourceBuffer()
+{
+    var settings = new Dictionary<string, string>
+    {
+        ["RPOL user name"] = "example-user",
+        ["RPOL password"] = "example-password"
+    };
+    var encryptedJson = LocalSettingsUtility.CreatePortableEncryptedSettingsJson(settings);
+    var encryptedUtf8 = System.Text.Encoding.UTF8.GetBytes(encryptedJson);
+
+    var loadedSettings = LocalSettingsUtility.LoadPortableEncryptedSettingsFromUtf8Bytes(
+        encryptedUtf8,
+        "test settings");
+
+    AssertEqual("example-user", loadedSettings["RPOL user name"], "unexpected user name after byte-buffer load");
+    AssertEqual("example-password", loadedSettings["RPOL password"], "unexpected password after byte-buffer load");
+    AssertTrue(encryptedUtf8.All(static value => value == 0), "portable encrypted settings buffer should be cleared after load");
+}
+
+static void CredentialManagerUtf8HelpersClearTransientBuffers()
+{
+    var backend = new ObservedWindowsCredentialStoreBackend();
+    using var backendScope = RuntimeSecretStoreUtility.UseBackendForTests(backend);
+
+    WindowsCredentialManagerUtility.WriteSecretUtf8("PlayerAssistant/Test/Secret", "hunter2", "test");
+    AssertTrue(backend.LastWriteInputBytes is not null, "expected test backend to observe the write buffer");
+    AssertTrue(backend.LastWriteInputBytes!.All(static value => value == 0), "UTF-8 write buffer should be cleared after credential-manager write");
+
+    AssertTrue(
+        WindowsCredentialManagerUtility.TryReadSecretUtf8(
+            "PlayerAssistant/Test/Secret",
+            out var storedSecret,
+            out _),
+        "expected test secret to round-trip through credential manager helper");
+    AssertEqual("hunter2", storedSecret ?? string.Empty, "unexpected credential-manager secret text");
+    AssertTrue(backend.LastReadOutputBytes is not null, "expected test backend to expose the read buffer");
+    AssertTrue(backend.LastReadOutputBytes!.All(static value => value == 0), "UTF-8 read buffer should be cleared after credential-manager read");
+}
+
 static void LocalSettingsEncryptCommandWritesPortableEnvelope()
 {
     using var directory = TemporaryDirectory.Create();
@@ -7518,6 +7559,40 @@ internal sealed class InMemoryWindowsCredentialStoreBackend : IWindowsCredential
 
     public void Write(string targetName, byte[] secretBytes, string? comment = null)
     {
+        _secrets[targetName] = new StoredSecret([.. secretBytes], DateTimeOffset.UtcNow);
+    }
+
+    public void Delete(string targetName)
+    {
+        _secrets.Remove(targetName);
+    }
+}
+
+internal sealed class ObservedWindowsCredentialStoreBackend : IWindowsCredentialStoreBackend
+{
+    private readonly Dictionary<string, StoredSecret> _secrets = new(StringComparer.Ordinal);
+
+    public byte[]? LastWriteInputBytes { get; private set; }
+
+    public byte[]? LastReadOutputBytes { get; private set; }
+
+    public bool TryRead(string targetName, out StoredSecret? storedSecret)
+    {
+        if (_secrets.TryGetValue(targetName, out var existingSecret))
+        {
+            LastReadOutputBytes = [.. existingSecret.SecretBytes];
+            storedSecret = new StoredSecret(LastReadOutputBytes, existingSecret.LastWritten);
+            return true;
+        }
+
+        LastReadOutputBytes = null;
+        storedSecret = null;
+        return false;
+    }
+
+    public void Write(string targetName, byte[] secretBytes, string? comment = null)
+    {
+        LastWriteInputBytes = secretBytes;
         _secrets[targetName] = new StoredSecret([.. secretBytes], DateTimeOffset.UtcNow);
     }
 
