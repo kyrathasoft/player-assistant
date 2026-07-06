@@ -1516,6 +1516,7 @@ function Get-ReleaseManifestFileList {
     return @(
         'player-assistant.exe',
         'settings.json',
+        $SettingsLocalFileName,
         $XpPasswordFileName,
         $RuntimeInventoryFileName,
         $KeywordIndexFileName,
@@ -1673,6 +1674,11 @@ $publishExitCode = $LASTEXITCODE
 if ($publishExitCode -ne 0) {
     Invoke-ProcessLockDiagnostics -PublishDirectory $resolvedOutputDir
     throw "dotnet publish failed with exit code $publishExitCode."
+}
+
+$releaseLocalSettingsPath = Join-Path (Join-Path $PSScriptRoot 'Release') $SettingsLocalFileName
+if (Test-Path -LiteralPath $releaseLocalSettingsPath -PathType Leaf) {
+    Remove-Item -LiteralPath $releaseLocalSettingsPath -Force
 }
 
 Get-ChildItem -Path $resolvedOutputDir -Filter *.pdb -File | Remove-Item -Force

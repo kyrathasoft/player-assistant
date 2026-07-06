@@ -7041,6 +7041,14 @@ static void WriteManifestedRuntime(string directoryPath)
     WriteRequiredRuntimeSidecars(directoryPath);
     File.WriteAllText(Path.Combine(directoryPath, "player-assistant.exe"), "synthetic executable");
     File.WriteAllText(Path.Combine(directoryPath, "settings.json"), "{}");
+    LocalSettingsUtility.SaveEncryptedSettings(
+        Path.Combine(directoryPath, "settings.local.json"),
+        new Dictionary<string, string>
+        {
+            ["XP Tracking"] = "https://publish.obsidian.md/scarlethorizons/Intentional+Orphans/XP+Tracking",
+            ["RPOL user name"] = "example-user",
+            ["RPOL password"] = "example-password"
+        });
 
     Directory.CreateDirectory(Path.Combine(directoryPath, ".playwright", "node", "win32_x64"));
     Directory.CreateDirectory(Path.Combine(directoryPath, ".playwright", "package"));
@@ -7215,6 +7223,7 @@ static string[] GetReleaseManifestRelativePaths()
     [
         "player-assistant.exe",
         "settings.json",
+        "settings.local.json",
         XpPasswordStoreUtility.FileName,
         "release-runtime-inventory.json",
         "keyword-index.json",

@@ -345,9 +345,7 @@ Assert-PathInsideRepo -Path $resolvedPublishDir -Description 'publish directory'
 $exePath = Join-Path $resolvedPublishDir $ExecutableFileName
 Assert-RequiredFile -Path $exePath -Description 'published player-assistant.exe'
 Assert-RequiredFile -Path (Join-Path $resolvedPublishDir 'settings.json') -Description 'published settings.json'
-if (Test-Path -LiteralPath (Join-Path $resolvedPublishDir 'settings.local.json') -PathType Leaf) {
-    throw 'published settings.local.json must not be shipped; hosted local settings should load at runtime.'
-}
+Assert-RequiredFile -Path (Join-Path $resolvedPublishDir 'settings.local.json') -Description 'published encrypted settings.local.json'
 Assert-RequiredFile -Path (Join-Path $resolvedPublishDir 'keyword-index.json') -Description 'published keyword-index.json'
 Assert-RequiredFile -Path (Join-Path $resolvedPublishDir 'game-posts-key-terms.md') -Description 'published keyword terms file'
 Assert-RequiredFile -Path (Join-Path $resolvedPublishDir 'sitemap.xml') -Description 'published sitemap.xml'
