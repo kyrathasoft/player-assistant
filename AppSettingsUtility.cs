@@ -202,12 +202,24 @@ namespace PlayerAssistant
                 HostedLocalSettingsRequestPolicy,
                 purpose: NetworkUrlPurpose.PlayerAssistantHostedSettings);
             response.EnsureSuccessStatusCode();
-            var fileContents = NetworkRequestUtility.ReadStringAsync(
+            var fileContentsUtf8 = NetworkRequestUtility.ReadBytesAsync(
                 response.Content,
                 NetworkResponseContentLimit.JsonCache).GetAwaiter().GetResult();
             return HostedSettingsTrustUtility.LoadAndVerifyHostedSettings(
-                fileContents,
+                fileContentsUtf8,
                 hostedLocalSettingsUrl);
+        }
+
+        internal static bool TryGetRpolCredentials(out string? userName, out string? password)
+        {
+            if (RuntimeSecretStoreUtility.TryGetRpolCredentials(out userName, out password))
+            {
+                return !string.IsNullOrWhiteSpace(userName) && !string.IsNullOrWhiteSpace(password);
+            }
+
+            userName = GetOptionalSetting(RpolUserNameSettingsKey);
+            password = GetOptionalSetting(RpolPasswordSettingsKey);
+            return !string.IsNullOrWhiteSpace(userName) && !string.IsNullOrWhiteSpace(password);
         }
 
         private static Dictionary<string, string> LoadSettingsFile(string settingsPath)

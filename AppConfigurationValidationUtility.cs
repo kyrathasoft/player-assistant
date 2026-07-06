@@ -92,14 +92,12 @@ namespace PlayerAssistant
                 [XpTrackingSettingsKey] = AppSettingsUtility.XpTrackingUrl
             };
 
-            if (!string.IsNullOrWhiteSpace(AppSettingsUtility.RpolUserName))
+            if (AppSettingsUtility.TryGetRpolCredentials(out var rpolUserName, out var rpolPassword)
+                && !string.IsNullOrWhiteSpace(rpolUserName)
+                && !string.IsNullOrWhiteSpace(rpolPassword))
             {
-                settings[RpolUserNameSettingsKey] = AppSettingsUtility.RpolUserName;
-            }
-
-            if (!string.IsNullOrWhiteSpace(AppSettingsUtility.RpolPassword))
-            {
-                settings[RpolPasswordSettingsKey] = AppSettingsUtility.RpolPassword;
+                settings[RpolUserNameSettingsKey] = rpolUserName;
+                settings[RpolPasswordSettingsKey] = rpolPassword;
             }
 
             LatestReport = Validate(settings, AppContext.BaseDirectory);

@@ -38,8 +38,16 @@ namespace PlayerAssistant
             string signedHostedSettingsJson,
             string sourceDescription)
         {
+            ArgumentException.ThrowIfNullOrWhiteSpace(signedHostedSettingsJson);
+            return LoadAndVerifyHostedSettings(Encoding.UTF8.GetBytes(signedHostedSettingsJson), sourceDescription);
+        }
+
+        public static Dictionary<string, string> LoadAndVerifyHostedSettings(
+            byte[] signedHostedSettingsUtf8,
+            string sourceDescription)
+        {
             return LoadAndVerifyHostedSettings(
-                signedHostedSettingsJson,
+                signedHostedSettingsUtf8,
                 sourceDescription,
                 TrustedHostedSettingsKeysOverrideForTests ?? TrustedHostedSettingsKeys,
                 trustedHostedSettingsStatePath: null,
@@ -54,6 +62,22 @@ namespace PlayerAssistant
             DateTimeOffset? nowUtc = null)
         {
             ArgumentException.ThrowIfNullOrWhiteSpace(signedHostedSettingsJson);
+            return LoadAndVerifyHostedSettings(
+                Encoding.UTF8.GetBytes(signedHostedSettingsJson),
+                sourceDescription,
+                trustedSigningKeys,
+                trustedHostedSettingsStatePath,
+                nowUtc);
+        }
+
+        internal static Dictionary<string, string> LoadAndVerifyHostedSettings(
+            byte[] signedHostedSettingsUtf8,
+            string sourceDescription,
+            IReadOnlyList<HostedSettingsSigningKeyTrustEntry> trustedSigningKeys,
+            string? trustedHostedSettingsStatePath = null,
+            DateTimeOffset? nowUtc = null)
+        {
+            ArgumentNullException.ThrowIfNull(signedHostedSettingsUtf8);
             ArgumentException.ThrowIfNullOrWhiteSpace(sourceDescription);
             ArgumentNullException.ThrowIfNull(trustedSigningKeys);
 
@@ -62,30 +86,40 @@ namespace PlayerAssistant
                 throw new InvalidOperationException("No trusted hosted settings signing keys are configured.");
             }
 
-            var envelope = ParseSignedEnvelope(signedHostedSettingsJson);
-            if (!string.Equals(envelope.Format, SignedEnvelopeFormat, StringComparison.Ordinal))
+            try
             {
-                throw new InvalidOperationException(
-                    $"{sourceDescription} must use hosted settings signed envelope format '{SignedEnvelopeFormat}'.");
-            }
+                var envelope = ParseSignedEnvelope(signedHostedSettingsUtf8);
+                if (!string.Equals(envelope.Format, SignedEnvelopeFormat, StringComparison.Ordinal))
+                {
+                    throw new InvalidOperationException(
+                        $"{sourceDescription} must use hosted settings signed envelope format '{SignedEnvelopeFormat}'.");
+                }
 
-            if (!string.Equals(envelope.ContentId, HostedSettingsContentId, StringComparison.Ordinal))
+                if (!string.Equals(envelope.ContentId, HostedSettingsContentId, StringComparison.Ordinal))
+                {
+                    throw new InvalidOperationException(
+                        $"{sourceDescription} content identity '{envelope.ContentId}' did not match expected '{HostedSettingsContentId}'.");
+                }
+
+                if (!Version.TryParse(envelope.Version, out var version))
+                {
+                    throw new InvalidOperationException($"{sourceDescription} hosted settings version '{envelope.Version}' is invalid.");
+                }
+
+                VerifyEnvelopeSignature(envelope, trustedSigningKeys, nowUtc ?? DateTimeOffset.UtcNow);
+                var settings = LocalSettingsUtility.LoadPortableEncryptedSettingsFromUtf8Bytes(
+                    Encoding.UTF8.GetBytes(envelope.EncryptedSettingsJson),
+                    sourceDescription);
+                ApplyTrustedHostedSettingsVersionPolicy(version, trustedHostedSettingsStatePath);
+                return settings;
+            }
+            finally
             {
-                throw new InvalidOperationException(
-                    $"{sourceDescription} content identity '{envelope.ContentId}' did not match expected '{HostedSettingsContentId}'.");
+                if (signedHostedSettingsUtf8.Length > 0)
+                {
+                    CryptographicOperations.ZeroMemory(signedHostedSettingsUtf8);
+                }
             }
-
-            if (!Version.TryParse(envelope.Version, out var version))
-            {
-                throw new InvalidOperationException($"{sourceDescription} hosted settings version '{envelope.Version}' is invalid.");
-            }
-
-            VerifyEnvelopeSignature(envelope, trustedSigningKeys, nowUtc ?? DateTimeOffset.UtcNow);
-            var settings = LocalSettingsUtility.LoadPortableEncryptedSettingsFromContents(
-                envelope.EncryptedSettingsJson,
-                sourceDescription);
-            ApplyTrustedHostedSettingsVersionPolicy(version, trustedHostedSettingsStatePath);
-            return settings;
         }
 
         internal static string CreateSignedHostedSettingsJson(
@@ -201,12 +235,12 @@ namespace PlayerAssistant
             return new DelegateDisposable(() => TrustedHostedSettingsKeysOverrideForTests = previousTrustedKeys);
         }
 
-        private static SignedHostedSettingsEnvelope ParseSignedEnvelope(string signedHostedSettingsJson)
+        private static SignedHostedSettingsEnvelope ParseSignedEnvelope(byte[] signedHostedSettingsUtf8)
         {
             SignedHostedSettingsEnvelope? envelope;
             try
             {
-                envelope = JsonSerializer.Deserialize<SignedHostedSettingsEnvelope>(signedHostedSettingsJson, JsonOptions);
+                envelope = JsonSerializer.Deserialize<SignedHostedSettingsEnvelope>(signedHostedSettingsUtf8, JsonOptions);
             }
             catch (JsonException ex)
             {

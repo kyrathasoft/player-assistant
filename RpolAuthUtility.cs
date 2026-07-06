@@ -280,10 +280,9 @@ namespace PlayerAssistant
 
         private static (string UserName, string Password) GetCredentials()
         {
-            var userName = AppSettingsUtility.RpolUserName;
-            var password = AppSettingsUtility.RpolPassword;
-
-            if (string.IsNullOrWhiteSpace(userName) || string.IsNullOrWhiteSpace(password))
+            if (!AppSettingsUtility.TryGetRpolCredentials(out var userName, out var password)
+                || string.IsNullOrWhiteSpace(userName)
+                || string.IsNullOrWhiteSpace(password))
             {
                 throw new RpolAuthException(
                     RpolAuthFailureKind.MissingCredentials,
