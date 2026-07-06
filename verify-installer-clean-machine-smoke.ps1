@@ -387,8 +387,16 @@ namespace PlayerAssistantSmoke
 }
 
 function Remove-CredentialTargets {
-    foreach ($target in $CredentialTargets) {
-        & cmdkey.exe /delete:$target | Out-Null
+    $previousNativeErrorPreference = $PSNativeCommandUseErrorActionPreference
+    try {
+        $PSNativeCommandUseErrorActionPreference = $false
+        foreach ($target in $CredentialTargets) {
+            & cmdkey.exe /delete:$target 2>$null | Out-Null
+            $global:LASTEXITCODE = 0
+        }
+    }
+    finally {
+        $PSNativeCommandUseErrorActionPreference = $previousNativeErrorPreference
     }
 }
 
@@ -410,6 +418,7 @@ $runtimeUserDataRoot = Join-Path ([Environment]::GetFolderPath([Environment+Spec
 $runtimeSharedDataRoot = Join-Path ([Environment]::GetFolderPath([Environment+SpecialFolder]::CommonApplicationData)) $UserDataRelativeRoot
 $backupRoot = Join-Path $scratchRoot 'runtime-backup'
 $serverProcess = $null
+$verificationSucceeded = $false
 
 try {
     New-Item -ItemType Directory -Force -Path $scratchRoot | Out-Null
@@ -553,6 +562,7 @@ try {
         Write-Output "  Hosted settings requests: $(@($requestLog | Where-Object { $_ -eq $HostedSettingsRelativePath }).Count)"
         Write-Output "  Update manifest requests: $(@($requestLog | Where-Object { $_ -eq $UpdateManifestRelativePath }).Count)"
         Write-Output "  Update signature requests: $(@($requestLog | Where-Object { $_ -eq $UpdateSignatureRelativePath }).Count)"
+        $verificationSucceeded = $true
     }
     finally {
         $hostedSettingsSigningKey.Dispose()
@@ -589,5 +599,9 @@ finally {
 
     if (Test-Path -LiteralPath $scratchRoot) {
         Remove-Item -LiteralPath $scratchRoot -Recurse -Force -ErrorAction SilentlyContinue
+    }
+
+    if ($verificationSucceeded) {
+        $global:LASTEXITCODE = 0
     }
 }
