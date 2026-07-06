@@ -262,7 +262,10 @@ function Write-PortableEncryptedSettings {
         payload = [Convert]::ToBase64String($payloadBytes)
     }
 
-    [pscustomobject]$envelope | ConvertTo-Json -Depth 4 | Set-Content -LiteralPath $DestinationPath -Encoding UTF8
+    [System.IO.File]::WriteAllText(
+        $DestinationPath,
+        ([pscustomobject]$envelope | ConvertTo-Json -Depth 4),
+        [System.Text.UTF8Encoding]::new($false))
 }
 
 function Copy-DirectoryContents {

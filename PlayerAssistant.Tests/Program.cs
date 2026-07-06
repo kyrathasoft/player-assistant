@@ -56,8 +56,10 @@ var tests = new (string Name, Action Test)[]
     ("app configuration validation reports missing url", AppConfigurationValidationReportsMissingUrl),
     ("app configuration validation rejects disallowed network host", AppConfigurationValidationRejectsDisallowedNetworkHost),
     ("app configuration validation writes repair guidance", AppConfigurationValidationWritesRepairGuidance),
-    ("app configuration validation warns about missing rpol credentials", AppConfigurationValidationWarnsAboutMissingRpolCredentials),
+    ("app configuration validation suppresses missing rpol credentials before hosted settings failure", AppConfigurationValidationSuppressesMissingRpolCredentialsBeforeHostedSettingsFailure),
+    ("app configuration validation warns about missing rpol credentials after hosted settings failure", AppConfigurationValidationWarnsAboutMissingRpolCredentialsAfterHostedSettingsFailure),
     ("app configuration validation warns about missing sidecars", AppConfigurationValidationWarnsAboutMissingSidecars),
+    ("app settings loads rpol credentials from local settings sidecar", AppSettingsLoadsRpolCredentialsFromLocalSettingsSidecar),
     ("app settings migrate hosted rpol credentials into credential manager", AppSettingsMigrateHostedRpolCredentialsIntoCredentialManager),
     ("app configuration validation accepts valid release manifest", AppConfigurationValidationAcceptsValidReleaseManifest),
     ("app configuration validation rejects missing manifest file", AppConfigurationValidationRejectsMissingManifestFile),
@@ -215,8 +217,9 @@ var tests = new (string Name, Action Test)[]
     ("publish verification rejects last crash artifact", PublishVerificationRejectsLastCrashArtifact),
     ("publish verification rejects malformed settings json", PublishVerificationRejectsMalformedSettingsJson),
     ("publish verification rejects future settings schema", PublishVerificationRejectsFutureSettingsSchema),
-    ("publish verification rejects shipped local settings", PublishVerificationRejectsShippedLocalSettings),
-    ("publish verification rejects missing hosted local settings url", PublishVerificationRejectsMissingHostedLocalSettingsUrl),
+    ("publish verification accepts encrypted rpol local settings sidecar", PublishVerificationAcceptsEncryptedRpolLocalSettingsSidecar),
+    ("publish verification rejects plaintext rpol local settings sidecar", PublishVerificationRejectsPlaintextRpolLocalSettingsSidecar),
+    ("publish verification accepts missing hosted local settings url", PublishVerificationAcceptsMissingHostedLocalSettingsUrl),
     ("publish verification rejects missing xp password sidecar", PublishVerificationRejectsMissingXpPasswordSidecar),
     ("publish verification rejects plaintext xp password sidecar", PublishVerificationRejectsPlaintextXpPasswordSidecar),
     ("publish verification rejects malformed keyword index", PublishVerificationRejectsMalformedKeywordIndex),
@@ -989,10 +992,12 @@ static void AppConfigurationValidationWritesRepairGuidance()
     AssertContains(remediation, "Game Intro is not on the allowed network host list");
     AssertContains(remediation, "URL must be absolute.");
     AssertContains(remediation, "Edit settings.json");
-    AssertContains(remediation, "RPOL credentials are incomplete");
+    AssertFalse(
+        remediation.Contains("RPOL credentials", StringComparison.OrdinalIgnoreCase),
+        "RPOL credential warnings should not appear unless hosted settings failed");
 }
 
-static void AppConfigurationValidationWarnsAboutMissingRpolCredentials()
+static void AppConfigurationValidationSuppressesMissingRpolCredentialsBeforeHostedSettingsFailure()
 {
     using var directory = TemporaryDirectory.Create();
     WriteRequiredRuntimeSidecars(directory.Path);
@@ -1001,10 +1006,28 @@ static void AppConfigurationValidationWarnsAboutMissingRpolCredentials()
         CreateValidAppSettings(includeCredentials: false),
         directory.Path);
 
+    AssertFalse(
+        report.Issues.Any(issue => issue.Message.Contains("RPOL credential", StringComparison.OrdinalIgnoreCase)),
+        "missing RPOL credentials should not be reported before hosted settings failure");
+    AssertFalse(
+        report.Issues.Any(issue => issue.Severity == AppConfigurationIssueSeverity.Error),
+        "missing optional RPOL credentials should not be fatal");
+}
+
+static void AppConfigurationValidationWarnsAboutMissingRpolCredentialsAfterHostedSettingsFailure()
+{
+    using var directory = TemporaryDirectory.Create();
+    WriteRequiredRuntimeSidecars(directory.Path);
+
+    var report = AppConfigurationValidationUtility.Validate(
+        CreateValidAppSettings(includeCredentials: false),
+        directory.Path,
+        warnAboutMissingRpolCredentials: true);
+
     AssertTrue(
         report.Issues.Any(issue => issue.Severity == AppConfigurationIssueSeverity.Warning
-            && issue.Message.Contains("RPOL credentials", StringComparison.Ordinal)),
-        "missing RPOL credentials should be a warning");
+            && issue.Message.Contains("Hosted RPOL credential data could not be loaded", StringComparison.Ordinal)),
+        "missing RPOL credentials should be a warning after hosted settings failure");
     AssertFalse(
         report.Issues.Any(issue => issue.Severity == AppConfigurationIssueSeverity.Error),
         "missing optional RPOL credentials should not be fatal");
@@ -1024,6 +1047,35 @@ static void AppConfigurationValidationWarnsAboutMissingSidecars()
     AssertTrue(
         report.Issues.All(issue => issue.Severity == AppConfigurationIssueSeverity.Warning),
         "missing sidecars should warn without blocking startup");
+}
+
+static void AppSettingsLoadsRpolCredentialsFromLocalSettingsSidecar()
+{
+    using var directory = TemporaryDirectory.Create();
+    WriteSettingsJson(directory.Path, CreateValidAppSettings(includeCredentials: false));
+    WriteRequiredRuntimeSidecars(directory.Path);
+    LocalSettingsUtility.SaveEncryptedSettings(
+        Path.Combine(directory.Path, "settings.local.json"),
+        new Dictionary<string, string>
+        {
+            ["XP Tracking"] = "https://publish.obsidian.md/scarlethorizons/Intentional+Orphans/XP+Tracking",
+            ["RPOL user name"] = "example-user",
+            ["RPOL password"] = "example-password"
+        });
+
+    using var credentialStoreScope = RuntimeSecretStoreUtility.UseBackendForTests(new InMemoryWindowsCredentialStoreBackend());
+    var settings = new Dictionary<string, string>(AppSettingsUtility.LoadSettings(directory.Path), StringComparer.OrdinalIgnoreCase);
+
+    AssertEqual("example-user", settings["RPOL user name"], "local settings sidecar should provide RPOL user name");
+    AssertEqual("example-password", settings["RPOL password"], "local settings sidecar should provide RPOL password");
+    AssertEqual(
+        "https://publish.obsidian.md/scarlethorizons/Intentional+Orphans/XP+Tracking",
+        settings["XP Tracking"],
+        "local settings sidecar should still provide XP Tracking");
+    var report = AppConfigurationValidationUtility.Validate(settings, directory.Path, warnAboutMissingRpolCredentials: true);
+    AssertFalse(
+        report.Issues.Any(issue => issue.Message.Contains("Hosted RPOL credential data could not be loaded", StringComparison.Ordinal)),
+        "loaded sidecar RPOL credentials should suppress the hosted-settings warning");
 }
 
 static void AppConfigurationValidationAcceptsValidReleaseManifest()
@@ -5102,7 +5154,7 @@ static void PublishVerificationRejectsFutureSettingsSchema()
     });
 }
 
-static void PublishVerificationRejectsShippedLocalSettings()
+static void PublishVerificationAcceptsEncryptedRpolLocalSettingsSidecar()
 {
     WithCopiedPublishDirectory(directoryPath =>
     {
@@ -5110,17 +5162,45 @@ static void PublishVerificationRejectsShippedLocalSettings()
             Path.Combine(directoryPath, "settings.local.json"),
             new Dictionary<string, string>
             {
-                ["XP Tracking"] = "https://publish.obsidian.md/scarlethorizons/Intentional+Orphans/XP+Tracking"
+                ["XP Tracking"] = "https://publish.obsidian.md/scarlethorizons/Intentional+Orphans/XP+Tracking",
+                ["RPOL user name"] = "example-user",
+                ["RPOL password"] = "example-password"
             });
+        WriteReleaseManifest(directoryPath);
+        WriteReleaseProvenance(directoryPath);
 
         var output = RunPublishVerification(directoryPath);
 
-        AssertFalse(output.ExitCode == 0, "publish verification should fail when settings.local.json ships in published output");
-        AssertContains(output.Output, "must not ship settings.local.json");
+        AssertEqual(
+            0,
+            output.ExitCode,
+            $"publish verification should accept encrypted settings.local.json with RPOL credentials. Output: {output.Output}");
     });
 }
 
-static void PublishVerificationRejectsMissingHostedLocalSettingsUrl()
+static void PublishVerificationRejectsPlaintextRpolLocalSettingsSidecar()
+{
+    WithCopiedPublishDirectory(directoryPath =>
+    {
+        File.WriteAllText(
+            Path.Combine(directoryPath, "settings.local.json"),
+            """
+            {
+              "XP Tracking": "https://publish.obsidian.md/scarlethorizons/Intentional+Orphans/XP+Tracking",
+              "RPOL user name": "example-user",
+              "RPOL password": "example-password"
+            }
+            """);
+        WriteReleaseManifest(directoryPath);
+
+        var output = RunPublishVerification(directoryPath);
+
+        AssertFalse(output.ExitCode == 0, "publish verification should fail when settings.local.json contains plaintext RPOL credentials");
+        AssertContains(output.Output, "plaintext RPOL credentials");
+    });
+}
+
+static void PublishVerificationAcceptsMissingHostedLocalSettingsUrl()
 {
     WithCopiedPublishDirectory(directoryPath =>
     {
@@ -5133,11 +5213,23 @@ static void PublishVerificationRejectsMissingHostedLocalSettingsUrl()
 """,
                 string.Empty,
                 StringComparison.Ordinal));
+        LocalSettingsUtility.SaveEncryptedSettings(
+            Path.Combine(directoryPath, "settings.local.json"),
+            new Dictionary<string, string>
+            {
+                ["XP Tracking"] = "https://publish.obsidian.md/scarlethorizons/Intentional+Orphans/XP+Tracking",
+                ["RPOL user name"] = "example-user",
+                ["RPOL password"] = "example-password"
+            });
+        WriteReleaseManifest(directoryPath);
+        WriteReleaseProvenance(directoryPath);
 
         var output = RunPublishVerification(directoryPath);
 
-        AssertFalse(output.ExitCode == 0, "publish verification should fail when settings.json omits Hosted Local Settings");
-        AssertContains(output.Output, "Published settings.json is missing required URL setting 'Hosted Local Settings'.");
+        AssertEqual(
+            0,
+            output.ExitCode,
+            $"publish verification should accept settings.json without Hosted Local Settings when encrypted local settings ships. Output: {output.Output}");
     });
 }
 
@@ -5856,10 +5948,14 @@ static void WithCopiedPublishDirectory(Action<string> action)
             overwrite: true);
         WriteRequiredRuntimeSidecars(directoryPath);
         var shippedLocalSettingsPath = Path.Combine(directoryPath, "settings.local.json");
-        if (File.Exists(shippedLocalSettingsPath))
-        {
-            File.Delete(shippedLocalSettingsPath);
-        }
+        LocalSettingsUtility.SaveEncryptedSettings(
+            shippedLocalSettingsPath,
+            new Dictionary<string, string>
+            {
+                ["XP Tracking"] = "https://publish.obsidian.md/scarlethorizons/Intentional+Orphans/XP+Tracking",
+                ["RPOL user name"] = "example-user",
+                ["RPOL password"] = "example-password"
+            });
         WriteReleaseRuntimeInventory(directoryPath);
         WriteReleaseManifest(directoryPath);
         WriteReleaseProvenance(directoryPath);

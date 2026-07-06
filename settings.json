@@ -1,8 +1,8 @@
 {
   "schema_version": 1,
-  "Hosted Local Settings": "https://bryanmiller.us/scarlethorizons/settings.local.json",
   "RPOL Site": "https://rpol.net/game.php?gi=80170",
   "Game Intro": "https://rpol.net/gameinfo.php?gi=80170",
   "The Cast": "https://rpol.net/gameinfo.php?action=cast&gi=80170",
-  "Obsidian Game Vault": "https://publish.obsidian.md/scarlethorizons"
+  "Obsidian Game Vault": "https://publish.obsidian.md/scarlethorizons",
+  "XP Tracking": "https://publish.obsidian.md/scarlethorizons/Intentional+Orphans/XP+Tracking"
 }

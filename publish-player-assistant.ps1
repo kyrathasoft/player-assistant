@@ -63,10 +63,6 @@ $ForbiddenPlaintextPatterns = @(
     '"RPOL password"\s*:',
     '"RPOL user name"\s*:'
 )
-$ForbiddenPublishedLocalSettingsKeys = @(
-    'RPOL user name',
-    'RPOL password'
-)
 $IgnoredKeywordTermsSourceDirectories = @(
     '.git',
     'bin',
@@ -75,7 +71,6 @@ $IgnoredKeywordTermsSourceDirectories = @(
     'Release'
 )
 $RequiredSettingsUrlKeys = @(
-    'Hosted Local Settings',
     'RPOL Site',
     'Game Intro',
     'The Cast',
@@ -83,6 +78,10 @@ $RequiredSettingsUrlKeys = @(
 )
 $RequiredLocalSettingsUrlKeys = @(
     'XP Tracking'
+)
+$RequiredLocalSettingsCredentialKeys = @(
+    'RPOL user name',
+    'RPOL password'
 )
 $ProcessLockDiagnosticsScriptPath = Join-Path $PSScriptRoot 'diagnose-player-assistant-locks.ps1'
 $RuntimeSidecarVerificationScriptPath = Join-Path $PSScriptRoot 'verify-runtime-sidecars.ps1'
@@ -708,14 +707,14 @@ function Write-AppEncryptedLocalSettings {
         key_scope = Get-SettingsKeyScope -SettingsPath $DestinationPath
     }
 
-    [pscustomobject]$envelope | ConvertTo-Json -Depth 4 | Set-Content -LiteralPath $DestinationPath -Encoding UTF8
+    [System.IO.File]::WriteAllText(
+        $DestinationPath,
+        ([pscustomobject]$envelope | ConvertTo-Json -Depth 4),
+        [System.Text.UTF8Encoding]::new($false))
 }
 
 function Assert-EncryptedLocalSettings {
     param(
-        [Parameter(Mandatory = $true)]
-        [string]$SourcePath,
-
         [Parameter(Mandatory = $true)]
         [string]$PublishedPath
     )
@@ -727,7 +726,6 @@ function Assert-EncryptedLocalSettings {
         throw "Published $SettingsLocalFileName appears to contain plaintext RPOL credentials."
     }
 
-    $sourceSettings = ConvertFrom-LocalSettingsFile -SettingsPath $SourcePath
     $publishedSettings = ConvertFrom-AppEncryptedLocalSettings -SettingsPath $PublishedPath
     $publishedEnvelope = Read-JsonFile -Path $PublishedPath -Description "published $SettingsLocalFileName"
     $publishedSchemaVersion = Get-SettingsSchemaVersion -Settings $publishedEnvelope -Description "published $SettingsLocalFileName"
@@ -736,11 +734,6 @@ function Assert-EncryptedLocalSettings {
     }
 
     foreach ($settingsKey in $RequiredLocalSettingsUrlKeys) {
-        $sourceProperty = $sourceSettings.PSObject.Properties[$settingsKey]
-        if ($null -eq $sourceProperty -or [string]::IsNullOrWhiteSpace([string]$sourceProperty.Value)) {
-            throw "Source $SettingsLocalFileName is missing required URL setting '$settingsKey'."
-        }
-
         $publishedProperty = $publishedSettings.PSObject.Properties[$settingsKey]
         if ($null -eq $publishedProperty -or [string]::IsNullOrWhiteSpace([string]$publishedProperty.Value)) {
             throw "Published $SettingsLocalFileName is missing required URL setting '$settingsKey'."
@@ -753,32 +746,16 @@ function Assert-EncryptedLocalSettings {
         }
     }
 
-    foreach ($property in $sourceSettings.PSObject.Properties) {
-        if ($ForbiddenPublishedLocalSettingsKeys -contains [string]$property.Name) {
-            if (![string]::IsNullOrWhiteSpace([string]$property.Value)) {
-                throw "Source $SettingsLocalFileName must not contain '$($property.Name)'. Store RPOL credentials in Windows Credential Manager instead."
-            }
-
-            continue
-        }
-
-        $publishedProperty = $publishedSettings.PSObject.Properties[$property.Name]
-        if ($null -eq $publishedProperty) {
-            throw "Published $SettingsLocalFileName is missing decrypted setting '$($property.Name)'."
-        }
-
-        if ([string]$publishedProperty.Value -ne [string]$property.Value) {
-            throw "Published $SettingsLocalFileName did not decrypt back to the source value for '$($property.Name)'."
-        }
-
-        if (![string]::IsNullOrWhiteSpace([string]$property.Value) -and $publishedRaw.Contains([string]$property.Value)) {
-            throw "Published $SettingsLocalFileName contains plaintext value for '$($property.Name)'."
+    foreach ($settingsKey in $RequiredLocalSettingsCredentialKeys) {
+        $publishedProperty = $publishedSettings.PSObject.Properties[$settingsKey]
+        if ($null -eq $publishedProperty -or [string]::IsNullOrWhiteSpace([string]$publishedProperty.Value)) {
+            throw "Published $SettingsLocalFileName is missing required RPOL credential setting '$settingsKey'."
         }
     }
 
-    foreach ($forbiddenKey in $ForbiddenPublishedLocalSettingsKeys) {
-        if ($null -ne $publishedSettings.PSObject.Properties[$forbiddenKey]) {
-            throw "Published $SettingsLocalFileName must not contain '$forbiddenKey'. Store RPOL credentials in Windows Credential Manager instead."
+    foreach ($property in $publishedSettings.PSObject.Properties) {
+        if (![string]::IsNullOrWhiteSpace([string]$property.Value) -and $publishedRaw.Contains([string]$property.Value)) {
+            throw "Published $SettingsLocalFileName contains plaintext value for '$($property.Name)'."
         }
     }
 }
@@ -1627,9 +1604,7 @@ function Assert-PublishOutput {
     Assert-PublishedSitemap -Path (Join-Path $Directory $SitemapFileName)
     [void](Read-JsonFile -Path (Join-Path $Directory $SitemapKeywordUrlsFileName) -Description 'published sitemap keyword URL library')
     Assert-PublishedPlaywrightRuntime -Directory (Join-Path $Directory '.playwright')
-    if (Test-Path -LiteralPath (Join-Path $Directory $SettingsLocalFileName) -PathType Leaf) {
-        throw "Published output must not ship $SettingsLocalFileName. Hosted local settings must be downloaded at runtime instead."
-    }
+    Assert-EncryptedLocalSettings -PublishedPath (Join-Path $Directory $SettingsLocalFileName)
     Assert-PublishedXpPasswordSidecar -Path (Join-Path $Directory $XpPasswordFileName)
     Assert-PublishedRuntimeInventory -Directory $Directory
     Assert-NoSensitiveFiles -Directory $Directory
@@ -1662,7 +1637,6 @@ $resolvedOutputDir = Resolve-FullPath $OutputDir
 Assert-PathInsideRepo -Path $resolvedOutputDir -Description 'publish output directory'
 
 if ($VerifyOnly) {
-    Assert-PublishInputs
     Assert-PublishOutput -Directory $resolvedOutputDir
     Write-Output "Publish verification passed: $resolvedOutputDir"
     return
@@ -1708,6 +1682,9 @@ Copy-Item -LiteralPath (Join-Path $PSScriptRoot "Release\$KeywordTermsFileName")
 Copy-Item -LiteralPath (Join-Path $PSScriptRoot "Release\$SitemapFileName") -Destination (Join-Path $resolvedOutputDir $SitemapFileName) -Force
 Copy-Item -LiteralPath (Join-Path $PSScriptRoot "Release\$SitemapKeywordUrlsFileName") -Destination (Join-Path $resolvedOutputDir $SitemapKeywordUrlsFileName) -Force
 Copy-Item -LiteralPath (Join-Path $PSScriptRoot $XpPasswordFileName) -Destination (Join-Path $resolvedOutputDir $XpPasswordFileName) -Force
+Write-AppEncryptedLocalSettings `
+    -SourcePath (Join-Path $PSScriptRoot $SettingsLocalFileName) `
+    -DestinationPath (Join-Path $resolvedOutputDir $SettingsLocalFileName)
 Protect-RuntimeSidecarFiles -Directory $resolvedOutputDir
 Write-ReleaseRuntimeInventory -Directory $resolvedOutputDir
 Write-ReleaseIntegrityManifest -Directory $resolvedOutputDir

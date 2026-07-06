@@ -23,6 +23,7 @@ namespace PlayerAssistant
         private static readonly Lazy<IReadOnlyDictionary<string, string>> Settings = new(LoadSettings);
         private static Func<HttpClient>? HttpClientFactoryOverride;
         private static Func<string, NetworkUrlAllowlistValidation>? HostedLocalSettingsValidationOverride;
+        private static bool hostedLocalSettingsLoadFailed;
 
         public const string RpolUserNameSettingsKey = "RPOL user name";
         public const string RpolPasswordSettingsKey = "RPOL password";
@@ -35,6 +36,7 @@ namespace PlayerAssistant
         public static string TheCastUrl => Settings.Value[TheCastSettingsKey];
         public static string ObsidianGameVaultUrl => Settings.Value[ObsidianGameVaultSettingsKey].TrimEnd('/');
         public static string XpTrackingUrl => Settings.Value[XpTrackingSettingsKey];
+        public static bool HostedLocalSettingsLoadFailed => hostedLocalSettingsLoadFailed;
 
         public static void Load()
         {
@@ -49,6 +51,7 @@ namespace PlayerAssistant
         internal static IReadOnlyDictionary<string, string> LoadSettings(string runtimeDirectory)
         {
             ArgumentException.ThrowIfNullOrWhiteSpace(runtimeDirectory);
+            hostedLocalSettingsLoadFailed = false;
 
             var runtimeSettingsPath = RuntimePathUtility.CombineUnderBase(runtimeDirectory, SettingsFileName);
             var settings = LoadSettingsFile(File.Exists(runtimeSettingsPath)
@@ -67,19 +70,6 @@ namespace PlayerAssistant
                         StringComparison.OrdinalIgnoreCase)
                             ? LocalSettingsUtility.LoadSettings(localSettingsPath)
                             : LocalSettingsUtility.LoadSettingsWithoutMigration(localSettingsPath);
-
-                    try
-                    {
-                        _ = RuntimeSecretStoreUtility.TryMigrateRpolSecretsFromLocalSettings(localSettings, localSettingsPath);
-                    }
-                    catch (Exception ex) when (IsRecoverableLocalSettingsException(ex))
-                    {
-                        StartupLoggingUtility.Append(
-                            "local settings secret-store migration",
-                            new InvalidOperationException(
-                                $"Unable to migrate RPOL credentials from '{localSettingsPath}' into Windows Credential Manager. Continuing with legacy sidecar values for this run.",
-                                ex));
-                    }
 
                     foreach (var pair in localSettings)
                     {
@@ -178,6 +168,7 @@ namespace PlayerAssistant
             }
             catch (Exception ex) when (IsRecoverableHostedLocalSettingsException(ex))
             {
+                hostedLocalSettingsLoadFailed = true;
                 StartupLoggingUtility.Append(
                     "hosted local settings load",
                     new InvalidOperationException(

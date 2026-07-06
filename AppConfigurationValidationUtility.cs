@@ -100,7 +100,10 @@ namespace PlayerAssistant
                 settings[RpolPasswordSettingsKey] = rpolPassword;
             }
 
-            LatestReport = Validate(settings, AppContext.BaseDirectory);
+            LatestReport = Validate(
+                settings,
+                AppContext.BaseDirectory,
+                warnAboutMissingRpolCredentials: AppSettingsUtility.HostedLocalSettingsLoadFailed);
             if (LatestReport.HasIssues)
             {
                 WriteRemediationFile(LatestReport, AppContext.BaseDirectory);
@@ -135,7 +138,8 @@ namespace PlayerAssistant
 
         public static AppConfigurationValidationReport Validate(
             IReadOnlyDictionary<string, string> settings,
-            string runtimeDirectory)
+            string runtimeDirectory,
+            bool warnAboutMissingRpolCredentials = false)
         {
             ArgumentNullException.ThrowIfNull(settings);
             ArgumentException.ThrowIfNullOrWhiteSpace(runtimeDirectory);
@@ -148,7 +152,7 @@ namespace PlayerAssistant
             ValidateHttpUrlSetting(settings, TheCastSettingsKey, NetworkUrlPurpose.Rpol, issues);
             ValidateHttpUrlSetting(settings, ObsidianGameVaultSettingsKey, NetworkUrlPurpose.ObsidianPublish, issues);
             ValidateHttpUrlSetting(settings, XpTrackingSettingsKey, NetworkUrlPurpose.ObsidianPublish, issues);
-            ValidateRpolCredentials(settings, issues);
+            ValidateRpolCredentials(settings, issues, warnAboutMissingRpolCredentials);
             ValidateRuntimeDirectory(runtimeDirectory, issues);
             ValidateRuntimeSidecars(runtimeDirectory, issues);
             ValidateReleaseIntegrityManifest(runtimeDirectory, issues);
@@ -219,7 +223,8 @@ namespace PlayerAssistant
 
         private static void ValidateRpolCredentials(
             IReadOnlyDictionary<string, string> settings,
-            List<AppConfigurationIssue> issues)
+            List<AppConfigurationIssue> issues,
+            bool warnAboutMissingRpolCredentials)
         {
             var hasUserName = settings.TryGetValue(RpolUserNameSettingsKey, out var userName)
                 && !string.IsNullOrWhiteSpace(userName);
@@ -231,10 +236,15 @@ namespace PlayerAssistant
                 return;
             }
 
+            if (!warnAboutMissingRpolCredentials)
+            {
+                return;
+            }
+
             issues.Add(new AppConfigurationIssue(
                 AppConfigurationIssueSeverity.Warning,
-                "RPOL credentials are incomplete; authenticated RPOL downloads will be unavailable.",
-                "Open Settings > RPOL Credentials and provide both RPOL user name and RPOL password, or remove both stored credentials if authenticated RPOL downloads are not needed."));
+                "Hosted RPOL credential data could not be loaded; authenticated RPOL downloads will be unavailable.",
+                "Confirm the Hosted Local Settings URL is reachable and contains both RPOL user name and RPOL password, then restart the app."));
         }
 
         private static void ValidateRuntimeDirectory(string runtimeDirectory, List<AppConfigurationIssue> issues)
