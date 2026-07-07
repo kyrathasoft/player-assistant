@@ -34,6 +34,12 @@ namespace PlayerAssistant
         {
             ArgumentNullException.ThrowIfNull(requestMessage);
 
+            if (requestMessage.RequestUri is null
+                || !MatchesHostSuffix(requestMessage.RequestUri, PlayerAssistantUpdatePolicy.HostSuffix))
+            {
+                return sslPolicyErrors == SslPolicyErrors.None;
+            }
+
             return ValidatePinnedRequest(
                 requestMessage.RequestUri,
                 GetPresentedPins(certificate, chain),

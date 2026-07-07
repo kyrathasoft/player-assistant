@@ -52,6 +52,8 @@ var tests = new (string Name, Action Test)[]
     ("app settings hosted settings failure logs oversized payload", AppSettingsHostedSettingsFailureLogsOversizedPayload),
     ("app settings hosted settings failure logs unreachable fixture server", AppSettingsHostedSettingsFailureLogsUnreachableFixtureServer),
     ("xp password store loads encrypted sidecar", XpPasswordStoreLoadsEncryptedSidecar),
+    ("xp password store accepts first and full character names", XpPasswordStoreAcceptsFirstAndFullCharacterNames),
+    ("xp password store accepts encrypted sidecar with utf8 bom", XpPasswordStoreAcceptsEncryptedSidecarWithUtf8Bom),
     ("xp password store rejects plaintext sidecar", XpPasswordStoreRejectsPlaintextSidecar),
     ("app configuration validation reports missing url", AppConfigurationValidationReportsMissingUrl),
     ("app configuration validation rejects disallowed network host", AppConfigurationValidationRejectsDisallowedNetworkHost),
@@ -60,6 +62,7 @@ var tests = new (string Name, Action Test)[]
     ("app configuration validation warns about missing rpol credentials after hosted settings failure", AppConfigurationValidationWarnsAboutMissingRpolCredentialsAfterHostedSettingsFailure),
     ("app configuration validation warns about missing sidecars", AppConfigurationValidationWarnsAboutMissingSidecars),
     ("app settings loads rpol credentials from local settings sidecar", AppSettingsLoadsRpolCredentialsFromLocalSettingsSidecar),
+    ("app settings uses local rpol credentials when credential store is unavailable", AppSettingsUsesLocalRpolCredentialsWhenCredentialStoreIsUnavailable),
     ("app settings migrate hosted rpol credentials into credential manager", AppSettingsMigrateHostedRpolCredentialsIntoCredentialManager),
     ("app configuration validation accepts valid release manifest", AppConfigurationValidationAcceptsValidReleaseManifest),
     ("app configuration validation rejects missing manifest file", AppConfigurationValidationRejectsMissingManifestFile),
@@ -99,6 +102,7 @@ var tests = new (string Name, Action Test)[]
     ("network request wraps timeout", NetworkRequestWrapsTimeout),
     ("network request preserves caller cancellation", NetworkRequestPreservesCallerCancellation),
     ("network allowlist rejects credentialed and escaped hosts", NetworkAllowlistRejectsCredentialedAndEscapedHosts),
+    ("network allowlist accepts obsidian publish content hosts", NetworkAllowlistAcceptsObsidianPublishContentHosts),
     ("network allowlist rejects unexpected hosted settings path", NetworkAllowlistRejectsUnexpectedHostedSettingsPath),
     ("network allowlist rejects unexpected update path", NetworkAllowlistRejectsUnexpectedUpdatePath),
     ("network allowlist generic policy rejects unrelated update host paths", NetworkAllowlistGenericPolicyRejectsUnrelatedUpdateHostPaths),
@@ -117,6 +121,7 @@ var tests = new (string Name, Action Test)[]
     ("player character refresh cancellation clears in progress flag", PlayerCharacterRefreshCancellationClearsInProgressFlag),
     ("game forum startup cancellation writes no manifests", GameForumStartupCancellationWritesNoManifests),
     ("keyword index loader quarantines malformed json", KeywordIndexLoaderQuarantinesMalformedJson),
+    ("keyword index loader salvages legacy disallowed urls", KeywordIndexLoaderSalvagesLegacyDisallowedUrls),
     ("sitemap validation rejects poisoned url", SitemapValidationRejectsPoisonedUrl),
     ("sitemap keyword dictionary preserves existing output on rejected url", SitemapKeywordDictionaryPreservesExistingOutputOnRejectedUrl),
     ("source integrity records first accepted sitemap", SourceIntegrityRecordsFirstAcceptedSitemap),
@@ -154,7 +159,6 @@ var tests = new (string Name, Action Test)[]
     ("keyword search accepts url source metadata", KeywordSearchAcceptsUrlSourceMetadata),
     ("keyword search filters rpol hero metadata-only hits", KeywordSearchFiltersRpolHeroMetadataOnlyHits),
     ("show menu contains xp item", ShowMenuContainsXpItem),
-    ("settings menu contains rpol credentials item", SettingsMenuContainsRpolCredentialsItem),
     ("about menu contains author and update items", AboutMenuContainsAuthorAndUpdateItems),
     ("about author text lists developer info", AboutAuthorTextListsDeveloperInfo),
     ("about version text shows app version", AboutVersionTextShowsAppVersion),
@@ -175,6 +179,7 @@ var tests = new (string Name, Action Test)[]
     ("update host certificate pinning supports rotation window", UpdateHostCertificatePinningSupportsRotationWindow),
     ("update host certificate pinning rejects retired pin", UpdateHostCertificatePinningRejectsRetiredPin),
     ("update host certificate pinning rejects mismatched pin", UpdateHostCertificatePinningRejectsMismatchedPin),
+    ("certificate validation skips pin extraction for non update hosts", CertificateValidationSkipsPinExtractionForNonUpdateHosts),
     ("verified updater downloads installer to controlled path", VerifiedUpdaterDownloadsInstallerToControlledPath),
     ("verified updater rejects installer sha256 mismatch", VerifiedUpdaterRejectsInstallerSha256Mismatch),
     ("verified updater rejects installer signer mismatch", VerifiedUpdaterRejectsInstallerSignerMismatch),
@@ -186,12 +191,17 @@ var tests = new (string Name, Action Test)[]
     ("keyword search cancels previous online fallback", KeywordSearchCancelsPreviousOnlineFallback),
     ("keyword search rpol scope excludes obsidian-only whiteheart", KeywordSearchRpolScopeExcludesObsidianOnlyWhiteheart),
     ("keyword search rpol scope excludes obsidian-only whiteheart stiffwhiskers", KeywordSearchRpolScopeExcludesObsidianOnlyWhiteheartStiffwhiskers),
+    ("keyword search expands hero first and full names", KeywordSearchExpandsHeroFirstAndFullNames),
+    ("party hero sheet parser reads summary and hides xp lines", PartyHeroSheetParserReadsSummaryAndHidesXpLines),
+    ("party hero xp visibility follows authenticated character", PartyHeroXpVisibilityFollowsAuthenticatedCharacter),
     ("xp display recognizes dungeon master access", XpDisplayRecognizesDungeonMasterAccess),
+    ("xp display finds totals by first and full character names", XpDisplayFindsTotalsByFirstAndFullCharacterNames),
     ("xp display stores multiple totals for dungeon master", XpDisplayStoresMultipleTotalsForDungeonMaster),
     ("xp tracking parser reads latest table totals", XpTrackingParserReadsLatestTableTotals),
     ("xp tracking parser rejects missing latest table", XpTrackingParserRejectsMissingLatestTable),
     ("xp tracking failure message hides url and directs players to dm", XpTrackingFailureMessageHidesUrlAndDirectsPlayersToDm),
     ("xp tracking missing pc message directs players to dm", XpTrackingMissingPcMessageDirectsPlayersToDm),
+    ("show menu contains party item", ShowMenuContainsPartyItem),
     ("external url launch policy accepts http and https", ExternalUrlLaunchPolicyAcceptsHttpAndHttps),
     ("external url launch policy rejects unsafe inputs", ExternalUrlLaunchPolicyRejectsUnsafeInputs),
     ("hero image paths follow listing markdown table", HeroImagePathsFollowListingMarkdownTable),
@@ -920,6 +930,49 @@ static void XpPasswordStoreLoadsEncryptedSidecar()
         "encrypted XP password sidecar should not contain plaintext password material");
 }
 
+static void XpPasswordStoreAcceptsFirstAndFullCharacterNames()
+{
+    using var directory = TemporaryDirectory.Create();
+    var sidecarPath = Path.Combine(directory.Path, XpPasswordStoreUtility.FileName);
+    LocalSettingsUtility.SavePortableEncryptedSettings(
+        sidecarPath,
+        new Dictionary<string, string>
+        {
+            ["Kelpie"] = "gemstone",
+            ["Jelb Garrick"] = "spell-component",
+            ["Dungeon Master"] = "Lucian99!"
+        });
+
+    AssertTrue(
+        XpPasswordStoreUtility.ValidatePassword("Kelpie Lawfuller", "gemstone", directory.Path),
+        "full Kelpie name should validate against first-name XP credential");
+    AssertTrue(
+        XpPasswordStoreUtility.ValidatePassword("Jelb", "spell-component", directory.Path),
+        "first Jelb name should validate against full-name XP credential");
+    AssertFalse(
+        XpPasswordStoreUtility.ValidatePassword("Dungeon", "Lucian99!", directory.Path),
+        "Dungeon Master access should not allow a first-name shortcut");
+}
+
+static void XpPasswordStoreAcceptsEncryptedSidecarWithUtf8Bom()
+{
+    using var directory = TemporaryDirectory.Create();
+    var sidecarPath = Path.Combine(directory.Path, XpPasswordStoreUtility.FileName);
+    LocalSettingsUtility.SavePortableEncryptedSettings(
+        sidecarPath,
+        new Dictionary<string, string>
+        {
+            ["Kelpie Lawfuller"] = "gemstone"
+        });
+
+    var encryptedBytes = File.ReadAllBytes(sidecarPath);
+    File.WriteAllBytes(sidecarPath, [0xEF, 0xBB, 0xBF, .. encryptedBytes]);
+
+    AssertTrue(
+        XpPasswordStoreUtility.ValidatePassword("Kelpie Lawfuller", "gemstone", directory.Path),
+        "matching XP password should validate when encrypted sidecar has a UTF-8 BOM");
+}
+
 static void XpPasswordStoreRejectsPlaintextSidecar()
 {
     using var directory = TemporaryDirectory.Create();
@@ -1068,6 +1121,8 @@ static void AppSettingsLoadsRpolCredentialsFromLocalSettingsSidecar()
 
     AssertEqual("example-user", settings["RPOL user name"], "local settings sidecar should provide RPOL user name");
     AssertEqual("example-password", settings["RPOL password"], "local settings sidecar should provide RPOL password");
+    AssertEqual("example-user", RuntimeSecretStoreUtility.GetRpolUserName()!, "local settings sidecar should prime RPOL user name");
+    AssertEqual("example-password", RuntimeSecretStoreUtility.GetRpolPassword()!, "local settings sidecar should prime RPOL password");
     AssertEqual(
         "https://publish.obsidian.md/scarlethorizons/Intentional+Orphans/XP+Tracking",
         settings["XP Tracking"],
@@ -1076,6 +1131,27 @@ static void AppSettingsLoadsRpolCredentialsFromLocalSettingsSidecar()
     AssertFalse(
         report.Issues.Any(issue => issue.Message.Contains("Hosted RPOL credential data could not be loaded", StringComparison.Ordinal)),
         "loaded sidecar RPOL credentials should suppress the hosted-settings warning");
+}
+
+static void AppSettingsUsesLocalRpolCredentialsWhenCredentialStoreIsUnavailable()
+{
+    using var directory = TemporaryDirectory.Create();
+    WriteSettingsJson(directory.Path, CreateValidAppSettings(includeCredentials: false));
+    WriteRequiredRuntimeSidecars(directory.Path);
+    LocalSettingsUtility.SaveEncryptedSettings(
+        Path.Combine(directory.Path, "settings.local.json"),
+        new Dictionary<string, string>
+        {
+            ["XP Tracking"] = "https://publish.obsidian.md/scarlethorizons/Intentional+Orphans/XP+Tracking",
+            ["RPOL user name"] = "sidecar-user",
+            ["RPOL password"] = "sidecar-password"
+        });
+
+    using var credentialStoreScope = RuntimeSecretStoreUtility.UseBackendForTests(new ThrowingWindowsCredentialStoreBackend());
+    var settings = new Dictionary<string, string>(AppSettingsUtility.LoadSettings(directory.Path), StringComparer.OrdinalIgnoreCase);
+
+    AssertEqual("sidecar-user", settings["RPOL user name"], "local settings sidecar should provide RPOL user name when the credential store is unavailable");
+    AssertEqual("sidecar-password", settings["RPOL password"], "local settings sidecar should provide RPOL password when the credential store is unavailable");
 }
 
 static void AppConfigurationValidationAcceptsValidReleaseManifest()
@@ -1249,9 +1325,9 @@ static void ApplicationVersionMetadataMatchesHardeningRelease()
         .InformationalVersion;
     var fileVersion = FileVersionInfo.GetVersionInfo(assembly.Location).FileVersion;
 
-    AssertEqual(new Version(0, 9, 1, 0), name.Version!, "unexpected assembly version");
-    AssertEqual("0.9.1.1", fileVersion!, "unexpected file version");
-    AssertEqual("0.9.1-hardening.1", informationalVersion, "unexpected informational version");
+    AssertEqual(new Version(0, 9, 3, 0), name.Version!, "unexpected assembly version");
+    AssertEqual("0.9.3.0", fileVersion!, "unexpected file version");
+    AssertEqual("0.9.3", informationalVersion, "unexpected informational version");
 }
 
 static void ApplicationVersionArgumentReturnsVersionText()
@@ -1272,7 +1348,7 @@ static void ApplicationVersionArgumentReturnsVersionText()
     var versionText = (string?)InvokeStaticMethod(programType, "GetVersionText")
         ?? throw new InvalidOperationException("GetVersionText returned null.");
     AssertContains(versionText, "player-assistant");
-    AssertContains(versionText, "0.9.1-hardening.1");
+    AssertContains(versionText, "0.9.3");
 }
 
 static void StartupManifestStatusDistinguishesSkippedAndFailed()
@@ -2042,10 +2118,32 @@ static void NetworkAllowlistRejectsCredentialedAndEscapedHosts()
 {
     var credentialed = NetworkUrlAllowlistUtility.Validate("https://user:password@rpol.net/game.php", NetworkUrlPurpose.Rpol);
     var escapedHost = NetworkUrlAllowlistUtility.Validate("https://rpol%2enet/game.php", NetworkUrlPurpose.Rpol);
+    var threadDisplay = NetworkUrlAllowlistUtility.Validate("https://rpol.net/display.cgi?gi=80170&ti=12&msgpage=&show=all", NetworkUrlPurpose.Rpol);
 
     AssertFalse(credentialed.IsAllowed, "credentialed URLs should not be allowed");
     AssertContains(credentialed.RejectionReason ?? string.Empty, "credentials");
     AssertFalse(escapedHost.IsAllowed, "escaped host URLs should not be allowed");
+    AssertTrue(threadDisplay.IsAllowed, "RPOL thread display URLs should remain valid local search results");
+}
+
+static void NetworkAllowlistAcceptsObsidianPublishContentHosts()
+{
+    var page = NetworkUrlAllowlistUtility.Validate(
+        "https://publish.obsidian.md/scarlethorizons/Intentional+Orphans/XP+Tracking",
+        NetworkUrlPurpose.ObsidianPublish);
+    var markdown = NetworkUrlAllowlistUtility.Validate(
+        "https://publish-01.obsidian.md/access/1113217a28a5bfdcc9fbe8e6d82b27ac/Intentional%20Orphans/XP%20Tracking.md",
+        NetworkUrlPurpose.ObsidianPublish);
+    var rejected = NetworkUrlAllowlistUtility.Validate(
+        "https://help.obsidian.md/access/1113217a28a5bfdcc9fbe8e6d82b27ac/Intentional%20Orphans/XP%20Tracking.md",
+        NetworkUrlPurpose.ObsidianPublish);
+
+    AssertTrue(page.IsAllowed, "public Obsidian Publish pages should remain allowed");
+    AssertTrue(markdown.IsAllowed, "Obsidian Publish generated markdown access URLs should be allowed");
+    AssertTrue(
+        NetworkUrlAllowlistUtility.IsObsidianPublishHost(new Uri("https://publish-01.obsidian.md/")),
+        "generated Obsidian Publish content hosts should be recognized");
+    AssertFalse(rejected.IsAllowed, "non-Publish obsidian.md hosts should not be accepted");
 }
 
 static void NetworkAllowlistRejectsUnexpectedHostedSettingsPath()
@@ -2496,6 +2594,71 @@ static void KeywordIndexLoaderQuarantinesMalformedJson()
     }
 }
 
+static void KeywordIndexLoaderSalvagesLegacyDisallowedUrls()
+{
+    using var directory = TemporaryDirectory.Create();
+    var indexPath = Path.Combine(directory.Path, "keyword-index.json");
+    File.WriteAllText(
+        indexPath,
+        """
+        {
+          "index_metadata": {
+            "generated_at": "2026-06-30T00:00:00.0000000+00:00",
+            "total_words_indexed": 10
+          },
+          "urls": {
+            "https://rpol.net/admin/gm.cgi?gi=80170": {
+              "source": "RPOL"
+            },
+            "https://publish.obsidian.md/scarlethorizons/Safe": {
+              "source": "Obsidian wiki"
+            }
+          },
+          "words": {
+            "Kelpie": {
+              "total_occurrences": 2,
+              "matches": [
+                {
+                  "url": "https://rpol.net/admin/gm.cgi?gi=80170",
+                  "count": 1,
+                  "last_indexed": "2026-06-30T00:00:00.0000000+00:00"
+                },
+                {
+                  "url": "https://publish.obsidian.md/scarlethorizons/Safe",
+                  "count": 1,
+                  "last_indexed": "2026-06-30T00:00:00.0000000+00:00"
+                }
+              ]
+            }
+          }
+        }
+        """);
+
+    var loadTask = (Task)(InvokeStaticMethod(
+        typeof(KeywordIndexCrawler),
+        "LoadExistingDocumentAsync",
+        indexPath,
+        CancellationToken.None)
+        ?? throw new InvalidOperationException("expected keyword index load task"));
+    loadTask.GetAwaiter().GetResult();
+
+    var result = loadTask
+        .GetType()
+        .GetProperty("Result")
+        ?.GetValue(loadTask)
+        ?? throw new InvalidOperationException("expected sanitized keyword index document");
+    var words = result.GetType().GetProperty("Words")?.GetValue(result)
+        ?? throw new InvalidOperationException("expected keyword index words");
+    var kelpieEntry = ((System.Collections.IDictionary)words)["Kelpie"]
+        ?? throw new InvalidOperationException("expected Kelpie entry to survive sanitization");
+    var matches = kelpieEntry.GetType().GetProperty("Matches")?.GetValue(kelpieEntry)
+        ?? throw new InvalidOperationException("expected Kelpie matches");
+
+    AssertTrue(File.Exists(indexPath), "legacy keyword index should not be quarantined when useful entries can be salvaged");
+    AssertEqual(0, Directory.GetFiles(directory.Path, "keyword-index.bad-*.json").Length, "legacy keyword index should not be moved aside");
+    AssertEqual(1, ((System.Collections.ICollection)matches).Count, "expected only allowed matches to survive sanitization");
+}
+
 static void SitemapValidationRejectsPoisonedUrl()
 {
     var exception = AssertThrows<InvalidOperationException>(() =>
@@ -2779,11 +2942,18 @@ static void RpolAuthDistinguishesBlockedAndRemoteFailures()
     var uri = new Uri("https://rpol.net/display.cgi?gi=80170");
 
     var forbidden = RpolAuthUtility.CreateUnsuccessfulResponseException(uri, 403, "Forbidden");
+    var cloudflareChallenge = RpolAuthUtility.CreateUnsuccessfulResponseException(
+        uri,
+        403,
+        "Forbidden",
+        "https://rpol.net/display.cgi?gi=80170&__cf_chl_rt_tk=challenge-token");
     var rateLimited = RpolAuthUtility.CreateUnsuccessfulResponseException(uri, 429, "Too Many Requests");
     var unavailable = RpolAuthUtility.CreateUnsuccessfulResponseException(uri, 503, "Service Unavailable");
 
     AssertEqual(RpolAuthFailureKind.RpolBlocked, forbidden.Kind, "403 should be classified as RPOL blocking");
     AssertContains(forbidden.Message, "blocked authenticated access");
+    AssertEqual(RpolAuthFailureKind.CloudflareChallenge, cloudflareChallenge.Kind, "Cloudflare challenge 403 should trigger headed browser recovery");
+    AssertFalse(RpolAuthUtility.IsFatalAuthFailure(cloudflareChallenge), "Cloudflare challenges should be retryable instead of cached as fatal");
     AssertEqual(RpolAuthFailureKind.RpolBlocked, rateLimited.Kind, "429 should be classified as RPOL blocking");
     AssertEqual(RpolAuthFailureKind.RemoteUnavailable, unavailable.Kind, "503 should remain a transient remote failure");
 }
@@ -3531,20 +3701,20 @@ static void ShowMenuContainsXpItem()
     });
 }
 
-static void SettingsMenuContainsRpolCredentialsItem()
+static void ShowMenuContainsPartyItem()
 {
     RunOnStaThread(() =>
     {
         using var form = new Form1(suppressHeroImagesForThisRun: true);
-        var settingsMenuItem = (ToolStripMenuItem)(GetPrivateField(form, "settingsToolStripMenuItem")
-            ?? throw new InvalidOperationException("settingsToolStripMenuItem was null."));
-        var rpolCredentialsMenuItem = (ToolStripMenuItem)(GetPrivateField(form, "rpolCredentialsToolStripMenuItem")
-            ?? throw new InvalidOperationException("rpolCredentialsToolStripMenuItem was null."));
+        var showMenuItem = (ToolStripMenuItem)(GetPrivateField(form, "showToolStripMenuItem")
+            ?? throw new InvalidOperationException("showToolStripMenuItem was null."));
+        var partyMenuItem = (ToolStripMenuItem)(GetPrivateField(form, "partyToolStripMenuItem")
+            ?? throw new InvalidOperationException("partyToolStripMenuItem was null."));
 
-        AssertEqual("RPOL Credentials", rpolCredentialsMenuItem.Text ?? string.Empty, "unexpected RPOL credentials menu item text");
+        AssertEqual("Party", partyMenuItem.Text ?? string.Empty, "unexpected Party menu item text");
         AssertTrue(
-            settingsMenuItem.DropDownItems.Cast<ToolStripItem>().Contains(rpolCredentialsMenuItem),
-            "Settings menu should contain the RPOL Credentials item");
+            showMenuItem.DropDownItems.Cast<ToolStripItem>().Contains(partyMenuItem),
+            "Show menu should contain the Party item");
     });
 }
 
@@ -3595,7 +3765,7 @@ static void AboutVersionTextShowsAppVersion()
 {
     var versionText = (string)(InvokeStaticMethod(typeof(Form1), "GetAppVersionText")
         ?? throw new InvalidOperationException("GetAppVersionText returned null."));
-    AssertEqual("RPOL Scarlet Horizon Campaign Assistant 0.9.1", versionText, "unexpected About Version text");
+    AssertEqual("RPOL Scarlet Horizon Campaign Assistant 0.9.3", versionText, "unexpected About Version text");
 }
 
 static void UpdateCheckVerifiesSignedPAssistManifest()
@@ -4124,6 +4294,21 @@ static void UpdateHostCertificatePinningRejectsMismatchedPin()
     AssertFalse(isValid, "expected mismatched pin to be rejected for update host");
 }
 
+static void CertificateValidationSkipsPinExtractionForNonUpdateHosts()
+{
+    using var request = new HttpRequestMessage(
+        HttpMethod.Get,
+        "https://publish.obsidian.md/scarlethorizons/Intentional+Orphans/XP+Tracking");
+
+    AssertTrue(
+        CertificatePinningUtility.ValidateServerCertificate(
+            request,
+            certificate: null,
+            chain: null,
+            SslPolicyErrors.None),
+        "non-update hosts should use normal TLS validation without requiring Player Assistant update pins");
+}
+
 static void VerifiedUpdaterRejectsInstallerSha256Mismatch()
 {
     using var directory = TemporaryDirectory.Create();
@@ -4524,6 +4709,93 @@ static void KeywordSearchRpolScopeExcludesObsidianOnlyWhiteheartStiffwhiskers()
     });
 }
 
+static void KeywordSearchExpandsHeroFirstAndFullNames()
+{
+    RunOnStaThread(() =>
+    {
+        using var form = new Form1(suppressHeroImagesForThisRun: true);
+        SetPrivateField(
+            form,
+            "_playerCharacterListingMarkdown",
+            """
+            | Name | Character | Notes | Hero |
+            | ---- | --------- | ----- | ---- |
+            | [[Kelpie Lawfuller]] | Fighter | active | ![[kelpie-token.webp]] |
+            | [[Jelb Garrick]] | Illusionist | active | ![[jelb-token.webp]] |
+            """);
+
+        var kelpieAliases = ((string[]?)InvokePrivateMethod(form, "GetHeroSearchTermAliases", "Kelpie")
+            ?? []).OrderBy(value => value, StringComparer.OrdinalIgnoreCase).ToArray();
+        var jelbAliases = ((string[]?)InvokePrivateMethod(form, "GetHeroSearchTermAliases", "Jelb Garrick")
+            ?? []).OrderBy(value => value, StringComparer.OrdinalIgnoreCase).ToArray();
+
+        AssertEqual(2, kelpieAliases.Length, "Kelpie first-name search should produce first and full-name aliases");
+        AssertEqual("Kelpie", kelpieAliases[0], "unexpected Kelpie first-name alias");
+        AssertEqual("Kelpie Lawfuller", kelpieAliases[1], "unexpected Kelpie full-name alias");
+        AssertEqual(2, jelbAliases.Length, "Jelb full-name search should produce first and full-name aliases");
+        AssertEqual("Jelb", jelbAliases[0], "unexpected Jelb first-name alias");
+        AssertEqual("Jelb Garrick", jelbAliases[1], "unexpected Jelb full-name alias");
+    });
+}
+
+static void PartyHeroSheetParserReadsSummaryAndHidesXpLines()
+{
+    var hero = PartyHeroUtility.ParseHeroSheet(
+        """
+        ---
+        dg-publish: true
+        ---
+        ![[jelb-token.webp]]
+
+        Class: Illusionist
+        HP: 4
+        Level: 1
+        XP: 0
+        Intelligence 16 Language Native+2 Literacy Literate XP Bonus: 10%
+        Attained level 03 Illusionist after XP was awarded.
+
+        Name: Jelb Garrick
+        """,
+        "Jelb");
+
+    AssertEqual("Jelb Garrick", hero.Name, "unexpected parsed hero name");
+    AssertEqual("Illusionist", hero.CharacterClass, "unexpected parsed class");
+    AssertEqual("3", hero.Level, "unexpected parsed level");
+    AssertEqual("4", hero.HitPoints, "unexpected parsed hit points");
+    AssertFalse(hero.CharacterSheetText.Contains("XP: 0", StringComparison.Ordinal), "XP total lines should be hidden from party sheet text");
+    AssertContains(hero.CharacterSheetText, "XP Bonus: 10%");
+}
+
+static void PartyHeroXpVisibilityFollowsAuthenticatedCharacter()
+{
+    var heroes = new PartyHeroSheet[]
+    {
+        new("Kelpie Lawfuller", null, "3", "Fighter", "12", "Kelpie sheet"),
+        new("Jelb Garrick", null, "1", "Illusionist", "4", "Jelb sheet")
+    };
+    var xpTotals = new PcXpTotal[]
+    {
+        new("Kelpie Lawfuller", 7062),
+        new("Jelb Garrick", 8575)
+    };
+
+    var kelpieView = PartyHeroUtility.WithVisibleXpTotals(
+        heroes,
+        xpTotals,
+        "Kelpie",
+        isDungeonMaster: false);
+    var dmView = PartyHeroUtility.WithVisibleXpTotals(
+        heroes,
+        xpTotals,
+        "Dungeon Master",
+        isDungeonMaster: true);
+
+    AssertEqual(7062, kelpieView[0].XpTotal ?? -1, "authenticated hero should see their own XP");
+    AssertTrue(kelpieView[1].XpTotal is null, "authenticated hero should not see another hero's XP");
+    AssertEqual(7062, dmView[0].XpTotal ?? -1, "DM should see Kelpie XP");
+    AssertEqual(8575, dmView[1].XpTotal ?? -1, "DM should see Jelb XP");
+}
+
 static void XpDisplayRecognizesDungeonMasterAccess()
 {
     AssertTrue(
@@ -4535,6 +4807,39 @@ static void XpDisplayRecognizesDungeonMasterAccess()
     AssertFalse(
         (bool)(InvokeStaticMethod(typeof(Form1), "IsDungeonMasterXpAccess", "Kelpie") ?? true),
         "ordinary PCs should not unlock all XP totals");
+}
+
+static void XpDisplayFindsTotalsByFirstAndFullCharacterNames()
+{
+    var totals = new PcXpTotal[]
+    {
+        new("Kelpie Lawfuller", 7062),
+        new("Jelb", 8575)
+    };
+
+    var kelpieTotal = (PcXpTotal?)InvokeStaticMethod(
+        typeof(Form1),
+        "FindXpTotalForCharacter",
+        totals,
+        "Kelpie");
+    var jelbTotal = (PcXpTotal?)InvokeStaticMethod(
+        typeof(Form1),
+        "FindXpTotalForCharacter",
+        totals,
+        "Jelb Garrick");
+
+    if (kelpieTotal is null)
+    {
+        throw new InvalidOperationException("first-name Kelpie lookup should find full-name XP row");
+    }
+
+    if (jelbTotal is null)
+    {
+        throw new InvalidOperationException("full-name Jelb lookup should find first-name XP row");
+    }
+
+    AssertEqual(new PcXpTotal("Kelpie Lawfuller", 7062), kelpieTotal!, "unexpected Kelpie XP row");
+    AssertEqual(new PcXpTotal("Jelb", 8575), jelbTotal!, "unexpected Jelb XP row");
 }
 
 static void XpDisplayStoresMultipleTotalsForDungeonMaster()
@@ -7680,6 +7985,25 @@ internal sealed class InMemoryWindowsCredentialStoreBackend : IWindowsCredential
     public void Delete(string targetName)
     {
         _secrets.Remove(targetName);
+    }
+}
+
+internal sealed class ThrowingWindowsCredentialStoreBackend : IWindowsCredentialStoreBackend
+{
+    public bool TryRead(string targetName, out StoredSecret? storedSecret)
+    {
+        storedSecret = null;
+        throw new InvalidOperationException("Credential store unavailable for test.");
+    }
+
+    public void Write(string targetName, byte[] secretBytes, string? comment = null)
+    {
+        throw new InvalidOperationException("Credential store unavailable for test.");
+    }
+
+    public void Delete(string targetName)
+    {
+        throw new InvalidOperationException("Credential store unavailable for test.");
     }
 }
 

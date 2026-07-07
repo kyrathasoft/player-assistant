@@ -6,6 +6,7 @@ namespace PlayerAssistant
     internal static class XpPasswordStoreUtility
     {
         public const string FileName = "xp-passwords.json";
+        private const string DungeonMasterAccessName = "Dungeon Master";
 
         public static IReadOnlyDictionary<string, string> LoadPasswords(string? runtimeDirectory = null)
         {
@@ -43,12 +44,57 @@ namespace PlayerAssistant
             ArgumentNullException.ThrowIfNull(password);
 
             var passwords = LoadPasswords(runtimeDirectory);
-            if (!passwords.TryGetValue(pcName, out var expectedPassword))
+            foreach (var candidateName in GetCandidateNames(pcName, passwords.Keys))
             {
-                return false;
+                if (passwords.TryGetValue(candidateName, out var expectedPassword)
+                    && FixedTimeEquals(password, expectedPassword))
+                {
+                    return true;
+                }
             }
 
-            return FixedTimeEquals(password, expectedPassword);
+            return false;
+        }
+
+        private static IEnumerable<string> GetCandidateNames(
+            string pcName,
+            IEnumerable<string> storedNames)
+        {
+            var trimmedName = pcName.Trim();
+            yield return trimmedName;
+
+            if (string.Equals(trimmedName, DungeonMasterAccessName, StringComparison.OrdinalIgnoreCase))
+            {
+                yield break;
+            }
+
+            var firstName = GetFirstName(trimmedName);
+            if (!string.Equals(firstName, trimmedName, StringComparison.OrdinalIgnoreCase))
+            {
+                yield return firstName;
+            }
+
+            foreach (var storedName in storedNames)
+            {
+                if (string.Equals(storedName, DungeonMasterAccessName, StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
+                if (string.Equals(GetFirstName(storedName), firstName, StringComparison.OrdinalIgnoreCase))
+                {
+                    yield return storedName;
+                }
+            }
+        }
+
+        private static string GetFirstName(string value)
+        {
+            var trimmedValue = value.Trim();
+            var spaceIndex = trimmedValue.IndexOf(' ');
+            return spaceIndex < 0
+                ? trimmedValue
+                : trimmedValue[..spaceIndex];
         }
 
         private static bool FixedTimeEquals(string left, string right)

@@ -36,10 +36,10 @@ namespace PlayerAssistant
             showPostTotalsToolStripMenuItem = new ToolStripMenuItem();
             showDiceRollsToolStripMenuItem = new ToolStripMenuItem();
             xpToolStripMenuItem = new ToolStripMenuItem();
+            partyToolStripMenuItem = new ToolStripMenuItem();
             regionalMapToolStripMenuItem = new ToolStripMenuItem();
             searchToolStripMenuItem = new ToolStripMenuItem();
             settingsToolStripMenuItem = new ToolStripMenuItem();
-            rpolCredentialsToolStripMenuItem = new ToolStripMenuItem();
             skipHeroImageParadeAtStartupToolStripMenuItem = new ToolStripMenuItem();
             whiteMarbleBackgroundTilingToolStripMenuItem = new ToolStripMenuItem();
             aboutToolStripMenuItem = new ToolStripMenuItem();
@@ -91,7 +91,7 @@ namespace PlayerAssistant
             // 
             // showToolStripMenuItem
             // 
-            showToolStripMenuItem.DropDownItems.AddRange(new ToolStripItem[] { loginInfoToolStripMenuItem, showPostTotalsToolStripMenuItem, showDiceRollsToolStripMenuItem, xpToolStripMenuItem, regionalMapToolStripMenuItem });
+            showToolStripMenuItem.DropDownItems.AddRange(new ToolStripItem[] { loginInfoToolStripMenuItem, showPostTotalsToolStripMenuItem, showDiceRollsToolStripMenuItem, xpToolStripMenuItem, partyToolStripMenuItem, regionalMapToolStripMenuItem });
             showToolStripMenuItem.Name = "showToolStripMenuItem";
             showToolStripMenuItem.Size = new Size(48, 20);
             showToolStripMenuItem.Text = "Show";
@@ -125,6 +125,13 @@ namespace PlayerAssistant
             xpToolStripMenuItem.Text = "XP";
             xpToolStripMenuItem.Click += XpToolStripMenuItem_Click;
             // 
+            // partyToolStripMenuItem
+            // 
+            partyToolStripMenuItem.Name = "partyToolStripMenuItem";
+            partyToolStripMenuItem.Size = new Size(163, 22);
+            partyToolStripMenuItem.Text = "Party";
+            partyToolStripMenuItem.Click += PartyToolStripMenuItem_Click;
+            // 
             // regionalMapToolStripMenuItem
             // 
             regionalMapToolStripMenuItem.Enabled = false;
@@ -142,18 +149,11 @@ namespace PlayerAssistant
             // 
             // settingsToolStripMenuItem
             // 
-            settingsToolStripMenuItem.DropDownItems.AddRange(new ToolStripItem[] { rpolCredentialsToolStripMenuItem, skipHeroImageParadeAtStartupToolStripMenuItem, whiteMarbleBackgroundTilingToolStripMenuItem });
+            settingsToolStripMenuItem.DropDownItems.AddRange(new ToolStripItem[] { skipHeroImageParadeAtStartupToolStripMenuItem, whiteMarbleBackgroundTilingToolStripMenuItem });
             settingsToolStripMenuItem.Name = "settingsToolStripMenuItem";
             settingsToolStripMenuItem.Size = new Size(61, 20);
             settingsToolStripMenuItem.Text = "Settings";
             settingsToolStripMenuItem.DropDownOpening += NonSearchToolStripMenuItem_DropDownOpening;
-            // 
-            // rpolCredentialsToolStripMenuItem
-            // 
-            rpolCredentialsToolStripMenuItem.Name = "rpolCredentialsToolStripMenuItem";
-            rpolCredentialsToolStripMenuItem.Size = new Size(256, 22);
-            rpolCredentialsToolStripMenuItem.Text = "RPOL Credentials";
-            rpolCredentialsToolStripMenuItem.Click += RpolCredentialsToolStripMenuItem_Click;
             // 
             // skipHeroImageParadeAtStartupToolStripMenuItem
             // 
@@ -389,10 +389,10 @@ namespace PlayerAssistant
         private ToolStripMenuItem showPostTotalsToolStripMenuItem;
         private ToolStripMenuItem showDiceRollsToolStripMenuItem;
         private ToolStripMenuItem xpToolStripMenuItem;
+        private ToolStripMenuItem partyToolStripMenuItem;
         private ToolStripMenuItem regionalMapToolStripMenuItem;
         private ToolStripMenuItem exitToolStripMenuItem;
         private ToolStripMenuItem settingsToolStripMenuItem;
-        private ToolStripMenuItem rpolCredentialsToolStripMenuItem;
         private ToolStripMenuItem skipHeroImageParadeAtStartupToolStripMenuItem;
         private ToolStripMenuItem whiteMarbleBackgroundTilingToolStripMenuItem;
         private ToolStripMenuItem aboutToolStripMenuItem;

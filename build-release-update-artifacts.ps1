@@ -1,7 +1,7 @@
 param(
     [string]$OutputDir = (Join-Path $PSScriptRoot 'Release\installer'),
     [string]$PublishDir = (Join-Path $PSScriptRoot 'Release\publish'),
-    [string]$Version = '0.9.1-hardening.1',
+    [string]$Version = '0.9.3',
     [string]$ManifestBaseUri = 'https://bryanmiller.us/scarlethorizons/',
     [string]$InstallerPath,
     [string]$ArchivePath,

@@ -332,7 +332,7 @@ namespace PlayerAssistant
                 return await JsonSerializer.DeserializeAsync<KeywordIndexDocument>(
                     stream,
                     cancellationToken: cancellationToken).ConfigureAwait(false) is { } document
-                    ? ValidateKeywordIndexDocument(document)
+                    ? SanitizeExistingKeywordIndexDocument(document)
                     : null;
             }
             catch (Exception ex) when (ex is JsonException or InvalidOperationException or IOException)
@@ -898,6 +898,42 @@ namespace PlayerAssistant
             return document;
         }
 
+        private static KeywordIndexDocument SanitizeExistingKeywordIndexDocument(KeywordIndexDocument document)
+        {
+            var urls = document.Urls is null
+                ? null
+                : document.Urls
+                    .Where(pair => IsStoredUrlAllowed(pair.Key, pair.Value.Source))
+                    .ToDictionary(
+                        pair => pair.Key,
+                        pair => pair.Value,
+                        StringComparer.OrdinalIgnoreCase);
+            var words = document.Words
+                .Select(pair =>
+                {
+                    var matches = pair.Value.Matches
+                        .Where(match => IsStoredUrlAllowed(match.Url, null))
+                        .ToArray();
+                    return new
+                    {
+                        pair.Key,
+                        Entry = new KeywordIndexWordEntry(
+                            matches.Sum(match => match.Count),
+                            matches)
+                    };
+                })
+                .Where(pair => pair.Entry.Matches.Count > 0)
+                .ToDictionary(
+                    pair => pair.Key,
+                    pair => pair.Entry,
+                    StringComparer.OrdinalIgnoreCase);
+
+            return new KeywordIndexDocument(
+                document.IndexMetadata,
+                urls,
+                words);
+        }
+
         private static void ValidateStoredUrl(string url, string? source, string description)
         {
             var purpose = source switch
@@ -912,6 +948,17 @@ namespace PlayerAssistant
                 throw new InvalidOperationException(
                     $"{description} contains a URL that is not allowed: {url}. {validation.RejectionReason}");
             }
+        }
+
+        private static bool IsStoredUrlAllowed(string url, string? source)
+        {
+            var purpose = source switch
+            {
+                KeywordIndexUrlSource.Rpol => NetworkUrlPurpose.Rpol,
+                KeywordIndexUrlSource.ObsidianWiki => NetworkUrlPurpose.ObsidianPublish,
+                _ => NetworkUrlPurpose.Generic
+            };
+            return NetworkUrlAllowlistUtility.Validate(url, purpose).IsAllowed;
         }
 
         private sealed class MutableKeywordIndexWordEntry

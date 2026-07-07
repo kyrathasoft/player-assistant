@@ -86,9 +86,11 @@ namespace PlayerAssistant
         private PostTotalsSummary? _postTotalsSummary;
         private IReadOnlyList<PcXpTotal> _xpTotals = [];
         private string _xpDateLabel = string.Empty;
+        private IReadOnlyList<PartyHeroSheet> _partyHeroes = [];
         private bool _showLoginInfo;
         private bool _showPostTotals;
         private bool _showXpTotal;
+        private bool _showParty;
         private bool _showWelcomeText = true;
         private bool _showHeroIntroText;
         private bool _showAttributionText;
@@ -116,6 +118,7 @@ namespace PlayerAssistant
         private PictureBox? _heroImagePictureBox;
         private Panel? _regionalMapPanel;
         private ListBox? _diceRollsListBox;
+        private Panel? _partyPanel;
         private Image? _regionalMapImage;
         private Image? _regionalMapImageCache;
         private string? _regionalMapImageCachePath;
@@ -155,6 +158,7 @@ namespace PlayerAssistant
             _showWarningDialog = ShowWarningDialog;
             _onlineSearchProvider = SearchOnlineForTermsAsync;
             _rpolHeroNameBodyMatchProvider = DoesRpolPostBodyContainSearchTermAsync;
+            RpolAuthUtility.WebViewVerificationHandler = ShowRpolWebViewVerificationAsync;
             InitializeComponent();
             _baseTitleText = Text;
             InitializeRegionalMapPanel();
@@ -222,6 +226,11 @@ namespace PlayerAssistant
             _keywordIndexStatusTimer?.Dispose();
             _searchOperationCancellation?.Cancel();
             _backgroundTasks.Dispose();
+            if (RpolAuthUtility.WebViewVerificationHandler == ShowRpolWebViewVerificationAsync)
+            {
+                RpolAuthUtility.WebViewVerificationHandler = null;
+            }
+
             _regionalMapPanel?.Dispose();
             _heroImagePictureBox?.Image?.Dispose();
             _heroImagePictureBox?.Dispose();
@@ -243,12 +252,15 @@ namespace PlayerAssistant
             InitializeCachedActiveHeroImages();
             StartBackgroundTask("regional map preload", PreloadRegionalMapImageAsync);
             await Task.Yield();
-            StartKeywordIndexCrawler();
             StartBackgroundTask(
                 "game forum startup",
                 async cancellationToken =>
                 {
-                    await LoadGameForumChapterPrefixesAsync(cancellationToken);
+                    if (await LoadGameForumChapterPrefixesAsync(cancellationToken))
+                    {
+                        StartKeywordIndexCrawler();
+                    }
+
                     StartBackgroundTask(
                         "player character refresh",
                         playerCharacterCancellationToken => StartPlayerCharacterListingUpdateAsync(
@@ -264,6 +276,47 @@ namespace PlayerAssistant
             {
                 SetStatusBarMessage(message, TimeSpan.FromSeconds(8));
             }
+        }
+
+        private Task<string?> ShowRpolWebViewVerificationAsync(
+            RpolWebViewVerificationRequest request,
+            CancellationToken cancellationToken)
+        {
+            var completion = new TaskCompletionSource<string?>(
+                TaskCreationOptions.RunContinuationsAsynchronously);
+
+            void ShowDialogOnUiThread()
+            {
+                try
+                {
+                    if (IsDisposed)
+                    {
+                        completion.TrySetCanceled(cancellationToken);
+                        return;
+                    }
+
+                    using var dialog = new RpolWebViewVerificationDialog(request, cancellationToken);
+                    var result = dialog.ShowDialog(this);
+                    completion.TrySetResult(result == DialogResult.OK
+                        ? dialog.StorageStateJson
+                        : null);
+                }
+                catch (Exception ex)
+                {
+                    completion.TrySetException(ex);
+                }
+            }
+
+            if (InvokeRequired)
+            {
+                BeginInvoke(ShowDialogOnUiThread);
+            }
+            else
+            {
+                ShowDialogOnUiThread();
+            }
+
+            return completion.Task;
         }
 
         private void StartKeywordIndexCrawler()
@@ -557,6 +610,7 @@ namespace PlayerAssistant
             base.OnResize(e);
             UpdateRegionalMapPanelBounds();
             UpdateDiceRollsListBoxBounds();
+            UpdatePartyPanelBounds();
             UpdateSearchPanelBounds();
         }
 
@@ -643,6 +697,7 @@ namespace PlayerAssistant
             EnableLoginInfoMenuItem();
             EnableShowPostTotalsMenuItem();
             EnableXpMenuItem();
+            EnablePartyMenuItem();
             Close();
         }
 
@@ -662,8 +717,9 @@ namespace PlayerAssistant
             EnableShowPostTotalsMenuItem();
             EnableShowDiceRollsMenuItem();
             EnableXpMenuItem();
+            EnablePartyMenuItem();
 
-            if (_regionalMapActive || _showLoginInfo || _showPostTotals || _showXpTotal || _diceRollsListBox is not null)
+            if (_regionalMapActive || _showLoginInfo || _showPostTotals || _showXpTotal || _showParty || _diceRollsListBox is not null)
             {
                 ClearDisplaySurfaceForRegionalMap();
                 Refresh();
@@ -679,6 +735,7 @@ namespace PlayerAssistant
             EnableShowPostTotalsMenuItem();
             EnableShowDiceRollsMenuItem();
             EnableXpMenuItem();
+            EnablePartyMenuItem();
             loginInfoToolStripMenuItem.Enabled = false;
             _loginInfoRefreshTarget = LoginInfoDisplayMode.LoginInfo;
 
@@ -714,6 +771,7 @@ namespace PlayerAssistant
             EnableLoginInfoMenuItem();
             EnableShowDiceRollsMenuItem();
             EnableXpMenuItem();
+            EnablePartyMenuItem();
             showPostTotalsToolStripMenuItem.Enabled = false;
             _loginInfoRefreshTarget = LoginInfoDisplayMode.PostTotals;
 
@@ -757,6 +815,7 @@ namespace PlayerAssistant
             EnableLoginInfoMenuItem();
             EnableShowPostTotalsMenuItem();
             EnableXpMenuItem();
+            EnablePartyMenuItem();
 
             var diceRollsPath = GetDiceRollsHtmlPath();
             if (!TryLoadDiceRollEntries(diceRollsPath, out var entries) || entries.Length == 0)
@@ -791,6 +850,7 @@ namespace PlayerAssistant
             EnableLoginInfoMenuItem();
             EnableShowPostTotalsMenuItem();
             EnableShowDiceRollsMenuItem();
+            EnablePartyMenuItem();
 
             if (!TryPromptForXpCredentials(out var characterName, out var password))
             {
@@ -820,8 +880,7 @@ namespace PlayerAssistant
                     return;
                 }
 
-                var total = snapshot.Totals.FirstOrDefault(row =>
-                    string.Equals(row.Name, characterName, StringComparison.OrdinalIgnoreCase));
+                var total = FindXpTotalForCharacter(snapshot.Totals, characterName);
                 if (total is null)
                 {
                     xpToolStripMenuItem.Enabled = true;
@@ -844,6 +903,87 @@ namespace PlayerAssistant
                 SetStatusBarMessage("XP total unavailable. Contact the DM.");
                 ShowWarningDialog("XP Error", XpTrackingUtility.FormatUserFacingFailureMessage(ex));
             }
+        }
+
+        private async void PartyToolStripMenuItem_Click(object? sender, EventArgs e)
+        {
+            ClearDiceRollsDisplayIfVisible();
+            HideSearchPanel();
+            EnableLoginInfoMenuItem();
+            EnableShowPostTotalsMenuItem();
+            EnableShowDiceRollsMenuItem();
+            EnableXpMenuItem();
+
+            partyToolStripMenuItem.Enabled = false;
+            try
+            {
+                var partyHeroes = PartyHeroUtility.LoadActiveParty(EnsurePlayerCharacterDirectories());
+                if (TryPromptForXpCredentials(out var characterName, out var password))
+                {
+                    if (XpPasswordStoreUtility.ValidatePassword(characterName, password, AppContext.BaseDirectory))
+                    {
+                        try
+                        {
+                            SetStatusBarMessage("Loading party and XP totals...");
+                            var snapshot = await XpTrackingUtility.GetCurrentXpSnapshotAsync();
+                            partyHeroes = PartyHeroUtility.WithVisibleXpTotals(
+                                partyHeroes,
+                                snapshot.Totals,
+                                characterName,
+                                IsDungeonMasterXpAccess(characterName));
+                        }
+                        catch (Exception ex)
+                        {
+                            await AppendStartupErrorLogAsync("party XP display", ex);
+                            SetStatusBarMessage("Party loaded without XP totals. Contact the DM if XP should be visible.");
+                        }
+                    }
+                    else
+                    {
+                        MessageBox.Show(
+                            this,
+                            "The character name and XP password did not match. Party details will be shown without XP totals.",
+                            "Party",
+                            MessageBoxButtons.OK,
+                            MessageBoxIcon.Warning);
+                        SetStatusBarMessage("Party XP access denied. Showing party without XP totals.");
+                    }
+                }
+
+                ShowPartyHeroes(partyHeroes);
+            }
+            catch (Exception ex)
+            {
+                partyToolStripMenuItem.Enabled = true;
+                await ReportOperationFailureAsync(
+                    "party display",
+                    "Party unavailable",
+                    "Party Error",
+                    ex,
+                    showDialog: true);
+            }
+        }
+
+        private static PcXpTotal? FindXpTotalForCharacter(
+            IReadOnlyList<PcXpTotal> totals,
+            string characterName)
+        {
+            var trimmedName = characterName.Trim();
+            var exactMatch = totals.FirstOrDefault(row =>
+                string.Equals(row.Name, trimmedName, StringComparison.OrdinalIgnoreCase));
+            if (exactMatch is not null)
+            {
+                return exactMatch;
+            }
+
+            var firstName = GetFirstName(trimmedName);
+            var firstNameMatches = totals
+                .Where(row => string.Equals(GetFirstName(row.Name), firstName, StringComparison.OrdinalIgnoreCase))
+                .Take(2)
+                .ToArray();
+            return firstNameMatches.Length == 1
+                ? firstNameMatches[0]
+                : null;
         }
 
         private bool TryPromptForXpCredentials(out string characterName, out string password)
@@ -940,10 +1080,12 @@ namespace PlayerAssistant
             EnableShowPostTotalsMenuItem();
             EnableShowDiceRollsMenuItem();
             EnableXpMenuItem();
+            EnablePartyMenuItem();
             var searchPanelWasHidden = HideSearchPanel();
             var shouldRefreshBeforeShowingMap = searchPanelWasHidden
                 || _showLoginInfo
                 || _showXpTotal
+                || _showParty
                 || _showWelcomeText
                 || _showHeroIntroText
                 || _showAttributionText;
@@ -984,6 +1126,7 @@ namespace PlayerAssistant
                 loginInfoToolStripMenuItem.Enabled = true;
                 showPostTotalsToolStripMenuItem.Enabled = true;
                 EnableXpMenuItem();
+                EnablePartyMenuItem();
                 UpdateRegionalMapMenuItem();
                 SetStatusBarMessage($"Regional map loaded: {RegionalMapFileName}.");
                 Invalidate();
@@ -1030,41 +1173,6 @@ namespace PlayerAssistant
                 UserPreferencesUtility.SkipHeroImageParadeAtStartup
                     ? "Hero images will be skipped on the next startup."
                     : "Hero images will play on the next startup.");
-        }
-
-        private void RpolCredentialsToolStripMenuItem_Click(object? sender, EventArgs e)
-        {
-            using var dialog = new RpolCredentialsDialog(
-                RuntimeSecretStoreUtility.GetRpolUserName(),
-                RuntimeSecretStoreUtility.GetRpolPassword());
-            var result = dialog.ShowDialog(this);
-            if (result == DialogResult.Cancel)
-            {
-                return;
-            }
-
-            if (result == DialogResult.Abort)
-            {
-                RuntimeSecretStoreUtility.DeleteRpolCredentials();
-                RpolAuthUtility.ResetAuthenticationState();
-                SetStatusBarMessage("RPOL credentials removed from Windows Credential Manager.");
-                return;
-            }
-
-            if (string.IsNullOrWhiteSpace(dialog.UserName) || string.IsNullOrWhiteSpace(dialog.Password))
-            {
-                MessageBox.Show(
-                    this,
-                    "Provide both RPOL user name and RPOL password, or choose Remove.",
-                    "RPOL Credentials",
-                    MessageBoxButtons.OK,
-                    MessageBoxIcon.Warning);
-                return;
-            }
-
-            RuntimeSecretStoreUtility.SaveRpolCredentials(dialog.UserName, dialog.Password);
-            RpolAuthUtility.ResetAuthenticationState();
-            SetStatusBarMessage("RPOL credentials saved to Windows Credential Manager.");
         }
 
         private void AuthorToolStripMenuItem_Click(object? sender, EventArgs e)
@@ -1548,7 +1656,7 @@ namespace PlayerAssistant
         {
             var hyperlinks = await HtmlUtility.GetRpolGameHyperlinksAsync(cancellationToken);
             var normalizedHeroSearchTerms = searchTerms
-                .Where(IsHeroNameSearchTerm)
+                .SelectMany(GetHeroSearchTermAliases)
                 .Distinct(StringComparer.OrdinalIgnoreCase)
                 .ToArray();
 
@@ -1564,37 +1672,26 @@ namespace PlayerAssistant
                 return matchingUrls;
             }
 
-            var filteredUrls = new List<string>();
+            var filteredUrls = matchingUrls
+                .Where(url => !IsRpolSearchResultUrl(url))
+                .ToList();
 
-            foreach (var url in matchingUrls)
+            var candidateRpolPostUrls = hyperlinks
+                .Select(hyperlink => NormalizeSearchResultUrl(hyperlink.Url))
+                .Where(url => !string.IsNullOrWhiteSpace(url))
+                .Where(IsRpolSearchResultUrl)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToArray();
+
+            foreach (var url in candidateRpolPostUrls)
             {
-                if (!IsRpolSearchResultUrl(url))
-                {
-                    filteredUrls.Add(url);
-                    continue;
-                }
-
-                var matchedHeroTerm = false;
-                var includeUrl = true;
-
                 foreach (var heroTerm in normalizedHeroSearchTerms)
                 {
-                    if (!SearchTextMatches(url, heroTerm))
+                    if (await _rpolHeroNameBodyMatchProvider(url, heroTerm, cancellationToken))
                     {
-                        continue;
-                    }
-
-                    matchedHeroTerm = true;
-                    if (!await _rpolHeroNameBodyMatchProvider(url, heroTerm, cancellationToken))
-                    {
-                        includeUrl = false;
+                        filteredUrls.Add(url);
                         break;
                     }
-                }
-
-                if (!matchedHeroTerm || includeUrl)
-                {
-                    filteredUrls.Add(url);
                 }
             }
 
@@ -1639,6 +1736,31 @@ namespace PlayerAssistant
             var normalizedTerm = term.Trim();
 
             return normalizedCandidate.Contains(normalizedTerm, StringComparison.OrdinalIgnoreCase);
+        }
+
+        private string[] GetHeroSearchTermAliases(string term)
+        {
+            if (string.IsNullOrWhiteSpace(term))
+            {
+                return [];
+            }
+
+            var trimmedTerm = term.Trim();
+            var heroNames = GetHeroNamesForSearch().ToArray();
+            var aliases = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+            foreach (var heroName in heroNames)
+            {
+                var firstName = GetFirstName(heroName);
+                if (string.Equals(heroName, trimmedTerm, StringComparison.OrdinalIgnoreCase)
+                    || string.Equals(firstName, trimmedTerm, StringComparison.OrdinalIgnoreCase))
+                {
+                    aliases.Add(heroName);
+                    aliases.Add(firstName);
+                }
+            }
+
+            return aliases.ToArray();
         }
 
         private static string NormalizeSearchResultUrl(string url)
@@ -2123,8 +2245,10 @@ namespace PlayerAssistant
             _showLoginInfo = true;
             _showPostTotals = false;
             _showXpTotal = false;
+            _showParty = false;
             _xpTotals = [];
             _xpDateLabel = string.Empty;
+            _partyHeroes = [];
             _postTotalsSummary = null;
             SetStatusBarMessage($"Login info: {_loginInfoRows.Length} {source} rows loaded.");
             Invalidate();
@@ -2138,8 +2262,10 @@ namespace PlayerAssistant
             _showLoginInfo = false;
             _showPostTotals = true;
             _showXpTotal = false;
+            _showParty = false;
             _xpTotals = [];
             _xpDateLabel = string.Empty;
+            _partyHeroes = [];
             SetStatusBarMessage($"Post totals: {_postTotalsSummary.Rows.Count} {source} rows loaded.");
             Invalidate();
         }
@@ -2149,6 +2275,8 @@ namespace PlayerAssistant
             ClearDisplaySurfaceForLoginInfo();
             _showLoginInfo = false;
             _showPostTotals = false;
+            _showParty = false;
+            _partyHeroes = [];
             _showXpTotal = true;
             _postTotalsSummary = null;
             _xpDateLabel = dateLabel;
@@ -2158,6 +2286,165 @@ namespace PlayerAssistant
                 ? $"XP total: {_xpTotals[0].Name} has {_xpTotals[0].XpTotal:N0} XP."
                 : $"XP totals: {_xpTotals.Count} PCs loaded.");
             Invalidate();
+        }
+
+        private void ShowPartyHeroes(IReadOnlyList<PartyHeroSheet> heroes)
+        {
+            ClearDisplaySurfaceForLoginInfo();
+            _showLoginInfo = false;
+            _showPostTotals = false;
+            _showXpTotal = false;
+            _showParty = true;
+            _postTotalsSummary = null;
+            _xpTotals = [];
+            _xpDateLabel = string.Empty;
+            _partyHeroes = heroes.ToArray();
+            partyToolStripMenuItem.Enabled = false;
+            BuildPartyPanel(_partyHeroes);
+            SetStatusBarMessage(_partyHeroes.Count == 0
+                ? "Party unavailable: no active heroes were found."
+                : $"Party: {_partyHeroes.Count} active hero{(_partyHeroes.Count == 1 ? string.Empty : "es")} loaded.");
+            Invalidate();
+        }
+
+        private void BuildPartyPanel(IReadOnlyList<PartyHeroSheet> heroes)
+        {
+            DisposePartyPanel();
+
+            var panel = new Panel
+            {
+                AutoScroll = true,
+                BackColor = Color.White
+            };
+            _partyPanel = panel;
+            Controls.Add(panel);
+            UpdatePartyPanelBounds();
+
+            var titleLabel = new Label
+            {
+                AutoSize = false,
+                Font = new Font("Segoe UI", 22, FontStyle.Bold),
+                ForeColor = Color.FromArgb(35, 35, 35),
+                Location = new Point(24, 18),
+                Size = new Size(Math.Max(320, panel.ClientSize.Width - 48), 42),
+                Text = "Party"
+            };
+            panel.Controls.Add(titleLabel);
+
+            var top = 76;
+            if (heroes.Count == 0)
+            {
+                panel.Controls.Add(new Label
+                {
+                    AutoSize = false,
+                    Font = new Font("Segoe UI", 12, FontStyle.Regular),
+                    ForeColor = Color.FromArgb(75, 75, 75),
+                    Location = new Point(24, top),
+                    Size = new Size(Math.Max(320, panel.ClientSize.Width - 48), 36),
+                    Text = "No active hero sheets were found."
+                });
+            }
+
+            foreach (var hero in heroes)
+            {
+                var heroPanel = CreatePartyHeroPanel(hero, Math.Max(520, panel.ClientSize.Width - 64));
+                heroPanel.Location = new Point(24, top);
+                panel.Controls.Add(heroPanel);
+                top += heroPanel.Height + 18;
+            }
+
+            panel.BringToFront();
+            menuStrip.BringToFront();
+            statusStrip.BringToFront();
+        }
+
+        private Panel CreatePartyHeroPanel(PartyHeroSheet hero, int width)
+        {
+            var heroPanel = new Panel
+            {
+                BackColor = Color.FromArgb(248, 249, 251),
+                BorderStyle = BorderStyle.FixedSingle,
+                Size = new Size(width, 292)
+            };
+
+            var imageBox = new PictureBox
+            {
+                BackColor = Color.White,
+                BorderStyle = BorderStyle.FixedSingle,
+                Location = new Point(16, 16),
+                Size = new Size(128, 128),
+                SizeMode = PictureBoxSizeMode.Zoom
+            };
+            if (!string.IsNullOrWhiteSpace(hero.TokenImagePath) && File.Exists(hero.TokenImagePath))
+            {
+                try
+                {
+                    imageBox.Image = LoadImageCopy(hero.TokenImagePath);
+                }
+                catch
+                {
+                }
+            }
+
+            var nameLabel = new Label
+            {
+                AutoEllipsis = true,
+                Font = new Font("Segoe UI", 16, FontStyle.Bold),
+                ForeColor = Color.FromArgb(35, 35, 35),
+                Location = new Point(160, 16),
+                Size = new Size(width - 184, 34),
+                Text = hero.Name
+            };
+            var summaryLabel = new Label
+            {
+                AutoEllipsis = true,
+                Font = new Font("Segoe UI", 10.5f, FontStyle.Bold),
+                ForeColor = Color.FromArgb(75, 75, 75),
+                Location = new Point(160, 54),
+                Size = new Size(width - 184, 28),
+                Text = FormatPartyHeroSummary(hero)
+            };
+            var xpLabel = new Label
+            {
+                AutoEllipsis = true,
+                Font = new Font("Segoe UI", 10.5f, FontStyle.Bold),
+                ForeColor = Color.FromArgb(55, 80, 120),
+                Location = new Point(160, 84),
+                Size = new Size(width - 184, 28),
+                Text = hero.XpTotal is null
+                    ? "XP Total: hidden"
+                    : $"XP Total: {hero.XpTotal.Value:N0}"
+            };
+            var sheetTextBox = new TextBox
+            {
+                BorderStyle = BorderStyle.FixedSingle,
+                Font = new Font("Consolas", 9.5f, FontStyle.Regular),
+                Location = new Point(160, 116),
+                Multiline = true,
+                ReadOnly = true,
+                ScrollBars = ScrollBars.Vertical,
+                Size = new Size(width - 184, 154),
+                Text = hero.CharacterSheetText
+            };
+
+            heroPanel.Controls.Add(imageBox);
+            heroPanel.Controls.Add(nameLabel);
+            heroPanel.Controls.Add(summaryLabel);
+            heroPanel.Controls.Add(xpLabel);
+            heroPanel.Controls.Add(sheetTextBox);
+            return heroPanel;
+        }
+
+        private static string FormatPartyHeroSummary(PartyHeroSheet hero)
+        {
+            var values = new[]
+            {
+                string.IsNullOrWhiteSpace(hero.Level) ? null : $"Level {hero.Level}",
+                string.IsNullOrWhiteSpace(hero.CharacterClass) ? null : hero.CharacterClass,
+                string.IsNullOrWhiteSpace(hero.HitPoints) ? null : $"HP {hero.HitPoints}"
+            };
+            var summary = string.Join("   ", values.Where(value => !string.IsNullOrWhiteSpace(value)));
+            return summary.Length == 0 ? "Level, class, and hit points unavailable" : summary;
         }
 
         private static string GetLoginInfoPath()
@@ -2273,8 +2560,10 @@ namespace PlayerAssistant
             _showLoginInfo = false;
             _showPostTotals = false;
             _showXpTotal = false;
+            _showParty = false;
             _xpTotals = [];
             _xpDateLabel = string.Empty;
+            _partyHeroes = [];
         }
 
         private void ClearMainDisplaySurface()
@@ -2282,12 +2571,15 @@ namespace PlayerAssistant
             StopHeroImageShowcase();
             ClearHeroImagePictureBox();
             DisposeDiceRollsListBox();
+            DisposePartyPanel();
             _showWelcomeText = false;
             _showHeroIntroText = false;
             _showAttributionText = false;
             _showXpTotal = false;
+            _showParty = false;
             _xpTotals = [];
             _xpDateLabel = string.Empty;
+            _partyHeroes = [];
             _regionalMapActive = false;
             _regionalMapImage?.Dispose();
             _regionalMapImage = null;
@@ -2353,6 +2645,20 @@ namespace PlayerAssistant
                 Math.Max(0, statusStrip.Top - menuStrip.Bottom - 20));
         }
 
+        private void UpdatePartyPanelBounds()
+        {
+            if (_partyPanel is null)
+            {
+                return;
+            }
+
+            _partyPanel.Bounds = new Rectangle(
+                10,
+                menuStrip.Bottom + 10,
+                Math.Max(0, ClientSize.Width - 20),
+                Math.Max(0, statusStrip.Top - menuStrip.Bottom - 20));
+        }
+
         private void DisposeDiceRollsListBox()
         {
             if (_diceRollsListBox is null)
@@ -2365,7 +2671,40 @@ namespace PlayerAssistant
             _diceRollsListBox = null;
         }
 
-        private async Task LoadGameForumChapterPrefixesAsync(CancellationToken cancellationToken = default)
+        private void DisposePartyPanel()
+        {
+            if (_partyPanel is null)
+            {
+                return;
+            }
+
+            foreach (var pictureBox in _partyPanel.Controls
+                .OfType<Control>()
+                .SelectMany(GetSelfAndDescendants)
+                .OfType<PictureBox>())
+            {
+                pictureBox.Image?.Dispose();
+                pictureBox.Image = null;
+            }
+
+            Controls.Remove(_partyPanel);
+            _partyPanel.Dispose();
+            _partyPanel = null;
+        }
+
+        private static IEnumerable<Control> GetSelfAndDescendants(Control control)
+        {
+            yield return control;
+            foreach (Control child in control.Controls)
+            {
+                foreach (var descendant in GetSelfAndDescendants(child))
+                {
+                    yield return descendant;
+                }
+            }
+        }
+
+        private async Task<bool> LoadGameForumChapterPrefixesAsync(CancellationToken cancellationToken = default)
         {
             GameForumChapterDownload[] chapterDownloads = [];
             GameForumPostDownload[] asideDownloads = [];
@@ -2397,12 +2736,13 @@ namespace PlayerAssistant
                     "Game Forum Error",
                     ex,
                     showDialog: false);
-                return;
+                return false;
             }
 
             SetStatusBarMessage(
                 $"Game forum links: {FormatGameForumDownloadStatus("IC", chapterDownloads)}; {FormatGameForumDownloadStatus("Aside", asideDownloads)}; {FormatGameForumDownloadStatus("OOC", allOutOfCharacterDownloads)}.");
             UpdateShowMenuItemsForHeroImageShowcase();
+            return true;
         }
 
         private static string FormatGameForumDownloadStatus<TDownload>(string label, IReadOnlyCollection<TDownload> downloads)
@@ -2870,6 +3210,7 @@ namespace PlayerAssistant
                 && _diceRollsListBox is null
                 && HasDiceRollEntries(GetDiceRollsHtmlPath());
             xpToolStripMenuItem.Enabled = showMenuItemsEnabled && !_showXpTotal;
+            partyToolStripMenuItem.Enabled = showMenuItemsEnabled && !_showParty;
             UpdateRegionalMapMenuItem();
         }
 
@@ -2911,6 +3252,16 @@ namespace PlayerAssistant
             }
 
             xpToolStripMenuItem.Enabled = true;
+        }
+
+        private void EnablePartyMenuItem()
+        {
+            if (_heroImageIntroStarted || _heroImageShowcaseStarted)
+            {
+                return;
+            }
+
+            partyToolStripMenuItem.Enabled = true;
         }
 
         private async Task PreloadRegionalMapImageAsync(CancellationToken cancellationToken = default)
@@ -3935,6 +4286,15 @@ namespace PlayerAssistant
         private static bool IsDungeonMasterXpAccess(string characterName)
         {
             return string.Equals(characterName, DungeonMasterXpAccessName, StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static string GetFirstName(string value)
+        {
+            var trimmedValue = value.Trim();
+            var spaceIndex = trimmedValue.IndexOf(' ');
+            return spaceIndex < 0
+                ? trimmedValue
+                : trimmedValue[..spaceIndex];
         }
 
         private static RectangleF[] GetLoginInfoColumns(int width)

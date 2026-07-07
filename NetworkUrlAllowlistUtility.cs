@@ -38,24 +38,28 @@ namespace PlayerAssistant
                 uri => IsHost(uri, "rpol.net") && (PathEquals(uri, "/game.php") || PathEquals(uri, "/gameinfo.php"))),
             new(
                 NetworkUrlPurpose.Rpol,
+                "RPOL thread display URLs must use rpol.net with the '/display.cgi' path.",
+                uri => IsHost(uri, "rpol.net") && PathEquals(uri, "/display.cgi")),
+            new(
+                NetworkUrlPurpose.Rpol,
                 "RPOL hosted image URLs must use rpol.net with the '/c-webp/' path.",
                 uri => IsHost(uri, "rpol.net") && PathStartsWith(uri, "/c-webp/")),
             new(
                 NetworkUrlPurpose.ObsidianPublish,
-                "Obsidian Publish page and note URLs must use publish.obsidian.md or an obsidian.md subdomain.",
-                uri => IsHost(uri, "publish.obsidian.md", allowSubdomains: true) && HasNonEmptyPath(uri)),
+                "Obsidian Publish page and note URLs must use publish.obsidian.md or an Obsidian Publish content host.",
+                uri => IsObsidianPublishHost(uri) && HasNonEmptyPath(uri)),
             new(
                 NetworkUrlPurpose.ObsidianPublish,
-                "Obsidian Publish cache URLs must use an obsidian.md host with the '/cache/' path.",
-                uri => IsHost(uri, "publish.obsidian.md", allowSubdomains: true) && PathStartsWith(uri, "/cache/")),
+                "Obsidian Publish cache URLs must use an Obsidian Publish content host with the '/cache/' path.",
+                uri => IsObsidianPublishHost(uri) && PathStartsWith(uri, "/cache/")),
             new(
                 NetworkUrlPurpose.ObsidianPublish,
-                "Obsidian Publish asset access URLs must use an obsidian.md host with the '/access/' path.",
-                uri => IsHost(uri, "publish.obsidian.md", allowSubdomains: true) && PathStartsWith(uri, "/access/")),
+                "Obsidian Publish asset access URLs must use an Obsidian Publish content host with the '/access/' path.",
+                uri => IsObsidianPublishHost(uri) && PathStartsWith(uri, "/access/")),
             new(
                 NetworkUrlPurpose.ObsidianPublish,
-                "Obsidian Publish markdown URLs must use an obsidian.md host and end with '.md'.",
-                uri => IsHost(uri, "publish.obsidian.md", allowSubdomains: true)
+                "Obsidian Publish markdown URLs must use an Obsidian Publish content host and end with '.md'.",
+                uri => IsObsidianPublishHost(uri)
                     && uri.AbsolutePath.EndsWith(".md", StringComparison.OrdinalIgnoreCase)),
             new(
                 NetworkUrlPurpose.PlayerAssistantUpdate,
@@ -182,7 +186,9 @@ namespace PlayerAssistant
         {
             ArgumentNullException.ThrowIfNull(uri);
 
-            return IsHost(uri, "publish.obsidian.md", allowSubdomains: true);
+            return string.Equals(uri.Host, "publish.obsidian.md", StringComparison.OrdinalIgnoreCase)
+                || (uri.Host.StartsWith("publish-", StringComparison.OrdinalIgnoreCase)
+                    && uri.Host.EndsWith(".obsidian.md", StringComparison.OrdinalIgnoreCase));
         }
 
         public static bool IsPlayerAssistantUpdateHost(Uri uri)

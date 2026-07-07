@@ -1,5 +1,5 @@
 param(
-    [string]$PackagePath = (Join-Path $PSScriptRoot 'Release\installer\player-assistant-0.9.1-hardening.1-installer.zip'),
+    [string]$PackagePath = (Join-Path $PSScriptRoot 'Release\installer\player-assistant-0.9.3-installer.zip'),
     [int]$TimeoutSeconds = 60
 )
 

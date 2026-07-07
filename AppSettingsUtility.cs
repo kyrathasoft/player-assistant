@@ -30,8 +30,23 @@ namespace PlayerAssistant
 
         public static string GameForumUrl => Settings.Value[RpolSiteSettingsKey];
         public static string HostedLocalSettingsUrl => GetEffectiveHostedLocalSettingsUrl(Settings.Value);
-        public static string? RpolUserName => RuntimeSecretStoreUtility.GetRpolUserName() ?? GetOptionalSetting(RpolUserNameSettingsKey);
-        public static string? RpolPassword => RuntimeSecretStoreUtility.GetRpolPassword() ?? GetOptionalSetting(RpolPasswordSettingsKey);
+        public static string? RpolUserName
+        {
+            get
+            {
+                TryGetRpolCredentials(out var userName, out _);
+                return userName;
+            }
+        }
+
+        public static string? RpolPassword
+        {
+            get
+            {
+                TryGetRpolCredentials(out _, out var password);
+                return password;
+            }
+        }
         public static string GameIntroUrl => Settings.Value[GameIntroSettingsKey];
         public static string TheCastUrl => Settings.Value[TheCastSettingsKey];
         public static string ObsidianGameVaultUrl => Settings.Value[ObsidianGameVaultSettingsKey].TrimEnd('/');
@@ -71,20 +86,14 @@ namespace PlayerAssistant
                             ? LocalSettingsUtility.LoadSettings(localSettingsPath)
                             : LocalSettingsUtility.LoadSettingsWithoutMigration(localSettingsPath);
 
+                    PrimeRpolCredentialStoreFromLocalSettings(localSettings, localSettingsPath);
+
                     foreach (var pair in localSettings)
                     {
                         settings[pair.Key] = pair.Value;
                     }
 
-                    if (RuntimeSecretStoreUtility.GetRpolUserName() is { Length: > 0 } storedUserName)
-                    {
-                        settings[RpolUserNameSettingsKey] = storedUserName;
-                    }
-
-                    if (RuntimeSecretStoreUtility.GetRpolPassword() is { Length: > 0 } storedPassword)
-                    {
-                        settings[RpolPasswordSettingsKey] = storedPassword;
-                    }
+                    OverlayStoredRpolCredentials(settings);
 
                     if (!string.Equals(localSettingsPath, preferredLocalSettingsPath, StringComparison.OrdinalIgnoreCase))
                     {
@@ -126,6 +135,59 @@ namespace PlayerAssistant
             return RuntimePathUtility.ResolveUserDataFileForRead(LocalSettingsFileName);
         }
 
+        private static void PrimeRpolCredentialStoreFromLocalSettings(
+            IReadOnlyDictionary<string, string> localSettings,
+            string localSettingsPath)
+        {
+            if (!localSettings.TryGetValue(RpolUserNameSettingsKey, out var userName)
+                || !localSettings.TryGetValue(RpolPasswordSettingsKey, out var password)
+                || string.IsNullOrWhiteSpace(userName)
+                || string.IsNullOrWhiteSpace(password))
+            {
+                return;
+            }
+
+            try
+            {
+                RuntimeSecretStoreUtility.SaveRpolCredentials(userName, password);
+            }
+            catch (Exception ex)
+            {
+                StartupLoggingUtility.Append(
+                    "local settings secret-store migration",
+                    new InvalidOperationException(
+                        $"Unable to prime RPOL credentials from local settings '{localSettingsPath}' into Windows Credential Manager. Continuing with local settings values for this run.",
+                        ex));
+            }
+        }
+
+        private static void OverlayStoredRpolCredentials(IDictionary<string, string> settings)
+        {
+            try
+            {
+                if (RuntimeSecretStoreUtility.TryGetRpolCredentials(out var storedUserName, out var storedPassword))
+                {
+                    if (!string.IsNullOrWhiteSpace(storedUserName))
+                    {
+                        settings[RpolUserNameSettingsKey] = storedUserName;
+                    }
+
+                    if (!string.IsNullOrWhiteSpace(storedPassword))
+                    {
+                        settings[RpolPasswordSettingsKey] = storedPassword;
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                StartupLoggingUtility.Append(
+                    "rpol credential secret-store overlay",
+                    new InvalidOperationException(
+                        "Unable to overlay RPOL credentials from Windows Credential Manager. Continuing with local settings values for this run.",
+                        ex));
+            }
+        }
+
         private static void MergeHostedLocalSettings(Dictionary<string, string> settings)
         {
             var hostedLocalSettingsUrl = GetEffectiveHostedLocalSettingsUrl(settings);
@@ -142,7 +204,7 @@ namespace PlayerAssistant
                 {
                     _ = RuntimeSecretStoreUtility.TryMigrateRpolSecretsFromSettings(hostedLocalSettings);
                 }
-                catch (Exception ex) when (IsRecoverableLocalSettingsException(ex))
+                catch (Exception ex)
                 {
                     StartupLoggingUtility.Append(
                         "hosted local settings secret-store migration",
@@ -156,15 +218,7 @@ namespace PlayerAssistant
                     settings[pair.Key] = pair.Value;
                 }
 
-                if (RuntimeSecretStoreUtility.GetRpolUserName() is { Length: > 0 } storedUserName)
-                {
-                    settings[RpolUserNameSettingsKey] = storedUserName;
-                }
-
-                if (RuntimeSecretStoreUtility.GetRpolPassword() is { Length: > 0 } storedPassword)
-                {
-                    settings[RpolPasswordSettingsKey] = storedPassword;
-                }
+                OverlayStoredRpolCredentials(settings);
             }
             catch (Exception ex) when (IsRecoverableHostedLocalSettingsException(ex))
             {
@@ -217,9 +271,20 @@ namespace PlayerAssistant
 
         internal static bool TryGetRpolCredentials(out string? userName, out string? password)
         {
-            if (RuntimeSecretStoreUtility.TryGetRpolCredentials(out userName, out password))
+            try
             {
-                return !string.IsNullOrWhiteSpace(userName) && !string.IsNullOrWhiteSpace(password);
+                if (RuntimeSecretStoreUtility.TryGetRpolCredentials(out userName, out password))
+                {
+                    return !string.IsNullOrWhiteSpace(userName) && !string.IsNullOrWhiteSpace(password);
+                }
+            }
+            catch (Exception ex)
+            {
+                StartupLoggingUtility.Append(
+                    "rpol credential secret-store read",
+                    new InvalidOperationException(
+                        "Unable to read RPOL credentials from Windows Credential Manager. Falling back to local settings for this run.",
+                        ex));
             }
 
             userName = GetOptionalSetting(RpolUserNameSettingsKey);

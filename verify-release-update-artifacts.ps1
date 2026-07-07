@@ -1,7 +1,7 @@
 param(
-    [string]$PublishArchivePath = (Join-Path $PSScriptRoot 'Release\installer\p-assist-0.9.1.zip'),
-    [string]$InstallerPath = (Join-Path $PSScriptRoot 'Release\installer\p-assist-0.9.1.exe'),
-    [string]$Version = '0.9.1-hardening.1',
+    [string]$PublishArchivePath = (Join-Path $PSScriptRoot 'Release\installer\p-assist-0.9.3.zip'),
+    [string]$InstallerPath = (Join-Path $PSScriptRoot 'Release\installer\p-assist-0.9.3.exe'),
+    [string]$Version = '0.9.3',
     [string]$ManifestPath = (Join-Path $PSScriptRoot 'Release\installer\p-assist-updates.json'),
     [string]$SignaturePath = (Join-Path $PSScriptRoot 'Release\installer\p-assist-updates.json.sig'),
     [string]$PublicKeyXmlPath = (Join-Path $PSScriptRoot 'Release\installer\p-assist-updates.public-key.xml'),

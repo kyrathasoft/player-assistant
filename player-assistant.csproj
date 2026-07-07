@@ -8,10 +8,10 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <AssemblyName>player-assistant</AssemblyName>
     <RootNamespace>PlayerAssistant</RootNamespace>
-    <Version>0.9.1-hardening.1</Version>
-    <AssemblyVersion>0.9.1.0</AssemblyVersion>
-    <FileVersion>0.9.1.1</FileVersion>
-    <InformationalVersion>0.9.1-hardening.1</InformationalVersion>
+    <Version>0.9.3</Version>
+    <AssemblyVersion>0.9.3.0</AssemblyVersion>
+    <FileVersion>0.9.3.0</FileVersion>
+    <InformationalVersion>0.9.3</InformationalVersion>
     <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
     <ApplicationIcon>Assets\dragon-icon.ico</ApplicationIcon>
     <RuntimeIdentifier>win-x64</RuntimeIdentifier>
@@ -96,7 +96,19 @@
 
   <ItemGroup>
     <PackageReference Include="Microsoft.Playwright" Version="1.60.0" />
+    <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.4022.49" />
     <PackageReference Include="SkiaSharp" Version="3.119.4" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Reference Include="Microsoft.Web.WebView2.Core" Condition="Exists('$(NuGetPackageRoot)microsoft.web.webview2\1.0.4022.49\lib_manual\netcoreapp3.0\Microsoft.Web.WebView2.Core.dll')">
+      <HintPath>$(NuGetPackageRoot)microsoft.web.webview2\1.0.4022.49\lib_manual\netcoreapp3.0\Microsoft.Web.WebView2.Core.dll</HintPath>
+      <Private>true</Private>
+    </Reference>
+    <Reference Include="Microsoft.Web.WebView2.WinForms" Condition="Exists('$(NuGetPackageRoot)microsoft.web.webview2\1.0.4022.49\lib_manual\netcoreapp3.0\Microsoft.Web.WebView2.WinForms.dll')">
+      <HintPath>$(NuGetPackageRoot)microsoft.web.webview2\1.0.4022.49\lib_manual\netcoreapp3.0\Microsoft.Web.WebView2.WinForms.dll</HintPath>
+      <Private>true</Private>
+    </Reference>
   </ItemGroup>
 
   <ItemGroup>
@@ -108,16 +120,17 @@
   </ItemGroup>
 
   <Target Name="CopyKeywordIndexToPublish" AfterTargets="Publish">
-    <Copy
-      SourceFiles="$(OutputPath)keyword-index.json"
-      DestinationFiles="$(PublishDir)keyword-index.json"
-      Condition="Exists('$(OutputPath)keyword-index.json')" />
+    <Copy SourceFiles="$(OutputPath)keyword-index.json" DestinationFiles="$(PublishDir)keyword-index.json" Condition="Exists('$(OutputPath)keyword-index.json')" />
   </Target>
 
   <Target Name="CopyPlaywrightRuntimeToPublish" AfterTargets="Publish">
-    <Exec
-      Command="if exist &quot;$(OutputPath).playwright&quot; xcopy &quot;$(OutputPath).playwright&quot; &quot;$(PublishDir).playwright\&quot; /E /I /Y /H &gt;nul"
-      Condition="Exists('$(OutputPath).playwright')" />
+    <Exec Command="if exist &quot;$(OutputPath).playwright&quot; xcopy &quot;$(OutputPath).playwright&quot; &quot;$(PublishDir).playwright\&quot; /E /I /Y /H &gt;nul" Condition="Exists('$(OutputPath).playwright')" />
+  </Target>
+
+  <Target Name="RemoveUnusedWebView2WpfReference" BeforeTargets="ResolveAssemblyReferences">
+    <ItemGroup>
+      <Reference Remove="@(Reference)" Condition="'%(Reference.Filename)' == 'Microsoft.Web.WebView2.Wpf'" />
+    </ItemGroup>
   </Target>
 
 </Project>

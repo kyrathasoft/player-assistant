@@ -76,7 +76,7 @@ namespace PlayerAssistant
             var fileContentsUtf8 = File.ReadAllBytes(settingsPath);
             try
             {
-                using var document = JsonDocument.Parse(fileContentsUtf8);
+                using var document = JsonDocument.Parse(TrimUtf8Bom(fileContentsUtf8));
 
                 if (TryReadEncryptedEnvelope(document.RootElement, out var envelope))
                 {
@@ -164,7 +164,7 @@ namespace PlayerAssistant
 
             try
             {
-                using var document = JsonDocument.Parse(fileContentsUtf8);
+                using var document = JsonDocument.Parse(TrimUtf8Bom(fileContentsUtf8));
                 if (!TryReadEncryptedEnvelope(document.RootElement, out var envelope))
                 {
                     throw new InvalidOperationException($"{sourceDescription} must use an authenticated encrypted envelope.");
@@ -239,7 +239,7 @@ namespace PlayerAssistant
             var fileContentsUtf8 = File.ReadAllBytes(path);
             try
             {
-                using var document = JsonDocument.Parse(fileContentsUtf8);
+                using var document = JsonDocument.Parse(TrimUtf8Bom(fileContentsUtf8));
                 if (!TryReadEncryptedEnvelope(document.RootElement, out var envelope))
                 {
                     throw new InvalidOperationException("Protected settings file must use an authenticated encrypted envelope.");
@@ -491,6 +491,13 @@ namespace PlayerAssistant
             {
                 CryptographicOperations.ZeroMemory(bytes);
             }
+        }
+
+        private static ReadOnlyMemory<byte> TrimUtf8Bom(byte[] bytes)
+        {
+            return bytes is [0xEF, 0xBB, 0xBF, ..]
+                ? bytes.AsMemory(3)
+                : bytes;
         }
 
         private static KeySet GetKeySet(string format, string settingsPath)
