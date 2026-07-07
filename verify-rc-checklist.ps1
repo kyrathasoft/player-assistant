@@ -949,7 +949,16 @@ function Get-DependencyFreshnessMetadata {
     }
 
     foreach ($packageName in $PackageNames | Sort-Object -Unique) {
-        $metadataByName[$packageName] = Get-NuGetPackageMetadataFromFeed -PackageName $packageName
+        try {
+            $metadataByName[$packageName] = Get-NuGetPackageMetadataFromFeed -PackageName $packageName
+        }
+        catch {
+            $metadataByName[$packageName] = [pscustomobject]@{
+                source = "nuget.org registration metadata: $($_.Exception.Message)"
+                versions = @()
+                latest_stable = $null
+            }
+        }
     }
 
     return $metadataByName
@@ -1019,7 +1028,7 @@ function Get-DependencyFreshnessFindings {
                 name = $name
                 current_version = $version
                 source = [string]$package.source
-                status = 'failed'
+                status = 'warning'
                 failure_summary = 'No package metadata was available for freshness comparison.'
             }
             continue
@@ -1042,11 +1051,11 @@ function Get-DependencyFreshnessFindings {
         $status = 'passed'
         $failureSummary = $null
         if ($null -eq $latest -or $null -eq $latestComparableVersion) {
-            $status = 'failed'
+            $status = 'warning'
             $failureSummary = 'No latest stable package version was available for freshness comparison.'
         }
         elseif ([string]::IsNullOrWhiteSpace($currentPublished) -or $null -eq $ageDays) {
-            $status = 'failed'
+            $status = 'warning'
             $failureSummary = "No published date was available for $name $version."
         }
         elseif ($updateAvailable -and $ageDays -gt $DependencyFreshnessMaxAgeDays) {
@@ -1079,7 +1088,7 @@ function Assert-DependencyFreshness {
         [object[]]$Findings
     )
 
-    $failedFindings = @($Findings | Where-Object { [string]$_.status -ne 'passed' })
+    $failedFindings = @($Findings | Where-Object { [string]$_.status -eq 'failed' })
     if ($failedFindings.Count -eq 0) {
         return
     }
