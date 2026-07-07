@@ -20,8 +20,8 @@ env:
   RELEASE_DIR: ${{ github.workspace }}\Release
   PUBLISH_DIR: ${{ github.workspace }}\Release\publish
   INSTALLER_DIR: ${{ github.workspace }}\Release\installer
-  UPDATE_ARCHIVE_PATH: ${{ github.workspace }}\Release\installer\p-assist-0.9.1.zip
-  UPDATE_INSTALLER_PATH: ${{ github.workspace }}\Release\installer\p-assist-0.9.1.exe
+  UPDATE_ARCHIVE_PATH: ${{ github.workspace }}\Release\installer\p-assist-0.9.3.zip
+  UPDATE_INSTALLER_PATH: ${{ github.workspace }}\Release\installer\p-assist-0.9.3.exe
   UPDATE_MANIFEST_PATH: ${{ github.workspace }}\Release\installer\p-assist-updates.json
   UPDATE_MANIFEST_SIGNATURE_PATH: ${{ github.workspace }}\Release\installer\p-assist-updates.json.sig
   UPDATE_MANIFEST_PUBLIC_KEY_PATH: ${{ github.workspace }}\Release\installer\p-assist-updates.public-key.xml
@@ -305,7 +305,7 @@ jobs:
           name: release-installer-artifacts
           if-no-files-found: error
           path: |
-            ${{ env.INSTALLER_DIR }}\player-assistant-0.9.1-hardening.1-installer.zip
+            ${{ env.INSTALLER_DIR }}\player-assistant-0.9.3-installer.zip
             ${{ env.UPDATE_ARCHIVE_PATH }}
             ${{ env.UPDATE_INSTALLER_PATH }}
             ${{ env.UPDATE_MANIFEST_PATH }}

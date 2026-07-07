@@ -5932,8 +5932,8 @@ static void HardeningWorkflowBuildsAndUploadsSignedReleaseUpdateArtifacts()
     AssertContains(workflow, "p-assist-updates.json");
     AssertContains(workflow, "p-assist-updates.json.sig");
     AssertContains(workflow, "p-assist-updates.public-key.xml");
-    AssertContains(workflow, "p-assist-0.9.1.zip");
-    AssertContains(workflow, "p-assist-0.9.1.exe");
+    AssertContains(workflow, "p-assist-0.9.3.zip");
+    AssertContains(workflow, "p-assist-0.9.3.exe");
     AssertContains(workflow, "Build Release test harness");
     AssertContains(workflow, "Verify hosted settings fetch and decrypt path");
     AssertContains(workflow, "app settings loads hosted encrypted xp tracking url from fixture server");
