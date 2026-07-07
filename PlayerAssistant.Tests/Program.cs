@@ -38,6 +38,7 @@ var tests = new (string Name, Action Test)[]
     ("orcish translator supports sarcastic but variants", OrcishTranslatorSupportsSarcasticButVariants),
     ("orcish translator random but picker returns valid variant", OrcishTranslatorRandomButPickerReturnsValidVariant),
     ("orcish translator exposes unique english term count", OrcishTranslatorExposesUniqueEnglishTermCount),
+    ("to-orcish translates terms before trailing punctuation", ToOrcishTranslatesTermsBeforeTrailingPunctuation),
     ("app configuration validation accepts complete runtime", AppConfigurationValidationAcceptsCompleteRuntime),
     ("settings json accepts current schema version", SettingsJsonAcceptsCurrentSchemaVersion),
     ("settings json rejects future schema version", SettingsJsonRejectsFutureSchemaVersion),
@@ -520,12 +521,20 @@ static void OrcishTranslatorExposesUniqueEnglishTermCount()
 {
     var terms = OrcishTranslatorUtility.GetEnglishTerms();
 
-    AssertEqual(179, OrcishTranslatorUtility.GetEnglishTermCount(), "unexpected total English term count");
+    AssertEqual(205, OrcishTranslatorUtility.GetEnglishTermCount(), "unexpected total English term count");
     AssertEqual(OrcishTranslatorUtility.GetEnglishTermCount(), terms.Count, "term list and count should agree");
     AssertEqual(1, terms.Count(term => string.Equals(term, "I", StringComparison.OrdinalIgnoreCase)), "I should be counted once despite multiple variants");
     AssertEqual(1, terms.Count(term => string.Equals(term, "really", StringComparison.OrdinalIgnoreCase)), "really should be counted once despite multiple variants");
     AssertEqual(1, terms.Count(term => string.Equals(term, "watch", StringComparison.OrdinalIgnoreCase)), "watch should be counted once despite multiple parts of speech");
     AssertTrue(terms.Contains("humans'", StringComparer.OrdinalIgnoreCase), "expected generated plural possessive term");
+}
+
+static void ToOrcishTranslatesTermsBeforeTrailingPunctuation()
+{
+    var result = RunToOrcish("yours,");
+
+    AssertEqual(0, result.ExitCode, "to-orcish should exit successfully");
+    AssertEqual("narguk,", result.Output.Trim(), "expected yours to translate before comma restoration");
 }
 
 static void AppConfigurationValidationAcceptsCompleteRuntime()
@@ -6612,6 +6621,43 @@ static (int ExitCode, string Output) RunPublishVerification(string outputDirecto
     arguments.AddRange(extraArguments);
 
     return RunPowerShell(arguments, TimeSpan.FromSeconds(30));
+}
+
+static (int ExitCode, string Output) RunToOrcish(params string[] arguments)
+{
+    var repoRoot = GetRepositoryRoot();
+    var executablePath = Path.Combine(repoRoot, "Release", "to-orcish.exe");
+    if (!File.Exists(executablePath))
+    {
+        throw new InvalidOperationException($"to-orcish executable is missing: {executablePath}");
+    }
+
+    var startInfo = new ProcessStartInfo
+    {
+        FileName = executablePath,
+        WorkingDirectory = repoRoot,
+        RedirectStandardOutput = true,
+        RedirectStandardError = true,
+        UseShellExecute = false,
+        CreateNoWindow = true
+    };
+
+    foreach (var argument in arguments)
+    {
+        startInfo.ArgumentList.Add(argument);
+    }
+
+    using var process = Process.Start(startInfo)
+        ?? throw new InvalidOperationException("Unable to start to-orcish process.");
+
+    var output = process.StandardOutput.ReadToEnd() + process.StandardError.ReadToEnd();
+    if (!process.WaitForExit(TimeSpan.FromSeconds(30)))
+    {
+        process.Kill(entireProcessTree: true);
+        throw new TimeoutException("to-orcish process did not exit within 30 seconds.");
+    }
+
+    return (process.ExitCode, output);
 }
 
 static (int ExitCode, string Output) RunGit(string workingDirectory, params string[] arguments)

@@ -28,25 +28,25 @@ static string TranslateSentence(string input)
         return string.Empty;
     }
 
-    var finalPunctuation = StripFinalPunctuation(ref terms[^1]);
+    var trailingPunctuation = new string[terms.Length];
+    for (var index = 0; index < terms.Length; index++)
+    {
+        trailingPunctuation[index] = StripTrailingPunctuation(ref terms[index]);
+    }
+
     var translatedTerms = new List<string>(terms.Length);
 
     for (var index = 0; index < terms.Length; index++)
     {
         if (string.Equals(terms[index], "the", StringComparison.OrdinalIgnoreCase))
         {
-            translatedTerms.Add(TranslateDefiniteArticle(terms, index));
+            translatedTerms.Add(TranslateDefiniteArticle(terms, index) + trailingPunctuation[index]);
             continue;
         }
 
         var translated = TranslateLongestPhrase(terms, index, out var consumedTerms);
-        translatedTerms.Add(translated);
+        translatedTerms.Add(translated + trailingPunctuation[index + consumedTerms - 1]);
         index += consumedTerms - 1;
-    }
-
-    if (!string.IsNullOrEmpty(finalPunctuation))
-    {
-        translatedTerms[^1] += finalPunctuation;
     }
 
     return string.Join(" ", translatedTerms);
@@ -193,7 +193,7 @@ static string JoinTerms(IReadOnlyList<string> terms, int startIndex, int termCou
     return builder.ToString();
 }
 
-static string StripFinalPunctuation(ref string term)
+static string StripTrailingPunctuation(ref string term)
 {
     if (string.IsNullOrEmpty(term))
     {
@@ -204,7 +204,7 @@ static string StripFinalPunctuation(ref string term)
     while (punctuationStart > 0)
     {
         var character = term[punctuationStart - 1];
-        if (character is not '.' and not '!' and not '?')
+        if (character is not '.' and not '!' and not '?' and not ',' and not ';' and not ':')
         {
             break;
         }
