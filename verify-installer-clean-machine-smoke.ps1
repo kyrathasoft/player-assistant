@@ -1,5 +1,6 @@
 param(
     [string]$PackagePath = (Join-Path $PSScriptRoot 'Release\installer\player-assistant-0.9.3-installer.zip'),
+    [string]$UpdateVersion = '0.9.3',
     [int]$TimeoutSeconds = 60
 )
 
@@ -12,8 +13,8 @@ $UpdatePublicKeyEnvironmentVariable = 'PLAYER_ASSISTANT_UPDATE_MANIFEST_PUBLIC_K
 $HostedSettingsRelativePath = 'scarlethorizons/settings.local.json'
 $UpdateManifestRelativePath = 'scarlethorizons/p-assist-updates.json'
 $UpdateSignatureRelativePath = 'scarlethorizons/p-assist-updates.json.sig'
-$UpdateArchiveFileName = 'p-assist-0.9.2.zip'
-$UpdateInstallerFileName = 'p-assist-0.9.2.exe'
+$UpdateArchiveFileName = "p-assist-$UpdateVersion.zip"
+$UpdateInstallerFileName = "p-assist-$UpdateVersion.exe"
 $CredentialTargets = @(
     'PlayerAssistant/RPOL/UserName',
     'PlayerAssistant/RPOL/Password',
@@ -164,7 +165,7 @@ function New-SignedUpdateManifest {
         schema_version = 1
         updates = @(
             [ordered]@{
-                version = '0.9.2'
+                version = $UpdateVersion
                 url = $UpdateArchiveFileName
                 sha256 = $ArchiveSha256
                 installer_url = $UpdateInstallerFileName
