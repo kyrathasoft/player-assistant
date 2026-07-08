@@ -195,6 +195,15 @@ var tests = new (string Name, Action Test)[]
     ("keyword search expands hero first and full names", KeywordSearchExpandsHeroFirstAndFullNames),
     ("party hero sheet parser reads summary and hides xp lines", PartyHeroSheetParserReadsSummaryAndHidesXpLines),
     ("party hero xp visibility follows authenticated character", PartyHeroXpVisibilityFollowsAuthenticatedCharacter),
+    ("tagged note cipher decrypts for matching level tag", TaggedNoteCipherDecryptsForMatchingLevelTag),
+    ("tagged note cipher rejects unmet class tag", TaggedNoteCipherRejectsUnmetClassTag),
+    ("tagged note cipher accepts either-or ability tag", TaggedNoteCipherAcceptsEitherOrAbilityTag),
+    ("tagged note cipher accepts bare class alternative", TaggedNoteCipherAcceptsBareClassAlternative),
+    ("tagged note cipher accepts class level shorthand and faction tag", TaggedNoteCipherAcceptsClassLevelShorthandAndFactionTag),
+    ("tagged note cipher accepts grouped and expression tag", TaggedNoteCipherAcceptsGroupedAndExpressionTag),
+    ("tagged note cipher reports mismatched decrypt tags", TaggedNoteCipherReportsMismatchedDecryptTags),
+    ("tagged note cipher reports encrypted markdown block counts", TaggedNoteCipherReportsEncryptedMarkdownBlockCounts),
+    ("tagged note cipher authenticates visible tags", TaggedNoteCipherAuthenticatesVisibleTags),
     ("xp display recognizes dungeon master access", XpDisplayRecognizesDungeonMasterAccess),
     ("xp display finds totals by first and full character names", XpDisplayFindsTotalsByFirstAndFullCharacterNames),
     ("xp display stores multiple totals for dungeon master", XpDisplayStoresMultipleTotalsForDungeonMaster),
@@ -4803,6 +4812,221 @@ static void PartyHeroXpVisibilityFollowsAuthenticatedCharacter()
     AssertTrue(kelpieView[1].XpTotal is null, "authenticated hero should not see another hero's XP");
     AssertEqual(7062, dmView[0].XpTotal ?? -1, "DM should see Kelpie XP");
     AssertEqual(8575, dmView[1].XpTotal ?? -1, "DM should see Jelb XP");
+}
+
+static void TaggedNoteCipherDecryptsForMatchingLevelTag()
+{
+    var hero = new HeroAccessContext(
+        Level: 8,
+        CharacterClass: "Paladin",
+        AbilityScores: new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["Wis"] = 12
+        });
+
+    var encrypted = TaggedNoteCipherUtility.TransformTaggedText(
+        "{Level 8}The shrine door opens at moonrise.{Level 8}",
+        TaggedNoteCipherMode.Encrypt);
+    var decrypted = TaggedNoteCipherUtility.TransformTaggedText(
+        encrypted,
+        TaggedNoteCipherMode.Decrypt,
+        hero: hero);
+
+    AssertEqual("{Level 8}The shrine door opens at moonrise.{Level 8}", decrypted, "matching level tag should decrypt note text");
+    AssertTrue(encrypted.StartsWith("{Level 8}", StringComparison.Ordinal), "encrypted note should preserve opening tags as plaintext");
+    AssertTrue(encrypted.EndsWith("{Level 8}", StringComparison.Ordinal), "encrypted note should preserve closing tags as plaintext");
+    AssertFalse(encrypted.Contains("The shrine door opens", StringComparison.Ordinal), "encrypted note should hide wrapped plaintext");
+}
+
+static void TaggedNoteCipherRejectsUnmetClassTag()
+{
+    var hero = new HeroAccessContext(
+        Level: 12,
+        CharacterClass: "Illusionist",
+        AbilityScores: new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase));
+    var encrypted = TaggedNoteCipherUtility.TransformTaggedText(
+        "{Class paladin}Only paladins may read this vow.{Class paladin}",
+        TaggedNoteCipherMode.Encrypt);
+
+    AssertThrows<UnauthorizedAccessException>(
+        () => TaggedNoteCipherUtility.TransformTaggedText(encrypted, TaggedNoteCipherMode.Decrypt, hero: hero));
+}
+
+static void TaggedNoteCipherAcceptsEitherOrAbilityTag()
+{
+    var hero = new HeroAccessContext(
+        Level: 4,
+        CharacterClass: "Cleric",
+        AbilityScores: new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["Wisdom"] = 15
+        });
+    var encrypted = TaggedNoteCipherUtility.TransformTaggedText(
+        "{Level 6|Wis 15}The omen points east.{Level 6|Wis 15}",
+        TaggedNoteCipherMode.Encrypt);
+    var decrypted = TaggedNoteCipherUtility.TransformTaggedText(
+        encrypted,
+        TaggedNoteCipherMode.Decrypt,
+        hero: hero);
+
+    AssertEqual("{Level 6|Wis 15}The omen points east.{Level 6|Wis 15}", decrypted, "either-or wisdom tag should decrypt note text");
+}
+
+static void TaggedNoteCipherAcceptsBareClassAlternative()
+{
+    var hero = new HeroAccessContext(
+        Level: 1,
+        CharacterClass: "Wizard",
+        AbilityScores: new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase));
+    var encrypted = TaggedNoteCipherUtility.TransformTaggedText(
+        "{Wizard|Level 5}The sigil means danger.{Wizard|Level 5}",
+        TaggedNoteCipherMode.Encrypt);
+    var decrypted = TaggedNoteCipherUtility.TransformTaggedText(
+        encrypted,
+        TaggedNoteCipherMode.Decrypt,
+        hero: hero);
+
+    AssertTrue(encrypted.StartsWith("{Wizard|Level 5}", StringComparison.Ordinal), "encrypted note should preserve bare class opening tag");
+    AssertTrue(encrypted.EndsWith("{Wizard|Level 5}", StringComparison.Ordinal), "encrypted note should preserve bare class closing tag");
+    AssertEqual("{Wizard|Level 5}The sigil means danger.{Wizard|Level 5}", decrypted, "bare class alternative should decrypt note text");
+}
+
+static void TaggedNoteCipherAcceptsClassLevelShorthandAndFactionTag()
+{
+    var spyHero = new HeroAccessContext(
+        Level: 4,
+        CharacterClass: "Spy",
+        AbilityScores: new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase));
+    var factionHero = new HeroAccessContext(
+        Level: 1,
+        CharacterClass: "Fighter",
+        AbilityScores: new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase),
+        Attributes: new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["Faction"] = "Scyntarn"
+        });
+    var encrypted = TaggedNoteCipherUtility.TransformTaggedText(
+        "{Spy 4|Faction Scyntarn}Nimba is actually a witch, like her sister Nuanda.{Spy 4|Faction Scyntarn}",
+        TaggedNoteCipherMode.Encrypt);
+
+    var spyDecrypted = TaggedNoteCipherUtility.TransformTaggedText(
+        encrypted,
+        TaggedNoteCipherMode.Decrypt,
+        hero: spyHero);
+    var factionDecrypted = TaggedNoteCipherUtility.TransformTaggedText(
+        encrypted,
+        TaggedNoteCipherMode.Decrypt,
+        hero: factionHero);
+
+    AssertEqual(
+        "{Spy 4|Faction Scyntarn}Nimba is actually a witch, like her sister Nuanda.{Spy 4|Faction Scyntarn}",
+        spyDecrypted,
+        "class level shorthand should decrypt note text");
+    AssertEqual(spyDecrypted, factionDecrypted, "faction tag alternative should decrypt the same note text");
+}
+
+static void TaggedNoteCipherAcceptsGroupedAndExpressionTag()
+{
+    const string taggedPlaintext = "{(Level 6 && Spy 3)|Scyntarn 9}The sealed paragraph opens.{(Level 6 && Spy 3)|Scyntarn 9}";
+    var spyHero = new HeroAccessContext(
+        Level: 6,
+        CharacterClass: "Spy",
+        AbilityScores: new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase));
+    var scyntarnHero = new HeroAccessContext(
+        Level: 1,
+        CharacterClass: "Fighter",
+        AbilityScores: new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase),
+        RankedMemberships: new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["Scyntarn"] = 9
+        });
+    var deniedHero = new HeroAccessContext(
+        Level: 6,
+        CharacterClass: "Fighter",
+        AbilityScores: new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase),
+        RankedMemberships: new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["Scyntarn"] = 8
+        });
+    var encrypted = TaggedNoteCipherUtility.TransformTaggedText(
+        taggedPlaintext,
+        TaggedNoteCipherMode.Encrypt);
+
+    var spyDecrypted = TaggedNoteCipherUtility.TransformTaggedText(
+        encrypted,
+        TaggedNoteCipherMode.Decrypt,
+        hero: spyHero);
+    var scyntarnDecrypted = TaggedNoteCipherUtility.TransformTaggedText(
+        encrypted,
+        TaggedNoteCipherMode.Decrypt,
+        hero: scyntarnHero);
+
+    AssertEqual(taggedPlaintext, spyDecrypted, "level and spy class-level branch should decrypt note text");
+    AssertEqual(taggedPlaintext, scyntarnDecrypted, "ranked Scyntarn branch should decrypt note text");
+    AssertThrows<UnauthorizedAccessException>(
+        () => TaggedNoteCipherUtility.TransformTaggedText(encrypted, TaggedNoteCipherMode.Decrypt, hero: deniedHero));
+}
+
+static void TaggedNoteCipherReportsMismatchedDecryptTags()
+{
+    var hero = new HeroAccessContext(
+        Level: 8,
+        CharacterClass: "Spy",
+        AbilityScores: new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase));
+    var encrypted = TaggedNoteCipherUtility.TransformTaggedText(
+        "{Level 8}The ward is real.{Level 8}",
+        TaggedNoteCipherMode.Encrypt);
+    var mismatched = encrypted[..^"{Level 8}".Length] + "{Level 9}";
+    var decrypted = TaggedNoteCipherUtility.TransformTaggedText(
+        mismatched,
+        TaggedNoteCipherMode.Decrypt,
+        hero: hero);
+
+    AssertEqual(
+        "unable to decrypt due to non-matching opening and closing tags",
+        decrypted,
+        "mismatched opening and closing tags should return the player-safe decrypt failure text");
+}
+
+static void TaggedNoteCipherReportsEncryptedMarkdownBlockCounts()
+{
+    var validBlock = TaggedNoteCipherUtility.TransformTaggedText(
+        "{Level 8}The ward is real.{Level 8}",
+        TaggedNoteCipherMode.Encrypt);
+    var secondValidBlock = TaggedNoteCipherUtility.TransformTaggedText(
+        "{(Level 6 && Spy 3)|Scyntarn 9}The sealed paragraph opens.{(Level 6 && Spy 3)|Scyntarn 9}",
+        TaggedNoteCipherMode.Encrypt);
+    var mismatchedBlock = secondValidBlock[..^"{(Level 6 && Spy 3)|Scyntarn 9}".Length] + "{Scyntarn 9}";
+    var wrappedValidBlock = validBlock.Replace("PAN1:", $"{Environment.NewLine}  PAN1:", StringComparison.Ordinal);
+    var markdown = string.Join(
+        Environment.NewLine + Environment.NewLine,
+        "Plain markdown before encrypted text.",
+        wrappedValidBlock,
+        mismatchedBlock,
+        secondValidBlock);
+
+    var report = TaggedNoteCipherUtility.EncryptedTextReportFromMarkdown(markdown);
+
+    AssertEqual(
+        "valid encrypted blocks: 2, mismatched tags: 1",
+        report,
+        "encrypted markdown report should count matching and mismatched tag wrappers");
+}
+
+static void TaggedNoteCipherAuthenticatesVisibleTags()
+{
+    var originalHero = new HeroAccessContext(
+        Level: 8,
+        CharacterClass: "Fighter",
+        AbilityScores: new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase));
+    var lowerLevelHero = originalHero with { Level = 7 };
+    var encrypted = TaggedNoteCipherUtility.TransformTaggedText(
+        "{Level 8}The ward is real.{Level 8}",
+        TaggedNoteCipherMode.Encrypt);
+    var tampered = encrypted.Replace("{Level 8}", "{Level 7}", StringComparison.Ordinal);
+
+    AssertThrows<InvalidOperationException>(
+        () => TaggedNoteCipherUtility.TransformTaggedText(tampered, TaggedNoteCipherMode.Decrypt, hero: lowerLevelHero));
 }
 
 static void XpDisplayRecognizesDungeonMasterAccess()
