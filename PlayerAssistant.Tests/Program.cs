@@ -38,6 +38,11 @@ var tests = new (string Name, Action Test)[]
     ("orcish translator exposes both but variants", OrcishTranslatorExposesBothButVariants),
     ("orcish translator supports sarcastic but variants", OrcishTranslatorSupportsSarcasticButVariants),
     ("orcish translator random but picker returns valid variant", OrcishTranslatorRandomButPickerReturnsValidVariant),
+    ("orcish translator supports Kirkilston refuge phrase vocabulary", OrcishTranslatorSupportsKirkilstonRefugePhraseVocabulary),
+    ("orcish translator supports regional map history vocabulary", OrcishTranslatorSupportsRegionalMapHistoryVocabulary),
+    ("orcish translator supports Xavamros rulership vocabulary", OrcishTranslatorSupportsXavamrosRulershipVocabulary),
+    ("orcish translator supports Prince Xavin youthful adventure vocabulary", OrcishTranslatorSupportsPrinceXavinYouthfulAdventureVocabulary),
+    ("orcish translator supports Kirkilston church and Red Laws vocabulary", OrcishTranslatorSupportsKirkilstonChurchAndRedLawsVocabulary),
     ("orcish translator exposes unique english term count", OrcishTranslatorExposesUniqueEnglishTermCount),
     ("to-orcish translates terms before trailing punctuation", ToOrcishTranslatesTermsBeforeTrailingPunctuation),
     ("app configuration validation accepts complete runtime", AppConfigurationValidationAcceptsCompleteRuntime),
@@ -532,11 +537,80 @@ static void OrcishTranslatorRandomButPickerReturnsValidVariant()
         "expected random but picker to return one of the plain variants");
 }
 
+static void OrcishTranslatorSupportsKirkilstonRefugePhraseVocabulary()
+{
+    AssertEqual("Kirkilston", OrcishTranslatorUtility.TranslateEnglishToOrcish("Kirkilston", partOfSpeech: "noun", requiredTags: ["proper-noun"])[0].Translation, "unexpected Kirkilston proper noun translation");
+    AssertEqual("mauk vargu dakkin", OrcishTranslatorUtility.TranslateEnglishToOrcish("may opt to be staying", partOfSpeech: "verb", requiredTags: ["fixed-phrase"])[0].Translation, "unexpected staying choice phrase translation");
+    AssertEqual("nak-dak", OrcishTranslatorUtility.TranslateEnglishToOrcish("vicinity", partOfSpeech: "noun", requiredTags: ["nearby"])[0].Translation, "unexpected vicinity translation");
+    AssertEqual("nul-dakkin", OrcishTranslatorUtility.TranslateEnglishToOrcish("abandoned", partOfSpeech: "adjective", requiredTags: ["deserted"])[0].Translation, "unexpected abandoned translation");
+    AssertEqual("ti-hek", OrcishTranslatorUtility.TranslateEnglishToOrcish("tower", partOfSpeech: "noun", requiredTags: ["built"])[0].Translation, "unexpected tower translation");
+    AssertEqual("noglar", OrcishTranslatorUtility.TranslateEnglishToOrcish("hidden", partOfSpeech: "adjective", requiredTags: ["concealed"])[0].Translation, "unexpected hidden translation");
+    AssertEqual("burz-dak", OrcishTranslatorUtility.TranslateEnglishToOrcish("cave", partOfSpeech: "noun", requiredTags: ["underground"])[0].Translation, "unexpected cave translation");
+    AssertEqual("mokh-dak", OrcishTranslatorUtility.TranslateEnglishToOrcish("base", partOfSpeech: "noun", requiredTags: ["operations"])[0].Translation, "unexpected base translation");
+    AssertEqual("mauk dok", OrcishTranslatorUtility.TranslateEnglishToOrcish("may be from", partOfSpeech: "verb", requiredTags: ["origin"])[0].Translation, "unexpected origin modal translation");
+    AssertEqual("dakku-dak", OrcishTranslatorUtility.TranslateEnglishToOrcish("residence", partOfSpeech: "noun", requiredTags: ["dwelling"])[0].Translation, "unexpected residence translation");
+}
+
+static void OrcishTranslatorSupportsRegionalMapHistoryVocabulary()
+{
+    AssertEqual("dak-mokhuk", OrcishTranslatorUtility.TranslateEnglishToOrcish("regional", partOfSpeech: "adjective", requiredTags: ["area"])[0].Translation, "unexpected regional translation");
+    AssertEqual("thog-var", OrcishTranslatorUtility.TranslateEnglishToOrcish("idea", partOfSpeech: "noun", requiredTags: ["abstract"])[0].Translation, "unexpected idea translation");
+    AssertEqual("mur-dakuri", OrcishTranslatorUtility.TranslateEnglishToOrcish("centuries", partOfSpeech: "noun", requiredTags: ["long-span", "plural"])[0].Translation, "unexpected centuries translation");
+    AssertEqual("mur-oglar", OrcishTranslatorUtility.TranslateEnglishToOrcish("famous", partOfSpeech: "adjective", requiredTags: ["known"])[0].Translation, "unexpected famous translation");
+    AssertEqual("ut-dravash", OrcishTranslatorUtility.TranslateEnglishToOrcish("recovered", partOfSpeech: "verb", requiredTags: ["reclaim"])[0].Translation, "unexpected recovered translation");
+    AssertEqual("dwarf-mog-dak", OrcishTranslatorUtility.TranslateEnglishToOrcish("dwarven settlement", partOfSpeech: "noun", requiredTags: ["dwarven"])[0].Translation, "unexpected dwarven settlement translation");
+    AssertEqual("Glittering Caves", OrcishTranslatorUtility.TranslateEnglishToOrcish("Glittering Caves", partOfSpeech: "noun", requiredTags: ["proper-noun"])[0].Translation, "unexpected Glittering Caves proper noun translation");
+    AssertEqual("ut-dravku", OrcishTranslatorUtility.TranslateEnglishToOrcish("re-take", partOfSpeech: "verb", requiredTags: ["reclaim"])[0].Translation, "unexpected re-take translation");
+    AssertEqual("orukhi", OrcishTranslatorUtility.TranslateEnglishToOrcish("orcs", partOfSpeech: "noun", requiredTags: ["orc", "plural"])[0].Translation, "unexpected orcs translation");
+    AssertEqual("koboldi", OrcishTranslatorUtility.TranslateEnglishToOrcish("kobolds", partOfSpeech: "noun", requiredTags: ["plural"])[0].Translation, "unexpected kobolds translation");
+}
+
+static void OrcishTranslatorSupportsXavamrosRulershipVocabulary()
+{
+    AssertEqual("dug-agh-dug", OrcishTranslatorUtility.TranslateEnglishToOrcish("IV", partOfSpeech: "numeral", requiredTags: ["fourth"])[0].Translation, "unexpected IV translation");
+    AssertEqual("murdrath-kelnib dakuruk", OrcishTranslatorUtility.TranslateEnglishToOrcish("hoary with age", partOfSpeech: "adjective", requiredTags: ["very-old"])[0].Translation, "unexpected hoary with age translation");
+    AssertEqual("dargu-tukur arhk darg-thrak", OrcishTranslatorUtility.TranslateEnglishToOrcish("retains the throne", partOfSpeech: "verb", requiredTags: ["rulership"])[0].Translation, "unexpected retains the throne translation");
+    AssertEqual("dargin arhk burz nak-oglar-dak darg-daki", OrcishTranslatorUtility.TranslateEnglishToOrcish("ruling the subterranean near-surface haunts", partOfSpeech: "verb", requiredTags: ["territory"])[0].Translation, "unexpected ruling the subterranean near-surface haunts translation");
+    AssertEqual("mok-grak", OrcishTranslatorUtility.TranslateEnglishToOrcish("just as", partOfSpeech: "conjunction", requiredTags: ["equivalence"])[0].Translation, "unexpected just as translation");
+    AssertEqual("darg-mog", OrcishTranslatorUtility.TranslateEnglishToOrcish("Governor", partOfSpeech: "noun", requiredTags: ["ruler"])[0].Translation, "unexpected Governor translation");
+    AssertEqual("dargur-ti", OrcishTranslatorUtility.TranslateEnglishToOrcish("holds sway", partOfSpeech: "verb", requiredTags: ["authority"])[0].Translation, "unexpected holds sway translation");
+    AssertEqual("oglar-dak mokhi", OrcishTranslatorUtility.TranslateEnglishToOrcish("surface communities", partOfSpeech: "noun", requiredTags: ["surface"])[0].Translation, "unexpected surface communities translation");
+}
+
+static void OrcishTranslatorSupportsPrinceXavinYouthfulAdventureVocabulary()
+{
+    AssertEqual("darg-ti-mog", OrcishTranslatorUtility.TranslateEnglishToOrcish("Prince", partOfSpeech: "noun", requiredTags: ["higher-than-governor"])[0].Translation, "unexpected Prince translation");
+    AssertEqual("Xavin", OrcishTranslatorUtility.TranslateEnglishToOrcish("Xavin", partOfSpeech: "noun", requiredTags: ["proper-noun"])[0].Translation, "unexpected Xavin proper noun translation");
+    AssertEqual("grak ik mogumuk dug mur-dakur", OrcishTranslatorUtility.TranslateEnglishToOrcish("well into his second century", partOfSpeech: "adjective", requiredTags: ["aged"])[0].Translation, "unexpected age phrase translation");
+    AssertEqual("ashdak nurik grod", OrcishTranslatorUtility.TranslateEnglishToOrcish("still youthful enough", partOfSpeech: "adjective", requiredTags: ["sufficient"])[0].Translation, "unexpected youthful enough translation");
+    AssertEqual("dargu-thog ak", OrcishTranslatorUtility.TranslateEnglishToOrcish("insist on", partOfSpeech: "verb", requiredTags: ["stubborn"])[0].Translation, "unexpected insist on translation");
+    AssertEqual("lag-oglarin", OrcishTranslatorUtility.TranslateEnglishToOrcish("exploring", partOfSpeech: "verb", requiredTags: ["seeking"])[0].Translation, "unexpected exploring translation");
+    AssertEqual("vark-yankin", OrcishTranslatorUtility.TranslateEnglishToOrcish("adventuring", partOfSpeech: "verb", requiredTags: ["danger"])[0].Translation, "unexpected adventuring translation");
+    AssertEqual("nul-thog", OrcishTranslatorUtility.TranslateEnglishToOrcish("nonsense", partOfSpeech: "noun", requiredTags: ["foolish"])[0].Translation, "unexpected nonsense translation");
+    AssertEqual("morzur", OrcishTranslatorUtility.TranslateEnglishToOrcish("plagues", partOfSpeech: "verb", requiredTags: ["present"])[0].Translation, "unexpected plagues translation");
+}
+
+static void OrcishTranslatorSupportsKirkilstonChurchAndRedLawsVocabulary()
+{
+    AssertEqual("tur mog-nargash dok", OrcishTranslatorUtility.TranslateEnglishToOrcish("is named after", partOfSpeech: "verb", requiredTags: ["passive"])[0].Translation, "unexpected named after translation");
+    AssertEqual("mograth-dak", OrcishTranslatorUtility.TranslateEnglishToOrcish("church", partOfSpeech: "noun", requiredTags: ["religious"])[0].Translation, "unexpected church translation");
+    AssertEqual("mograth-dak", OrcishTranslatorUtility.TranslateEnglishToOrcish("kirk", partOfSpeech: "noun", requiredTags: ["synonym"])[0].Translation, "unexpected kirk translation");
+    AssertEqual("murk-dak", OrcishTranslatorUtility.TranslateEnglishToOrcish("center", partOfSpeech: "noun", requiredTags: ["central"])[0].Translation, "unexpected center translation");
+    AssertEqual("rug-mograth-dak-ti", OrcishTranslatorUtility.TranslateEnglishToOrcish("Red Temple", partOfSpeech: "noun", requiredTags: ["red-law"])[0].Translation, "unexpected Red Temple translation");
+    AssertEqual("gor-ti-hek", OrcishTranslatorUtility.TranslateEnglishToOrcish("Watchtower", partOfSpeech: "noun", requiredTags: ["watch"])[0].Translation, "unexpected Watchtower translation");
+    AssertEqual("thrak-murk-daki", OrcishTranslatorUtility.TranslateEnglishToOrcish("key centers", partOfSpeech: "noun", requiredTags: ["important"])[0].Translation, "unexpected key centers translation");
+    AssertEqual("mograth-thog", OrcishTranslatorUtility.TranslateEnglishToOrcish("faith", partOfSpeech: "noun", requiredTags: ["belief"])[0].Translation, "unexpected faith translation");
+    AssertEqual("mograth-darg", OrcishTranslatorUtility.TranslateEnglishToOrcish("Prelacy", partOfSpeech: "noun", requiredTags: ["religious"])[0].Translation, "unexpected Prelacy translation");
+    AssertEqual("rug-darg-bibi", OrcishTranslatorUtility.TranslateEnglishToOrcish("Red Laws", partOfSpeech: "noun", requiredTags: ["red-law"])[0].Translation, "unexpected Red Laws translation");
+    AssertEqual("thrum-darg-ti", OrcishTranslatorUtility.TranslateEnglishToOrcish("more relaxed", partOfSpeech: "adjective", requiredTags: ["lenient"])[0].Translation, "unexpected more relaxed translation");
+    AssertEqual("grak-nak-dak-mokh", OrcishTranslatorUtility.TranslateEnglishToOrcish("immediate surrounding area", partOfSpeech: "noun", requiredTags: ["immediate"])[0].Translation, "unexpected immediate surrounding area translation");
+}
+
 static void OrcishTranslatorExposesUniqueEnglishTermCount()
 {
     var terms = OrcishTranslatorUtility.GetEnglishTerms();
 
-    AssertEqual(205, OrcishTranslatorUtility.GetEnglishTermCount(), "unexpected total English term count");
+    AssertEqual(417, OrcishTranslatorUtility.GetEnglishTermCount(), "unexpected total English term count");
     AssertEqual(OrcishTranslatorUtility.GetEnglishTermCount(), terms.Count, "term list and count should agree");
     AssertEqual(1, terms.Count(term => string.Equals(term, "I", StringComparison.OrdinalIgnoreCase)), "I should be counted once despite multiple variants");
     AssertEqual(1, terms.Count(term => string.Equals(term, "really", StringComparison.OrdinalIgnoreCase)), "really should be counted once despite multiple variants");
