@@ -7,6 +7,7 @@ using System.IO;
 using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using SkiaSharp;
 
 namespace PlayerAssistant
@@ -87,6 +88,7 @@ namespace PlayerAssistant
         private IReadOnlyList<PcXpTotal> _xpTotals = [];
         private string _xpDateLabel = string.Empty;
         private IReadOnlyList<PartyHeroSheet> _partyHeroes = [];
+        private HashSet<string>? _encryptedTextIndexUrls;
         private bool _showLoginInfo;
         private bool _showPostTotals;
         private bool _showXpTotal;
@@ -98,6 +100,7 @@ namespace PlayerAssistant
         private System.Windows.Forms.Timer? _welcomeTimer;
         private System.Windows.Forms.Timer? _heroImageShowcaseTimer;
         private System.Windows.Forms.Timer? _keywordIndexStatusTimer;
+        private System.Windows.Forms.Timer? _statusActivityTimer;
         private readonly Random _random = new();
         private readonly List<string> _heroImageShowcasePaths = [];
         private Image? _currentHeroImage;
@@ -143,7 +146,10 @@ namespace PlayerAssistant
         private KeywordIndexProgress? _latestKeywordIndexProgress;
         private KeywordIndexProgress? _pendingKeywordIndexProgress;
         private bool _keywordIndexingInProgress;
+        private int _activeAsyncOperationCount;
+        private int _statusActivityFrameIndex;
         private CancellationTokenSource? _searchOperationCancellation;
+        private static readonly string[] StatusActivityFrames = ["-", "\\", "|", "/"];
         private Func<string[], DialogResult> _showLocalIndexMissPrompt = _ => DialogResult.No;
         private Action<string[], int> _showOnlineSearchCompletedMessage = static (_, _) => { };
         private Action<string, string> _showWarningDialog = static (_, _) => { };
@@ -160,6 +166,8 @@ namespace PlayerAssistant
             _rpolHeroNameBodyMatchProvider = DoesRpolPostBodyContainSearchTermAsync;
             RpolAuthUtility.WebViewVerificationHandler = ShowRpolWebViewVerificationAsync;
             InitializeComponent();
+            statusActivityToolStripStatusLabel.Available = false;
+            statusActivityToolStripStatusLabel.Text = string.Empty;
             _baseTitleText = Text;
             InitializeRegionalMapPanel();
             InitializeHeroImagePictureBox();
@@ -216,6 +224,12 @@ namespace PlayerAssistant
             };
             _keywordIndexStatusTimer.Tick += (_, _) => UpdateKeywordIndexStatusTimer();
             _keywordIndexStatusTimer.Start();
+
+            _statusActivityTimer = new System.Windows.Forms.Timer
+            {
+                Interval = 150
+            };
+            _statusActivityTimer.Tick += (_, _) => AdvanceStatusActivityIndicator();
         }
 
         protected override void OnFormClosed(FormClosedEventArgs e)
@@ -224,6 +238,7 @@ namespace PlayerAssistant
             _attributionTimer?.Dispose();
             _welcomeTimer?.Dispose();
             _keywordIndexStatusTimer?.Dispose();
+            _statusActivityTimer?.Dispose();
             _searchOperationCancellation?.Cancel();
             _backgroundTasks.Dispose();
             if (RpolAuthUtility.WebViewVerificationHandler == ShowRpolWebViewVerificationAsync)
@@ -343,7 +358,8 @@ namespace PlayerAssistant
 
         private bool StartBackgroundTask(string phase, Func<CancellationToken, Task> action)
         {
-            return _backgroundTasks.TryStart(phase, async cancellationToken =>
+            var activity = BeginStatusBarActivity();
+            var started = _backgroundTasks.TryStart(phase, async cancellationToken =>
             {
                 try
                 {
@@ -360,8 +376,98 @@ namespace PlayerAssistant
                             _keywordIndexingInProgress = false;
                         });
                     }
+
+                    activity.Dispose();
                 }
             });
+            if (!started)
+            {
+                activity.Dispose();
+            }
+
+            return started;
+        }
+
+        private IDisposable BeginStatusBarActivity()
+        {
+            ChangeStatusBarActivityCount(1);
+            return new StatusActivityScope(this);
+        }
+
+        private void EndStatusBarActivity()
+        {
+            ChangeStatusBarActivityCount(-1);
+        }
+
+        private void ChangeStatusBarActivityCount(int delta)
+        {
+            if (IsDisposed)
+            {
+                return;
+            }
+
+            if (InvokeRequired)
+            {
+                try
+                {
+                    BeginInvoke(() => ChangeStatusBarActivityCount(delta));
+                }
+                catch (InvalidOperationException)
+                {
+                }
+
+                return;
+            }
+
+            _activeAsyncOperationCount = Math.Max(0, _activeAsyncOperationCount + delta);
+            UpdateStatusActivityIndicatorState();
+        }
+
+        private void UpdateStatusActivityIndicatorState()
+        {
+            if (_activeAsyncOperationCount > 0)
+            {
+                if (!statusActivityToolStripStatusLabel.Available)
+                {
+                    _statusActivityFrameIndex = 0;
+                    statusActivityToolStripStatusLabel.Text = StatusActivityFrames[_statusActivityFrameIndex];
+                    statusActivityToolStripStatusLabel.Available = true;
+                }
+
+                _statusActivityTimer?.Start();
+                return;
+            }
+
+            _statusActivityTimer?.Stop();
+            statusActivityToolStripStatusLabel.Available = false;
+            statusActivityToolStripStatusLabel.Text = string.Empty;
+        }
+
+        private void AdvanceStatusActivityIndicator()
+        {
+            if (_activeAsyncOperationCount <= 0)
+            {
+                UpdateStatusActivityIndicatorState();
+                return;
+            }
+
+            _statusActivityFrameIndex = (_statusActivityFrameIndex + 1) % StatusActivityFrames.Length;
+            statusActivityToolStripStatusLabel.Text = StatusActivityFrames[_statusActivityFrameIndex];
+        }
+
+        private sealed class StatusActivityScope : IDisposable
+        {
+            private Form1? _owner;
+
+            public StatusActivityScope(Form1 owner)
+            {
+                _owner = owner;
+            }
+
+            public void Dispose()
+            {
+                Interlocked.Exchange(ref _owner, null)?.EndStatusBarActivity();
+            }
         }
 
         private void UpdateKeywordIndexStatus(KeywordIndexProgress progress)
@@ -873,6 +979,7 @@ namespace PlayerAssistant
             try
             {
                 SetStatusBarMessage("Loading XP total...");
+                using var activity = BeginStatusBarActivity();
                 var snapshot = await XpTrackingUtility.GetCurrentXpSnapshotAsync();
                 if (IsDungeonMasterXpAccess(characterName))
                 {
@@ -925,6 +1032,7 @@ namespace PlayerAssistant
                         try
                         {
                             SetStatusBarMessage("Loading party and XP totals...");
+                            using var activity = BeginStatusBarActivity();
                             var snapshot = await XpTrackingUtility.GetCurrentXpSnapshotAsync();
                             partyHeroes = PartyHeroUtility.WithVisibleXpTotals(
                                 partyHeroes,
@@ -1114,6 +1222,7 @@ namespace PlayerAssistant
                 {
                     regionalMapToolStripMenuItem.Enabled = false;
                     SetStatusBarMessage("Loading regional map...");
+                    using var activity = BeginStatusBarActivity();
                     await PreloadRegionalMapImageAsync();
                     regionalMapImage = TryCreateRegionalMapDisplayImage(regionalMapPath)
                         ?? LoadImageCopy(regionalMapPath);
@@ -1191,6 +1300,7 @@ namespace PlayerAssistant
             try
             {
                 SetStatusBarMessage("Checking for updates...");
+                using var activity = BeginStatusBarActivity();
                 using var httpClient = NetworkRequestUtility.CreateHttpClient();
                 var update = await PlayerAssistantUpdateUtility.CheckForLatestUpdateAsync(httpClient);
                 var currentVersion = PlayerAssistantUpdateUtility.GetCurrentAppVersion();
@@ -1385,6 +1495,7 @@ namespace PlayerAssistant
 
         private async Task PerformSearchAsync()
         {
+            using var activity = BeginStatusBarActivity();
             using var searchOperation = StartSearchOperation();
             await PerformSearchAsync(searchOperation.Token, searchOperation);
         }
@@ -1427,9 +1538,10 @@ namespace PlayerAssistant
                         foreach (var url in onlineResults)
                         {
                             cancellationToken.ThrowIfCancellationRequested();
-                            AddSearchResultUrl(url);
+                            AddSearchResultUrl(url, displayAsUppercase: IsObsidianWikiSearchResultUrl(url));
                         }
 
+                        await BackfillKeywordIndexWithOnlineResultsAsync(searchTerms, onlineResults, cancellationToken);
                         _showOnlineSearchCompletedMessage(searchTerms, onlineResults.Length);
                     }
                     catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
@@ -1597,6 +1709,133 @@ namespace PlayerAssistant
             using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
             using var reader = new StreamReader(stream);
             return reader.ReadToEnd();
+        }
+
+        internal static async Task BackfillKeywordIndexWithOnlineResultsAsync(
+            string[] searchTerms,
+            string[] onlineResults,
+            CancellationToken cancellationToken)
+        {
+            if (searchTerms.Length == 0 || onlineResults.Length == 0)
+            {
+                return;
+            }
+
+            var indexPath = GetKeywordIndexPath();
+            if (!File.Exists(indexPath))
+            {
+                return;
+            }
+
+            try
+            {
+                var root = JsonNode.Parse(ReadTextFileShared(indexPath)) as JsonObject;
+                if (root?["words"] is not JsonObject words)
+                {
+                    return;
+                }
+
+                var changed = false;
+                foreach (var term in searchTerms
+                    .Select(term => term.Trim())
+                    .Where(term => term.Length > 0)
+                    .Distinct(StringComparer.OrdinalIgnoreCase))
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+                    if (KeywordIndexContainsTerm(words, term))
+                    {
+                        continue;
+                    }
+
+                    var matchingUrls = GetOnlineResultUrlsForKeywordBackfill(term, searchTerms.Length, onlineResults);
+                    if (matchingUrls.Length == 0)
+                    {
+                        continue;
+                    }
+
+                    words[term] = CreateKeywordIndexWordNode(matchingUrls);
+                    changed = true;
+                }
+
+                if (!changed)
+                {
+                    return;
+                }
+
+                UpdateKeywordIndexMetadata(root, words.Count);
+                var updatedJson = root.ToJsonString(new JsonSerializerOptions { WriteIndented = true });
+                KeywordIndexCrawler.ValidateKeywordIndexJson(updatedJson);
+                await AtomicFileUtility.WriteAllTextAsync(indexPath, updatedJson, cancellationToken);
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                throw;
+            }
+            catch (Exception ex) when (ex is IOException or JsonException or InvalidOperationException or UnauthorizedAccessException)
+            {
+                StartupLoggingUtility.Append("keyword index online backfill", ex);
+            }
+        }
+
+        private static bool KeywordIndexContainsTerm(JsonObject words, string term)
+        {
+            return words.Any(pair => string.Equals(pair.Key, term, StringComparison.OrdinalIgnoreCase));
+        }
+
+        private static string[] GetOnlineResultUrlsForKeywordBackfill(
+            string term,
+            int searchTermCount,
+            string[] onlineResults)
+        {
+            var allowedResults = onlineResults
+                .Select(NormalizeSearchResultUrl)
+                .Where(url => !string.IsNullOrWhiteSpace(url))
+                .Where(url => NetworkUrlAllowlistUtility.Validate(url).IsAllowed)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToArray();
+
+            var matchingResults = allowedResults
+                .Where(url => SearchTextMatches(url, term))
+                .ToArray();
+            if (matchingResults.Length > 0 || searchTermCount > 1)
+            {
+                return matchingResults;
+            }
+
+            return allowedResults;
+        }
+
+        private static JsonObject CreateKeywordIndexWordNode(string[] urls)
+        {
+            var now = DateTimeOffset.UtcNow.ToString("O");
+            var matches = new JsonArray();
+            foreach (var url in urls.OrderBy(url => url, StringComparer.OrdinalIgnoreCase))
+            {
+                matches.Add(new JsonObject
+                {
+                    ["url"] = url,
+                    ["count"] = 1,
+                    ["last_indexed"] = now
+                });
+            }
+
+            return new JsonObject
+            {
+                ["total_occurrences"] = urls.Length,
+                ["matches"] = matches
+            };
+        }
+
+        private static void UpdateKeywordIndexMetadata(JsonObject root, int totalWordsIndexed)
+        {
+            if (root["index_metadata"] is not JsonObject metadata)
+            {
+                metadata = [];
+                root["index_metadata"] = metadata;
+            }
+
+            metadata["generated_at"] = DateTimeOffset.UtcNow.ToString("O");
+            metadata["total_words_indexed"] = totalWordsIndexed;
         }
 
         private DialogResult ShowLocalIndexMissPrompt(string[] searchTerms)
@@ -1840,6 +2079,11 @@ namespace PlayerAssistant
             return Path.Combine(GetApplicationExecutableDirectory(), KeywordIndexFileName);
         }
 
+        private static string GetEncryptedTextIndexPath()
+        {
+            return Path.Combine(GetApplicationExecutableDirectory(), TaggedNoteCipherUtility.EncryptedTextIndexFileName);
+        }
+
         private static string GetApplicationExecutableDirectory()
         {
 #pragma warning disable IL3000
@@ -1857,16 +2101,91 @@ namespace PlayerAssistant
             return GetReleaseDirectory();
         }
 
-        private void AddSearchResultUrl(string url)
+        private void AddSearchResultUrl(string url, bool displayAsUppercase = false)
         {
             if (lstSearchResults.Items.Cast<object>()
-                .Any(item => string.Equals(item?.ToString(), url, StringComparison.OrdinalIgnoreCase)))
+                .Any(item => string.Equals(GetSearchResultLaunchUrl(item), url, StringComparison.OrdinalIgnoreCase)))
             {
                 return;
             }
 
-            lstSearchResults.Items.Add(url);
+            lstSearchResults.Items.Add(CreateSearchResultItem(url, displayAsUppercase));
             SetStatusBarMessage($"Search results: {lstSearchResults.Items.Count} URL{(lstSearchResults.Items.Count == 1 ? string.Empty : "s")} found.");
+        }
+
+        private object CreateSearchResultItem(string url, bool displayAsUppercase)
+        {
+            return displayAsUppercase || IsEncryptedTextIndexUrl(url)
+                ? new SearchResultItem(url, url.ToUpperInvariant())
+                : url;
+        }
+
+        private static bool IsObsidianWikiSearchResultUrl(string url)
+        {
+            return Uri.TryCreate(url, UriKind.Absolute, out var uri)
+                && NetworkUrlAllowlistUtility.IsObsidianPublishHost(uri);
+        }
+
+        private string? GetSearchResultLaunchUrl(object? selectedItem)
+        {
+            return selectedItem switch
+            {
+                SearchResultItem result => result.Url,
+                null => null,
+                _ => selectedItem.ToString()
+            };
+        }
+
+        private bool IsEncryptedTextIndexUrl(string url)
+        {
+            return GetEncryptedTextIndexUrls().Contains(url);
+        }
+
+        private HashSet<string> GetEncryptedTextIndexUrls()
+        {
+            if (_encryptedTextIndexUrls is not null)
+            {
+                return _encryptedTextIndexUrls;
+            }
+
+            var urls = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var indexPath = GetEncryptedTextIndexPath();
+            if (!File.Exists(indexPath))
+            {
+                _encryptedTextIndexUrls = urls;
+                return _encryptedTextIndexUrls;
+            }
+
+            try
+            {
+                using var document = JsonDocument.Parse(ReadTextFileShared(indexPath));
+                if (document.RootElement.ValueKind != JsonValueKind.Array)
+                {
+                    _encryptedTextIndexUrls = urls;
+                    return _encryptedTextIndexUrls;
+                }
+
+                foreach (var entry in document.RootElement.EnumerateArray())
+                {
+                    if (entry.ValueKind == JsonValueKind.Object
+                        && entry.TryGetProperty("url", out var urlElement)
+                        && urlElement.ValueKind == JsonValueKind.String)
+                    {
+                        var entryUrl = urlElement.GetString();
+                        if (!string.IsNullOrWhiteSpace(entryUrl))
+                        {
+                            urls.Add(entryUrl);
+                        }
+                    }
+                }
+            }
+            catch (Exception ex) when (ex is IOException or JsonException or UnauthorizedAccessException)
+            {
+                StartupLoggingUtility.Append("encrypted text index load", ex);
+            }
+
+            _encryptedTextIndexUrls = urls;
+            return _encryptedTextIndexUrls;
         }
 
         private bool ShouldSearchRpolOnline()
@@ -1901,7 +2220,7 @@ namespace PlayerAssistant
 
         private void LstSearchResults_MouseClick(object? sender, MouseEventArgs e)
         {
-            var selectedItem = lstSearchResults.SelectedItem?.ToString();
+            var selectedItem = GetSearchResultLaunchUrl(lstSearchResults.SelectedItem);
             if (string.IsNullOrWhiteSpace(selectedItem))
             {
                 return;
@@ -1938,6 +2257,14 @@ namespace PlayerAssistant
             {
                 StartupLoggingUtility.Append("external URL launch", ex);
                 SetStatusBarMessage($"Unable to open URL: {ex.Message}");
+            }
+        }
+
+        private sealed record SearchResultItem(string Url, string DisplayText)
+        {
+            public override string ToString()
+            {
+                return DisplayText;
             }
         }
 

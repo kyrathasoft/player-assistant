@@ -78,6 +78,12 @@ namespace PlayerAssistant
                     && PathStartsWith(uri, "/scarlethorizons/")
                     && UpdateArtifactFileNameRegex().IsMatch(Path.GetFileName(uri.AbsolutePath))),
             new(
+                NetworkUrlPurpose.Generic,
+                "Player Assistant regional map image must use bryanmiller.us at an approved northernreaches.png path.",
+                uri => IsHost(uri, "bryanmiller.us", allowSubdomains: true)
+                    && (PathEquals(uri, "/scarlethorizons/northernreaches.png")
+                        || PathEquals(uri, "/blog/content/bryan/blog/images/rpg-maps/northernreaches.png"))),
+            new(
                 NetworkUrlPurpose.PlayerAssistantHostedSettings,
                 "Hosted Player Assistant settings must use bryanmiller.us at '/scarlethorizons/settings.local.json'.",
                 uri => IsHost(uri, "bryanmiller.us", allowSubdomains: true)

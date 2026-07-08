@@ -1,5 +1,8 @@
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.Encodings.Web;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 using System.Text.RegularExpressions;
 
 namespace PlayerAssistant
@@ -9,6 +12,11 @@ namespace PlayerAssistant
         Encrypt,
         Decrypt
     }
+
+    internal sealed record EncryptedTextIndexEntry(
+        [property: JsonPropertyName("url")] string Url,
+        [property: JsonPropertyName("encrypted_sections")] int EncryptedSections,
+        [property: JsonPropertyName("frontmatter_tags")] IReadOnlyList<string> FrontmatterTags);
 
     internal sealed record HeroAccessContext(
         int? Level,
@@ -39,12 +47,18 @@ namespace PlayerAssistant
 
     internal static class TaggedNoteCipherUtility
     {
+        public const string EncryptedTextIndexFileName = "encrypted-text-index.json";
         private const string EnvelopePrefix = "PAN1:";
         private const string MismatchedTagsMessage = "unable to decrypt due to non-matching opening and closing tags";
         private const int NonceSizeBytes = 12;
         private const int AuthenticationTagSizeBytes = 16;
         private const string KeySeed = "PlayerAssistant.TaggedNoteCipher.v1";
         private static readonly byte[] EncryptionKey = SHA256.HashData(Encoding.UTF8.GetBytes(KeySeed));
+        private static readonly JsonSerializerOptions EncryptedTextIndexJsonOptions = new()
+        {
+            Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
+            WriteIndented = true
+        };
 
         public static string TransformTaggedText(
             string text,
@@ -69,6 +83,67 @@ namespace PlayerAssistant
             return EncryptedTextReportFromMarkdown(MarkdownUtility.GetMarkdownFromURL(url));
         }
 
+        public static async Task<IReadOnlyList<EncryptedTextIndexEntry>> BuildEncryptedTextIndexAsync(
+            string sitemapUrl,
+            CancellationToken cancellationToken = default)
+        {
+            ArgumentException.ThrowIfNullOrWhiteSpace(sitemapUrl);
+
+            var tempSitemapPath = Path.Combine(
+                Path.GetTempPath(),
+                $"player-assistant-encrypted-text-index-{Guid.NewGuid():N}.xml");
+            try
+            {
+                await SitemapUtility.DownloadSitemapAsync(sitemapUrl, tempSitemapPath, cancellationToken);
+                var urls = await SitemapUtility.ReadUrlsFromSitemapAsync(tempSitemapPath, cancellationToken);
+                var entries = new List<EncryptedTextIndexEntry>();
+
+                foreach (var url in urls)
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+
+                    var markdown = await MarkdownUtility.GetMarkdownFromUrlAsync(url, cancellationToken);
+                    if (IsMarkdownFetchFailure(markdown, url))
+                    {
+                        continue;
+                    }
+
+                    var entry = CreateEncryptedTextIndexEntry(url, markdown);
+                    if (entry is not null)
+                    {
+                        entries.Add(entry);
+                    }
+                }
+
+                return entries;
+            }
+            finally
+            {
+                if (File.Exists(tempSitemapPath))
+                {
+                    File.Delete(tempSitemapPath);
+                }
+            }
+        }
+
+        public static async Task SaveEncryptedTextIndexAsync(
+            string sitemapUrl,
+            string destinationPath,
+            CancellationToken cancellationToken = default)
+        {
+            ArgumentException.ThrowIfNullOrWhiteSpace(destinationPath);
+
+            var entries = await BuildEncryptedTextIndexAsync(sitemapUrl, cancellationToken);
+            await AtomicFileUtility.WriteFileAsync(
+                destinationPath,
+                destination => JsonSerializer.SerializeAsync(
+                    destination,
+                    entries,
+                    EncryptedTextIndexJsonOptions,
+                    cancellationToken),
+                cancellationToken);
+        }
+
         internal static string EncryptedTextReportFromMarkdown(string markdown)
         {
             ArgumentNullException.ThrowIfNull(markdown);
@@ -91,6 +166,123 @@ namespace PlayerAssistant
             }
 
             return $"valid encrypted blocks: {validEncryptedBlocks}, mismatched tags: {mismatchedTags}";
+        }
+
+        internal static EncryptedTextIndexEntry? CreateEncryptedTextIndexEntry(string url, string markdown)
+        {
+            ArgumentException.ThrowIfNullOrWhiteSpace(url);
+            ArgumentNullException.ThrowIfNull(markdown);
+
+            var encryptedSectionCount = FindEncryptedBlocks(markdown).Count;
+            if (encryptedSectionCount == 0)
+            {
+                return null;
+            }
+
+            return new EncryptedTextIndexEntry(
+                url,
+                encryptedSectionCount,
+                ExtractFrontmatterTags(markdown));
+        }
+
+        internal static IReadOnlyList<string> ExtractFrontmatterTags(string markdown)
+        {
+            ArgumentNullException.ThrowIfNull(markdown);
+
+            var normalized = markdown.Replace("\r\n", "\n", StringComparison.Ordinal).Replace('\r', '\n');
+            if (!normalized.StartsWith("---\n", StringComparison.Ordinal))
+            {
+                return [];
+            }
+
+            var frontmatterEnd = normalized.IndexOf("\n---", 4, StringComparison.Ordinal);
+            if (frontmatterEnd < 0)
+            {
+                return [];
+            }
+
+            var tags = new List<string>();
+            var lines = normalized[4..frontmatterEnd].Split('\n');
+            for (var index = 0; index < lines.Length; index++)
+            {
+                var line = lines[index];
+                var trimmed = line.Trim();
+                if (!trimmed.StartsWith("tags:", StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
+                var inlineTags = trimmed["tags:".Length..].Trim();
+                if (inlineTags.Length > 0)
+                {
+                    AddInlineFrontmatterTags(tags, inlineTags);
+                    continue;
+                }
+
+                index = AddListFrontmatterTags(tags, lines, index + 1);
+            }
+
+            return tags
+                .Where(tag => tag.Length > 0)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToArray();
+        }
+
+        private static bool IsMarkdownFetchFailure(string markdown, string url)
+        {
+            return string.Equals(markdown, $"{MarkdownUtility.InvalidUrlMessage}: {url}", StringComparison.Ordinal)
+                || string.Equals(markdown, $"{MarkdownUtility.UnresolvedUrlMessage}: {url}", StringComparison.Ordinal);
+        }
+
+        private static void AddInlineFrontmatterTags(List<string> tags, string value)
+        {
+            if (value.StartsWith('[') && value.EndsWith(']'))
+            {
+                foreach (var item in value[1..^1].Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries))
+                {
+                    tags.Add(UnquoteFrontmatterValue(item));
+                }
+
+                return;
+            }
+
+            tags.Add(UnquoteFrontmatterValue(value));
+        }
+
+        private static int AddListFrontmatterTags(List<string> tags, string[] lines, int startIndex)
+        {
+            var index = startIndex;
+            for (; index < lines.Length; index++)
+            {
+                var line = lines[index];
+                if (string.IsNullOrWhiteSpace(line))
+                {
+                    continue;
+                }
+
+                var trimmed = line.TrimStart();
+                if (!trimmed.StartsWith("- ", StringComparison.Ordinal))
+                {
+                    break;
+                }
+
+                tags.Add(UnquoteFrontmatterValue(trimmed[2..].Trim()));
+            }
+
+            return index - 1;
+        }
+
+        private static string UnquoteFrontmatterValue(string value)
+        {
+            var trimmed = value.Trim();
+            if (trimmed.Length >= 2
+                && ((trimmed[0] == '"' && trimmed[^1] == '"')
+                    || (trimmed[0] == '\'' && trimmed[^1] == '\'')))
+            {
+                return trimmed[1..^1].Trim();
+            }
+
+            return trimmed;
         }
 
         private static string Encrypt(string taggedPlaintext, IEnumerable<string>? tags)

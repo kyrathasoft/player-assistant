@@ -48,6 +48,7 @@ namespace PlayerAssistant
             versionToolStripMenuItem = new ToolStripMenuItem();
             statusStrip = new StatusStrip();
             statusToolStripStatusLabel = new ToolStripStatusLabel();
+            statusActivityToolStripStatusLabel = new ToolStripStatusLabel();
             pnlSearch = new Panel();
             pnlSearchScope = new Panel();
             rdoObsidian = new RadioButton();
@@ -205,7 +206,7 @@ namespace PlayerAssistant
             // 
             // statusStrip
             // 
-            statusStrip.Items.AddRange(new ToolStripItem[] { statusToolStripStatusLabel });
+            statusStrip.Items.AddRange(new ToolStripItem[] { statusToolStripStatusLabel, statusActivityToolStripStatusLabel });
             statusStrip.Location = new Point(0, 746);
             statusStrip.Name = "statusStrip";
             statusStrip.Size = new Size(1024, 22);
@@ -217,6 +218,14 @@ namespace PlayerAssistant
             statusToolStripStatusLabel.Name = "statusToolStripStatusLabel";
             statusToolStripStatusLabel.Size = new Size(39, 17);
             statusToolStripStatusLabel.Text = "Ready";
+            // 
+            // statusActivityToolStripStatusLabel
+            // 
+            statusActivityToolStripStatusLabel.AutoSize = false;
+            statusActivityToolStripStatusLabel.Available = false;
+            statusActivityToolStripStatusLabel.Name = "statusActivityToolStripStatusLabel";
+            statusActivityToolStripStatusLabel.Size = new Size(24, 17);
+            statusActivityToolStripStatusLabel.Text = "";
             // 
             // pnlSearch
             // 
@@ -401,6 +410,7 @@ namespace PlayerAssistant
         private ToolStripMenuItem versionToolStripMenuItem;
         private StatusStrip statusStrip;
         private ToolStripStatusLabel statusToolStripStatusLabel;
+        private ToolStripStatusLabel statusActivityToolStripStatusLabel;
         private Panel pnlSearch;
         private Button btnSearch;
         private Panel pnlSearchResults;

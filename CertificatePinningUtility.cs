@@ -35,7 +35,7 @@ namespace PlayerAssistant
             ArgumentNullException.ThrowIfNull(requestMessage);
 
             if (requestMessage.RequestUri is null
-                || !MatchesHostSuffix(requestMessage.RequestUri, PlayerAssistantUpdatePolicy.HostSuffix))
+                || !IsPlayerAssistantUpdateRequest(requestMessage.RequestUri))
             {
                 return sslPolicyErrors == SslPolicyErrors.None;
             }
@@ -46,6 +46,12 @@ namespace PlayerAssistant
                 sslPolicyErrors,
                 PlayerAssistantUpdatePolicy,
                 DateTimeOffset.UtcNow);
+        }
+
+        private static bool IsPlayerAssistantUpdateRequest(Uri requestUri)
+        {
+            return MatchesHostSuffix(requestUri, PlayerAssistantUpdatePolicy.HostSuffix)
+                && NetworkUrlAllowlistUtility.Validate(requestUri, NetworkUrlPurpose.PlayerAssistantUpdate).IsAllowed;
         }
 
         internal static bool ValidatePinnedRequest(

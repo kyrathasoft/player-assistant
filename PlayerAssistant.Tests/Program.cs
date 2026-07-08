@@ -10,6 +10,7 @@ using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 using System.Net.Security;
 using System.Diagnostics.CodeAnalysis;
+using System.Text.Json;
 using System.Windows.Forms;
 using System.Xml.Linq;
 
@@ -87,6 +88,7 @@ var tests = new (string Name, Action Test)[]
     ("runtime housekeeping rotates oversized startup log", RuntimeHousekeepingRotatesOversizedStartupLog),
     ("runtime housekeeping skips locked files", RuntimeHousekeepingSkipsLockedFiles),
     ("ui operation failure reporter logs status and dialog", UiOperationFailureReporterLogsStatusAndDialog),
+    ("status bar activity indicator tracks async operations", StatusBarActivityIndicatorTracksAsyncOperations),
     ("background task supervisor suppresses duplicate phases", BackgroundTaskSupervisorSuppressesDuplicatePhases),
     ("background task supervisor logs failures", BackgroundTaskSupervisorLogsFailures),
     ("background task supervisor cancels running tasks on dispose", BackgroundTaskSupervisorCancelsRunningTasksOnDispose),
@@ -188,6 +190,9 @@ var tests = new (string Name, Action Test)[]
     ("verified installer launch rejects signer changes after verification", VerifiedInstallerLaunchRejectsSignerChangesAfterVerification),
     ("verified installer launch rejects elevation changes after verification", VerifiedInstallerLaunchRejectsElevationChangesAfterVerification),
     ("search enter triggers click when enabled", SearchEnterTriggersClickWhenEnabled),
+    ("keyword search uppercases encrypted index results without changing launch URL", KeywordSearchUppercasesEncryptedIndexResultsWithoutChangingLaunchUrl),
+    ("keyword search uppercases online Obsidian fallback results", KeywordSearchUppercasesOnlineObsidianFallbackResults),
+    ("keyword search backfills online hits into keyword index", KeywordSearchBackfillsOnlineHitsIntoKeywordIndex),
     ("keyword search offers online fallback on local miss", KeywordSearchOffersOnlineFallbackOnLocalMiss),
     ("keyword search cancels previous online fallback", KeywordSearchCancelsPreviousOnlineFallback),
     ("keyword search rpol scope excludes obsidian-only whiteheart", KeywordSearchRpolScopeExcludesObsidianOnlyWhiteheart),
@@ -203,6 +208,7 @@ var tests = new (string Name, Action Test)[]
     ("tagged note cipher accepts grouped and expression tag", TaggedNoteCipherAcceptsGroupedAndExpressionTag),
     ("tagged note cipher reports mismatched decrypt tags", TaggedNoteCipherReportsMismatchedDecryptTags),
     ("tagged note cipher reports encrypted markdown block counts", TaggedNoteCipherReportsEncryptedMarkdownBlockCounts),
+    ("tagged note cipher indexes encrypted markdown frontmatter tags", TaggedNoteCipherIndexesEncryptedMarkdownFrontmatterTags),
     ("tagged note cipher authenticates visible tags", TaggedNoteCipherAuthenticatesVisibleTags),
     ("xp display recognizes dungeon master access", XpDisplayRecognizesDungeonMasterAccess),
     ("xp display finds totals by first and full character names", XpDisplayFindsTotalsByFirstAndFullCharacterNames),
@@ -1716,6 +1722,39 @@ static void UiOperationFailureReporterLogsStatusAndDialog()
     }
 }
 
+static void StatusBarActivityIndicatorTracksAsyncOperations()
+{
+    RunOnStaThread(() =>
+    {
+        using var form = new Form1(suppressHeroImagesForThisRun: true);
+        var indicator = (ToolStripStatusLabel)(GetPrivateField(form, "statusActivityToolStripStatusLabel")
+            ?? throw new InvalidOperationException("status activity indicator was null."));
+
+        AssertEqual(0, (int)(GetPrivateField(form, "_activeAsyncOperationCount") ?? -1), "activity count should start at zero");
+        AssertEqual(string.Empty, indicator.Text ?? string.Empty, "activity indicator text should start empty");
+        using var firstActivity = (IDisposable)(InvokePrivateMethod(form, "BeginStatusBarActivity")
+            ?? throw new InvalidOperationException("first activity scope was null."));
+
+        AssertEqual(1, (int)(GetPrivateField(form, "_activeAsyncOperationCount") ?? -1), "activity count should increment while async work is active");
+        AssertFalse(string.IsNullOrWhiteSpace(indicator.Text), "activity indicator should display an animation frame while active");
+        var firstFrame = indicator.Text ?? string.Empty;
+        InvokePrivateMethod(form, "AdvanceStatusActivityIndicator");
+        AssertFalse(
+            string.Equals(firstFrame, indicator.Text, StringComparison.Ordinal),
+            "activity indicator should advance animation frames");
+
+        using (var secondActivity = (IDisposable)(InvokePrivateMethod(form, "BeginStatusBarActivity")
+            ?? throw new InvalidOperationException("second activity scope was null.")))
+        {
+            firstActivity.Dispose();
+            AssertEqual(1, (int)(GetPrivateField(form, "_activeAsyncOperationCount") ?? -1), "activity count should remain positive until all async work completes");
+        }
+
+        AssertEqual(0, (int)(GetPrivateField(form, "_activeAsyncOperationCount") ?? -1), "activity count should return to zero after all async work completes");
+        AssertEqual(string.Empty, indicator.Text ?? string.Empty, "activity indicator text should clear when idle");
+    });
+}
+
 static void BackgroundTaskSupervisorSuppressesDuplicatePhases()
 {
     using var supervisor = new BackgroundTaskSupervisor();
@@ -2199,9 +2238,13 @@ static void NetworkAllowlistRejectsUnexpectedUpdatePath()
 static void NetworkAllowlistGenericPolicyRejectsUnrelatedUpdateHostPaths()
 {
     var genericAllowed = NetworkUrlAllowlistUtility.Validate("https://bryanmiller.us/scarlethorizons/p-assist-0.9.1.exe");
+    var regionalMap = NetworkUrlAllowlistUtility.Validate("https://bryanmiller.us/scarlethorizons/northernreaches.png");
+    var blogRegionalMap = NetworkUrlAllowlistUtility.Validate("https://bryanmiller.us/blog/content/bryan/blog/images/rpg-maps/northernreaches.png");
     var genericRejected = NetworkUrlAllowlistUtility.Validate("https://bryanmiller.us/random-note.txt");
 
     AssertTrue(genericAllowed.IsAllowed, "generic allowlist should still permit approved update artifact paths");
+    AssertTrue(regionalMap.IsAllowed, "generic allowlist should permit the hosted regional map image");
+    AssertTrue(blogRegionalMap.IsAllowed, "generic allowlist should permit the hosted blog regional map image");
     AssertFalse(genericRejected.IsAllowed, "generic allowlist should reject unrelated paths on an otherwise approved host");
 }
 
@@ -4317,6 +4360,9 @@ static void CertificateValidationSkipsPinExtractionForNonUpdateHosts()
     using var request = new HttpRequestMessage(
         HttpMethod.Get,
         "https://publish.obsidian.md/scarlethorizons/Intentional+Orphans/XP+Tracking");
+    using var mapRequest = new HttpRequestMessage(
+        HttpMethod.Get,
+        "https://bryanmiller.us/blog/content/bryan/blog/images/rpg-maps/northernreaches.png");
 
     AssertTrue(
         CertificatePinningUtility.ValidateServerCertificate(
@@ -4325,6 +4371,13 @@ static void CertificateValidationSkipsPinExtractionForNonUpdateHosts()
             chain: null,
             SslPolicyErrors.None),
         "non-update hosts should use normal TLS validation without requiring Player Assistant update pins");
+    AssertTrue(
+        CertificatePinningUtility.ValidateServerCertificate(
+            mapRequest,
+            certificate: null,
+            chain: null,
+            SslPolicyErrors.None),
+        "non-update paths on the update host should use normal TLS validation without requiring update pins");
 }
 
 static void VerifiedUpdaterRejectsInstallerSha256Mismatch()
@@ -4554,6 +4607,168 @@ static void SearchEnterTriggersClickWhenEnabled()
                 AssertContains(string.Join("\n", results), "https://example.test/entry");
             });
     });
+}
+
+static void KeywordSearchUppercasesEncryptedIndexResultsWithoutChangingLaunchUrl()
+{
+    RunOnStaThread(() =>
+    {
+        WithTemporaryKeywordIndex(
+            """
+            {
+              "index_metadata": {
+                "total_words_indexed": 0
+              },
+              "words": {
+                "nimba": {
+                  "total_occurrences": 2,
+                  "matches": [
+                    {
+                      "url": "https://publish.obsidian.md/scarlethorizons/NPCs/Nimba+Armstrong",
+                      "count": 1,
+                      "last_indexed": "2026-07-07T00:00:00.0000000+00:00"
+                    },
+                    {
+                      "url": "https://publish.obsidian.md/scarlethorizons/NPCs/Nuanda+Armstrong",
+                      "count": 1,
+                      "last_indexed": "2026-07-07T00:00:00.0000000+00:00"
+                    }
+                  ]
+                }
+              }
+            }
+            """,
+            () => WithTemporaryEncryptedTextIndex(
+                """
+                [
+                  {
+                    "url": "https://publish.obsidian.md/scarlethorizons/NPCs/Nimba+Armstrong",
+                    "encrypted_sections": 2,
+                    "frontmatter_tags": ["npc", "spy"]
+                  }
+                ]
+                """,
+                () =>
+                {
+                    using var form = new Form1(suppressHeroImagesForThisRun: true);
+                    var txtSearch = GetControl<TextBox>(form, "txtSearch");
+                    var lstSearchResults = GetControl<ListBox>(form, "lstSearchResults");
+
+                    txtSearch.Text = "nimba";
+                    InvokePrivateAsync(form, "PerformSearchAsync").GetAwaiter().GetResult();
+
+                    var results = lstSearchResults.Items.Cast<object>().ToArray();
+                    AssertEqual(2, results.Length, "expected both keyword-index matches to be returned");
+                    AssertEqual(
+                        "HTTPS://PUBLISH.OBSIDIAN.MD/SCARLETHORIZONS/NPCS/NIMBA+ARMSTRONG",
+                        results[0]?.ToString() ?? string.Empty,
+                        "encrypted index result should display in uppercase");
+                    AssertEqual(
+                        "https://publish.obsidian.md/scarlethorizons/NPCs/Nuanda+Armstrong",
+                        results[1]?.ToString() ?? string.Empty,
+                        "non-encrypted index result should display normally");
+
+                    var launchUrl = InvokePrivateMethod(form, "GetSearchResultLaunchUrl", results[0]);
+                    AssertEqual(
+                        "https://publish.obsidian.md/scarlethorizons/NPCs/Nimba+Armstrong",
+                        launchUrl?.ToString() ?? string.Empty,
+                        "uppercase display item should retain the original launch URL");
+            }));
+    });
+}
+
+static void KeywordSearchUppercasesOnlineObsidianFallbackResults()
+{
+    RunOnStaThread(() =>
+    {
+        WithTemporaryKeywordIndex(
+            """
+            {
+              "index_metadata": {
+                "total_words_indexed": 0
+              },
+              "words": {}
+            }
+            """,
+            () =>
+            {
+                using var form = new Form1(suppressHeroImagesForThisRun: true);
+                var txtSearch = GetControl<TextBox>(form, "txtSearch");
+                var lstSearchResults = GetControl<ListBox>(form, "lstSearchResults");
+
+                SetPrivateField(
+                    form,
+                    "_showLocalIndexMissPrompt",
+                    (Func<string[], DialogResult>)(_ => DialogResult.Yes));
+                SetPrivateField(
+                    form,
+                    "_showOnlineSearchCompletedMessage",
+                    (Action<string[], int>)((_, _) => { }));
+                SetPrivateField(
+                    form,
+                    "_onlineSearchProvider",
+                    (Func<string[], CancellationToken, Task<string[]>>)((_, _) => Task.FromResult(new[]
+                    {
+                        "https://publish.obsidian.md/scarlethorizons/NPCs/Nimba+Armstrong",
+                        "https://rpol.net/display.cgi?gi=80170&ti=12&msgpage=&show=all"
+                    })));
+
+                txtSearch.Text = "not indexed locally";
+                InvokePrivateAsync(form, "PerformSearchAsync").GetAwaiter().GetResult();
+
+                var results = lstSearchResults.Items.Cast<object>().ToArray();
+                AssertEqual(2, results.Length, "expected online fallback to populate both provider results");
+                AssertEqual(
+                    "HTTPS://PUBLISH.OBSIDIAN.MD/SCARLETHORIZONS/NPCS/NIMBA+ARMSTRONG",
+                    results[0]?.ToString() ?? string.Empty,
+                    "online Obsidian fallback result should display in uppercase");
+                AssertEqual(
+                    "https://rpol.net/display.cgi?gi=80170&ti=12&msgpage=&show=all",
+                    results[1]?.ToString() ?? string.Empty,
+                    "non-Obsidian online fallback result should display normally");
+
+                var launchUrl = InvokePrivateMethod(form, "GetSearchResultLaunchUrl", results[0]);
+                AssertEqual(
+                    "https://publish.obsidian.md/scarlethorizons/NPCs/Nimba+Armstrong",
+                    launchUrl?.ToString() ?? string.Empty,
+                    "uppercase online Obsidian item should retain the original launch URL");
+            });
+    });
+}
+
+static void KeywordSearchBackfillsOnlineHitsIntoKeywordIndex()
+{
+    WithTemporaryKeywordIndex(
+        """
+        {
+          "index_metadata": {
+            "total_words_indexed": 0
+          },
+          "words": {}
+        }
+        """,
+        () =>
+        {
+            Form1.BackfillKeywordIndexWithOnlineResultsAsync(
+                ["Nimba Armstrong"],
+                ["https://publish.obsidian.md/scarlethorizons/NPCs/Nimba+Armstrong"],
+                CancellationToken.None).GetAwaiter().GetResult();
+
+            using var document = JsonDocument.Parse(File.ReadAllText(GetPlayerAssistantIndexPath()));
+            var words = document.RootElement.GetProperty("words");
+            AssertTrue(words.TryGetProperty("Nimba Armstrong", out var nimbaEntry), "online hit should add the missing search term to keyword-index.json");
+            AssertEqual(1, nimbaEntry.GetProperty("total_occurrences").GetInt32(), "backfilled keyword should record one occurrence");
+
+            var match = nimbaEntry.GetProperty("matches").EnumerateArray().Single();
+            AssertEqual(
+                "https://publish.obsidian.md/scarlethorizons/NPCs/Nimba+Armstrong",
+                match.GetProperty("url").GetString() ?? string.Empty,
+                "backfilled keyword should store the online hit URL");
+            AssertEqual(1, match.GetProperty("count").GetInt32(), "backfilled match should use a count of one");
+            AssertFalse(
+                string.IsNullOrWhiteSpace(match.GetProperty("last_indexed").GetString()),
+                "backfilled match should record a last-indexed timestamp");
+        });
 }
 
 static void KeywordSearchOffersOnlineFallbackOnLocalMiss()
@@ -5011,6 +5226,46 @@ static void TaggedNoteCipherReportsEncryptedMarkdownBlockCounts()
         "valid encrypted blocks: 2, mismatched tags: 1",
         report,
         "encrypted markdown report should count matching and mismatched tag wrappers");
+}
+
+static void TaggedNoteCipherIndexesEncryptedMarkdownFrontmatterTags()
+{
+    var encryptedBlock = TaggedNoteCipherUtility.TransformTaggedText(
+        "{Level 8}The ward is real.{Level 8}",
+        TaggedNoteCipherMode.Encrypt);
+    var secondEncryptedBlock = TaggedNoteCipherUtility.TransformTaggedText(
+        "{Spy 4|Faction Scyntarn}The innkeeper knows the pass.{Spy 4|Faction Scyntarn}",
+        TaggedNoteCipherMode.Encrypt);
+    var markdown = string.Join(
+        Environment.NewLine,
+        "---",
+        "tags:",
+        "  - npc",
+        "  - spy",
+        "  - \"Scyntarn\"",
+        "---",
+        "Plain text.",
+        encryptedBlock,
+        secondEncryptedBlock);
+
+    var entry = TaggedNoteCipherUtility.CreateEncryptedTextIndexEntry(
+        "https://publish.obsidian.md/scarlethorizons/NPCs/Nimba+Armstrong",
+        markdown);
+
+    if (entry is null)
+    {
+        throw new InvalidOperationException("encrypted markdown should produce an index entry");
+    }
+
+    AssertEqual(2, entry.EncryptedSections, "encrypted text index should count encrypted markdown blocks");
+    AssertEqual(
+        "npc,spy,Scyntarn",
+        string.Join(",", entry.FrontmatterTags),
+        "encrypted text index should preserve frontmatter tags");
+    AssertEqual(
+        TaggedNoteCipherUtility.EncryptedTextIndexFileName,
+        "encrypted-text-index.json",
+        "encrypted text index filename should match the proposed JSON artifact name");
 }
 
 static void TaggedNoteCipherAuthenticatesVisibleTags()
@@ -7329,6 +7584,42 @@ static void WithTemporaryKeywordTermsFile(Action action)
     }
 }
 
+static void WithTemporaryEncryptedTextIndex(string json, Action action)
+{
+    var indexPath = GetPlayerAssistantEncryptedTextIndexPath();
+    var backupPath = indexPath + ".test-backup";
+    var hadOriginalIndex = File.Exists(indexPath);
+
+    try
+    {
+        Directory.CreateDirectory(Path.GetDirectoryName(indexPath)!);
+        if (hadOriginalIndex)
+        {
+            File.Copy(indexPath, backupPath, overwrite: true);
+        }
+
+        File.WriteAllText(indexPath, json);
+        action();
+    }
+    finally
+    {
+        if (File.Exists(indexPath))
+        {
+            File.Delete(indexPath);
+        }
+
+        if (hadOriginalIndex)
+        {
+            if (!File.Exists(backupPath))
+            {
+                throw new FileNotFoundException($"Expected backup file '{backupPath}' to exist for restore.", backupPath);
+            }
+
+            File.Move(backupPath, indexPath, overwrite: true);
+        }
+    }
+}
+
 static string GetPlayerAssistantIndexPath()
 {
     var assemblyDirectory = Path.GetDirectoryName(typeof(Form1).Assembly.Location);
@@ -7338,6 +7629,17 @@ static string GetPlayerAssistantIndexPath()
     }
 
     return Path.Combine(assemblyDirectory, "keyword-index.json");
+}
+
+static string GetPlayerAssistantEncryptedTextIndexPath()
+{
+    var assemblyDirectory = Path.GetDirectoryName(typeof(Form1).Assembly.Location);
+    if (string.IsNullOrWhiteSpace(assemblyDirectory))
+    {
+        throw new InvalidOperationException("Unable to resolve the player-assistant assembly directory.");
+    }
+
+    return Path.Combine(assemblyDirectory, TaggedNoteCipherUtility.EncryptedTextIndexFileName);
 }
 
 static string GetPlayerAssistantKeywordTermsPath()
