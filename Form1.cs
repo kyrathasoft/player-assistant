@@ -3116,6 +3116,8 @@ namespace PlayerAssistant
                         $"{download.Prefix}\t{GetManifestStatus(download.Downloaded, download.ErrorMessage)}\t{download.FilePath}\t{download.ErrorMessage}"),
                     cancellationToken);
 
+                await TryBuildAdventureOutlineAsync(icPostsDirectory, cancellationToken);
+
                 return chapterDownloads;
             }
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
@@ -3126,6 +3128,28 @@ namespace PlayerAssistant
             {
                 await AppendStartupErrorLogAsync("chapter downloads", ex);
                 return [];
+            }
+        }
+
+        private static async Task TryBuildAdventureOutlineAsync(
+            string icPostsDirectory,
+            CancellationToken cancellationToken = default)
+        {
+            try
+            {
+                var outlinePath = Path.Combine(GetReleaseDirectory(), AdventureOutlineUtility.FileName);
+                await AdventureOutlineUtility.UpdateAdventureOutlineAsync(
+                    icPostsDirectory,
+                    outlinePath,
+                    cancellationToken);
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                throw;
+            }
+            catch (Exception ex)
+            {
+                await AppendStartupErrorLogAsync("adventure outline", ex);
             }
         }
 

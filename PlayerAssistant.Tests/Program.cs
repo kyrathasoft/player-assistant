@@ -174,6 +174,11 @@ var tests = new (string Name, Action Test)[]
     ("regional map skips when newer than one hour", RegionalMapSkipsWhenNewerThanOneHour),
     ("regional map downloads when newer but transparent", RegionalMapDownloadsWhenNewerButTransparent),
     ("startup status includes download count and size", StartupStatusIncludesDownloadCountAndSize),
+    ("adventure outline builds from saved IC html", AdventureOutlineBuildsFromSavedIcHtml),
+    ("adventure outline merges new saved IC bullets", AdventureOutlineMergesNewSavedIcBullets),
+    ("adventure outline falls back to Obsidian markdown", AdventureOutlineFallsBackToObsidianMarkdown),
+    ("adventure outline prefers saved IC html over fallback", AdventureOutlinePrefersSavedIcHtmlOverFallback),
+    ("adventure outline ignores failed fallback markdown fetch", AdventureOutlineIgnoresFailedFallbackMarkdownFetch),
     ("adjusted post tallies aggregate saved IC html", AdjustedPostTalliesAggregateSavedIcHtml),
     ("keyword search falls back to The-prefixed term", KeywordSearchFallsBackToThePrefixedTerm),
     ("keyword search keeps quoted phrases together", KeywordSearchKeepsQuotedPhrasesTogether),
@@ -3769,6 +3774,194 @@ static void StartupStatusIncludesDownloadCountAndSize()
     AssertContains(summary, "2 files");
     AssertContains(summary, "1.5 KB");
     AssertContains(summary, "0 MB");
+}
+
+static void AdventureOutlineBuildsFromSavedIcHtml()
+{
+    using var directory = TemporaryDirectory.Create();
+    var icDirectory = Path.Combine(directory.Path, "Posts", "IC");
+    Directory.CreateDirectory(icDirectory);
+
+    File.WriteAllText(
+        Path.Combine(icDirectory, "ch-10.html"),
+        """
+        <html><body>
+        <h1>Ch 10 - Later Trouble.</h1>
+        <span class="messageauthor">Kelpie Lawfuller</span>
+        <div class="messagebody" id="msg2">Kelpie keeps watch.<br>Then moves on.</div>
+        </body></html>
+        """);
+    File.WriteAllText(
+        Path.Combine(icDirectory, "ch-2.html"),
+        """
+        <html><body>
+        <h1>Ch 2 - Supper With Nuanda.</h1>
+        <span class="messageauthor you"><a href="/gm">Dungeon Master</a></span>
+        <div class="messagebody" id="msg1">Nuanda offers stew &amp; hard biscuits.</div>
+        </body></html>
+        """);
+    File.WriteAllText(
+        Path.Combine(icDirectory, "ch-2.bak-20260707.html"),
+        """
+        <html><body>
+        <h1>Ch 2 - Old Backup.</h1>
+        <span class="messageauthor">Backup</span>
+        <div class="messagebody" id="msg1">This should not appear.</div>
+        </body></html>
+        """);
+
+    var outline = AdventureOutlineUtility.BuildAdventureOutlineAsync(icDirectory)
+        .GetAwaiter()
+        .GetResult();
+
+    AssertContains(outline, "# Adventure Outline");
+    AssertContains(outline, "## Ch 2 - Supper With Nuanda");
+    AssertContains(outline, "- Dungeon Master: Nuanda offers stew & hard biscuits.");
+    AssertContains(outline, "## Ch 10 - Later Trouble");
+    AssertContains(outline, "- Kelpie Lawfuller: Kelpie keeps watch. Then moves on.");
+    AssertFalse(outline.Contains("Old Backup", StringComparison.Ordinal), "backup chapter files should be ignored");
+    AssertTrue(
+        outline.IndexOf("## Ch 2", StringComparison.Ordinal) < outline.IndexOf("## Ch 10", StringComparison.Ordinal),
+        "chapter files should sort by numeric chapter number");
+}
+
+static void AdventureOutlineMergesNewSavedIcBullets()
+{
+    using var directory = TemporaryDirectory.Create();
+    var icDirectory = Path.Combine(directory.Path, "Posts", "IC");
+    Directory.CreateDirectory(icDirectory);
+    File.WriteAllText(
+        Path.Combine(icDirectory, "ch-1.html"),
+        """
+        <html><body>
+        <h1>Ch 1 - Kirkilston.</h1>
+        <span class="messageauthor">Dungeon Master</span>
+        <div class="messagebody" id="msg1">The party leaves town.</div>
+        <span class="messageauthor">Kelpie Lawfuller</span>
+        <div class="messagebody" id="msg2">Kelpie takes the lead.</div>
+        </body></html>
+        """);
+    File.WriteAllText(
+        Path.Combine(icDirectory, "ch-2.html"),
+        """
+        <html><body>
+        <h1>Ch 2 - Supper With Nuanda.</h1>
+        <span class="messageauthor">Nuanda</span>
+        <div class="messagebody" id="msg3">Nuanda shares what she learned.</div>
+        </body></html>
+        """);
+
+    var outlinePath = Path.Combine(directory.Path, AdventureOutlineUtility.FileName);
+    File.WriteAllText(
+        outlinePath,
+        """
+        # Adventure Outline
+
+        ## Ch 1 - Kirkilston
+
+        - Dungeon Master: The party leaves town.
+        """);
+
+    var updated = AdventureOutlineUtility.UpdateAdventureOutlineAsync(icDirectory, outlinePath)
+        .GetAwaiter()
+        .GetResult();
+    var outline = File.ReadAllText(outlinePath);
+
+    AssertTrue(updated, "existing adventure outline should be updated with missing material");
+    AssertEqual(
+        1,
+        CountOccurrences(outline, "- Dungeon Master: The party leaves town."),
+        "existing bullet should not be duplicated");
+    AssertContains(outline, "- Kelpie Lawfuller: Kelpie takes the lead.");
+    AssertContains(outline, "## Ch 2 - Supper With Nuanda");
+    AssertContains(outline, "- Nuanda: Nuanda shares what she learned.");
+    AssertTrue(
+        outline.IndexOf("- Kelpie Lawfuller: Kelpie takes the lead.", StringComparison.Ordinal)
+            < outline.IndexOf("## Ch 2 - Supper With Nuanda", StringComparison.Ordinal),
+        "missing chapter 1 bullet should remain before chapter 2");
+}
+
+static void AdventureOutlineFallsBackToObsidianMarkdown()
+{
+    using var directory = TemporaryDirectory.Create();
+    var icDirectory = Path.Combine(directory.Path, "Posts", "IC");
+    var outlinePath = Path.Combine(directory.Path, AdventureOutlineUtility.FileName);
+    var requestedUrl = string.Empty;
+
+    var updated = AdventureOutlineUtility.UpdateAdventureOutlineAsync(
+        icDirectory,
+        outlinePath,
+        "https://publish.obsidian.md/scarlethorizons/Intentional+Orphans/Adventure+Outline",
+        (url, _) =>
+        {
+            requestedUrl = url;
+            return Task.FromResult(
+                """
+                # Adventure Outline
+
+                ## Ch 1 - Kirkilston
+
+                - The party seeks Nuanda.
+                """);
+        }).GetAwaiter().GetResult();
+
+    AssertTrue(updated, "fallback markdown should write adventure outline when saved IC files are unavailable");
+    AssertEqual(
+        "https://publish.obsidian.md/scarlethorizons/Intentional+Orphans/Adventure+Outline",
+        requestedUrl,
+        "unexpected fallback markdown URL");
+    AssertContains(File.ReadAllText(outlinePath), "- The party seeks Nuanda.");
+}
+
+static void AdventureOutlinePrefersSavedIcHtmlOverFallback()
+{
+    using var directory = TemporaryDirectory.Create();
+    var icDirectory = Path.Combine(directory.Path, "Posts", "IC");
+    Directory.CreateDirectory(icDirectory);
+    File.WriteAllText(
+        Path.Combine(icDirectory, "ch-1.html"),
+        """
+        <html><body>
+        <h1>Ch 1 - Kirkilston.</h1>
+        <span class="messageauthor">Dungeon Master</span>
+        <div class="messagebody" id="msg1">Local chapter material.</div>
+        </body></html>
+        """);
+    var outlinePath = Path.Combine(directory.Path, AdventureOutlineUtility.FileName);
+    var fallbackFetchCount = 0;
+
+    AdventureOutlineUtility.UpdateAdventureOutlineAsync(
+        icDirectory,
+        outlinePath,
+        AdventureOutlineUtility.FallbackMarkdownUrl,
+        (_, _) =>
+        {
+            fallbackFetchCount++;
+            return Task.FromResult("# Adventure Outline\n\n- Fallback material.");
+        }).GetAwaiter().GetResult();
+
+    var outline = File.ReadAllText(outlinePath);
+    AssertEqual(0, fallbackFetchCount, "fallback markdown should not be fetched when saved IC HTML builds an outline");
+    AssertContains(outline, "- Dungeon Master: Local chapter material.");
+    AssertFalse(outline.Contains("Fallback material", StringComparison.Ordinal), "fallback content should not replace local IC outline");
+}
+
+static void AdventureOutlineIgnoresFailedFallbackMarkdownFetch()
+{
+    using var directory = TemporaryDirectory.Create();
+    var icDirectory = Path.Combine(directory.Path, "Posts", "IC");
+    var outlinePath = Path.Combine(directory.Path, AdventureOutlineUtility.FileName);
+
+    var updated = AdventureOutlineUtility.UpdateAdventureOutlineAsync(
+        icDirectory,
+        outlinePath,
+        AdventureOutlineUtility.FallbackMarkdownUrl,
+        (_, _) => Task.FromResult($"{MarkdownUtility.UnresolvedUrlMessage}: fallback"))
+        .GetAwaiter()
+        .GetResult();
+
+    AssertFalse(updated, "failed fallback markdown fetch should not update adventure outline");
+    AssertFalse(File.Exists(outlinePath), "failed fallback markdown fetch should not write an outline file");
 }
 
 static void AdjustedPostTalliesAggregateSavedIcHtml()
