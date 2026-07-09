@@ -21,16 +21,18 @@ static string TranslateSentence(string input)
     input = OrcishTranslatorUtility.TranslateEnglishTextToOrcishPronouns(input);
 
     var terms = input
-        .Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        .Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
 
     if (terms.Length == 0)
     {
         return string.Empty;
     }
 
+    var leadingPunctuation = new string[terms.Length];
     var trailingPunctuation = new string[terms.Length];
     for (var index = 0; index < terms.Length; index++)
     {
+        leadingPunctuation[index] = StripLeadingPunctuation(ref terms[index]);
         trailingPunctuation[index] = StripTrailingPunctuation(ref terms[index]);
     }
 
@@ -40,16 +42,34 @@ static string TranslateSentence(string input)
     {
         if (string.Equals(terms[index], "the", StringComparison.OrdinalIgnoreCase))
         {
-            translatedTerms.Add(TranslateDefiniteArticle(terms, index) + trailingPunctuation[index]);
+            translatedTerms.Add(leadingPunctuation[index] + TranslateDefiniteArticle(terms, index) + trailingPunctuation[index]);
+            continue;
+        }
+
+        if (string.Equals(terms[index], "at", StringComparison.OrdinalIgnoreCase))
+        {
+            translatedTerms.Add(leadingPunctuation[index] + TranslatePrepositionByNextWordSound(terms, index, "ak", "kaat") + trailingPunctuation[index]);
+            continue;
+        }
+
+        if (string.Equals(terms[index], "to", StringComparison.OrdinalIgnoreCase))
+        {
+            translatedTerms.Add(leadingPunctuation[index] + TranslatePrepositionByNextWordSound(terms, index, "ur", "kur") + trailingPunctuation[index]);
+            continue;
+        }
+
+        if (string.Equals(terms[index], "in", StringComparison.OrdinalIgnoreCase))
+        {
+            translatedTerms.Add(leadingPunctuation[index] + TranslatePrepositionByNextWordSound(terms, index, "ik", "k'ik") + trailingPunctuation[index]);
             continue;
         }
 
         var translated = TranslateLongestPhrase(terms, index, out var consumedTerms);
-        translatedTerms.Add(translated + trailingPunctuation[index + consumedTerms - 1]);
+        translatedTerms.Add(leadingPunctuation[index] + translated + trailingPunctuation[index + consumedTerms - 1]);
         index += consumedTerms - 1;
     }
 
-    return string.Join(" ", translatedTerms);
+    return CapitalizeSentenceStarts(string.Join(" ", translatedTerms));
 }
 
 static string TranslateDefiniteArticle(IReadOnlyList<string> terms, int articleIndex)
@@ -61,6 +81,21 @@ static string TranslateDefiniteArticle(IReadOnlyList<string> terms, int articleI
 
     var nextTranslation = TranslateLongestPhrase(terms, articleIndex + 1, out _);
     return StartsWithOrcishVowel(nextTranslation) ? "karnt" : "arhk";
+}
+
+static string TranslatePrepositionByNextWordSound(
+    IReadOnlyList<string> terms,
+    int prepositionIndex,
+    string beforeConsonant,
+    string beforeVowel)
+{
+    if (prepositionIndex >= terms.Count - 1)
+    {
+        return beforeConsonant;
+    }
+
+    var nextTranslation = TranslateLongestPhrase(terms, prepositionIndex + 1, out _);
+    return StartsWithOrcishVowel(nextTranslation) ? beforeVowel : beforeConsonant;
 }
 
 static string TranslateLongestPhrase(IReadOnlyList<string> terms, int startIndex, out int consumedTerms)
@@ -156,6 +191,40 @@ static bool HasTag(IReadOnlyList<string>? tags, string tag)
         .Any(existingTag => string.Equals(existingTag, tag, StringComparison.OrdinalIgnoreCase));
 }
 
+static string CapitalizeSentenceStarts(string text)
+{
+    if (string.IsNullOrEmpty(text))
+    {
+        return text;
+    }
+
+    var builder = new StringBuilder(text.Length);
+    var capitalizeNextLetter = true;
+
+    foreach (var character in text)
+    {
+        if (capitalizeNextLetter && char.IsLetter(character))
+        {
+            builder.Append(char.ToUpperInvariant(character));
+            capitalizeNextLetter = false;
+            continue;
+        }
+
+        builder.Append(character);
+
+        if (character is '.' or '!' or '?')
+        {
+            capitalizeNextLetter = true;
+        }
+        else if (!char.IsWhiteSpace(character) && character is not '"' and not '\'' and not ')' and not ']')
+        {
+            capitalizeNextLetter = false;
+        }
+    }
+
+    return builder.ToString();
+}
+
 static bool StartsWithOrcishVowel(string value)
 {
     if (string.IsNullOrWhiteSpace(value))
@@ -193,6 +262,35 @@ static string JoinTerms(IReadOnlyList<string> terms, int startIndex, int termCou
     return builder.ToString();
 }
 
+static string StripLeadingPunctuation(ref string term)
+{
+    if (string.IsNullOrEmpty(term))
+    {
+        return string.Empty;
+    }
+
+    var wordStart = 0;
+    while (wordStart < term.Length)
+    {
+        var character = term[wordStart];
+        if (character is not '(' and not '[' and not '"' and not '\'')
+        {
+            break;
+        }
+
+        wordStart++;
+    }
+
+    if (wordStart == 0)
+    {
+        return string.Empty;
+    }
+
+    var punctuation = term[..wordStart];
+    term = term[wordStart..];
+    return punctuation;
+}
+
 static string StripTrailingPunctuation(ref string term)
 {
     if (string.IsNullOrEmpty(term))
@@ -204,7 +302,7 @@ static string StripTrailingPunctuation(ref string term)
     while (punctuationStart > 0)
     {
         var character = term[punctuationStart - 1];
-        if (character is not '.' and not '!' and not '?' and not ',' and not ';' and not ':')
+        if (character is not '.' and not '!' and not '?' and not ',' and not ';' and not ':' and not ')' and not ']' and not '"' and not '\'')
         {
             break;
         }
