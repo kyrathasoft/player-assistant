@@ -224,6 +224,7 @@ var tests = new (string Name, Action Test)[]
     ("party hero sheet parser reads summary and hides xp lines", PartyHeroSheetParserReadsSummaryAndHidesXpLines),
     ("party hero xp visibility follows authenticated character", PartyHeroXpVisibilityFollowsAuthenticatedCharacter),
     ("tagged note cipher decrypts for matching level tag", TaggedNoteCipherDecryptsForMatchingLevelTag),
+    ("tagged note cipher decrypts for matching character tag", TaggedNoteCipherDecryptsForMatchingCharacterTag),
     ("tagged note cipher rejects unmet class tag", TaggedNoteCipherRejectsUnmetClassTag),
     ("tagged note cipher accepts either-or ability tag", TaggedNoteCipherAcceptsEitherOrAbilityTag),
     ("tagged note cipher accepts bare class alternative", TaggedNoteCipherAcceptsBareClassAlternative),
@@ -5561,6 +5562,36 @@ static void TaggedNoteCipherDecryptsForMatchingLevelTag()
     AssertTrue(encrypted.StartsWith("{Level 8}", StringComparison.Ordinal), "encrypted note should preserve opening tags as plaintext");
     AssertTrue(encrypted.EndsWith("{Level 8}", StringComparison.Ordinal), "encrypted note should preserve closing tags as plaintext");
     AssertFalse(encrypted.Contains("The shrine door opens", StringComparison.Ordinal), "encrypted note should hide wrapped plaintext");
+}
+
+static void TaggedNoteCipherDecryptsForMatchingCharacterTag()
+{
+    var jelbHero = HeroAccessContext.FromPartyHeroSheet(new PartyHeroSheet(
+        Name: "Jelb Stonehand",
+        TokenImagePath: null,
+        Level: "3",
+        CharacterClass: "Fighter",
+        HitPoints: "20",
+        CharacterSheetText: "Name: Jelb Stonehand"));
+    var otherHero = HeroAccessContext.FromPartyHeroSheet(new PartyHeroSheet(
+        Name: "Kelpie Lawfuller",
+        TokenImagePath: null,
+        Level: "8",
+        CharacterClass: "Paladin",
+        HitPoints: "42",
+        CharacterSheetText: "Name: Kelpie Lawfuller"));
+    var encrypted = TaggedNoteCipherUtility.TransformTaggedText(
+        "{Character Jelb}sample text{Character Jelb}",
+        TaggedNoteCipherMode.Encrypt);
+
+    var decrypted = TaggedNoteCipherUtility.TransformTaggedText(
+        encrypted,
+        TaggedNoteCipherMode.Decrypt,
+        hero: jelbHero);
+
+    AssertEqual("{Character Jelb}sample text{Character Jelb}", decrypted, "matching character tag should decrypt note text");
+    AssertThrows<UnauthorizedAccessException>(
+        () => TaggedNoteCipherUtility.TransformTaggedText(encrypted, TaggedNoteCipherMode.Decrypt, hero: otherHero));
 }
 
 static void TaggedNoteCipherRejectsUnmetClassTag()

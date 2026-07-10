@@ -12,6 +12,19 @@
 - [x] Add an Inno Setup installer that installs to Program Files and guides users to the .NET Desktop Runtime 10 x64 download when the required runtime is missing.
 - [x] Switch publish output to framework-dependent multi-file now that the Inno installer checks for the .NET Desktop Runtime.
 
+## Player-facing features completed in this session
+
+- [x] Added `TransformTaggedText()` to encrypt and decrypt visible tag-enclosed markdown text while leaving access tags readable.
+- [x] Added support for complex tag expressions such as grouped `&&` requirements and either-or alternatives.
+- [x] Added encrypted markdown block validation so mismatched opening and closing tags return a clear unable-to-decrypt message.
+- [x] Added `EncryptedTextReport()` to fetch Obsidian markdown from a URL and count valid encrypted blocks and mismatched encrypted blocks.
+- [x] Added encrypted-text indexing for Obsidian sitemap URLs, including encrypted block counts and YAML frontmatter tags.
+- [x] Updated search results so URLs known to contain encrypted text display in all caps while still opening the original URL.
+- [x] Updated online Obsidian fallback search results so URLs found only by live wiki search display in all caps.
+- [x] Added keyword-index backfill so live wiki search hits for previously missing search terms are written to `keyword-index.json`.
+- [x] Allowed the Northern Reaches regional map image URL and narrowed certificate pinning so non-update `bryanmiller.us` content is not treated as update-channel traffic.
+- [x] Added a status-bar activity animation that appears while tracked asynchronous app tasks are running.
+
 ## Hardening completed in this session
 
 - [x] Added centralized startup exception/log wrappers around required and optional startup phases.

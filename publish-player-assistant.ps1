@@ -54,7 +54,8 @@ $ForbiddenPublishFileNames = @(
     'startup-health.json',
     'outbound-network-diagnostics.json',
     'last-crash.json',
-    'startup-remediation.txt'
+    'startup-remediation.txt',
+    'used-for-orcish-translation-candidates.md'
 )
 $ForbiddenPublishDirectoryNames = @(
     'temp'

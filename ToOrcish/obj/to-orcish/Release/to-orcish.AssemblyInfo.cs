@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("to-orcish")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Release")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+5a53695c14a678d1588ceb749e091be88233e886")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+53266d67ced8238966027ef13288678be5ff8c64")]
 [assembly: System.Reflection.AssemblyProductAttribute("to-orcish")]
 [assembly: System.Reflection.AssemblyTitleAttribute("to-orcish")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]
