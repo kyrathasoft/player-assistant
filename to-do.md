@@ -1,0 +1,177 @@
+- [ ] Resume Orcish invalid retranslation review.
+  - Workflow: `codex-scratch\orcish-retranslation-review\review-workflow.md`
+  - Review TSV: `codex-scratch\orcish-retranslation-review\retranslated-invalid-orcish-review.tsv`
+  - Summary: `codex-scratch\orcish-retranslation-review\summary.txt`
+  - Lexicon source: `OrcishTranslatorUtility.cs`
+  - Count test: `PlayerAssistant.Tests\Program.cs`
+  - Current review TSV start: `actresses`
+  - Current remaining review count: `13,841`
+  - Current next 10 for review: `actresses`, `actual`, `actual-play`, `actually`, `acute`, `ad`, `adam`, `adam's`, `adams`, `adapt`
+  - Process: show next 10 rows, apply user approvals/drops, collision-check approved Orcish forms, patch lexicon entries, remove all reviewed rows from TSV, update summary, adjust count test only if entries are dropped, run Release builds and focused `to-orcish` verification, then refresh graphify.
+- [x] code app feature to search online vault by using the JSON library file 'sitemap-keyword-urls.json'
+- [x] add menu item to display the regional map
+- [x] build method GetSearchTerms() to extract search terms when btnSearch is clicked
+- [x] string[] SearchTerms should accept the output of method GetSearchTerms()
+- [x] code a method that, given a search term, will return a list of URLs from the JSON library file 'sitemap-keyword-urls.json' that match the search term
+- [x] add terms from Locations index (on obisidian wiki) to game-posts-key-terms.md
+- [x] Store the XP Tracking URL in encrypted local settings and add a parser/fetch helper for current PC XP totals.
+- [x] Add `Show > XP` with encrypted per-PC password sidecar validation before displaying a character's XP date and total.
+- [x] Allow the Dungeon Master XP credential to display dates and XP totals for all PCs.
+- [x] Show player-safe XP Tracking failure messages that hide the unlisted URL and direct users to contact the DM.
+- [x] Add a polished installer package workflow for `0.9.1-hardening.1` targeting `C:\Program Files\kyrathasoft\player-assistant`.
+- [x] Add an Inno Setup installer that installs to Program Files and guides users to the .NET Desktop Runtime 10 x64 download when the required runtime is missing.
+- [x] Switch publish output to framework-dependent multi-file now that the Inno installer checks for the .NET Desktop Runtime.
+
+## Player-facing features completed in this session
+
+- [x] Added `TransformTaggedText()` to encrypt and decrypt visible tag-enclosed markdown text while leaving access tags readable.
+- [x] Added support for complex tag expressions such as grouped `&&` requirements and either-or alternatives.
+- [x] Added encrypted markdown block validation so mismatched opening and closing tags return a clear unable-to-decrypt message.
+- [x] Added `EncryptedTextReport()` to fetch Obsidian markdown from a URL and count valid encrypted blocks and mismatched encrypted blocks.
+- [x] Added encrypted-text indexing for Obsidian sitemap URLs, including encrypted block counts and YAML frontmatter tags.
+- [x] Updated search results so URLs known to contain encrypted text display in all caps while still opening the original URL.
+- [x] Updated online Obsidian fallback search results so URLs found only by live wiki search display in all caps.
+- [x] Added keyword-index backfill so live wiki search hits for previously missing search terms are written to `keyword-index.json`.
+- [x] Allowed the Northern Reaches regional map image URL and narrowed certificate pinning so non-update `bryanmiller.us` content is not treated as update-channel traffic.
+- [x] Added a status-bar activity animation that appears while tracked asynchronous app tasks are running.
+
+## Hardening completed in this session
+
+- [x] Added centralized startup exception/log wrappers around required and optional startup phases.
+- [x] Converted settings load, player-character refresh, regional-map preload, configuration validation, and runtime housekeeping into logged startup phases.
+- [x] Added background-task supervision for startup work so duplicate phases are suppressed, cancellation is coordinated, and failures are logged.
+- [x] Added retry/timeout handling for network requests and preserved caller cancellation behavior.
+- [x] Added atomic file writes and replacement retry handling for runtime artifacts such as keyword indexes and generated sidecars.
+- [x] Added malformed runtime-artifact quarantine handling for JSON/text loads, including keyword index, login info, and asset manifest paths.
+- [x] Added startup configuration validation for required settings, optional RPOL credentials, and runtime sidecar warnings.
+- [x] Hardened UI operation failures with centralized status/log/dialog reporting.
+- [x] Hardened RPOL authentication failure caching and logging to avoid repeated noisy failures.
+- [x] Hardened publish verification to reject diagnostic/runtime leak artifacts such as stale startup logs, temp folders, debug symbols, plaintext credentials, and browser auth state.
+- [x] Added runtime housekeeping to remove stale temp files, orphaned atomic temp files, and old quarantined JSON files while rotating oversized startup logs.
+- [x] Added focused regression tests for the above hardening paths in the Release test harness.
+- [x] Added startup dependency failure-matrix coverage for bad config, missing/empty sidecars, corrupt optional local settings, locked runtime artifacts, keyword-index recovery, and terminal network failures.
+- [x] Hardened RPOL authenticated-fetch failure classification for missing credentials, rejected login, expired auth state, RPOL blocking/rate limits, Playwright unavailability, and transient remote outages.
+- [x] Added `startup-health.json` to record structured startup phase status, elapsed time, download counts, failure counts, and last exception summaries while keeping the diagnostic artifact out of publish output.
+- [x] Expanded publish verification to parse and validate published `settings.json`, encrypted `settings.local.json`, keyword-index sidecars, keyword terms, `sitemap.xml`, and required Playwright runtime internals.
+- [x] Added and ran a controlled Release startup smoke verification script that backs up selected runtime artifacts, launches `Release\player-assistant.exe --suppress-hero-images`, validates fresh `startup-health.json` phases, and restores prior artifacts.
+- [x] Added release identity hardening with `0.9.1-hardening.1` project metadata, a `/version`/`--version` command path, executable version verification during publish checks, and regression coverage for version metadata.
+- [x] Ran the full release rehearsal: Release build, publish, publish verification tests, Release startup smoke, published-folder startup smoke, and executable version checks for both output folders.
+- [x] Hardened keyword terms startup handling so running from `Release\publish` no longer deletes the parent `Release\game-posts-key-terms.md` runtime artifact.
+
+## Next hardening tasks
+
+- [x] Add transactional RPOL thread export that writes to a temporary sibling folder, validates the manifest, and swaps into place without deleting the last good export first.
+- [x] Add a shared diagnostic redaction utility used consistently by crash diagnostics, startup health, startup logs, and diagnostic bundle verification paths.
+- [x] Add an RC commit/tag checklist script that verifies clean intended diffs, runs the focused hardening tests, confirms both executable versions, and prints the exact `v0.9.1-hardening.1-rc1` tagging commands without mutating Git state.
+- [x] Add a published-folder runtime integrity check that verifies no startup run from `Release\publish` modifies or deletes parent `Release` artifacts, using before/after file manifests for tracked runtime files.
+- [x] Add a diagnostic bundle script that collects `startup-health.json`, `startup-errors.log`, version metadata, publish verification output, and smoke verification output into a redacted timestamped zip for troubleshooting.
+- [x] Add focused regression coverage for diagnostic bundle redaction, encrypted local-settings summarization, expected zip contents, and forbidden auth-state rejection.
+- [x] Add `collect-diagnostics.ps1 -VerifyOnly` to inspect an existing diagnostics zip for forbidden auth-state files and unredacted credential markers.
+- [x] Broaden diagnostics redaction for bearer tokens, cookie headers, credentialed URLs, and password/token/secret query values.
+- [x] Add diagnostics bundle generation and verification to the RC checklist.
+- [x] Add process-lock diagnostics for build/publish troubleshooting so running `player-assistant.exe` process paths and PIDs are reported after publish failure.
+- [x] Validate `rpol-storage-state.json` before Playwright uses it, deleting stale, malformed, or non-RPOL auth state so authenticated fetches start from a clean login path.
+- [x] Add retention limits for diagnostics, quarantines, and old scratch folders.
+- [x] Add `startup-health.json` schema/versioning.
+- [x] Add crash-path diagnostic capture like `last-crash.json`.
+- [x] Add Release/publish parity checks.
+- [x] Add config repair guidance for startup validation failures.
+- [x] Add a network/auth circuit breaker for repeated terminal failures.
+- [x] Add a release integrity hash manifest.
+
+## Follow-up hardening backlog
+
+- [x] Add secret scanning to the RC checklist for tracked files and reachable history.
+- [x] Add a dependency/runtime version inventory to publish output and diagnostics.
+- [x] Strengthen `settings.local.json` key separation with a per-machine or per-install derivation path.
+- [x] Add network allowlist validation for configured and fetched RPOL/Obsidian URLs.
+- [x] Add RC checklist self-tests for secret scan, health failure, manifest mismatch, and expected-path handling.
+
+## Additional hardening backlog
+
+- [x] Add signed release provenance with commit, tag, manifest, runtime inventory, script hash, and executable signature metadata.
+- [x] Add config/schema versioning for `settings.json` and `settings.local.json`.
+  - [x] Add `schema_version: 1` metadata to checked-in `settings.json`.
+  - [x] Treat missing schema versions as legacy-compatible version `0`.
+  - [x] Reject invalid or future schema versions in app startup settings load.
+  - [x] Emit `schema_version: 1` for encrypted `settings.local.json` envelopes.
+  - [x] Migrate legacy/plaintext local settings to the current encrypted schema envelope.
+  - [x] Validate config schema versions during publish verification.
+  - [x] Include local-settings schema metadata in diagnostic bundle shape output.
+  - [x] Add focused regression tests for current/future settings schemas, local settings schemas, publish verification, and diagnostics.
+
+## Future hardening implementation tasks
+
+- [x] Add network response content limits for HTML, markdown, JSON cache, and image downloads.
+  - [x] Define per-content-type maximum byte limits and sensible defaults.
+  - [x] Enforce limits while streaming HTTP responses instead of after full buffering.
+  - [x] Apply limits to RPOL HTML fetches, Obsidian markdown fetches, keyword/sitemap JSON cache downloads, and hero/image downloads.
+  - [x] Preserve last known good files by failing bounded downloads before atomic promotion.
+  - [x] Add tests for oversized HTML, markdown, JSON, and image responses.
+- [x] Validate sitemap and keyword-index URL entries against the network allowlist before storing them.
+  - [x] Validate every sitemap URL before writing `sitemap.xml`.
+  - [x] Validate keyword-index URL lists before writing `sitemap-keyword-urls.json` or `keyword-index.json`.
+  - [x] Reject credentialed URLs, non-HTTP(S) schemes, escaped hosts, and non-allowlisted RPOL/Obsidian hosts.
+  - [x] Preserve the previous good index when fetched data contains rejected URLs.
+  - [x] Add regression coverage for poisoned sitemap and keyword-index entries.
+- [x] Add a full RC dry-run mode that writes a structured JSON summary and exits nonzero on any failure.
+  - [x] Add a `-DryRunJson` or equivalent mode to the RC checklist script.
+  - [x] Capture each checklist step with status, elapsed time, command, artifact paths, and failure summary.
+  - [x] Exit nonzero when any required check fails while still writing the summary file.
+  - [x] Add tests for passing and failing dry-run summaries.
+- [x] Add dependency freshness and vulnerability checks to the RC checklist.
+  - [x] Inventory NuGet package versions, .NET SDK/runtime version, Playwright package/browser versions, and bundled Node runtime versions.
+  - [x] Run `dotnet list package --vulnerable` or equivalent vulnerability checks during RC verification.
+  - [x] Record dependency check results in diagnostics and RC dry-run JSON output.
+  - [x] Add self-tests or fixture tests that prove stale/vulnerable dependency output fails the RC checklist.
+
+## Remaining hardening backlog
+
+- [x] Add release code-signing enforcement and Authenticode verification to publish verification, installer builds, and the RC checklist.
+  - [x] Fail RC verification when the release executable or installer is unsigned or signed with an unexpected certificate subject/thumbprint.
+  - [x] Record signature metadata in release provenance and diagnostics.
+- [x] Add installer/runtime sidecar ACL validation.
+  - [x] Verify encrypted runtime sidecars are installed read-only for normal users where appropriate.
+  - [x] Verify writable runtime directories live under the approved per-user or ProgramData fallback locations.
+  - [x] Add installer verification that rejects missing encrypted XP/settings sidecars.
+- [x] Add automated dependency freshness policy checks beyond vulnerability scanning.
+  - [x] Compare NuGet and Playwright versions against the latest available package metadata.
+  - [x] Warn or fail RC verification when dependencies exceed an approved age threshold.
+  - [x] Record stale dependency findings in dependency inventory JSON.
+- [x] Add authenticated-source tamper detection for fetched Obsidian/RPOL content.
+  - [x] Persist source hashes for last-known-good downloaded markdown, sitemap, keyword, and RPOL export inputs.
+  - [x] Detect unexpected structural changes and show player-safe recovery guidance.
+  - [x] Keep previous good content available when newly fetched content fails integrity or shape checks.
+- [x] Add backup/restore hardening for user-writable runtime data.
+  - [x] Create bounded rotating backups before modifying user settings, indexes, exports, and encrypted sidecars.
+  - [x] Add startup recovery that can restore the newest valid backup after corruption or interrupted writes.
+  - [x] Add focused tests for backup selection, rollback, and retention limits.
+- [x] Add CI/release pipeline enforcement for the local hardening scripts.
+  - [x] Run publish verification, RC self-tests, secret scan, dependency checks, and diagnostics verification in CI.
+  - [x] Upload redacted verification artifacts for failed CI runs.
+  - [x] Block release tags unless the RC checklist passes.
+- [x] Harden the update channel with a signed JSON manifest, pinned public-key verification, update SHA256 metadata, and tests that reject tampered manifests before offering downloads.
+
+## Post-backlog hardening candidates
+
+- [x] Add a verified in-app updater that downloads the installer to a controlled temp location, verifies its SHA256 against the signed update manifest, verifies its Authenticode signer against the current release certificate policy, and only then offers execution.
+- [x] Add certificate pinning or equivalent transport trust hardening for the update host beyond the current allowlist and HTTPS validation.
+- [x] Move update and RPOL-sensitive runtime secrets out of app-adjacent sidecars into a Windows-backed secret store such as Credential Manager.
+- [x] Add anti-downgrade tracking so the updater refuses older-but-valid signed releases after a newer trusted version has been observed.
+- [x] Add revocation and rotation handling for update trust material.
+  - [x] Support pinned-certificate rotation windows.
+  - [x] Support update-signing key rotation and explicit revocation.
+  - [x] Fail closed if a manifest is signed by a retired key.
+- [x] Protect the anti-downgrade trusted-version floor and related updater state against tampering, not just corruption.
+- [x] Re-verify the installer immediately before execution and refuse launch if path, signer, or elevation context changes after initial verification.
+- [x] Produce and verify release installer artifacts in CI, including filename/version/signature/hash checks against the signed manifest.
+- [x] Further minimize outbound network trust by centralizing per-purpose host/path allowlists and auditing every allowed endpoint.
+- [x] Add end-to-end CI verification that exercises the hosted settings.local.json fetch/decrypt path against a controlled fixture server.
+
+## New backlog
+
+- [x] Add negative-path CI coverage for hosted settings fetch/decrypt failures, including tampered envelopes, plaintext JSON, oversized payloads, and unreachable fixture-server responses.
+- [x] Add signed metadata for hosted settings so the app verifies content identity and version, not just transport and URL allowlist membership.
+- [x] Reduce plaintext secret lifetime in memory for decrypted hosted settings and RPOL credentials where practical.
+- [x] Add runtime diagnostics for outbound allowlisted requests, recording per-purpose endpoint usage and failure counts without logging secret-bearing values.
+- [x] Add a clean-machine installer smoke path in CI that verifies first launch, hosted settings download, credential migration, and updater preflight behavior after install.
