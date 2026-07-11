@@ -55,6 +55,7 @@ var tests = new (string Name, Action Test)[]
     ("orcish translator supports heraldic stranger equipment vocabulary", OrcishTranslatorSupportsHeraldicStrangerEquipmentVocabulary),
     ("orcish translator exposes unique english term count", OrcishTranslatorExposesUniqueEnglishTermCount),
     ("to-orcish translates terms before trailing punctuation", ToOrcishTranslatesTermsBeforeTrailingPunctuation),
+    ("to-orcish translates dotted abbreviation terms", ToOrcishTranslatesDottedAbbreviationTerms),
     ("to-orcish translates terms inside parentheses", ToOrcishTranslatesTermsInsideParentheses),
     ("to-orcish translates terms inside quotes", ToOrcishTranslatesTermsInsideQuotes),
     ("to-orcish translates words after newlines", ToOrcishTranslatesWordsAfterNewlines),
@@ -835,7 +836,7 @@ static void OrcishTranslatorExposesUniqueEnglishTermCount()
 {
     var terms = OrcishTranslatorUtility.GetEnglishTerms();
 
-    AssertEqual(16748, OrcishTranslatorUtility.GetEnglishTermCount(), "unexpected total English term count");
+    AssertEqual(16749, OrcishTranslatorUtility.GetEnglishTermCount(), "unexpected total English term count");
     AssertEqual(OrcishTranslatorUtility.GetEnglishTermCount(), terms.Count, "term list and count should agree");
     AssertEqual(1, terms.Count(term => string.Equals(term, "I", StringComparison.OrdinalIgnoreCase)), "I should be counted once despite multiple variants");
     AssertEqual(1, terms.Count(term => string.Equals(term, "really", StringComparison.OrdinalIgnoreCase)), "really should be counted once despite multiple variants");
@@ -849,6 +850,14 @@ static void ToOrcishTranslatesTermsBeforeTrailingPunctuation()
 
     AssertEqual(0, result.ExitCode, "to-orcish should exit successfully");
     AssertEqual("Narguk,", result.Output.Trim(), "expected yours to translate before comma restoration");
+}
+
+static void ToOrcishTranslatesDottedAbbreviationTerms()
+{
+    var result = RunToOrcish("p.m.");
+
+    AssertEqual(0, result.ExitCode, "to-orcish should exit successfully");
+    AssertEqual("Exenda", result.Output.Trim(), "expected dotted abbreviation to translate before punctuation stripping");
 }
 
 static void ToOrcishTranslatesTermsInsideParentheses()

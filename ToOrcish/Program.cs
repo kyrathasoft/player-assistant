@@ -298,6 +298,12 @@ static string StripTrailingPunctuation(ref string term)
         return string.Empty;
     }
 
+    if (term.Contains('.', StringComparison.Ordinal)
+        && OrcishTranslatorUtility.TranslateEnglishToOrcish(term).Count > 0)
+    {
+        return string.Empty;
+    }
+
     var punctuationStart = term.Length;
     while (punctuationStart > 0)
     {
