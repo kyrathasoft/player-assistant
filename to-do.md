@@ -4,9 +4,9 @@
   - Summary: `codex-scratch\orcish-retranslation-review\summary.txt`
   - Lexicon source: `OrcishTranslatorUtility.cs`
   - Count test: `PlayerAssistant.Tests\Program.cs`
-  - Current review TSV start: `actresses`
-  - Current remaining review count: `13,841`
-  - Current next 10 for review: `actresses`, `actual`, `actual-play`, `actually`, `acute`, `ad`, `adam`, `adam's`, `adams`, `adapt`
+  - Current review TSV start: `adventurer`
+  - Current remaining review count: `13,751`
+  - Current next 10 for review: `adventurer`, `advertising`, `advocate`, `aegis`, `afar`, `affect`, `affecting`, `affection`, `affectionate`, `affects`
   - Process: show next 10 rows, apply user approvals/drops, collision-check approved Orcish forms, patch lexicon entries, remove all reviewed rows from TSV, update summary, adjust count test only if entries are dropped, run Release builds and focused `to-orcish` verification, then refresh graphify.
 - [x] code app feature to search online vault by using the JSON library file 'sitemap-keyword-urls.json'
 - [x] add menu item to display the regional map
