@@ -19,13 +19,14 @@
   - Current remaining review count: `0`
   - Current next 10 for review: none
   - Process: show next 10 rows, apply user approvals/drops, collision-check approved Orcish forms, patch lexicon entries, remove all reviewed rows from TSV, update summary, adjust count test only if entries are dropped, run Release builds and focused `to-orcish` verification, then refresh graphify.
-- [ ] Run Orcish weak-signal core audit.
+- [x] Run Orcish weak-signal core audit.
   - Audit TSV: `codex-scratch\orcish-retranslation-review\weak-signal-core-audit.tsv`
   - Scope: review remaining core non-generated lexicon entries before later generated/promoted derived families.
   - Target weak mechanically disambiguated compounds such as `men`, `weak humans`, `superior children of Gruumsh`, `free human`, `thinker`, `traveller`, `wizard`, `warrior`, `cleric`, `days`, `day’s`, `family`, `authority`, `expression`, `home`, `folly`, `tavern`, `sight`, `guard duty`, and `economy`.
   - Target direct proper-name/exonym entries and decide whether each should remain as intentional lore/name pass-through vocabulary or be culled as noise.
   - Classify each candidate as `repair-root`, `drop`, `keep-exonym`, or `keep-lore-term`.
   - For repairs, prefer meaning-bearing root compounds; collision-check before patching; update dependent derived forms; verify representative terms with Release `to-orcish`; refresh graphify after source changes.
+  - Completed audit decisions: 68 root repairs, 18 kept exonyms, 2 kept lore terms.
 - [ ] Propagate repaired Orcish roots through derived families.
   - After weak-signal repairs, update dependent plural, possessive, progressive, past, present, and related derived entries so no stale weak root remains beside a repaired base term.
 - [ ] Audit generated and review-promoted derived Orcish entries.

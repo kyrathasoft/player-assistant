@@ -742,7 +742,7 @@ static void OrcishTranslatorSupportsMorganTavernObservationVocabulary()
     AssertEqual("thrak-thog-ti", OrcishTranslatorUtility.TranslateEnglishToOrcish("high quality", partOfSpeech: "noun", requiredTags: ["high"])[0].Translation, "unexpected high quality translation");
     AssertEqual("dug-agh-ash bantin", OrcishTranslatorUtility.TranslateEnglishToOrcish("triple braided", partOfSpeech: "adjective", requiredTags: ["braided"])[0].Translation, "unexpected triple braided translation");
     AssertEqual("darg-ti-mog", OrcishTranslatorUtility.TranslateEnglishToOrcish("noble", partOfSpeech: "noun", requiredTags: ["noble"])[0].Translation, "unexpected noble translation");
-    AssertEqual("dargin mokh", OrcishTranslatorUtility.TranslateEnglishToOrcish("ruling family", partOfSpeech: "noun", requiredTags: ["ruling"])[0].Translation, "unexpected ruling family translation");
+    AssertEqual("dargin mokh-zog", OrcishTranslatorUtility.TranslateEnglishToOrcish("ruling family", partOfSpeech: "noun", requiredTags: ["ruling"])[0].Translation, "unexpected ruling family translation");
 }
 
 static void OrcishTranslatorTreatsDwarfOnlyAsDwarvenRace()
