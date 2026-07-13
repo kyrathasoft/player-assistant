@@ -661,6 +661,7 @@ static void OrcishTranslatorSupportsKirklistonEconomyVocabulary()
     AssertEqual("rukh-mauk", OrcishTranslatorUtility.TranslateEnglishToOrcish("mead", partOfSpeech: "noun", requiredTags: ["fermented"])[0].Translation, "unexpected mead translation");
     AssertEqual("gruul-hek hekin-var", OrcishTranslatorUtility.TranslateEnglishToOrcish("lumber production", partOfSpeech: "noun", requiredTags: ["wood"])[0].Translation, "unexpected lumber production translation");
     AssertEqual("hrogar-lag", OrcishTranslatorUtility.TranslateEnglishToOrcish("caravan route", partOfSpeech: "noun", requiredTags: ["transport"])[0].Translation, "unexpected caravan route translation");
+    AssertEqual("mokh", OrcishTranslatorUtility.TranslateEnglishToOrcish("company", partOfSpeech: "noun", requiredTags: ["trade"])[0].Translation, "unexpected company translation");
     AssertEqual("dravur dok", OrcishTranslatorUtility.TranslateEnglishToOrcish("benefits from", partOfSpeech: "verb", requiredTags: ["advantage"])[0].Translation, "unexpected benefits from translation");
     AssertEqual("mokru-thogi", OrcishTranslatorUtility.TranslateEnglishToOrcish("interactions", partOfSpeech: "noun", requiredTags: ["contact"])[0].Translation, "unexpected interactions translation");
     AssertEqual("draviki", OrcishTranslatorUtility.TranslateEnglishToOrcish("merchants", partOfSpeech: "noun", requiredTags: ["trade"])[0].Translation, "unexpected merchants translation");
