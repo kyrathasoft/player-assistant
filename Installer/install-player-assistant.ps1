@@ -10,7 +10,7 @@ $ErrorActionPreference = 'Stop'
 
 $AppName = 'Player Assistant'
 $Publisher = 'KyrathaSoft'
-$Version = '0.9.3'
+$Version = '0.9.4'
 $ExecutableName = 'player-assistant.exe'
 $UninstallKeyPath = 'HKLM:\Software\Microsoft\Windows\CurrentVersion\Uninstall\KyrathaSoft Player Assistant'
 $EncryptedSidecarFileNames = @(

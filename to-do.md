@@ -221,7 +221,7 @@
   - Status: completed after restoring `settings.local.json` from the local installer payload.
 - [x] Continue refining `Show > Adventure Outline` summary quality so generated bullets are consistently specific, player-facing scene updates rather than generic fallback phrases.
   - Status: completed a fallback-summary refinement pass that keeps unknown posts tied to concrete campaign details such as Red Tusk, the Deep Friends, Raven's Pass, caravan cargo, Jelenneth, Nuanda, or Blightstone Pit instead of generic conversation/location summaries.
-  - Rehearsal findings: clean Release rebuild passes and refreshes executable metadata to 0.9.3; publish verification passes; Release startup smoke passes; Release/publish parity passes; published health passes; published-folder runtime integrity passes.
+  - Rehearsal findings: clean Release rebuild passes and refreshes executable metadata to 0.9.4; publish verification passes; Release startup smoke passes; Release/publish parity passes; published health passes; published-folder runtime integrity passes.
   - RC checklist passes with code-signing skipped; signing remains a separate release-material prerequisite.
 - [x] Audit tracked generated artifacts, especially `keyword-index.json`, and define the update policy.
   - Status: completed.

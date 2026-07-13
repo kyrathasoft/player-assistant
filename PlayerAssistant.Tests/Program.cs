@@ -1862,9 +1862,9 @@ static void ApplicationVersionMetadataMatchesHardeningRelease()
         .InformationalVersion;
     var fileVersion = FileVersionInfo.GetVersionInfo(assembly.Location).FileVersion;
 
-    AssertEqual(new Version(0, 9, 3, 0), name.Version!, "unexpected assembly version");
-    AssertEqual("0.9.3.0", fileVersion!, "unexpected file version");
-    AssertEqual("0.9.3", informationalVersion, "unexpected informational version");
+    AssertEqual(new Version(0, 9, 4, 0), name.Version!, "unexpected assembly version");
+    AssertEqual("0.9.4.0", fileVersion!, "unexpected file version");
+    AssertEqual("0.9.4", informationalVersion, "unexpected informational version");
 }
 
 static void ApplicationVersionArgumentReturnsVersionText()
@@ -1885,7 +1885,7 @@ static void ApplicationVersionArgumentReturnsVersionText()
     var versionText = (string?)InvokeStaticMethod(programType, "GetVersionText")
         ?? throw new InvalidOperationException("GetVersionText returned null.");
     AssertContains(versionText, "player-assistant");
-    AssertContains(versionText, "0.9.3");
+    AssertContains(versionText, "0.9.4");
 }
 
 static void StartupManifestStatusDistinguishesSkippedAndFailed()
@@ -4856,7 +4856,7 @@ static void AboutVersionTextShowsAppVersion()
 {
     var versionText = (string)(InvokeStaticMethod(typeof(Form1), "GetAppVersionText")
         ?? throw new InvalidOperationException("GetAppVersionText returned null."));
-    AssertEqual("RPOL Scarlet Horizon Campaign Assistant 0.9.3", versionText, "unexpected About Version text");
+    AssertEqual("RPOL Scarlet Horizon Campaign Assistant 0.9.4", versionText, "unexpected About Version text");
 }
 
 static void UpdateCheckVerifiesSignedPAssistManifest()
@@ -7480,8 +7480,8 @@ static void HardeningWorkflowBuildsAndUploadsSignedReleaseUpdateArtifacts()
     AssertContains(workflow, "p-assist-updates.json");
     AssertContains(workflow, "p-assist-updates.json.sig");
     AssertContains(workflow, "p-assist-updates.public-key.xml");
-    AssertContains(workflow, "p-assist-0.9.3.zip");
-    AssertContains(workflow, "p-assist-0.9.3.exe");
+    AssertContains(workflow, "p-assist-0.9.4.zip");
+    AssertContains(workflow, "p-assist-0.9.4.exe");
     AssertContains(workflow, "Build Release test harness");
     AssertContains(workflow, "Verify hosted settings fetch and decrypt path");
     AssertContains(workflow, "app settings loads hosted encrypted xp tracking url from fixture server");

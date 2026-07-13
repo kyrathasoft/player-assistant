@@ -1,6 +1,6 @@
 param(
-    [string]$PackagePath = (Join-Path $PSScriptRoot 'Release\installer\player-assistant-0.9.3-installer.zip'),
-    [string]$ExpectedVersion = '0.9.3',
+    [string]$PackagePath = (Join-Path $PSScriptRoot 'Release\installer\player-assistant-0.9.4-installer.zip'),
+    [string]$ExpectedVersion = '0.9.4',
     [string]$ExpectedSignerSubject = $env:PLAYER_ASSISTANT_RELEASE_SIGNER_SUBJECT,
     [string]$ExpectedSignerThumbprint = $env:PLAYER_ASSISTANT_RELEASE_SIGNER_THUMBPRINT,
     [switch]$RequireCodeSigning

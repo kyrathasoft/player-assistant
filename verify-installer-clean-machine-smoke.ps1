@@ -1,6 +1,6 @@
 param(
-    [string]$PackagePath = (Join-Path $PSScriptRoot 'Release\installer\player-assistant-0.9.3-installer.zip'),
-    [string]$UpdateVersion = '0.9.3',
+    [string]$PackagePath = (Join-Path $PSScriptRoot 'Release\installer\player-assistant-0.9.4-installer.zip'),
+    [string]$UpdateVersion = '0.9.4',
     [int]$TimeoutSeconds = 60
 )
 

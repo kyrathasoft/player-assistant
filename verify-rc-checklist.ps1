@@ -1,7 +1,7 @@
 param(
     [string]$ReleaseDir = (Join-Path $PSScriptRoot 'Release'),
     [string]$PublishDir = (Join-Path $PSScriptRoot 'Release\publish'),
-    [string]$RcTag = 'v0.9.3-rc1',
+    [string]$RcTag = 'v0.9.4-rc1',
     [string[]]$ExpectedChangedPath = @(),
     [string[]]$TestFilter = @(
         'application version',
