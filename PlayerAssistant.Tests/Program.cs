@@ -53,6 +53,12 @@ var tests = new (string Name, Action Test)[]
     ("orcish translator supports Kelpie road and inn vocabulary", OrcishTranslatorSupportsKelpieRoadAndInnVocabulary),
     ("orcish translator supports Kelpie fellowship prayer vocabulary", OrcishTranslatorSupportsKelpieFellowshipPrayerVocabulary),
     ("orcish translator supports heraldic stranger equipment vocabulary", OrcishTranslatorSupportsHeraldicStrangerEquipmentVocabulary),
+    ("orcish translator propagates repaired roots through derived families", OrcishTranslatorPropagatesRepairedRootsThroughDerivedFamilies),
+    ("orcish translator audits review-promoted derived families", OrcishTranslatorAuditsReviewPromotedDerivedFamilies),
+    ("orcish translator shortens mechanically lengthened forms", OrcishTranslatorShortensMechanicallyLengthenedForms),
+    ("orcish translator derives predictable morphology by rule", OrcishTranslatorDerivesPredictableMorphologyByRule),
+    ("orcish translator culls low value exonym pass throughs", OrcishTranslatorCullsLowValueExonymPassThroughs),
+    ("orcish translator enforces lexicon quality invariants", OrcishTranslatorEnforcesLexiconQualityInvariants),
     ("orcish translator exposes unique english term count", OrcishTranslatorExposesUniqueEnglishTermCount),
     ("to-orcish translates terms before trailing punctuation", ToOrcishTranslatesTermsBeforeTrailingPunctuation),
     ("to-orcish translates dotted abbreviation terms", ToOrcishTranslatesDottedAbbreviationTerms),
@@ -832,11 +838,162 @@ static void OrcishTranslatorSupportsHeraldicStrangerEquipmentVocabulary()
     AssertEqual("ut-dakur ur", OrcishTranslatorUtility.TranslateEnglishToOrcish("then to", partOfSpeech: "adverb", requiredTags: ["then"])[0].Translation, "unexpected then to translation");
 }
 
+static void OrcishTranslatorPropagatesRepairedRootsThroughDerivedFamilies()
+{
+    AssertEqual("dakur-hrowkuk gash-lag", OrcishTranslatorUtility.TranslateEnglishToOrcish("day's march", partOfSpeech: "noun", requiredTags: ["root-repaired"])[0].Translation, "unexpected repaired day's march translation");
+    AssertEqual("ut-dravku", OrcishTranslatorUtility.TranslateEnglishToOrcish("retake", partOfSpeech: "verb", requiredTags: ["reclaim", "root-repaired"])[0].Translation, "unexpected repaired retake translation");
+    AssertEqual("mokrai", OrcishTranslatorUtility.TranslateEnglishToOrcish("allies", partOfSpeech: "noun", requiredTags: ["base-ally", "plural", "root-repaired"])[0].Translation, "unexpected repaired allies translation");
+    AssertEqual("mokh-zogi", OrcishTranslatorUtility.TranslateEnglishToOrcish("families", partOfSpeech: "noun", requiredTags: ["base-family", "plural", "root-repaired"])[0].Translation, "unexpected repaired families translation");
+    AssertEqual("noglar-grak", OrcishTranslatorUtility.TranslateEnglishToOrcish("secretly", partOfSpeech: "adverb", requiredTags: ["base-secret", "root-repaired"])[0].Translation, "unexpected repaired secretly translation");
+    AssertEqual("darg-dakuk", OrcishTranslatorUtility.TranslateEnglishToOrcish("station's", partOfSpeech: "noun", requiredTags: ["base-station", "possessive", "root-repaired"])[0].Translation, "unexpected repaired station possessive translation");
+    AssertEqual("darg-daki", OrcishTranslatorUtility.TranslateEnglishToOrcish("stations", partOfSpeech: "noun", requiredTags: ["base-station", "s-form", "root-repaired"])[0].Translation, "unexpected repaired stations translation");
+    AssertEqual("kelnib-in", OrcishTranslatorUtility.TranslateEnglishToOrcish("paling", partOfSpeech: "verb", requiredTags: ["base-pale", "progressive", "root-repaired"])[0].Translation, "unexpected repaired paling translation");
+    AssertEqual("darg-dakash", OrcishTranslatorUtility.TranslateEnglishToOrcish("stationed", partOfSpeech: "verb", requiredTags: ["base-station", "past", "root-repaired"])[0].Translation, "unexpected repaired stationed translation");
+}
+
+static void OrcishTranslatorAuditsReviewPromotedDerivedFamilies()
+{
+    AssertEqual("vargur", OrcishTranslatorUtility.TranslateEnglishToOrcish("lets", partOfSpeech: "verb", requiredTags: ["base-let", "derived-audited"])[0].Translation, "unexpected audited lets translation");
+    AssertEqual("margiuk-grod-krag", OrcishTranslatorUtility.TranslateEnglishToOrcish("man’s", partOfSpeech: "noun", requiredTags: ["base-man", "derived-audited"])[0].Translation, "unexpected audited man's translation");
+    AssertEqual("oglurin", OrcishTranslatorUtility.TranslateEnglishToOrcish("seeing", partOfSpeech: "verb", requiredTags: ["base-see", "derived-audited"])[0].Translation, "unexpected audited seeing translation");
+    AssertEqual("gorin", OrcishTranslatorUtility.TranslateEnglishToOrcish("watching", partOfSpeech: "verb", requiredTags: ["base-watch", "derived-audited"])[0].Translation, "unexpected audited watching translation");
+    AssertEqual("hrowk-khal-thrumuk", OrcishTranslatorUtility.TranslateEnglishToOrcish("bag's", partOfSpeech: "noun", requiredTags: ["base-bag", "derived-audited"])[0].Translation, "unexpected audited bag possessive translation");
+    AssertEqual("oglar-krubuk", OrcishTranslatorUtility.TranslateEnglishToOrcish("eye's", partOfSpeech: "noun", requiredTags: ["base-eye", "derived-audited"])[0].Translation, "unexpected audited eye possessive translation");
+    AssertEqual("dok-ka-burz-bantuk", OrcishTranslatorUtility.TranslateEnglishToOrcish("tether's", partOfSpeech: "noun", requiredTags: ["base-tether", "derived-audited"])[0].Translation, "unexpected audited tether possessive translation");
+    AssertEqual("dug-agh-ash-ash-dokuuk", OrcishTranslatorUtility.TranslateEnglishToOrcish("trio's", partOfSpeech: "noun", requiredTags: ["base-trio", "derived-audited"])[0].Translation, "unexpected audited trio possessive translation");
+    AssertEqual("dornukikash", OrcishTranslatorUtility.TranslateEnglishToOrcish("hushed", partOfSpeech: "verb", requiredTags: ["base-hush", "derived-audited"])[0].Translation, "unexpected audited hushed translation");
+}
+
+static void OrcishTranslatorShortensMechanicallyLengthenedForms()
+{
+    AssertEqual("dak-mokh", OrcishTranslatorUtility.TranslateEnglishToOrcish("area", partOfSpeech: "noun", requiredTags: ["area", "shortened"])[0].Translation, "unexpected shortened area translation");
+    AssertEqual("dak-mokhi", OrcishTranslatorUtility.TranslateEnglishToOrcish("areas", partOfSpeech: "noun", requiredTags: ["base-area", "shortened"])[0].Translation, "unexpected shortened areas translation");
+    AssertEqual("kaag-thogash", OrcishTranslatorUtility.TranslateEnglishToOrcish("smelled", partOfSpeech: "verb", requiredTags: ["base-smell", "shortened"])[0].Translation, "unexpected shortened smelled translation");
+    AssertEqual("oglar-gashash", OrcishTranslatorUtility.TranslateEnglishToOrcish("aimed", partOfSpeech: "verb", requiredTags: ["base-aim", "shortened"])[0].Translation, "unexpected shortened aimed translation");
+    AssertEqual("oglar-gashin", OrcishTranslatorUtility.TranslateEnglishToOrcish("aiming", partOfSpeech: "verb", requiredTags: ["base-aim", "shortened"])[0].Translation, "unexpected shortened aiming translation");
+    AssertEqual("narg-bib-zol", OrcishTranslatorUtility.TranslateEnglishToOrcish("stylus", partOfSpeech: "noun", requiredTags: ["writing", "shortened"])[0].Translation, "unexpected shortened stylus translation");
+
+    var huntResults = OrcishTranslatorUtility.TranslateEnglishToOrcish("hunt", partOfSpeech: "verb", requiredTags: ["hunt"]);
+    AssertEqual(1, huntResults.Count, "hunt should not retain a generated duplicate translation");
+    AssertEqual("gash-lag-mokh", huntResults[0].Translation, "unexpected hunt translation");
+}
+
+static void OrcishTranslatorDerivesPredictableMorphologyByRule()
+{
+    AssertEqual("dak-mokhi", OrcishTranslatorUtility.TranslateEnglishToOrcish("areas", partOfSpeech: "noun", requiredTags: ["derived-by-rule", "plural"])[0].Translation, "areas should be generated from the area root");
+    AssertEqual("hrowkur", OrcishTranslatorUtility.TranslateEnglishToOrcish("carries", partOfSpeech: "verb", requiredTags: ["derived-by-rule", "present"])[0].Translation, "carries should be generated from the carry root");
+    AssertEqual("hrowkash", OrcishTranslatorUtility.TranslateEnglishToOrcish("carried", partOfSpeech: "verb", requiredTags: ["derived-by-rule", "past"])[0].Translation, "carried should be generated from the carry root");
+    AssertEqual("hrowkin", OrcishTranslatorUtility.TranslateEnglishToOrcish("carrying", partOfSpeech: "verb", requiredTags: ["derived-by-rule", "progressive"])[0].Translation, "carrying should be generated from the carry root");
+    AssertEqual("nargur-thog", OrcishTranslatorUtility.TranslateEnglishToOrcish("acknowledges", partOfSpeech: "verb", requiredTags: ["derived-by-rule", "present"])[0].Translation, "acknowledges should inflect the first root in its compound");
+    AssertEqual("nargash-thog", OrcishTranslatorUtility.TranslateEnglishToOrcish("acknowledged", partOfSpeech: "verb", requiredTags: ["derived-by-rule", "past"])[0].Translation, "acknowledged should inflect the first root in its compound");
+    AssertEqual("oglar-gashash", OrcishTranslatorUtility.TranslateEnglishToOrcish("aimed", partOfSpeech: "verb", requiredTags: ["derived-by-rule", "past"])[0].Translation, "aimed should be generated from the aim verb root");
+    AssertEqual("oglar-gashin", OrcishTranslatorUtility.TranslateEnglishToOrcish("aiming", partOfSpeech: "verb", requiredTags: ["derived-by-rule", "progressive"])[0].Translation, "aiming should be generated from the aim verb root");
+}
+
+static void OrcishTranslatorCullsLowValueExonymPassThroughs()
+{
+    foreach (var culled in new[] { "abby", "archontos", "lexie", "rosk", "sulla", "vul's" })
+    {
+        AssertEqual(0, OrcishTranslatorUtility.TranslateEnglishToOrcish(culled).Count, $"low-value exonym '{culled}' should be culled");
+    }
+
+    AssertEqual("Kirkilston", OrcishTranslatorUtility.TranslateEnglishToOrcish("Kirkilston", partOfSpeech: "noun", requiredTags: ["proper-noun"])[0].Translation, "intentional Kirkilston exonym should remain");
+    AssertEqual("Xavin", OrcishTranslatorUtility.TranslateEnglishToOrcish("Xavin", partOfSpeech: "noun", requiredTags: ["proper-noun"])[0].Translation, "intentional Xavin exonym should remain");
+    AssertEqual("Kelpie", OrcishTranslatorUtility.TranslateEnglishToOrcish("Kelpie", partOfSpeech: "noun", requiredTags: ["proper-noun"])[0].Translation, "intentional Kelpie exonym should remain");
+}
+
+static void OrcishTranslatorEnforcesLexiconQualityInvariants()
+{
+    var entries = OrcishTranslatorUtility.GetLexiconEntries();
+    var duplicateSignatures = entries
+        .GroupBy(
+            static entry => $"{entry.English}\u001F{entry.Orcish}\u001F{entry.PartOfSpeech}",
+            StringComparer.OrdinalIgnoreCase)
+        .Where(static group => group.Count() > 1)
+        .Select(static group => FormatLexiconEntry(group.First()))
+        .OrderBy(static value => value, StringComparer.OrdinalIgnoreCase)
+        .ToArray();
+    AssertEqual(string.Empty, string.Join("; ", duplicateSignatures), "lexicon should not contain exact duplicate English/Orcish/part-of-speech entries");
+
+    var singleWordEnglishWithOrcishSpaces = entries
+        .Where(static entry => IsSingleWord(entry.English))
+        .Where(static entry => entry.Orcish.Contains(' '))
+        .Where(static entry => !HasAnyTag(entry, "fixed-phrase", "proper-noun", "exonym"))
+        .Select(static entry => FormatLexiconEntry(entry))
+        .OrderBy(static value => value, StringComparer.OrdinalIgnoreCase)
+        .ToArray();
+    AssertEqual(string.Empty, string.Join("; ", singleWordEnglishWithOrcishSpaces), "single-word English entries should not translate to Orcish phrases without an explicit phrase/name tag");
+
+    var entriesWithDigits = entries
+        .Where(static entry => entry.Orcish.Any(char.IsDigit))
+        .Select(static entry => FormatLexiconEntry(entry))
+        .OrderBy(static value => value, StringComparer.OrdinalIgnoreCase)
+        .ToArray();
+    AssertEqual(string.Empty, string.Join("; ", entriesWithDigits), "Orcish translations should not contain digits");
+
+    var placeholderSegments = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+    {
+        "bbc",
+        "dbe",
+        "dca",
+        "dcbi",
+        "fcb",
+        "fcd",
+        "fce"
+    };
+    var entriesWithPlaceholderSegments = entries
+        .Where(entry => SplitOrcishSegments(entry.Orcish).Any(placeholderSegments.Contains))
+        .Select(static entry => FormatLexiconEntry(entry))
+        .OrderBy(static value => value, StringComparer.OrdinalIgnoreCase)
+        .ToArray();
+    AssertEqual(string.Empty, string.Join("; ", entriesWithPlaceholderSegments), "Orcish translations should not contain placeholder-looking generated segments");
+
+    var unapprovedPassThroughs = entries
+        .Where(static entry => string.Equals(entry.English, entry.Orcish, StringComparison.OrdinalIgnoreCase))
+        .Where(static entry => !HasAnyTag(entry, "proper-noun", "exonym", "game-term"))
+        .Select(static entry => FormatLexiconEntry(entry))
+        .OrderBy(static value => value, StringComparer.OrdinalIgnoreCase)
+        .ToArray();
+    AssertEqual(string.Empty, string.Join("; ", unapprovedPassThroughs), "direct pass-through translations should be approved as proper nouns, exonyms, or game terms");
+
+    var generatedPassThroughs = entries
+        .Where(static entry => string.Equals(entry.English, entry.Orcish, StringComparison.OrdinalIgnoreCase))
+        .Where(static entry => HasAnyTag(entry, "generated"))
+        .Where(static entry => !HasAnyTag(entry, "keep-exonym", "keep-lore-term", "orc-origin"))
+        .Select(static entry => FormatLexiconEntry(entry))
+        .OrderBy(static value => value, StringComparer.OrdinalIgnoreCase)
+        .ToArray();
+    AssertEqual(string.Empty, string.Join("; ", generatedPassThroughs), "generated direct pass-through translations should be explicitly kept or removed");
+}
+
+static bool IsSingleWord(string value)
+{
+    return !value.Any(char.IsWhiteSpace);
+}
+
+static bool HasAnyTag(OrcishLexiconEntry entry, params string[] tags)
+{
+    return tags.Any(tag =>
+        (entry.Tags ?? Array.Empty<string>())
+        .Any(entryTag => string.Equals(entryTag, tag, StringComparison.OrdinalIgnoreCase)));
+}
+
+static IEnumerable<string> SplitOrcishSegments(string orcish)
+{
+    return orcish
+        .Split([' ', '-'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+}
+
+static string FormatLexiconEntry(OrcishLexiconEntry entry)
+{
+    return $"{entry.English}->{entry.Orcish} [{entry.PartOfSpeech ?? "?"}]";
+}
+
 static void OrcishTranslatorExposesUniqueEnglishTermCount()
 {
     var terms = OrcishTranslatorUtility.GetEnglishTerms();
 
-    AssertEqual(3653, OrcishTranslatorUtility.GetEnglishTermCount(), "unexpected total English term count");
+    AssertEqual(3620, OrcishTranslatorUtility.GetEnglishTermCount(), "unexpected total English term count");
     AssertEqual(OrcishTranslatorUtility.GetEnglishTermCount(), terms.Count, "term list and count should agree");
     AssertEqual(1, terms.Count(term => string.Equals(term, "I", StringComparison.OrdinalIgnoreCase)), "I should be counted once despite multiple variants");
     AssertEqual(1, terms.Count(term => string.Equals(term, "really", StringComparison.OrdinalIgnoreCase)), "really should be counted once despite multiple variants");

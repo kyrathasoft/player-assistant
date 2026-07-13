@@ -179,6 +179,11 @@ namespace PlayerAssistant
                 .ToArray();
         }
 
+        public static IReadOnlyList<OrcishLexiconEntry> GetLexiconEntries()
+        {
+            return LexiconEntries;
+        }
+
         public static IReadOnlyList<OrcishAffixEntry> GetAffixEntries()
         {
             return AffixEntries;
@@ -260,7 +265,7 @@ namespace PlayerAssistant
                 new("Ygg", "Ygg", PartOfSpeech: "noun", GrammarClass: "person", Tags: ["proper-noun", "exonym"]),
                 new("region", "dak-mokh", PartOfSpeech: "noun", GrammarClass: "place", Tags: ["area", "compound"]),
                 new("regional", "dak-mokhuk", PartOfSpeech: "adjective", GrammarClass: "place", Tags: ["area", "possessive-derived"]),
-                new("area", "dak-mokh-grum-drak", PartOfSpeech: "noun", GrammarClass: "place", Tags: ["area", "compound"]),
+                new("area", "dak-mokh", PartOfSpeech: "noun", GrammarClass: "place", Tags: ["area", "compound", "root-repaired", "shortened", "derive-plural", "base-area"]),
                 new("surrounding area", "nak-dak-mokh", PartOfSpeech: "noun", GrammarClass: "place", Tags: ["nearby", "area", "fixed-phrase"]),
                 new("immediate surrounding area", "grak-nak-dak-mokh", PartOfSpeech: "noun", GrammarClass: "place", Tags: ["nearby", "immediate", "area", "fixed-phrase"]),
                 new("vicinity", "nak-dak", PartOfSpeech: "noun", GrammarClass: "place", Tags: ["nearby", "area", "compound"]),
@@ -689,7 +694,7 @@ namespace PlayerAssistant
                 new("sight", "oglar-thog", PartOfSpeech: "noun", GrammarClass: "perception", Tags: ["sight", "abstract", "compound", "root-repaired"]),
                 new("welcome sight", "mokra-dak oglar-thog", PartOfSpeech: "noun", GrammarClass: "perception", Tags: ["welcome", "sight", "fixed-phrase"]),
                 new("march", "gash-lag", PartOfSpeech: "noun", GrammarClass: "motion", Tags: ["walking", "military", "compound"]),
-                new("day's march", "dakuruk gash-lag", PartOfSpeech: "noun", GrammarClass: "motion", Tags: ["day", "walking", "fixed-phrase"]),
+                new("day's march", "dakur-hrowkuk gash-lag", PartOfSpeech: "noun", GrammarClass: "motion", Tags: ["day", "walking", "fixed-phrase", "root-repaired"]),
                 new("day’s march", "dakur-hrowkuk gash-lag", PartOfSpeech: "noun", GrammarClass: "motion", Tags: ["day", "walking", "fixed-phrase", "root-repaired"]),
                 new("morning", "dakur-sun", PartOfSpeech: "noun", GrammarClass: "time", Tags: ["morning", "compound"]),
                 new("guard duty", "gor-hek-thog", PartOfSpeech: "noun", GrammarClass: "protection", Tags: ["guard", "duty", "compound", "root-repaired"]),
@@ -837,9 +842,7 @@ namespace PlayerAssistant
                 new("escape", "varku", PartOfSpeech: "verb", GrammarClass: "motion", Tags: ["infinitive"]),
                 new("escaped", "varkash", PartOfSpeech: "verb", GrammarClass: "motion", Tags: ["past"]),
                 new("escaping", "varkin", PartOfSpeech: "verb", GrammarClass: "motion", Tags: ["progressive", "present"]),
-                new("carry", "hrowku", PartOfSpeech: "verb", GrammarClass: "motion", Tags: ["infinitive", "carrying"]),
-                new("carries", "hrowkur", PartOfSpeech: "verb", GrammarClass: "motion", Tags: ["present", "carrying"]),
-                new("carried", "hrowkash", PartOfSpeech: "verb", GrammarClass: "motion", Tags: ["past", "carrying"]),
+                new("carry", "hrowku", PartOfSpeech: "verb", GrammarClass: "motion", Tags: ["infinitive", "carrying", "derive-present", "derive-past", "derive-progressive"]),
                 new("stepped inside", "lagash ik", PartOfSpeech: "verb", GrammarClass: "motion", Tags: ["past", "inside", "fixed-phrase"]),
                 new("drift", "varku-thrum", PartOfSpeech: "verb", GrammarClass: "motion", Tags: ["infinitive", "slow", "compound"]),
                 new("drift into", "varku-thrum ik", PartOfSpeech: "verb", GrammarClass: "motion", Tags: ["infinitive", "slow", "fixed-phrase"]),
@@ -856,7 +859,7 @@ namespace PlayerAssistant
                 new("recover", "ut-dravku", PartOfSpeech: "verb", GrammarClass: "taking", Tags: ["infinitive", "reclaim"]),
                 new("recovered", "ut-dravash", PartOfSpeech: "verb", GrammarClass: "taking", Tags: ["past", "reclaim"]),
                 new("re-take", "ut-dravku", PartOfSpeech: "verb", GrammarClass: "taking", Tags: ["infinitive", "reclaim", "root-repaired"]),
-                new("retake", "ut-dravku-hush-gash", PartOfSpeech: "verb", GrammarClass: "taking", Tags: ["infinitive", "reclaim"]),
+                new("retake", "ut-dravku", PartOfSpeech: "verb", GrammarClass: "taking", Tags: ["infinitive", "reclaim", "root-repaired"]),
                 new("went on", "lagash", PartOfSpeech: "verb", GrammarClass: "sequence", Tags: ["past", "continued"]),
                 new("revolves around", "murk-dakur nak", PartOfSpeech: "verb", GrammarClass: "relation", Tags: ["present", "central", "fixed-phrase"]),
                 new("rooted", "lag-hekash", PartOfSpeech: "verb", GrammarClass: "origin", Tags: ["past-participle", "rooted", "compound"]),
@@ -882,7 +885,6 @@ namespace PlayerAssistant
                 new("waited", "grotash", PartOfSpeech: "verb", GrammarClass: "delay", Tags: ["past", "wait"]),
                 new("watched", "gorash", PartOfSpeech: "verb", GrammarClass: "perception", Tags: ["past", "watch"]),
                 new("smelling", "kaag-thogin", PartOfSpeech: "verb", GrammarClass: "sense", Tags: ["progressive", "smell", "compound"]),
-                new("carrying", "hrowkin", PartOfSpeech: "verb", GrammarClass: "motion", Tags: ["progressive", "carrying"]),
                 new("smiled", "mauk-nargash", PartOfSpeech: "verb", GrammarClass: "expression", Tags: ["past", "smile", "compound"]),
                 new("offering", "dravin-hush-narg", PartOfSpeech: "verb", GrammarClass: "transfer", Tags: ["progressive", "offer"]),
                 new("glanced", "oglash-thrum", PartOfSpeech: "verb", GrammarClass: "perception", Tags: ["past", "brief", "compound"]),
@@ -1049,9 +1051,8 @@ namespace PlayerAssistant
                 // Promoted from TSV cleanup: root-derived touched translations.
                 new("afternoons", "dakur-surg-doki", PartOfSpeech: "noun", GrammarClass: "derived", Tags: ["review-promoted", "root-derived", "s-form", "base-afternoon"]),
                 new("alarms", "vark-narg-rukhi", PartOfSpeech: "noun", GrammarClass: "derived", Tags: ["review-promoted", "root-derived", "s-form", "base-alarm"]),
-                new("allies", "mokra-lag-vraki", PartOfSpeech: "noun", GrammarClass: "derived", Tags: ["review-promoted", "root-derived", "plural", "base-ally"]),
+                new("allies", "mokrai", PartOfSpeech: "noun", GrammarClass: "derived", Tags: ["review-promoted", "root-derived", "plural", "base-ally", "root-repaired"]),
                 new("approaches", "lag-thog-krag-burzi", PartOfSpeech: "noun", GrammarClass: "derived", Tags: ["review-promoted", "root-derived", "s-form", "base-approach"]),
-                new("areas", "dak-mokh-grum-draki", PartOfSpeech: "noun", GrammarClass: "derived", Tags: ["review-promoted", "root-derived", "s-form", "base-area"]),
                 new("arrow's", "flit-zoluk", PartOfSpeech: "noun", GrammarClass: "derived", Tags: ["review-promoted", "root-derived", "possessive", "base-arrow"]),
                 new("assignments", "darg-heki", PartOfSpeech: "noun", GrammarClass: "derived", Tags: ["review-promoted", "root-derived", "s-form", "base-assignment"]),
                 new("awards", "grod-dravi", PartOfSpeech: "noun", GrammarClass: "derived", Tags: ["review-promoted", "root-derived", "s-form", "base-award"]),
@@ -1114,7 +1115,7 @@ namespace PlayerAssistant
                 new("escapes", "varkuur", PartOfSpeech: "verb", GrammarClass: "action", Tags: ["review-promoted", "root-derived", "s-form", "base-escape"]),
                 new("essentially", "thruk-dorn-zog-grak", PartOfSpeech: "adverb", GrammarClass: "manner", Tags: ["review-promoted", "root-derived", "adverbial", "base-essential"]),
                 new("evenings", "exendai", PartOfSpeech: "noun", GrammarClass: "derived", Tags: ["review-promoted", "root-derived", "s-form", "base-evening"]),
-                new("families", "mokh-zog-hushi", PartOfSpeech: "noun", GrammarClass: "derived", Tags: ["review-promoted", "root-derived", "plural", "base-family"]),
+                new("families", "mokh-zogi", PartOfSpeech: "noun", GrammarClass: "derived", Tags: ["review-promoted", "root-derived", "plural", "base-family", "root-repaired"]),
                 new("fantasies", "thog-nauti", PartOfSpeech: "noun", GrammarClass: "derived", Tags: ["review-promoted", "root-derived", "plural", "base-fantasy"]),
                 new("fathers", "flitu-hrowkuri", PartOfSpeech: "noun", GrammarClass: "derived", Tags: ["review-promoted", "root-derived", "s-form", "base-father"]),
                 new("feeling", "grodhin", PartOfSpeech: "verb", GrammarClass: "action", Tags: ["review-promoted", "root-derived", "progressive", "base-feel"]),
@@ -1238,7 +1239,7 @@ namespace PlayerAssistant
                 new("scripts", "bib-nargi", PartOfSpeech: "noun", GrammarClass: "derived", Tags: ["review-promoted", "root-derived", "s-form", "base-script"]),
                 new("scroll's", "bib-khaluk", PartOfSpeech: "noun", GrammarClass: "derived", Tags: ["review-promoted", "root-derived", "possessive", "base-scroll", "root-repaired"]),
                 new("scrolls", "bib-khali", PartOfSpeech: "noun", GrammarClass: "derived", Tags: ["review-promoted", "root-derived", "s-form", "base-scroll", "root-repaired"]),
-                new("secretly", "noglar-gash-doku-grak", PartOfSpeech: "adverb", GrammarClass: "manner", Tags: ["review-promoted", "root-derived", "adverbial", "base-secret"]),
+                new("secretly", "noglar-grak", PartOfSpeech: "adverb", GrammarClass: "manner", Tags: ["review-promoted", "root-derived", "adverbial", "base-secret", "root-repaired"]),
                 new("secured", "dok-ka-grod-morzash", PartOfSpeech: "verb", GrammarClass: "action", Tags: ["review-promoted", "root-derived", "past", "base-secure"]),
                 new("secures", "dok-ka-grod-morzur", PartOfSpeech: "verb", GrammarClass: "action", Tags: ["review-promoted", "root-derived", "s-form", "base-secure"]),
                 new("securing", "dok-ka-grod-morz-in", PartOfSpeech: "verb", GrammarClass: "action", Tags: ["review-promoted", "root-derived", "progressive", "base-secure"]),
@@ -1259,8 +1260,8 @@ namespace PlayerAssistant
                 new("squares", "murk-mokh-daki", PartOfSpeech: "noun", GrammarClass: "derived", Tags: ["review-promoted", "root-derived", "s-form", "base-square"]),
                 new("standing", "gor-dargu-in", PartOfSpeech: "verb", GrammarClass: "action", Tags: ["review-promoted", "root-derived", "progressive", "base-stand"]),
                 new("stands", "gor-darguur", PartOfSpeech: "verb", GrammarClass: "action", Tags: ["review-promoted", "root-derived", "s-form", "base-stand"]),
-                new("station's", "darg-dak-burz-karnuk", PartOfSpeech: "noun", GrammarClass: "derived", Tags: ["review-promoted", "root-derived", "possessive", "base-station"]),
-                new("stations", "darg-dak-burz-karni", PartOfSpeech: "noun", GrammarClass: "derived", Tags: ["review-promoted", "root-derived", "s-form", "base-station"]),
+                new("station's", "darg-dakuk", PartOfSpeech: "noun", GrammarClass: "derived", Tags: ["review-promoted", "root-derived", "possessive", "base-station", "root-repaired"]),
+                new("stations", "darg-daki", PartOfSpeech: "noun", GrammarClass: "derived", Tags: ["review-promoted", "root-derived", "s-form", "base-station", "root-repaired"]),
                 new("strains", "grot-thog-vraki", PartOfSpeech: "noun", GrammarClass: "derived", Tags: ["review-promoted", "root-derived", "s-form", "base-strain"]),
                 new("surfaces", "oglar-daki", PartOfSpeech: "noun", GrammarClass: "derived", Tags: ["review-promoted", "root-derived", "s-form", "base-surface"]),
                 new("survives", "dakur-thoguur", PartOfSpeech: "verb", GrammarClass: "action", Tags: ["review-promoted", "root-derived", "s-form", "base-survive"]),
@@ -1372,9 +1373,7 @@ namespace PlayerAssistant
                 new("grunts", "grukhur", PartOfSpeech: "verb", GrammarClass: "speech", Tags: ["present", "rough"]),
                 new("returns", "ut-lagur", PartOfSpeech: "verb", GrammarClass: "motion", Tags: ["present", "return"]),
                 new("returns his attention to", "ut-oglarur mogumuk oglar-thog ur", PartOfSpeech: "verb", GrammarClass: "perception", Tags: ["present", "attention", "fixed-phrase"]),
-                new("acknowledge", "nargu-thog", PartOfSpeech: "verb", GrammarClass: "speech", Tags: ["infinitive", "acknowledgement", "compound"]),
-                new("acknowledges", "nargur-thog", PartOfSpeech: "verb", GrammarClass: "speech", Tags: ["present", "acknowledgement", "compound"]),
-                new("acknowledged", "nargash-thog", PartOfSpeech: "verb", GrammarClass: "speech", Tags: ["past", "acknowledgement", "compound"]),
+                new("acknowledge", "nargu-thog", PartOfSpeech: "verb", GrammarClass: "speech", Tags: ["infinitive", "acknowledgement", "compound", "derive-present", "derive-past"]),
                 new("moves", "lagur", PartOfSpeech: "verb", GrammarClass: "motion", Tags: ["present"]),
                 new("moves to take", "lagur ur dravku", PartOfSpeech: "verb", GrammarClass: "motion", Tags: ["present", "taking", "fixed-phrase"]),
                 new("take", "dravku-krag-flit", PartOfSpeech: "verb", GrammarClass: "taking", Tags: ["infinitive"]),
@@ -1385,7 +1384,6 @@ namespace PlayerAssistant
                 new("cripple", "kangsin", PartOfSpeech: "adjective", GrammarClass: "condition", Tags: ["subject-complement"]),
                 new("crippled", "kangsin-vrak-zog", PartOfSpeech: "adjective", GrammarClass: "condition", Tags: ["subject-complement", "past-participle"]),
                 new("welcome", "mokra-dak", PartOfSpeech: "adjective", GrammarClass: "acceptance", Tags: ["friendly"]),
-                new("well met", "mokra-narg", PartOfSpeech: "interjection", GrammarClass: "greeting", Tags: ["greeting", "fixed-phrase"]),
                 new("Well met", "mokra-narg", PartOfSpeech: "interjection", GrammarClass: "greeting", Tags: ["greeting", "fixed-phrase", "root-repaired"]),
                 new("please", "mauk-drav", PartOfSpeech: "interjection", GrammarClass: "courtesy", Tags: ["request", "polite", "fixed-phrase"]),
                 new("Obliged", "tukru-drav", PartOfSpeech: "interjection", GrammarClass: "courtesy", Tags: ["thanks", "debt", "fixed-phrase"]),
@@ -1907,6 +1905,7 @@ namespace PlayerAssistant
                 new("skittering", "lagin-grot", PartOfSpeech: "verb", GrammarClass: "motion", Tags: ["awkward", "progressive", "compound"]),
                 new("harmlessly", "nul-brakkin", PartOfSpeech: "adverb", GrammarClass: "harm", Tags: ["without-harm", "compound"]),
                 new("aim", "oglar-gash-thog", PartOfSpeech: "noun", GrammarClass: "combat", Tags: ["sight", "attack", "compound"]),
+                new("aim", "oglar-gash", PartOfSpeech: "verb", GrammarClass: "combat", Tags: ["sight", "attack", "compound", "root-repaired", "shortened", "base-aim", "derive-past", "derive-progressive"]),
                 new("ragged", "brak-khaluk", PartOfSpeech: "adjective", GrammarClass: "condition", Tags: ["torn", "possessive-derived"]),
                 new("bloodied", "pukh-vrakuk", PartOfSpeech: "adjective", GrammarClass: "condition", Tags: ["blood", "skin", "compound"]),
                 new("outnumbered", "mur-nu-mokh", PartOfSpeech: "adjective", GrammarClass: "quantity", Tags: ["outnumbered", "compound"]),
@@ -2643,8 +2642,6 @@ namespace PlayerAssistant
                 new("acolyte", "mograth-bit-mog", Tags: ["blog", "shadowdim-ap-6-10", "generated"]),
                 new("acolytes", "mograth-bit-mogi", Tags: ["blog", "shadowdim-ap-6-10", "generated"]),
                 new("arcanist", "gurmog-bib-mog", Tags: ["blog", "shadowdim-ap-6-10", "generated"]),
-                new("archontos", "Archontos", Tags: ["blog", "shadowdim-ap-6-10", "generated"]),
-                new("arcturus", "Arcturus", Tags: ["blog", "shadowdim-ap-6-10", "generated"]),
                 new("balm", "morz-grod-rukh", Tags: ["blog", "shadowdim-ap-6-10", "generated"]),
                 new("bard", "narg-rukh-mog-ti", Tags: ["blog", "shadowdim-ap-6-10", "generated"]),
                 new("bioluminescence", "dakur-rukh-oglar", Tags: ["blog", "shadowdim-ap-6-10", "generated"]),
@@ -2702,7 +2699,6 @@ namespace PlayerAssistant
                 new("aah", "ata-hekmoguk", Tags: ["frequency", "freq-xls-ge100", "generated"]),
                 new("abbey", "grotin-bibi", Tags: ["frequency", "freq-xls-ge100", "generated"]),
                 new("abbott", "hrowkuk-exieuk-bibnak", Tags: ["frequency", "freq-xls-ge100", "generated"]),
-                new("abby", "Abby", Tags: ["frequency", "freq-xls-ge100", "generated", "review-repaired", "proper-noun", "exonym"]),
                 new("abdomen", "bae-grotin-bibash", Tags: ["frequency", "freq-xls-ge100", "generated"]),
                 new("abdominal", "gur-ardenuk-dravin", Tags: ["frequency", "freq-xls-ge100", "generated"]),
                 new("abducted", "gabh-burzuk-dakururi", Tags: ["frequency", "freq-xls-ge100", "generated"]),
@@ -2872,7 +2868,7 @@ namespace PlayerAssistant
                 new("sins", "morz-thogi", PartOfSpeech: "noun", GrammarClass: "derived", Tags: ["review-promoted", "root-derived", "s-form", "base-sin"]),
                 new("sirs", "gash-dargi", PartOfSpeech: "noun", GrammarClass: "derived", Tags: ["review-promoted", "root-derived", "s-form", "base-sir"]),
                 new("sites", "dok-gashuur", PartOfSpeech: "verb", GrammarClass: "action", Tags: ["review-promoted", "root-derived", "s-form", "base-sit"]),
-                new("smelled", "kaag-thog-thog-kragash", PartOfSpeech: "verb", GrammarClass: "action", Tags: ["review-promoted", "root-derived", "past", "base-smell"]),
+                new("smell", "kaag-thog", PartOfSpeech: "verb", GrammarClass: "sense", Tags: ["smell", "root-repaired", "shortened", "base-smell", "derive-past"]),
                 new("sneeze", "dornuk-goruk", PartOfSpeech: "noun", GrammarClass: "body", Tags: ["breath", "compound"]),
                 new("spelled", "gur-nargash", PartOfSpeech: "verb", GrammarClass: "action", Tags: ["review-promoted", "root-derived", "past", "base-spell"]),
                 new("spelling", "gur-narg-in", PartOfSpeech: "verb", GrammarClass: "action", Tags: ["review-promoted", "root-derived", "progressive", "base-spell"]),
@@ -2911,7 +2907,7 @@ namespace PlayerAssistant
                 new("guarded", "gor-mogash", PartOfSpeech: "verb", GrammarClass: "action", Tags: ["review-promoted", "root-derived", "past", "base-guard"]),
                 new("hasted", "grak-lag-thogash", PartOfSpeech: "verb", GrammarClass: "action", Tags: ["review-promoted", "root-derived", "past", "base-haste"]),
                 new("needing", "thrukin", PartOfSpeech: "verb", GrammarClass: "action", Tags: ["review-promoted", "root-derived", "progressive", "base-need"]),
-                new("paling", "kelnib-brak-dorn-in", PartOfSpeech: "verb", GrammarClass: "action", Tags: ["review-promoted", "root-derived", "progressive", "base-pale"]),
+                new("paling", "kelnib-in", PartOfSpeech: "verb", GrammarClass: "action", Tags: ["review-promoted", "root-derived", "progressive", "base-pale", "root-repaired"]),
                 new("placing", "dakin", PartOfSpeech: "verb", GrammarClass: "action", Tags: ["review-promoted", "root-derived", "progressive", "base-place"]),
                 new("priestly", "mograth-grak", PartOfSpeech: "adverb", GrammarClass: "manner", Tags: ["review-promoted", "root-derived", "adverbial", "base-priest"]),
                 new("seated", "dok-gashash", PartOfSpeech: "verb", GrammarClass: "posture", Tags: ["past", "compound"]),
@@ -2935,7 +2931,6 @@ namespace PlayerAssistant
                 new("adopts", "flitin-brukur-ghent", Tags: ["blog", "shadowdim-ap-26-30", "generated"]),
                 new("advice", "aba-hek-goru", Tags: ["blog", "shadowdim-ap-26-30", "generated"]),
                 new("aided", "drav-thrukash", PartOfSpeech: "verb", GrammarClass: "action", Tags: ["review-promoted", "root-derived", "past", "base-aid"]),
-                new("aimed", "oglar-gash-thogash", PartOfSpeech: "verb", GrammarClass: "action", Tags: ["review-promoted", "root-derived", "past", "base-aim"]),
                 new("biting", "kruk-gash-in", PartOfSpeech: "verb", GrammarClass: "action", Tags: ["review-promoted", "root-derived", "progressive", "base-bite"]),
                 new("causing", "thruk-thog-in", PartOfSpeech: "verb", GrammarClass: "action", Tags: ["review-promoted", "root-derived", "progressive", "base-cause"]),
                 new("contrasting", "mok-nu-thog-in", PartOfSpeech: "verb", GrammarClass: "action", Tags: ["review-promoted", "root-derived", "progressive", "base-contrast"]),
@@ -2986,7 +2981,7 @@ namespace PlayerAssistant
                 new("adept", "grodu-baku", Tags: ["blog", "shadowdim-ap-21-25", "generated"]),
                 new("aims", "oglar-gash-thogi", PartOfSpeech: "noun", GrammarClass: "derived", Tags: ["review-promoted", "root-derived", "s-form", "base-aim"]),
                 new("armed", "yank-bantash", PartOfSpeech: "verb", GrammarClass: "action", Tags: ["review-promoted", "root-derived", "past", "base-arm"]),
-                new("bag's", "hrowk-khal-thrumuk", PartOfSpeech: "noun", GrammarClass: "possession", Tags: ["review-promoted", "problem-proposal-repair", "root-derived", "possessive", "base-bags"]),
+                new("bag's", "hrowk-khal-thrumuk", PartOfSpeech: "noun", GrammarClass: "possession", Tags: ["review-promoted", "problem-proposal-repair", "root-derived", "possessive", "base-bag", "derived-audited"]),
                 new("based", "mokh-dakash", PartOfSpeech: "verb", GrammarClass: "action", Tags: ["review-promoted", "root-derived", "past", "base-base"]),
                 new("blistering", "morz-vrak-bit-in", PartOfSpeech: "verb", GrammarClass: "action", Tags: ["review-promoted", "root-derived", "progressive", "base-blister"]),
                 new("centered", "murk-dakash", PartOfSpeech: "verb", GrammarClass: "action", Tags: ["review-promoted", "root-derived", "past", "base-center"]),
@@ -2997,7 +2992,7 @@ namespace PlayerAssistant
                 new("flanking", "gash-nak-in", PartOfSpeech: "verb", GrammarClass: "action", Tags: ["review-promoted", "root-derived", "progressive", "base-flank"]),
                 new("functioned", "gashin-grrtuk-lagash", PartOfSpeech: "verb", GrammarClass: "action", Tags: ["review-promoted", "root-derived", "past", "base-function"]),
                 new("guiding", "lag-oglar-mog-in", PartOfSpeech: "verb", GrammarClass: "action", Tags: ["review-promoted", "root-derived", "progressive", "base-guide"]),
-                new("hushed", "dornukikash", PartOfSpeech: "verb", GrammarClass: "speech", Tags: ["review-promoted", "problem-proposal-repair", "root-derived", "past", "base-hushed"]),
+                new("hushed", "dornukikash", PartOfSpeech: "verb", GrammarClass: "speech", Tags: ["review-promoted", "problem-proposal-repair", "root-derived", "past", "base-hush", "derived-audited"]),
                 new("jade", "oglar-zol-grod", PartOfSpeech: "noun", GrammarClass: "material", Tags: ["gem", "green", "compound"]),
                 new("pits", "burz-dak-tii", PartOfSpeech: "noun", GrammarClass: "derived", Tags: ["review-promoted", "root-derived", "s-form", "base-pit"]),
                 new("precision-cut", "ecod-ender-grukhur", PartOfSpeech: "verb", GrammarClass: "craft", Tags: ["precise", "cut", "compound"]),
@@ -3008,7 +3003,7 @@ namespace PlayerAssistant
                 new("shelving", "dedin", PartOfSpeech: "verb", GrammarClass: "storage", Tags: ["progressive"]),
                 new("smithing", "hekruhurin", PartOfSpeech: "verb", GrammarClass: "action", Tags: ["review-promoted", "root-derived", "progressive", "base-smith"]),
                 new("sparked", "rukh-bitash", PartOfSpeech: "verb", GrammarClass: "action", Tags: ["review-promoted", "root-derived", "past", "base-spark"]),
-                new("stationed", "darg-dak-burz-karnash", PartOfSpeech: "verb", GrammarClass: "action", Tags: ["review-promoted", "root-derived", "past", "base-station"]),
+                new("stationed", "darg-dakash", PartOfSpeech: "verb", GrammarClass: "action", Tags: ["review-promoted", "root-derived", "past", "base-station", "root-repaired"]),
                 new("straining", "grot-thog-vrak-in", PartOfSpeech: "verb", GrammarClass: "action", Tags: ["review-promoted", "root-derived", "progressive", "base-strain"]),
                 new("titled", "darg-mog-nargash", PartOfSpeech: "verb", GrammarClass: "action", Tags: ["review-promoted", "root-derived", "past", "base-title"]),
             ]);
@@ -3024,7 +3019,6 @@ namespace PlayerAssistant
                 new("addition", "dravku-gashur-thog", Tags: ["blog", "shadowdim-ap-16-20", "generated"]),
                 new("adhered", "ashi-hrowku-ash", Tags: ["blog", "shadowdim-ap-16-20", "generated"]),
                 new("adopting", "flitin-brukur-ghen-in", Tags: ["blog", "shadowdim-ap-16-20", "generated"]),
-                new("aiming", "oglar-gash-thog-in", PartOfSpeech: "verb", GrammarClass: "action", Tags: ["review-promoted", "root-derived", "progressive", "base-aim"]),
                 new("annals", "cab-draku", PartOfSpeech: "noun", GrammarClass: "record", Tags: ["history", "chronicle", "compound"]),
                 new("approaching", "lag-thog-krag-burz-in", PartOfSpeech: "verb", GrammarClass: "action", Tags: ["review-promoted", "root-derived", "progressive", "base-approach"]),
                 new("bags", "hrowk-khal-thrumi", PartOfSpeech: "noun", GrammarClass: "derived", Tags: ["review-promoted", "root-derived", "s-form", "base-bag"]),
@@ -3041,7 +3035,7 @@ namespace PlayerAssistant
                 new("dusting", "dak-thrum-in", PartOfSpeech: "verb", GrammarClass: "action", Tags: ["review-promoted", "root-derived", "progressive", "base-dust"]),
                 new("exhaust", "grot-vrak-ka", PartOfSpeech: "verb", GrammarClass: "fatigue", Tags: ["weary", "body", "verb", "compound"]),
                 new("exhausts", "grot-vrak-kar", PartOfSpeech: "verb", GrammarClass: "fatigue", Tags: ["weary", "body", "present", "compound"]),
-                new("eye's", "oglar-krubuk", PartOfSpeech: "noun", GrammarClass: "possession", Tags: ["review-promoted", "problem-proposal-repair", "root-derived", "possessive", "base-eyes"]),
+                new("eye's", "oglar-krubuk", PartOfSpeech: "noun", GrammarClass: "possession", Tags: ["review-promoted", "problem-proposal-repair", "root-derived", "possessive", "base-eye", "derived-audited"]),
                 new("figured", "mog-var-morz-brakash", PartOfSpeech: "verb", GrammarClass: "action", Tags: ["review-promoted", "root-derived", "past", "base-figure"]),
                 new("flaming", "rukh-tur-in", PartOfSpeech: "verb", GrammarClass: "action", Tags: ["review-promoted", "root-derived", "progressive", "base-flame"]),
                 new("forced", "darg-gashash", PartOfSpeech: "verb", GrammarClass: "action", Tags: ["review-promoted", "root-derived", "past", "base-force"]),
@@ -3053,8 +3047,8 @@ namespace PlayerAssistant
                 new("hiss", "mogumuki", PartOfSpeech: "noun", GrammarClass: "derived", Tags: ["review-promoted", "root-candidate-final", "root-derived", "s-form", "base-his"]),
                 new("hums", "thrum-narg-rukhi", PartOfSpeech: "noun", GrammarClass: "derived", Tags: ["review-promoted", "root-derived", "s-form", "base-hum"]),
                 new("keyed", "thrak-hrowk-dargash", PartOfSpeech: "verb", GrammarClass: "action", Tags: ["review-promoted", "root-derived", "past", "base-key"]),
-                new("lets", "vargashur", PartOfSpeech: "verb", GrammarClass: "action", Tags: ["review-promoted", "root-derived", "s-form", "base-let"]),
-                new("man’s", "margi-ash-rukhuk", PartOfSpeech: "noun", GrammarClass: "possession", Tags: ["review-promoted", "problem-proposal-repair", "root-derived", "possessive", "base-mans"]),
+                new("lets", "vargur", PartOfSpeech: "verb", GrammarClass: "permission", Tags: ["review-promoted", "root-derived", "s-form", "base-let", "root-repaired", "derived-audited"]),
+                new("man’s", "margiuk-grod-krag", PartOfSpeech: "noun", GrammarClass: "possession", Tags: ["review-promoted", "problem-proposal-repair", "root-derived", "possessive", "base-man", "variant-spelling", "root-repaired", "derived-audited"]),
                 new("mentioned", "dikultash", PartOfSpeech: "verb", GrammarClass: "speech", Tags: ["cite", "past"]),
                 new("noting", "nu-brak-burz-in", PartOfSpeech: "verb", GrammarClass: "action", Tags: ["review-promoted", "root-candidate-final", "root-derived", "progressive", "base-not"]),
                 new("opened", "lag-nu-gorash", PartOfSpeech: "verb", GrammarClass: "action", Tags: ["review-promoted", "root-derived", "past", "base-open"]),
@@ -3066,7 +3060,7 @@ namespace PlayerAssistant
                 new("ringing", "bant-murk-in", PartOfSpeech: "verb", GrammarClass: "action", Tags: ["review-promoted", "root-derived", "progressive", "base-ring"]),
                 new("rolling", "zorn-bib-in", PartOfSpeech: "verb", GrammarClass: "action", Tags: ["review-promoted", "root-derived", "progressive", "base-roll"]),
                 new("saved", "ut-varkash", PartOfSpeech: "verb", GrammarClass: "action", Tags: ["review-promoted", "root-derived", "past", "base-save"]),
-                new("seeing", "oglar-karn-darg-in", PartOfSpeech: "verb", GrammarClass: "action", Tags: ["review-promoted", "root-derived", "progressive", "base-see"]),
+                new("seeing", "oglurin", PartOfSpeech: "verb", GrammarClass: "perception", Tags: ["review-promoted", "root-derived", "progressive", "present", "base-see", "root-repaired", "derived-audited"]),
                 new("sensing", "kaag-oglar-thog-in", PartOfSpeech: "verb", GrammarClass: "action", Tags: ["review-promoted", "root-derived", "progressive", "base-sense"]),
                 new("shadowed", "burz-nakash", PartOfSpeech: "verb", GrammarClass: "action", Tags: ["review-promoted", "root-derived", "past", "base-shadow"]),
                 new("shelves", "dedi", PartOfSpeech: "noun", GrammarClass: "object", Tags: ["storage", "plural"]),
@@ -3079,16 +3073,16 @@ namespace PlayerAssistant
                 new("sounding", "narg-rukh-in", PartOfSpeech: "verb", GrammarClass: "action", Tags: ["review-promoted", "root-derived", "progressive", "base-sound"]),
                 new("sparking", "rukh-bit-in", PartOfSpeech: "verb", GrammarClass: "action", Tags: ["review-promoted", "root-derived", "progressive", "base-spark"]),
                 new("squarely", "murk-mokh-dak-grak", PartOfSpeech: "adverb", GrammarClass: "manner", Tags: ["review-promoted", "root-derived", "adverbial", "base-square"]),
-                new("stylus", "narg-bib-ash-morz-doku", Tags: ["blog", "shadowdim-ap-16-20", "generated"]),
+                new("stylus", "narg-bib-zol", PartOfSpeech: "noun", GrammarClass: "object", Tags: ["blog", "shadowdim-ap-16-20", "generated", "writing", "root-repaired", "shortened"]),
                 new("sweating", "hush-rukh-in", PartOfSpeech: "verb", GrammarClass: "action", Tags: ["review-promoted", "root-derived", "progressive", "base-sweat"]),
                 new("tether", "dok-ka-burz-bant", PartOfSpeech: "verb", GrammarClass: "binding", Tags: ["bind", "secure", "verb"]),
-                new("tether's", "dok-ka-burz-bantuk", PartOfSpeech: "noun", GrammarClass: "possession", Tags: ["review-promoted", "problem-proposal-repair", "root-derived", "possessive", "base-tethers"]),
+                new("tether's", "dok-ka-burz-bantuk", PartOfSpeech: "noun", GrammarClass: "possession", Tags: ["review-promoted", "problem-proposal-repair", "root-derived", "possessive", "base-tether", "derived-audited"]),
                 new("tethering", "dok-kain", PartOfSpeech: "verb", GrammarClass: "binding", Tags: ["bind", "secure", "progressive"]),
                 new("tethers", "dok-kar", PartOfSpeech: "verb", GrammarClass: "binding", Tags: ["bind", "secure", "present"]),
                 new("timed", "dakurash", PartOfSpeech: "verb", GrammarClass: "action", Tags: ["review-promoted", "root-derived", "past", "base-time"]),
-                new("trio's", "dug-agh-ash-ash-dokuuk", PartOfSpeech: "noun", GrammarClass: "possession", Tags: ["review-promoted", "problem-proposal-repair", "root-derived", "possessive", "base-trios"]),
+                new("trio's", "dug-agh-ash-ash-dokuuk", PartOfSpeech: "noun", GrammarClass: "possession", Tags: ["review-promoted", "problem-proposal-repair", "root-derived", "possessive", "base-trio", "derived-audited"]),
                 new("warding", "gor-narg-in", PartOfSpeech: "verb", GrammarClass: "action", Tags: ["review-promoted", "root-derived", "progressive", "base-ward"]),
-                new("watching", "thrakin", PartOfSpeech: "verb", GrammarClass: "action", Tags: ["review-promoted", "root-derived", "progressive", "base-watch"]),
+                new("watching", "gorin", PartOfSpeech: "verb", GrammarClass: "perception", Tags: ["review-promoted", "root-derived", "progressive", "base-watch", "root-repaired", "derived-audited"]),
                 new("welcoming", "mokra-dak-in", PartOfSpeech: "verb", GrammarClass: "action", Tags: ["review-promoted", "root-derived", "progressive", "base-welcome"]),
             ]);
 
@@ -3103,7 +3097,7 @@ namespace PlayerAssistant
                 new("adequate", "aaei-fletragi-hrowkash", Tags: ["blog", "shadowdim-ap-1", "generated"]),
                 new("adequately", "aaei-fletragi-hrowkash-ku", Tags: ["blog", "shadowdim-ap-1", "generated"]),
                 new("adjusted", "var-thog-mokhash", Tags: ["blog", "shadowdim-ap-1", "generated", "review-repaired", "root-derived"]),
-                new("aelves", "Aelves", Tags: ["blog", "shadowdim-ap-1", "generated"]),
+                new("aelves", "Aelves", PartOfSpeech: "noun", GrammarClass: "lineage", Tags: ["blog", "shadowdim-ap-1", "generated", "proper-noun", "exonym", "keep-exonym", "plural"]),
                 new("aerial", "dravin-kelnib", PartOfSpeech: "adjective", GrammarClass: "sky", Tags: ["air", "above", "compound"]),
                 new("ahead", "nar-lag", Tags: ["blog", "shadowdim-ap-1", "generated"]),
                 new("allow", "kur-darg", Tags: ["blog", "shadowdim-ap-1", "generated"]),
@@ -3112,7 +3106,7 @@ namespace PlayerAssistant
                 new("answer", "narg-dok", Tags: ["blog", "shadowdim-ap-1", "generated"]),
                 new("answered", "narg-dok-ash", Tags: ["blog", "shadowdim-ap-1", "generated"]),
                 new("archon", "darg-ti", Tags: ["blog", "shadowdim-ap-1", "generated"]),
-                new("arden", "Arden", Tags: ["blog", "shadowdim-ap-1", "generated"]),
+                new("arden", "Arden", PartOfSpeech: "noun", GrammarClass: "name", Tags: ["blog", "shadowdim-ap-1", "generated", "proper-noun", "exonym", "keep-exonym"]),
                 new("arden's", "Ardenuk", Tags: ["blog", "shadowdim-ap-1", "generated"]),
                 new("art", "hek-thog", Tags: ["blog", "shadowdim-ap-1", "generated"]),
                 new("avoid", "nu-nak-lagu", Tags: ["blog", "shadowdim-ap-1", "generated"]),
@@ -3132,7 +3126,6 @@ namespace PlayerAssistant
                 new("can't", "nu-karnu", Tags: ["blog", "shadowdim-ap-1", "generated"]),
                 new("careful", "gor-thoguk", Tags: ["blog", "shadowdim-ap-1", "generated"]),
                 new("carefully", "gor-thoguk-uk", Tags: ["blog", "shadowdim-ap-1", "generated"]),
-                new("catacombs", "Catacombs", Tags: ["blog", "shadowdim-ap-1", "generated"]),
                 new("change", "var-thog", Tags: ["blog", "shadowdim-ap-1", "generated"]),
                 new("cheese", "quum-thrum", Tags: ["blog", "shadowdim-ap-1", "generated"]),
                 new("chose", "var-lagash", Tags: ["blog", "shadowdim-ap-1", "generated"]),
@@ -3141,7 +3134,7 @@ namespace PlayerAssistant
                 new("clearly", "oglar-grod-uk", Tags: ["blog", "shadowdim-ap-1", "generated"]),
                 new("cloak", "vrak-khal", Tags: ["blog", "shadowdim-ap-1", "generated"]),
                 new("cloak's", "vrak-khal-uk", Tags: ["blog", "shadowdim-ap-1", "generated"]),
-                new("collegium", "Collegium", Tags: ["blog", "shadowdim-ap-1", "generated"]),
+                new("collegium", "Collegium", PartOfSpeech: "noun", GrammarClass: "institution", Tags: ["blog", "shadowdim-ap-1", "generated", "proper-noun", "exonym", "keep-exonym"]),
                 new("column", "ti-dak-bant", Tags: ["blog", "shadowdim-ap-1", "generated"]),
                 new("coming", "nak-lagin", Tags: ["blog", "shadowdim-ap-1", "generated"]),
                 new("concern", "gor-thog-morz", Tags: ["blog", "shadowdim-ap-1", "generated"]),
@@ -3150,68 +3143,64 @@ namespace PlayerAssistant
                 new("converse", "narg-mokru", Tags: ["blog", "shadowdim-ap-1", "generated"]),
                 new("court", "darg-bib-dak", Tags: ["blog", "shadowdim-ap-1", "generated"]),
                 new("cover", "gor-khal", Tags: ["blog", "shadowdim-ap-1", "generated"]),
-                new("cromm", "Cromm", Tags: ["blog", "shadowdim-ap-1", "generated"]),
+                new("cromm", "Cromm", PartOfSpeech: "noun", GrammarClass: "name", Tags: ["blog", "shadowdim-ap-1", "generated", "proper-noun", "exonym", "keep-exonym"]),
                 new("crosses", "dug-lagur", Tags: ["blog", "shadowdim-ap-1", "generated"]),
                 new("crossing", "mograth-bant-in", PartOfSpeech: "verb", GrammarClass: "action", Tags: ["review-promoted", "root-derived", "progressive", "base-cross"]),
                 new("cube", "bant-mur-ti", Tags: ["blog", "shadowdim-ap-1", "generated"]),
                 new("cut", "ecod-ender", PartOfSpeech: "verb", GrammarClass: "craft", Tags: ["cut", "verb", "compound"]),
-                new("dawntrack", "Dawntrack", Tags: ["blog", "shadowdim-ap-1", "generated"]),
+                new("dawntrack", "Dawntrack", PartOfSpeech: "noun", GrammarClass: "place", Tags: ["blog", "shadowdim-ap-1", "generated", "proper-noun", "exonym", "keep-exonym"]),
                 new("dearest", "mokra-ti", Tags: ["blog", "shadowdim-ap-1", "generated"]),
                 new("deeded", "darg-bibash", Tags: ["blog", "shadowdim-ap-1", "generated"]),
                 new("deeply", "burz-tiuk", Tags: ["blog", "shadowdim-ap-1", "generated"]),
-                new("deornorth", "Deornorth", Tags: ["blog", "shadowdim-ap-1", "generated"]),
-                new("deornoth", "Deornoth", Tags: ["blog", "shadowdim-ap-1", "generated"]),
+                new("deornorth", "Deornorth", PartOfSpeech: "noun", GrammarClass: "place", Tags: ["blog", "shadowdim-ap-1", "generated", "proper-noun", "exonym", "keep-exonym"]),
+                new("deornoth", "Deornoth", PartOfSpeech: "noun", GrammarClass: "place", Tags: ["blog", "shadowdim-ap-1", "generated", "proper-noun", "exonym", "keep-exonym", "variant-spelling"]),
                 new("depths", "shad-depth-dedi", Tags: ["blog", "shadowdim-ap-1", "generated"]),
                 new("descent", "thrum-lag", Tags: ["blog", "shadowdim-ap-1", "generated"]),
                 new("details", "bib-biti", Tags: ["blog", "shadowdim-ap-1", "generated"]),
                 new("device", "zol-hek-bit-ti", Tags: ["blog", "shadowdim-ap-1", "generated"]),
-                new("devis", "Devis", Tags: ["blog", "shadowdim-ap-1", "generated"]),
+                new("devis", "Devis", PartOfSpeech: "noun", GrammarClass: "name", Tags: ["blog", "shadowdim-ap-1", "generated", "proper-noun", "exonym", "keep-exonym"]),
                 new("didn't", "nu-hekash", Tags: ["blog", "shadowdim-ap-1", "generated"]),
-                new("disaster", "Disaster", Tags: ["blog", "shadowdim-ap-1", "generated"]),
                 new("don't", "nu-heku", Tags: ["blog", "shadowdim-ap-1", "generated"]),
                 new("done", "hekash-grod", Tags: ["blog", "shadowdim-ap-1", "generated"]),
-                new("dorn", "Dorn", Tags: ["blog", "shadowdim-ap-1", "generated"]),
-                new("dorn's", "Dornuk", Tags: ["blog", "shadowdim-ap-1", "generated"]),
+                new("dorn", "Dorn", PartOfSpeech: "noun", GrammarClass: "name", Tags: ["blog", "shadowdim-ap-1", "generated", "proper-noun", "exonym", "keep-exonym"]),
+                new("dorn's", "Dornuk", PartOfSpeech: "noun", GrammarClass: "name", Tags: ["blog", "shadowdim-ap-1", "generated", "proper-noun", "exonym", "keep-exonym", "possessive"]),
                 new("down", "defuh", PartOfSpeech: "adverb", GrammarClass: "direction", Tags: ["downward"]),
                 new("duo", "dug-mokh", Tags: ["blog", "shadowdim-ap-1", "generated"]),
-                new("dwimmer", "Dwimmer", Tags: ["blog", "shadowdim-ap-1", "generated"]),
+                new("dwimmer", "Dwimmer", PartOfSpeech: "noun", GrammarClass: "name", Tags: ["blog", "shadowdim-ap-1", "generated", "proper-noun", "exonym", "keep-exonym"]),
                 new("early", "nar-dakur-ti", Tags: ["blog", "shadowdim-ap-1", "generated"]),
                 new("easily", "grod-laguk", Tags: ["blog", "shadowdim-ap-1", "generated"]),
-                new("ender", "Ender", Tags: ["blog", "shadowdim-ap-1", "generated"]),
+                new("ender", "Ender", PartOfSpeech: "noun", GrammarClass: "name", Tags: ["blog", "shadowdim-ap-1", "generated", "proper-noun", "exonym", "keep-exonym"]),
                 new("enemy", "morz-mog", Tags: ["blog", "shadowdim-ap-1", "generated"]),
                 new("entrance", "ik-lag-dak", Tags: ["blog", "shadowdim-ap-1", "generated"]),
                 new("error", "morz-bib", Tags: ["blog", "shadowdim-ap-1", "generated"]),
                 new("ever", "dakur-var", Tags: ["blog", "shadowdim-ap-1", "generated"]),
-                new("exarchate", "Exarchate", Tags: ["blog", "shadowdim-ap-1", "generated"]),
-                new("exie", "Exie", Tags: ["blog", "shadowdim-ap-1", "generated"]),
+                new("exarchate", "Exarchate", PartOfSpeech: "noun", GrammarClass: "institution", Tags: ["blog", "shadowdim-ap-1", "generated", "proper-noun", "exonym", "keep-exonym"]),
+                new("exie", "Exie", PartOfSpeech: "noun", GrammarClass: "name", Tags: ["blog", "shadowdim-ap-1", "generated", "proper-noun", "exonym", "keep-exonym"]),
                 new("exie's", "Exieuk", Tags: ["blog", "shadowdim-ap-1", "generated"]),
-                new("falsta", "Falsta", Tags: ["blog", "shadowdim-ap-1", "generated"]),
-                new("falsta's", "Falstauk", Tags: ["blog", "shadowdim-ap-1", "generated"]),
+                new("falsta", "Falsta", PartOfSpeech: "noun", GrammarClass: "name", Tags: ["blog", "shadowdim-ap-1", "generated", "proper-noun", "exonym", "keep-exonym"]),
+                new("falsta's", "Falstauk", PartOfSpeech: "noun", GrammarClass: "name", Tags: ["blog", "shadowdim-ap-1", "generated", "proper-noun", "exonym", "keep-exonym", "possessive"]),
                 new("future", "nar-dakur-lag", Tags: ["blog", "shadowdim-ap-1", "generated"]),
                 new("gate", "ik-lag-gor", Tags: ["blog", "shadowdim-ap-1", "generated"]),
-                new("gatekeepers", "Gatekeepers", Tags: ["blog", "shadowdim-ap-1", "generated"]),
-                new("gio", "Gio", Tags: ["blog", "shadowdim-ap-1", "generated"]),
-                new("giodon", "Giodon", Tags: ["blog", "shadowdim-ap-1", "generated"]),
+                new("gio", "Gio", PartOfSpeech: "noun", GrammarClass: "name", Tags: ["blog", "shadowdim-ap-1", "generated", "proper-noun", "exonym", "keep-exonym"]),
+                new("giodon", "Giodon", PartOfSpeech: "noun", GrammarClass: "name", Tags: ["blog", "shadowdim-ap-1", "generated", "proper-noun", "exonym", "keep-exonym"]),
                 new("government", "darg-mokh-ti", Tags: ["blog", "shadowdim-ap-1", "generated"]),
-                new("grandmaster", "Grandmaster", Tags: ["blog", "shadowdim-ap-1", "generated"]),
-                new("great-barrow", "Great-barrow", Tags: ["blog", "shadowdim-ap-1", "generated"]),
+                new("great-barrow", "Great-barrow", PartOfSpeech: "noun", GrammarClass: "place", Tags: ["blog", "shadowdim-ap-1", "generated", "proper-noun", "exonym", "keep-exonym"]),
                 new("guardswoman", "gor-mog-nar", Tags: ["blog", "shadowdim-ap-1", "generated"]),
-                new("guildmaster", "Guildmaster", Tags: ["blog", "shadowdim-ap-1", "generated"]),
                 new("gullet", "rukh-lag-ik", Tags: ["blog", "shadowdim-ap-1", "generated"]),
                 new("hazard", "morz-nak", Tags: ["blog", "shadowdim-ap-1", "generated"]),
                 new("hazards", "morz-naki", Tags: ["blog", "shadowdim-ap-1", "generated"]),
                 new("heat", "rug-rukh", Tags: ["blog", "shadowdim-ap-1", "generated"]),
-                new("helix", "Helix", Tags: ["blog", "shadowdim-ap-1", "generated"]),
+                new("helix", "Helix", PartOfSpeech: "noun", GrammarClass: "name", Tags: ["blog", "shadowdim-ap-1", "generated", "proper-noun", "exonym", "keep-exonym"]),
                 new("holding", "gor-darg-dak", Tags: ["blog", "shadowdim-ap-1", "generated"]),
                 new("hooded", "ti-khal-ash", Tags: ["blog", "shadowdim-ap-1", "generated"]),
                 new("i'll", "ugh-uk-heku", PartOfSpeech: "pronoun", GrammarClass: "self", Tags: ["blog", "shadowdim-ap-1", "generated", "review-promoted", "contraction", "future", "first-person", "compound"]),
                 new("i've", "Ughmi", PartOfSpeech: "pronoun", GrammarClass: "self", Tags: ["contraction", "first-person", "perfect"]),
-                new("imla", "Imla", Tags: ["blog", "shadowdim-ap-1", "generated"]),
+                new("imla", "Imla", PartOfSpeech: "noun", GrammarClass: "name", Tags: ["blog", "shadowdim-ap-1", "generated", "proper-noun", "exonym", "keep-exonym"]),
                 new("imla's", "Imlauk", Tags: ["blog", "shadowdim-ap-1", "generated"]),
                 new("impact", "gash-thog", Tags: ["blog", "shadowdim-ap-1", "generated"]),
                 new("itinerary", "lag-bib-ti", Tags: ["blog", "shadowdim-ap-1", "generated"]),
-                new("jorun", "Jorun", Tags: ["blog", "shadowdim-ap-1", "generated"]),
-                new("kal-leon", "Kal-leon", Tags: ["blog", "shadowdim-ap-1", "generated"]),
+                new("jorun", "Jorun", PartOfSpeech: "noun", GrammarClass: "name", Tags: ["blog", "shadowdim-ap-1", "generated", "proper-noun", "exonym", "keep-exonym"]),
+                new("kal-leon", "Kal-leon", PartOfSpeech: "noun", GrammarClass: "name", Tags: ["blog", "shadowdim-ap-1", "generated", "proper-noun", "exonym", "keep-exonym"]),
                 new("knots", "khal-gori", Tags: ["blog", "shadowdim-ap-1", "generated"]),
                 new("lack", "nu-zorn", Tags: ["blog", "shadowdim-ap-1", "generated"]),
                 new("lantern's", "oglar-bant-uk", Tags: ["blog", "shadowdim-ap-1", "generated"]),
@@ -3219,7 +3208,7 @@ namespace PlayerAssistant
                 new("letter", "bib-bit", Tags: ["blog", "shadowdim-ap-1", "generated"]),
                 new("limb", "vrak-lag", Tags: ["blog", "shadowdim-ap-1", "generated"]),
                 new("lover", "pukh-mokra", Tags: ["blog", "shadowdim-ap-1", "generated"]),
-                new("lowshelf", "Lowshelf", Tags: ["blog", "shadowdim-ap-1", "generated"]),
+                new("lowshelf", "Lowshelf", PartOfSpeech: "noun", GrammarClass: "place", Tags: ["blog", "shadowdim-ap-1", "generated", "proper-noun", "exonym", "keep-exonym"]),
                 new("manage", "darg-heku", Tags: ["blog", "shadowdim-ap-1", "generated"]),
                 new("married", "pukh-bantash", Tags: ["blog", "shadowdim-ap-1", "generated"]),
                 new("mostly", "mur-flit-mokh-grak", PartOfSpeech: "adverb", GrammarClass: "manner", Tags: ["review-promoted", "problem-proposal-repair", "root-derived", "adverbial", "base-mostly"]),
@@ -3230,34 +3219,34 @@ namespace PlayerAssistant
                 new("noted", "nu-brak-burzash", PartOfSpeech: "verb", GrammarClass: "action", Tags: ["review-promoted", "root-candidate-final", "root-derived", "past", "base-not"]),
                 new("opted", "varguash", PartOfSpeech: "verb", GrammarClass: "action", Tags: ["review-promoted", "root-derived", "past", "base-opt"]),
                 new("ordered", "darg-bib-ash", Tags: ["blog", "shadowdim-ap-1", "generated"]),
-                new("prelm", "Prelm", Tags: ["blog", "shadowdim-ap-1", "generated"]),
+                new("prelm", "Prelm", PartOfSpeech: "noun", GrammarClass: "name", Tags: ["blog", "shadowdim-ap-1", "generated", "proper-noun", "exonym", "keep-exonym"]),
                 new("previous", "ash-dakuruk", Tags: ["blog", "shadowdim-ap-1", "generated"]),
                 new("priest's", "mograth-mog-uk", Tags: ["blog", "shadowdim-ap-1", "generated"]),
                 new("progress", "grod-lag", Tags: ["blog", "shadowdim-ap-1", "generated"]),
-                new("prolemion", "Prolemion", Tags: ["blog", "shadowdim-ap-1", "generated"]),
+                new("prolemion", "Prolemion", PartOfSpeech: "noun", GrammarClass: "name", Tags: ["blog", "shadowdim-ap-1", "generated", "proper-noun", "exonym", "keep-exonym"]),
                 new("quakes", "shad-kwake-aaei", Tags: ["blog", "shadowdim-ap-1", "generated"]),
-                new("rameses", "Rameses", Tags: ["blog", "shadowdim-ap-1", "generated"]),
+                new("rameses", "Rameses", PartOfSpeech: "noun", GrammarClass: "name", Tags: ["blog", "shadowdim-ap-1", "generated", "proper-noun", "exonym", "keep-exonym"]),
                 new("read", "bib-oglaru", Tags: ["blog", "shadowdim-ap-1", "generated"]),
                 new("reading", "bib-oglaru-in", Tags: ["blog", "shadowdim-ap-1", "generated"]),
                 new("ready", "gor-lag", Tags: ["blog", "shadowdim-ap-1", "generated"]),
                 new("safely", "gor-groduk", Tags: ["blog", "shadowdim-ap-1", "generated"]),
                 new("secure", "dok-ka-grod-morz", PartOfSpeech: "verb", GrammarClass: "binding", Tags: ["bind", "secure", "verb"]),
                 new("sent", "lag-dargash", Tags: ["blog", "shadowdim-ap-1", "generated"]),
-                new("shadowdim", "Shadowdim", Tags: ["blog", "shadowdim-ap-1", "generated"]),
+                new("shadowdim", "Shadowdim", PartOfSpeech: "noun", GrammarClass: "place", Tags: ["blog", "shadowdim-ap-1", "generated", "proper-noun", "exonym", "keep-exonym"]),
                 new("silently", "nul-narg-rukhuk-uk", Tags: ["blog", "shadowdim-ap-1", "generated"]),
                 new("slowly", "grot-laguk", Tags: ["blog", "shadowdim-ap-1", "generated"]),
                 new("solution", "grod-lag-bib", Tags: ["blog", "shadowdim-ap-1", "generated"]),
-                new("sovrast", "Sovrast", Tags: ["blog", "shadowdim-ap-1", "generated"]),
+                new("sovrast", "Sovrast", PartOfSpeech: "noun", GrammarClass: "name", Tags: ["blog", "shadowdim-ap-1", "generated", "proper-noun", "exonym", "keep-exonym"]),
                 new("species", "mog-vrak", Tags: ["blog", "shadowdim-ap-1", "generated"]),
                 new("status", "darg-zorn", Tags: ["blog", "shadowdim-ap-1", "generated"]),
-                new("stelg", "Stelg", Tags: ["blog", "shadowdim-ap-1", "generated"]),
-                new("stelgaard", "Stelgaard", Tags: ["blog", "shadowdim-ap-1", "generated"]),
-                new("stelgard", "Stelgard", Tags: ["blog", "shadowdim-ap-1", "generated"]),
+                new("stelg", "Stelg", PartOfSpeech: "noun", GrammarClass: "name", Tags: ["blog", "shadowdim-ap-1", "generated", "proper-noun", "exonym", "keep-exonym"]),
+                new("stelgaard", "Stelgaard", PartOfSpeech: "noun", GrammarClass: "place", Tags: ["blog", "shadowdim-ap-1", "generated", "proper-noun", "exonym", "keep-exonym"]),
+                new("stelgard", "Stelgard", PartOfSpeech: "noun", GrammarClass: "place", Tags: ["blog", "shadowdim-ap-1", "generated", "proper-noun", "exonym", "keep-exonym", "variant-spelling"]),
                 new("student", "bib-thog-mog", Tags: ["blog", "shadowdim-ap-1", "generated"]),
                 new("tax", "darg-drav", Tags: ["blog", "shadowdim-ap-1", "generated"]),
                 new("taxes", "darg-dravi", Tags: ["blog", "shadowdim-ap-1", "generated"]),
                 new("tech", "zol-hek", Tags: ["blog", "shadowdim-ap-1", "generated"]),
-                new("thales", "Thales", Tags: ["blog", "shadowdim-ap-1", "generated"]),
+                new("thales", "Thales", PartOfSpeech: "noun", GrammarClass: "name", Tags: ["blog", "shadowdim-ap-1", "generated", "proper-noun", "exonym", "keep-exonym"]),
                 new("that's", "ut-karn-morz-tur", PartOfSpeech: "pronoun", GrammarClass: "demonstrative", Tags: ["blog", "shadowdim-ap-1", "generated", "review-promoted", "contraction", "state", "compound"]),
                 new("theo's", "Theouk", Tags: ["blog", "shadowdim-ap-1", "generated"]),
                 new("there's", "dak-doku-darg-tur", PartOfSpeech: "adverb", GrammarClass: "location", Tags: ["blog", "shadowdim-ap-1", "generated", "review-promoted", "contraction", "state", "compound"]),
@@ -3266,7 +3255,7 @@ namespace PlayerAssistant
                 new("thick", "ti-thrum", Tags: ["blog", "shadowdim-ap-1", "generated"]),
                 new("things", "zol-biti", Tags: ["blog", "shadowdim-ap-1", "generated"]),
                 new("thousand", "ti-dakur-ti", Tags: ["blog", "shadowdim-ap-1", "generated"]),
-                new("thracia", "Thracia", Tags: ["blog", "shadowdim-ap-1", "generated"]),
+                new("thracia", "Thracia", PartOfSpeech: "noun", GrammarClass: "place", Tags: ["blog", "shadowdim-ap-1", "generated", "proper-noun", "exonym", "keep-exonym"]),
                 new("told", "nargash", Tags: ["blog", "shadowdim-ap-1", "generated"]),
                 new("too", "agh-ti", Tags: ["blog", "shadowdim-ap-1", "generated"]),
                 new("torch", "rug-oglar-zol", Tags: ["blog", "shadowdim-ap-1", "generated"]),
@@ -3278,23 +3267,21 @@ namespace PlayerAssistant
                 new("unless", "nu-ash", Tags: ["blog", "shadowdim-ap-1", "generated"]),
                 new("used", "hekash-use", Tags: ["blog", "shadowdim-ap-1", "generated"]),
                 new("various", "var-biti", Tags: ["blog", "shadowdim-ap-1", "generated"]),
-                new("vida", "Vida", Tags: ["blog", "shadowdim-ap-1", "generated"]),
+                new("vida", "Vida", PartOfSpeech: "noun", GrammarClass: "name", Tags: ["blog", "shadowdim-ap-1", "generated", "proper-noun", "exonym", "keep-exonym"]),
                 new("visited", "nak-lagash", Tags: ["blog", "shadowdim-ap-1", "generated"]),
-                new("visitors", "Visitors", Tags: ["blog", "shadowdim-ap-1", "generated"]),
                 new("void", "nul-dak-ti", Tags: ["blog", "shadowdim-ap-1", "generated"]),
-                new("vul", "Vul", Tags: ["blog", "shadowdim-ap-1", "generated"]),
                 new("walls", "gor-heki", Tags: ["blog", "shadowdim-ap-1", "generated"]),
                 new("warming", "rug-rukhin", Tags: ["blog", "shadowdim-ap-1", "generated"]),
                 new("wasn't", "nu-tash", Tags: ["blog", "shadowdim-ap-1", "generated"]),
                 new("we're", "ugh-mokh-tur", PartOfSpeech: "pronoun", GrammarClass: "group", Tags: ["blog", "shadowdim-ap-1", "generated", "review-promoted", "contraction", "state", "first-person-plural", "compound"]),
-                new("what's", "narg-var nar", Tags: ["blog", "shadowdim-ap-1", "generated"]),
+                new("what's", "narg-var nar", PartOfSpeech: "pronoun", GrammarClass: "question", Tags: ["blog", "shadowdim-ap-1", "generated", "contraction", "state", "fixed-phrase"]),
                 new("without", "nu-agh", Tags: ["blog", "shadowdim-ap-1", "generated"]),
                 new("woman", "margi-nar", Tags: ["blog", "shadowdim-ap-1", "generated"]),
                 new("worked", "hek-grum-morzash", PartOfSpeech: "verb", GrammarClass: "action", Tags: ["review-promoted", "root-derived", "past", "base-work"]),
                 new("world's", "dak-mokh-ti-uk", Tags: ["blog", "shadowdim-ap-1", "generated"]),
                 new("worlds", "dak-mokh-tii", Tags: ["blog", "shadowdim-ap-1", "generated"]),
                 new("wrong", "morz-bibuk", Tags: ["blog", "shadowdim-ap-1", "generated"]),
-                new("wynthia", "Wynthia", Tags: ["blog", "shadowdim-ap-1", "generated"]),
+                new("wynthia", "Wynthia", PartOfSpeech: "noun", GrammarClass: "name", Tags: ["blog", "shadowdim-ap-1", "generated", "proper-noun", "exonym", "keep-exonym"]),
                 new("yes", "akh", Tags: ["blog", "shadowdim-ap-1", "generated"]),
                 new("yet", "nar-nu", Tags: ["blog", "shadowdim-ap-1", "generated"]),
                 new("you'll", "narg-uk", PartOfSpeech: "pronoun", GrammarClass: "address", Tags: ["blog", "shadowdim-ap-1", "generated", "review-promoted", "contraction", "future", "second-person", "compound"]),
@@ -3302,7 +3289,7 @@ namespace PlayerAssistant
                 new("you've", "narg-tukur", PartOfSpeech: "pronoun", GrammarClass: "address", Tags: ["blog", "shadowdim-ap-1", "generated", "review-promoted", "contraction", "perfect", "second-person", "compound"]),
                 new("yourself", "zu-vrak", Tags: ["blog", "shadowdim-ap-1", "generated"]),
                 new("youth's", "margi-bit-uk", Tags: ["blog", "shadowdim-ap-1", "generated"]),
-                new("zorvin", "Zorvin", Tags: ["blog", "shadowdim-ap-1", "generated"]),
+                new("zorvin", "Zorvin", PartOfSpeech: "noun", GrammarClass: "name", Tags: ["blog", "shadowdim-ap-1", "generated", "proper-noun", "exonym", "keep-exonym"]),
             ]);
 
             // Generated from codex-scratch/orcish-shadowdim-ap-2/non-chrome-text.txt.
@@ -3316,28 +3303,26 @@ namespace PlayerAssistant
                 new("adds", "dravku-gashur-i", Tags: ["blog", "shadowdim-ap-2", "generated"]),
                 new("adjusts", "var-thog-mokhur", Tags: ["blog", "shadowdim-ap-2", "generated", "review-repaired", "root-derived"]),
                 new("admits", "grak-nargur", Tags: ["blog", "shadowdim-ap-2", "generated", "review-repaired", "root-derived"]),
-                new("aele", "Aele", Tags: ["blog", "shadowdim-ap-2", "generated"]),
-                new("aelf", "Aelf", Tags: ["blog", "shadowdim-ap-2", "generated"]),
-                new("aelven", "Aelfuk", Tags: ["blog", "shadowdim-ap-2", "generated"]),
+                new("aele", "Aele", PartOfSpeech: "noun", GrammarClass: "lineage", Tags: ["blog", "shadowdim-ap-2", "generated", "proper-noun", "exonym", "keep-exonym"]),
+                new("aelf", "Aelf", PartOfSpeech: "noun", GrammarClass: "lineage", Tags: ["blog", "shadowdim-ap-2", "generated", "proper-noun", "exonym", "keep-exonym"]),
+                new("aelven", "Aelfuk", PartOfSpeech: "adjective", GrammarClass: "lineage", Tags: ["blog", "shadowdim-ap-2", "generated", "proper-noun", "exonym", "keep-exonym", "possessive-derived"]),
                 new("alive", "rukh-nar", Tags: ["blog", "shadowdim-ap-2", "generated"]),
                 new("angles", "var-lag-biti", Tags: ["blog", "shadowdim-ap-2", "generated"]),
                 new("answers", "narg-doki", Tags: ["blog", "shadowdim-ap-2", "generated"]),
                 new("approval", "grod-darg-thog", Tags: ["blog", "shadowdim-ap-2", "generated"]),
-                new("arandia", "Arandia", Tags: ["blog", "shadowdim-ap-2", "generated"]),
-                new("arandian", "Arandian", Tags: ["blog", "shadowdim-ap-2", "generated"]),
+                new("arandia", "Arandia", PartOfSpeech: "noun", GrammarClass: "place", Tags: ["blog", "shadowdim-ap-2", "generated", "proper-noun", "exonym", "keep-exonym"]),
+                new("arandian", "Arandian", PartOfSpeech: "adjective", GrammarClass: "demonym", Tags: ["blog", "shadowdim-ap-2", "generated", "proper-noun", "exonym", "keep-exonym"]),
                 new("aren't", "nu-nar", Tags: ["blog", "shadowdim-ap-2", "generated"]),
                 new("assesses", "thog-oglaruri", Tags: ["blog", "shadowdim-ap-2", "generated"]),
                 new("backpack", "khal-bant-vrak", Tags: ["blog", "shadowdim-ap-2", "generated"]),
                 new("befriend", "mokra-heku", Tags: ["blog", "shadowdim-ap-2", "generated"]),
-                new("blackfists", "Blackfists", Tags: ["blog", "shadowdim-ap-2", "generated"]),
                 new("bothering", "morz-nak-hekin", Tags: ["blog", "shadowdim-ap-2", "generated"]),
-                new("burdock's", "Burdockuk", Tags: ["blog", "shadowdim-ap-2", "generated"]),
+                new("burdock's", "Burdockuk", PartOfSpeech: "noun", GrammarClass: "name", Tags: ["blog", "shadowdim-ap-2", "generated", "proper-noun", "exonym", "keep-exonym", "possessive"]),
                 new("burn", "rug-rukhu", Tags: ["blog", "shadowdim-ap-2", "generated"]),
                 new("bust", "braku", Tags: ["blog", "shadowdim-ap-2", "generated"]),
                 new("cache", "gor-drav-dak-bit", Tags: ["blog", "shadowdim-ap-2", "generated"]),
                 new("calls", "narguri", Tags: ["blog", "shadowdim-ap-2", "generated"]),
                 new("canopy", "ti-khal-vril", Tags: ["blog", "shadowdim-ap-2", "generated"]),
-                new("cathedral", "Cathedral", Tags: ["blog", "shadowdim-ap-2", "generated"]),
                 new("chilly", "grot-rukhuk", Tags: ["blog", "shadowdim-ap-2", "generated"]),
                 new("clergy", "mograth-mogi", Tags: ["blog", "shadowdim-ap-2", "generated"]),
                 new("colder", "grot-rukh-ti", Tags: ["blog", "shadowdim-ap-2", "generated"]),
@@ -3373,15 +3358,15 @@ namespace PlayerAssistant
                 new("full", "mokh-ti", Tags: ["blog", "shadowdim-ap-2", "generated"]),
                 new("generations", "dakur-vraki", Tags: ["blog", "shadowdim-ap-2", "generated"]),
                 new("glittering", "oglar-zol-in", Tags: ["blog", "shadowdim-ap-2", "generated"]),
-                new("gosterwick", "Gosterwick", Tags: ["blog", "shadowdim-ap-2", "generated"]),
-                new("greatmoss", "Greatmoss", Tags: ["blog", "shadowdim-ap-2", "generated"]),
+                new("gosterwick", "Gosterwick", PartOfSpeech: "noun", GrammarClass: "place", Tags: ["blog", "shadowdim-ap-2", "generated", "proper-noun", "exonym", "keep-exonym"]),
+                new("greatmoss", "Greatmoss", PartOfSpeech: "noun", GrammarClass: "place", Tags: ["blog", "shadowdim-ap-2", "generated", "proper-noun", "exonym", "keep-exonym"]),
                 new("half-empty", "thrum-murk-nul-hrowk", Tags: ["blog", "shadowdim-ap-2", "generated"]),
                 new("haunted", "morz-thog-darguk", Tags: ["blog", "shadowdim-ap-2", "generated"]),
                 new("heal", "vrak-grodu", Tags: ["blog", "shadowdim-ap-2", "generated"]),
                 new("highly", "ti-tiuk", Tags: ["blog", "shadowdim-ap-2", "generated"]),
                 new("interesting", "thog-nakuk", Tags: ["blog", "shadowdim-ap-2", "generated"]),
                 new("intimate", "pukh-nakuk", Tags: ["blog", "shadowdim-ap-2", "generated"]),
-                new("karstbridge", "Karstbridge", Tags: ["blog", "shadowdim-ap-2", "generated"]),
+                new("karstbridge", "Karstbridge", PartOfSpeech: "noun", GrammarClass: "place", Tags: ["blog", "shadowdim-ap-2", "generated", "proper-noun", "exonym", "keep-exonym"]),
                 new("laden", "bant-hrowkuk", Tags: ["blog", "shadowdim-ap-2", "generated"]),
                 new("lake", "rukh-murk-dak-ti", Tags: ["blog", "shadowdim-ap-2", "generated"]),
                 new("lanterns", "oglar-banti", Tags: ["blog", "shadowdim-ap-2", "generated"]),
@@ -3429,7 +3414,7 @@ namespace PlayerAssistant
                 new("retrieves", "hrowk-dokur", Tags: ["blog", "shadowdim-ap-2", "generated"]),
                 new("ropers", "khal-morz-daki", Tags: ["blog", "shadowdim-ap-2", "generated"]),
                 new("rumble", "dak-narg-ti", Tags: ["blog", "shadowdim-ap-2", "generated"]),
-                new("ruven", "Ruven", Tags: ["blog", "shadowdim-ap-2", "generated"]),
+                new("ruven", "Ruven", PartOfSpeech: "noun", GrammarClass: "name", Tags: ["blog", "shadowdim-ap-2", "generated", "proper-noun", "exonym", "keep-exonym"]),
                 new("savoring", "rukh-thog-grodin", Tags: ["blog", "shadowdim-ap-2", "generated"]),
                 new("seeming", "oglar-thoguk", Tags: ["blog", "shadowdim-ap-2", "generated"]),
                 new("separate", "var-dakuk", Tags: ["blog", "shadowdim-ap-2", "generated"]),
@@ -3467,7 +3452,7 @@ namespace PlayerAssistant
                 new("tool", "hek-zol", Tags: ["blog", "shadowdim-ap-2", "generated"]),
                 new("treated", "vrak-gorash", Tags: ["blog", "shadowdim-ap-2", "generated"]),
                 new("tripled", "dug-ti-agh", Tags: ["blog", "shadowdim-ap-2", "generated"]),
-                new("truemas", "Truemas", Tags: ["blog", "shadowdim-ap-2", "generated"]),
+                new("truemas", "Truemas", PartOfSpeech: "noun", GrammarClass: "name", Tags: ["blog", "shadowdim-ap-2", "generated", "proper-noun", "exonym", "keep-exonym"]),
                 new("tunnels", "burz-lagi", Tags: ["blog", "shadowdim-ap-2", "generated"]),
                 new("uncertainly", "nu-gor-thoguk", Tags: ["blog", "shadowdim-ap-2", "generated"]),
                 new("unmarked", "nu-bibuk", Tags: ["blog", "shadowdim-ap-2", "generated"]),
@@ -3486,7 +3471,7 @@ namespace PlayerAssistant
                 new("wield", "zol-dargu", Tags: ["blog", "shadowdim-ap-2", "generated"]),
                 new("wrongly", "morz-bibuk-ti", Tags: ["blog", "shadowdim-ap-2", "generated"]),
                 new("you'd", "narg-hekash", PartOfSpeech: "pronoun", GrammarClass: "address", Tags: ["blog", "shadowdim-ap-2", "generated", "review-promoted", "contraction", "conditional", "second-person", "compound"]),
-                new("zhorvin", "Zhorvin", Tags: ["blog", "shadowdim-ap-2", "generated"]),
+                new("zhorvin", "Zhorvin", PartOfSpeech: "noun", GrammarClass: "name", Tags: ["blog", "shadowdim-ap-2", "generated", "proper-noun", "exonym", "keep-exonym"]),
             ]);
 
             // Generated from codex-scratch/orcish-shadowdim-ap-3/non-chrome-text.txt.
@@ -3497,7 +3482,7 @@ namespace PlayerAssistant
                 new("adorn", "dokur-hekruh-flit", Tags: ["blog", "shadowdim-ap-3", "generated"]),
                 new("adorned", "dokur-hekruh-flitu", Tags: ["blog", "shadowdim-ap-3", "generated"]),
                 new("adorning", "dokur-hekruh-flit-in", Tags: ["blog", "shadowdim-ap-3", "generated"]),
-                new("arden-flow", "Arden-flow", Tags: ["blog", "shadowdim-ap-3", "generated"]),
+                new("arden-flow", "Arden-flow", PartOfSpeech: "noun", GrammarClass: "place", Tags: ["blog", "shadowdim-ap-3", "generated", "proper-noun", "exonym", "keep-exonym"]),
                 new("attacked", "gash-narg-ash", Tags: ["blog", "shadowdim-ap-3", "generated"]),
                 new("attacking", "gash-narg-in", Tags: ["blog", "shadowdim-ap-3", "generated"]),
                 new("attacks", "gashuri", Tags: ["blog", "shadowdim-ap-3", "generated"]),
@@ -3508,7 +3493,7 @@ namespace PlayerAssistant
                 new("bitten", "krumash", Tags: ["blog", "shadowdim-ap-3", "generated"]),
                 new("blowing", "gash-rukh-in-ash-zog", Tags: ["blog", "shadowdim-ap-3", "generated"]),
                 new("buildings", "hekin-daki", Tags: ["blog", "shadowdim-ap-3", "generated"]),
-                new("burdock", "Burdock", Tags: ["blog", "shadowdim-ap-3", "generated"]),
+                new("burdock", "Burdock", PartOfSpeech: "noun", GrammarClass: "name", Tags: ["blog", "shadowdim-ap-3", "generated", "proper-noun", "exonym", "keep-exonym"]),
                 new("burning", "rug-rukhu-in", Tags: ["blog", "shadowdim-ap-3", "generated"]),
                 new("chambers", "burz-dak-mokhi", Tags: ["blog", "shadowdim-ap-3", "generated"]),
                 new("charcoal", "rug-burz-zol", Tags: ["blog", "shadowdim-ap-3", "generated"]),
@@ -3516,7 +3501,6 @@ namespace PlayerAssistant
                 new("cliff-top", "ti-dak-zol-nak-ti", Tags: ["blog", "shadowdim-ap-3", "generated"]),
                 new("cloaks", "vrak-khali", Tags: ["blog", "shadowdim-ap-3", "generated"]),
                 new("coins", "drav-zoli", Tags: ["blog", "shadowdim-ap-3", "generated"]),
-                new("colossal", "Colossal", Tags: ["blog", "shadowdim-ap-3", "generated"]),
                 new("comes", "ik-lagui", Tags: ["blog", "shadowdim-ap-3", "generated"]),
                 new("crossbows", "dug-bant-zoli", Tags: ["blog", "shadowdim-ap-3", "generated"]),
                 new("curses", "morz-gur-nargi", Tags: ["blog", "shadowdim-ap-3", "generated"]),
@@ -3531,25 +3515,20 @@ namespace PlayerAssistant
                 new("floors", "dak-burz-thrumi", Tags: ["blog", "shadowdim-ap-3", "generated"]),
                 new("friends", "mokrai", Tags: ["blog", "shadowdim-ap-3", "generated"]),
                 new("gained", "dravu-ash", Tags: ["blog", "shadowdim-ap-3", "generated"]),
-                new("gog", "Gog", Tags: ["blog", "shadowdim-ap-3", "generated"]),
+                new("gog", "Gog", PartOfSpeech: "noun", GrammarClass: "name", Tags: ["blog", "shadowdim-ap-3", "generated", "proper-noun", "exonym", "keep-exonym"]),
                 new("half-men", "thrum-murk-margith", Tags: ["blog", "shadowdim-ap-3", "generated"]),
                 new("he's", "mogum-tur", PartOfSpeech: "pronoun", GrammarClass: "person", Tags: ["blog", "shadowdim-ap-3", "generated", "review-promoted", "contraction", "state", "third-person", "compound"]),
                 new("heights", "ti-thogi", Tags: ["blog", "shadowdim-ap-3", "generated"]),
                 new("hieroglyphs", "mograth-bibi-zoli", Tags: ["blog", "shadowdim-ap-3", "generated"]),
                 new("ibis", "flit-mog-zol", Tags: ["blog", "shadowdim-ap-3", "generated"]),
-                new("imperial", "Imperial", Tags: ["blog", "shadowdim-ap-3", "generated"]),
                 new("initiatives", "ashdak-gash-thogi", Tags: ["blog", "shadowdim-ap-3", "generated"]),
                 new("insisted", "dargu-thog-ash", Tags: ["blog", "shadowdim-ap-3", "generated"]),
                 new("it'll", "um-uk", PartOfSpeech: "pronoun", GrammarClass: "object", Tags: ["blog", "shadowdim-ap-3", "generated", "review-promoted", "contraction", "future", "third-person", "compound"]),
-                new("korvin", "Korvin", Tags: ["blog", "shadowdim-ap-3", "generated"]),
                 new("largely", "ti-mur-uk", Tags: ["blog", "shadowdim-ap-3", "generated"]),
                 new("light's", "rukh-oglar-uk", Tags: ["blog", "shadowdim-ap-3", "generated"]),
-                new("maat", "Maat", Tags: ["blog", "shadowdim-ap-3", "generated"]),
                 new("named", "mog-nargash", PartOfSpeech: "verb", GrammarClass: "action", Tags: ["review-promoted", "root-derived", "past", "base-name"]),
-                new("newmarket", "Newmarket", Tags: ["blog", "shadowdim-ap-3", "generated"]),
                 new("oils", "rukh-rukhi", Tags: ["blog", "shadowdim-ap-3", "generated"]),
                 new("packs", "hrowk-khali", Tags: ["blog", "shadowdim-ap-3", "generated"]),
-                new("paleologue", "Paleologue", Tags: ["blog", "shadowdim-ap-3", "generated"]),
                 new("parchment", "bib-vrak", Tags: ["blog", "shadowdim-ap-3", "generated"]),
                 new("party", "lag-mokh", Tags: ["blog", "shadowdim-ap-3", "generated"]),
                 new("patrol", "gor-lag-mokh", Tags: ["blog", "shadowdim-ap-3", "generated"]),
@@ -3560,8 +3539,6 @@ namespace PlayerAssistant
                 new("retrieve", "daki-grod", PartOfSpeech: "verb", GrammarClass: "recovery", Tags: ["infinitive", "compound"]),
                 new("rings", "bant-murki", Tags: ["blog", "shadowdim-ap-3", "generated"]),
                 new("river", "rukh-lag-ti", Tags: ["blog", "shadowdim-ap-3", "generated"]),
-                new("rosk", "Rosk", Tags: ["blog", "shadowdim-ap-3", "generated"]),
-                new("roskelly", "Roskelly", Tags: ["blog", "shadowdim-ap-3", "generated"]),
                 new("secrets", "noglari", Tags: ["blog", "shadowdim-ap-3", "generated"]),
                 new("shadows", "burz-naki", Tags: ["blog", "shadowdim-ap-3", "generated"]),
                 new("sitting", "dok-gashin-zog-darg", PartOfSpeech: "verb", GrammarClass: "posture", Tags: ["progressive", "compound"]),
@@ -3571,7 +3548,6 @@ namespace PlayerAssistant
                 new("stone's", "zol-dak-uk", Tags: ["blog", "shadowdim-ap-3", "generated"]),
                 new("stories", "var-bibi", Tags: ["blog", "shadowdim-ap-3", "generated"]),
                 new("swords", "zol-gashi", Tags: ["blog", "shadowdim-ap-3", "generated"]),
-                new("thoth", "Thoth", Tags: ["blog", "shadowdim-ap-3", "generated"]),
                 new("ties", "dok-kaur", PartOfSpeech: "verb", GrammarClass: "action", Tags: ["review-promoted", "root-derived", "s-form", "base-tie"]),
                 new("towering", "ti-hek-in", Tags: ["blog", "shadowdim-ap-3", "generated"]),
                 new("traveling", "lagu-dok-in", Tags: ["blog", "shadowdim-ap-3", "generated"]),
@@ -3588,12 +3564,10 @@ namespace PlayerAssistant
                 new("acceptable", "arcturus-gashi-evazhun", Tags: ["blog", "shadowdim-ap-4", "generated"]),
                 new("acquired", "dravik-heki-ka", Tags: ["blog", "shadowdim-ap-4", "generated"]),
                 new("advises", "aba-hek-goru-dag-i", Tags: ["blog", "shadowdim-ap-4", "generated"]),
-                new("agarics", "Agarici", Tags: ["blog", "shadowdim-ap-4", "generated"]),
                 new("ambushing", "noglar-gashin", Tags: ["blog", "shadowdim-ap-4", "generated"]),
                 new("anxious", "morz-thog-nar", Tags: ["blog", "shadowdim-ap-4", "generated"]),
                 new("asparagus", "vril-quum-lag", Tags: ["blog", "shadowdim-ap-4", "generated"]),
                 new("beholders", "ashuk-dravku", PartOfSpeech: "noun", GrammarClass: "creature", Tags: ["observer", "plural", "compound"]),
-                new("blackfist", "Blackfist", Tags: ["blog", "shadowdim-ap-4", "generated"]),
                 new("blood-birds", "pukh-flit-mogi", Tags: ["blog", "shadowdim-ap-4", "generated"]),
                 new("blunt", "nu-zol-nakuk", Tags: ["blog", "shadowdim-ap-4", "generated"]),
                 new("brings", "hrowkuri", Tags: ["blog", "shadowdim-ap-4", "generated"]),
@@ -3603,7 +3577,6 @@ namespace PlayerAssistant
                 new("cat", "vark-thrum-mog", Tags: ["blog", "shadowdim-ap-4", "generated"]),
                 new("cat's", "vark-thrum-mog-uk", Tags: ["blog", "shadowdim-ap-4", "generated"]),
                 new("changes", "var-thogi", Tags: ["blog", "shadowdim-ap-4", "generated"]),
-                new("chesire", "Chesire", Tags: ["blog", "shadowdim-ap-4", "generated"]),
                 new("club", "gash-bant-zol", Tags: ["blog", "shadowdim-ap-4", "generated"]),
                 new("confidence", "thog-darg-ti", Tags: ["blog", "shadowdim-ap-4", "generated"]),
                 new("counters", "rukh-quum-banti", Tags: ["blog", "shadowdim-ap-4", "generated"]),
@@ -3632,10 +3605,8 @@ namespace PlayerAssistant
                 new("heals", "vrak-grodui", Tags: ["blog", "shadowdim-ap-4", "generated"]),
                 new("hogweed", "vark-vril-quum", Tags: ["blog", "shadowdim-ap-4", "generated"]),
                 new("hoping", "mauk-thruk-thog-in", PartOfSpeech: "verb", GrammarClass: "action", Tags: ["review-promoted", "root-derived", "progressive", "base-hope"]),
-                new("hunt", "gash-lag-mokh-grrt-grum", Tags: ["blog", "shadowdim-ap-4", "generated"]),
                 new("ivory", "vrak-zol-thrum", Tags: ["blog", "shadowdim-ap-4", "generated"]),
                 new("lantern-refills", "oglar-bant-rukh-doki", Tags: ["blog", "shadowdim-ap-4", "generated"]),
-                new("lexie", "Lexie", Tags: ["blog", "shadowdim-ap-4", "generated"]),
                 new("license", "darg-bib-ti", Tags: ["blog", "shadowdim-ap-4", "generated"]),
                 new("limbering", "vrak-thrum-grodin", Tags: ["blog", "shadowdim-ap-4", "generated"]),
                 new("limestone", "thrum-dak-zol", Tags: ["blog", "shadowdim-ap-4", "generated"]),
@@ -3645,7 +3616,6 @@ namespace PlayerAssistant
                 new("mentions", "dikultur", PartOfSpeech: "verb", GrammarClass: "speech", Tags: ["cite", "present"]),
                 new("quieten down", "dornukik-bant-burz", PartOfSpeech: "interjection", GrammarClass: "command", Tags: ["quiet", "imperative", "fixed-phrase"]),
                 new("be quieter", "dornukik-zog-narg", PartOfSpeech: "interjection", GrammarClass: "command", Tags: ["quiet", "imperative", "fixed-phrase"]),
-                new("mercs", "Mercs", Tags: ["blog", "shadowdim-ap-4", "generated"]),
                 new("minted", "drav-bibash", Tags: ["blog", "shadowdim-ap-4", "generated"]),
                 new("monetary", "drav-zornuk", Tags: ["blog", "shadowdim-ap-4", "generated"]),
                 new("moth-eaten", "kruk-quumash", Tags: ["blog", "shadowdim-ap-4", "generated"]),
@@ -3655,7 +3625,6 @@ namespace PlayerAssistant
                 new("oily", "rukh-rukhuk", Tags: ["blog", "shadowdim-ap-4", "generated"]),
                 new("options", "vargi", Tags: ["blog", "shadowdim-ap-4", "generated"]),
                 new("peering", "mokru-mog-in", Tags: ["blog", "shadowdim-ap-4", "generated"]),
-                new("phlebotomas", "Phlebotomas", Tags: ["blog", "shadowdim-ap-4", "generated"]),
                 new("positive", "grod-rukhuk", Tags: ["blog", "shadowdim-ap-4", "generated"]),
                 new("potency", "rukh-zorn-ti", Tags: ["blog", "shadowdim-ap-4", "generated"]),
                 new("prisoners", "gor-darg-mogi", Tags: ["blog", "shadowdim-ap-4", "generated"]),
@@ -3667,26 +3636,21 @@ namespace PlayerAssistant
                 new("seconds", "dugi", Tags: ["blog", "shadowdim-ap-4", "generated"]),
                 new("shakedown", "dravash-defuh", PartOfSpeech: "noun", GrammarClass: "coercion", Tags: ["extortion", "compound"]),
                 new("shelf-like", "bib-bant-mok", Tags: ["blog", "shadowdim-ap-4", "generated"]),
-                new("shinker's", "Shinkeruk", Tags: ["blog", "shadowdim-ap-4", "generated"]),
                 new("speaking", "nargu-in", Tags: ["blog", "shadowdim-ap-4", "generated"]),
                 new("spores", "gruul-rukh-biti", Tags: ["blog", "shadowdim-ap-4", "generated"]),
                 new("square-cut", "murk-mokh-dak-zol-gashu", Tags: ["blog", "shadowdim-ap-4", "generated"]),
                 new("stick", "lag-zol-bit", Tags: ["blog", "shadowdim-ap-4", "generated"]),
-                new("sulla", "Sulla", Tags: ["blog", "shadowdim-ap-4", "generated"]),
-                new("sulla's", "Sullauk", Tags: ["blog", "shadowdim-ap-4", "generated"]),
                 new("targeting", "narg-gash-in", Tags: ["blog", "shadowdim-ap-4", "generated"]),
                 new("targets", "narg-gashi", Tags: ["blog", "shadowdim-ap-4", "generated"]),
                 new("tariff", "drav-darg-bit", Tags: ["blog", "shadowdim-ap-4", "generated"]),
                 new("three-story", "dug-agh-ash-var-bib", Tags: ["blog", "shadowdim-ap-4", "generated"]),
                 new("tithing", "drav-mograth-dargin", Tags: ["blog", "shadowdim-ap-4", "generated"]),
-                new("tradewell", "Tradewell", Tags: ["blog", "shadowdim-ap-4", "generated"]),
                 new("trapdoor", "noglar-gor-dak", Tags: ["blog", "shadowdim-ap-4", "generated"]),
                 new("truce", "nul-gash-mokru", Tags: ["blog", "shadowdim-ap-4", "generated"]),
                 new("vaulted", "gor-drav-dak-ash", Tags: ["blog", "shadowdim-ap-4", "generated"]),
                 new("vial", "rukh-bant-bit-thrum", Tags: ["blog", "shadowdim-ap-4", "generated"]),
                 new("vials", "rukh-bant-bit-thrumi", Tags: ["blog", "shadowdim-ap-4", "generated"]),
                 new("vine", "vril-khal", Tags: ["blog", "shadowdim-ap-4", "generated"]),
-                new("vul's", "Vuluk", Tags: ["blog", "shadowdim-ap-4", "generated"]),
                 new("what'll", "narg-var-uk", PartOfSpeech: "pronoun", GrammarClass: "question", Tags: ["blog", "shadowdim-ap-4", "generated", "review-promoted", "contraction", "future", "compound"]),
             ]);
 
@@ -3701,7 +3665,6 @@ namespace PlayerAssistant
                 new("bypass", "skarg-pass", Tags: ["blog", "shadowdim-ap-5", "generated"]),
                 new("chamber's", "burz-dak-mokhuk", Tags: ["blog", "shadowdim-ap-5", "generated"]),
                 new("conservation", "thrak-keep", Tags: ["blog", "shadowdim-ap-5", "generated"]),
-                new("cromm-thoth", "Cromm-Thoth", Tags: ["blog", "shadowdim-ap-5", "generated"]),
                 new("crown", "krun", Tags: ["blog", "shadowdim-ap-5", "generated"]),
                 new("damned", "morz-shak-dak", Tags: ["blog", "shadowdim-ap-5", "generated"]),
                 new("detected", "zog-ash", Tags: ["blog", "shadowdim-ap-5", "generated"]),
@@ -3730,13 +3693,12 @@ namespace PlayerAssistant
                 new("rounding", "bant-murkuk-in", PartOfSpeech: "verb", GrammarClass: "action", Tags: ["review-promoted", "root-derived", "progressive", "base-round"]),
                 new("squashed", "brak-thrumash", Tags: ["blog", "shadowdim-ap-5", "generated", "review-repaired", "root-derived"]),
                 new("statue's", "zol-mog-bantuk", Tags: ["blog", "shadowdim-ap-5", "generated"]),
-                new("thothian", "Thoth-uk", Tags: ["blog", "shadowdim-ap-5", "generated"]),
                 new("value-to-weight", "drav-thog-ti-ur-bant-zorn", Tags: ["blog", "shadowdim-ap-5", "generated"]),
                 new("vegetables", "vril-nar", Tags: ["blog", "shadowdim-ap-5", "generated"]),
             ]);
 
             var baseEntries = entries.ToArray();
-            entries.AddRange(BuildPluralPossessives(baseEntries));
+            entries.AddRange(BuildDerivedMorphologyEntries(baseEntries));
             return entries.ToArray();
         }
 
@@ -3869,6 +3831,78 @@ namespace PlayerAssistant
                 entryTags.Any(entryTag => string.Equals(entryTag, requiredTag, StringComparison.OrdinalIgnoreCase)));
         }
 
+        private static IEnumerable<OrcishLexiconEntry> BuildDerivedMorphologyEntries(IEnumerable<OrcishLexiconEntry> entries)
+        {
+            var sourceEntries = entries.ToArray();
+            var emittedSignatures = sourceEntries
+                .Select(CreateEntrySignature)
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+            foreach (var entry in sourceEntries)
+            {
+                if (HasTag(entry, "derive-plural"))
+                {
+                    var candidate = CreateDerivedEntry(
+                        entry,
+                        ToEnglishPlural(entry.English),
+                        ToOrcishPlural(entry.Orcish),
+                        "plural",
+                        "s-form");
+                    if (emittedSignatures.Add(CreateEntrySignature(candidate)))
+                    {
+                        yield return candidate;
+                    }
+                }
+
+                if (HasTag(entry, "derive-present"))
+                {
+                    var candidate = CreateDerivedEntry(
+                        entry,
+                        ToEnglishPresent(entry.English),
+                        ToOrcishVerbForm(entry.Orcish, "ur"),
+                        "present");
+                    if (emittedSignatures.Add(CreateEntrySignature(candidate)))
+                    {
+                        yield return candidate;
+                    }
+                }
+
+                if (HasTag(entry, "derive-past"))
+                {
+                    var candidate = CreateDerivedEntry(
+                        entry,
+                        ToEnglishPast(entry.English),
+                        ToOrcishVerbForm(entry.Orcish, "ash"),
+                        "past");
+                    if (emittedSignatures.Add(CreateEntrySignature(candidate)))
+                    {
+                        yield return candidate;
+                    }
+                }
+
+                if (HasTag(entry, "derive-progressive"))
+                {
+                    var candidate = CreateDerivedEntry(
+                        entry,
+                        ToEnglishProgressive(entry.English),
+                        ToOrcishVerbForm(entry.Orcish, "in"),
+                        "progressive");
+                    if (emittedSignatures.Add(CreateEntrySignature(candidate)))
+                    {
+                        yield return candidate;
+                    }
+                }
+            }
+
+            foreach (var entry in BuildPluralPossessives(sourceEntries))
+            {
+                if (emittedSignatures.Add(CreateEntrySignature(entry)))
+                {
+                    yield return entry;
+                }
+            }
+        }
+
         private static IEnumerable<OrcishLexiconEntry> BuildPluralPossessives(IEnumerable<OrcishLexiconEntry> entries)
         {
             foreach (var entry in entries.Where(entry =>
@@ -3883,6 +3917,48 @@ namespace PlayerAssistant
                     entry.GrammarClass,
                     AddTag(entry.Tags, "possessive"));
             }
+        }
+
+        private static OrcishLexiconEntry CreateDerivedEntry(
+            OrcishLexiconEntry entry,
+            string english,
+            string orcish,
+            params string[] derivedTags)
+        {
+            var tags = new List<string>();
+            foreach (var tag in entry.Tags ?? Array.Empty<string>())
+            {
+                if (tag.StartsWith("derive-", StringComparison.OrdinalIgnoreCase) ||
+                    string.Equals(tag, "infinitive", StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
+                if (!tags.Any(existingTag => string.Equals(existingTag, tag, StringComparison.OrdinalIgnoreCase)))
+                {
+                    tags.Add(tag);
+                }
+            }
+
+            foreach (var tag in derivedTags.Concat(["root-derived", "derived-by-rule"]))
+            {
+                if (!tags.Any(existingTag => string.Equals(existingTag, tag, StringComparison.OrdinalIgnoreCase)))
+                {
+                    tags.Add(tag);
+                }
+            }
+
+            return new OrcishLexiconEntry(
+                english,
+                orcish,
+                entry.PartOfSpeech,
+                entry.GrammarClass,
+                tags);
+        }
+
+        private static string CreateEntrySignature(OrcishLexiconEntry entry)
+        {
+            return $"{entry.English}\u001F{entry.Orcish}\u001F{entry.PartOfSpeech}";
         }
 
         private static bool HasTag(OrcishLexiconEntry entry, string tag)
@@ -3915,9 +3991,92 @@ namespace PlayerAssistant
                 : $"{english}'s";
         }
 
+        private static string ToEnglishPlural(string english)
+        {
+            if (english.EndsWith("y", StringComparison.OrdinalIgnoreCase) && !EndsWithVowelBeforeY(english))
+            {
+                return $"{english[..^1]}ies";
+            }
+
+            return english.EndsWith("s", StringComparison.OrdinalIgnoreCase)
+                ? english
+                : $"{english}s";
+        }
+
+        private static string ToEnglishPresent(string english)
+        {
+            if (english.EndsWith("y", StringComparison.OrdinalIgnoreCase) && !EndsWithVowelBeforeY(english))
+            {
+                return $"{english[..^1]}ies";
+            }
+
+            return english.EndsWith("s", StringComparison.OrdinalIgnoreCase)
+                ? english
+                : $"{english}s";
+        }
+
+        private static string ToEnglishPast(string english)
+        {
+            if (english.EndsWith("e", StringComparison.OrdinalIgnoreCase))
+            {
+                return $"{english}d";
+            }
+
+            if (english.EndsWith("y", StringComparison.OrdinalIgnoreCase) && !EndsWithVowelBeforeY(english))
+            {
+                return $"{english[..^1]}ied";
+            }
+
+            return $"{english}ed";
+        }
+
+        private static string ToEnglishProgressive(string english)
+        {
+            if (english.EndsWith("e", StringComparison.OrdinalIgnoreCase) &&
+                !english.EndsWith("ee", StringComparison.OrdinalIgnoreCase))
+            {
+                return $"{english[..^1]}ing";
+            }
+
+            return $"{english}ing";
+        }
+
+        private static bool EndsWithVowelBeforeY(string text)
+        {
+            if (text.Length < 2)
+            {
+                return false;
+            }
+
+            return "aeiou".Contains(char.ToLowerInvariant(text[^2]), StringComparison.Ordinal);
+        }
+
         private static string ToOrcishPossessive(string orcish)
         {
             return $"{orcish}uk";
+        }
+
+        private static string ToOrcishPlural(string orcish)
+        {
+            return $"{orcish}i";
+        }
+
+        private static string ToOrcishVerbForm(string orcish, string suffix)
+        {
+            var hyphenIndex = orcish.IndexOf('-');
+            if (hyphenIndex > 0)
+            {
+                var firstSegment = orcish[..hyphenIndex];
+                var remainder = orcish[hyphenIndex..];
+                if (firstSegment.EndsWith("u", StringComparison.OrdinalIgnoreCase))
+                {
+                    return $"{firstSegment[..^1]}{suffix}{remainder}";
+                }
+            }
+
+            return orcish.EndsWith("u", StringComparison.OrdinalIgnoreCase)
+                ? $"{orcish[..^1]}{suffix}"
+                : $"{orcish}{suffix}";
         }
 
         private static OrcishTranslationCandidate CreateCandidate(

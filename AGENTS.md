@@ -35,6 +35,7 @@ Rules:
 - Do not read or scan the /bin or /obj directories.
 - Focus strictly on source files inside /src or specific .cs files mentioned.
 - Before adopting a new Orcish lexicon term, first check for exact collisions and close-form conflicts against existing translator entries and affix patterns.
+- Before adding a new explicit Orcish lexicon word, first consult the morphology rules engine in `OrcishTranslatorUtility.cs`; use or extend a reusable rule for predictable plural, possessive, past, progressive, or present forms instead of hand-adding a derived entry.
 - For Orcish lexicon additions, prefer extending existing roots, compounds, plural patterns, and affix meanings instead of inventing unrelated forms when an established pattern already fits.
 - When an English term is better represented as a fixed Orcish phrase or compound, add the full entry explicitly rather than assuming the CLI translator will compose it from separate words.
 - Keep part of speech and sense distinctions explicit in the lexicon when meaning depends on usage, such as noun vs. verb vs. adjective/complement or singular vs. plural vs. possessive.
