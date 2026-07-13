@@ -1,0 +1,33 @@
+# Keep graphify focused on source and project documentation.
+# The repo .gitignore intentionally re-includes some markdown under generated
+# folders, but graphify should not scan generated runtime/build outputs.
+
+graphify-out/
+
+bin/
+obj/
+**/bin/
+**/obj/
+binfix/
+obj-verify/
+
+Release/
+Release-verify/
+publish/
+publish-msbuild/
+
+**/.playwright/
+node/
+node_modules/
+dist/
+build/
+.next/
+.venv/
+.vs/
+.codex/
+codex-scratch/
+
+*.cache
+*.dll
+*.exe
+*.pdb

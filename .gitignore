@@ -1,0 +1,27 @@
+bin/
+obj/
+Release/
+codex-scratch/
+!**/*.ps1
+# Local agent/editor state
+.codex/
+.vs/
+
+# Graphify generated output/cache
+graphify-out/
+
+# Build/verification output
+obj-verify/
+Release-verify/.playwright/
+publish/.playwright/
+publish/sitemap.xml
+publish-msbuild/.playwright/
+
+# User/project-local files
+*.csproj.user
+xp-passwords*.json
+
+# Scratch files except active Orcish review batch
+codex-scratch/*
+!codex-scratch/orcish-retranslation-review/
+!codex-scratch/orcish-retranslation-review/**
