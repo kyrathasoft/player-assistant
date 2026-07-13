@@ -785,6 +785,36 @@ namespace PlayerAssistant
 
         private static string BuildFallbackSceneSummary(string actor, string lowerBody)
         {
+            if (ContainsAny(lowerBody, "red tusk", "deep friends", "toothbreakers"))
+            {
+                return $"{actor} connects the current threat to Red Tusk, the Deep Friends, or the Toothbreakers.";
+            }
+
+            if (ContainsAny(lowerBody, "scroll", "letter", "note", "message"))
+            {
+                return $"{actor} studies written evidence for clues about the opposition.";
+            }
+
+            if (ContainsAny(lowerBody, "raven's pass", "ravens pass", "mason's apron", "nimba", "samuel"))
+            {
+                return $"{actor} points the party toward Raven's Pass contacts and support.";
+            }
+
+            if (ContainsAny(lowerBody, "caravan", "wagons", "mules", "cargo"))
+            {
+                return $"{actor} focuses the scene on the caravan, its route, or its cargo.";
+            }
+
+            if (ContainsAny(lowerBody, "nuanda", "jelenneth", "jenny", "blanryde hills", "hwyanthemon", "amethyst"))
+            {
+                return $"{actor} keeps the search for Jelenneth and Nuanda's leads in focus.";
+            }
+
+            if (ContainsAny(lowerBody, "orcs", "orcspawn", "ambush", "quarry", "blightstone pit"))
+            {
+                return $"{actor} brings the orc threat around Blightstone Pit into focus.";
+            }
+
             if (ContainsAny(lowerBody, "asks", " ask ", "?", "where is", "do you have", "can you", "would you"))
             {
                 return $"{actor} asks a question that narrows the party's next choice.";

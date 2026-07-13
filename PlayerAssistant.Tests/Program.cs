@@ -186,6 +186,7 @@ var tests = new (string Name, Action Test)[]
     ("adventure outline summarizes table roles concisely", AdventureOutlineSummarizesTableRolesConcisely),
     ("adventure outline skips empty bullet marker posts", AdventureOutlineSkipsEmptyBulletMarkerPosts),
     ("adventure outline rejects weak generated summaries", AdventureOutlineRejectsWeakGeneratedSummaries),
+    ("adventure outline fallback summaries preserve scene specifics", AdventureOutlineFallbackSummariesPreserveSceneSpecifics),
     ("adventure outline merges new saved IC bullets", AdventureOutlineMergesNewSavedIcBullets),
     ("adventure outline falls back to Obsidian markdown", AdventureOutlineFallsBackToObsidianMarkdown),
     ("adventure outline prefers saved IC html over fallback", AdventureOutlinePrefersSavedIcHtmlOverFallback),
@@ -4186,6 +4187,41 @@ static string[] GetWeakAdventureOutlineSummaryPhrases()
     ];
 }
 
+static void AdventureOutlineFallbackSummariesPreserveSceneSpecifics()
+{
+    using var directory = TemporaryDirectory.Create();
+    var icDirectory = Path.Combine(directory.Path, "Posts", "IC");
+    Directory.CreateDirectory(icDirectory);
+    File.WriteAllText(
+        Path.Combine(icDirectory, "ch-5.html"),
+        """
+        <html><body>
+        <h1>Ch 5 - A Betentacled Escape.</h1>
+        <span class="messageauthor">Maximilian</span>
+        <div class="messagebody" id="msg1">Maximilian studies the recovered scroll and says it names Red Tusk and the Deep Friends.</div>
+        <span class="messageauthor">Algorn Druff</span>
+        <div class="messagebody" id="msg2">Algorn says the Raven's Pass trail should lead them to Nimba at The Mason's Apron.</div>
+        <span class="messageauthor">Billworth Turgen</span>
+        <div class="messagebody" id="msg3">Billworth checks the caravan wagons, mules, and remaining cargo before they move again.</div>
+        </body></html>
+        """);
+
+    var outline = AdventureOutlineUtility.BuildAdventureOutlineAsync(icDirectory)
+        .GetAwaiter()
+        .GetResult();
+
+    AssertContains(outline, "- Maximilian connects the current threat to Red Tusk, the Deep Friends, or the Toothbreakers.");
+    AssertContains(outline, "- Algorn points the party toward Raven's Pass contacts and support.");
+    AssertContains(outline, "- Billworth focuses the scene on the caravan, its route, or its cargo.");
+
+    foreach (var weakSummary in GetWeakAdventureOutlineSummaryPhrases())
+    {
+        AssertFalse(
+            outline.Contains(weakSummary, StringComparison.OrdinalIgnoreCase),
+            $"fallback outline should not contain weak generated summary '{weakSummary}'");
+    }
+}
+
 static void AdventureOutlineMergesNewSavedIcBullets()
 {
     using var directory = TemporaryDirectory.Create();
@@ -4671,6 +4707,12 @@ static void AdventureOutlineViewDisplaysGeneratedMarkdown()
     {
         using var form = new Form1(suppressHeroImagesForThisRun: true);
         const string outline = """
+        ---
+        title: Adventure Outline
+        aliases:
+          - Scarlet Horizons Adventure Outline
+        ---
+
         # Adventure Outline
 
         - Source files inspected:
@@ -4682,10 +4724,22 @@ static void AdventureOutlineViewDisplaysGeneratedMarkdown()
 
         -
 
+        ## Ch 4 - Battle at Blightstone Pit
+
+        - The party fights at the quarry.
+
+        ## Ch 5 - A Betentacled Escape
+
+        - The party escapes the pit.
+
         ## Ch 2 - Supper With Nuanda
 
         - Jelb weighs the party's options.
         - Dungeon Master frames the next choice.
+
+        ## Ch 3 - Joining the Caravan to Raven's Pass
+
+        - The party joins the caravan.
         """;
 
         InvokePrivateMethod(form, "ShowAdventureOutline", outline);
@@ -4702,6 +4756,25 @@ static void AdventureOutlineViewDisplaysGeneratedMarkdown()
         AssertContains(textBox.Text, "Ch 2 - Supper With Nuanda");
         AssertContains(textBox.Text, "Jelb weighs the party's options.");
         AssertContains(textBox.Text, "Dungeon Master frames the next choice.");
+        AssertTrue(
+            textBox.Text.IndexOf("Chapter 7 - The Gate Opens", StringComparison.Ordinal)
+                < textBox.Text.IndexOf("Ch 4 - Battle at Blightstone Pit", StringComparison.Ordinal),
+            "adventure outline display should keep chapter order from the markdown");
+        AssertTrue(
+            textBox.Text.IndexOf("Ch 4 - Battle at Blightstone Pit", StringComparison.Ordinal)
+                < textBox.Text.IndexOf("Ch 5 - A Betentacled Escape", StringComparison.Ordinal),
+            "chapter 4 should display before chapter 5");
+        AssertTrue(
+            textBox.Text.IndexOf("Ch 5 - A Betentacled Escape", StringComparison.Ordinal)
+                < textBox.Text.IndexOf("Ch 2 - Supper With Nuanda", StringComparison.Ordinal),
+            "chapter 5 should display before the later markdown chapter 2 entry in this fixture");
+        AssertTrue(
+            textBox.Text.IndexOf("Ch 2 - Supper With Nuanda", StringComparison.Ordinal)
+                < textBox.Text.IndexOf("Ch 3 - Joining the Caravan to Raven's Pass", StringComparison.Ordinal),
+            "chapter 2 should display before chapter 3");
+        AssertFalse(textBox.Text.Contains("title: Adventure Outline", StringComparison.Ordinal), "player-facing outline should hide YAML frontmatter");
+        AssertFalse(textBox.Text.Contains("aliases:", StringComparison.Ordinal), "player-facing outline should hide YAML frontmatter keys");
+        AssertFalse(textBox.Text.Contains("Scarlet Horizons Adventure Outline", StringComparison.Ordinal), "player-facing outline should hide YAML frontmatter values");
         AssertFalse(textBox.Lines.Any(line => line.Trim().Equals("-", StringComparison.Ordinal)), "player-facing outline should hide empty bullet marker lines");
         for (var lineIndex = 0; lineIndex < textBox.Lines.Length; lineIndex++)
         {

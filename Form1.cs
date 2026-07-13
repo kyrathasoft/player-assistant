@@ -2750,12 +2750,34 @@ namespace PlayerAssistant
         {
             var displayLines = new List<(string Text, AdventureOutlineLineStyle Style)>();
             var skippingSourceFiles = false;
+            var canStartYamlFrontmatter = true;
+            var skippingYamlFrontmatter = false;
 
             foreach (var line in outlineMarkdown
                 .Replace("\r\n", "\n")
                 .Replace('\r', '\n')
                 .Split('\n'))
             {
+                if (canStartYamlFrontmatter)
+                {
+                    canStartYamlFrontmatter = false;
+                    if (line.Trim().Equals("---", StringComparison.Ordinal))
+                    {
+                        skippingYamlFrontmatter = true;
+                        continue;
+                    }
+                }
+
+                if (skippingYamlFrontmatter)
+                {
+                    if (line.Trim().Equals("---", StringComparison.Ordinal))
+                    {
+                        skippingYamlFrontmatter = false;
+                    }
+
+                    continue;
+                }
+
                 if (line.Equals("- Source files inspected:", StringComparison.OrdinalIgnoreCase))
                 {
                     skippingSourceFiles = true;
@@ -2863,6 +2885,11 @@ namespace PlayerAssistant
                     textBox.SelectionIndent = 18;
                     textBox.SelectionHangingIndent = 8;
                 }
+
+                textBox.Select(textBox.TextLength, 0);
+                textBox.SelectionBullet = false;
+                textBox.SelectionIndent = 0;
+                textBox.SelectionHangingIndent = 0;
             }
 
             textBox.Select(0, 0);
