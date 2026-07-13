@@ -182,6 +182,10 @@ var tests = new (string Name, Action Test)[]
     ("regional map downloads when newer but transparent", RegionalMapDownloadsWhenNewerButTransparent),
     ("startup status includes download count and size", StartupStatusIncludesDownloadCountAndSize),
     ("adventure outline builds from saved IC html", AdventureOutlineBuildsFromSavedIcHtml),
+    ("adventure outline parses rpol linked author exports", AdventureOutlineParsesRpolLinkedAuthorExports),
+    ("adventure outline summarizes table roles concisely", AdventureOutlineSummarizesTableRolesConcisely),
+    ("adventure outline skips empty bullet marker posts", AdventureOutlineSkipsEmptyBulletMarkerPosts),
+    ("adventure outline rejects weak generated summaries", AdventureOutlineRejectsWeakGeneratedSummaries),
     ("adventure outline merges new saved IC bullets", AdventureOutlineMergesNewSavedIcBullets),
     ("adventure outline falls back to Obsidian markdown", AdventureOutlineFallsBackToObsidianMarkdown),
     ("adventure outline prefers saved IC html over fallback", AdventureOutlinePrefersSavedIcHtmlOverFallback),
@@ -192,6 +196,8 @@ var tests = new (string Name, Action Test)[]
     ("keyword search accepts url source metadata", KeywordSearchAcceptsUrlSourceMetadata),
     ("keyword search filters rpol hero metadata-only hits", KeywordSearchFiltersRpolHeroMetadataOnlyHits),
     ("show menu contains xp item", ShowMenuContainsXpItem),
+    ("show menu contains adventure outline item", ShowMenuContainsAdventureOutlineItem),
+    ("adventure outline view displays generated markdown", AdventureOutlineViewDisplaysGeneratedMarkdown),
     ("about menu contains author and update items", AboutMenuContainsAuthorAndUpdateItems),
     ("about author text lists developer info", AboutAuthorTextListsDeveloperInfo),
     ("about version text shows app version", AboutVersionTextShowsAppVersion),
@@ -3983,13 +3989,184 @@ static void AdventureOutlineBuildsFromSavedIcHtml()
 
     AssertContains(outline, "# Adventure Outline");
     AssertContains(outline, "## Ch 2 - Supper With Nuanda");
-    AssertContains(outline, "- Dungeon Master: Nuanda offers stew & hard biscuits.");
+    AssertContains(outline, "- Dungeon Master introduces Nuanda's supper.");
     AssertContains(outline, "## Ch 10 - Later Trouble");
-    AssertContains(outline, "- Kelpie Lawfuller: Kelpie keeps watch. Then moves on.");
+    AssertContains(outline, "- Kelpie keeps watch as the party moves on.");
     AssertFalse(outline.Contains("Old Backup", StringComparison.Ordinal), "backup chapter files should be ignored");
     AssertTrue(
         outline.IndexOf("## Ch 2", StringComparison.Ordinal) < outline.IndexOf("## Ch 10", StringComparison.Ordinal),
         "chapter files should sort by numeric chapter number");
+}
+
+static void AdventureOutlineParsesRpolLinkedAuthorExports()
+{
+    using var directory = TemporaryDirectory.Create();
+    var icDirectory = Path.Combine(directory.Path, "Posts", "IC");
+    Directory.CreateDirectory(icDirectory);
+
+    File.WriteAllText(
+        Path.Combine(icDirectory, "ch-1.html"),
+        """
+        <html><body>
+        <div class="threadheader">
+            <h1>Ch 1 - Kirkilston.</h1>
+        </div>
+        <div class="message">
+            <span class="messageauthor you"><a href="/gameinfo.php?action=viewdescription&amp;ci=396686">Dungeon Master</a></span>
+            <div class="messagebody" id="msg37">Mapper: Slip?<br>Caller: Kelpie?</div>
+        </div>
+        <div class="message">
+            <span class="messageauthor"><a href="/gameinfo.php?action=viewdescription&amp;ci=396648">Kelpie Lawfuller</a></span>
+            <div class="messagebody" id="msg38">
+            Kelpie was already prepared.<br>
+            <span class="blue">I will take the fore</span>
+            </div>
+        </div>
+        </body></html>
+        """);
+
+    var outline = AdventureOutlineUtility.BuildAdventureOutlineAsync(icDirectory)
+        .GetAwaiter()
+        .GetResult();
+
+    AssertContains(outline, "## Ch 1 - Kirkilston");
+    AssertContains(outline, "- Dungeon Master asks a question that narrows the party's next choice.");
+    AssertContains(outline, "- Kelpie takes the lead as the party sets out toward Nuanda.");
+    AssertFalse(
+        outline.Contains("No in-character posts were found", StringComparison.Ordinal),
+        "linked author RPOL exports should produce post summaries");
+}
+
+static void AdventureOutlineSummarizesTableRolesConcisely()
+{
+    using var directory = TemporaryDirectory.Create();
+    var icDirectory = Path.Combine(directory.Path, "Posts", "IC");
+    Directory.CreateDirectory(icDirectory);
+    File.WriteAllText(
+        Path.Combine(icDirectory, "ch-1.html"),
+        """
+        <html><body>
+        <h1>Ch 1 - Kirkilston.</h1>
+        <span class="messageauthor you"><a href="/gm">Dungeon Master</a></span>
+        <div class="messagebody" id="msg1">
+        • Mapper: Slip?<br>
+        • Caller: Kelpie?<br>
+        • Quartermaster: Urvan<br>
+        • Chronicler: Jelb?<br>
+        Whoever is acting as the Caller can let me know where the party heads off to.
+        </div>
+        </body></html>
+        """);
+
+    var outlinePath = Path.Combine(directory.Path, AdventureOutlineUtility.FileName);
+    File.WriteAllText(
+        outlinePath,
+        """
+        # Adventure Outline
+
+        ## Ch 1 - Kirkilston
+
+        - Dungeon Master: • Mapper: Slip? • Caller: Kelpie? • Quartermaster: Urvan • Chronicler: Jelb? Whoever is acting as the Caller can let me know where the party heads off to, any preparation they make, etc. If you are seeking Nuanda, you can get there in under an hour, and I just need a d6 roll from...
+        """);
+
+    var updated = AdventureOutlineUtility.UpdateAdventureOutlineAsync(icDirectory, outlinePath)
+        .GetAwaiter()
+        .GetResult();
+    var outline = File.ReadAllText(outlinePath);
+
+    AssertTrue(updated, "role-assignment outline should replace stale overlong bullets");
+    AssertContains(outline, "- Dungeon Master asked players to assume the roles of Caller, Quartermaster, Mapper, and Chronicler.");
+    AssertFalse(outline.Contains("Whoever is acting as the Caller", StringComparison.Ordinal), "role-assignment outline should not retain the long excerpt");
+}
+
+static void AdventureOutlineSkipsEmptyBulletMarkerPosts()
+{
+    using var directory = TemporaryDirectory.Create();
+    var icDirectory = Path.Combine(directory.Path, "Posts", "IC");
+    Directory.CreateDirectory(icDirectory);
+    File.WriteAllText(
+        Path.Combine(icDirectory, "ch-1.html"),
+        """
+        <html><body>
+        <h1>Ch 1 - Kirkilston.</h1>
+        <span class="messageauthor">Kelpie Lawfuller</span>
+        <div class="messagebody" id="msg1">•<br>-<br></div>
+        <span class="messageauthor">Dungeon Master</span>
+        <div class="messagebody" id="msg2">The party leaves town.</div>
+        </body></html>
+        """);
+
+    var outline = AdventureOutlineUtility.BuildAdventureOutlineAsync(icDirectory)
+        .GetAwaiter()
+        .GetResult();
+
+    AssertContains(outline, "- Dungeon Master moves the party out of town.");
+    AssertFalse(outline.Contains("Kelpie", StringComparison.Ordinal), "empty bullet marker posts should not produce outline bullets");
+    AssertFalse(outline.Contains("advances the scene", StringComparison.OrdinalIgnoreCase), "outline summaries should explain how the scene advanced");
+}
+
+static void AdventureOutlineRejectsWeakGeneratedSummaries()
+{
+    using var directory = TemporaryDirectory.Create();
+    var icDirectory = Path.Combine(directory.Path, "Posts", "IC");
+    Directory.CreateDirectory(icDirectory);
+    File.WriteAllText(
+        Path.Combine(icDirectory, "ch-2.html"),
+        """
+        <html><body>
+        <h1>Ch 2 - Supper With Nuanda.</h1>
+        <span class="messageauthor">Jelb Garrick</span>
+        <div class="messagebody" id="msg1">Jelb agreed to check on the bread, bringing it out to cool when it was ready. I do have something of hers. Her brooch.</div>
+        <span class="messageauthor">Nuanda</span>
+        <div class="messagebody" id="msg2">The girl, Jelenneth. She was picking berries when bandits abducted her.</div>
+        <span class="messageauthor">Urvan Hall</span>
+        <div class="messagebody" id="msg3">That is...remarkable. With this information we could look for her.</div>
+        </body></html>
+        """);
+
+    var outlinePath = Path.Combine(directory.Path, AdventureOutlineUtility.FileName);
+    File.WriteAllText(
+        outlinePath,
+        """
+        # Adventure Outline
+
+        ## Ch 2 - Supper With Nuanda
+
+        - Jelb advances the scene.
+        - Nuanda contributes a new development to the scene.
+        - Urvan presses for answers or a decision.
+        - Nuanda reassures Kelpie that Morrow and her own magic protect her.
+        """);
+
+    AdventureOutlineUtility.UpdateAdventureOutlineAsync(icDirectory, outlinePath)
+        .GetAwaiter()
+        .GetResult();
+    var outline = File.ReadAllText(outlinePath);
+
+    AssertContains(outline, "- Jelb helps with the bread and offers Jelenneth's brooch as a focus.");
+    AssertContains(outline, "- Nuanda recounts Jelenneth's abduction by bandits.");
+    AssertContains(outline, "- Urvan recognizes that Nuanda's divination gives the party a lead.");
+
+    foreach (var weakSummary in GetWeakAdventureOutlineSummaryPhrases())
+    {
+        AssertFalse(
+            outline.Contains(weakSummary, StringComparison.OrdinalIgnoreCase),
+            $"outline should not contain weak generated summary '{weakSummary}'");
+    }
+}
+
+static string[] GetWeakAdventureOutlineSummaryPhrases()
+{
+    return
+    [
+        "advances the scene",
+        "adds dialogue that clarifies the exchange",
+        "presses for answers or a decision",
+        "reveals a concern or reaction",
+        "contributes a new development to the scene",
+        "handles practical preparations for the party",
+        "reassures Kelpie that Morrow and her own magic protect her"
+    ];
 }
 
 static void AdventureOutlineMergesNewSavedIcBullets()
@@ -4035,15 +4212,13 @@ static void AdventureOutlineMergesNewSavedIcBullets()
     var outline = File.ReadAllText(outlinePath);
 
     AssertTrue(updated, "existing adventure outline should be updated with missing material");
-    AssertEqual(
-        1,
-        CountOccurrences(outline, "- Dungeon Master: The party leaves town."),
-        "existing bullet should not be duplicated");
-    AssertContains(outline, "- Kelpie Lawfuller: Kelpie takes the lead.");
+    AssertContains(outline, "- Dungeon Master moves the party out of town.");
+    AssertFalse(outline.Contains("- Dungeon Master: The party leaves town.", StringComparison.Ordinal), "stale author-prefixed excerpts should be replaced");
+    AssertContains(outline, "- Kelpie takes the lead.");
     AssertContains(outline, "## Ch 2 - Supper With Nuanda");
-    AssertContains(outline, "- Nuanda: Nuanda shares what she learned.");
+    AssertContains(outline, "- Nuanda briefs the party.");
     AssertTrue(
-        outline.IndexOf("- Kelpie Lawfuller: Kelpie takes the lead.", StringComparison.Ordinal)
+        outline.IndexOf("- Kelpie takes the lead.", StringComparison.Ordinal)
             < outline.IndexOf("## Ch 2 - Supper With Nuanda", StringComparison.Ordinal),
         "missing chapter 1 bullet should remain before chapter 2");
 }
@@ -4109,7 +4284,7 @@ static void AdventureOutlinePrefersSavedIcHtmlOverFallback()
 
     var outline = File.ReadAllText(outlinePath);
     AssertEqual(0, fallbackFetchCount, "fallback markdown should not be fetched when saved IC HTML builds an outline");
-    AssertContains(outline, "- Dungeon Master: Local chapter material.");
+    AssertContains(outline, "- Dungeon Master adds a concrete detail that changes the party's situation.");
     AssertFalse(outline.Contains("Fallback material", StringComparison.Ordinal), "fallback content should not replace local IC outline");
 }
 
@@ -4453,6 +4628,94 @@ static void ShowMenuContainsPartyItem()
         AssertTrue(
             showMenuItem.DropDownItems.Cast<ToolStripItem>().Contains(partyMenuItem),
             "Show menu should contain the Party item");
+    });
+}
+
+static void ShowMenuContainsAdventureOutlineItem()
+{
+    RunOnStaThread(() =>
+    {
+        using var form = new Form1(suppressHeroImagesForThisRun: true);
+        var showMenuItem = (ToolStripMenuItem)(GetPrivateField(form, "showToolStripMenuItem")
+            ?? throw new InvalidOperationException("showToolStripMenuItem was null."));
+        var adventureOutlineMenuItem = (ToolStripMenuItem)(GetPrivateField(form, "adventureOutlineToolStripMenuItem")
+            ?? throw new InvalidOperationException("adventureOutlineToolStripMenuItem was null."));
+
+        AssertEqual("Adventure Outline", adventureOutlineMenuItem.Text ?? string.Empty, "unexpected Adventure Outline menu item text");
+        AssertTrue(
+            showMenuItem.DropDownItems.Cast<ToolStripItem>().Contains(adventureOutlineMenuItem),
+            "Show menu should contain the Adventure Outline item");
+    });
+}
+
+static void AdventureOutlineViewDisplaysGeneratedMarkdown()
+{
+    RunOnStaThread(() =>
+    {
+        using var form = new Form1(suppressHeroImagesForThisRun: true);
+        const string outline = """
+        # Adventure Outline
+
+        - Source files inspected:
+          - `C:/repos/player-assistant/Release/Posts/IC/ch-1.html`
+
+        ## Chapter 7 - The Gate Opens
+
+        - Kelpie: Found the hidden key.
+
+        -
+
+        ## Ch 2 - Supper With Nuanda
+
+        - Jelb weighs the party's options.
+        - Dungeon Master frames the next choice.
+        """;
+
+        InvokePrivateMethod(form, "ShowAdventureOutline", outline);
+
+        var textBox = (RichTextBox)(GetPrivateField(form, "_adventureOutlineTextBox")
+            ?? throw new InvalidOperationException("_adventureOutlineTextBox was null."));
+        var adventureOutlineMenuItem = (ToolStripMenuItem)(GetPrivateField(form, "adventureOutlineToolStripMenuItem")
+            ?? throw new InvalidOperationException("adventureOutlineToolStripMenuItem was null."));
+
+        AssertTrue(form.Controls.Contains(textBox), "adventure outline text box should be attached to the form");
+        AssertTrue(textBox.ReadOnly, "adventure outline text box should be read-only");
+        AssertContains(textBox.Text, "Chapter 7 - The Gate Opens");
+        AssertContains(textBox.Text, "Kelpie: Found the hidden key.");
+        AssertContains(textBox.Text, "Ch 2 - Supper With Nuanda");
+        AssertContains(textBox.Text, "Jelb weighs the party's options.");
+        AssertContains(textBox.Text, "Dungeon Master frames the next choice.");
+        AssertFalse(textBox.Lines.Any(line => line.Trim().Equals("-", StringComparison.Ordinal)), "player-facing outline should hide empty bullet marker lines");
+        for (var lineIndex = 0; lineIndex < textBox.Lines.Length; lineIndex++)
+        {
+            if (textBox.Lines[lineIndex].Length == 0)
+            {
+                var lineStart = textBox.GetFirstCharIndexFromLine(lineIndex);
+                if (lineStart < 0)
+                {
+                    continue;
+                }
+
+                textBox.Select(lineStart, 0);
+                AssertFalse(textBox.SelectionBullet, "blank outline lines should not render as empty bullets");
+            }
+        }
+
+        var chapterStart = textBox.Text.IndexOf("Ch 2 - Supper With Nuanda", StringComparison.Ordinal);
+        textBox.Select(chapterStart, 1);
+        AssertTrue(textBox.SelectionFont?.Bold == true, "chapter headings should be bold");
+        AssertEqual(16f, textBox.SelectionFont?.Size ?? 0f, "chapter headings should use the enlarged adventure outline font");
+        var jelbStart = textBox.Text.IndexOf("Jelb weighs the party's options.", StringComparison.Ordinal);
+        textBox.Select(jelbStart, 1);
+        AssertTrue(textBox.SelectionFont?.Bold == false, "summary bullet text should use regular font");
+        AssertEqual(12f, textBox.SelectionFont?.Size ?? 0f, "summary bullet text should use the enlarged adventure outline font");
+        var dungeonStart = textBox.Text.IndexOf("Dungeon Master frames the next choice.", StringComparison.Ordinal);
+        textBox.Select(dungeonStart, 1);
+        AssertTrue(textBox.SelectionFont?.Bold == false, "summary bullet text should not inherit heading bold");
+        AssertEqual(12f, textBox.SelectionFont?.Size ?? 0f, "summary bullet text should keep the enlarged adventure outline font");
+        AssertFalse(textBox.Text.Contains("Source files inspected", StringComparison.Ordinal), "player-facing outline should hide source file audit text");
+        AssertFalse(textBox.Text.Contains("ch-1.html", StringComparison.Ordinal), "player-facing outline should hide source file paths");
+        AssertFalse(adventureOutlineMenuItem.Enabled, "Adventure Outline menu item should be disabled while the outline is active");
     });
 }
 

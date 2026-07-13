@@ -27,6 +27,14 @@ namespace PlayerAssistant
             IndexUnavailable
         }
 
+        private enum AdventureOutlineLineStyle
+        {
+            Body,
+            Title,
+            Chapter,
+            Bullet
+        }
+
         private static string PlayerCharactersListingUrl => $"{AppSettingsUtility.ObsidianGameVaultUrl}/PCs/Player+Characters+Listing";
         private static string SitemapUrl => $"{AppSettingsUtility.ObsidianGameVaultUrl}/sitemap.xml";
         private const string PlayerCharactersDirectoryName = "PCs";
@@ -88,6 +96,7 @@ namespace PlayerAssistant
         private IReadOnlyList<PcXpTotal> _xpTotals = [];
         private string _xpDateLabel = string.Empty;
         private IReadOnlyList<PartyHeroSheet> _partyHeroes = [];
+        private string _adventureOutlineMarkdown = string.Empty;
         private HashSet<string>? _encryptedTextIndexUrls;
         private bool _showLoginInfo;
         private bool _showPostTotals;
@@ -121,6 +130,7 @@ namespace PlayerAssistant
         private PictureBox? _heroImagePictureBox;
         private Panel? _regionalMapPanel;
         private ListBox? _diceRollsListBox;
+        private RichTextBox? _adventureOutlineTextBox;
         private Panel? _partyPanel;
         private Image? _regionalMapImage;
         private Image? _regionalMapImageCache;
@@ -250,6 +260,7 @@ namespace PlayerAssistant
             _heroImagePictureBox?.Image?.Dispose();
             _heroImagePictureBox?.Dispose();
             _diceRollsListBox?.Dispose();
+            _adventureOutlineTextBox?.Dispose();
             _regionalMapImage?.Dispose();
             _regionalMapImageCache?.Dispose();
             BackgroundImage?.Dispose();
@@ -716,6 +727,7 @@ namespace PlayerAssistant
             base.OnResize(e);
             UpdateRegionalMapPanelBounds();
             UpdateDiceRollsListBoxBounds();
+            UpdateAdventureOutlineTextBoxBounds();
             UpdatePartyPanelBounds();
             UpdateSearchPanelBounds();
         }
@@ -804,6 +816,7 @@ namespace PlayerAssistant
             EnableShowPostTotalsMenuItem();
             EnableXpMenuItem();
             EnablePartyMenuItem();
+            EnableAdventureOutlineMenuItem();
             Close();
         }
 
@@ -824,8 +837,9 @@ namespace PlayerAssistant
             EnableShowDiceRollsMenuItem();
             EnableXpMenuItem();
             EnablePartyMenuItem();
+            EnableAdventureOutlineMenuItem();
 
-            if (_regionalMapActive || _showLoginInfo || _showPostTotals || _showXpTotal || _showParty || _diceRollsListBox is not null)
+            if (_regionalMapActive || _showLoginInfo || _showPostTotals || _showXpTotal || _showParty || _diceRollsListBox is not null || _adventureOutlineTextBox is not null)
             {
                 ClearDisplaySurfaceForRegionalMap();
                 Refresh();
@@ -842,6 +856,7 @@ namespace PlayerAssistant
             EnableShowDiceRollsMenuItem();
             EnableXpMenuItem();
             EnablePartyMenuItem();
+            EnableAdventureOutlineMenuItem();
             loginInfoToolStripMenuItem.Enabled = false;
             _loginInfoRefreshTarget = LoginInfoDisplayMode.LoginInfo;
 
@@ -878,6 +893,7 @@ namespace PlayerAssistant
             EnableShowDiceRollsMenuItem();
             EnableXpMenuItem();
             EnablePartyMenuItem();
+            EnableAdventureOutlineMenuItem();
             showPostTotalsToolStripMenuItem.Enabled = false;
             _loginInfoRefreshTarget = LoginInfoDisplayMode.PostTotals;
 
@@ -922,6 +938,7 @@ namespace PlayerAssistant
             EnableShowPostTotalsMenuItem();
             EnableXpMenuItem();
             EnablePartyMenuItem();
+            EnableAdventureOutlineMenuItem();
 
             var diceRollsPath = GetDiceRollsHtmlPath();
             if (!TryLoadDiceRollEntries(diceRollsPath, out var entries) || entries.Length == 0)
@@ -957,6 +974,7 @@ namespace PlayerAssistant
             EnableShowPostTotalsMenuItem();
             EnableShowDiceRollsMenuItem();
             EnablePartyMenuItem();
+            EnableAdventureOutlineMenuItem();
 
             if (!TryPromptForXpCredentials(out var characterName, out var password))
             {
@@ -1020,6 +1038,7 @@ namespace PlayerAssistant
             EnableShowPostTotalsMenuItem();
             EnableShowDiceRollsMenuItem();
             EnableXpMenuItem();
+            EnableAdventureOutlineMenuItem();
 
             partyToolStripMenuItem.Enabled = false;
             try
@@ -1067,6 +1086,49 @@ namespace PlayerAssistant
                     "party display",
                     "Party unavailable",
                     "Party Error",
+                    ex,
+                    showDialog: true);
+            }
+        }
+
+        private async void AdventureOutlineToolStripMenuItem_Click(object? sender, EventArgs e)
+        {
+            ClearDiceRollsDisplayIfVisible();
+            HideSearchPanel();
+            EnableLoginInfoMenuItem();
+            EnableShowPostTotalsMenuItem();
+            EnableShowDiceRollsMenuItem();
+            EnableXpMenuItem();
+            EnablePartyMenuItem();
+
+            adventureOutlineToolStripMenuItem.Enabled = false;
+            try
+            {
+                SetStatusBarMessage("Loading adventure outline...");
+                using var activity = BeginStatusBarActivity();
+                var outlinePath = GetAdventureOutlinePath();
+                var icPostsDirectory = Path.Combine(
+                    GetReleaseDirectory(),
+                    PostsDirectoryName,
+                    InCharacterPostsDirectoryName);
+
+                await AdventureOutlineUtility.UpdateAdventureOutlineAsync(
+                    icPostsDirectory,
+                    outlinePath).ConfigureAwait(true);
+
+                var outline = File.Exists(outlinePath)
+                    ? await File.ReadAllTextAsync(outlinePath).ConfigureAwait(true)
+                    : await AdventureOutlineUtility.BuildAdventureOutlineAsync(icPostsDirectory).ConfigureAwait(true);
+
+                ShowAdventureOutline(outline);
+            }
+            catch (Exception ex)
+            {
+                adventureOutlineToolStripMenuItem.Enabled = true;
+                await ReportOperationFailureAsync(
+                    "adventure outline display",
+                    "Adventure outline unavailable",
+                    "Adventure Outline Error",
                     ex,
                     showDialog: true);
             }
@@ -1189,11 +1251,13 @@ namespace PlayerAssistant
             EnableShowDiceRollsMenuItem();
             EnableXpMenuItem();
             EnablePartyMenuItem();
+            EnableAdventureOutlineMenuItem();
             var searchPanelWasHidden = HideSearchPanel();
             var shouldRefreshBeforeShowingMap = searchPanelWasHidden
                 || _showLoginInfo
                 || _showXpTotal
                 || _showParty
+                || _adventureOutlineTextBox is not null
                 || _showWelcomeText
                 || _showHeroIntroText
                 || _showAttributionText;
@@ -1236,6 +1300,7 @@ namespace PlayerAssistant
                 showPostTotalsToolStripMenuItem.Enabled = true;
                 EnableXpMenuItem();
                 EnablePartyMenuItem();
+                EnableAdventureOutlineMenuItem();
                 UpdateRegionalMapMenuItem();
                 SetStatusBarMessage($"Regional map loaded: {RegionalMapFileName}.");
                 Invalidate();
@@ -1434,10 +1499,12 @@ namespace PlayerAssistant
         private void ClearPaintedFormSurface()
         {
             DisposeDiceRollsListBox();
+            DisposeAdventureOutlineTextBox();
             _showLoginInfo = false;
             _showWelcomeText = false;
             _showHeroIntroText = false;
             _showAttributionText = false;
+            _adventureOutlineMarkdown = string.Empty;
             Invalidate();
             Update();
         }
@@ -2634,6 +2701,173 @@ namespace PlayerAssistant
             Invalidate();
         }
 
+        private void ShowAdventureOutline(string outlineMarkdown)
+        {
+            ClearDisplaySurfaceForLoginInfo();
+            _showLoginInfo = false;
+            _showPostTotals = false;
+            _showXpTotal = false;
+            _showParty = false;
+            _postTotalsSummary = null;
+            _xpTotals = [];
+            _xpDateLabel = string.Empty;
+            _partyHeroes = [];
+            _adventureOutlineMarkdown = string.IsNullOrWhiteSpace(outlineMarkdown)
+                ? "# Adventure Outline\r\n\r\nNo adventure outline entries are available yet."
+                : outlineMarkdown.Replace("\r\n", "\n").Replace('\r', '\n').Replace("\n", Environment.NewLine);
+            adventureOutlineToolStripMenuItem.Enabled = false;
+            BuildAdventureOutlineTextBox(_adventureOutlineMarkdown);
+            SetStatusBarMessage("Adventure outline loaded.");
+            Invalidate();
+        }
+
+        private void BuildAdventureOutlineTextBox(string outlineMarkdown)
+        {
+            DisposeAdventureOutlineTextBox();
+            var displayLines = ParseAdventureOutlineDisplayLines(outlineMarkdown);
+
+            var textBox = new RichTextBox
+            {
+                BackColor = Color.White,
+                BorderStyle = BorderStyle.None,
+                DetectUrls = true,
+                Font = new Font("Segoe UI", 12),
+                ReadOnly = true,
+                ScrollBars = RichTextBoxScrollBars.Vertical,
+                WordWrap = true
+            };
+
+            AppendAdventureOutlineText(textBox, displayLines);
+            _adventureOutlineTextBox = textBox;
+            Controls.Add(textBox);
+            UpdateAdventureOutlineTextBoxBounds();
+            textBox.BringToFront();
+            menuStrip.BringToFront();
+            statusStrip.BringToFront();
+        }
+
+        private static IReadOnlyList<(string Text, AdventureOutlineLineStyle Style)> ParseAdventureOutlineDisplayLines(string outlineMarkdown)
+        {
+            var displayLines = new List<(string Text, AdventureOutlineLineStyle Style)>();
+            var skippingSourceFiles = false;
+
+            foreach (var line in outlineMarkdown
+                .Replace("\r\n", "\n")
+                .Replace('\r', '\n')
+                .Split('\n'))
+            {
+                if (line.Equals("- Source files inspected:", StringComparison.OrdinalIgnoreCase))
+                {
+                    skippingSourceFiles = true;
+                    continue;
+                }
+
+                if (skippingSourceFiles)
+                {
+                    if (line.StartsWith("  - ", StringComparison.Ordinal))
+                    {
+                        continue;
+                    }
+
+                    skippingSourceFiles = false;
+                }
+
+                if (line.StartsWith("# ", StringComparison.Ordinal))
+                {
+                    var titleText = line[2..].Trim();
+                    if (titleText.Length > 0)
+                    {
+                        displayLines.Add((titleText, AdventureOutlineLineStyle.Title));
+                    }
+
+                    continue;
+                }
+
+                if (line.StartsWith("## ", StringComparison.Ordinal))
+                {
+                    var chapterText = line[3..].Trim();
+                    if (chapterText.Length > 0)
+                    {
+                        displayLines.Add((chapterText, AdventureOutlineLineStyle.Chapter));
+                    }
+
+                    continue;
+                }
+
+                if (line.StartsWith("- ", StringComparison.Ordinal))
+                {
+                    var bulletText = line[2..].Trim();
+                    if (bulletText.Length == 0)
+                    {
+                        continue;
+                    }
+
+                    displayLines.Add((bulletText, AdventureOutlineLineStyle.Bullet));
+                    continue;
+                }
+
+                if (line.Trim().Equals("-", StringComparison.Ordinal)
+                    || line.Trim().Equals("•", StringComparison.Ordinal))
+                {
+                    continue;
+                }
+
+                if (line.Length == 0
+                    && displayLines.Count > 0
+                    && displayLines[^1].Text.Length == 0)
+                {
+                    continue;
+                }
+
+                displayLines.Add((line.TrimEnd(), AdventureOutlineLineStyle.Body));
+            }
+
+            return displayLines;
+        }
+
+        private static void AppendAdventureOutlineText(
+            RichTextBox textBox,
+            IReadOnlyList<(string Text, AdventureOutlineLineStyle Style)> displayLines)
+        {
+            for (var index = 0; index < displayLines.Count; index++)
+            {
+                var line = displayLines[index];
+                var start = textBox.TextLength;
+                if (index > 0)
+                {
+                    textBox.AppendText(Environment.NewLine);
+                    start = textBox.TextLength;
+                }
+
+                textBox.AppendText(line.Text);
+                textBox.Select(start, line.Text.Length);
+                textBox.SelectionBullet = false;
+                textBox.SelectionIndent = 0;
+                textBox.SelectionHangingIndent = 0;
+                textBox.SelectionFont = new Font("Segoe UI", 12, FontStyle.Regular);
+                textBox.SelectionColor = Color.FromArgb(32, 32, 32);
+
+                if (line.Style == AdventureOutlineLineStyle.Title)
+                {
+                    textBox.SelectionFont = new Font("Segoe UI", 22, FontStyle.Bold);
+                    textBox.SelectionColor = Color.FromArgb(40, 55, 75);
+                }
+                else if (line.Style == AdventureOutlineLineStyle.Chapter)
+                {
+                    textBox.SelectionFont = new Font("Segoe UI", 16, FontStyle.Bold);
+                    textBox.SelectionColor = Color.FromArgb(55, 72, 95);
+                }
+                else if (line.Style == AdventureOutlineLineStyle.Bullet)
+                {
+                    textBox.SelectionBullet = true;
+                    textBox.SelectionIndent = 18;
+                    textBox.SelectionHangingIndent = 8;
+                }
+            }
+
+            textBox.Select(0, 0);
+        }
+
         private void BuildPartyPanel(IReadOnlyList<PartyHeroSheet> heroes)
         {
             DisposePartyPanel();
@@ -2891,6 +3125,7 @@ namespace PlayerAssistant
             _xpTotals = [];
             _xpDateLabel = string.Empty;
             _partyHeroes = [];
+            _adventureOutlineMarkdown = string.Empty;
         }
 
         private void ClearMainDisplaySurface()
@@ -2898,6 +3133,7 @@ namespace PlayerAssistant
             StopHeroImageShowcase();
             ClearHeroImagePictureBox();
             DisposeDiceRollsListBox();
+            DisposeAdventureOutlineTextBox();
             DisposePartyPanel();
             _showWelcomeText = false;
             _showHeroIntroText = false;
@@ -2907,6 +3143,7 @@ namespace PlayerAssistant
             _xpTotals = [];
             _xpDateLabel = string.Empty;
             _partyHeroes = [];
+            _adventureOutlineMarkdown = string.Empty;
             _regionalMapActive = false;
             _regionalMapImage?.Dispose();
             _regionalMapImage = null;
@@ -2972,6 +3209,20 @@ namespace PlayerAssistant
                 Math.Max(0, statusStrip.Top - menuStrip.Bottom - 20));
         }
 
+        private void UpdateAdventureOutlineTextBoxBounds()
+        {
+            if (_adventureOutlineTextBox is null)
+            {
+                return;
+            }
+
+            _adventureOutlineTextBox.Bounds = new Rectangle(
+                24,
+                menuStrip.Bottom + 18,
+                Math.Max(0, ClientSize.Width - 48),
+                Math.Max(0, statusStrip.Top - menuStrip.Bottom - 36));
+        }
+
         private void UpdatePartyPanelBounds()
         {
             if (_partyPanel is null)
@@ -2996,6 +3247,18 @@ namespace PlayerAssistant
             Controls.Remove(_diceRollsListBox);
             _diceRollsListBox.Dispose();
             _diceRollsListBox = null;
+        }
+
+        private void DisposeAdventureOutlineTextBox()
+        {
+            if (_adventureOutlineTextBox is null)
+            {
+                return;
+            }
+
+            Controls.Remove(_adventureOutlineTextBox);
+            _adventureOutlineTextBox.Dispose();
+            _adventureOutlineTextBox = null;
         }
 
         private void DisposePartyPanel()
@@ -3544,6 +3807,11 @@ namespace PlayerAssistant
             return Path.Combine(GetReleaseDirectory(), ImagesDirectoryName, MapsDirectoryName, RegionalMapFileName);
         }
 
+        private static string GetAdventureOutlinePath()
+        {
+            return Path.Combine(GetReleaseDirectory(), AdventureOutlineUtility.FileName);
+        }
+
         private void UpdateRegionalMapMenuItem()
         {
             regionalMapToolStripMenuItem.Enabled = !_heroImageIntroStarted
@@ -3562,6 +3830,7 @@ namespace PlayerAssistant
                 && HasDiceRollEntries(GetDiceRollsHtmlPath());
             xpToolStripMenuItem.Enabled = showMenuItemsEnabled && !_showXpTotal;
             partyToolStripMenuItem.Enabled = showMenuItemsEnabled && !_showParty;
+            adventureOutlineToolStripMenuItem.Enabled = showMenuItemsEnabled && _adventureOutlineTextBox is null;
             UpdateRegionalMapMenuItem();
         }
 
@@ -3613,6 +3882,16 @@ namespace PlayerAssistant
             }
 
             partyToolStripMenuItem.Enabled = true;
+        }
+
+        private void EnableAdventureOutlineMenuItem()
+        {
+            if (_heroImageIntroStarted || _heroImageShowcaseStarted)
+            {
+                return;
+            }
+
+            adventureOutlineToolStripMenuItem.Enabled = _adventureOutlineTextBox is null;
         }
 
         private async Task PreloadRegionalMapImageAsync(CancellationToken cancellationToken = default)

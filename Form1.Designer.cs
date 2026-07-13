@@ -37,6 +37,7 @@ namespace PlayerAssistant
             showDiceRollsToolStripMenuItem = new ToolStripMenuItem();
             xpToolStripMenuItem = new ToolStripMenuItem();
             partyToolStripMenuItem = new ToolStripMenuItem();
+            adventureOutlineToolStripMenuItem = new ToolStripMenuItem();
             regionalMapToolStripMenuItem = new ToolStripMenuItem();
             searchToolStripMenuItem = new ToolStripMenuItem();
             settingsToolStripMenuItem = new ToolStripMenuItem();
@@ -92,7 +93,7 @@ namespace PlayerAssistant
             // 
             // showToolStripMenuItem
             // 
-            showToolStripMenuItem.DropDownItems.AddRange(new ToolStripItem[] { loginInfoToolStripMenuItem, showPostTotalsToolStripMenuItem, showDiceRollsToolStripMenuItem, xpToolStripMenuItem, partyToolStripMenuItem, regionalMapToolStripMenuItem });
+            showToolStripMenuItem.DropDownItems.AddRange(new ToolStripItem[] { loginInfoToolStripMenuItem, showPostTotalsToolStripMenuItem, showDiceRollsToolStripMenuItem, xpToolStripMenuItem, partyToolStripMenuItem, adventureOutlineToolStripMenuItem, regionalMapToolStripMenuItem });
             showToolStripMenuItem.Name = "showToolStripMenuItem";
             showToolStripMenuItem.Size = new Size(48, 20);
             showToolStripMenuItem.Text = "Show";
@@ -132,6 +133,13 @@ namespace PlayerAssistant
             partyToolStripMenuItem.Size = new Size(163, 22);
             partyToolStripMenuItem.Text = "Party";
             partyToolStripMenuItem.Click += PartyToolStripMenuItem_Click;
+            // 
+            // adventureOutlineToolStripMenuItem
+            // 
+            adventureOutlineToolStripMenuItem.Name = "adventureOutlineToolStripMenuItem";
+            adventureOutlineToolStripMenuItem.Size = new Size(163, 22);
+            adventureOutlineToolStripMenuItem.Text = "Adventure Outline";
+            adventureOutlineToolStripMenuItem.Click += AdventureOutlineToolStripMenuItem_Click;
             // 
             // regionalMapToolStripMenuItem
             // 
@@ -399,6 +407,7 @@ namespace PlayerAssistant
         private ToolStripMenuItem showDiceRollsToolStripMenuItem;
         private ToolStripMenuItem xpToolStripMenuItem;
         private ToolStripMenuItem partyToolStripMenuItem;
+        private ToolStripMenuItem adventureOutlineToolStripMenuItem;
         private ToolStripMenuItem regionalMapToolStripMenuItem;
         private ToolStripMenuItem exitToolStripMenuItem;
         private ToolStripMenuItem settingsToolStripMenuItem;

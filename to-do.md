@@ -62,6 +62,7 @@
 
 ## Player-facing features completed in this session
 
+- [x] Added `Show > Adventure Outline` to render generated adventure-outline summaries inside the app.
 - [x] Added `TransformTaggedText()` to encrypt and decrypt visible tag-enclosed markdown text while leaving access tags readable.
 - [x] Added support for complex tag expressions such as grouped `&&` requirements and either-or alternatives.
 - [x] Added encrypted markdown block validation so mismatched opening and closing tags return a clear unable-to-decrypt message.
@@ -218,6 +219,7 @@
 
 - [x] Run a full release verification/rehearsal now that project files and sidecars are tracked.
   - Status: completed after restoring `settings.local.json` from the local installer payload.
+- [ ] Continue refining `Show > Adventure Outline` summary quality so generated bullets are consistently specific, player-facing scene updates rather than generic fallback phrases.
   - Rehearsal findings: clean Release rebuild passes and refreshes executable metadata to 0.9.3; publish verification passes; Release startup smoke passes; Release/publish parity passes; published health passes; published-folder runtime integrity passes.
   - RC checklist passes with code-signing skipped; signing remains a separate release-material prerequisite.
 - [x] Audit tracked generated artifacts, especially `keyword-index.json`, and define the update policy.
