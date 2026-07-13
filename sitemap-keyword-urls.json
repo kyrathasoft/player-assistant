@@ -384,7 +384,6 @@
   "XP Awards": "https://publish.obsidian.md/scarlethorizons/Intentional+Orphans/XP+Awards",
   "XP Tracking": "https://publish.obsidian.md/scarlethorizons/Intentional+Orphans/XP+Tracking",
   "Player Contributions": "https://publish.obsidian.md/scarlethorizons/Player-Contributed/Player+Contributions",
-  "Kelb's Chronicles - 1": "https://publish.obsidian.md/scarlethorizons/Player-Contributed/Kelb+Chronicles/Kelb's+Chronicles+-+1",
   "Steve's Map of Starting Region of Campaign": "https://publish.obsidian.md/scarlethorizons/Player-Contributed/Steve's+Map+of+Starting+Region+of+Campaign",
   "Kurfel": "https://publish.obsidian.md/scarlethorizons/Powers/Gods/Kurfel",
   "Gaining Additional Hit Points": "https://publish.obsidian.md/scarlethorizons/Meta/House+Rules/Gaining+Additional+Hit+Points",
@@ -477,7 +476,6 @@
   "Farrod's Lake": "https://publish.obsidian.md/scarlethorizons/Locations/Farrod's+Lake",
   "Far Reach": "https://publish.obsidian.md/scarlethorizons/Locations/Far+Reach",
   "README": "https://publish.obsidian.md/scarlethorizons/OSE/README",
-  "License": "https://publish.obsidian.md/scarlethorizons/OSE/License",
   "Wand of trap Detection": "https://publish.obsidian.md/scarlethorizons/OSE/8.+Treasures/Rods%2C+Staves%2C+Wands/Wand+of+trap+Detection",
   "Wand of Secret Door Detection": "https://publish.obsidian.md/scarlethorizons/OSE/8.+Treasures/Rods%2C+Staves%2C+Wands/Wand+of+Secret+Door+Detection",
   "Wand of Polymorph": "https://publish.obsidian.md/scarlethorizons/OSE/8.+Treasures/Rods%2C+Staves%2C+Wands/Wand+of+Polymorph",
@@ -576,7 +574,6 @@
   "13. Sentient Swords": "https://publish.obsidian.md/scarlethorizons/OSE/8.+Treasures/13.+Sentient+Swords",
   "12. Weapons": "https://publish.obsidian.md/scarlethorizons/OSE/8.+Treasures/12.+Weapons",
   "11. Swords": "https://publish.obsidian.md/scarlethorizons/OSE/8.+Treasures/11.+Swords",
-  "10 Scolls and Maps": "https://publish.obsidian.md/scarlethorizons/OSE/8.+Treasures/10+Scolls+and+Maps",
   "1. Placing Treasure": "https://publish.obsidian.md/scarlethorizons/OSE/8.+Treasures/1.+Placing+Treasure",
   "Zombie": "https://publish.obsidian.md/scarlethorizons/OSE/7.+Monsters/Monster+Stats/Zombie",
   "Yellow Mould": "https://publish.obsidian.md/scarlethorizons/OSE/7.+Monsters/Monster+Stats/Yellow+Mould",
@@ -941,5 +938,11 @@
   "Glittering Canopy": "https://publish.obsidian.md/scarlethorizons/Locations/Glittering+Canopy",
   "Urvan Hall, paladin of St. Ygg": "https://publish.obsidian.md/scarlethorizons/NPCs/Urvan+Hall%2C+paladin+of+St.+Ygg",
   "Narinza Izrut": "https://publish.obsidian.md/scarlethorizons/NPCs/Narinza+Izrut",
-  "Chapter 4 - Battle at Blightstone Pit": "https://publish.obsidian.md/scarlethorizons/Meta/IC/Chapter+4+-+Battle+at+Blightstone+Pit"
+  "Chapter 4 - Battle at Blightstone Pit": "https://publish.obsidian.md/scarlethorizons/Meta/IC/Chapter+4+-+Battle+at+Blightstone+Pit",
+  "Jelb's Family Genealogy": "https://publish.obsidian.md/scarlethorizons/Player-Contributed/Jelb's+Family+Genealogy",
+  "Jelb's Chronicles - 1": "https://publish.obsidian.md/scarlethorizons/Player-Contributed/Jelb+Chronicles/Jelb's+Chronicles+-+1",
+  "10 Scrolls and Maps": "https://publish.obsidian.md/scarlethorizons/OSE/8.+Treasures/10+Scrolls+and+Maps",
+  "Lair": "https://publish.obsidian.md/scarlethorizons/Meta/Lair",
+  "Jelb's Chronicles - 2": "https://publish.obsidian.md/scarlethorizons/Player-Contributed/Jelb+Chronicles/Jelb's+Chronicles+-+2",
+  "Five-Day Meal Plan for PHP Clients ($164.11)": "https://publish.obsidian.md/scarlethorizons/Decks/PHP+Meals/Five-Day+Meal+Plan+for+PHP+Clients+(%24164.11)"
 }

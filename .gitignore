@@ -19,6 +19,7 @@ publish-msbuild/.playwright/
 
 # User/project-local files
 *.csproj.user
+settings.local.json
 xp-passwords*.json
 
 # Scratch files except active Orcish review batch

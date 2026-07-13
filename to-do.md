@@ -213,3 +213,16 @@
 - [x] Reduce plaintext secret lifetime in memory for decrypted hosted settings and RPOL credentials where practical.
 - [x] Add runtime diagnostics for outbound allowlisted requests, recording per-purpose endpoint usage and failure counts without logging secret-bearing values.
 - [x] Add a clean-machine installer smoke path in CI that verifies first launch, hosted settings download, credential migration, and updater preflight behavior after install.
+
+## Fresh backlog
+
+- [x] Run a full release verification/rehearsal now that project files and sidecars are tracked.
+  - Status: completed after restoring `settings.local.json` from the local installer payload.
+  - Rehearsal findings: clean Release rebuild passes and refreshes executable metadata to 0.9.3; publish verification passes; Release startup smoke passes; Release/publish parity passes; published health passes; published-folder runtime integrity passes.
+  - RC checklist passes with code-signing skipped; signing remains a separate release-material prerequisite.
+- [x] Audit tracked generated artifacts, especially `keyword-index.json`, and define the update policy.
+  - Status: completed.
+  - Findings: root `keyword-index.json` and `sitemap-keyword-urls.json` are the tracked generated search snapshots; Release/publish copies, diagnostics, installer payloads, and credential sidecars are generated runtime/distribution output.
+  - Policy: documented in `AGENTS.md`; refreshed the root tracked snapshots from the current validated `Release` copies.
+- [ ] Start a new player-facing feature backlog.
+- [ ] Continue Orcish work with a new quality pass outside the completed backlog.

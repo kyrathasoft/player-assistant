@@ -43,6 +43,12 @@ Rules:
 - Use `codex-scratch\candidates.txt` as the current curated backlog for Orcish lexicon work; remove an item only when the exact remaining candidate has been covered, not merely a related root word.
 - After lexicon edits, verify representative terms with `to-orcish`; if Debug outputs are locked, use a Release build artifact for confirmation instead of assuming the change worked.
 
+# Generated artifact update policy
+- Treat root `keyword-index.json` and `sitemap-keyword-urls.json` as the tracked campaign search snapshots. They may be committed only after an intentional crawl/index refresh, schema change, or release-data refresh.
+- Do not commit incidental changes to generated runtime output under `Release`, `Release\publish`, `publish`, `publish-msbuild`, installer payloads, diagnostics bundles, startup health/log files, crash files, or outbound network diagnostics unless the user explicitly asks for a release artifact commit.
+- When an intentional app run refreshes `Release\keyword-index.json` or `Release\sitemap-keyword-urls.json`, copy the reviewed Release copy back to the matching root tracked snapshot before committing so Git preserves the current reproducible search data.
+- Before committing refreshed generated snapshots, verify the JSON parses, confirm the change is expected from the crawl/index source data, and run the relevant release checks that consume the files: publish verification, Release/publish parity, or published-folder runtime integrity as appropriate.
+- Keep `settings.local.json`, `xp-passwords*.json`, and other credential-bearing sidecars ignored and local. The publish script may stage encrypted copies into `Release\publish`, but those staged copies remain generated distribution output.
 
 Do not display executed commands, command output, grep results, line-number lookups, or file-inspection transcripts.
 
