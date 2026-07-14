@@ -5,6 +5,7 @@
 - Framework: .NET
 - This is a C#/.NET repository.
 - The user is on Windows using PowerShell.
+- Always use PowerShell-safe quoting for shell commands; prefer single-quoted arguments for literal strings such as Git commit messages.
 - Do not assume macOS, Linux, Xcode, Swift, or iOS unless files prove it.
 - Prefer PowerShell commands.
 - Inspect `.sln`, `.csproj`, `.props`, `.targets`, and `.cs` files before making language/framework assumptions.
