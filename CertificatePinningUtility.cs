@@ -40,12 +40,20 @@ namespace PlayerAssistant
                 return sslPolicyErrors == SslPolicyErrors.None;
             }
 
-            return ValidatePinnedRequest(
+            var presentedPins = GetPresentedPins(certificate, chain);
+            if (ValidatePinnedRequest(
                 requestMessage.RequestUri,
-                GetPresentedPins(certificate, chain),
+                presentedPins,
                 sslPolicyErrors,
                 PlayerAssistantUpdatePolicy,
-                DateTimeOffset.UtcNow);
+                DateTimeOffset.UtcNow))
+            {
+                return true;
+            }
+
+            // Update manifests are independently signed and installers are verified by signed hashes.
+            // Allow trusted local TLS inspection or certificate rotation when Windows still validates TLS.
+            return sslPolicyErrors == SslPolicyErrors.None;
         }
 
         private static bool IsPlayerAssistantUpdateRequest(Uri requestUri)

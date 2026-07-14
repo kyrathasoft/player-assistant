@@ -1,4 +1,5 @@
 using PlayerAssistant;
+using Microsoft.Playwright;
 using System.Diagnostics;
 using System.Drawing;
 using System.Drawing.Imaging;
@@ -147,6 +148,7 @@ var tests = new (string Name, Action Test)[]
     ("asset manifest load returns empty for malformed json", AssetManifestLoadReturnsEmptyForMalformedJson),
     ("active hero markdown cancellation writes no files", ActiveHeroMarkdownCancellationWritesNoFiles),
     ("player character refresh cancellation clears in progress flag", PlayerCharacterRefreshCancellationClearsInProgressFlag),
+    ("player character refresh is not delayed when hero images are suppressed", PlayerCharacterRefreshIsNotDelayedWhenHeroImagesAreSuppressed),
     ("game forum startup cancellation writes no manifests", GameForumStartupCancellationWritesNoManifests),
     ("keyword index loader quarantines malformed json", KeywordIndexLoaderQuarantinesMalformedJson),
     ("keyword index loader salvages legacy disallowed urls", KeywordIndexLoaderSalvagesLegacyDisallowedUrls),
@@ -162,6 +164,7 @@ var tests = new (string Name, Action Test)[]
     ("keyword terms publish copy preserves parent release terms", KeywordTermsPublishCopyPreservesParentReleaseTerms),
     ("rpol auth detects login page fallback", RpolAuthDetectsLoginPageFallback),
     ("rpol auth distinguishes blocked and remote failures", RpolAuthDistinguishesBlockedAndRemoteFailures),
+    ("rpol auth prefers installed browsers before playwright chromium", RpolAuthPrefersInstalledBrowsersBeforePlaywrightChromium),
     ("rpol auth cached failure short circuits html fetch", RpolAuthCachedFailureShortCircuitsHtmlFetch),
     ("rpol auth cached failure logs once", RpolAuthCachedFailureLogsOnce),
     ("rpol auth caches blocked and expired session failures", RpolAuthCachesBlockedAndExpiredSessionFailures),
@@ -203,6 +206,7 @@ var tests = new (string Name, Action Test)[]
     ("about author text lists developer info", AboutAuthorTextListsDeveloperInfo),
     ("about version text shows app version", AboutVersionTextShowsAppVersion),
     ("update check verifies signed p-assist manifest", UpdateCheckVerifiesSignedPAssistManifest),
+    ("update check accepts manifest signature made before trailing newline", UpdateCheckAcceptsManifestSignatureMadeBeforeTrailingNewline),
     ("update check chooses newest signed manifest entry", UpdateCheckChoosesNewestSignedManifestEntry),
     ("update check rejects tampered signed manifest", UpdateCheckRejectsTamperedSignedManifest),
     ("update check rejects retired manifest signing key", UpdateCheckRejectsRetiredManifestSigningKey),
@@ -219,6 +223,7 @@ var tests = new (string Name, Action Test)[]
     ("update host certificate pinning supports rotation window", UpdateHostCertificatePinningSupportsRotationWindow),
     ("update host certificate pinning rejects retired pin", UpdateHostCertificatePinningRejectsRetiredPin),
     ("update host certificate pinning rejects mismatched pin", UpdateHostCertificatePinningRejectsMismatchedPin),
+    ("update host certificate validation allows trusted tls with pin mismatch", UpdateHostCertificateValidationAllowsTrustedTlsWithPinMismatch),
     ("certificate validation skips pin extraction for non update hosts", CertificateValidationSkipsPinExtractionForNonUpdateHosts),
     ("verified updater downloads installer to controlled path", VerifiedUpdaterDownloadsInstallerToControlledPath),
     ("verified updater rejects installer sha256 mismatch", VerifiedUpdaterRejectsInstallerSha256Mismatch),
@@ -236,6 +241,7 @@ var tests = new (string Name, Action Test)[]
     ("keyword search rpol scope excludes obsidian-only whiteheart stiffwhiskers", KeywordSearchRpolScopeExcludesObsidianOnlyWhiteheartStiffwhiskers),
     ("keyword search expands hero first and full names", KeywordSearchExpandsHeroFirstAndFullNames),
     ("party hero sheet parser reads summary and hides xp lines", PartyHeroSheetParserReadsSummaryAndHidesXpLines),
+    ("party hero listing summary overrides stale cached sheet", PartyHeroListingSummaryOverridesStaleCachedSheet),
     ("party hero xp visibility follows authenticated character", PartyHeroXpVisibilityFollowsAuthenticatedCharacter),
     ("tagged note cipher decrypts for matching level tag", TaggedNoteCipherDecryptsForMatchingLevelTag),
     ("tagged note cipher decrypts for matching character tag", TaggedNoteCipherDecryptsForMatchingCharacterTag),
@@ -3065,6 +3071,26 @@ static void PlayerCharacterRefreshCancellationClearsInProgressFlag()
     });
 }
 
+static void PlayerCharacterRefreshIsNotDelayedWhenHeroImagesAreSuppressed()
+{
+    RunOnStaThread(() =>
+    {
+        using var suppressedForm = new Form1(suppressHeroImagesForThisRun: true);
+        SetPrivateField(suppressedForm, "_activePlayerCharacterImagePaths", new[] { "cached-hero.webp" });
+        SetPrivateField(suppressedForm, "_heroImageShowcaseCompleted", false);
+        AssertFalse(
+            (bool)(InvokePrivateMethod(suppressedForm, "ShouldDelayPlayerCharacterRefreshForHeroShowcase") ?? true),
+            "suppressed hero images should not delay player-character markdown refresh");
+
+        using var normalForm = new Form1(suppressHeroImagesForThisRun: false);
+        SetPrivateField(normalForm, "_activePlayerCharacterImagePaths", new[] { "cached-hero.webp" });
+        SetPrivateField(normalForm, "_heroImageShowcaseCompleted", false);
+        AssertTrue(
+            (bool)(InvokePrivateMethod(normalForm, "ShouldDelayPlayerCharacterRefreshForHeroShowcase") ?? false),
+            "normal hero image startup should still wait for the showcase before refreshing player characters");
+    });
+}
+
 static void GameForumStartupCancellationWritesNoManifests()
 {
     RunOnStaThread(() =>
@@ -3530,6 +3556,25 @@ static void RpolAuthDistinguishesBlockedAndRemoteFailures()
     AssertFalse(RpolAuthUtility.IsFatalAuthFailure(cloudflareChallenge), "Cloudflare challenges should be retryable instead of cached as fatal");
     AssertEqual(RpolAuthFailureKind.RpolBlocked, rateLimited.Kind, "429 should be classified as RPOL blocking");
     AssertEqual(RpolAuthFailureKind.RemoteUnavailable, unavailable.Kind, "503 should remain a transient remote failure");
+}
+
+static void RpolAuthPrefersInstalledBrowsersBeforePlaywrightChromium()
+{
+    var normalOptions = (BrowserTypeLaunchOptions[])(InvokeStaticMethod(
+        typeof(RpolAuthUtility),
+        "CreateRpolBrowserLaunchOptions",
+        false) ?? throw new InvalidOperationException("CreateRpolBrowserLaunchOptions returned null."));
+    var verificationOptions = (BrowserTypeLaunchOptions[])(InvokeStaticMethod(
+        typeof(RpolAuthUtility),
+        "CreateRpolBrowserLaunchOptions",
+        true) ?? throw new InvalidOperationException("CreateRpolBrowserLaunchOptions returned null."));
+
+    AssertEqual(3, normalOptions.Length, "normal RPOL auth should try Edge, Chrome, then Playwright Chromium");
+    AssertEqual("msedge", normalOptions[0].Channel ?? string.Empty, "Edge should be tried before default Playwright Chromium");
+    AssertEqual("chrome", normalOptions[1].Channel ?? string.Empty, "Chrome should be tried before default Playwright Chromium");
+    AssertTrue(string.IsNullOrWhiteSpace(normalOptions[2].Channel), "default Playwright Chromium should remain the final fallback");
+    AssertTrue(normalOptions.All(option => option.Headless == true), "normal RPOL auth should launch browsers headless");
+    AssertTrue(verificationOptions.All(option => option.Headless == false), "manual RPOL browser verification should launch browsers headed");
 }
 
 static void RpolAuthCachedFailureShortCircuitsHtmlFetch()
@@ -4903,6 +4948,41 @@ static void UpdateCheckVerifiesSignedPAssistManifest()
         "unexpected installer SHA256");
 }
 
+static void UpdateCheckAcceptsManifestSignatureMadeBeforeTrailingNewline()
+{
+    const string manifestJson =
+        """
+        {
+          "schema_version": 1,
+          "updates": [
+            {
+              "version": "0.9.5",
+              "url": "p-assist-0.9.5.zip",
+              "sha256": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+              "installer_url": "p-assist-0.9.5.exe",
+              "installer_sha256": "BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB"
+            }
+          ]
+        }
+        """;
+    using var rsa = RSA.Create(2048);
+    var manifestBytes = System.Text.Encoding.UTF8.GetBytes(manifestJson);
+    var downloadedManifestBytes = System.Text.Encoding.UTF8.GetBytes(manifestJson + Environment.NewLine);
+    var signatureBytes = rsa.SignData(
+        manifestBytes,
+        HashAlgorithmName.SHA256,
+        RSASignaturePadding.Pkcs1);
+
+    var update = PlayerAssistantUpdateUtility.FindLatestUpdateFromSignedManifest(
+        downloadedManifestBytes,
+        Convert.ToBase64String(signatureBytes),
+        PlayerAssistantUpdateUtility.UpdateManifestUri,
+        [CreateActiveSigningKey(rsa.ExportSubjectPublicKeyInfoPem())]);
+
+    AssertTrue(update is not null, "expected update manifest with trailing newline to verify");
+    AssertEqual("0.9.5", update!.VersionText, "unexpected parsed update version");
+}
+
 static void UpdateCheckChoosesNewestSignedManifestEntry()
 {
     var signed = CreateSignedUpdateManifest(
@@ -4997,10 +5077,10 @@ static void UpdateCheckRejectsRetiredManifestSigningKey()
           "schema_version": 1,
           "updates": [
             {
-              "version": "0.9.1",
-              "url": "p-assist-0.9.1.zip",
+              "version": "0.9.5",
+              "url": "p-assist-0.9.5.zip",
               "sha256": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
-              "installer_url": "p-assist-0.9.1.exe",
+              "installer_url": "p-assist-0.9.5.exe",
               "installer_sha256": "BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB"
             }
           ]
@@ -5063,16 +5143,18 @@ static void UpdateCheckReportsLatestVersionMessage()
 
 static void UpdateCheckFetchesSignedManifestFromAllowedUpdateHost()
 {
+    using var directory = TemporaryDirectory.Create();
+    var statePath = Path.Combine(directory.Path, "trusted-update-state.json");
     var signed = CreateSignedUpdateManifest(
         """
         {
           "schema_version": 1,
           "updates": [
             {
-              "version": "0.9.1",
-              "url": "p-assist-0.9.1.zip",
+              "version": "0.9.5",
+              "url": "p-assist-0.9.5.zip",
               "sha256": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
-              "installer_url": "p-assist-0.9.1.exe",
+              "installer_url": "p-assist-0.9.5.exe",
               "installer_sha256": "BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB"
             }
           ]
@@ -5105,7 +5187,7 @@ static void UpdateCheckFetchesSignedManifestFromAllowedUpdateHost()
     }));
 
     var update = PlayerAssistantUpdateUtility
-        .CheckForLatestUpdateAsync(httpClient, [CreateActiveSigningKey(signed.PublicKeyPem)])
+        .CheckForLatestUpdateAsync(httpClient, [CreateActiveSigningKey(signed.PublicKeyPem)], statePath)
         .GetAwaiter()
         .GetResult();
     AssertEqual(2, requestUris.Count, "expected manifest and signature requests");
@@ -5118,9 +5200,9 @@ static void UpdateCheckFetchesSignedManifestFromAllowedUpdateHost()
         requestUris[1],
         "unexpected update manifest signature request URL");
     AssertTrue(update is not null, "expected update archive from scripted signed manifest");
-    AssertEqual("0.9.1", update!.VersionText, "unexpected fetched update version");
+    AssertEqual("0.9.5", update!.VersionText, "unexpected fetched update version");
     AssertEqual(
-        "https://bryanmiller.us/scarlethorizons/p-assist-0.9.1.exe",
+        "https://bryanmiller.us/scarlethorizons/p-assist-0.9.5.exe",
         update.InstallerUri.AbsoluteUri,
         "unexpected fetched installer URL");
 
@@ -5383,6 +5465,28 @@ static void UpdateHostCertificatePinningRejectsMismatchedPin()
             ]));
 
     AssertFalse(isValid, "expected mismatched pin to be rejected for update host");
+}
+
+static void UpdateHostCertificateValidationAllowsTrustedTlsWithPinMismatch()
+{
+    using var request = new HttpRequestMessage(
+        HttpMethod.Get,
+        "https://bryanmiller.us/scarlethorizons/p-assist-updates.json");
+
+    AssertTrue(
+        CertificatePinningUtility.ValidateServerCertificate(
+            request,
+            certificate: null,
+            chain: null,
+            SslPolicyErrors.None),
+        "trusted TLS should be accepted even when update-host pins are unavailable or mismatched because manifests are signed");
+    AssertFalse(
+        CertificatePinningUtility.ValidateServerCertificate(
+            request,
+            certificate: null,
+            chain: null,
+            SslPolicyErrors.RemoteCertificateChainErrors),
+        "TLS validation errors should still be rejected for update checks");
 }
 
 static void CertificateValidationSkipsPinExtractionForNonUpdateHosts()
@@ -6027,6 +6131,38 @@ static void PartyHeroSheetParserReadsSummaryAndHidesXpLines()
     AssertEqual("4", hero.HitPoints, "unexpected parsed hit points");
     AssertFalse(hero.CharacterSheetText.Contains("XP: 0", StringComparison.Ordinal), "XP total lines should be hidden from party sheet text");
     AssertContains(hero.CharacterSheetText, "XP Bonus: 10%");
+}
+
+static void PartyHeroListingSummaryOverridesStaleCachedSheet()
+{
+    using var directory = TemporaryDirectory.Create();
+    var activeDirectory = Path.Combine(directory.Path, "active");
+    Directory.CreateDirectory(activeDirectory);
+    File.WriteAllText(
+        PlayerCharacterAssetUtility.GetPlayerCharactersListingMarkdownCachePath(directory.Path),
+        """
+        | Name | Class | Level | Token | HP | Race | AC |
+        | ---- | ----- | ----- | ----- | -- | ---- | -- |
+        | [[Jelb Garrick, Illusionist\|Jelb]] | Illusionist | 3 | ![[jelb-token.webp\|70]] | 8 | Human | 7[12] |
+        """);
+    File.WriteAllText(
+        Path.Combine(activeDirectory, "jelb.md"),
+        """
+        Class: Illusionist
+        HP: 4
+        Level: 1
+
+        Name: Jelb Garrick
+        """);
+
+    var heroes = PartyHeroUtility.LoadActiveParty(directory.Path);
+
+    AssertEqual(1, heroes.Count, "unexpected active party count");
+    AssertEqual("Jelb Garrick", heroes[0].Name, "sheet name should remain the displayed party name");
+    AssertEqual("Illusionist", heroes[0].CharacterClass, "listing class should be used");
+    AssertEqual("3", heroes[0].Level, "listing level should override stale sheet level");
+    AssertEqual("8", heroes[0].HitPoints, "listing HP should override stale sheet HP");
+    AssertContains(heroes[0].CharacterSheetText, "HP: 4");
 }
 
 static void PartyHeroXpVisibilityFollowsAuthenticatedCharacter()

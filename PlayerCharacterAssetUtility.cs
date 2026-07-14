@@ -160,17 +160,24 @@ namespace PlayerAssistant
         {
             ArgumentNullException.ThrowIfNull(markdown);
 
-            return markdown
+            var tableRows = markdown
                 .Split('\n')
                 .Select(line => line.Trim())
                 .Where(line => line.StartsWith('|') && line.EndsWith('|'))
                 .Select(SplitMarkdownTableRow)
-                .Where(cells => cells.Length >= 4)
+                .Where(cells => cells.Length > 0)
+                .ToArray();
+            var headerIndexes = GetHeroTableHeaderIndexes(tableRows);
+
+            return tableRows
                 .Where(cells => !IsHeaderOrSeparator(cells[0]))
                 .Select(cells => new PlayerCharacterHeroRow(
-                    CleanMarkdownCell(cells[0]),
-                    GetObsidianImageFileName(cells[3]),
-                    GetCharacterPageUrl(cells[0], listingUrl)))
+                    CleanMarkdownCell(GetHeroTableCell(cells, headerIndexes, 0, "name", "character")),
+                    GetObsidianImageFileName(GetHeroTableCell(cells, headerIndexes, 3, "token", "hero")),
+                    GetCharacterPageUrl(GetHeroTableCell(cells, headerIndexes, 0, "name", "character"), listingUrl),
+                    CleanMarkdownCell(GetHeroTableCell(cells, headerIndexes, 1, "class", "characterclass")),
+                    CleanMarkdownCell(GetHeroTableCell(cells, headerIndexes, -1, "level")),
+                    CleanMarkdownCell(GetHeroTableCell(cells, headerIndexes, -1, "hp", "hitpoints"))))
                 .Where(row => !string.IsNullOrWhiteSpace(row.Name))
                 .ToArray();
         }
@@ -295,6 +302,57 @@ namespace PlayerAssistant
 
             cells.Add(new string(current.ToArray()));
             return cells.Select(cell => cell.Trim()).ToArray();
+        }
+
+        private static Dictionary<string, int> GetHeroTableHeaderIndexes(string[][] rows)
+        {
+            var header = rows.FirstOrDefault(cells =>
+                cells.Any(cell =>
+                {
+                    var name = NormalizeHeroTableHeader(cell);
+                    return name is "name" or "character";
+                }));
+            var indexes = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+            if (header is null)
+            {
+                return indexes;
+            }
+
+            for (var index = 0; index < header.Length; index++)
+            {
+                var name = NormalizeHeroTableHeader(header[index]);
+                if (name.Length > 0 && !indexes.ContainsKey(name))
+                {
+                    indexes.Add(name, index);
+                }
+            }
+
+            return indexes;
+        }
+
+        private static string GetHeroTableCell(
+            string[] cells,
+            Dictionary<string, int> headerIndexes,
+            int fallbackIndex,
+            params string[] headerNames)
+        {
+            foreach (var headerName in headerNames)
+            {
+                if (headerIndexes.TryGetValue(headerName, out var index) && index >= 0 && index < cells.Length)
+                {
+                    return cells[index];
+                }
+            }
+
+            return fallbackIndex >= 0 && fallbackIndex < cells.Length
+                ? cells[fallbackIndex]
+                : string.Empty;
+        }
+
+        private static string NormalizeHeroTableHeader(string value)
+        {
+            var cleaned = CleanMarkdownCell(value);
+            return Regex.Replace(cleaned, @"[^a-z0-9]+", string.Empty, RegexOptions.IgnoreCase).ToLowerInvariant();
         }
 
         private static bool IsHeaderOrSeparator(string value)
@@ -486,5 +544,11 @@ namespace PlayerAssistant
         }
     }
 
-    internal sealed record PlayerCharacterHeroRow(string Name, string? TokenFileName, string? CharacterPageUrl = null);
+    internal sealed record PlayerCharacterHeroRow(
+        string Name,
+        string? TokenFileName,
+        string? CharacterPageUrl = null,
+        string CharacterClass = "",
+        string Level = "",
+        string HitPoints = "");
 }

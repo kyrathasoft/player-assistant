@@ -199,7 +199,7 @@ $manifestJson = $manifest | ConvertTo-Json -Depth 6
 
 $rsa = Get-SigningKey -PrivateKeyXmlPath $PrivateKeyXmlPath -GenerateEphemeralSigningKey:$GenerateEphemeralSigningKey
 try {
-    $manifestBytes = [System.Text.Encoding]::UTF8.GetBytes($manifestJson)
+    $manifestBytes = [System.IO.File]::ReadAllBytes($resolvedManifestPath)
     $signatureBytes = $rsa.SignData($manifestBytes, 'SHA256')
     [System.IO.File]::WriteAllText($resolvedSignaturePath, [Convert]::ToBase64String($signatureBytes) + [Environment]::NewLine, [System.Text.UTF8Encoding]::new($false))
     [System.IO.File]::WriteAllText($resolvedPublicKeyXmlPath, $rsa.ToXmlString($false), [System.Text.UTF8Encoding]::new($false))

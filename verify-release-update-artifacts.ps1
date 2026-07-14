@@ -124,7 +124,7 @@ function Assert-ManifestSignature {
     Assert-RequiredFile -Path $SignaturePath -Description 'signed update manifest signature'
     Assert-RequiredFile -Path $PublicKeyXmlPath -Description 'signed update manifest public key'
 
-    $manifestBytes = [System.Text.Encoding]::UTF8.GetBytes((Get-Content -Raw -LiteralPath $ManifestPath).TrimEnd("`r", "`n"))
+    $manifestBytes = [System.IO.File]::ReadAllBytes($ManifestPath)
     $signatureBytes = [Convert]::FromBase64String((Get-Content -Raw -LiteralPath $SignaturePath).Trim())
     $publicKeyXml = Get-Content -Raw -LiteralPath $PublicKeyXmlPath
 
@@ -132,7 +132,8 @@ function Assert-ManifestSignature {
     $rsa.PersistKeyInCsp = $false
     try {
         $rsa.FromXmlString($publicKeyXml)
-        if (!$rsa.VerifyData($manifestBytes, 'SHA256', $signatureBytes)) {
+        $legacyManifestBytes = [System.Text.Encoding]::UTF8.GetBytes((Get-Content -Raw -LiteralPath $ManifestPath).TrimEnd("`r", "`n", "`t", " "))
+        if (!$rsa.VerifyData($manifestBytes, 'SHA256', $signatureBytes) -and !$rsa.VerifyData($legacyManifestBytes, 'SHA256', $signatureBytes)) {
             throw 'Signed update manifest signature verification failed.'
         }
     }

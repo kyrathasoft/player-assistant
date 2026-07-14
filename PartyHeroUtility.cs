@@ -108,18 +108,37 @@ namespace PlayerAssistant
                 ? Path.Combine(activeDirectory, hero.TokenFileName)
                 : null;
 
-            return File.Exists(markdownPath)
-                ? ParseHeroSheet(
+            if (File.Exists(markdownPath))
+            {
+                var sheet = ParseHeroSheet(
                     File.ReadAllText(markdownPath),
                     hero.Name,
-                    File.Exists(tokenImagePath) ? tokenImagePath : null)
-                : new PartyHeroSheet(
-                    hero.Name,
-                    File.Exists(tokenImagePath) ? tokenImagePath : null,
-                    string.Empty,
-                    string.Empty,
-                    string.Empty,
-                    "Character sheet markdown is not available.");
+                    File.Exists(tokenImagePath) ? tokenImagePath : null);
+                return ApplyListingSummary(sheet, hero);
+            }
+
+            return new PartyHeroSheet(
+                hero.Name,
+                File.Exists(tokenImagePath) ? tokenImagePath : null,
+                hero.Level,
+                hero.CharacterClass,
+                hero.HitPoints,
+                "Character sheet markdown is not available.");
+        }
+
+        private static PartyHeroSheet ApplyListingSummary(PartyHeroSheet sheet, PlayerCharacterHeroRow hero)
+        {
+            return sheet with
+            {
+                Level = FirstNonBlank(hero.Level, sheet.Level),
+                CharacterClass = FirstNonBlank(hero.CharacterClass, sheet.CharacterClass),
+                HitPoints = FirstNonBlank(hero.HitPoints, sheet.HitPoints)
+            };
+        }
+
+        private static string FirstNonBlank(string preferred, string fallback)
+        {
+            return string.IsNullOrWhiteSpace(preferred) ? fallback : preferred;
         }
 
         private static string? FindTokenImageForMarkdown(string activeDirectory, string markdownPath)

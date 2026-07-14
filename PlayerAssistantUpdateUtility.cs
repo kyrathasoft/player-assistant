@@ -39,13 +39,13 @@ namespace PlayerAssistant
                 "update-signing-2026-primary",
                 """
                 -----BEGIN PUBLIC KEY-----
-                MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA1O6Lb1iZWkxwzEE69NiX
-                t3Dhyf0ZK2tr7UrJZNGJ3wmS8SyKWi4PYn1ymWxpJ3QmyqJhem3d52B3C6Prp8oq
-                0RpBZia7K2qo4VRoNqQfxGGHHkZv18v5Q+NOhIZET8LRG6RwOuKvP3vg76hylgBj
-                wC/WlNaxXPg981j0UAh2tLwJAN2+GroBzVMCwX4LEfUwZ6pqN+TgOJ1ZFHowvH3F
-                IZ9EBqQAM/HGiTHb8gA5YMZj/UApeek6T7Mkw9WUYE3CR10kMFqzgiNirCNJHbs6
-                h5sx4M4HZoAMWcd4317uuayoOeue+Ggq7q1UVj4w274x3N51wHKT61cHyx5GdSW/
-                2QIDAQAB
+                MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAmn1/5EhDHNdV2zIdKxB/
+                S1ny3TygjZHHPfvj9myjjFw23z5K2vGQkAgfzn4+WSp/a9MxHfCunug5S8Ig0uMB
+                sTbgDogxg/81SOi+qWTuYEcn7rTJVZISWX4uVw7K7TFhes+orRUULqHR3hbsa1Ta
+                t4XeflJaz2Z+C6bVmNtazwVgqkJVMVCzrDXdGgrUWXKIGa1NWj58RCVboqQdQKIa
+                LfBfW8oeWxzbH6rngE8R2U9PmJn3WO3o76iOgCueKsxmx4PVX6BBxd4vKHCjuivY
+                LyTK9NT40bqTOpiKa8QG1cggowwhgR+V7Hphu8OexyI/WkcYG5tZp8cD8vvyP7VU
+                MQIDAQAB
                 -----END PUBLIC KEY-----
                 """)
         ];
@@ -480,15 +480,17 @@ namespace PlayerAssistant
         {
             var signatureBytes = ParseSignature(signatureText);
             UpdateManifestSigningKeyTrustEntry? retiredMatch = null;
+            var signedPayloadCandidates = GetSignedPayloadCandidates(manifestBytes);
             foreach (var trustedSigningKey in trustedSigningKeys)
             {
                 using var rsa = RSA.Create();
                 rsa.ImportFromPem(trustedSigningKey.PublicKeyPem);
-                if (rsa.VerifyData(
-                        manifestBytes,
-                        signatureBytes,
-                        HashAlgorithmName.SHA256,
-                        RSASignaturePadding.Pkcs1))
+                if (signedPayloadCandidates.Any(candidate =>
+                        rsa.VerifyData(
+                            candidate,
+                            signatureBytes,
+                            HashAlgorithmName.SHA256,
+                            RSASignaturePadding.Pkcs1)))
                 {
                     if (!trustedSigningKey.IsRevoked && IsWithinTrustWindow(trustedSigningKey, nowUtc))
                     {
@@ -507,6 +509,20 @@ namespace PlayerAssistant
             }
 
             throw new InvalidOperationException("Update manifest signature could not be verified with a trusted signing key.");
+        }
+
+        private static byte[][] GetSignedPayloadCandidates(byte[] manifestBytes)
+        {
+            var trimmedLength = manifestBytes.Length;
+            while (trimmedLength > 0
+                && manifestBytes[trimmedLength - 1] is (byte)' ' or (byte)'\t' or (byte)'\r' or (byte)'\n')
+            {
+                trimmedLength--;
+            }
+
+            return trimmedLength == manifestBytes.Length
+                ? [manifestBytes]
+                : [manifestBytes, manifestBytes[..trimmedLength]];
         }
 
         private static bool IsWithinTrustWindow(UpdateManifestSigningKeyTrustEntry trustedSigningKey, DateTimeOffset nowUtc)

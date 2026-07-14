@@ -276,37 +276,52 @@ namespace PlayerAssistant
             bool clearCloudflareChallenge,
             CancellationToken cancellationToken)
         {
-            if (clearCloudflareChallenge)
+            foreach (var launchOptions in CreateRpolBrowserLaunchOptions(clearCloudflareChallenge))
             {
-                foreach (var channel in new[] { "chrome", "msedge" })
+                try
                 {
-                    try
-                    {
-                        var systemBrowser = await WaitForPlaywrightAsync(
-                            playwright.Chromium.LaunchAsync(new BrowserTypeLaunchOptions
-                            {
-                                Channel = channel,
-                                Headless = false
-                            }),
-                            $"launching the RPOL browser ({channel})",
-                            cancellationToken);
-                        return new RpolBrowserLaunch(systemBrowser, UseDefaultUserAgent: true);
-                    }
-                    catch (Exception ex) when (ex is PlaywrightException or TimeoutException or IOException)
-                    {
-                    }
+                    var browser = await WaitForPlaywrightAsync(
+                        playwright.Chromium.LaunchAsync(launchOptions),
+                        GetBrowserLaunchDescription(launchOptions),
+                        cancellationToken);
+                    return new RpolBrowserLaunch(browser, UseDefaultUserAgent: !string.IsNullOrWhiteSpace(launchOptions.Channel));
+                }
+                catch (Exception ex) when (ex is PlaywrightException or TimeoutException or IOException)
+                {
                 }
             }
 
-            var bundledBrowser = await WaitForPlaywrightAsync(
-                playwright.Chromium.LaunchAsync(new BrowserTypeLaunchOptions
-                {
-                    Headless = !clearCloudflareChallenge,
-                    Args = new[] { "--disable-blink-features=AutomationControlled" }
-                }),
-                "launching the RPOL browser",
-                cancellationToken);
-            return new RpolBrowserLaunch(bundledBrowser, UseDefaultUserAgent: false);
+            throw new RpolAuthException(
+                RpolAuthFailureKind.PlaywrightUnavailable,
+                "RPOL browser authentication could not launch installed Microsoft Edge, installed Google Chrome, or Playwright Chromium.");
+        }
+
+        private static BrowserTypeLaunchOptions[] CreateRpolBrowserLaunchOptions(bool clearCloudflareChallenge)
+        {
+            var headless = !clearCloudflareChallenge;
+            return
+            [
+                CreateRpolBrowserLaunchOption("msedge", headless),
+                CreateRpolBrowserLaunchOption("chrome", headless),
+                CreateRpolBrowserLaunchOption(channel: null, headless)
+            ];
+        }
+
+        private static BrowserTypeLaunchOptions CreateRpolBrowserLaunchOption(string? channel, bool headless)
+        {
+            return new BrowserTypeLaunchOptions
+            {
+                Channel = channel,
+                Headless = headless,
+                Args = ["--disable-blink-features=AutomationControlled"]
+            };
+        }
+
+        private static string GetBrowserLaunchDescription(BrowserTypeLaunchOptions launchOptions)
+        {
+            return string.IsNullOrWhiteSpace(launchOptions.Channel)
+                ? "launching the RPOL browser"
+                : $"launching the RPOL browser ({launchOptions.Channel})";
         }
 
         private static BrowserNewContextOptions CreateBrowserContextOptions(

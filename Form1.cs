@@ -4222,7 +4222,7 @@ namespace PlayerAssistant
                 || _showHeroIntroText
                 || _regionalMapActive
                 || _heroImageShowcaseStarted
-                || (_activePlayerCharacterImagePaths.Length > 0 && !_heroImageShowcaseCompleted))
+                || ShouldDelayPlayerCharacterRefreshForHeroShowcase())
             {
                 return;
             }
@@ -4236,6 +4236,13 @@ namespace PlayerAssistant
             {
                 _playerCharacterListingUpdateStarted = false;
             }
+        }
+
+        private bool ShouldDelayPlayerCharacterRefreshForHeroShowcase()
+        {
+            return !_suppressHeroImagesForThisRun
+                && _activePlayerCharacterImagePaths.Length > 0
+                && !_heroImageShowcaseCompleted;
         }
 
         private void UpdateHeroImageShowcase()
