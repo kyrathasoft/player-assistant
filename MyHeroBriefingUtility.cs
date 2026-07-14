@@ -259,7 +259,7 @@ namespace PlayerAssistant
             var aliases = GetHeroAliases(hero.Name);
             return threadPosts
                 .SelectMany(thread => (thread.Posts ?? [])
-                    .Where(post => MentionsAnyAlias(post.BodyText, aliases))
+                    .Where(post => IsHeroAuthor(post.Author, aliases) || MentionsAnyAlias(post.BodyText, aliases))
                     .Select(post => new MyHeroBriefingActivityItem(
                         thread.ThreadTitle,
                         thread.ThreadUrl,

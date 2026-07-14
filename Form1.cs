@@ -36,6 +36,16 @@ namespace PlayerAssistant
             Bullet
         }
 
+        private static readonly string[] MyHeroBriefingLikelyResponseKeyLines =
+        [
+            "*First, the app finds the hero's latest authored post in each thread.*",
+            "*Then it looks at later posts in that same thread by other authors.*",
+            "*Those later posts are ranked as:*",
+            "*- Direct mention after your last post when the post mentions the hero by name or first name.*",
+            "*- Question-like post after your last post when the post contains a ?.*",
+            "*- Recent post after your last post when it is simply a later post in that thread.*"
+        ];
+
         private static string PlayerCharactersListingUrl => $"{AppSettingsUtility.ObsidianGameVaultUrl}/PCs/Player+Characters+Listing";
         private static string SitemapUrl => $"{AppSettingsUtility.ObsidianGameVaultUrl}/sitemap.xml";
         private const string PlayerCharactersDirectoryName = "PCs";
@@ -1435,6 +1445,21 @@ namespace PlayerAssistant
             }
 
             var threadPosts = new List<MyHeroBriefingThreadPosts>();
+            LoadMyHeroBriefingSourceExportThreads(icPostsDirectory, threadPosts);
+            if (threadPosts.Count == 0)
+            {
+                LoadMyHeroBriefingFlatCacheThreads(icPostsDirectory, threadPosts);
+            }
+
+            return threadPosts
+                .OrderBy(thread => thread.ThreadTitle, StringComparer.OrdinalIgnoreCase)
+                .ToArray();
+        }
+
+        private static void LoadMyHeroBriefingSourceExportThreads(
+            string icPostsDirectory,
+            List<MyHeroBriefingThreadPosts> threadPosts)
+        {
             foreach (var sourcePath in Directory.EnumerateFiles(icPostsDirectory, "_source-show-all.html", SearchOption.AllDirectories))
             {
                 try
@@ -1461,10 +1486,53 @@ namespace PlayerAssistant
                     continue;
                 }
             }
+        }
 
-            return threadPosts
-                .OrderBy(thread => thread.ThreadTitle, StringComparer.OrdinalIgnoreCase)
-                .ToArray();
+        private static void LoadMyHeroBriefingFlatCacheThreads(
+            string icPostsDirectory,
+            List<MyHeroBriefingThreadPosts> threadPosts)
+        {
+            var flatHtmlFiles = Directory
+                .EnumerateFiles(icPostsDirectory, "*.html", SearchOption.TopDirectoryOnly)
+                .Concat(EnumerateMyHeroBriefingAsideHtmlFiles(icPostsDirectory))
+                .Where(IsMyHeroBriefingCurrentFlatThreadFile);
+
+            foreach (var sourcePath in flatHtmlFiles)
+            {
+                try
+                {
+                    var posts = RpolThreadPostUtility.GetThreadPostsFromHtml(File.ReadAllText(sourcePath));
+                    if (posts.Length == 0)
+                    {
+                        continue;
+                    }
+
+                    threadPosts.Add(new MyHeroBriefingThreadPosts(
+                        Path.GetFileNameWithoutExtension(sourcePath),
+                        sourcePath,
+                        posts));
+                }
+                catch
+                {
+                    continue;
+                }
+            }
+        }
+
+        private static IEnumerable<string> EnumerateMyHeroBriefingAsideHtmlFiles(string icPostsDirectory)
+        {
+            var asideDirectory = Path.Combine(icPostsDirectory, AsidePostsDirectoryName);
+            return Directory.Exists(asideDirectory)
+                ? Directory.EnumerateFiles(asideDirectory, "*.html", SearchOption.TopDirectoryOnly)
+                : [];
+        }
+
+        private static bool IsMyHeroBriefingCurrentFlatThreadFile(string path)
+        {
+            var fileName = Path.GetFileName(path);
+            return !fileName.Equals("_source-show-all.html", StringComparison.OrdinalIgnoreCase)
+                && !fileName.Equals("index.html", StringComparison.OrdinalIgnoreCase)
+                && !fileName.Contains(".bak-", StringComparison.OrdinalIgnoreCase);
         }
 
         private static RpolThreadSplitResult? TryLoadRpolThreadManifest(string manifestPath)
@@ -2810,6 +2878,7 @@ namespace PlayerAssistant
         {
             var tempDirectory = Path.Combine(GetReleaseDirectory(), TempDirectoryName);
             var loginInfoPath = GetLoginInfoPath();
+            var theCastHtmlPath = GetTheCastHtmlPath();
             var tempLoginInfoPath = Path.Combine(tempDirectory, TheCastLoginInfoFileName);
             var oocPostsDirectory = Path.GetDirectoryName(loginInfoPath)
                 ?? Path.Combine(GetReleaseDirectory(), PostsDirectoryName, OutOfCharacterPostsDirectoryName);
@@ -2827,6 +2896,7 @@ namespace PlayerAssistant
                 tempLoginInfoPath,
                 cancellationToken);
 
+            await PromoteFileIfChangedAsync(tempCastDownload.FilePath, theCastHtmlPath, cancellationToken);
             await PromoteFileIfChangedAsync(tempLoginInfoPath, loginInfoPath, cancellationToken);
 
             return loginInfoPath;
@@ -3050,10 +3120,31 @@ namespace PlayerAssistant
 
             _myHeroBriefingTextBox = textBox;
             Controls.Add(textBox);
+            _ = textBox.Handle;
+            StyleMyHeroBriefingText(textBox);
             UpdateMyHeroBriefingTextBoxBounds();
             textBox.BringToFront();
             menuStrip.BringToFront();
             statusStrip.BringToFront();
+        }
+
+        private static void StyleMyHeroBriefingText(RichTextBox textBox)
+        {
+            var keyBackColor = Color.FromArgb(246, 241, 222);
+            foreach (var keyLine in MyHeroBriefingLikelyResponseKeyLines)
+            {
+                var start = textBox.Text.IndexOf(keyLine, StringComparison.Ordinal);
+                if (start < 0)
+                {
+                    continue;
+                }
+
+                textBox.Select(start, keyLine.Length);
+                textBox.SelectionBackColor = keyBackColor;
+                textBox.SelectionFont = new Font(textBox.Font, FontStyle.Italic);
+            }
+
+            textBox.Select(0, 0);
         }
 
         private static string FormatMyHeroBriefingForDisplay(MyHeroBriefing briefing)
@@ -3092,6 +3183,7 @@ namespace PlayerAssistant
         private static void AppendResponseItems(StringBuilder builder, IReadOnlyList<MyHeroBriefingResponseItem> items)
         {
             builder.AppendLine("Likely Open Response Items");
+            AppendLikelyResponseKey(builder);
             if (items.Count == 0)
             {
                 builder.AppendLine("No likely open response items were found.");
@@ -3103,6 +3195,16 @@ namespace PlayerAssistant
             {
                 builder.AppendLine($"- {item.ThreadTitle} #{item.MessageNumber} by {item.Author}: {item.Reason}");
                 builder.AppendLine($"  {item.Excerpt}");
+            }
+
+            builder.AppendLine();
+        }
+
+        private static void AppendLikelyResponseKey(StringBuilder builder)
+        {
+            foreach (var line in MyHeroBriefingLikelyResponseKeyLines)
+            {
+                builder.AppendLine(line);
             }
 
             builder.AppendLine();

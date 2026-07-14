@@ -251,7 +251,9 @@ var tests = new (string Name, Action Test)[]
     ("my hero briefing surfaces relevant unlocked notes", MyHeroBriefingSurfacesRelevantUnlockedNotes),
     ("my hero briefing requests hero selection when no hero selected", MyHeroBriefingRequestsHeroSelectionWhenNoHeroSelected),
     ("my hero briefing display text includes focused sections", MyHeroBriefingDisplayTextIncludesFocusedSections),
+    ("my hero briefing styles likely response key", MyHeroBriefingStylesLikelyResponseKey),
     ("my hero briefing loads cached thread posts from runtime artifacts", MyHeroBriefingLoadsCachedThreadPostsFromRuntimeArtifacts),
+    ("my hero briefing loads flat cached thread files from runtime artifacts", MyHeroBriefingLoadsFlatCachedThreadFilesFromRuntimeArtifacts),
     ("my hero briefing encrypted index loader tolerates malformed json", MyHeroBriefingEncryptedIndexLoaderToleratesMalformedJson),
     ("party hero sheet parser reads summary and hides xp lines", PartyHeroSheetParserReadsSummaryAndHidesXpLines),
     ("party hero listing summary overrides stale cached sheet", PartyHeroListingSummaryOverridesStaleCachedSheet),
@@ -6353,7 +6355,17 @@ static void MyHeroBriefingBuildsRecentHeroActivity()
                 "014.html",
                 "<div></div>",
                 "<p></p>",
-                "Kelpie studies the same clue.")
+                "Kelpie studies the same clue."),
+            new RpolThreadPost(
+                15,
+                "Jelb",
+                string.Empty,
+                "Mon 1 Jan 2026",
+                "15:00",
+                "015.html",
+                "<div></div>",
+                "<p></p>",
+                "I check the stonework for hidden catches.")
         ])
         .ToArray();
     var briefing = MyHeroBriefingUtility.Build(new MyHeroBriefingRequest(
@@ -6368,8 +6380,8 @@ static void MyHeroBriefingBuildsRecentHeroActivity()
         ]));
 
     AssertEqual(10, briefing.RecentActivity.Count, "recent activity should be capped at ten matching posts");
-    AssertEqual(12, briefing.RecentActivity[0].MessageNumber, "latest matching post should appear first");
-    AssertEqual(3, briefing.RecentActivity[^1].MessageNumber, "oldest retained matching post should be message 3");
+    AssertEqual(15, briefing.RecentActivity[0].MessageNumber, "latest hero-authored post should appear first");
+    AssertEqual(4, briefing.RecentActivity[^1].MessageNumber, "oldest retained matching post should be message 4");
     AssertTrue(
         briefing.RecentActivity.All(item => item.ThreadTitle == "Chapter 1"
             && item.ThreadUrl == "https://rpol.net/display.cgi?gi=80170&ti=7"),
@@ -6377,8 +6389,9 @@ static void MyHeroBriefingBuildsRecentHeroActivity()
     AssertTrue(
         briefing.RecentActivity.All(item => item.MessageNumber != 13 && item.MessageNumber != 14),
         "activity should exclude substring matches and unrelated hero posts");
-    AssertTrue(briefing.RecentActivity[0].Excerpt.EndsWith("...", StringComparison.Ordinal), "long excerpts should be shortened");
-    AssertTrue(briefing.RecentActivity[0].Excerpt.Length <= 183, "shortened excerpts should stay bounded");
+    AssertTrue(briefing.RecentActivity.Any(item => item.MessageNumber == 15), "hero-authored posts should count as recent activity");
+    AssertTrue(briefing.RecentActivity[1].Excerpt.EndsWith("...", StringComparison.Ordinal), "long excerpts should be shortened");
+    AssertTrue(briefing.RecentActivity[1].Excerpt.Length <= 183, "shortened excerpts should stay bounded");
 }
 
 static void MyHeroBriefingBuildsLikelyOpenResponseItems()
@@ -6515,6 +6528,50 @@ static void MyHeroBriefingRequestsHeroSelectionWhenNoHeroSelected()
 
 static void MyHeroBriefingDisplayTextIncludesFocusedSections()
 {
+    var briefing = CreateMyHeroBriefingDisplayFixture();
+    var text = (string)(InvokeStaticMethod(typeof(Form1), "FormatMyHeroBriefingForDisplay", briefing)
+        ?? throw new InvalidOperationException("briefing display text was null."));
+
+    AssertContains(text, "My Hero Briefing");
+    AssertContains(text, "Current Hero");
+    AssertContains(text, "Jelb Garrick");
+    AssertContains(text, "Class: Illusionist");
+    AssertContains(text, "Level: 3");
+    AssertContains(text, "HP: 8");
+    AssertContains(text, "XP: 1,234 XP");
+    AssertContains(text, "Likely Open Response Items");
+    AssertContains(text, "*First, the app finds the hero's latest authored post in each thread.*");
+    AssertContains(text, "*Then it looks at later posts in that same thread by other authors.*");
+    AssertContains(text, "*Those later posts are ranked as:*");
+    AssertContains(text, "*- Direct mention after your last post when the post mentions the hero by name or first name.*");
+    AssertContains(text, "*- Question-like post after your last post when the post contains a ?.*");
+    AssertContains(text, "*- Recent post after your last post when it is simply a later post in that thread.*");
+    AssertContains(text, "Direct mention after your last post");
+    AssertContains(text, "Recent Hero Activity");
+    AssertContains(text, "Relevant Unlocked Notes");
+    AssertContains(text, "Jelb Only");
+    AssertContains(text, "Quick Links");
+}
+
+static void MyHeroBriefingStylesLikelyResponseKey()
+{
+    RunOnStaThread(() =>
+    {
+        using var form = new Form1(suppressHeroImagesForThisRun: true);
+        InvokePrivateMethod(form, "ShowMyHeroBriefing", CreateMyHeroBriefingDisplayFixture());
+        var textBox = (RichTextBox)(GetPrivateField(form, "_myHeroBriefingTextBox")
+            ?? throw new InvalidOperationException("my hero briefing text box was null."));
+        const string keyLine = "*First, the app finds the hero's latest authored post in each thread.*";
+        var start = textBox.Text.IndexOf(keyLine, StringComparison.Ordinal);
+
+        AssertTrue(start >= 0, "expected likely response key line to be present");
+        textBox.Select(start, 1);
+        AssertEqual(Color.FromArgb(246, 241, 222), textBox.SelectionBackColor, "unexpected likely response key background color");
+    });
+}
+
+static MyHeroBriefing CreateMyHeroBriefingDisplayFixture()
+{
     var heroes = new PartyHeroSheet[]
     {
         new("Jelb Garrick", "jelb-token.webp", "3", "Illusionist", "8", "Jelb sheet")
@@ -6536,29 +6593,12 @@ static void MyHeroBriefingDisplayTextIncludesFocusedSections()
             1,
             ["Hero Jelb"])
     };
-    var briefing = MyHeroBriefingUtility.Build(new MyHeroBriefingRequest(
+    return MyHeroBriefingUtility.Build(new MyHeroBriefingRequest(
         heroes,
         AuthenticatedHeroName: "Jelb",
         ThreadPosts: posts,
         XpTotals: [new PcXpTotal("Jelb Garrick", 1234)],
         EncryptedTextIndex: encryptedIndex));
-
-    var text = (string)(InvokeStaticMethod(typeof(Form1), "FormatMyHeroBriefingForDisplay", briefing)
-        ?? throw new InvalidOperationException("briefing display text was null."));
-
-    AssertContains(text, "My Hero Briefing");
-    AssertContains(text, "Current Hero");
-    AssertContains(text, "Jelb Garrick");
-    AssertContains(text, "Class: Illusionist");
-    AssertContains(text, "Level: 3");
-    AssertContains(text, "HP: 8");
-    AssertContains(text, "XP: 1,234 XP");
-    AssertContains(text, "Likely Open Response Items");
-    AssertContains(text, "Direct mention after your last post");
-    AssertContains(text, "Recent Hero Activity");
-    AssertContains(text, "Relevant Unlocked Notes");
-    AssertContains(text, "Jelb Only");
-    AssertContains(text, "Quick Links");
 }
 
 static void MyHeroBriefingLoadsCachedThreadPostsFromRuntimeArtifacts()
@@ -6596,6 +6636,40 @@ static void MyHeroBriefingLoadsCachedThreadPostsFromRuntimeArtifacts()
         AssertEqual(2, threadPosts[0].Posts.Count, "unexpected cached post count");
         AssertEqual("Jelb", threadPosts[0].Posts[0].Author, "unexpected first cached post author");
         AssertEqual("The lock clicks.", threadPosts[0].Posts[1].BodyText, "unexpected second cached post body");
+    }
+    finally
+    {
+        Form1.MyHeroBriefingPostsDirectoryOverride = null;
+    }
+}
+
+static void MyHeroBriefingLoadsFlatCachedThreadFilesFromRuntimeArtifacts()
+{
+    using var directory = TemporaryDirectory.Create();
+    var asideDirectory = Path.Combine(directory.Path, "Aside");
+    Directory.CreateDirectory(asideDirectory);
+    File.WriteAllText(
+        Path.Combine(directory.Path, "ch-5.html"),
+        CreateRpolSourceHtml(
+            (1, "Jelb", "Mon 1 Jan 2026", "01:00", "I watch the passage."),
+            (2, "Dungeon Master", "Mon 1 Jan 2026", "01:05", "Jelb hears footsteps.")));
+    File.WriteAllText(
+        Path.Combine(directory.Path, "ch-5.bak-20260713-191558-767.html"),
+        CreateRpolSourceHtml((99, "Dungeon Master", "Mon 1 Jan 2026", "01:10", "Stale backup content.")));
+    File.WriteAllText(
+        Path.Combine(asideDirectory, "Aside - Searching the woods.html"),
+        CreateRpolSourceHtml((3, "Kelpie", "Mon 1 Jan 2026", "01:15", "Kelpie searches the woods.")));
+
+    Form1.MyHeroBriefingPostsDirectoryOverride = directory.Path;
+    try
+    {
+        var threadPosts = (IReadOnlyList<MyHeroBriefingThreadPosts>)(InvokeStaticMethod(typeof(Form1), "LoadMyHeroBriefingThreadPosts")
+            ?? throw new InvalidOperationException("thread posts were null."));
+
+        AssertEqual(2, threadPosts.Count, "expected current flat chapter and aside files to load");
+        AssertTrue(threadPosts.Any(thread => thread.ThreadTitle == "ch-5" && thread.Posts.Count == 2), "current chapter file should load");
+        AssertTrue(threadPosts.Any(thread => thread.ThreadTitle == "Aside - Searching the woods" && thread.Posts.Count == 1), "aside file should load");
+        AssertFalse(threadPosts.Any(thread => thread.Posts.Any(post => post.MessageNumber == 99)), "backup files should be ignored");
     }
     finally
     {
