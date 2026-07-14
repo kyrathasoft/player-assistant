@@ -228,35 +228,35 @@
   - Findings: root `keyword-index.json` and `sitemap-keyword-urls.json` are the tracked generated search snapshots; Release/publish copies, diagnostics, installer payloads, and credential sidecars are generated runtime/distribution output.
   - Policy: documented in `AGENTS.md`; refreshed the root tracked snapshots from the current validated `Release` copies.
 - [ ] Implement `Show > My Hero Briefing` as the next player-facing feature.
-  - [ ] Define the `MyHeroBriefing` data model and utility boundary.
+  - [x] Define the `MyHeroBriefing` data model and utility boundary.
     - Inputs: active party rows, authenticated hero identity if available, RPOL thread/post cache, XP totals, encrypted note/search metadata, and app settings.
     - Output: one player-safe briefing object containing current hero summary, recent activity, likely open response items, relevant unlocked notes, and quick links.
-  - [ ] Add hero identity resolution for briefing.
+  - [x] Add hero identity resolution for briefing.
     - Prefer the authenticated RPOL/XP hero identity when available.
     - Fall back to a hero picker when identity cannot be inferred.
     - Keep Dungeon Master behavior explicit instead of silently choosing the wrong hero.
-  - [ ] Build the current hero card.
+  - [x] Build the current hero card.
     - Reuse Party data for name, class, level, HP, token, and sheet text.
     - Reuse XP visibility rules so a player sees only their allowed XP total.
     - Add quick links to full sheet, XP, Party, Adventure Outline, and relevant RPOL thread URLs.
-  - [ ] Build recent hero activity.
+  - [x] Build recent hero activity.
     - Find recent RPOL posts that mention the hero's first name, full name, or known aliases.
     - Show the latest 5-10 matching posts with thread, author, timestamp/order, and a short player-safe excerpt.
-  - [ ] Build likely open response items.
+  - [x] Build likely open response items.
     - Identify posts after the hero's last known post in active RPOL threads.
     - Group them by thread and rank direct mentions or question-like posts first.
     - Avoid implying obligation when the evidence is only a weak mention.
-  - [ ] Surface relevant unlocked notes.
+  - [x] Surface relevant unlocked notes.
     - Reuse tagged/encrypted-note access rules with the hero's class, level, name, and tags.
     - Show only note titles/excerpts the current hero is allowed to read.
     - Keep locked or mismatched encrypted content hidden.
-  - [ ] Add the WinForms UI entry point.
+- [x] Add the WinForms UI entry point.
     - Add `Show > My Hero Briefing`.
     - Render the briefing in the existing display surface with refresh, hero selector when needed, and empty/error states.
     - Preserve existing status-bar activity and operation-failure reporting patterns.
-  - [ ] Add focused regression tests.
+  - [x] Add focused regression tests.
     - Cover identity resolution, current hero card fields, XP visibility, recent activity filtering, open response ranking, encrypted-note filtering, and menu wiring.
-  - [ ] Run Release verification for the feature.
+  - [x] Run Release verification for the feature.
     - Build the Release app and Release test harness.
     - Run focused My Hero Briefing tests plus affected RPOL/Party/XP/encrypted-note tests.
     - Run `graphify update . --no-cluster`.

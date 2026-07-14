@@ -6,6 +6,7 @@ using System.Globalization;
 using System.IO;
 using System.Reflection;
 using System.Runtime.InteropServices;
+using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using SkiaSharp;
@@ -102,6 +103,7 @@ namespace PlayerAssistant
         private bool _showPostTotals;
         private bool _showXpTotal;
         private bool _showParty;
+        private bool _showMyHeroBriefing;
         private bool _showWelcomeText = true;
         private bool _showHeroIntroText;
         private bool _showAttributionText;
@@ -131,6 +133,7 @@ namespace PlayerAssistant
         private Panel? _regionalMapPanel;
         private ListBox? _diceRollsListBox;
         private RichTextBox? _adventureOutlineTextBox;
+        private RichTextBox? _myHeroBriefingTextBox;
         private Panel? _partyPanel;
         private Image? _regionalMapImage;
         private Image? _regionalMapImageCache;
@@ -143,6 +146,7 @@ namespace PlayerAssistant
         private readonly bool _suppressHeroImagesForThisRun;
         private bool _searchResultsRequested;
         private readonly string _baseTitleText;
+        internal static string? MyHeroBriefingPostsDirectoryOverride { get; set; }
         private DateTimeOffset _keywordIndexStatusLastChangedUtc;
         private DateTimeOffset _keywordIndexStatusLockedUntilUtc;
         private string _keywordIndexStatusMessage = string.Empty;
@@ -728,6 +732,7 @@ namespace PlayerAssistant
             UpdateRegionalMapPanelBounds();
             UpdateDiceRollsListBoxBounds();
             UpdateAdventureOutlineTextBoxBounds();
+            UpdateMyHeroBriefingTextBoxBounds();
             UpdatePartyPanelBounds();
             UpdateSearchPanelBounds();
         }
@@ -816,6 +821,7 @@ namespace PlayerAssistant
             EnableShowPostTotalsMenuItem();
             EnableXpMenuItem();
             EnablePartyMenuItem();
+            EnableMyHeroBriefingMenuItem();
             EnableAdventureOutlineMenuItem();
             Close();
         }
@@ -837,9 +843,10 @@ namespace PlayerAssistant
             EnableShowDiceRollsMenuItem();
             EnableXpMenuItem();
             EnablePartyMenuItem();
+            EnableMyHeroBriefingMenuItem();
             EnableAdventureOutlineMenuItem();
 
-            if (_regionalMapActive || _showLoginInfo || _showPostTotals || _showXpTotal || _showParty || _diceRollsListBox is not null || _adventureOutlineTextBox is not null)
+            if (_regionalMapActive || _showLoginInfo || _showPostTotals || _showXpTotal || _showParty || _showMyHeroBriefing || _diceRollsListBox is not null || _adventureOutlineTextBox is not null || _myHeroBriefingTextBox is not null)
             {
                 ClearDisplaySurfaceForRegionalMap();
                 Refresh();
@@ -856,6 +863,7 @@ namespace PlayerAssistant
             EnableShowDiceRollsMenuItem();
             EnableXpMenuItem();
             EnablePartyMenuItem();
+            EnableMyHeroBriefingMenuItem();
             EnableAdventureOutlineMenuItem();
             loginInfoToolStripMenuItem.Enabled = false;
             _loginInfoRefreshTarget = LoginInfoDisplayMode.LoginInfo;
@@ -893,6 +901,7 @@ namespace PlayerAssistant
             EnableShowDiceRollsMenuItem();
             EnableXpMenuItem();
             EnablePartyMenuItem();
+            EnableMyHeroBriefingMenuItem();
             EnableAdventureOutlineMenuItem();
             showPostTotalsToolStripMenuItem.Enabled = false;
             _loginInfoRefreshTarget = LoginInfoDisplayMode.PostTotals;
@@ -938,6 +947,7 @@ namespace PlayerAssistant
             EnableShowPostTotalsMenuItem();
             EnableXpMenuItem();
             EnablePartyMenuItem();
+            EnableMyHeroBriefingMenuItem();
             EnableAdventureOutlineMenuItem();
 
             var diceRollsPath = GetDiceRollsHtmlPath();
@@ -974,6 +984,7 @@ namespace PlayerAssistant
             EnableShowPostTotalsMenuItem();
             EnableShowDiceRollsMenuItem();
             EnablePartyMenuItem();
+            EnableMyHeroBriefingMenuItem();
             EnableAdventureOutlineMenuItem();
 
             if (!TryPromptForXpCredentials(out var characterName, out var password))
@@ -1038,6 +1049,7 @@ namespace PlayerAssistant
             EnableShowPostTotalsMenuItem();
             EnableShowDiceRollsMenuItem();
             EnableXpMenuItem();
+            EnableMyHeroBriefingMenuItem();
             EnableAdventureOutlineMenuItem();
 
             partyToolStripMenuItem.Enabled = false;
@@ -1087,6 +1099,101 @@ namespace PlayerAssistant
                     "Party unavailable",
                     "Party Error",
                     ex,
+                showDialog: true);
+            }
+        }
+
+        private async void MyHeroBriefingToolStripMenuItem_Click(object? sender, EventArgs e)
+        {
+            ClearDiceRollsDisplayIfVisible();
+            HideSearchPanel();
+            EnableLoginInfoMenuItem();
+            EnableShowPostTotalsMenuItem();
+            EnableShowDiceRollsMenuItem();
+            EnableXpMenuItem();
+            EnablePartyMenuItem();
+            EnableMyHeroBriefingMenuItem();
+            EnableAdventureOutlineMenuItem();
+
+            myHeroBriefingToolStripMenuItem.Enabled = false;
+            try
+            {
+                SetStatusBarMessage("Loading My Hero Briefing...");
+                using var activity = BeginStatusBarActivity();
+                var partyHeroes = PartyHeroUtility.LoadActiveParty(EnsurePlayerCharacterDirectories());
+                string? authenticatedHeroName = null;
+                var isDungeonMaster = false;
+                IReadOnlyList<PcXpTotal> xpTotals = [];
+
+                if (TryPromptForXpCredentials(out var characterName, out var password))
+                {
+                    if (XpPasswordStoreUtility.ValidatePassword(characterName, password, AppContext.BaseDirectory))
+                    {
+                        authenticatedHeroName = characterName;
+                        isDungeonMaster = IsDungeonMasterXpAccess(characterName);
+                        try
+                        {
+                            var snapshot = await XpTrackingUtility.GetCurrentXpSnapshotAsync();
+                            xpTotals = snapshot.Totals;
+                        }
+                        catch (Exception ex)
+                        {
+                            await AppendStartupErrorLogAsync("my hero briefing XP display", ex);
+                            SetStatusBarMessage("My Hero Briefing loaded without XP totals. Contact the DM if XP should be visible.");
+                        }
+                    }
+                    else
+                    {
+                        MessageBox.Show(
+                            this,
+                            "The character name and XP password did not match. My Hero Briefing will be shown without XP totals.",
+                            "My Hero Briefing",
+                            MessageBoxButtons.OK,
+                            MessageBoxIcon.Warning);
+                        SetStatusBarMessage("My Hero Briefing XP access denied. Showing briefing without XP totals.");
+                    }
+                }
+
+                var threadPosts = LoadMyHeroBriefingThreadPosts();
+                var encryptedTextIndex = LoadMyHeroBriefingEncryptedTextIndex();
+                var briefing = MyHeroBriefingUtility.Build(new MyHeroBriefingRequest(
+                    partyHeroes,
+                    AuthenticatedHeroName: authenticatedHeroName,
+                    IsDungeonMaster: isDungeonMaster,
+                    ThreadPosts: threadPosts,
+                    XpTotals: xpTotals,
+                    EncryptedTextIndex: encryptedTextIndex));
+
+                if (briefing.NeedsHeroSelection)
+                {
+                    var selectedHeroName = PromptForMyHeroBriefingHeroSelection(briefing.HeroChoices);
+                    if (string.IsNullOrWhiteSpace(selectedHeroName))
+                    {
+                        myHeroBriefingToolStripMenuItem.Enabled = true;
+                        SetStatusBarMessage("My Hero Briefing canceled.");
+                        return;
+                    }
+
+                    briefing = MyHeroBriefingUtility.Build(new MyHeroBriefingRequest(
+                        partyHeroes,
+                        SelectedHeroName: selectedHeroName,
+                        AuthenticatedHeroName: authenticatedHeroName,
+                        IsDungeonMaster: isDungeonMaster,
+                        ThreadPosts: threadPosts,
+                        XpTotals: xpTotals,
+                        EncryptedTextIndex: encryptedTextIndex));
+                }
+
+                ShowMyHeroBriefing(briefing);
+            }
+            catch (Exception ex)
+            {
+                myHeroBriefingToolStripMenuItem.Enabled = true;
+                await ReportOperationFailureAsync(
+                    "my hero briefing display",
+                    "My Hero Briefing unavailable",
+                    "My Hero Briefing Error",
+                    ex,
                     showDialog: true);
             }
         }
@@ -1100,6 +1207,7 @@ namespace PlayerAssistant
             EnableShowDiceRollsMenuItem();
             EnableXpMenuItem();
             EnablePartyMenuItem();
+            EnableMyHeroBriefingMenuItem();
 
             adventureOutlineToolStripMenuItem.Enabled = false;
             try
@@ -1243,6 +1351,157 @@ namespace PlayerAssistant
             return false;
         }
 
+        private string? PromptForMyHeroBriefingHeroSelection(IReadOnlyList<string> heroChoices)
+        {
+            var choices = heroChoices
+                .Where(choice => !string.IsNullOrWhiteSpace(choice))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .OrderBy(choice => choice, StringComparer.OrdinalIgnoreCase)
+                .ToArray();
+
+            if (choices.Length == 0)
+            {
+                MessageBox.Show(
+                    this,
+                    "No active heroes are available for My Hero Briefing.",
+                    "My Hero Briefing",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Warning);
+                return null;
+            }
+
+            if (choices.Length == 1)
+            {
+                return choices[0];
+            }
+
+            using var dialog = new Form
+            {
+                Text = "My Hero Briefing",
+                FormBorderStyle = FormBorderStyle.FixedDialog,
+                StartPosition = FormStartPosition.CenterParent,
+                MinimizeBox = false,
+                MaximizeBox = false,
+                ShowInTaskbar = false,
+                ClientSize = new Size(380, 132)
+            };
+
+            using var label = new Label
+            {
+                AutoSize = true,
+                Location = new Point(18, 22),
+                Text = "Hero:"
+            };
+            using var comboBox = new ComboBox
+            {
+                DropDownStyle = ComboBoxStyle.DropDownList,
+                Location = new Point(82, 18),
+                Size = new Size(274, 23)
+            };
+            comboBox.Items.AddRange(choices.Cast<object>().ToArray());
+            comboBox.SelectedIndex = 0;
+
+            using var okButton = new Button
+            {
+                DialogResult = DialogResult.OK,
+                Location = new Point(200, 82),
+                Size = new Size(75, 26),
+                Text = "OK"
+            };
+            using var cancelButton = new Button
+            {
+                DialogResult = DialogResult.Cancel,
+                Location = new Point(281, 82),
+                Size = new Size(75, 26),
+                Text = "Cancel"
+            };
+
+            dialog.Controls.AddRange([label, comboBox, okButton, cancelButton]);
+            dialog.AcceptButton = okButton;
+            dialog.CancelButton = cancelButton;
+
+            return dialog.ShowDialog(this) == DialogResult.OK
+                ? comboBox.SelectedItem?.ToString()
+                : null;
+        }
+
+        private static IReadOnlyList<MyHeroBriefingThreadPosts> LoadMyHeroBriefingThreadPosts()
+        {
+            var icPostsDirectory = MyHeroBriefingPostsDirectoryOverride
+                ?? Path.Combine(GetReleaseDirectory(), PostsDirectoryName, InCharacterPostsDirectoryName);
+            if (!Directory.Exists(icPostsDirectory))
+            {
+                return [];
+            }
+
+            var threadPosts = new List<MyHeroBriefingThreadPosts>();
+            foreach (var sourcePath in Directory.EnumerateFiles(icPostsDirectory, "_source-show-all.html", SearchOption.AllDirectories))
+            {
+                try
+                {
+                    var html = File.ReadAllText(sourcePath);
+                    var posts = RpolThreadPostUtility.GetThreadPostsFromHtml(html);
+                    if (posts.Length == 0)
+                    {
+                        continue;
+                    }
+
+                    var manifest = TryLoadRpolThreadManifest(Path.Combine(Path.GetDirectoryName(sourcePath) ?? icPostsDirectory, "manifest.json"));
+                    var threadTitle = !string.IsNullOrWhiteSpace(manifest?.ThreadTitle)
+                        ? manifest.ThreadTitle
+                        : Path.GetFileName(Path.GetDirectoryName(sourcePath) ?? icPostsDirectory);
+                    var threadUrl = !string.IsNullOrWhiteSpace(manifest?.SourceUrl)
+                        ? manifest.SourceUrl
+                        : sourcePath;
+
+                    threadPosts.Add(new MyHeroBriefingThreadPosts(threadTitle, threadUrl, posts));
+                }
+                catch
+                {
+                    continue;
+                }
+            }
+
+            return threadPosts
+                .OrderBy(thread => thread.ThreadTitle, StringComparer.OrdinalIgnoreCase)
+                .ToArray();
+        }
+
+        private static RpolThreadSplitResult? TryLoadRpolThreadManifest(string manifestPath)
+        {
+            if (!File.Exists(manifestPath))
+            {
+                return null;
+            }
+
+            try
+            {
+                return JsonSerializer.Deserialize<RpolThreadSplitResult>(File.ReadAllText(manifestPath));
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
+        private static IReadOnlyList<EncryptedTextIndexEntry> LoadMyHeroBriefingEncryptedTextIndex()
+        {
+            var indexPath = GetEncryptedTextIndexPath();
+            if (!File.Exists(indexPath))
+            {
+                return [];
+            }
+
+            try
+            {
+                return JsonSerializer.Deserialize<EncryptedTextIndexEntry[]>(File.ReadAllText(indexPath)) ?? [];
+            }
+            catch
+            {
+                return [];
+            }
+        }
+
         private async void RegionalMapToolStripMenuItem_Click(object? sender, EventArgs e)
         {
             ClearDiceRollsDisplayIfVisible();
@@ -1257,7 +1516,9 @@ namespace PlayerAssistant
                 || _showLoginInfo
                 || _showXpTotal
                 || _showParty
+                || _showMyHeroBriefing
                 || _adventureOutlineTextBox is not null
+                || _myHeroBriefingTextBox is not null
                 || _showWelcomeText
                 || _showHeroIntroText
                 || _showAttributionText;
@@ -1300,6 +1561,7 @@ namespace PlayerAssistant
                 showPostTotalsToolStripMenuItem.Enabled = true;
                 EnableXpMenuItem();
                 EnablePartyMenuItem();
+                EnableMyHeroBriefingMenuItem();
                 EnableAdventureOutlineMenuItem();
                 UpdateRegionalMapMenuItem();
                 SetStatusBarMessage($"Regional map loaded: {RegionalMapFileName}.");
@@ -2640,6 +2902,7 @@ namespace PlayerAssistant
             _showPostTotals = false;
             _showXpTotal = false;
             _showParty = false;
+            _showMyHeroBriefing = false;
             _xpTotals = [];
             _xpDateLabel = string.Empty;
             _partyHeroes = [];
@@ -2657,6 +2920,7 @@ namespace PlayerAssistant
             _showPostTotals = true;
             _showXpTotal = false;
             _showParty = false;
+            _showMyHeroBriefing = false;
             _xpTotals = [];
             _xpDateLabel = string.Empty;
             _partyHeroes = [];
@@ -2670,6 +2934,7 @@ namespace PlayerAssistant
             _showLoginInfo = false;
             _showPostTotals = false;
             _showParty = false;
+            _showMyHeroBriefing = false;
             _partyHeroes = [];
             _showXpTotal = true;
             _postTotalsSummary = null;
@@ -2689,6 +2954,7 @@ namespace PlayerAssistant
             _showPostTotals = false;
             _showXpTotal = false;
             _showParty = true;
+            _showMyHeroBriefing = false;
             _postTotalsSummary = null;
             _xpTotals = [];
             _xpDateLabel = string.Empty;
@@ -2701,6 +2967,26 @@ namespace PlayerAssistant
             Invalidate();
         }
 
+        private void ShowMyHeroBriefing(MyHeroBriefing briefing)
+        {
+            ClearDisplaySurfaceForLoginInfo();
+            _showLoginInfo = false;
+            _showPostTotals = false;
+            _showXpTotal = false;
+            _showParty = false;
+            _showMyHeroBriefing = true;
+            _postTotalsSummary = null;
+            _xpTotals = [];
+            _xpDateLabel = string.Empty;
+            _partyHeroes = [];
+            myHeroBriefingToolStripMenuItem.Enabled = false;
+            BuildMyHeroBriefingTextBox(FormatMyHeroBriefingForDisplay(briefing));
+            SetStatusBarMessage(briefing.Hero is null
+                ? "My Hero Briefing needs a hero selection."
+                : $"My Hero Briefing: {briefing.Hero.Name} loaded.");
+            Invalidate();
+        }
+
         private void ShowAdventureOutline(string outlineMarkdown)
         {
             ClearDisplaySurfaceForLoginInfo();
@@ -2708,6 +2994,7 @@ namespace PlayerAssistant
             _showPostTotals = false;
             _showXpTotal = false;
             _showParty = false;
+            _showMyHeroBriefing = false;
             _postTotalsSummary = null;
             _xpTotals = [];
             _xpDateLabel = string.Empty;
@@ -2744,6 +3031,153 @@ namespace PlayerAssistant
             textBox.BringToFront();
             menuStrip.BringToFront();
             statusStrip.BringToFront();
+        }
+
+        private void BuildMyHeroBriefingTextBox(string briefingText)
+        {
+            DisposeMyHeroBriefingTextBox();
+            var textBox = new RichTextBox
+            {
+                BackColor = Color.White,
+                BorderStyle = BorderStyle.None,
+                DetectUrls = true,
+                Font = new Font("Segoe UI", 11),
+                ReadOnly = true,
+                ScrollBars = RichTextBoxScrollBars.Vertical,
+                Text = briefingText,
+                WordWrap = true
+            };
+
+            _myHeroBriefingTextBox = textBox;
+            Controls.Add(textBox);
+            UpdateMyHeroBriefingTextBoxBounds();
+            textBox.BringToFront();
+            menuStrip.BringToFront();
+            statusStrip.BringToFront();
+        }
+
+        private static string FormatMyHeroBriefingForDisplay(MyHeroBriefing briefing)
+        {
+            ArgumentNullException.ThrowIfNull(briefing);
+
+            var builder = new StringBuilder();
+            builder.AppendLine("My Hero Briefing");
+            builder.AppendLine();
+            builder.AppendLine(briefing.StatusMessage);
+            builder.AppendLine();
+
+            if (briefing.HeroCard is not null)
+            {
+                builder.AppendLine("Current Hero");
+                builder.AppendLine($"{briefing.HeroCard.Name}");
+                builder.AppendLine($"Class: {ValueOrUnavailable(briefing.HeroCard.CharacterClass)}");
+                builder.AppendLine($"Level: {ValueOrUnavailable(briefing.HeroCard.Level)}");
+                builder.AppendLine($"HP: {ValueOrUnavailable(briefing.HeroCard.HitPoints)}");
+                builder.AppendLine($"XP: {FormatBriefingXpTotal(briefing.HeroCard)}");
+                if (!string.IsNullOrWhiteSpace(briefing.HeroCard.TokenImagePath))
+                {
+                    builder.AppendLine($"Token: {briefing.HeroCard.TokenImagePath}");
+                }
+
+                builder.AppendLine();
+            }
+
+            AppendResponseItems(builder, briefing.LikelyResponseItems);
+            AppendActivityItems(builder, briefing.RecentActivity);
+            AppendUnlockedNotes(builder, briefing.UnlockedNotes);
+            AppendQuickLinks(builder, briefing.QuickLinks);
+            return builder.ToString().TrimEnd();
+        }
+
+        private static void AppendResponseItems(StringBuilder builder, IReadOnlyList<MyHeroBriefingResponseItem> items)
+        {
+            builder.AppendLine("Likely Open Response Items");
+            if (items.Count == 0)
+            {
+                builder.AppendLine("No likely open response items were found.");
+                builder.AppendLine();
+                return;
+            }
+
+            foreach (var item in items)
+            {
+                builder.AppendLine($"- {item.ThreadTitle} #{item.MessageNumber} by {item.Author}: {item.Reason}");
+                builder.AppendLine($"  {item.Excerpt}");
+            }
+
+            builder.AppendLine();
+        }
+
+        private static void AppendActivityItems(StringBuilder builder, IReadOnlyList<MyHeroBriefingActivityItem> items)
+        {
+            builder.AppendLine("Recent Hero Activity");
+            if (items.Count == 0)
+            {
+                builder.AppendLine("No recent hero activity was found.");
+                builder.AppendLine();
+                return;
+            }
+
+            foreach (var item in items)
+            {
+                builder.AppendLine($"- {item.ThreadTitle} #{item.MessageNumber} by {item.Author} {FormatPostedAt(item.PostedDate, item.PostedTime)}");
+                builder.AppendLine($"  {item.Excerpt}");
+            }
+
+            builder.AppendLine();
+        }
+
+        private static void AppendUnlockedNotes(StringBuilder builder, IReadOnlyList<MyHeroBriefingUnlockedNoteItem> notes)
+        {
+            builder.AppendLine("Relevant Unlocked Notes");
+            if (notes.Count == 0)
+            {
+                builder.AppendLine("No relevant unlocked notes were found.");
+                builder.AppendLine();
+                return;
+            }
+
+            foreach (var note in notes)
+            {
+                builder.AppendLine($"- {note.Title}");
+                builder.AppendLine($"  {note.Excerpt}");
+                builder.AppendLine($"  {note.Url}");
+            }
+
+            builder.AppendLine();
+        }
+
+        private static void AppendQuickLinks(StringBuilder builder, IReadOnlyList<MyHeroBriefingQuickLink> quickLinks)
+        {
+            builder.AppendLine("Quick Links");
+            if (quickLinks.Count == 0)
+            {
+                builder.AppendLine("No quick links are available.");
+                return;
+            }
+
+            foreach (var link in quickLinks)
+            {
+                builder.AppendLine($"- {link.Label}: {link.Target}");
+            }
+        }
+
+        private static string ValueOrUnavailable(string value)
+        {
+            return string.IsNullOrWhiteSpace(value) ? "Unavailable" : value.Trim();
+        }
+
+        private static string FormatBriefingXpTotal(MyHeroBriefingHeroCard heroCard)
+        {
+            return heroCard.XpTotal.HasValue
+                ? $"{heroCard.XpTotal.Value:N0} XP"
+                : heroCard.XpTotalLabel;
+        }
+
+        private static string FormatPostedAt(string postedDate, string postedTime)
+        {
+            var value = $"{postedDate} {postedTime}".Trim();
+            return value.Length == 0 ? string.Empty : $"({value})";
         }
 
         private static IReadOnlyList<(string Text, AdventureOutlineLineStyle Style)> ParseAdventureOutlineDisplayLines(string outlineMarkdown)
@@ -3149,6 +3583,7 @@ namespace PlayerAssistant
             _showPostTotals = false;
             _showXpTotal = false;
             _showParty = false;
+            _showMyHeroBriefing = false;
             _xpTotals = [];
             _xpDateLabel = string.Empty;
             _partyHeroes = [];
@@ -3161,12 +3596,14 @@ namespace PlayerAssistant
             ClearHeroImagePictureBox();
             DisposeDiceRollsListBox();
             DisposeAdventureOutlineTextBox();
+            DisposeMyHeroBriefingTextBox();
             DisposePartyPanel();
             _showWelcomeText = false;
             _showHeroIntroText = false;
             _showAttributionText = false;
             _showXpTotal = false;
             _showParty = false;
+            _showMyHeroBriefing = false;
             _xpTotals = [];
             _xpDateLabel = string.Empty;
             _partyHeroes = [];
@@ -3250,6 +3687,20 @@ namespace PlayerAssistant
                 Math.Max(0, statusStrip.Top - menuStrip.Bottom - 36));
         }
 
+        private void UpdateMyHeroBriefingTextBoxBounds()
+        {
+            if (_myHeroBriefingTextBox is null)
+            {
+                return;
+            }
+
+            _myHeroBriefingTextBox.Bounds = new Rectangle(
+                24,
+                menuStrip.Bottom + 18,
+                Math.Max(0, ClientSize.Width - 48),
+                Math.Max(0, statusStrip.Top - menuStrip.Bottom - 36));
+        }
+
         private void UpdatePartyPanelBounds()
         {
             if (_partyPanel is null)
@@ -3286,6 +3737,18 @@ namespace PlayerAssistant
             Controls.Remove(_adventureOutlineTextBox);
             _adventureOutlineTextBox.Dispose();
             _adventureOutlineTextBox = null;
+        }
+
+        private void DisposeMyHeroBriefingTextBox()
+        {
+            if (_myHeroBriefingTextBox is null)
+            {
+                return;
+            }
+
+            Controls.Remove(_myHeroBriefingTextBox);
+            _myHeroBriefingTextBox.Dispose();
+            _myHeroBriefingTextBox = null;
         }
 
         private void DisposePartyPanel()
@@ -3857,6 +4320,7 @@ namespace PlayerAssistant
                 && HasDiceRollEntries(GetDiceRollsHtmlPath());
             xpToolStripMenuItem.Enabled = showMenuItemsEnabled && !_showXpTotal;
             partyToolStripMenuItem.Enabled = showMenuItemsEnabled && !_showParty;
+            myHeroBriefingToolStripMenuItem.Enabled = showMenuItemsEnabled && !_showMyHeroBriefing;
             adventureOutlineToolStripMenuItem.Enabled = showMenuItemsEnabled && _adventureOutlineTextBox is null;
             UpdateRegionalMapMenuItem();
         }
@@ -3909,6 +4373,16 @@ namespace PlayerAssistant
             }
 
             partyToolStripMenuItem.Enabled = true;
+        }
+
+        private void EnableMyHeroBriefingMenuItem()
+        {
+            if (_heroImageIntroStarted || _heroImageShowcaseStarted)
+            {
+                return;
+            }
+
+            myHeroBriefingToolStripMenuItem.Enabled = !_showMyHeroBriefing;
         }
 
         private void EnableAdventureOutlineMenuItem()

@@ -230,6 +230,21 @@ namespace PlayerAssistant
                 .ToArray();
         }
 
+        internal static bool CanAccessAnyTag(IReadOnlyList<string> tags, HeroAccessContext? hero)
+        {
+            ArgumentNullException.ThrowIfNull(tags);
+
+            if (hero is null)
+            {
+                return false;
+            }
+
+            return tags
+                .Select(tag => tag?.Trim() ?? string.Empty)
+                .Where(tag => tag.Length > 0)
+                .Any(tag => CanAccess([ParseTag($"{{{tag}}}")], hero));
+        }
+
         private static bool IsMarkdownFetchFailure(string markdown, string url)
         {
             return string.Equals(markdown, $"{MarkdownUtility.InvalidUrlMessage}: {url}", StringComparison.Ordinal)

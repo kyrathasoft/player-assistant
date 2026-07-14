@@ -200,6 +200,7 @@ var tests = new (string Name, Action Test)[]
     ("keyword search accepts url source metadata", KeywordSearchAcceptsUrlSourceMetadata),
     ("keyword search filters rpol hero metadata-only hits", KeywordSearchFiltersRpolHeroMetadataOnlyHits),
     ("show menu contains xp item", ShowMenuContainsXpItem),
+    ("show menu contains my hero briefing item", ShowMenuContainsMyHeroBriefingItem),
     ("show menu contains adventure outline item", ShowMenuContainsAdventureOutlineItem),
     ("adventure outline view displays generated markdown", AdventureOutlineViewDisplaysGeneratedMarkdown),
     ("about menu contains author and update items", AboutMenuContainsAuthorAndUpdateItems),
@@ -240,6 +241,18 @@ var tests = new (string Name, Action Test)[]
     ("keyword search rpol scope excludes obsidian-only whiteheart", KeywordSearchRpolScopeExcludesObsidianOnlyWhiteheart),
     ("keyword search rpol scope excludes obsidian-only whiteheart stiffwhiskers", KeywordSearchRpolScopeExcludesObsidianOnlyWhiteheartStiffwhiskers),
     ("keyword search expands hero first and full names", KeywordSearchExpandsHeroFirstAndFullNames),
+    ("my hero briefing builds selected hero summary boundary", MyHeroBriefingBuildsSelectedHeroSummaryBoundary),
+    ("my hero briefing prefers authenticated hero identity", MyHeroBriefingPrefersAuthenticatedHeroIdentity),
+    ("my hero briefing requires explicit dungeon master hero selection", MyHeroBriefingRequiresExplicitDungeonMasterHeroSelection),
+    ("my hero briefing leaves ambiguous first name unresolved", MyHeroBriefingLeavesAmbiguousFirstNameUnresolved),
+    ("my hero briefing hides xp for unauthenticated selected hero card", MyHeroBriefingHidesXpForUnauthenticatedSelectedHeroCard),
+    ("my hero briefing builds recent hero activity", MyHeroBriefingBuildsRecentHeroActivity),
+    ("my hero briefing builds likely open response items", MyHeroBriefingBuildsLikelyOpenResponseItems),
+    ("my hero briefing surfaces relevant unlocked notes", MyHeroBriefingSurfacesRelevantUnlockedNotes),
+    ("my hero briefing requests hero selection when no hero selected", MyHeroBriefingRequestsHeroSelectionWhenNoHeroSelected),
+    ("my hero briefing display text includes focused sections", MyHeroBriefingDisplayTextIncludesFocusedSections),
+    ("my hero briefing loads cached thread posts from runtime artifacts", MyHeroBriefingLoadsCachedThreadPostsFromRuntimeArtifacts),
+    ("my hero briefing encrypted index loader tolerates malformed json", MyHeroBriefingEncryptedIndexLoaderToleratesMalformedJson),
     ("party hero sheet parser reads summary and hides xp lines", PartyHeroSheetParserReadsSummaryAndHidesXpLines),
     ("party hero listing summary overrides stale cached sheet", PartyHeroListingSummaryOverridesStaleCachedSheet),
     ("party hero xp visibility follows authenticated character", PartyHeroXpVisibilityFollowsAuthenticatedCharacter),
@@ -3594,7 +3607,7 @@ static void RpolAuthCachedFailureShortCircuitsHtmlFetch()
         AssertEqual(cachedFailure.Message, exception.Message, "expected cached failure message to be reused");
 
         exception = AssertThrows<RpolAuthException>(() =>
-            RpolAuthUtility.GetResponseAsync(new Uri("https://rpol.net/images/example.png")).GetAwaiter().GetResult());
+            RpolAuthUtility.GetResponseAsync(new Uri("https://rpol.net/c-webp/example.webp")).GetAwaiter().GetResult());
         AssertEqual(RpolAuthFailureKind.MissingCredentials, exception.Kind, "expected cached missing-credentials response failure");
     }
     finally
@@ -4726,6 +4739,27 @@ static void ShowMenuContainsPartyItem()
         AssertTrue(
             showMenuItem.DropDownItems.Cast<ToolStripItem>().Contains(partyMenuItem),
             "Show menu should contain the Party item");
+    });
+}
+
+static void ShowMenuContainsMyHeroBriefingItem()
+{
+    RunOnStaThread(() =>
+    {
+        using var form = new Form1(suppressHeroImagesForThisRun: true);
+        var showMenuItem = (ToolStripMenuItem)(GetPrivateField(form, "showToolStripMenuItem")
+            ?? throw new InvalidOperationException("showToolStripMenuItem was null."));
+        var myHeroBriefingMenuItem = (ToolStripMenuItem)(GetPrivateField(form, "myHeroBriefingToolStripMenuItem")
+            ?? throw new InvalidOperationException("myHeroBriefingToolStripMenuItem was null."));
+
+        AssertEqual("My Hero Briefing", myHeroBriefingMenuItem.Text ?? string.Empty, "unexpected My Hero Briefing menu item text");
+        AssertTrue(
+            showMenuItem.DropDownItems.Cast<ToolStripItem>().Contains(myHeroBriefingMenuItem),
+            "Show menu should contain the My Hero Briefing item");
+        AssertTrue(
+            showMenuItem.DropDownItems.IndexOf(myHeroBriefingMenuItem) > showMenuItem.DropDownItems.IndexOf((ToolStripItem)(GetPrivateField(form, "partyToolStripMenuItem")
+                ?? throw new InvalidOperationException("partyToolStripMenuItem was null."))),
+            "My Hero Briefing should appear after Party");
     });
 }
 
@@ -6131,6 +6165,469 @@ static void PartyHeroSheetParserReadsSummaryAndHidesXpLines()
     AssertEqual("4", hero.HitPoints, "unexpected parsed hit points");
     AssertFalse(hero.CharacterSheetText.Contains("XP: 0", StringComparison.Ordinal), "XP total lines should be hidden from party sheet text");
     AssertContains(hero.CharacterSheetText, "XP Bonus: 10%");
+}
+
+static void MyHeroBriefingBuildsSelectedHeroSummaryBoundary()
+{
+    var heroes = new PartyHeroSheet[]
+    {
+        new("Kelpie Lawfuller", "kelpie-token.webp", "3", "Fighter", "12", "Kelpie sheet"),
+        new("Jelb Garrick", "jelb-token.webp", "3", "Illusionist", "8", "Jelb sheet")
+    };
+    var request = new MyHeroBriefingRequest(
+        heroes,
+        SelectedHeroName: "Jelb Garrick",
+        AuthenticatedHeroName: "Jelb",
+        XpTotals: [new PcXpTotal("Jelb", 8575)],
+        ThreadPosts:
+        [
+            new MyHeroBriefingThreadPosts(
+                "Chapter 1",
+                "https://rpol.net/display.cgi?gi=80170&ti=7",
+                [])
+        ],
+        EncryptedTextIndex:
+        [
+            new EncryptedTextIndexEntry(
+                "https://publish.obsidian.md/scarlethorizons/Secrets",
+                1,
+                ["illusionist"])
+        ],
+        QuickLinks:
+        [
+            new MyHeroBriefingQuickLink("Party", "app://show/party")
+        ]);
+
+    var briefing = MyHeroBriefingUtility.Build(request);
+
+    AssertFalse(briefing.NeedsHeroSelection, "selected hero should not require a picker");
+    AssertTrue(briefing.Hero is not null, "selected hero should build a hero summary");
+    AssertEqual("Jelb Garrick", briefing.Hero!.Name, "unexpected briefing hero");
+    AssertEqual("Illusionist", briefing.Hero.CharacterClass, "unexpected briefing class");
+    AssertEqual("3", briefing.Hero.Level, "unexpected briefing level");
+    AssertEqual("8", briefing.Hero.HitPoints, "unexpected briefing hit points");
+    AssertEqual(8575, briefing.Hero.XpTotal ?? -1, "XP should match first-name alias");
+    AssertEqual("jelb-token.webp", briefing.Hero.TokenImagePath ?? string.Empty, "unexpected token path");
+    AssertEqual("Jelb Garrick", briefing.Hero.AccessContext.CharacterName ?? string.Empty, "unexpected access context character");
+    AssertTrue(briefing.HeroCard is not null, "selected hero should build a current hero card");
+    AssertEqual("Jelb Garrick", briefing.HeroCard!.Name, "unexpected card hero");
+    AssertEqual("Illusionist", briefing.HeroCard.CharacterClass, "unexpected card class");
+    AssertEqual("3", briefing.HeroCard.Level, "unexpected card level");
+    AssertEqual("8", briefing.HeroCard.HitPoints, "unexpected card hit points");
+    AssertEqual("XP Total: 8,575", briefing.HeroCard.XpTotalLabel, "unexpected card XP label");
+    AssertEqual("jelb-token.webp", briefing.HeroCard.TokenImagePath ?? string.Empty, "unexpected card token path");
+    AssertEqual("Jelb sheet", briefing.HeroCard.CharacterSheetText, "unexpected card sheet text");
+    AssertEqual(2, briefing.HeroChoices.Count, "unexpected hero choice count");
+    AssertEqual(MyHeroBriefingHeroIdentitySource.AuthenticatedHero, briefing.HeroIdentitySource, "authenticated identity should win before selected hero");
+    AssertTrue(briefing.QuickLinks.Any(link => link.Label == "Full Sheet" && link.Target == "app://show/party"), "briefing should include a full-sheet quick link");
+    AssertTrue(briefing.QuickLinks.Any(link => link.Label == "XP" && link.Target == "app://show/xp"), "briefing should include an XP quick link");
+    AssertTrue(briefing.QuickLinks.Any(link => link.Label == "Party" && link.Target == "app://show/party"), "briefing should include a Party quick link");
+    AssertTrue(briefing.QuickLinks.Any(link => link.Label == "Adventure Outline" && link.Target == "app://show/adventure-outline"), "briefing should include an Adventure Outline quick link");
+    AssertTrue(briefing.QuickLinks.Any(link => link.Label == "Chapter 1" && link.Target == "https://rpol.net/display.cgi?gi=80170&ti=7"), "briefing should include RPOL thread quick links");
+    AssertTrue(briefing.QuickLinks.Any(link => link.Label == "Party" && link.Target == "app://show/party"), "provided quick links should be retained");
+    AssertEqual(briefing.QuickLinks.Count, briefing.HeroCard.QuickLinks.Count, "card quick links should mirror briefing quick links");
+    AssertEqual(0, briefing.RecentActivity.Count, "activity should be left for the later backlog step");
+    AssertEqual(0, briefing.LikelyResponseItems.Count, "response items should be left for the later backlog step");
+    AssertEqual(1, briefing.UnlockedNotes.Count, "encrypted index input should surface unlocked notes");
+    AssertEqual("Secrets", briefing.UnlockedNotes[0].Title, "unexpected unlocked note title");
+}
+
+static void MyHeroBriefingPrefersAuthenticatedHeroIdentity()
+{
+    var heroes = new PartyHeroSheet[]
+    {
+        new("Kelpie Lawfuller", null, "3", "Fighter", "12", "Kelpie sheet"),
+        new("Jelb Garrick", null, "3", "Illusionist", "8", "Jelb sheet")
+    };
+
+    var briefing = MyHeroBriefingUtility.Build(new MyHeroBriefingRequest(
+        heroes,
+        SelectedHeroName: "Kelpie Lawfuller",
+        AuthenticatedHeroName: "Jelb"));
+
+    AssertTrue(briefing.Hero is not null, "authenticated hero should resolve a briefing hero");
+    AssertEqual("Jelb Garrick", briefing.Hero!.Name, "authenticated first-name identity should select Jelb");
+    AssertEqual(MyHeroBriefingHeroIdentitySource.AuthenticatedHero, briefing.HeroIdentitySource, "unexpected identity source");
+    AssertFalse(briefing.NeedsHeroSelection, "resolved authenticated hero should not need a picker");
+}
+
+static void MyHeroBriefingRequiresExplicitDungeonMasterHeroSelection()
+{
+    var heroes = new PartyHeroSheet[]
+    {
+        new("Kelpie Lawfuller", null, "3", "Fighter", "12", "Kelpie sheet"),
+        new("Jelb Garrick", null, "3", "Illusionist", "8", "Jelb sheet")
+    };
+    var unresolved = MyHeroBriefingUtility.Build(new MyHeroBriefingRequest(
+        heroes,
+        AuthenticatedHeroName: "Dungeon Master",
+        IsDungeonMaster: true));
+    var selected = MyHeroBriefingUtility.Build(new MyHeroBriefingRequest(
+        heroes,
+        SelectedHeroName: "Kelpie",
+        AuthenticatedHeroName: "Dungeon Master",
+        IsDungeonMaster: true));
+
+    AssertTrue(unresolved.Hero is null, "DM briefing should not infer a hero from Dungeon Master identity");
+    AssertTrue(unresolved.NeedsHeroSelection, "DM briefing should request explicit hero selection");
+    AssertEqual(MyHeroBriefingHeroIdentitySource.None, unresolved.HeroIdentitySource, "unexpected unresolved DM identity source");
+    AssertEqual("Choose a hero to build My Hero Briefing for Dungeon Master view.", unresolved.StatusMessage, "unexpected DM picker status");
+    AssertTrue(selected.Hero is not null, "explicit DM selection should resolve a hero");
+    AssertEqual("Kelpie Lawfuller", selected.Hero!.Name, "unexpected selected DM hero");
+    AssertEqual(MyHeroBriefingHeroIdentitySource.SelectedHero, selected.HeroIdentitySource, "unexpected selected DM identity source");
+}
+
+static void MyHeroBriefingLeavesAmbiguousFirstNameUnresolved()
+{
+    var heroes = new PartyHeroSheet[]
+    {
+        new("Max North", null, "1", "Fighter", "5", "Max North sheet"),
+        new("Max Stone", null, "2", "Thief", "7", "Max Stone sheet")
+    };
+
+    var briefing = MyHeroBriefingUtility.Build(new MyHeroBriefingRequest(
+        heroes,
+        AuthenticatedHeroName: "Max"));
+
+    AssertTrue(briefing.Hero is null, "ambiguous first-name identity should remain unresolved");
+    AssertTrue(briefing.NeedsHeroSelection, "ambiguous identity should request explicit selection");
+    AssertEqual(MyHeroBriefingHeroIdentitySource.None, briefing.HeroIdentitySource, "unexpected ambiguous identity source");
+}
+
+static void MyHeroBriefingHidesXpForUnauthenticatedSelectedHeroCard()
+{
+    var heroes = new PartyHeroSheet[]
+    {
+        new("Kelpie Lawfuller", null, "3", "Fighter", "12", "Kelpie sheet"),
+        new("Jelb Garrick", null, "3", "Illusionist", "8", "Jelb sheet")
+    };
+
+    var briefing = MyHeroBriefingUtility.Build(new MyHeroBriefingRequest(
+        heroes,
+        SelectedHeroName: "Kelpie Lawfuller",
+        XpTotals: [new PcXpTotal("Kelpie Lawfuller", 7062)]));
+
+    AssertTrue(briefing.HeroCard is not null, "selected hero should build a current hero card");
+    AssertTrue(briefing.HeroCard!.XpTotal is null, "unauthenticated selected hero should not receive raw XP totals");
+    AssertEqual("XP Total: hidden", briefing.HeroCard.XpTotalLabel, "unexpected hidden XP label");
+    AssertEqual(MyHeroBriefingHeroIdentitySource.SelectedHero, briefing.HeroIdentitySource, "unexpected selected identity source");
+}
+
+static void MyHeroBriefingBuildsRecentHeroActivity()
+{
+    var heroes = new PartyHeroSheet[]
+    {
+        new("Jelb Garrick", null, "3", "Illusionist", "8", "Jelb sheet")
+    };
+    var matchingPosts = Enumerable.Range(1, 12)
+        .Select(index => new RpolThreadPost(
+            index,
+            index % 2 == 0 ? "Dungeon Master" : "Kelpie",
+            string.Empty,
+            "Mon 1 Jan 2026",
+            $"{index:00}:00",
+            $"{index:000}.html",
+            "<div></div>",
+            "<p></p>",
+            index == 12
+                ? "Jelb Garrick considers the long corridor. " + new string('x', 220)
+                : $"Jelb studies clue {index}."))
+        .Concat(
+        [
+            new RpolThreadPost(
+                13,
+                "Dungeon Master",
+                string.Empty,
+                "Mon 1 Jan 2026",
+                "13:00",
+                "013.html",
+                "<div></div>",
+                "<p></p>",
+                "A jelbian carving is unrelated."),
+            new RpolThreadPost(
+                14,
+                "Dungeon Master",
+                string.Empty,
+                "Mon 1 Jan 2026",
+                "14:00",
+                "014.html",
+                "<div></div>",
+                "<p></p>",
+                "Kelpie studies the same clue.")
+        ])
+        .ToArray();
+    var briefing = MyHeroBriefingUtility.Build(new MyHeroBriefingRequest(
+        heroes,
+        AuthenticatedHeroName: "Jelb",
+        ThreadPosts:
+        [
+            new MyHeroBriefingThreadPosts(
+                "Chapter 1",
+                "https://rpol.net/display.cgi?gi=80170&ti=7",
+                matchingPosts)
+        ]));
+
+    AssertEqual(10, briefing.RecentActivity.Count, "recent activity should be capped at ten matching posts");
+    AssertEqual(12, briefing.RecentActivity[0].MessageNumber, "latest matching post should appear first");
+    AssertEqual(3, briefing.RecentActivity[^1].MessageNumber, "oldest retained matching post should be message 3");
+    AssertTrue(
+        briefing.RecentActivity.All(item => item.ThreadTitle == "Chapter 1"
+            && item.ThreadUrl == "https://rpol.net/display.cgi?gi=80170&ti=7"),
+        "activity items should retain thread context");
+    AssertTrue(
+        briefing.RecentActivity.All(item => item.MessageNumber != 13 && item.MessageNumber != 14),
+        "activity should exclude substring matches and unrelated hero posts");
+    AssertTrue(briefing.RecentActivity[0].Excerpt.EndsWith("...", StringComparison.Ordinal), "long excerpts should be shortened");
+    AssertTrue(briefing.RecentActivity[0].Excerpt.Length <= 183, "shortened excerpts should stay bounded");
+}
+
+static void MyHeroBriefingBuildsLikelyOpenResponseItems()
+{
+    var heroes = new PartyHeroSheet[]
+    {
+        new("Jelb Garrick", null, "3", "Illusionist", "8", "Jelb sheet")
+    };
+    var chapterPosts = new RpolThreadPost[]
+    {
+        CreateRpolThreadPost(1, "Dungeon Master", "Before Jelb posts."),
+        CreateRpolThreadPost(2, "Jelb", "Jelb watches the door."),
+        CreateRpolThreadPost(3, "Kelpie", "Should we open it?"),
+        CreateRpolThreadPost(4, "Dungeon Master", "Jelb hears a faint click."),
+        CreateRpolThreadPost(5, "Nuanda", "The corridor stays quiet."),
+        CreateRpolThreadPost(6, "Jelb", "Jelb studies the lock."),
+        CreateRpolThreadPost(7, "Dungeon Master", "The lock gives way."),
+        CreateRpolThreadPost(8, "Kelpie", "Jelb, do you want the lantern?")
+    };
+    var noHeroPostThread = new RpolThreadPost[]
+    {
+        CreateRpolThreadPost(1, "Kelpie", "Jelb might know this."),
+        CreateRpolThreadPost(2, "Dungeon Master", "What happens next?")
+    };
+
+    var briefing = MyHeroBriefingUtility.Build(new MyHeroBriefingRequest(
+        heroes,
+        AuthenticatedHeroName: "Jelb",
+        ThreadPosts:
+        [
+            new MyHeroBriefingThreadPosts(
+                "Chapter 1",
+                "https://rpol.net/display.cgi?gi=80170&ti=7",
+                chapterPosts),
+            new MyHeroBriefingThreadPosts(
+                "Chapter 2",
+                "https://rpol.net/display.cgi?gi=80170&ti=8",
+                noHeroPostThread)
+        ]));
+
+    AssertEqual(2, briefing.LikelyResponseItems.Count, "only posts after the hero's latest post should be response candidates");
+    AssertEqual(8, briefing.LikelyResponseItems[0].MessageNumber, "direct mention should rank first");
+    AssertEqual("Direct mention after your last post", briefing.LikelyResponseItems[0].Reason, "unexpected direct-mention reason");
+    AssertEqual(7, briefing.LikelyResponseItems[1].MessageNumber, "neutral follow-up should remain after direct mentions and questions");
+    AssertEqual("Recent post after your last post", briefing.LikelyResponseItems[1].Reason, "weak evidence should stay neutral");
+    AssertTrue(
+        briefing.LikelyResponseItems.All(item => item.ThreadTitle == "Chapter 1"
+            && item.ThreadUrl == "https://rpol.net/display.cgi?gi=80170&ti=7"),
+        "response items should be grouped by retaining thread context and ignore threads without a hero post");
+}
+
+static RpolThreadPost CreateRpolThreadPost(int messageNumber, string author, string bodyText)
+{
+    return new RpolThreadPost(
+        messageNumber,
+        author,
+        string.Empty,
+        "Mon 1 Jan 2026",
+        $"{messageNumber:00}:00",
+        $"{messageNumber:000}.html",
+        "<div></div>",
+        "<p></p>",
+        bodyText);
+}
+
+static void MyHeroBriefingSurfacesRelevantUnlockedNotes()
+{
+    var heroes = new PartyHeroSheet[]
+    {
+        new("Jelb Garrick", null, "3", "Illusionist", "8", "Jelb sheet")
+    };
+    var encryptedIndex = new EncryptedTextIndexEntry[]
+    {
+        new(
+            "https://publish.obsidian.md/scarlethorizons/Secrets/Illusionist+Clue",
+            2,
+            ["Class Illusionist"]),
+        new(
+            "https://publish.obsidian.md/scarlethorizons/Secrets/Jelb+Only",
+            1,
+            ["Hero Jelb"]),
+        new(
+            "https://publish.obsidian.md/scarlethorizons/Secrets/High+Level",
+            1,
+            ["Level 4"]),
+        new(
+            "https://publish.obsidian.md/scarlethorizons/Secrets/Fighter+Only",
+            1,
+            ["Class Fighter"]),
+        new(
+            "https://publish.obsidian.md/scarlethorizons/Secrets/Public",
+            0,
+            ["Class Illusionist"])
+    };
+
+    var briefing = MyHeroBriefingUtility.Build(new MyHeroBriefingRequest(
+        heroes,
+        AuthenticatedHeroName: "Jelb",
+        EncryptedTextIndex: encryptedIndex));
+
+    AssertEqual(2, briefing.UnlockedNotes.Count, "only notes unlocked by hero tags should be surfaced");
+    AssertTrue(
+        briefing.UnlockedNotes.Any(note =>
+            note.Title == "Illusionist Clue"
+            && note.Url == "https://publish.obsidian.md/scarlethorizons/Secrets/Illusionist+Clue"
+            && note.Excerpt == "2 unlocked encrypted sections may be relevant."),
+        "class-matched encrypted note should be included");
+    AssertTrue(
+        briefing.UnlockedNotes.Any(note =>
+            note.Title == "Jelb Only"
+            && note.Excerpt == "1 unlocked encrypted section may be relevant."),
+        "hero-name matched encrypted note should be included");
+    AssertFalse(
+        briefing.UnlockedNotes.Any(note => note.Title is "High Level" or "Fighter Only" or "Public"),
+        "locked notes and entries without encrypted sections should remain hidden");
+}
+
+static void MyHeroBriefingRequestsHeroSelectionWhenNoHeroSelected()
+{
+    var heroes = new PartyHeroSheet[]
+    {
+        new("Kelpie Lawfuller", null, "3", "Fighter", "12", "Kelpie sheet"),
+        new("Jelb Garrick", null, "3", "Illusionist", "8", "Jelb sheet")
+    };
+
+    var briefing = MyHeroBriefingUtility.Build(new MyHeroBriefingRequest(heroes));
+
+    AssertTrue(briefing.Hero is null, "briefing should not choose a hero before identity resolution exists");
+    AssertTrue(briefing.NeedsHeroSelection, "briefing should request a hero selection");
+    AssertEqual(2, briefing.HeroChoices.Count, "unexpected hero choice count");
+    AssertEqual(MyHeroBriefingHeroIdentitySource.None, briefing.HeroIdentitySource, "unexpected unresolved identity source");
+    AssertEqual("Choose a hero to build My Hero Briefing.", briefing.StatusMessage, "unexpected picker status");
+}
+
+static void MyHeroBriefingDisplayTextIncludesFocusedSections()
+{
+    var heroes = new PartyHeroSheet[]
+    {
+        new("Jelb Garrick", "jelb-token.webp", "3", "Illusionist", "8", "Jelb sheet")
+    };
+    var posts = new[]
+    {
+        new MyHeroBriefingThreadPosts(
+            "Chapter 2",
+            "https://rpol.net/display.cgi?gi=80170&ti=8",
+            [
+                CreateRpolThreadPost(1, "Jelb", "Jelb checks the suspicious door."),
+                CreateRpolThreadPost(2, "Dungeon Master", "Jelb hears a lock click. What do you do?")
+            ])
+    };
+    var encryptedIndex = new[]
+    {
+        new EncryptedTextIndexEntry(
+            "https://publish.obsidian.md/scarlethorizons/Secrets/Jelb+Only",
+            1,
+            ["Hero Jelb"])
+    };
+    var briefing = MyHeroBriefingUtility.Build(new MyHeroBriefingRequest(
+        heroes,
+        AuthenticatedHeroName: "Jelb",
+        ThreadPosts: posts,
+        XpTotals: [new PcXpTotal("Jelb Garrick", 1234)],
+        EncryptedTextIndex: encryptedIndex));
+
+    var text = (string)(InvokeStaticMethod(typeof(Form1), "FormatMyHeroBriefingForDisplay", briefing)
+        ?? throw new InvalidOperationException("briefing display text was null."));
+
+    AssertContains(text, "My Hero Briefing");
+    AssertContains(text, "Current Hero");
+    AssertContains(text, "Jelb Garrick");
+    AssertContains(text, "Class: Illusionist");
+    AssertContains(text, "Level: 3");
+    AssertContains(text, "HP: 8");
+    AssertContains(text, "XP: 1,234 XP");
+    AssertContains(text, "Likely Open Response Items");
+    AssertContains(text, "Direct mention after your last post");
+    AssertContains(text, "Recent Hero Activity");
+    AssertContains(text, "Relevant Unlocked Notes");
+    AssertContains(text, "Jelb Only");
+    AssertContains(text, "Quick Links");
+}
+
+static void MyHeroBriefingLoadsCachedThreadPostsFromRuntimeArtifacts()
+{
+    using var directory = TemporaryDirectory.Create();
+    var threadDirectory = Path.Combine(directory.Path, "ch-2");
+    Directory.CreateDirectory(threadDirectory);
+    File.WriteAllText(
+        Path.Combine(threadDirectory, "_source-show-all.html"),
+        CreateRpolSourceHtml(
+            (1, "Jelb", "Mon 1 Jan 2026", "01:00", "Jelb checks the door."),
+            (2, "Dungeon Master", "Mon 1 Jan 2026", "01:05", "The lock clicks.")));
+    var manifest = new RpolThreadSplitResult(
+        "Chapter 2 - Supper With Nuanda",
+        "https://rpol.net/display.cgi?gi=80170&ti=8&show=all",
+        threadDirectory,
+        2,
+        new Dictionary<string, int>(StringComparer.Ordinal)
+        {
+            ["Dungeon Master"] = 1,
+            ["Jelb"] = 1
+        },
+        []);
+    File.WriteAllText(Path.Combine(threadDirectory, "manifest.json"), JsonSerializer.Serialize(manifest));
+
+    Form1.MyHeroBriefingPostsDirectoryOverride = directory.Path;
+    try
+    {
+        var threadPosts = (IReadOnlyList<MyHeroBriefingThreadPosts>)(InvokeStaticMethod(typeof(Form1), "LoadMyHeroBriefingThreadPosts")
+            ?? throw new InvalidOperationException("thread posts were null."));
+
+        AssertEqual(1, threadPosts.Count, "expected one cached thread to load");
+        AssertEqual("Chapter 2 - Supper With Nuanda", threadPosts[0].ThreadTitle, "unexpected thread title");
+        AssertEqual("https://rpol.net/display.cgi?gi=80170&ti=8&show=all", threadPosts[0].ThreadUrl, "unexpected thread URL");
+        AssertEqual(2, threadPosts[0].Posts.Count, "unexpected cached post count");
+        AssertEqual("Jelb", threadPosts[0].Posts[0].Author, "unexpected first cached post author");
+        AssertEqual("The lock clicks.", threadPosts[0].Posts[1].BodyText, "unexpected second cached post body");
+    }
+    finally
+    {
+        Form1.MyHeroBriefingPostsDirectoryOverride = null;
+    }
+}
+
+static void MyHeroBriefingEncryptedIndexLoaderToleratesMalformedJson()
+{
+    WithTemporaryEncryptedTextIndex(
+        "{ not-json",
+        () =>
+        {
+            var entries = (IReadOnlyList<EncryptedTextIndexEntry>)(InvokeStaticMethod(typeof(Form1), "LoadMyHeroBriefingEncryptedTextIndex")
+                ?? throw new InvalidOperationException("encrypted index entries were null."));
+
+            AssertEqual(0, entries.Count, "malformed encrypted index should be ignored");
+        });
+}
+
+static string CreateRpolSourceHtml(params (int MessageNumber, string Author, string Date, string Time, string BodyText)[] posts)
+{
+    return string.Join(
+        Environment.NewLine,
+        posts.Select(post => $"""
+        <div class='message'>
+        <span class='messageauthor'>{WebUtility.HtmlEncode(post.Author)}</span>
+        <ul><li>msg #{post.MessageNumber}</li></ul>
+        {post.Date} at {post.Time}
+        <div class='messagebody' id='msg{post.MessageNumber}'>{WebUtility.HtmlEncode(post.BodyText)}</div>
+        </div><!-- 1 -->
+        """));
 }
 
 static void PartyHeroListingSummaryOverridesStaleCachedSheet()

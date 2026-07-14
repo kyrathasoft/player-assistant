@@ -37,6 +37,7 @@ namespace PlayerAssistant
             showDiceRollsToolStripMenuItem = new ToolStripMenuItem();
             xpToolStripMenuItem = new ToolStripMenuItem();
             partyToolStripMenuItem = new ToolStripMenuItem();
+            myHeroBriefingToolStripMenuItem = new ToolStripMenuItem();
             adventureOutlineToolStripMenuItem = new ToolStripMenuItem();
             regionalMapToolStripMenuItem = new ToolStripMenuItem();
             searchToolStripMenuItem = new ToolStripMenuItem();
@@ -93,7 +94,7 @@ namespace PlayerAssistant
             // 
             // showToolStripMenuItem
             // 
-            showToolStripMenuItem.DropDownItems.AddRange(new ToolStripItem[] { loginInfoToolStripMenuItem, showPostTotalsToolStripMenuItem, showDiceRollsToolStripMenuItem, xpToolStripMenuItem, partyToolStripMenuItem, adventureOutlineToolStripMenuItem, regionalMapToolStripMenuItem });
+            showToolStripMenuItem.DropDownItems.AddRange(new ToolStripItem[] { loginInfoToolStripMenuItem, showPostTotalsToolStripMenuItem, showDiceRollsToolStripMenuItem, xpToolStripMenuItem, partyToolStripMenuItem, myHeroBriefingToolStripMenuItem, adventureOutlineToolStripMenuItem, regionalMapToolStripMenuItem });
             showToolStripMenuItem.Name = "showToolStripMenuItem";
             showToolStripMenuItem.Size = new Size(48, 20);
             showToolStripMenuItem.Text = "Show";
@@ -133,6 +134,13 @@ namespace PlayerAssistant
             partyToolStripMenuItem.Size = new Size(163, 22);
             partyToolStripMenuItem.Text = "Party";
             partyToolStripMenuItem.Click += PartyToolStripMenuItem_Click;
+            // 
+            // myHeroBriefingToolStripMenuItem
+            // 
+            myHeroBriefingToolStripMenuItem.Name = "myHeroBriefingToolStripMenuItem";
+            myHeroBriefingToolStripMenuItem.Size = new Size(163, 22);
+            myHeroBriefingToolStripMenuItem.Text = "My Hero Briefing";
+            myHeroBriefingToolStripMenuItem.Click += MyHeroBriefingToolStripMenuItem_Click;
             // 
             // adventureOutlineToolStripMenuItem
             // 
@@ -407,6 +415,7 @@ namespace PlayerAssistant
         private ToolStripMenuItem showDiceRollsToolStripMenuItem;
         private ToolStripMenuItem xpToolStripMenuItem;
         private ToolStripMenuItem partyToolStripMenuItem;
+        private ToolStripMenuItem myHeroBriefingToolStripMenuItem;
         private ToolStripMenuItem adventureOutlineToolStripMenuItem;
         private ToolStripMenuItem regionalMapToolStripMenuItem;
         private ToolStripMenuItem exitToolStripMenuItem;
