@@ -32,6 +32,7 @@ namespace PlayerAssistant
         public static async Task<string[]> DownloadActiveHeroImagesAsync(
             string listingUrl,
             string pcsDirectory,
+            IReadOnlyDictionary<string, string>? publishedAssetUrlsByFileName = null,
             CancellationToken cancellationToken = default)
         {
             var activeDirectory = GetActivePlayerCharactersDirectory(pcsDirectory);
@@ -41,10 +42,7 @@ namespace PlayerAssistant
             ThrowIfMarkdownFetchFailed(listingMarkdown, listingUrl);
             ThrowIfMarkdownFetchFailed(manifestMarkdown, AssetManifestUrl);
 
-            if (!TryDeserializeAssetManifest(manifestMarkdown, out var manifest))
-            {
-                return [];
-            }
+            TryDeserializeAssetManifest(manifestMarkdown, out var manifest);
 
             var heroes = GetHeroRows(listingMarkdown).ToArray();
             var downloadedFiles = new List<string>();
@@ -54,13 +52,26 @@ namespace PlayerAssistant
                 cancellationToken.ThrowIfCancellationRequested();
 
                 if (hero.TokenFileName is null
-                    || !TryGetSafeHeroImageFileName(hero.TokenFileName, out var tokenFileName)
-                    || !manifest.TryGetValue(hero.TokenFileName, out var vaultPath))
+                    || !TryGetSafeHeroImageFileName(hero.TokenFileName, out var tokenFileName))
                 {
                     continue;
                 }
 
-                var imageUrl = await ObsidianPublishUtility.GetAccessUrlAsync(listingUrl, vaultPath, cancellationToken);
+                string? imageUrl = null;
+                if (manifest.TryGetValue(hero.TokenFileName, out var vaultPath))
+                {
+                    imageUrl = await ObsidianPublishUtility.GetAccessUrlAsync(listingUrl, vaultPath, cancellationToken);
+                }
+                else if (publishedAssetUrlsByFileName?.TryGetValue(hero.TokenFileName, out var publishedAssetUrl) == true)
+                {
+                    imageUrl = publishedAssetUrl;
+                }
+
+                if (imageUrl is null)
+                {
+                    continue;
+                }
+
                 var destinationPath = GetActiveHeroAssetPath(activeDirectory, tokenFileName);
 
                 await DownloadFileAsync(imageUrl, destinationPath, cancellationToken);

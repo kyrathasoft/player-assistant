@@ -4316,9 +4316,9 @@ namespace PlayerAssistant
                 _playerCharacterImageUris = MarkdownUtility.GetImageUrisFromMarkdown(_playerCharacterListingMarkdown, PlayerCharactersListingUrl);
                 _playerCharacterImageFileNames = MarkdownUtility.GetImageFileNamesFromMarkdown(_playerCharacterListingMarkdown);
                 _playerCharacterHtmlImageUris = HtmlUtility.GetImageUrisFromHtml(_playerCharacterListingHtml, PlayerCharactersListingUrl);
-                var imagePathsByFileName = await ObsidianPublishUtility.GetAttachmentImagePathsByFileNameAsync(
+                var imagePathsByFileName = await ObsidianPublishUtility.GetPublishedAssetUrlsByFileNameAsync(
                     PlayerCharactersListingUrl,
-                    cancellationToken: cancellationToken);
+                    cancellationToken);
                 _playerCharacterResolvedImagePaths = _playerCharacterImageFileNames
                     .Select(fileName => imagePathsByFileName.TryGetValue(fileName, out var imagePath)
                         ? $"{fileName}: {imagePath}"
@@ -4332,6 +4332,7 @@ namespace PlayerAssistant
                     await PlayerCharacterAssetUtility.DownloadActiveHeroImagesAsync(
                         PlayerCharactersListingUrl,
                         pcsDirectory,
+                        imagePathsByFileName,
                         cancellationToken);
                     await AtomicFileUtility.WriteAllTextAsync(
                         downloadMarkerPath,

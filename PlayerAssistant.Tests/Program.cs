@@ -149,6 +149,7 @@ var tests = new (string Name, Action Test)[]
     ("startup dependency matrix logs locked runtime artifact failures", StartupDependencyMatrixLogsLockedRuntimeArtifactFailures),
     ("login info cache load returns empty for malformed json", LoginInfoCacheLoadReturnsEmptyForMalformedJson),
     ("asset manifest load returns empty for malformed json", AssetManifestLoadReturnsEmptyForMalformedJson),
+    ("published asset fallback resolves transclusion without attachment index", PublishedAssetFallbackResolvesTransclusionWithoutAttachmentIndex),
     ("active hero markdown cancellation writes no files", ActiveHeroMarkdownCancellationWritesNoFiles),
     ("player character refresh cancellation clears in progress flag", PlayerCharacterRefreshCancellationClearsInProgressFlag),
     ("player character refresh is not delayed when hero images are suppressed", PlayerCharacterRefreshIsNotDelayedWhenHeroImagesAreSuppressed),
@@ -3115,6 +3116,27 @@ static void AssetManifestLoadReturnsEmptyForMalformedJson()
             File.Delete(startupLogPath);
         }
     }
+}
+
+static void PublishedAssetFallbackResolvesTransclusionWithoutAttachmentIndex()
+{
+    var cachePaths = new[]
+    {
+        "Assets/hero-tokens/neria-token.webp",
+        "PCs/Neria Silverdale.md"
+    };
+
+    var assets = (Dictionary<string, string>?)InvokeStaticMethod(
+        typeof(ObsidianPublishUtility),
+        "GetAssetPathsByFileName",
+        (object)cachePaths)
+        ?? throw new InvalidOperationException("GetAssetPathsByFileName returned null.");
+
+    AssertEqual(
+        "Assets/hero-tokens/neria-token.webp",
+        assets["neria-token.webp"],
+        "listing transclusion should resolve directly from the published asset cache");
+    AssertFalse(assets.ContainsKey("Neria Silverdale.md"), "markdown pages should not be treated as image assets");
 }
 
 static void ActiveHeroMarkdownCancellationWritesNoFiles()

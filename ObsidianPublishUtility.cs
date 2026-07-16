@@ -39,6 +39,20 @@ namespace PlayerAssistant
             return imagePathsByFileName;
         }
 
+        public static async Task<Dictionary<string, string>> GetPublishedAssetUrlsByFileNameAsync(
+            string siteUrl,
+            CancellationToken cancellationToken = default)
+        {
+            var siteInfo = await GetSiteInfoAsync(siteUrl, cancellationToken);
+            var cache = await GetPublishedCacheAsync(siteInfo, cancellationToken);
+
+            return GetAssetPathsByFileName(cache)
+                .ToDictionary(
+                    pair => pair.Key,
+                    pair => BuildAccessUrl(siteInfo, pair.Value),
+                    StringComparer.OrdinalIgnoreCase);
+        }
+
         public static async Task<string> GetAccessUrlAsync(
             string siteUrl,
             string vaultPath,
