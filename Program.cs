@@ -19,6 +19,8 @@ namespace PlayerAssistant
         private static readonly string[] UpdatePreflightArguments = ["--update-preflight", "/update-preflight"];
         private static readonly string[] EncryptLocalSettingsArguments = ["--encrypt-local-settings", "/encrypt-local-settings"];
         private static readonly string[] DecryptLocalSettingsArguments = ["--decrypt-local-settings", "/decrypt-local-settings"];
+        private static readonly string[] HashXpPasswordsArguments = ["--hash-xp-passwords", "/hash-xp-passwords"];
+        private static readonly string[] PublishRpolSnapshotsArguments = ["--publish-rpol-snapshots", "/publish-rpol-snapshots"];
 
         /// <summary>
         ///  The main entry point for the application.
@@ -72,6 +74,12 @@ namespace PlayerAssistant
 
             if (TryRunLocalSettingsCommand(args, Console.Out))
             {
+                return;
+            }
+
+            if (args.Any(IsPublishRpolSnapshotsArgument))
+            {
+                RunRpolSnapshotPublisher();
                 return;
             }
 
@@ -182,10 +190,36 @@ namespace PlayerAssistant
                 string.Equals(argument, decryptArgument, StringComparison.OrdinalIgnoreCase));
         }
 
+        internal static bool IsPublishRpolSnapshotsArgument(string argument)
+        {
+            return PublishRpolSnapshotsArguments.Any(candidate =>
+                string.Equals(argument, candidate, StringComparison.OrdinalIgnoreCase));
+        }
+
+        internal static bool IsHashXpPasswordsArgument(string argument)
+        {
+            return HashXpPasswordsArguments.Any(hashArgument =>
+                string.Equals(argument, hashArgument, StringComparison.OrdinalIgnoreCase));
+        }
+
         internal static bool TryRunLocalSettingsCommand(string[] args, TextWriter output)
         {
             ArgumentNullException.ThrowIfNull(args);
             ArgumentNullException.ThrowIfNull(output);
+
+            if (TryGetCommandIndex(args, IsHashXpPasswordsArgument, out var hashXpPasswordsCommandIndex))
+            {
+                var sourcePath = GetOptionalPathArgument(args, hashXpPasswordsCommandIndex + 1)
+                    ?? Path.Combine(Environment.CurrentDirectory, XpPasswordStoreUtility.FileName);
+                var destinationPath = GetOptionalPathArgument(args, hashXpPasswordsCommandIndex + 2);
+                var entryCount = XpPasswordStoreUtility.ConvertEncryptedSidecarToPasswordHashes(
+                    Path.GetFullPath(sourcePath),
+                    destinationPath is null ? null : Path.GetFullPath(destinationPath));
+                output.WriteLine(
+                    $"Converted {entryCount} XP password entries to salted hashes in " +
+                    $"'{Path.GetFullPath(destinationPath ?? sourcePath)}'.");
+                return true;
+            }
 
             if (TryGetCommandIndex(args, IsEncryptLocalSettingsArgument, out var encryptCommandIndex))
             {
@@ -296,7 +330,35 @@ namespace PlayerAssistant
                 || IsHealthArgument(value)
                 || IsUpdatePreflightArgument(value)
                 || IsEncryptLocalSettingsArgument(value)
-                || IsDecryptLocalSettingsArgument(value);
+                || IsDecryptLocalSettingsArgument(value)
+                || IsHashXpPasswordsArgument(value)
+                || IsPublishRpolSnapshotsArgument(value);
+        }
+
+        private static void RunRpolSnapshotPublisher()
+        {
+            RpolSnapshotPublishReport report;
+            try
+            {
+                AppSettingsUtility.Load();
+                report = RpolSnapshotUtility.PublishAsync().GetAwaiter().GetResult();
+            }
+            catch (Exception ex)
+            {
+                report = new RpolSnapshotPublishReport(
+                    Discovered: 0,
+                    Published: 0,
+                    Failed: 1,
+                    [SensitiveTextRedactionUtility.Redact(ex.Message)]);
+            }
+
+            var reportPath = RuntimePathUtility.CombineUnderBase(
+                AppContext.BaseDirectory,
+                "rpol-snapshot-publish-result.json");
+            var json = JsonSerializer.Serialize(report, new JsonSerializerOptions { WriteIndented = true });
+            File.WriteAllText(reportPath, json);
+            Console.WriteLine(json);
+            Environment.ExitCode = report.Failed == 0 && report.Published > 0 ? 0 : 1;
         }
 
         internal static string GetVersionText()

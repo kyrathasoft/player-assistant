@@ -1251,7 +1251,7 @@ namespace PlayerAssistant
         {
             MessageBox.Show(
                 this,
-                $"The encrypted XP password file '{XpPasswordStoreUtility.FileName}' was not found. {featureName} will be shown without XP totals. Restore the file to the Release folder to enable protected XP access.",
+                $"The XP password hash file '{XpPasswordStoreUtility.FileName}' was not found. {featureName} will be shown without XP totals. Restore the file to the Release folder to enable protected XP access.",
                 featureName,
                 MessageBoxButtons.OK,
                 MessageBoxIcon.Warning);

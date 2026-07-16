@@ -35,6 +35,11 @@ namespace PlayerAssistant
 
             if (RpolAuthUtility.IsRpolUri(uri))
             {
+                if (!string.IsNullOrWhiteSpace(RuntimeSecretStoreUtility.GetBrokerToken()))
+                {
+                    return await RpolSnapshotUtility.GetHtmlAsync(uri, cancellationToken);
+                }
+
                 return await RpolAuthUtility.GetHtmlFromUrlAsync(uri, cancellationToken);
             }
 

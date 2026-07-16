@@ -148,7 +148,6 @@ function Test-InstallerDirectory {
     Assert-RequiredFile -Path (Join-Path $payloadDirectory '.playwright\package\browsers.json') -Description 'payload Playwright browsers.json'
 
     Assert-EncryptedEnvelope -Path (Join-Path $payloadDirectory 'settings.local.json') -Description 'payload settings.local.json'
-    Assert-EncryptedEnvelope -Path (Join-Path $payloadDirectory 'xp-passwords.json') -Description 'payload xp-passwords.json'
     & powershell.exe `
         -NoProfile `
         -ExecutionPolicy Bypass `

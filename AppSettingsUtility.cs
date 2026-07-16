@@ -10,6 +10,7 @@ namespace PlayerAssistant
         private const string HostedLocalSettingsSettingsKey = "Hosted Local Settings";
         private const string HostedLocalSettingsOverrideEnvironmentVariable = "PLAYER_ASSISTANT_HOSTED_LOCAL_SETTINGS_URL_OVERRIDE";
         private const string RpolSiteSettingsKey = "RPOL Site";
+        private const string RpolBrokerSettingsKey = "RPOL Broker";
         private const string GameIntroSettingsKey = "Game Intro";
         private const string TheCastSettingsKey = "The Cast";
         private const string ObsidianGameVaultSettingsKey = "Obsidian Game Vault";
@@ -29,6 +30,9 @@ namespace PlayerAssistant
         public const string RpolPasswordSettingsKey = "RPOL password";
 
         public static string GameForumUrl => Settings.Value[RpolSiteSettingsKey];
+        public static string RpolBrokerUrl => Settings.Value.TryGetValue(RpolBrokerSettingsKey, out var value)
+            ? value.TrimEnd('/') + "/"
+            : string.Empty;
         public static string HostedLocalSettingsUrl => GetEffectiveHostedLocalSettingsUrl(Settings.Value);
         public static string? RpolUserName
         {

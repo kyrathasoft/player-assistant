@@ -6,7 +6,8 @@ namespace PlayerAssistant
         Rpol,
         ObsidianPublish,
         PlayerAssistantUpdate,
-        PlayerAssistantHostedSettings
+        PlayerAssistantHostedSettings,
+        PlayerAssistantBroker
     }
 
     internal sealed record NetworkUrlAllowlistValidation(
@@ -87,7 +88,12 @@ namespace PlayerAssistant
                 NetworkUrlPurpose.PlayerAssistantHostedSettings,
                 "Hosted Player Assistant settings must use bryanmiller.us at '/scarlethorizons/settings.local.json'.",
                 uri => IsHost(uri, "bryanmiller.us", allowSubdomains: true)
-                    && PathEquals(uri, "/scarlethorizons/settings.local.json"))
+                    && PathEquals(uri, "/scarlethorizons/settings.local.json")),
+            new(
+                NetworkUrlPurpose.PlayerAssistantBroker,
+                "Player Assistant broker requests must use bryanmiller.us under '/scarlethorizons/api/v1/'.",
+                uri => IsHost(uri, "bryanmiller.us", allowSubdomains: true)
+                    && PathStartsWith(uri, "/scarlethorizons/api/v1/"))
         ];
 
         public static NetworkUrlAllowlistValidation Validate(

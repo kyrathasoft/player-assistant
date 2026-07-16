@@ -8,8 +8,12 @@ param(
 $ErrorActionPreference = 'Stop'
 
 $SettingsLocalFileName = 'settings.local.json'
+$XpPasswordFileName = 'xp-passwords.json'
+$XpPasswordFormat = 'xp-password-hashes-v1'
+$XpPasswordAlgorithm = 'PBKDF2-HMAC-SHA256'
+$XpPasswordMinimumIterations = 600000
 $RequiredSidecarFileNames = @(
-    'xp-passwords.json'
+    $XpPasswordFileName
 )
 $AllowedEncryptedFormats = @(
     'app-protected-v1',
@@ -19,11 +23,6 @@ $AllowedEncryptedFormats = @(
 $ForbiddenPlaintextMarkers = @(
     '"RPOL password"',
     '"RPOL user name"',
-    '"Dungeon Master"',
-    '"Kelpie"',
-    '"Jelb"',
-    '"Geoffroy"',
-    '"Maximilian"',
     'Lucian99!',
     'gemstone',
     'spell-component',
@@ -110,6 +109,75 @@ function Assert-EncryptedSidecar {
     }
 }
 
+function Assert-XpPasswordHashSidecar {
+    param(
+        [Parameter(Mandatory = $true)][string]$Path,
+        [Parameter(Mandatory = $true)][string]$FileName
+    )
+
+    Assert-RequiredFile -Path $Path -Description "runtime sidecar $FileName"
+    $raw = Get-Content -Raw -LiteralPath $Path
+    foreach ($marker in $ForbiddenPlaintextMarkers) {
+        if ($raw.Contains($marker)) {
+            throw "Runtime sidecar $FileName contains plaintext sensitive marker '$marker'."
+        }
+    }
+
+    try {
+        $json = $raw | ConvertFrom-Json
+    }
+    catch {
+        throw "Runtime sidecar $FileName is not valid JSON: $($_.Exception.Message)"
+    }
+
+    if ($json.schema_version -ne 1 -or $json.format -ne $XpPasswordFormat) {
+        throw "Runtime sidecar $FileName must use salted password hash format '$XpPasswordFormat' with schema_version 1."
+    }
+
+    $unexpectedDocumentProperties = @($json.PSObject.Properties.Name | Where-Object {
+        @('schema_version', 'format', 'entries') -notcontains $_
+    })
+    if ($unexpectedDocumentProperties.Count -gt 0) {
+        throw "Runtime sidecar $FileName contains unexpected property '$($unexpectedDocumentProperties[0])'."
+    }
+
+    $entries = @($json.entries)
+    if ($entries.Count -eq 0) {
+        throw "Runtime sidecar $FileName does not contain any password hash entries."
+    }
+
+    $names = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
+    $salts = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::Ordinal)
+    foreach ($entry in $entries) {
+        $unexpectedEntryProperties = @($entry.PSObject.Properties.Name | Where-Object {
+            @('name', 'algorithm', 'iterations', 'salt', 'hash') -notcontains $_
+        })
+        if ($unexpectedEntryProperties.Count -gt 0) {
+            throw "Runtime sidecar $FileName contains unexpected entry property '$($unexpectedEntryProperties[0])'."
+        }
+
+        if ([string]::IsNullOrWhiteSpace([string]$entry.name) -or !$names.Add([string]$entry.name)) {
+            throw "Runtime sidecar $FileName contains a blank or duplicate PC name."
+        }
+
+        if ($entry.algorithm -ne $XpPasswordAlgorithm -or [int64]$entry.iterations -lt $XpPasswordMinimumIterations) {
+            throw "Runtime sidecar $FileName contains unsupported password hash parameters."
+        }
+
+        try {
+            $saltBytes = [Convert]::FromBase64String([string]$entry.salt)
+            $hashBytes = [Convert]::FromBase64String([string]$entry.hash)
+        }
+        catch {
+            throw "Runtime sidecar $FileName contains invalid base64 hash data."
+        }
+
+        if ($saltBytes.Length -lt 16 -or $hashBytes.Length -ne 32 -or !$salts.Add([string]$entry.salt)) {
+            throw "Runtime sidecar $FileName contains invalid or reused password hash data."
+        }
+    }
+}
+
 function Assert-SidecarReadOnlyAttribute {
     param(
         [Parameter(Mandatory = $true)][string]$Path,
@@ -175,7 +243,7 @@ Assert-RequiredDirectory -Path $resolvedAppDir -Description 'application runtime
 
 foreach ($fileName in $RequiredSidecarFileNames) {
     $path = Join-Path $resolvedAppDir $fileName
-    Assert-EncryptedSidecar -Path $path -FileName $fileName
+    Assert-XpPasswordHashSidecar -Path $path -FileName $fileName
     Assert-SidecarReadOnlyAttribute -Path $path -FileName $fileName
 }
 

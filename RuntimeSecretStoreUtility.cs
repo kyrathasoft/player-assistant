@@ -8,6 +8,9 @@ namespace PlayerAssistant
         private const string RpolUserNameTarget = "PlayerAssistant/RPOL/UserName";
         private const string RpolPasswordTarget = "PlayerAssistant/RPOL/Password";
         private const string RpolStorageStateTarget = "PlayerAssistant/RPOL/StorageState";
+        private const string BrokerTokenTarget = "PlayerAssistant/Broker/Token";
+        private const string BrokerAdminKeyTarget = "PlayerAssistant/Broker/AdminKey";
+        private const string SnapshotSigningKeyTarget = "PlayerAssistant/Broker/SnapshotSigningKey";
         private const string RpolComment = "Player Assistant RPOL credential";
         private const string RpolStorageStateComment = "Player Assistant RPOL browser storage state";
 
@@ -82,6 +85,44 @@ namespace PlayerAssistant
         public static void DeleteRpolStorageState()
         {
             WindowsCredentialManagerUtility.DeleteSecret(RpolStorageStateTarget);
+        }
+
+        public static string? GetBrokerToken()
+        {
+            return ReadSecret(BrokerTokenTarget);
+        }
+
+        public static string? GetBrokerAdminKey()
+        {
+            return ReadSecret(BrokerAdminKeyTarget);
+        }
+
+        public static string? GetSnapshotSigningKey()
+        {
+            return ReadSecret(SnapshotSigningKeyTarget);
+        }
+
+        public static void SaveBrokerToken(string token)
+        {
+            SaveSecret(BrokerTokenTarget, token, "Player Assistant broker client token");
+        }
+
+        public static void SaveSnapshotSigningKey(string signingKey)
+        {
+            SaveSecret(SnapshotSigningKeyTarget, signingKey, "Player Assistant snapshot signing key");
+        }
+
+        private static string? ReadSecret(string target)
+        {
+            return WindowsCredentialManagerUtility.TryReadSecretUtf8(target, out var value, out _)
+                ? value
+                : null;
+        }
+
+        private static void SaveSecret(string target, string value, string comment)
+        {
+            ArgumentException.ThrowIfNullOrWhiteSpace(value);
+            WindowsCredentialManagerUtility.WriteSecretUtf8(target, value, comment);
         }
 
         public static bool TryMigrateRpolSecretsFromLocalSettings(

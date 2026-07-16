@@ -205,6 +205,15 @@
 
 ## Fresh backlog
 
+- [ ] Complete signed RPOL snapshot coverage beyond the verified root page.
+  - [x] Deploy the private DreamHost broker configuration with restricted permissions and required PHP extensions.
+  - [x] Add signed, sanitized snapshot upload and bearer-token retrieval endpoints.
+  - [x] Add the Windows Playwright publisher, daily scheduled task, exact broker allowlist, Credential Manager secrets, and desktop snapshot retrieval.
+  - [x] Verify live health, publish the approved game root, and retrieve it with a one-day test token before revoking that token.
+  - [x] Persist the approved page queue and advance one target per publisher execution so subsequent runs do not restart at the root.
+  - [ ] Confirm all remaining pages accumulate through repeated publisher executions.
+    - Live verification: root, Game Intro, and Cast snapshots stored; cursor advanced to the first thread; 11 pages remain.
+  - [ ] Run a clean-client test with no RPOL administrator credentials before removing or rotating distributed credentials.
 - [x] Run a full release verification/rehearsal now that project files and sidecars are tracked.
   - Status: completed after restoring `settings.local.json` from the local installer payload.
 - [x] Continue refining `Show > Adventure Outline` summary quality so generated bullets are consistently specific, player-facing scene updates rather than generic fallback phrases.

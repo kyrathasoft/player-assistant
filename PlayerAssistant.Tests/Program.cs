@@ -79,10 +79,12 @@ var tests = new (string Name, Action Test)[]
     ("app settings hosted settings failure logs plaintext payload", AppSettingsHostedSettingsFailureLogsPlaintextPayload),
     ("app settings hosted settings failure logs oversized payload", AppSettingsHostedSettingsFailureLogsOversizedPayload),
     ("app settings hosted settings failure logs unreachable fixture server", AppSettingsHostedSettingsFailureLogsUnreachableFixtureServer),
-    ("xp password store loads encrypted sidecar", XpPasswordStoreLoadsEncryptedSidecar),
+    ("xp password store loads salted hash sidecar", XpPasswordStoreLoadsSaltedHashSidecar),
+    ("xp password store uses unique salts and omits plaintext", XpPasswordStoreUsesUniqueSaltsAndOmitsPlaintext),
     ("xp password store accepts first and full character names", XpPasswordStoreAcceptsFirstAndFullCharacterNames),
-    ("xp password store accepts encrypted sidecar with utf8 bom", XpPasswordStoreAcceptsEncryptedSidecarWithUtf8Bom),
-    ("xp password store rejects plaintext sidecar", XpPasswordStoreRejectsPlaintextSidecar),
+    ("xp password store accepts hash sidecar with utf8 bom", XpPasswordStoreAcceptsHashSidecarWithUtf8Bom),
+    ("xp password store rejects legacy encrypted sidecar", XpPasswordStoreRejectsLegacyEncryptedSidecar),
+    ("xp password store migrates encrypted sidecar", XpPasswordStoreMigratesEncryptedSidecar),
     ("xp password store reports missing sidecar by name", XpPasswordStoreReportsMissingSidecarByName),
     ("app configuration validation reports missing url", AppConfigurationValidationReportsMissingUrl),
     ("app configuration validation rejects disallowed network host", AppConfigurationValidationRejectsDisallowedNetworkHost),
@@ -170,6 +172,18 @@ var tests = new (string Name, Action Test)[]
     ("rpol auth classifies transport security failures", RpolAuthClassifiesTransportSecurityFailures),
     ("rpol auth cached failure short circuits html fetch", RpolAuthCachedFailureShortCircuitsHtmlFetch),
     ("rpol auth cached failure logs once", RpolAuthCachedFailureLogsOnce),
+    ("rpol snapshot signs and verifies canonical payload", RpolSnapshotSignsAndVerifiesCanonicalPayload),
+    ("rpol snapshot rejects another game", RpolSnapshotRejectsAnotherGame),
+    ("rpol snapshot sanitizes credentials and login form", RpolSnapshotSanitizesCredentialsAndLoginForm),
+    ("rpol snapshot accepts sanitized campaign content", RpolSnapshotAcceptsSanitizedCampaignContent),
+    ("rpol snapshot rejects login-only content", RpolSnapshotRejectsLoginOnlyContent),
+    ("rpol challenge detection ignores passive cloudflare references", RpolChallengeDetectionIgnoresPassiveCloudflareReferences),
+    ("rpol verification recognizes authenticated browser title", RpolVerificationRecognizesAuthenticatedBrowserTitle),
+    ("snapshot publisher state advances one target and wraps", SnapshotPublisherStateAdvancesOneTargetAndWraps),
+    ("snapshot publisher state persists its cursor", SnapshotPublisherStatePersistsItsCursor),
+    ("snapshot publisher state rejects an invalid cursor", SnapshotPublisherStateRejectsInvalidCursor),
+    ("network allowlist accepts only broker api path", NetworkAllowlistAcceptsOnlyBrokerApiPath),
+    ("snapshot publisher argument is recognized", SnapshotPublisherArgumentIsRecognized),
     ("rpol auth caches blocked and expired session failures", RpolAuthCachesBlockedAndExpiredSessionFailures),
     ("rpol storage state validation accepts current rpol cookies", RpolStorageStateValidationAcceptsCurrentRpolCookies),
     ("rpol storage state validation deletes malformed state", RpolStorageStateValidationDeletesMalformedState),
@@ -1465,11 +1479,11 @@ static void HostedSettingsRejectsUnexpectedSignedContentIdentity()
     AssertContains(exception.Message, HostedSettingsTrustUtility.HostedSettingsContentId);
 }
 
-static void XpPasswordStoreLoadsEncryptedSidecar()
+static void XpPasswordStoreLoadsSaltedHashSidecar()
 {
     using var directory = TemporaryDirectory.Create();
     var sidecarPath = Path.Combine(directory.Path, XpPasswordStoreUtility.FileName);
-    LocalSettingsUtility.SavePortableEncryptedSettings(
+    XpPasswordStoreUtility.SavePasswordHashes(
         sidecarPath,
         new Dictionary<string, string>
         {
@@ -1477,25 +1491,49 @@ static void XpPasswordStoreLoadsEncryptedSidecar()
             ["Jelb"] = "spell-component"
         });
 
-    var passwords = XpPasswordStoreUtility.LoadPasswords(directory.Path);
+    var hashes = XpPasswordStoreUtility.LoadPasswordHashes(directory.Path);
 
-    AssertEqual("gemstone", passwords["Kelpie"], "unexpected Kelpie XP password");
+    AssertEqual(2, hashes.Count, "unexpected XP password hash count");
     AssertTrue(
         XpPasswordStoreUtility.ValidatePassword("Kelpie", "gemstone", directory.Path),
         "matching XP password should validate");
     AssertFalse(
         XpPasswordStoreUtility.ValidatePassword("Kelpie", "wrong", directory.Path),
         "wrong XP password should be rejected");
-    AssertFalse(
-        File.ReadAllText(sidecarPath).Contains("gemstone", StringComparison.Ordinal),
-        "encrypted XP password sidecar should not contain plaintext password material");
+}
+
+static void XpPasswordStoreUsesUniqueSaltsAndOmitsPlaintext()
+{
+    using var directory = TemporaryDirectory.Create();
+    var sidecarPath = Path.Combine(directory.Path, XpPasswordStoreUtility.FileName);
+    XpPasswordStoreUtility.SavePasswordHashes(
+        sidecarPath,
+        new Dictionary<string, string>
+        {
+            ["Kelpie"] = "shared-password",
+            ["Jelb"] = "shared-password"
+        });
+
+    var raw = File.ReadAllText(sidecarPath);
+    using var document = JsonDocument.Parse(raw);
+    var entries = document.RootElement.GetProperty("entries").EnumerateArray().ToArray();
+    var salts = entries.Select(entry => entry.GetProperty("salt").GetString()).ToArray();
+    var hashes = entries.Select(entry => entry.GetProperty("hash").GetString()).ToArray();
+
+    AssertEqual(
+        XpPasswordStoreUtility.Format,
+        document.RootElement.GetProperty("format").GetString() ?? string.Empty,
+        "unexpected XP password hash format");
+    AssertEqual(2, salts.Distinct(StringComparer.Ordinal).Count(), "each XP password must use a unique salt");
+    AssertEqual(2, hashes.Distinct(StringComparer.Ordinal).Count(), "equal passwords with unique salts must produce different hashes");
+    AssertFalse(raw.Contains("shared-password", StringComparison.Ordinal), "XP hash sidecar must not contain plaintext password material");
 }
 
 static void XpPasswordStoreAcceptsFirstAndFullCharacterNames()
 {
     using var directory = TemporaryDirectory.Create();
     var sidecarPath = Path.Combine(directory.Path, XpPasswordStoreUtility.FileName);
-    LocalSettingsUtility.SavePortableEncryptedSettings(
+    XpPasswordStoreUtility.SavePasswordHashes(
         sidecarPath,
         new Dictionary<string, string>
         {
@@ -1515,7 +1553,40 @@ static void XpPasswordStoreAcceptsFirstAndFullCharacterNames()
         "Dungeon Master access should not allow a first-name shortcut");
 }
 
-static void XpPasswordStoreAcceptsEncryptedSidecarWithUtf8Bom()
+static void XpPasswordStoreAcceptsHashSidecarWithUtf8Bom()
+{
+    using var directory = TemporaryDirectory.Create();
+    var sidecarPath = Path.Combine(directory.Path, XpPasswordStoreUtility.FileName);
+    XpPasswordStoreUtility.SavePasswordHashes(
+        sidecarPath,
+        new Dictionary<string, string>
+        {
+            ["Kelpie Lawfuller"] = "gemstone"
+        });
+
+    var hashBytes = File.ReadAllBytes(sidecarPath);
+    File.WriteAllBytes(sidecarPath, [0xEF, 0xBB, 0xBF, .. hashBytes]);
+
+    AssertTrue(
+        XpPasswordStoreUtility.ValidatePassword("Kelpie Lawfuller", "gemstone", directory.Path),
+        "matching XP password should validate when hash sidecar has a UTF-8 BOM");
+}
+
+static void XpPasswordStoreRejectsLegacyEncryptedSidecar()
+{
+    using var directory = TemporaryDirectory.Create();
+    var sidecarPath = Path.Combine(directory.Path, XpPasswordStoreUtility.FileName);
+    LocalSettingsUtility.SavePortableEncryptedSettings(
+        sidecarPath,
+        new Dictionary<string, string> { ["Kelpie"] = "gemstone" });
+
+    var exception = AssertThrows<InvalidOperationException>(() =>
+        XpPasswordStoreUtility.LoadPasswordHashes(directory.Path));
+
+    AssertContains(exception.Message, XpPasswordStoreUtility.Format);
+}
+
+static void XpPasswordStoreMigratesEncryptedSidecar()
 {
     using var directory = TemporaryDirectory.Create();
     var sidecarPath = Path.Combine(directory.Path, XpPasswordStoreUtility.FileName);
@@ -1523,32 +1594,18 @@ static void XpPasswordStoreAcceptsEncryptedSidecarWithUtf8Bom()
         sidecarPath,
         new Dictionary<string, string>
         {
-            ["Kelpie Lawfuller"] = "gemstone"
+            ["Kelpie"] = "gemstone",
+            ["Jelb"] = "spell-component"
         });
 
-    var encryptedBytes = File.ReadAllBytes(sidecarPath);
-    File.WriteAllBytes(sidecarPath, [0xEF, 0xBB, 0xBF, .. encryptedBytes]);
+    var entryCount = XpPasswordStoreUtility.ConvertEncryptedSidecarToPasswordHashes(sidecarPath);
 
-    AssertTrue(
-        XpPasswordStoreUtility.ValidatePassword("Kelpie Lawfuller", "gemstone", directory.Path),
-        "matching XP password should validate when encrypted sidecar has a UTF-8 BOM");
-}
-
-static void XpPasswordStoreRejectsPlaintextSidecar()
-{
-    using var directory = TemporaryDirectory.Create();
-    File.WriteAllText(
-        Path.Combine(directory.Path, XpPasswordStoreUtility.FileName),
-        """
-        {
-          "Kelpie": "gemstone"
-        }
-        """);
-
-    var exception = AssertThrows<InvalidOperationException>(() =>
-        XpPasswordStoreUtility.LoadPasswords(directory.Path));
-
-    AssertContains(exception.Message, "authenticated encrypted envelope");
+    AssertEqual(2, entryCount, "unexpected migrated XP password count");
+    AssertTrue(XpPasswordStoreUtility.ValidatePassword("Kelpie", "gemstone", directory.Path), "migrated XP password should validate");
+    var raw = File.ReadAllText(sidecarPath);
+    AssertContains(raw, XpPasswordStoreUtility.Format);
+    AssertFalse(raw.Contains("gemstone", StringComparison.Ordinal), "migration must remove plaintext password material");
+    AssertFalse(raw.Contains("app-protected", StringComparison.Ordinal), "migration must remove the reversible encrypted envelope");
 }
 
 static void XpPasswordStoreReportsMissingSidecarByName()
@@ -1556,7 +1613,7 @@ static void XpPasswordStoreReportsMissingSidecarByName()
     using var directory = TemporaryDirectory.Create();
 
     var exception = AssertThrows<FileNotFoundException>(() =>
-        XpPasswordStoreUtility.LoadPasswords(directory.Path));
+        XpPasswordStoreUtility.LoadPasswordHashes(directory.Path));
 
     AssertContains(exception.Message, XpPasswordStoreUtility.FileName);
     AssertContains(exception.Message, directory.Path);
@@ -7883,7 +7940,7 @@ static void PublishVerificationRejectsPlaintextXpPasswordSidecar()
         var output = RunPublishVerification(directoryPath);
 
         AssertFalse(output.ExitCode == 0, "publish verification should fail when xp-passwords.json is plaintext");
-        AssertContains(output.Output, "encrypted app-protected format");
+        AssertContains(output.Output, XpPasswordStoreUtility.Format);
     });
 }
 
@@ -8536,7 +8593,7 @@ static void WithCopiedPublishDirectory(Action<string> action)
 
     try
     {
-        var currentPublishDirectory = GetCurrentPublishDirectory();
+        var currentPublishDirectory = Path.Combine(GetCurrentReleaseDirectory(), "publish");
         var currentPublishExecutablePath = Path.Combine(currentPublishDirectory, "player-assistant.exe");
         if (File.Exists(currentPublishExecutablePath))
         {
@@ -9733,7 +9790,7 @@ static void WriteRequiredRuntimeSidecars(string directoryPath)
     File.WriteAllText(Path.Combine(directoryPath, KeywordTermsFileUtility.FileName), "scarlet");
     File.WriteAllText(Path.Combine(directoryPath, "sitemap.xml"), "<urlset />");
     File.WriteAllText(Path.Combine(directoryPath, "sitemap-keyword-urls.json"), "{}");
-    LocalSettingsUtility.SavePortableEncryptedSettings(
+    XpPasswordStoreUtility.SavePasswordHashes(
         Path.Combine(directoryPath, XpPasswordStoreUtility.FileName),
         new Dictionary<string, string>
         {
@@ -10183,6 +10240,137 @@ static string CorruptHostedSettingsSignature(string hostedSettingsJson)
           "signature": "{{tamperedSignature}}"
         }
         """;
+}
+
+static void RpolSnapshotSignsAndVerifiesCanonicalPayload()
+{
+    var signingKey = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32));
+    var payload = RpolSnapshotUtility.CreatePayload(
+        new Uri("https://rpol.net/game.php?gi=80170"),
+        "<html>campaign</html>",
+        "text/html; charset=utf-8",
+        DateTimeOffset.Parse("2026-07-16T12:00:00Z"),
+        signingKey);
+
+    AssertTrue(RpolSnapshotUtility.VerifySignature(payload, signingKey), "snapshot signature should verify");
+    AssertFalse(
+        RpolSnapshotUtility.VerifySignature(payload with { ContentSha256 = new string('0', 64) }, signingKey),
+        "tampered snapshot metadata should fail signature verification");
+}
+
+static void RpolSnapshotRejectsAnotherGame()
+{
+    var exception = AssertThrows<InvalidOperationException>(() =>
+        RpolSnapshotUtility.ValidateSourceUri(new Uri("https://rpol.net/game.php?gi=12345")));
+    AssertContains(exception.Message, "80170");
+}
+
+static void RpolSnapshotSanitizesCredentialsAndLoginForm()
+{
+    using var credentialStoreScope = RuntimeSecretStoreUtility.UseBackendForTests(new InMemoryWindowsCredentialStoreBackend());
+    RuntimeSecretStoreUtility.SaveRpolCredentials("admin-user", "secret-password");
+    var sanitized = RpolSnapshotUtility.SanitizeHtml(
+        "<html>admin-user secret-password<form action='/login.cgi'><input name='password'></form>safe</html>");
+
+    AssertFalse(sanitized.Contains("admin-user", StringComparison.OrdinalIgnoreCase), "user name should be redacted");
+    AssertFalse(sanitized.Contains("secret-password", StringComparison.Ordinal), "password should be redacted");
+    AssertFalse(sanitized.Contains("login.cgi", StringComparison.OrdinalIgnoreCase), "login form should be removed");
+    AssertContains(sanitized, "safe");
+}
+
+static void RpolSnapshotAcceptsSanitizedCampaignContent()
+{
+    var html = "<html><title>Scarlet Horizons</title><body>" + new string('x', 1200) + "</body></html>";
+    AssertTrue(RpolSnapshotUtility.IsUsableSnapshotHtml(html), "campaign HTML should be accepted after sanitization");
+}
+
+static void RpolSnapshotRejectsLoginOnlyContent()
+{
+    var html = "<html><title>RPoL Login</title><body>" + new string('x', 1200)
+        + "<form action='/login.cgi'><input name='username'><input name='password'></form></body></html>";
+    AssertFalse(RpolSnapshotUtility.IsUsableSnapshotHtml(html), "login-only HTML should not be published");
+}
+
+static void RpolChallengeDetectionIgnoresPassiveCloudflareReferences()
+{
+    AssertFalse(
+        RpolAuthUtility.LooksLikeCloudflareChallengePage("<html><body>Protected by Cloudflare</body></html>"),
+        "a passive Cloudflare reference should not be treated as a browser challenge");
+    AssertTrue(
+        RpolAuthUtility.LooksLikeCloudflareChallengePage("<title>Just a moment...</title>"),
+        "a concrete Cloudflare challenge marker should still be detected");
+}
+
+static void RpolVerificationRecognizesAuthenticatedBrowserTitle()
+{
+    AssertTrue(
+        RpolAuthUtility.IsVerifiedRpolBrowserWindowTitle("RPoL: World of Issenda - Scarlet Horizons - Google Chrome"),
+        "an authenticated RPOL window title should complete manual verification");
+    AssertFalse(
+        RpolAuthUtility.IsVerifiedRpolBrowserWindowTitle("Just a moment... - Google Chrome"),
+        "a challenge window title should remain open");
+}
+
+static void SnapshotPublisherStateAdvancesOneTargetAndWraps()
+{
+    var root = new Uri("https://rpol.net/game.php?gi=80170");
+    var cast = new Uri("https://rpol.net/gameinfo.php?action=cast&gi=80170");
+    var state = RpolSnapshotUtility.CreatePublisherState([root, cast]);
+
+    AssertEqual(root, RpolSnapshotUtility.GetNextSourceUri(state), "the root should be the initial publisher target");
+    state = RpolSnapshotUtility.AdvancePublisherState(state);
+    AssertEqual(cast, RpolSnapshotUtility.GetNextSourceUri(state), "one success should advance exactly one target");
+    state = RpolSnapshotUtility.AdvancePublisherState(state);
+    AssertEqual(root, RpolSnapshotUtility.GetNextSourceUri(state), "the publisher queue should wrap after the last target");
+}
+
+static void SnapshotPublisherStatePersistsItsCursor()
+{
+    using var directory = TemporaryDirectory.Create();
+    var statePath = Path.Combine(directory.Path, "publisher-state.json");
+    var state = RpolSnapshotUtility.AdvancePublisherState(
+        RpolSnapshotUtility.CreatePublisherState(
+        [
+            new Uri("https://rpol.net/game.php?gi=80170"),
+            new Uri("https://rpol.net/gameinfo.php?action=cast&gi=80170")
+        ]));
+
+    RpolSnapshotUtility.SavePublisherStateAsync(statePath, state).GetAwaiter().GetResult();
+    var loaded = RpolSnapshotUtility.LoadPublisherState(statePath)
+        ?? throw new InvalidOperationException("expected persisted publisher state");
+
+    AssertEqual(1, loaded.NextIndex, "the persisted publisher cursor should be retained");
+    AssertEqual(state.SourceUrls[1], loaded.SourceUrls[1], "the persisted publisher queue should be retained");
+}
+
+static void SnapshotPublisherStateRejectsInvalidCursor()
+{
+    var state = new RpolSnapshotPublisherState(
+        1,
+        ["https://rpol.net/game.php?gi=80170"],
+        1);
+
+    var exception = AssertThrows<InvalidOperationException>(() => RpolSnapshotUtility.GetNextSourceUri(state));
+    AssertContains(exception.Message, "cursor");
+}
+
+static void NetworkAllowlistAcceptsOnlyBrokerApiPath()
+{
+    var accepted = NetworkUrlAllowlistUtility.Validate(
+        "https://bryanmiller.us/scarlethorizons/api/v1/snapshots/page",
+        NetworkUrlPurpose.PlayerAssistantBroker);
+    var rejected = NetworkUrlAllowlistUtility.Validate(
+        "https://bryanmiller.us/scarlethorizons/settings.local.json",
+        NetworkUrlPurpose.PlayerAssistantBroker);
+
+    AssertTrue(accepted.IsAllowed, "broker API path should be allowed");
+    AssertFalse(rejected.IsAllowed, "non-broker paths should be rejected for broker requests");
+}
+
+static void SnapshotPublisherArgumentIsRecognized()
+{
+    AssertTrue(PlayerAssistant.Program.IsPublishRpolSnapshotsArgument("--publish-rpol-snapshots"), "long snapshot argument should be recognized");
+    AssertTrue(PlayerAssistant.Program.IsPublishRpolSnapshotsArgument("/publish-rpol-snapshots"), "slash snapshot argument should be recognized");
 }
 
 internal sealed class TemporaryDirectory : IDisposable

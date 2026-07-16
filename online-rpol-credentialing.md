@@ -34,9 +34,17 @@ https://bryanmiller.us/scarlethorizons/api/v1/health
   "service": "player-assistant-broker",
   "schema_version": 1,
   "status": "ok",
-  "rpol_credentials_configured": false
+  "rpol_credentials_configured": true
 }
 ```
+- Configured the private server with a server-generated administrator key and the existing RPOL credentials.
+- Stored the broker administrator key in Windows Credential Manager under `PlayerAssistant/Broker/AdminKey`.
+- Applied mode `0700` to the private broker directory and mode `0600` to its four private files.
+- Confirmed the DreamHost PHP runtime provides `curl`, `dom`, and `pdo_sqlite`.
+- Fixed the broker rate-limit transaction so its manual `BEGIN IMMEDIATE` uses matching manual `COMMIT` and `ROLLBACK` statements.
+- Issued and revoked one-day test tokens successfully.
+- Confirmed the approved RPOL page request reaches the upstream-fetch boundary and returns `502 rpol_unavailable`.
+- Confirmed through a direct server-side client test that RPOL requires browser verification that PHP cURL cannot complete.
 
 ## Local Deployment Files
 
@@ -97,17 +105,13 @@ Only the two files under `/scarlethorizons/api/` are web-accessible. The private
 
 ## Current Blocker
 
-The private server `config.php` still contains placeholder values. This is why the health endpoint currently reports:
+The private server configuration, permissions, PHP extensions, health check, and token flow are working. Live RPOL authentication is blocked because RPOL requires browser verification that DreamHost PHP cURL cannot complete.
 
-```text
-rpol_credentials_configured: false
-```
-
-No live RPOL authentication has been attempted by the broker yet.
+The broker correctly returns HTTP 502 with `rpol_unavailable`, does not expose the upstream exception to clients, and records the failed fetch through its existing audit path. Do not weaken TLS verification or distribute RPOL credentials or browser cookies to work around this blocker.
 
 ## Remaining Steps
 
-### 1. Configure Private Server Secrets
+### 1. Configure Private Server Secrets - Completed
 
 Edit the uploaded `/player-assistant-broker/config.php` file and replace these three placeholders:
 
@@ -125,7 +129,7 @@ php -r "echo bin2hex(random_bytes(32)), PHP_EOL;"
 
 Do not add the resulting key or RPOL credentials to this repository, this document, email, chat, logs, or screenshots.
 
-### 2. Restrict Private File Permissions
+### 2. Restrict Private File Permissions - Completed
 
 From the DreamHost user home directory:
 
@@ -139,7 +143,7 @@ chmod 600 player-assistant-broker/BrokerService.php
 
 Confirm PHP can still read the files because DreamHost PHP should execute as the assigned website user.
 
-### 3. Verify Required PHP Extensions
+### 3. Verify Required PHP Extensions - Completed
 
 The broker requires these PHP extensions:
 
@@ -155,7 +159,7 @@ Check them through SSH:
 php -m | grep -E 'curl|dom|pdo_sqlite'
 ```
 
-### 4. Recheck Health
+### 4. Recheck Health - Completed
 
 After updating `config.php`, request:
 
@@ -174,7 +178,7 @@ Expected result:
 }
 ```
 
-### 5. Issue the First Client Token
+### 5. Issue the First Client Token - Completed
 
 Use the private administrator key to create a short-lived test token. Avoid placing the administrator key directly in shell history:
 
@@ -191,7 +195,7 @@ unset BROKER_ADMIN_KEY
 
 The response contains the raw bearer token once. Keep it private. The server stores only its SHA-256 hash.
 
-### 6. Test Live RPOL Authentication
+### 6. Test a Signed RPOL Snapshot - Root Page Completed
 
 Use the short-lived bearer token to request one approved RPOL page:
 
@@ -201,7 +205,7 @@ curl --fail-with-body \
   -G \
   -H "Authorization: Bearer $BROKER_TOKEN" \
   --data-urlencode "url=https://rpol.net/game.php?gi=80170" \
-  https://bryanmiller.us/scarlethorizons/api/v1/rpol/page
+  https://bryanmiller.us/scarlethorizons/api/v1/snapshots/page
 unset BROKER_TOKEN
 ```
 
@@ -211,23 +215,27 @@ Success criteria:
 - JSON schema version 1.
 - `source_url` remains on `https://rpol.net`.
 - `content_type` is HTML.
-- `content_base64` is present.
+- `content_base64` is present and its SHA-256 matches `content_sha256`.
 - No RPOL username, password, cookie, or login form in the response.
 
-If the response is HTTP 502, inspect the DreamHost PHP error log. A likely blocker is RPOL Cloudflare/browser verification, which PHP cURL cannot complete. Do not weaken TLS verification or expose browser cookies to work around it.
+Verified on July 16, 2026 with a one-day token that was revoked after the test. The stored root snapshot returned schema version 1, game ID `80170`, the exact approved source URL, matching content hash, an RPOL title, and no login form.
 
-### 7. Decide the Cloudflare Fallback if Needed
+### 7. Cloudflare Fallback - Implemented with a Scheduled Publisher
 
-If direct PHP/cURL authentication is rejected, choose one of these designs:
+Direct PHP/cURL authentication is rejected by RPOL. The selected design is a trusted Windows publisher that uploads signed, sanitized snapshots:
 
-1. Run the broker on a VPS or service that supports Playwright while retaining `api.bryanmiller.us` as the public hostname.
-2. Run a trusted scheduled process on an administrator-controlled machine that fetches RPOL content and uploads signed, sanitized snapshots to `bryanmiller.us`.
+- `publish-rpol-snapshots.ps1` runs the Release executable in publisher mode.
+- The publisher recognizes a loaded RPOL verification window and closes it automatically.
+- HMAC-SHA256 snapshot metadata and content hashes are verified by the private broker before atomic storage.
+- The daily `Player Assistant RPOL Snapshot Publisher` task runs at 3:00 AM with `StartWhenAvailable`.
+- The live health response reports `snapshot_signing_configured: true` and `snapshot_count: 3`.
+- Publisher state persists the approved URL queue and advances exactly one target after each accepted upload.
 
-Do not put the shared administrator credentials back into the desktop app as a fallback.
+The root, Game Intro, and Cast pages publish successfully across separate executions. Eleven discovered thread pages remain queued for subsequent scheduled executions. Do not weaken TLS, publish browser cookies, or distribute the administrator credentials to accelerate that queue.
 
-### 8. Integrate Player Assistant with the Broker
+### 8. Integrate Player Assistant with the Broker - Implemented
 
-Required desktop changes:
+Implemented desktop changes:
 
 - Add an exact HTTPS broker URL setting.
 - Extend the network allowlist only for the exact broker host and `/scarlethorizons/api/v1/` path.
@@ -241,9 +249,11 @@ Required desktop changes:
 - Remove direct RPOL administrator credential requirements from startup validation and user-facing guidance.
 - Add focused broker-client, allowlist, response-validation, and negative-path tests.
 
+The direct RPOL path remains available only when no broker token is installed. When a broker token is present, broker retrieval fails closed and does not fall back to administrator credentials.
+
 ### 9. Remove Distributed Administrator Credentials
 
-Only after the broker works end to end:
+Only after every required approved page works end to end. The root page alone is not sufficient:
 
 - Remove `RPOL user name` and `RPOL password` from hosted `settings.local.json`.
 - Remove the same values from local and publish-time settings sidecars.
@@ -274,4 +284,4 @@ Only after the broker works end to end:
 
 ## Do Not Remove Yet
 
-Keep the existing Player Assistant RPOL credential path operational until the PHP broker successfully authenticates to RPOL and the desktop broker client passes end-to-end verification. Removing the current path earlier would break RPOL-backed application features without a tested replacement.
+Keep the RPOL administrator credential only on the trusted snapshot-publisher machine until all required approved pages publish and a clean client works using only a broker token. Do not distribute it to end-user installations. Removing it from the publisher now would prevent scheduled refreshes; removing the direct client path before the remaining pages pass would break RPOL-backed application features.

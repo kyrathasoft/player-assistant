@@ -589,16 +589,6 @@ The given project `player-assistant` has no vulnerable packages given the curren
     }
 }
 
-function New-EncryptedSidecarFixture {
-    param([Parameter(Mandatory = $true)][string]$Path)
-
-    [pscustomobject]@{
-        schema_version = 1
-        format = 'app-protected-v2'
-        payload = [Convert]::ToBase64String([System.Text.Encoding]::UTF8.GetBytes('fixture-payload'))
-    } | ConvertTo-Json -Depth 4 | Set-Content -LiteralPath $Path -Encoding UTF8
-}
-
 function Invoke-RuntimeSidecarSelfTest {
     $missingSidecarDir = Join-Path $SelfTestRoot 'missing-sidecar-payload'
     New-DirectoryClean -Path $missingSidecarDir

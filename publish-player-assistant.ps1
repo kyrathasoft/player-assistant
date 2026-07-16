@@ -18,6 +18,9 @@ $SettingsSchemaVersionPropertyName = 'schema_version'
 $SettingsSchemaVersion = 1
 $SettingsEncryptionSeed = 'PlayerAssistant.LocalSettings.v1'
 $XpPasswordFileName = 'xp-passwords.json'
+$XpPasswordFormat = 'xp-password-hashes-v1'
+$XpPasswordAlgorithm = 'PBKDF2-HMAC-SHA256'
+$XpPasswordMinimumIterations = 600000
 $KeywordIndexFileName = 'keyword-index.json'
 $KeywordTermsFileName = 'game-posts-key-terms.md'
 $SitemapFileName = 'sitemap.xml'
@@ -769,43 +772,69 @@ function Assert-PublishedXpPasswordSidecar {
 
     Assert-RequiredFile -Path $Path -Description "published $XpPasswordFileName"
 
-    $publishedRaw = Get-Content -Raw -LiteralPath $Path
     $envelope = Read-JsonFile -Path $Path -Description "published $XpPasswordFileName"
     [void](Get-SettingsSchemaVersion -Settings $envelope -Description "published $XpPasswordFileName")
 
-    if ($envelope.format -ne $SettingsFormat -and $envelope.format -ne $PreviousSettingsFormat -and $envelope.format -ne $V1SettingsFormat) {
-        throw "Published $XpPasswordFileName must use an encrypted app-protected format."
+    if ($envelope.format -ne $XpPasswordFormat) {
+        throw "Published $XpPasswordFileName must use salted password hash format '$XpPasswordFormat'."
     }
 
-    if ([string]::IsNullOrWhiteSpace([string]$envelope.payload)) {
-        throw "Published $XpPasswordFileName has an empty encrypted payload."
+    $unexpectedDocumentProperties = @($envelope.PSObject.Properties.Name | Where-Object {
+        @('schema_version', 'format', 'entries') -notcontains $_
+    })
+    if ($unexpectedDocumentProperties.Count -gt 0) {
+        throw "Published $XpPasswordFileName contains unexpected property '$($unexpectedDocumentProperties[0])'."
     }
 
-    if ($publishedRaw -match '"Dungeon Master"\s*:' -or
-        $publishedRaw -match '"Kelpie"\s*:' -or
-        $publishedRaw -match '"Jelb"\s*:' -or
-        $publishedRaw -match '"Geoffroy"\s*:' -or
-        $publishedRaw -match '"Maximilian"\s*:') {
-        throw "Published $XpPasswordFileName appears to contain plaintext PC password entries."
-    }
-
-    $passwords = ConvertFrom-AppEncryptedLocalSettings -SettingsPath $Path
-    $entries = @($passwords.PSObject.Properties)
+    $entries = @($envelope.entries)
     if ($entries.Count -eq 0) {
-        throw "Published $XpPasswordFileName does not contain any decrypted PC password entries."
+        throw "Published $XpPasswordFileName does not contain any password hash entries."
     }
 
+    $names = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
+    $salts = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::Ordinal)
     foreach ($entry in $entries) {
-        if ([string]::IsNullOrWhiteSpace([string]$entry.Name)) {
+        $unexpectedEntryProperties = @($entry.PSObject.Properties.Name | Where-Object {
+            @('name', 'algorithm', 'iterations', 'salt', 'hash') -notcontains $_
+        })
+        if ($unexpectedEntryProperties.Count -gt 0) {
+            throw "Published $XpPasswordFileName contains unexpected entry property '$($unexpectedEntryProperties[0])'."
+        }
+
+        if ([string]::IsNullOrWhiteSpace([string]$entry.name)) {
             throw "Published $XpPasswordFileName contains a blank PC name."
         }
 
-        if ([string]::IsNullOrWhiteSpace([string]$entry.Value)) {
-            throw "Published $XpPasswordFileName contains a blank password for '$($entry.Name)'."
+        if (!$names.Add([string]$entry.name)) {
+            throw "Published $XpPasswordFileName contains duplicate PC name '$($entry.name)'."
         }
 
-        if ($publishedRaw.Contains([string]$entry.Value)) {
-            throw "Published $XpPasswordFileName contains plaintext password material."
+        if ($entry.algorithm -ne $XpPasswordAlgorithm) {
+            throw "Published $XpPasswordFileName entry '$($entry.name)' must use algorithm '$XpPasswordAlgorithm'."
+        }
+
+        if ([int64]$entry.iterations -lt $XpPasswordMinimumIterations) {
+            throw "Published $XpPasswordFileName entry '$($entry.name)' must use at least $XpPasswordMinimumIterations iterations."
+        }
+
+        try {
+            $saltBytes = [Convert]::FromBase64String([string]$entry.salt)
+            $hashBytes = [Convert]::FromBase64String([string]$entry.hash)
+        }
+        catch {
+            throw "Published $XpPasswordFileName entry '$($entry.name)' contains invalid base64 hash data."
+        }
+
+        if ($saltBytes.Length -lt 16) {
+            throw "Published $XpPasswordFileName entry '$($entry.name)' must use a salt of at least 16 bytes."
+        }
+
+        if ($hashBytes.Length -ne 32) {
+            throw "Published $XpPasswordFileName entry '$($entry.name)' must use a 32-byte hash."
+        }
+
+        if (!$salts.Add([string]$entry.salt)) {
+            throw "Published $XpPasswordFileName contains a reused password salt."
         }
     }
 }

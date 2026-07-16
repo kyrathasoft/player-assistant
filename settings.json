@@ -1,6 +1,7 @@
 {
   "schema_version": 1,
   "RPOL Site": "https://rpol.net/game.php?gi=80170",
+  "RPOL Broker": "https://bryanmiller.us/scarlethorizons/api/v1/",
   "Game Intro": "https://rpol.net/gameinfo.php?gi=80170",
   "The Cast": "https://rpol.net/gameinfo.php?action=cast&gi=80170",
   "Obsidian Game Vault": "https://publish.obsidian.md/scarlethorizons",

@@ -74,6 +74,11 @@ namespace PlayerAssistant
                     if (LooksLikeLoginPage(html))
                     {
                         await ResetSessionAsync(cancellationToken);
+                        if (attempt == 0)
+                        {
+                            _clearCloudflareChallengeWithHeadedBrowser = true;
+                        }
+
                         continue;
                     }
 
@@ -98,6 +103,21 @@ namespace PlayerAssistant
 
         public static async Task<RpolResponse> GetResponseAsync(Uri uri, CancellationToken cancellationToken = default)
         {
+            return await GetResponseAsync(uri, allowEmbeddedLoginForm: false, cancellationToken);
+        }
+
+        internal static async Task<RpolResponse> GetSnapshotResponseAsync(
+            Uri uri,
+            CancellationToken cancellationToken = default)
+        {
+            return await GetResponseAsync(uri, allowEmbeddedLoginForm: true, cancellationToken);
+        }
+
+        private static async Task<RpolResponse> GetResponseAsync(
+            Uri uri,
+            bool allowEmbeddedLoginForm,
+            CancellationToken cancellationToken)
+        {
             cancellationToken.ThrowIfCancellationRequested();
             NetworkUrlAllowlistUtility.EnsureAllowed(uri, NetworkUrlPurpose.Rpol);
             ThrowIfCachedFatalAuthFailure();
@@ -109,9 +129,14 @@ namespace PlayerAssistant
                     var context = await GetAuthenticatedContextAsync(cancellationToken);
                     var response = await GetPageResponseAsync(context, uri, cancellationToken);
 
-                    if (LooksLikeLoginResponse(response.ContentType, response.Body))
+                    if (!allowEmbeddedLoginForm && LooksLikeLoginResponse(response.ContentType, response.Body))
                     {
                         await ResetSessionAsync(cancellationToken);
+                        if (attempt == 0)
+                        {
+                            _clearCloudflareChallengeWithHeadedBrowser = true;
+                        }
+
                         continue;
                     }
 
@@ -196,13 +221,11 @@ namespace PlayerAssistant
                         return await CreateAuthenticatedSessionAsync(cancellationToken);
                     }
 
-                    await RefreshStorageStateWithExternalBrowserAsync(
+                    return await RefreshStorageStateWithExternalBrowserAsync(
                         playwright,
                         userName,
                         password,
                         cancellationToken);
-                    playwright.Dispose();
-                    return await CreateAuthenticatedSessionAsync(cancellationToken);
                 }
 
                 var browserLaunch = await LaunchRpolBrowserAsync(
@@ -357,7 +380,7 @@ namespace PlayerAssistant
             return contextOptions;
         }
 
-        private static async Task RefreshStorageStateWithExternalBrowserAsync(
+        private static async Task<RpolBrowserSession> RefreshStorageStateWithExternalBrowserAsync(
             IPlaywright playwright,
             string userName,
             string password,
@@ -403,7 +426,7 @@ namespace PlayerAssistant
             }
 
             var remoteDebuggingPort = GetAvailableLoopbackPort();
-            using var importProcess = StartExternalBrowserForStorageImport(
+            var importProcess = StartExternalBrowserForStorageImport(
                 browserPath,
                 remoteDebuggingPort,
                 profileDirectory);
@@ -426,8 +449,15 @@ namespace PlayerAssistant
                     password,
                     cancellationToken);
                 await SaveStorageStateSecretAsync(context, cancellationToken);
+                DeleteTemporaryStorageStateFile(noticePath);
+                return new RpolBrowserSession(
+                    playwright,
+                    browser,
+                    context,
+                    importProcess,
+                    profileDirectory);
             }
-            finally
+            catch
             {
                 if (browser is not null)
                 {
@@ -453,6 +483,8 @@ namespace PlayerAssistant
 
                 DeleteTemporaryStorageStateFile(noticePath);
                 DeleteTemporaryDirectory(profileDirectory);
+                importProcess.Dispose();
+                throw;
             }
         }
 
@@ -469,12 +501,24 @@ namespace PlayerAssistant
                     return;
                 }
 
+                process.Refresh();
+                if (IsVerifiedRpolBrowserWindowTitle(process.MainWindowTitle))
+                {
+                    process.CloseMainWindow();
+                }
+
                 await Task.Delay(CloudflareClearancePollInterval, cancellationToken);
             }
 
             throw new RpolAuthException(
                 RpolAuthFailureKind.CloudflareChallenge,
                 $"RPOL browser verification did not complete within {CloudflareClearanceMaxWait.TotalMinutes:0} minutes. Complete any RPOL browser verification in the temporary Chrome or Edge window, then close that temporary window so Player Assistant can import the verified browser state.");
+        }
+
+        internal static bool IsVerifiedRpolBrowserWindowTitle(string? title)
+        {
+            return !string.IsNullOrWhiteSpace(title)
+                && title.StartsWith("RPoL:", StringComparison.OrdinalIgnoreCase);
         }
 
         private static async Task<IBrowser> ConnectToExternalBrowserAsync(
@@ -656,8 +700,8 @@ namespace PlayerAssistant
             startInfo.ArgumentList.Add($"--user-data-dir={profileDirectory}");
             startInfo.ArgumentList.Add("--no-first-run");
             startInfo.ArgumentList.Add("--new-window");
-            startInfo.ArgumentList.Add(new Uri(noticePath).AbsoluteUri);
             startInfo.ArgumentList.Add(AppSettingsUtility.GameForumUrl);
+            startInfo.ArgumentList.Add(new Uri(noticePath).AbsoluteUri);
 
             return StartExternalBrowserProcess(startInfo);
         }
@@ -949,12 +993,11 @@ namespace PlayerAssistant
                 exception);
         }
 
-        private static bool LooksLikeCloudflareChallengePage(string html)
+        internal static bool LooksLikeCloudflareChallengePage(string html)
         {
             return html.Contains("cf-challenge", StringComparison.OrdinalIgnoreCase)
                 || html.Contains("cf_clearance", StringComparison.OrdinalIgnoreCase)
                 || html.Contains("Just a moment", StringComparison.OrdinalIgnoreCase)
-                || html.Contains("Cloudflare", StringComparison.OrdinalIgnoreCase)
                 || html.Contains("Verify you are human", StringComparison.OrdinalIgnoreCase);
         }
 
@@ -1580,11 +1623,21 @@ namespace PlayerAssistant
 
         private sealed class RpolBrowserSession : IAsyncDisposable
         {
-            public RpolBrowserSession(IPlaywright playwright, IBrowser browser, IBrowserContext context)
+            private readonly Process? _externalBrowserProcess;
+            private readonly string? _profileDirectory;
+
+            public RpolBrowserSession(
+                IPlaywright playwright,
+                IBrowser browser,
+                IBrowserContext context,
+                Process? externalBrowserProcess = null,
+                string? profileDirectory = null)
             {
                 Playwright = playwright;
                 Browser = browser;
                 Context = context;
+                _externalBrowserProcess = externalBrowserProcess;
+                _profileDirectory = profileDirectory;
             }
 
             public IPlaywright Playwright { get; }
@@ -1595,9 +1648,30 @@ namespace PlayerAssistant
 
             public async ValueTask DisposeAsync()
             {
-                await Context.CloseAsync();
-                await Browser.CloseAsync();
-                Playwright.Dispose();
+                try
+                {
+                    await Context.CloseAsync();
+                    await Browser.CloseAsync();
+                }
+                finally
+                {
+                    if (_externalBrowserProcess is not null)
+                    {
+                        if (!_externalBrowserProcess.HasExited)
+                        {
+                            _externalBrowserProcess.Kill(entireProcessTree: true);
+                        }
+
+                        _externalBrowserProcess.Dispose();
+                    }
+
+                    if (!string.IsNullOrWhiteSpace(_profileDirectory))
+                    {
+                        DeleteTemporaryDirectory(_profileDirectory);
+                    }
+
+                    Playwright.Dispose();
+                }
             }
         }
 
