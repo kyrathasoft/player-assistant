@@ -202,6 +202,7 @@ var tests = new (string Name, Action Test)[]
     ("regional map downloads when newer but transparent", RegionalMapDownloadsWhenNewerButTransparent),
     ("startup status includes download count and size", StartupStatusIncludesDownloadCountAndSize),
     ("adventure outline builds from saved IC html", AdventureOutlineBuildsFromSavedIcHtml),
+    ("adventure outline fills every chapter through latest IC chapter", AdventureOutlineFillsEveryChapterThroughLatestIcChapter),
     ("adventure outline parses rpol linked author exports", AdventureOutlineParsesRpolLinkedAuthorExports),
     ("adventure outline summarizes table roles concisely", AdventureOutlineSummarizesTableRolesConcisely),
     ("adventure outline skips empty bullet marker posts", AdventureOutlineSkipsEmptyBulletMarkerPosts),
@@ -10256,6 +10257,44 @@ static void RpolSnapshotSignsAndVerifiesCanonicalPayload()
     AssertFalse(
         RpolSnapshotUtility.VerifySignature(payload with { ContentSha256 = new string('0', 64) }, signingKey),
         "tampered snapshot metadata should fail signature verification");
+}
+
+static void AdventureOutlineFillsEveryChapterThroughLatestIcChapter()
+{
+    using var directory = TemporaryDirectory.Create();
+    var icDirectory = Path.Combine(directory.Path, "Posts", "IC");
+    Directory.CreateDirectory(icDirectory);
+    File.WriteAllText(
+        Path.Combine(icDirectory, "ch-1.html"),
+        """
+        <html><body>
+        <h1>Ch 1 - Kirkilston.</h1>
+        <span class="messageauthor">Dungeon Master</span>
+        <div class="messagebody">The party leaves town.</div>
+        </body></html>
+        """);
+    File.WriteAllText(
+        Path.Combine(icDirectory, "ch-3.html"),
+        """
+        <html><body>
+        <h1>Ch 3 - The Road.</h1>
+        <span class="messageauthor">Kelpie</span>
+        <div class="messagebody">Kelpie keeps watch while the party travels.</div>
+        </body></html>
+        """);
+
+    var outline = AdventureOutlineUtility.BuildAdventureOutlineAsync(icDirectory)
+        .GetAwaiter()
+        .GetResult();
+
+    AssertContains(outline, "## Ch 1 - Kirkilston");
+    AssertContains(outline, "## Ch 2");
+    AssertContains(outline, "- The in-character chapter source is not available yet.");
+    AssertContains(outline, "## Ch 3 - The Road");
+    AssertTrue(
+        outline.IndexOf("## Ch 1", StringComparison.Ordinal) < outline.IndexOf("## Ch 2", StringComparison.Ordinal)
+            && outline.IndexOf("## Ch 2", StringComparison.Ordinal) < outline.IndexOf("## Ch 3", StringComparison.Ordinal),
+        "adventure outline chapters should form a contiguous numeric range");
 }
 
 static void RpolSnapshotRejectsAnotherGame()

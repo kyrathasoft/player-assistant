@@ -35,6 +35,7 @@ namespace PlayerAssistant
         private const int MaximumBulletTextLength = 140;
         private const int MaximumRetainedExistingBulletLength = 180;
         private const string NoInCharacterPostsBullet = "- No in-character posts were found in this chapter file.";
+        private const string MissingChapterSourceBullet = "- The in-character chapter source is not available yet.";
 
         public static async Task<bool> UpdateAdventureOutlineAsync(
             string icPostsDirectory,
@@ -172,16 +173,23 @@ namespace PlayerAssistant
                     return (IReadOnlyList<ChapterOutline>)[];
                 }
 
-                var chapters = new List<ChapterOutline>();
+                var chaptersByNumber = new Dictionary<int, ChapterOutline>();
                 foreach (var chapterFile in chapterFiles)
                 {
                     cancellationToken.ThrowIfCancellationRequested();
                     var html = await File.ReadAllTextAsync(chapterFile.Path, cancellationToken)
                         .ConfigureAwait(false);
-                    chapters.Add(BuildChapterOutline(html, chapterFile.Number, chapterFile.Path));
+                    chaptersByNumber.TryAdd(
+                        chapterFile.Number,
+                        BuildChapterOutline(html, chapterFile.Number, chapterFile.Path));
                 }
 
-                return chapters;
+                var latestChapterNumber = chaptersByNumber.Keys.Max();
+                return Enumerable.Range(1, latestChapterNumber)
+                    .Select(number => chaptersByNumber.TryGetValue(number, out var chapter)
+                        ? chapter
+                        : new ChapterOutline(number, $"Ch {number}", string.Empty, [MissingChapterSourceBullet]))
+                    .ToArray();
             }, cancellationToken).ConfigureAwait(false);
         }
 
@@ -233,7 +241,10 @@ namespace PlayerAssistant
 
             foreach (var chapter in generatedChapters)
             {
-                builder.AppendLine($"  - `{NormalizeMarkdownPath(chapter.SourcePath)}`");
+                if (!string.IsNullOrWhiteSpace(chapter.SourcePath))
+                {
+                    builder.AppendLine($"  - `{NormalizeMarkdownPath(chapter.SourcePath)}`");
+                }
             }
 
             foreach (var generatedChapter in generatedChapters)
@@ -280,6 +291,11 @@ namespace PlayerAssistant
 
             foreach (var generatedBullet in generatedBullets)
             {
+                if (IsUnavailableChapterBullet(generatedBullet) && merged.Count > 0)
+                {
+                    continue;
+                }
+
                 if (seen.Add(NormalizeBullet(generatedBullet)))
                 {
                     merged.Add(generatedBullet);
@@ -891,17 +907,16 @@ namespace PlayerAssistant
             return WhitespaceRegex.Replace(text, " ").Trim();
         }
 
-        private static bool IsNoInCharacterPostsBullet(string bullet)
+        private static bool IsUnavailableChapterBullet(string bullet)
         {
-            return string.Equals(
-                NormalizeBullet(bullet),
-                NormalizeBullet(NoInCharacterPostsBullet),
-                StringComparison.OrdinalIgnoreCase);
+            var normalized = NormalizeBullet(bullet);
+            return string.Equals(normalized, NormalizeBullet(NoInCharacterPostsBullet), StringComparison.OrdinalIgnoreCase)
+                || string.Equals(normalized, NormalizeBullet(MissingChapterSourceBullet), StringComparison.OrdinalIgnoreCase);
         }
 
         private static bool ShouldRetainExistingBullet(string bullet)
         {
-            return !IsNoInCharacterPostsBullet(bullet)
+            return !IsUnavailableChapterBullet(bullet)
                 && !AuthorPrefixedBulletRegex.IsMatch(bullet)
                 && !WeakGeneratedBulletRegex.IsMatch(bullet)
                 && NormalizeBullet(bullet).Length <= MaximumRetainedExistingBulletLength;
