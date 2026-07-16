@@ -63,6 +63,7 @@
 
 ## Hardening completed in this session
 
+- [x] Replaced reversible XP password storage with unique-salt PBKDF2-HMAC-SHA256 hashes and strict runtime, publish, and installer validation.
 - [x] Added centralized startup exception/log wrappers around required and optional startup phases.
 - [x] Converted settings load, player-character refresh, regional-map preload, configuration validation, and runtime housekeeping into logged startup phases.
 - [x] Added background-task supervision for startup work so duplicate phases are suppressed, cancellation is coordinated, and failures are logged.

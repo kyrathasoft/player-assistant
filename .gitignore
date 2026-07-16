@@ -26,3 +26,4 @@ obj-verify/
 *.csproj.user
 settings.local.json
 xp-passwords*.json
+web-deploy/
