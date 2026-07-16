@@ -1068,7 +1068,11 @@ namespace PlayerAssistant
                 var partyHeroes = PartyHeroUtility.LoadActiveParty(EnsurePlayerCharacterDirectories());
                 if (TryPromptForXpCredentials(out var characterName, out var password))
                 {
-                    if (XpPasswordStoreUtility.ValidatePassword(characterName, password, AppContext.BaseDirectory))
+                    var passwordValidation = await ValidateOptionalXpPasswordAsync(
+                        characterName,
+                        password,
+                        "party XP authentication");
+                    if (passwordValidation == OptionalXpPasswordValidation.Valid)
                     {
                         try
                         {
@@ -1087,7 +1091,7 @@ namespace PlayerAssistant
                             SetStatusBarMessage("Party loaded without XP totals. Contact the DM if XP should be visible.");
                         }
                     }
-                    else
+                    else if (passwordValidation == OptionalXpPasswordValidation.Invalid)
                     {
                         MessageBox.Show(
                             this,
@@ -1096,6 +1100,11 @@ namespace PlayerAssistant
                             MessageBoxButtons.OK,
                             MessageBoxIcon.Warning);
                         SetStatusBarMessage("Party XP access denied. Showing party without XP totals.");
+                    }
+                    else
+                    {
+                        ShowMissingXpPasswordStoreWarning("Party");
+                        SetStatusBarMessage("Party loaded without XP totals because the XP password file is missing.");
                     }
                 }
 
@@ -1137,7 +1146,11 @@ namespace PlayerAssistant
 
                 if (TryPromptForXpCredentials(out var characterName, out var password))
                 {
-                    if (XpPasswordStoreUtility.ValidatePassword(characterName, password, AppContext.BaseDirectory))
+                    var passwordValidation = await ValidateOptionalXpPasswordAsync(
+                        characterName,
+                        password,
+                        "my hero briefing XP authentication");
+                    if (passwordValidation == OptionalXpPasswordValidation.Valid)
                     {
                         authenticatedHeroName = characterName;
                         isDungeonMaster = IsDungeonMasterXpAccess(characterName);
@@ -1152,7 +1165,7 @@ namespace PlayerAssistant
                             SetStatusBarMessage("My Hero Briefing loaded without XP totals. Contact the DM if XP should be visible.");
                         }
                     }
-                    else
+                    else if (passwordValidation == OptionalXpPasswordValidation.Invalid)
                     {
                         MessageBox.Show(
                             this,
@@ -1161,6 +1174,11 @@ namespace PlayerAssistant
                             MessageBoxButtons.OK,
                             MessageBoxIcon.Warning);
                         SetStatusBarMessage("My Hero Briefing XP access denied. Showing briefing without XP totals.");
+                    }
+                    else
+                    {
+                        ShowMissingXpPasswordStoreWarning("My Hero Briefing");
+                        SetStatusBarMessage("My Hero Briefing loaded without XP totals because the XP password file is missing.");
                     }
                 }
 
@@ -1206,6 +1224,44 @@ namespace PlayerAssistant
                     ex,
                     showDialog: true);
             }
+        }
+
+        private async Task<OptionalXpPasswordValidation> ValidateOptionalXpPasswordAsync(
+            string characterName,
+            string password,
+            string logPhase)
+        {
+            try
+            {
+                return XpPasswordStoreUtility.ValidatePassword(characterName, password, AppContext.BaseDirectory)
+                    ? OptionalXpPasswordValidation.Valid
+                    : OptionalXpPasswordValidation.Invalid;
+            }
+            catch (FileNotFoundException ex) when (string.Equals(
+                Path.GetFileName(ex.FileName),
+                XpPasswordStoreUtility.FileName,
+                StringComparison.OrdinalIgnoreCase))
+            {
+                await AppendStartupErrorLogAsync(logPhase, ex);
+                return OptionalXpPasswordValidation.StoreUnavailable;
+            }
+        }
+
+        private void ShowMissingXpPasswordStoreWarning(string featureName)
+        {
+            MessageBox.Show(
+                this,
+                $"The encrypted XP password file '{XpPasswordStoreUtility.FileName}' was not found. {featureName} will be shown without XP totals. Restore the file to the Release folder to enable protected XP access.",
+                featureName,
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Warning);
+        }
+
+        private enum OptionalXpPasswordValidation
+        {
+            Valid,
+            Invalid,
+            StoreUnavailable
         }
 
         private async void AdventureOutlineToolStripMenuItem_Click(object? sender, EventArgs e)

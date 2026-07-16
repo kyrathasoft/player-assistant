@@ -1,27 +1,14 @@
 - [x] Resume Orcish invalid retranslation review.
-  - Workflow: `codex-scratch\orcish-retranslation-review\review-workflow.md`
-  - Review TSV: `codex-scratch\orcish-retranslation-review\retranslated-invalid-orcish-review.tsv`
-  - Root-faithfulness candidates: `codex-scratch\orcish-retranslation-review\root-faithfulness-candidates.tsv`
-  - Current root-faithfulness auto-promotion audit: `codex-scratch\orcish-retranslation-review\candidate-promote-now.tsv`
-  - Final root-candidates audit: `codex-scratch\orcish-retranslation-review\root-candidates-final-promotions.tsv`
-  - Problem proposal repair audit: `codex-scratch\orcish-retranslation-review\problem-proposal-repairs.tsv`
-  - Name substring cleanup audit: `codex-scratch\orcish-retranslation-review\name-substring-cleanup.tsv`
-  - Promoted touched translations: `codex-scratch\orcish-retranslation-review\promoted-touched-translations.tsv`
-  - Weak lexicon prune audit: `codex-scratch\orcish-retranslation-review\weak-lexicon-prune.tsv`
-  - Placeholder segment repair audit: `codex-scratch\orcish-retranslation-review\placeholder-segment-repairs.tsv`
-  - Suspicious fragment repair audit: `codex-scratch\orcish-retranslation-review\suspicious-fragment-repairs.tsv`
-  - Active review TSV repair audit: `codex-scratch\orcish-retranslation-review\active-review-tsv-repairs.tsv`
-  - Core disambiguator repair audit: `codex-scratch\orcish-retranslation-review\core-disambiguator-repairs.tsv`
-  - Summary: `codex-scratch\orcish-retranslation-review\summary.txt`
+  - Completed scratch audit files were removed after closeout; the review history remains available in Git.
   - Lexicon source: `OrcishTranslatorUtility.cs`
   - Count test: `PlayerAssistant.Tests\Program.cs`
   - Current review TSV start: none
   - Current remaining review count: `0`
   - Current next 10 for review: none
   - Process: show next 10 rows, apply user approvals/drops, collision-check approved Orcish forms, patch lexicon entries, remove all reviewed rows from TSV, update summary, adjust count test only if entries are dropped, run Release builds and focused `to-orcish` verification, then refresh graphify.
-  - Completed closeout: active review TSV is exhausted; remaining named TSVs are completed audit trails or candidate logs from prior repair passes.
+  - Completed closeout: active review TSV is exhausted and its scratch audit artifacts were removed.
 - [x] Run Orcish weak-signal core audit.
-  - Audit TSV: `codex-scratch\orcish-retranslation-review\weak-signal-core-audit.tsv`
+  - Completed audit data was removed with the closed scratch workspace and remains available in Git history.
   - Scope: review remaining core non-generated lexicon entries before later generated/promoted derived families.
   - Target weak mechanically disambiguated compounds such as `men`, `weak humans`, `superior children of Gruumsh`, `free human`, `thinker`, `traveller`, `wizard`, `warrior`, `cleric`, `days`, `day’s`, `family`, `authority`, `expression`, `home`, `folly`, `tavern`, `sight`, `guard duty`, and `economy`.
   - Target direct proper-name/exonym entries and decide whether each should remain as intentional lore/name pass-through vocabulary or be culled as noise.

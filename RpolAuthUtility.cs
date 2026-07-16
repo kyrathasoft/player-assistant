@@ -14,6 +14,7 @@ namespace PlayerAssistant
     {
         MissingCredentials,
         PlaywrightUnavailable,
+        TransportSecurityFailure,
         LoginRejected,
         AuthSessionExpired,
         CloudflareChallenge,
@@ -330,7 +331,6 @@ namespace PlayerAssistant
         {
             var contextOptions = new BrowserNewContextOptions
             {
-                IgnoreHTTPSErrors = true,
                 Locale = "en-US",
                 TimezoneId = "America/Chicago",
                 ViewportSize = new ViewportSize
@@ -927,6 +927,28 @@ namespace PlayerAssistant
                 || exception.Message.Contains("Target closed", StringComparison.OrdinalIgnoreCase);
         }
 
+        internal static bool IsTransportSecurityFailureMessage(string? message)
+        {
+            if (string.IsNullOrWhiteSpace(message))
+            {
+                return false;
+            }
+
+            return message.Contains("net::ERR_CERT_", StringComparison.OrdinalIgnoreCase)
+                || message.Contains("net::ERR_SSL_", StringComparison.OrdinalIgnoreCase)
+                || message.Contains("net::ERR_TLS_", StringComparison.OrdinalIgnoreCase)
+                || message.Contains("certificate verify failed", StringComparison.OrdinalIgnoreCase)
+                || message.Contains("unable to verify the first certificate", StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static RpolAuthException CreateTransportSecurityException(PlaywrightException exception)
+        {
+            return new RpolAuthException(
+                RpolAuthFailureKind.TransportSecurityFailure,
+                "Player Assistant could not establish a trusted TLS connection to RPOL. Authentication and downloads were stopped. Verify the Windows date, time, and trusted root certificates; do not bypass certificate warnings.",
+                exception);
+        }
+
         private static bool LooksLikeCloudflareChallengePage(string html)
         {
             return html.Contains("cf-challenge", StringComparison.OrdinalIgnoreCase)
@@ -1491,6 +1513,7 @@ namespace PlayerAssistant
 
             return exception.Kind is RpolAuthFailureKind.MissingCredentials
                 or RpolAuthFailureKind.PlaywrightUnavailable
+                or RpolAuthFailureKind.TransportSecurityFailure
                 or RpolAuthFailureKind.LoginRejected
                 or RpolAuthFailureKind.AuthSessionExpired
                 or RpolAuthFailureKind.RpolBlocked;
@@ -1589,6 +1612,10 @@ namespace PlayerAssistant
             {
                 await task.WaitAsync(PlaywrightOperationTimeout, cancellationToken);
             }
+            catch (PlaywrightException ex) when (IsTransportSecurityFailureMessage(ex.Message))
+            {
+                throw CreateTransportSecurityException(ex);
+            }
             catch (TimeoutException ex)
             {
                 throw new TimeoutException(
@@ -1605,6 +1632,10 @@ namespace PlayerAssistant
             try
             {
                 return await task.WaitAsync(PlaywrightOperationTimeout, cancellationToken);
+            }
+            catch (PlaywrightException ex) when (IsTransportSecurityFailureMessage(ex.Message))
+            {
+                throw CreateTransportSecurityException(ex);
             }
             catch (TimeoutException ex)
             {

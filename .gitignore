@@ -1,9 +1,18 @@
 bin/
 obj/
 Release/
+Release-verify/
+publish/
+publish-msbuild/
 codex-scratch/
-!**/*.ps1
+
+# Generated runtime and analysis output
+adventure-outline.md
+found-collisions.md
+temp.md
+
 # Local agent/editor state
+.agents/
 .codex/
 .vs/
 
@@ -12,17 +21,8 @@ graphify-out/
 
 # Build/verification output
 obj-verify/
-Release-verify/.playwright/
-publish/.playwright/
-publish/sitemap.xml
-publish-msbuild/.playwright/
 
 # User/project-local files
 *.csproj.user
 settings.local.json
 xp-passwords*.json
-
-# Scratch files except active Orcish review batch
-codex-scratch/*
-!codex-scratch/orcish-retranslation-review/
-!codex-scratch/orcish-retranslation-review/**

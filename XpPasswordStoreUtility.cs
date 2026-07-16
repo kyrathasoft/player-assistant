@@ -14,6 +14,13 @@ namespace PlayerAssistant
                 ? AppContext.BaseDirectory
                 : runtimeDirectory;
             var sidecarPath = RuntimePathUtility.CombineUnderBase(resolvedRuntimeDirectory, FileName);
+            if (!File.Exists(sidecarPath))
+            {
+                throw new FileNotFoundException(
+                    $"Encrypted XP password sidecar '{FileName}' was not found at '{sidecarPath}'.",
+                    sidecarPath);
+            }
+
             var loadedPasswords = LocalSettingsUtility.LoadPortableEncryptedSettings(sidecarPath);
             var passwords = new Dictionary<string, string>(loadedPasswords, StringComparer.OrdinalIgnoreCase);
 

@@ -83,6 +83,7 @@ var tests = new (string Name, Action Test)[]
     ("xp password store accepts first and full character names", XpPasswordStoreAcceptsFirstAndFullCharacterNames),
     ("xp password store accepts encrypted sidecar with utf8 bom", XpPasswordStoreAcceptsEncryptedSidecarWithUtf8Bom),
     ("xp password store rejects plaintext sidecar", XpPasswordStoreRejectsPlaintextSidecar),
+    ("xp password store reports missing sidecar by name", XpPasswordStoreReportsMissingSidecarByName),
     ("app configuration validation reports missing url", AppConfigurationValidationReportsMissingUrl),
     ("app configuration validation rejects disallowed network host", AppConfigurationValidationRejectsDisallowedNetworkHost),
     ("app configuration validation writes repair guidance", AppConfigurationValidationWritesRepairGuidance),
@@ -165,6 +166,8 @@ var tests = new (string Name, Action Test)[]
     ("rpol auth detects login page fallback", RpolAuthDetectsLoginPageFallback),
     ("rpol auth distinguishes blocked and remote failures", RpolAuthDistinguishesBlockedAndRemoteFailures),
     ("rpol auth prefers installed browsers before playwright chromium", RpolAuthPrefersInstalledBrowsersBeforePlaywrightChromium),
+    ("rpol auth enforces browser tls validation", RpolAuthEnforcesBrowserTlsValidation),
+    ("rpol auth classifies transport security failures", RpolAuthClassifiesTransportSecurityFailures),
     ("rpol auth cached failure short circuits html fetch", RpolAuthCachedFailureShortCircuitsHtmlFetch),
     ("rpol auth cached failure logs once", RpolAuthCachedFailureLogsOnce),
     ("rpol auth caches blocked and expired session failures", RpolAuthCachesBlockedAndExpiredSessionFailures),
@@ -1546,6 +1549,20 @@ static void XpPasswordStoreRejectsPlaintextSidecar()
         XpPasswordStoreUtility.LoadPasswords(directory.Path));
 
     AssertContains(exception.Message, "authenticated encrypted envelope");
+}
+
+static void XpPasswordStoreReportsMissingSidecarByName()
+{
+    using var directory = TemporaryDirectory.Create();
+
+    var exception = AssertThrows<FileNotFoundException>(() =>
+        XpPasswordStoreUtility.LoadPasswords(directory.Path));
+
+    AssertContains(exception.Message, XpPasswordStoreUtility.FileName);
+    AssertContains(exception.Message, directory.Path);
+    AssertFalse(
+        exception.Message.Contains("settings sidecar", StringComparison.OrdinalIgnoreCase),
+        "missing XP password diagnostics should not be mistaken for settings.local.json");
 }
 
 static void AppConfigurationValidationReportsMissingUrl()
@@ -3590,6 +3607,51 @@ static void RpolAuthPrefersInstalledBrowsersBeforePlaywrightChromium()
     AssertTrue(string.IsNullOrWhiteSpace(normalOptions[2].Channel), "default Playwright Chromium should remain the final fallback");
     AssertTrue(normalOptions.All(option => option.Headless == true), "normal RPOL auth should launch browsers headless");
     AssertTrue(verificationOptions.All(option => option.Headless == false), "manual RPOL browser verification should launch browsers headed");
+}
+
+static void RpolAuthEnforcesBrowserTlsValidation()
+{
+    var contextOptions = (BrowserNewContextOptions)(InvokeStaticMethod(
+        typeof(RpolAuthUtility),
+        "CreateBrowserContextOptions",
+        null!,
+        true) ?? throw new InvalidOperationException("CreateBrowserContextOptions returned null."));
+
+    AssertFalse(contextOptions.IgnoreHTTPSErrors == true, "RPOL browser contexts must reject HTTPS certificate errors");
+}
+
+static void RpolAuthClassifiesTransportSecurityFailures()
+{
+    AssertTrue(
+        RpolAuthUtility.IsTransportSecurityFailureMessage("net::ERR_CERT_AUTHORITY_INVALID at https://rpol.net/"),
+        "invalid certificate authorities should be classified as transport-security failures");
+    AssertTrue(
+        RpolAuthUtility.IsTransportSecurityFailureMessage("net::ERR_CERT_COMMON_NAME_INVALID at https://rpol.net/"),
+        "certificate hostname mismatches should be classified as transport-security failures");
+    AssertTrue(
+        RpolAuthUtility.IsTransportSecurityFailureMessage("net::ERR_SSL_VERSION_OR_CIPHER_MISMATCH"),
+        "TLS protocol failures should be classified as transport-security failures");
+    AssertFalse(
+        RpolAuthUtility.IsTransportSecurityFailureMessage("net::ERR_CONNECTION_RESET at https://rpol.net/"),
+        "ordinary network failures should not be classified as certificate failures");
+
+    var transportException = (RpolAuthException)(InvokeStaticMethod(
+        typeof(RpolAuthUtility),
+        "CreateTransportSecurityException",
+        new PlaywrightException("net::ERR_CERT_AUTHORITY_INVALID at https://rpol.net/game.php?gi=1"))
+        ?? throw new InvalidOperationException("CreateTransportSecurityException returned null."));
+    AssertEqual(
+        RpolAuthFailureKind.TransportSecurityFailure,
+        transportException.Kind,
+        "certificate errors should become transport-security failures");
+    AssertFalse(
+        transportException.Message.Contains("https://", StringComparison.OrdinalIgnoreCase),
+        "transport-security messages shown to users should not echo request URLs");
+    AssertTrue(
+        RpolAuthUtility.IsFatalAuthFailure(new RpolAuthException(
+            RpolAuthFailureKind.TransportSecurityFailure,
+            "TLS failure for test.")),
+        "transport-security failures should stop authentication retries for the current process");
 }
 
 static void RpolAuthCachedFailureShortCircuitsHtmlFetch()

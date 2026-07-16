@@ -4,12 +4,12 @@
 - cluster-only mode — file stats not available
 
 ## Summary
-- 2182 nodes · 4605 edges · 103 communities (93 shown, 10 thin omitted)
+- 2168 nodes · 4606 edges · 94 communities (87 shown, 7 thin omitted)
 - Extraction: 100% EXTRACTED · 0% INFERRED · 0% AMBIGUOUS · INFERRED: 5 edges (avg confidence: 0.8)
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `602aba06`
+- Built from commit: `f9d8db73`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
@@ -106,25 +106,18 @@
 - [[_COMMUNITY_Community 89|Community 89]]
 - [[_COMMUNITY_Community 90|Community 90]]
 - [[_COMMUNITY_Community 91|Community 91]]
-- [[_COMMUNITY_Community 92|Community 92]]
-- [[_COMMUNITY_Community 93|Community 93]]
-- [[_COMMUNITY_Community 94|Community 94]]
-- [[_COMMUNITY_Community 95|Community 95]]
-- [[_COMMUNITY_Community 96|Community 96]]
-- [[_COMMUNITY_Community 97|Community 97]]
-- [[_COMMUNITY_Community 98|Community 98]]
 
 ## God Nodes (most connected - your core abstractions)
-1. `Form1` - 278 edges
-2. `RpolAuthUtility` - 63 edges
+1. `Form1` - 280 edges
+2. `RpolAuthUtility` - 65 edges
 3. `TaggedNoteCipherUtility` - 49 edges
 4. `OrcishTranslatorUtility` - 39 edges
 5. `GameForumUtility` - 36 edges
 6. `LocalSettingsUtility` - 35 edges
 7. `PlayerAssistantUpdateUtility` - 33 edges
-8. `PlayerCharacterAssetUtility` - 32 edges
-9. `AdventureOutlineUtility` - 31 edges
-10. `Task` - 31 edges
+8. `Task` - 32 edges
+9. `PlayerCharacterAssetUtility` - 32 edges
+10. `AdventureOutlineUtility` - 31 edges
 
 ## Surprising Connections (you probably didn't know these)
 - `AppConfigurationValidationException` --inherits--> `InvalidOperationException`  [EXTRACTED]
@@ -133,22 +126,22 @@
   NetworkRequestUtility.cs → SourceIntegrityUtility.cs
 - `ChunkedHttpContent` --inherits--> `HttpContent`  [EXTRACTED]
   PlayerAssistant.Tests/Program.cs → NetworkRequestUtility.cs
-- `ScriptedHttpMessageHandler` --inherits--> `HttpMessageHandler`  [EXTRACTED]
-  PlayerAssistant.Tests/Program.cs → NetworkRequestUtility.cs
 - `RpolAuthException` --inherits--> `InvalidOperationException`  [EXTRACTED]
   RpolAuthUtility.cs → SourceIntegrityUtility.cs
+- `NetworkResponseTooLargeException` --inherits--> `InvalidOperationException`  [EXTRACTED]
+  NetworkRequestUtility.cs → SourceIntegrityUtility.cs
 
 ## Import Cycles
 - None detected.
 
-## Communities (103 total, 10 thin omitted)
+## Communities (94 total, 7 thin omitted)
 
 ### Community 0 - "Community 0"
 Cohesion: 0.04
 Nodes (28): DateTime, DialogResult, float, Action, BackgroundTaskSupervisor, bool, CancellationTokenSource, DateTimeOffset (+20 more)
 
 ### Community 1 - "Community 1"
-Cohesion: 0.07
+Cohesion: 0.06
 Nodes (33): BrowserNewContextOptions, BrowserTypeLaunchOptions, IAsyncDisposable, IBrowser, IBrowserContext, IPage, IPlaywright, IResponse (+25 more)
 
 ### Community 2 - "Community 2"
@@ -173,27 +166,27 @@ Nodes (14): OrcishAffixEntry, OrcishLanguage, OrcishLexiconEntry, OrcishSequence
 
 ### Community 7 - "Community 7"
 Cohesion: 0.10
-Nodes (46): Add-RcDryRunStep(), Assert-AuthenticodeSignatureMatchesPolicy(), Assert-CodeSigningPolicyConfigured(), Assert-DependencyFreshness(), Assert-ExecutableVersion(), Assert-ExpectedChangedPaths(), Assert-NoVulnerablePackages(), Assert-PathInsideRepo() (+38 more)
+Nodes (8): CancellationToken, Exception, GameForumChapterDownload, GameForumPostDownload, Hyperlink, RpolWebViewVerificationRequest, Task, OptionalXpPasswordValidation
 
 ### Community 8 - "Community 8"
+Cohesion: 0.10
+Nodes (46): Add-RcDryRunStep(), Assert-AuthenticodeSignatureMatchesPolicy(), Assert-CodeSigningPolicyConfigured(), Assert-DependencyFreshness(), Assert-ExecutableVersion(), Assert-ExpectedChangedPaths(), Assert-NoVulnerablePackages(), Assert-PathInsideRepo() (+38 more)
+
+### Community 9 - "Community 9"
 Cohesion: 0.08
 Nodes (26): AuthenticodeSignatureUtility, AuthenticodeSignatureInfo, AuthenticodeSignaturePolicy, Func, PlayerAssistant, InstallerLaunchElevationContext, AuthenticodeSignatureInfo, AuthenticodeSignaturePolicy (+18 more)
 
-### Community 9 - "Community 9"
+### Community 10 - "Community 10"
 Cohesion: 0.12
 Nodes (16): CancellationToken, DateTimeOffset, DieRollEntry, GameForumChapterDownload, GameForumPostDownload, Hyperlink, IEnumerable, List (+8 more)
-
-### Community 10 - "Community 10"
-Cohesion: 0.11
-Nodes (23): Encoding, HttpCompletionOption, CancellationToken, DateTimeOffset, Dictionary, Func, HttpClient, HttpContent (+15 more)
 
 ### Community 11 - "Community 11"
 Cohesion: 0.11
 Nodes (14): EncryptedSettingsEnvelope, KeyScope, KeySet, byte, Dictionary, Exception, int, IReadOnlyDictionary (+6 more)
 
 ### Community 12 - "Community 12"
-Cohesion: 0.07
-Nodes (14): AdventureOutlineLineStyle, IReadOnlyList, MyHeroBriefing, MyHeroBriefingActivityItem, MyHeroBriefingHeroCard, MyHeroBriefingQuickLink, MyHeroBriefingResponseItem, MyHeroBriefingUnlockedNoteItem (+6 more)
+Cohesion: 0.08
+Nodes (9): AdventureOutlineLineStyle, Downloaded, ErrorMessage, DieRollEntry, IReadOnlyCollection, FormClosedEventArgs, RichTextBox, Style (+1 more)
 
 ### Community 13 - "Community 13"
 Cohesion: 0.09
@@ -202,10 +195,6 @@ Nodes (19): AppSettingsUtility, Action, bool, Dictionary, Exception, Func, HttpC
 ### Community 14 - "Community 14"
 Cohesion: 0.11
 Nodes (14): RpolThreadPost, CancellationToken, Dictionary, Func, IDictionary, IEnumerable, IReadOnlyDictionary, JsonSerializerOptions (+6 more)
-
-### Community 15 - "Community 15"
-Cohesion: 0.12
-Nodes (7): CancellationToken, Exception, GameForumChapterDownload, GameForumPostDownload, Hyperlink, RpolWebViewVerificationRequest, Task
 
 ### Community 16 - "Community 16"
 Cohesion: 0.12
@@ -224,28 +213,32 @@ Cohesion: 0.10
 Nodes (15): CREDENTIAL, DllImport, IntPtr, Win32FileTime, BackendScope, bool, DateTimeOffset, IDisposable (+7 more)
 
 ### Community 20 - "Community 20"
+Cohesion: 0.11
+Nodes (18): BinaryWriter, HostedSettingsSigningKeyTrustEntry, Action, DateTimeOffset, Dictionary, IDisposable, int, IReadOnlyDictionary (+10 more)
+
+### Community 21 - "Community 21"
 Cohesion: 0.08
 Nodes (20): CoreWebView2Cookie, CoreWebView2CookieSameSiteKind, Form, Keys, PlaywrightCookie, TextBox, PlayerAssistant, RpolCredentialsDialog (+12 more)
 
 ### Community 22 - "Community 22"
-Cohesion: 0.11
-Nodes (5): Image, Stream, FormClosedEventArgs, Icon, ImageLayout
-
-### Community 23 - "Community 23"
 Cohesion: 0.13
 Nodes (15): Allowed(), Action, Func, GeneratedRegex, IDisposable, NetworkUrlAllowlistValidation, NetworkUrlPurpose, Regex (+7 more)
 
-### Community 24 - "Community 24"
+### Community 23 - "Community 23"
 Cohesion: 0.15
 Nodes (9): CharacterClass, Level, IReadOnlyList, PartyHeroSheet, PcXpTotal, PlayerCharacterHeroRow, Regex, PartyHeroUtility (+1 more)
 
-### Community 25 - "Community 25"
+### Community 24 - "Community 24"
 Cohesion: 0.12
 Nodes (10): DestinationPath, Func, int, IReadOnlyList, STAThread, string, PlayerAssistant, Program (+2 more)
 
-### Community 26 - "Community 26"
+### Community 25 - "Community 25"
 Cohesion: 0.13
 Nodes (11): Brush, Color, Font, FontFamily, Graphics, GraphicsPath, PaintEventArgs, Pen (+3 more)
+
+### Community 26 - "Community 26"
+Cohesion: 0.15
+Nodes (16): HttpCompletionOption, DateTimeOffset, Dictionary, Func, HttpClient, HttpRequestMessage, HttpResponseMessage, HttpStatusCode (+8 more)
 
 ### Community 27 - "Community 27"
 Cohesion: 0.15
@@ -256,92 +249,92 @@ Cohesion: 0.16
 Nodes (12): NetworkResponseTooLargeException, SourceIntegrityRecord, SourceIntegrityShape, CancellationToken, Dictionary, int, InvalidOperationException, JsonSerializerOptions (+4 more)
 
 ### Community 29 - "Community 29"
+Cohesion: 0.11
+Nodes (11): IReadOnlyList, MyHeroBriefing, MyHeroBriefingActivityItem, MyHeroBriefingHeroCard, MyHeroBriefingQuickLink, MyHeroBriefingResponseItem, MyHeroBriefingUnlockedNoteItem, Panel (+3 more)
+
+### Community 30 - "Community 30"
 Cohesion: 0.19
 Nodes (12): RuntimeHousekeepingOptions, RuntimeHousekeepingReport, DateTimeOffset, Exception, IEnumerable, int, string, TimeSpan (+4 more)
 
-### Community 30 - "Community 30"
+### Community 31 - "Community 31"
 Cohesion: 0.14
 Nodes (16): EndpointDiagnosticEntry, EndpointSummary, NetworkFailureKind, DateTimeOffset, Dictionary, HttpRequestMessage, HttpStatusCode, int (+8 more)
 
-### Community 31 - "Community 31"
+### Community 32 - "Community 32"
 Cohesion: 0.16
 Nodes (9): XpTrackingSnapshot, CancellationToken, Exception, IReadOnlyList, PcXpTotal, string, Task, PlayerAssistant (+1 more)
 
-### Community 32 - "Community 32"
+### Community 33 - "Community 33"
 Cohesion: 0.21
 Nodes (10): AppConfigurationIssue, AppConfigurationValidationReport, AppConfigurationValidationException, AppConfigurationValidationUtility, IReadOnlyDictionary, List, NetworkUrlPurpose, string (+2 more)
 
-### Community 33 - "Community 33"
+### Community 34 - "Community 34"
+Cohesion: 0.12
+Nodes (13): BackgroundTaskHandle, BackgroundTaskHandle, BackgroundTaskSupervisor, bool, CancellationToken, CancellationTokenSource, Dictionary, Func (+5 more)
+
+### Community 35 - "Community 35"
 Cohesion: 0.19
 Nodes (9): CancellationToken, HashSet, HttpClient, Hyperlink, Regex, Task, Uri, HtmlUtility (+1 more)
 
-### Community 34 - "Community 34"
+### Community 36 - "Community 36"
 Cohesion: 0.23
 Nodes (20): Assert-CommandFailsWith(), Assert-CommandPasses(), Assert-FileContains(), Assert-PathInsideRepo(), Assert-RcDryRunSummary(), ConvertTo-ProcessArguments(), Get-PowerShellExecutable(), Invoke-DependencyFreshnessSelfTest() (+12 more)
 
-### Community 35 - "Community 35"
+### Community 37 - "Community 37"
 Cohesion: 0.18
 Nodes (12): CertificatePinningPolicy, CertificatePinningUtility, DateTimeOffset, HttpRequestMessage, IReadOnlyCollection, Uri, PlayerAssistant, CertificatePinTrustEntry (+4 more)
 
-### Community 36 - "Community 36"
+### Community 38 - "Community 38"
 Cohesion: 0.24
 Nodes (9): AtomicFileUtility, CancellationToken, FileStream, Func, IEnumerable, int, Task, TimeSpan (+1 more)
 
-### Community 37 - "Community 37"
+### Community 39 - "Community 39"
 Cohesion: 0.21
 Nodes (18): Assert-DiagnosticStagingIsRedacted(), Assert-DiagnosticZipIsRedacted(), Assert-PathInsideRepo(), ConvertTo-PlainObject(), Get-ExecutableVersionSummary(), Get-FileSummary(), Get-PowerShellExecutable(), Get-Sha256HashText() (+10 more)
 
-### Community 38 - "Community 38"
+### Community 40 - "Community 40"
 Cohesion: 0.18
 Nodes (9): KeywordUrls, NodeCount, SitemapIndexResult, CancellationToken, Dictionary, HttpClient, Task, SitemapUtility (+1 more)
 
-### Community 39 - "Community 39"
+### Community 41 - "Community 41"
 Cohesion: 0.22
 Nodes (8): ObsidianPublishSiteInfo, CancellationToken, Dictionary, HttpClient, Regex, Task, ObsidianPublishUtility, PlayerAssistant
 
-### Community 40 - "Community 40"
+### Community 42 - "Community 42"
 Cohesion: 0.23
 Nodes (9): CancellationToken, Exception, FileStream, JsonSerializerOptions, string, T, Task, PlayerAssistant (+1 more)
 
-### Community 41 - "Community 41"
+### Community 43 - "Community 43"
 Cohesion: 0.13
 Nodes (6): DateTimeOffset, IDictionary, IDisposable, IWindowsCredentialStoreBackend, string, RuntimeSecretStoreUtility
 
-### Community 42 - "Community 42"
-Cohesion: 0.24
-Nodes (10): HostedSettingsSigningKeyTrustEntry, DateTimeOffset, Dictionary, IDisposable, int, IReadOnlyList, JsonSerializerOptions, string (+2 more)
+### Community 44 - "Community 44"
+Cohesion: 0.14
+Nodes (9): IWindowsCredentialStoreBackend, HttpMessageHandler, Dictionary, Func, StoredSecret, InMemoryWindowsCredentialStoreBackend, ObservedWindowsCredentialStoreBackend, ScriptedHttpMessageHandler (+1 more)
 
-### Community 43 - "Community 43"
+### Community 45 - "Community 45"
 Cohesion: 0.25
 Nodes (7): CancellationToken, HttpClient, Image, Task, Uri, ImageDownloadUtility, PlayerAssistant
 
-### Community 44 - "Community 44"
+### Community 46 - "Community 46"
 Cohesion: 0.23
 Nodes (15): Assert-Payload(), Assert-ProtectedEncryptedSidecars(), Assert-RequiredDirectory(), Assert-RequiredFile(), ConvertTo-ProcessArgument(), Copy-PayloadToStaging(), Grant-AppDirectoryAccess(), Install-PlayerAssistant() (+7 more)
 
-### Community 45 - "Community 45"
+### Community 47 - "Community 47"
 Cohesion: 0.18
 Nodes (11): Match, PostingCategory, HashSet, IEnumerable, IReadOnlyDictionary, PostTotalsSummary, Regex, string (+3 more)
 
-### Community 46 - "Community 46"
+### Community 48 - "Community 48"
 Cohesion: 0.12
 Nodes (13): Button, Label, ListBox, Panel, SearchTextBox, Form1, PlayerAssistant, IContainer (+5 more)
 
-### Community 47 - "Community 47"
-Cohesion: 0.17
-Nodes (8): IWindowsCredentialStoreBackend, Dictionary, Func, StoredSecret, InMemoryWindowsCredentialStoreBackend, ObservedWindowsCredentialStoreBackend, ScriptedHttpMessageHandler, ThrowingWindowsCredentialStoreBackend
-
-### Community 48 - "Community 48"
+### Community 49 - "Community 49"
 Cohesion: 0.16
 Nodes (12): StartupHealthException, DateTimeOffset, Exception, int, JsonSerializerOptions, List, object, string (+4 more)
 
-### Community 49 - "Community 49"
+### Community 50 - "Community 50"
 Cohesion: 0.23
 Nodes (11): Assert-AuthenticodeSignatureMatchesPolicy(), Assert-RequiredFile(), ConvertFrom-EncryptedSettingsFile(), ConvertFrom-SettingsFile(), ConvertTo-PlainSettingsObject(), Get-SettingsDerivationScope(), Get-Sha256Bytes(), Protect-RuntimeSidecarFiles() (+3 more)
-
-### Community 50 - "Community 50"
-Cohesion: 0.16
-Nodes (5): IDisposable, PlayerAssistant, StatusActivityScope, ToString(), JsonObject
 
 ### Community 51 - "Community 51"
 Cohesion: 0.18
@@ -364,72 +357,72 @@ Cohesion: 0.14
 Nodes (7): PlayerAssistant, PlayerAssistant, PlayerAssistant, PlayerAssistant, PlayerAssistant, PlayerAssistant, Text
 
 ### Community 56 - "Community 56"
-Cohesion: 0.36
-Nodes (5): GeneratedRegex, Regex, string, PlayerAssistant, SensitiveTextRedactionUtility
-
-### Community 57 - "Community 57"
-Cohesion: 0.19
-Nodes (5): Add-CredentialReaderType(), ConvertTo-PortableEncryptedSettingsJson(), New-SignedHostedSettingsJson(), Read-CredentialSecret(), Write-FramedString()
+Cohesion: 0.34
+Nodes (6): Encoding, CancellationToken, HttpContent, NetworkResponseContentLimit, Stream, Task
 
 ### Community 59 - "Community 59"
 Cohesion: 0.21
-Nodes (10): Create(), Exception, int, JsonSerializerOptions, string, From(), LastCrashDiagnosticUtility, PlayerAssistant (+2 more)
+Nodes (4): Image, Stream, Icon, ImageLayout
 
 ### Community 60 - "Community 60"
+Cohesion: 0.36
+Nodes (5): GeneratedRegex, Regex, string, PlayerAssistant, SensitiveTextRedactionUtility
+
+### Community 61 - "Community 61"
+Cohesion: 0.19
+Nodes (5): Add-CredentialReaderType(), ConvertTo-PortableEncryptedSettingsJson(), New-SignedHostedSettingsJson(), Read-CredentialSecret(), Write-FramedString()
+
+### Community 62 - "Community 62"
+Cohesion: 0.21
+Nodes (10): Create(), Exception, int, JsonSerializerOptions, string, From(), LastCrashDiagnosticUtility, PlayerAssistant (+2 more)
+
+### Community 63 - "Community 63"
 Cohesion: 0.20
 Nodes (8): ChunkedHttpContent, byte, CancellationToken, HttpRequestMessage, HttpResponseMessage, Stream, Task, TransportContext
 
-### Community 61 - "Community 61"
+### Community 64 - "Community 64"
 Cohesion: 0.21
 Nodes (6): Assert-PathInsideRepo(), Get-FileManifestEntry(), Get-ReleaseManifest(), Resolve-FullPath(), Test-StartupHealthHasRequiredPhases(), Wait-ForStartupHealth()
 
-### Community 62 - "Community 62"
-Cohesion: 0.20
-Nodes (7): BackgroundTaskHandle, BackgroundTaskSupervisor, bool, CancellationTokenSource, Dictionary, object, PlayerAssistant
-
-### Community 63 - "Community 63"
+### Community 65 - "Community 65"
 Cohesion: 0.24
 Nodes (5): Control, IEnumerable, List, MyHeroBriefingThreadPosts, RpolThreadSplitResult
 
-### Community 64 - "Community 64"
-Cohesion: 0.20
-Nodes (5): Downloaded, ErrorMessage, DieRollEntry, IReadOnlyCollection, TDownload
-
 ### Community 66 - "Community 66"
-Cohesion: 0.25
-Nodes (6): UiOperationFailure, Action, Exception, Task, PlayerAssistant, UiOperationFailureReporter
-
-### Community 67 - "Community 67"
 Cohesion: 0.27
 Nodes (5): HashSet, IEnumerable, string, KeywordTermsFileUtility, PlayerAssistant
 
-### Community 68 - "Community 68"
+### Community 67 - "Community 67"
 Cohesion: 0.24
 Nodes (7): ReleaseIntegrityManifest, ReleaseIntegrityManifestFile, IReadOnlyList, List, string, PlayerAssistant, ReleaseIntegrityManifestUtility
 
-### Community 69 - "Community 69"
+### Community 68 - "Community 68"
 Cohesion: 0.18
 Nodes (10): Additional hardening backlog, Follow-up hardening backlog, Fresh backlog, Future hardening implementation tasks, Hardening completed in this session, New backlog, Next hardening tasks, Player-facing features completed in this session (+2 more)
 
-### Community 70 - "Community 70"
+### Community 69 - "Community 69"
 Cohesion: 0.25
 Nodes (8): Assert-PathInsideRepo(), Assert-RegeneratedArtifacts(), Assert-RequiredFile(), Backup-AndRemove(), Copy-IfExists(), Resolve-FullPath(), Test-StartupHealthHasRequiredPhases(), Wait-ForStartupHealth()
 
-### Community 71 - "Community 71"
+### Community 70 - "Community 70"
 Cohesion: 0.36
 Nodes (10): Add-Finding(), Assert-PathInsideRepo(), ConvertTo-ProcessArguments(), Invoke-Git(), Resolve-FullPath(), Test-ForbiddenTrackedPaths(), Test-HistoryContent(), Test-IsAllowedFixtureMatch() (+2 more)
 
-### Community 72 - "Community 72"
+### Community 71 - "Community 71"
 Cohesion: 0.25
 Nodes (5): IEnumerable, IReadOnlyDictionary, string, PlayerAssistant, XpPasswordStoreUtility
 
-### Community 73 - "Community 73"
+### Community 72 - "Community 72"
 Cohesion: 0.22
 Nodes (9): net10.0, PlayerAssistant.Launcher, net10.0-windows, Microsoft.NET.Sdk, PlayerAssistant.Tests, net10.0-windows, Microsoft.NET.Sdk, to-orcish (+1 more)
 
-### Community 74 - "Community 74"
+### Community 73 - "Community 73"
 Cohesion: 0.20
 Nodes (6): int, object, string, LoopbackHttpServer, RequestObservation, TcpListener
+
+### Community 74 - "Community 74"
+Cohesion: 0.29
+Nodes (6): UiOperationFailure, Action, Exception, Task, PlayerAssistant, UiOperationFailureReporter
 
 ### Community 76 - "Community 76"
 Cohesion: 0.28
@@ -456,68 +449,52 @@ Cohesion: 0.28
 Nodes (3): Assert-EncryptedSidecar(), Assert-InstallerProtectsSidecars(), Assert-RequiredFile()
 
 ### Community 82 - "Community 82"
-Cohesion: 0.25
-Nodes (7): Active Leads and Open Threads, Adventure Outline, Ch 1 - Kirkilston, Ch 2 - Supper With Nuanda, Ch 3 - Joining the Caravan to Raven's Pass, Ch 4 - Battle at Blightstone Pit, Ch 5 - A Betentacled Escape
-
-### Community 83 - "Community 83"
 Cohesion: 0.62
 Nodes (6): Assert-AuthenticodeSignatureMatchesPolicy(), Assert-EncryptedEnvelope(), Assert-RequiredDirectory(), Assert-RequiredFile(), Test-CodeSigningPolicyConfigured(), Test-InstallerDirectory()
 
-### Community 84 - "Community 84"
-Cohesion: 0.53
-Nodes (4): BackgroundTaskHandle, CancellationToken, Func, Task
-
-### Community 85 - "Community 85"
-Cohesion: 0.33
-Nodes (3): BinaryWriter, IReadOnlyDictionary, RSA
-
-### Community 86 - "Community 86"
+### Community 83 - "Community 83"
 Cohesion: 0.53
 Nodes (5): Assert-PathInsideRepo(), Get-ItemSizeBytes(), Remove-RetentionItem(), Remove-StaleItems(), Resolve-FullPath()
 
-### Community 88 - "Community 88"
+### Community 84 - "Community 84"
 Cohesion: 0.33
 Nodes (6): Microsoft.Playwright (1.60.0), Microsoft.Web.WebView2 (1.0.4022.49), SkiaSharp (3.119.4), net10.0-windows, player-assistant, Microsoft.NET.Sdk
 
-### Community 89 - "Community 89"
+### Community 85 - "Community 85"
 Cohesion: 0.40
 Nodes (4): Generated artifact update policy, graphify, Project Constraints, Repository instructions
 
-### Community 91 - "Community 91"
-Cohesion: 0.40
-Nodes (3): Action, DelegateDisposable, PlayerAssistant
-
-### Community 93 - "Community 93"
-Cohesion: 0.40
-Nodes (4): Meta Commands, RTK - Rust Token Killer (Codex CLI), Rule, Verification
-
-### Community 94 - "Community 94"
+### Community 87 - "Community 87"
 Cohesion: 0.67
 Nodes (3): ApplicationSettingsBase, PlayerAssistant.Properties, Settings
 
-### Community 95 - "Community 95"
+### Community 88 - "Community 88"
+Cohesion: 0.50
+Nodes (3): IDisposable, PlayerAssistant, StatusActivityScope
+
+### Community 89 - "Community 89"
 Cohesion: 0.50
 Nodes (3): Conclusion, Findings, Source Review Findings
 
 ## Knowledge Gaps
-- **400 isolated node(s):** `PlayerAssistant`, `string`, `Regex`, `int`, `ExistingChapterSection` (+395 more)
+- **390 isolated node(s):** `PlayerAssistant`, `string`, `Regex`, `int`, `ExistingChapterSection` (+385 more)
   These have ≤1 connection - possible missing edges or undocumented components.
-- **10 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
+- **7 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
 
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_
 
-- **Why does `Text` connect `Community 55` to `Community 1`, `Community 2`, `Community 5`, `Community 72`, `Community 10`, `Community 12`, `Community 50`, `Community 19`, `Community 91`?**
-  _High betweenness centrality (0.144) - this node is a cross-community bridge._
-- **Why does `Form1` connect `Community 0` to `Community 64`, `Community 65`, `Community 66`, `Community 26`, `Community 12`, `Community 15`, `Community 50`, `Community 20`, `Community 21`, `Community 22`, `Community 58`, `Community 63`?**
-  _High betweenness centrality (0.112) - this node is a cross-community bridge._
+- **Why does `Text` connect `Community 55` to `Community 1`, `Community 2`, `Community 5`, `Community 71`, `Community 12`, `Community 19`, `Community 20`, `Community 88`, `Community 26`?**
+  _High betweenness centrality (0.146) - this node is a cross-community bridge._
+- **Why does `Form1` connect `Community 0` to `Community 65`, `Community 7`, `Community 12`, `Community 15`, `Community 21`, `Community 88`, `Community 57`, `Community 58`, `Community 59`, `Community 29`, `Community 25`?**
+  _High betweenness centrality (0.124) - this node is a cross-community bridge._
+- **Why does `NetworkRequestUtility` connect `Community 26` to `Community 56`, `Community 44`?**
+  _High betweenness centrality (0.053) - this node is a cross-community bridge._
 - **What connects `PlayerAssistant`, `string`, `Regex` to the rest of the system?**
-  _400 weakly-connected nodes found - possible documentation gaps or missing edges._
+  _390 weakly-connected nodes found - possible documentation gaps or missing edges._
 - **Should `Community 0` be split into smaller, more focused modules?**
-  _Cohesion score 0.036954087346024636 - nodes in this community are weakly interconnected._
+  _Cohesion score 0.03640350877192983 - nodes in this community are weakly interconnected._
 - **Should `Community 1` be split into smaller, more focused modules?**
-  _Cohesion score 0.06541822721598002 - nodes in this community are weakly interconnected._
+  _Cohesion score 0.06402293358815098 - nodes in this community are weakly interconnected._
 - **Should `Community 2` be split into smaller, more focused modules?**
   _Cohesion score 0.05364314400458979 - nodes in this community are weakly interconnected._
-- **Should `Community 3` be split into smaller, more focused modules?**
-  _Cohesion score 0.08581349206349206 - nodes in this community are weakly interconnected._
