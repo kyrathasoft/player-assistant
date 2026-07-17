@@ -47,6 +47,7 @@ namespace PlayerAssistant
         ];
 
         private static string PlayerCharactersListingUrl => $"{AppSettingsUtility.ObsidianGameVaultUrl}/PCs/Player+Characters+Listing";
+        private static string FormerPlayerCharactersListingUrl => $"{AppSettingsUtility.ObsidianGameVaultUrl}/PCs/Former+PCs";
         private static string SitemapUrl => $"{AppSettingsUtility.ObsidianGameVaultUrl}/sitemap.xml";
         private const string PlayerCharactersDirectoryName = "PCs";
         private const string PostsDirectoryName = "Posts";
@@ -58,6 +59,7 @@ namespace PlayerAssistant
         private const string ActivePlayerCharactersDirectoryName = "active";
         private const string InactivePlayerCharactersDirectoryName = "inactive";
         private const string ActiveHeroImageDownloadMarkerFileName = ".active-hero-images-downloaded";
+        private const string FormerHeroImageDownloadMarkerFileName = ".former-hero-images-downloaded";
         private static readonly TimeSpan ActiveHeroImageDownloadInterval = TimeSpan.FromHours(3);
         private const string ImageUriMessageBoxShownFileName = ".player-character-image-uris-shown";
         private const string HtmlImageUriMessageBoxShownFileName = ".player-character-html-image-uris-shown";
@@ -77,7 +79,7 @@ namespace PlayerAssistant
         private static readonly TimeSpan HeroImageShowcaseStartDelay = TimeSpan.FromMilliseconds(2500);
         private static readonly TimeSpan HeroImageIntroDuration = TimeSpan.FromSeconds(1);
         private static readonly TimeSpan HeroImageFadeInDuration = TimeSpan.FromMilliseconds(200);
-        private static readonly TimeSpan HeroImageDisplayDuration = TimeSpan.FromMilliseconds(400);
+        private static readonly TimeSpan HeroImageDisplayDuration = TimeSpan.FromMilliseconds(900);
         private static readonly TimeSpan HeroImageFadeOutDuration = TimeSpan.FromMilliseconds(200);
         private static readonly TimeSpan HeroImageInterImageDelayDuration = TimeSpan.FromMilliseconds(600);
         private static readonly string[] HeroImageExtensions =
@@ -125,6 +127,7 @@ namespace PlayerAssistant
         private readonly Random _random = new();
         private readonly List<string> _heroImageShowcasePaths = [];
         private Image? _currentHeroImage;
+        private string _currentHeroName = string.Empty;
         private Rectangle _currentHeroImageBounds;
         private readonly Stopwatch _currentHeroImageStopwatch = new();
         private float _currentHeroImageOpacity;
@@ -140,6 +143,7 @@ namespace PlayerAssistant
         private int _heroImageShowcaseSkipped;
         private string _lastHeroImageSkipReason = string.Empty;
         private PictureBox? _heroImagePictureBox;
+        private PictureBox? _heroNamePictureBox;
         private Panel? _regionalMapPanel;
         private ContextMenuStrip? _regionalMapContextMenuStrip;
         private ListBox? _diceRollsListBox;
@@ -275,6 +279,8 @@ namespace PlayerAssistant
             _regionalMapContextMenuStrip?.Dispose();
             _heroImagePictureBox?.Image?.Dispose();
             _heroImagePictureBox?.Dispose();
+            _heroNamePictureBox?.Image?.Dispose();
+            _heroNamePictureBox?.Dispose();
             _diceRollsListBox?.Dispose();
             _adventureOutlineTextBox?.Dispose();
             _regionalMapImage?.Dispose();
@@ -4329,7 +4335,7 @@ namespace PlayerAssistant
 
                 var downloadMarkerPath = Path.Combine(pcsDirectory, ActiveHeroImageDownloadMarkerFileName);
 
-                if (ShouldDownloadActiveHeroImages(downloadMarkerPath))
+                if (ShouldDownloadHeroImages(downloadMarkerPath))
                 {
                     await PlayerCharacterAssetUtility.DownloadActiveHeroImagesAsync(
                         PlayerCharactersListingUrl,
@@ -4358,6 +4364,27 @@ namespace PlayerAssistant
                     PlayerCharactersListingUrl,
                     pcsDirectory,
                     cancellationToken);
+                try
+                {
+                    await UpdateFormerPlayerCharactersAsync(
+                        pcsDirectory,
+                        imagePathsByFileName,
+                        cancellationToken);
+                }
+                catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+                {
+                    throw;
+                }
+                catch (Exception ex)
+                {
+                    await ReportOperationFailureAsync(
+                        "former player character refresh",
+                        "Former PC refresh unavailable",
+                        "Former PC Refresh Error",
+                        ex,
+                        showDialog: false);
+                }
+
                 await DownloadSitemapAsync(cancellationToken);
                 await DownloadRegionalMapAsync(cancellationToken);
                 cancellationToken.ThrowIfCancellationRequested();
@@ -4376,6 +4403,47 @@ namespace PlayerAssistant
                     ex,
                     showFailureDialog);
             }
+        }
+
+        private async Task UpdateFormerPlayerCharactersAsync(
+            string pcsDirectory,
+            IReadOnlyDictionary<string, string> publishedAssetUrlsByFileName,
+            CancellationToken cancellationToken)
+        {
+            var listingMarkdown = await MarkdownUtility.GetMarkdownFromUrlAsync(
+                FormerPlayerCharactersListingUrl,
+                cancellationToken);
+            if (IsMarkdownFetchFailure(listingMarkdown))
+            {
+                throw new InvalidOperationException(
+                    $"Markdown could not be fetched from {FormerPlayerCharactersListingUrl}.");
+            }
+
+            await AtomicFileUtility.WriteAllTextAsync(
+                PlayerCharacterAssetUtility.GetFormerPlayerCharactersListingMarkdownCachePath(pcsDirectory),
+                listingMarkdown,
+                cancellationToken);
+
+            var downloadMarkerPath = Path.Combine(pcsDirectory, FormerHeroImageDownloadMarkerFileName);
+            if (ShouldDownloadHeroImages(downloadMarkerPath))
+            {
+                await PlayerCharacterAssetUtility.DownloadFormerHeroImagesAsync(
+                    listingMarkdown,
+                    FormerPlayerCharactersListingUrl,
+                    pcsDirectory,
+                    publishedAssetUrlsByFileName,
+                    cancellationToken);
+                await AtomicFileUtility.WriteAllTextAsync(
+                    downloadMarkerPath,
+                    DateTimeOffset.Now.ToString("O"),
+                    cancellationToken);
+            }
+
+            await PlayerCharacterAssetUtility.DownloadFormerHeroMarkdownAsync(
+                listingMarkdown,
+                FormerPlayerCharactersListingUrl,
+                pcsDirectory,
+                cancellationToken);
         }
 
         private async Task DownloadSitemapAsync(CancellationToken cancellationToken = default)
@@ -4652,7 +4720,7 @@ namespace PlayerAssistant
                 || markdown.StartsWith(MarkdownUtility.UnresolvedUrlMessage, StringComparison.Ordinal);
         }
 
-        private static bool ShouldDownloadActiveHeroImages(string markerPath)
+        private static bool ShouldDownloadHeroImages(string markerPath)
         {
             return !File.Exists(markerPath)
                 || DateTimeOffset.UtcNow - File.GetLastWriteTimeUtc(markerPath) >= ActiveHeroImageDownloadInterval;
@@ -4800,6 +4868,7 @@ namespace PlayerAssistant
             _heroImageShowcasePaths.Clear();
             _currentHeroImage?.Dispose();
             _currentHeroImage = null;
+            _currentHeroName = string.Empty;
             ClearHeroImagePictureBox();
             _currentHeroImageOpacity = 0;
             _currentHeroImageStopwatch.Reset();
@@ -4821,6 +4890,9 @@ namespace PlayerAssistant
                 try
                 {
                     _currentHeroImage = LoadImageCopy(imagePath);
+                    _currentHeroName = PlayerCharacterAssetUtility.GetHeroNameForTokenFileName(
+                        _playerCharacterListingMarkdown,
+                        Path.GetFileName(imagePath)) ?? string.Empty;
                     _currentHeroImageBounds = GetCenteredHeroImageBounds(_currentHeroImage);
                     _heroImageShowcaseIndex++;
                     _currentHeroImageOpacity = 0;
@@ -5073,8 +5145,17 @@ namespace PlayerAssistant
                 SizeMode = PictureBoxSizeMode.StretchImage,
                 Visible = false
             };
+            _heroNamePictureBox = new PictureBox
+            {
+                BackColor = Color.Transparent,
+                Enabled = false,
+                SizeMode = PictureBoxSizeMode.Normal,
+                Visible = false
+            };
             Controls.Add(_heroImagePictureBox);
+            Controls.Add(_heroNamePictureBox);
             _heroImagePictureBox.BringToFront();
+            _heroNamePictureBox.BringToFront();
             menuStrip.BringToFront();
             statusStrip.BringToFront();
         }
@@ -5137,6 +5218,7 @@ namespace PlayerAssistant
                 frame.Height);
             _heroImagePictureBox.Visible = true;
             _heroImagePictureBox.BringToFront();
+            UpdateHeroNamePictureBox();
             menuStrip.BringToFront();
             statusStrip.BringToFront();
         }
@@ -5151,6 +5233,63 @@ namespace PlayerAssistant
             _heroImagePictureBox.Visible = false;
             _heroImagePictureBox.Image?.Dispose();
             _heroImagePictureBox.Image = null;
+            ClearHeroNamePictureBox();
+        }
+
+        private void UpdateHeroNamePictureBox()
+        {
+            if (_heroNamePictureBox is null
+                || !_heroImageShowcaseStarted
+                || _currentHeroImage is null
+                || _currentHeroImageOpacity <= 0
+                || string.IsNullOrWhiteSpace(_currentHeroName))
+            {
+                ClearHeroNamePictureBox();
+                return;
+            }
+
+            var displayBounds = GetHeroImageDisplayBounds();
+            var captionTop = _currentHeroImageBounds.Bottom + 12;
+            var captionHeight = Math.Min(80, displayBounds.Bottom - captionTop);
+            if (captionHeight <= 0)
+            {
+                return;
+            }
+
+            var frame = new Bitmap(displayBounds.Width, captionHeight, PixelFormat.Format32bppArgb);
+            using var graphics = Graphics.FromImage(frame);
+            graphics.Clear(Color.Transparent);
+            graphics.SmoothingMode = SmoothingMode.AntiAlias;
+            using var fontFamily = new FontFamily("Segoe UI");
+            DrawOutlinedText(
+                graphics,
+                _currentHeroName,
+                fontFamily,
+                40,
+                new Rectangle(0, 0, displayBounds.Width, captionHeight),
+                Color.LightGray);
+
+            _heroNamePictureBox.Image?.Dispose();
+            _heroNamePictureBox.Image = frame;
+            _heroNamePictureBox.Bounds = new Rectangle(
+                displayBounds.Left,
+                captionTop,
+                displayBounds.Width,
+                captionHeight);
+            _heroNamePictureBox.Visible = true;
+            _heroNamePictureBox.BringToFront();
+        }
+
+        private void ClearHeroNamePictureBox()
+        {
+            if (_heroNamePictureBox is null)
+            {
+                return;
+            }
+
+            _heroNamePictureBox.Visible = false;
+            _heroNamePictureBox.Image?.Dispose();
+            _heroNamePictureBox.Image = null;
         }
 
         private static Image LoadImageCopy(string imagePath)

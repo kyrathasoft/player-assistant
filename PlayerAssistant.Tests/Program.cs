@@ -150,7 +150,10 @@ var tests = new (string Name, Action Test)[]
     ("login info cache load returns empty for malformed json", LoginInfoCacheLoadReturnsEmptyForMalformedJson),
     ("asset manifest load returns empty for malformed json", AssetManifestLoadReturnsEmptyForMalformedJson),
     ("published asset fallback resolves transclusion without attachment index", PublishedAssetFallbackResolvesTransclusionWithoutAttachmentIndex),
+    ("hero token filename resolves listing display name", HeroTokenFileNameResolvesListingDisplayName),
+    ("former pc listing parses three-column hero rows", FormerPcListingParsesThreeColumnHeroRows),
     ("active hero markdown cancellation writes no files", ActiveHeroMarkdownCancellationWritesNoFiles),
+    ("former hero markdown cancellation writes no inactive files", FormerHeroMarkdownCancellationWritesNoInactiveFiles),
     ("player character refresh cancellation clears in progress flag", PlayerCharacterRefreshCancellationClearsInProgressFlag),
     ("player character refresh is not delayed when hero images are suppressed", PlayerCharacterRefreshIsNotDelayedWhenHeroImagesAreSuppressed),
     ("game forum startup cancellation writes no manifests", GameForumStartupCancellationWritesNoManifests),
@@ -3140,6 +3143,45 @@ static void PublishedAssetFallbackResolvesTransclusionWithoutAttachmentIndex()
     AssertFalse(assets.ContainsKey("Neria Silverdale.md"), "markdown pages should not be treated as image assets");
 }
 
+static void HeroTokenFileNameResolvesListingDisplayName()
+{
+    const string listingMarkdown = """
+        | Name | Class | Level | Token |
+        | --- | --- | --- | --- |
+        | [[Neria Silverdale\|Neria]] | Paladin | 1 | ![[neria-token.webp\|70]] |
+        """;
+
+    var heroName = PlayerCharacterAssetUtility.GetHeroNameForTokenFileName(
+        listingMarkdown,
+        "NERIA-TOKEN.WEBP")
+        ?? throw new InvalidOperationException("Expected the hero token filename to resolve.");
+
+    AssertEqual("Neria", heroName, "token filename should resolve the listing display name case-insensitively");
+}
+
+static void FormerPcListingParsesThreeColumnHeroRows()
+{
+    const string listingMarkdown = """
+        | Name | Class | Token |
+        | --- | --- | --- |
+        | [[Urvan Hall, paladin of St. Ygg\|Urvan]] | Paladin | ![[urvan-token.webp\|70]] |
+        | [['Slip' Harren, Thief\|Slip]] | Thief | ![[slip-token.webp\|70]] |
+        | [[Narinza Izrut\|Narinza]] | Thief | ![[narinza-token.webp\|70]] |
+        """;
+
+    var rows = PlayerCharacterAssetUtility.GetHeroRows(
+        listingMarkdown,
+        "https://publish.obsidian.md/scarlethorizons/PCs/Former+PCs");
+
+    AssertEqual(3, rows.Length, "all former PC rows should parse");
+    AssertEqual("Urvan", rows[0].Name, "former PC alias should become the display name");
+    AssertEqual(
+        "urvan-token.webp",
+        rows[0].TokenFileName ?? string.Empty,
+        "former PC token should parse from the Token column");
+    AssertContains(rows[0].CharacterPageUrl ?? string.Empty, "Urvan+Hall");
+}
+
 static void ActiveHeroMarkdownCancellationWritesNoFiles()
 {
     using var directory = TemporaryDirectory.Create();
@@ -3161,6 +3203,29 @@ static void ActiveHeroMarkdownCancellationWritesNoFiles()
     AssertFalse(
         Directory.Exists(activeDirectory) && Directory.EnumerateFiles(activeDirectory).Any(),
         "canceled hero markdown refresh should not write active hero files");
+}
+
+static void FormerHeroMarkdownCancellationWritesNoInactiveFiles()
+{
+    using var directory = TemporaryDirectory.Create();
+    using var cancellation = new CancellationTokenSource();
+    cancellation.Cancel();
+
+    AssertThrows<OperationCanceledException>(() =>
+        PlayerCharacterAssetUtility.DownloadFormerHeroMarkdownAsync(
+            """
+            | Name | Class | Token |
+            | --- | --- | --- |
+            | [[Urvan Hall\|Urvan]] | Paladin | ![[urvan-token.webp]] |
+            """,
+            "https://publish.obsidian.md/scarlethorizons/PCs/Former+PCs",
+            directory.Path,
+            cancellation.Token).GetAwaiter().GetResult());
+
+    var inactiveDirectory = Path.Combine(directory.Path, "inactive");
+    AssertFalse(
+        Directory.Exists(inactiveDirectory) && Directory.EnumerateFiles(inactiveDirectory).Any(),
+        "canceled former hero markdown download should not write inactive files");
 }
 
 static void PlayerCharacterRefreshCancellationClearsInProgressFlag()
