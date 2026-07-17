@@ -189,8 +189,20 @@ namespace PlayerAssistant
             return AffixEntries;
         }
 
+        public static IReadOnlyList<OrcishLexiconReviewIssue> ReviewProposedLexiconEntry(
+            OrcishLexiconEntry proposedEntry)
+        {
+            return OrcishLexiconReviewUtility.ReviewProposedEntry(proposedEntry, LexiconEntries);
+        }
+
+        public static void EnsureProposedLexiconEntryCanBeAdded(OrcishLexiconEntry proposedEntry)
+        {
+            OrcishLexiconReviewUtility.EnsureCanAdd(proposedEntry, LexiconEntries);
+        }
+
         private static OrcishLexiconEntry[] BuildLexiconEntries()
         {
+            // Review every proposed addition with ReviewProposedLexiconEntry before placing it here.
             var entries = new List<OrcishLexiconEntry>
             {
                 new("hello", "zug"),

@@ -60,6 +60,7 @@ var tests = new (string Name, Action Test)[]
     ("orcish translator derives predictable morphology by rule", OrcishTranslatorDerivesPredictableMorphologyByRule),
     ("orcish translator culls low value exonym pass throughs", OrcishTranslatorCullsLowValueExonymPassThroughs),
     ("orcish translator enforces lexicon quality invariants", OrcishTranslatorEnforcesLexiconQualityInvariants),
+    ("orcish translator reviews proposed lexicon additions", OrcishTranslatorReviewsProposedLexiconAdditions),
     ("orcish translator exposes unique english term count", OrcishTranslatorExposesUniqueEnglishTermCount),
     ("to-orcish translates terms before trailing punctuation", ToOrcishTranslatesTermsBeforeTrailingPunctuation),
     ("to-orcish translates dotted abbreviation terms", ToOrcishTranslatesDottedAbbreviationTerms),
@@ -1034,6 +1035,69 @@ static void OrcishTranslatorEnforcesLexiconQualityInvariants()
         .OrderBy(static value => value, StringComparer.OrdinalIgnoreCase)
         .ToArray();
     AssertEqual(string.Empty, string.Join("; ", generatedPassThroughs), "generated direct pass-through translations should be explicitly kept or removed");
+}
+
+static void OrcishTranslatorReviewsProposedLexiconAdditions()
+{
+    var existingEntries = new OrcishLexiconEntry[]
+    {
+        new("hello", "zug", PartOfSpeech: "interjection"),
+        new("carry", "hrowku", PartOfSpeech: "verb", Tags: ["infinitive"]),
+        new("stone", "krag", PartOfSpeech: "noun")
+    };
+
+    var reverseCollisionIssues = OrcishLexiconReviewUtility.ReviewProposedEntry(
+        new OrcishLexiconEntry("greeting", "zug", PartOfSpeech: "noun"),
+        existingEntries);
+    AssertTrue(
+        reverseCollisionIssues.Any(static issue => issue.Code == "orcish-form-collision"),
+        "a proposed Orcish form already used by another English term should be rejected");
+
+    var closeFormIssues = OrcishLexiconReviewUtility.ReviewProposedEntry(
+        new OrcishLexiconEntry("shout", "zugg", PartOfSpeech: "verb"),
+        existingEntries);
+    AssertTrue(
+        closeFormIssues.Any(static issue => issue.Code == "close-form-conflict"),
+        "an easily confused Orcish form should require explicit review");
+
+    var wrongRootIssues = OrcishLexiconReviewUtility.ReviewProposedEntry(
+        new OrcishLexiconEntry(
+            "carried",
+            "murkash",
+            PartOfSpeech: "verb",
+            Tags: ["root-derived", "base-carry", "past"]),
+        existingEntries);
+    AssertTrue(
+        wrongRootIssues.Any(static issue => issue.Code == "root-morphology-mismatch"),
+        "a derived form that abandons its declared root should be rejected");
+
+    var faithfulRootIssues = OrcishLexiconReviewUtility.ReviewProposedEntry(
+        new OrcishLexiconEntry(
+            "carried",
+            "hrowkash",
+            PartOfSpeech: "verb",
+            Tags: ["root-derived", "base-carry", "past"]),
+        existingEntries);
+    AssertEqual(0, faithfulRootIssues.Count, "a faithful rule-derived root form should pass review");
+
+    var compoundIssues = OrcishLexiconReviewUtility.ReviewProposedEntry(
+        new OrcishLexiconEntry("stone road", "krag-lag", PartOfSpeech: "noun", Tags: ["compound"]),
+        existingEntries);
+    AssertTrue(
+        compoundIssues.Any(static issue => issue.Code == "compound-root-review-required"),
+        "a compound should identify a source root or record explicit manual review");
+
+    var reviewedSharedFormIssues = OrcishLexiconReviewUtility.ReviewProposedEntry(
+        new OrcishLexiconEntry("greeting", "zug", PartOfSpeech: "noun", Tags: ["shared-form"]),
+        existingEntries);
+    AssertFalse(
+        reviewedSharedFormIssues.Any(static issue => issue.Code == "orcish-form-collision"),
+        "an intentional shared reverse form should be accepted only with an explicit review tag");
+
+    AssertThrows<InvalidOperationException>(() =>
+        OrcishLexiconReviewUtility.EnsureCanAdd(
+            new OrcishLexiconEntry("greeting", "zug", PartOfSpeech: "noun"),
+            existingEntries));
 }
 
 static bool IsSingleWord(string value)

@@ -205,7 +205,7 @@
 
 ## Fresh backlog
 
-- [ ] Complete signed RPOL snapshot coverage beyond the verified root page.
+- [x] Complete signed RPOL snapshot coverage beyond the verified root page.
   - [x] Deploy the private DreamHost broker configuration with restricted permissions and required PHP extensions.
   - [x] Add signed, sanitized snapshot upload and bearer-token retrieval endpoints.
   - [x] Add the Windows Playwright publisher, daily scheduled task, exact broker allowlist, Credential Manager secrets, and desktop snapshot retrieval.
@@ -213,7 +213,8 @@
   - [x] Persist the approved page queue and advance one target per publisher execution so subsequent runs do not restart at the root.
   - [x] Confirm all remaining pages accumulate through repeated publisher executions.
     - Live verification: all 15 approved targets are stored, including the newly approved Game Links page; the cursor advanced to the first thread after publishing Game Links.
-  - [ ] Run a clean-client test with no RPOL administrator credentials before removing or rotating distributed credentials.
+- [ ] Run a clean-client test with no RPOL administrator credentials before removing or rotating distributed credentials.
+  - Status: delegated to a player for independent verification of credential-free snapshot retrieval.
 - [x] Run a full release verification/rehearsal now that project files and sidecars are tracked.
   - Status: completed after restoring `settings.local.json` from the local installer payload.
 - [x] Continue refining `Show > Adventure Outline` summary quality so generated bullets are consistently specific, player-facing scene updates rather than generic fallback phrases.
@@ -258,4 +259,6 @@
     - Build the Release app and Release test harness.
     - Run focused My Hero Briefing tests plus affected RPOL/Party/XP/encrypted-note tests.
     - Run `graphify update . --no-cluster`.
-- [ ] Continue Orcish work with a new quality pass outside the completed backlog.
+- [x] Continue Orcish work with a new quality pass outside the completed backlog.
+  - Added a reusable proposed-entry admission guard for exact and reverse collisions, close-form conflicts, declared root fidelity, standard morphology, and compound provenance.
+  - Added explicit review tags for intentional exceptions and focused regression coverage for accepted and rejected additions.

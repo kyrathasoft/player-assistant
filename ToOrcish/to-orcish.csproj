@@ -15,6 +15,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Compile Include="..\OrcishLexiconReviewUtility.cs" Link="OrcishLexiconReviewUtility.cs" />
     <Compile Include="..\OrcishTranslatorUtility.cs" Link="OrcishTranslatorUtility.cs" />
     <Compile Include="..\RandomNumberUtility.cs" Link="RandomNumberUtility.cs" />
   </ItemGroup>
