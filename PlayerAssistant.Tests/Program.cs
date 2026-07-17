@@ -300,6 +300,8 @@ var tests = new (string Name, Action Test)[]
     ("xp tracking failure message hides url and directs players to dm", XpTrackingFailureMessageHidesUrlAndDirectsPlayersToDm),
     ("xp tracking missing pc message directs players to dm", XpTrackingMissingPcMessageDirectsPlayersToDm),
     ("show menu contains party item", ShowMenuContainsPartyItem),
+    ("show menu contains former pcs item", ShowMenuContainsFormerPcsItem),
+    ("former pcs view displays token name and class", FormerPcsViewDisplaysTokenNameAndClass),
     ("external url launch policy accepts http and https", ExternalUrlLaunchPolicyAcceptsHttpAndHttps),
     ("external url launch policy rejects unsafe inputs", ExternalUrlLaunchPolicyRejectsUnsafeInputs),
     ("hero image paths follow listing markdown table", HeroImagePathsFollowListingMarkdownTable),
@@ -4949,6 +4951,60 @@ static void ShowMenuContainsPartyItem()
         AssertTrue(
             showMenuItem.DropDownItems.Cast<ToolStripItem>().Contains(partyMenuItem),
             "Show menu should contain the Party item");
+    });
+}
+
+static void ShowMenuContainsFormerPcsItem()
+{
+    RunOnStaThread(() =>
+    {
+        using var form = new Form1(suppressHeroImagesForThisRun: true);
+        var showMenuItem = (ToolStripMenuItem)(GetPrivateField(form, "showToolStripMenuItem")
+            ?? throw new InvalidOperationException("showToolStripMenuItem was null."));
+        var partyMenuItem = (ToolStripMenuItem)(GetPrivateField(form, "partyToolStripMenuItem")
+            ?? throw new InvalidOperationException("partyToolStripMenuItem was null."));
+        var formerPcsMenuItem = (ToolStripMenuItem)(GetPrivateField(form, "formerPcsToolStripMenuItem")
+            ?? throw new InvalidOperationException("formerPcsToolStripMenuItem was null."));
+
+        AssertEqual("Former PCs", formerPcsMenuItem.Text ?? string.Empty, "unexpected Former PCs menu item text");
+        AssertTrue(
+            showMenuItem.DropDownItems.Cast<ToolStripItem>().Contains(formerPcsMenuItem),
+            "Show menu should contain the Former PCs item");
+        AssertEqual(
+            showMenuItem.DropDownItems.IndexOf(partyMenuItem) + 1,
+            showMenuItem.DropDownItems.IndexOf(formerPcsMenuItem),
+            "Former PCs should appear immediately after Party");
+    });
+}
+
+static void FormerPcsViewDisplaysTokenNameAndClass()
+{
+    using var directory = TemporaryDirectory.Create();
+    var tokenPath = Path.Combine(directory.Path, "urvan-token.png");
+    using (var token = new Bitmap(8, 8))
+    {
+        token.SetPixel(0, 0, Color.DarkRed);
+        token.Save(tokenPath, ImageFormat.Png);
+    }
+
+    RunOnStaThread(() =>
+    {
+        using var form = new Form1(suppressHeroImagesForThisRun: true);
+        InvokePrivateMethod(
+            form,
+            "ShowFormerPcs",
+            (object)new[] { new FormerPcSummary("Urvan", "Paladin of St. Ygg", tokenPath) });
+
+        var panel = (Panel)(GetPrivateField(form, "_partyPanel")
+            ?? throw new InvalidOperationException("Former PCs panel was null."));
+        var controls = panel.Controls
+            .Cast<Control>()
+            .SelectMany(control => control.Controls.Cast<Control>().Prepend(control))
+            .ToArray();
+
+        AssertTrue(controls.OfType<Label>().Any(label => label.Text == "Urvan"), "former PC name should be displayed");
+        AssertTrue(controls.OfType<Label>().Any(label => label.Text == "Paladin of St. Ygg"), "former PC class should be displayed");
+        AssertTrue(controls.OfType<PictureBox>().Any(pictureBox => pictureBox.Image is not null), "former PC token image should be displayed");
     });
 }
 

@@ -115,6 +115,7 @@ namespace PlayerAssistant
         private bool _showPostTotals;
         private bool _showXpTotal;
         private bool _showParty;
+        private bool _showFormerPcs;
         private bool _showMyHeroBriefing;
         private bool _showWelcomeText = true;
         private bool _showHeroIntroText;
@@ -864,7 +865,7 @@ namespace PlayerAssistant
             EnableMyHeroBriefingMenuItem();
             EnableAdventureOutlineMenuItem();
 
-            if (_regionalMapActive || _showLoginInfo || _showPostTotals || _showXpTotal || _showParty || _showMyHeroBriefing || _diceRollsListBox is not null || _adventureOutlineTextBox is not null || _myHeroBriefingTextBox is not null)
+            if (_regionalMapActive || _showLoginInfo || _showPostTotals || _showXpTotal || _showParty || _showFormerPcs || _showMyHeroBriefing || _diceRollsListBox is not null || _adventureOutlineTextBox is not null || _myHeroBriefingTextBox is not null)
             {
                 ClearDisplaySurfaceForRegionalMap();
                 Refresh();
@@ -1229,6 +1230,29 @@ namespace PlayerAssistant
                     "my hero briefing display",
                     "My Hero Briefing unavailable",
                     "My Hero Briefing Error",
+                    ex,
+                    showDialog: true);
+            }
+        }
+
+        private async void FormerPcsToolStripMenuItem_Click(object? sender, EventArgs e)
+        {
+            ClearDiceRollsDisplayIfVisible();
+            HideSearchPanel();
+            formerPcsToolStripMenuItem.Enabled = false;
+
+            try
+            {
+                var formerPcs = FormerPcUtility.Load(EnsurePlayerCharacterDirectories());
+                ShowFormerPcs(formerPcs);
+            }
+            catch (Exception ex)
+            {
+                formerPcsToolStripMenuItem.Enabled = true;
+                await ReportOperationFailureAsync(
+                    "former PC display",
+                    "Former PCs unavailable",
+                    "Former PCs Error",
                     ex,
                     showDialog: true);
             }
@@ -1648,6 +1672,7 @@ namespace PlayerAssistant
                 || _showLoginInfo
                 || _showXpTotal
                 || _showParty
+                || _showFormerPcs
                 || _showMyHeroBriefing
                 || _adventureOutlineTextBox is not null
                 || _myHeroBriefingTextBox is not null
@@ -3101,6 +3126,21 @@ namespace PlayerAssistant
             Invalidate();
         }
 
+        private void ShowFormerPcs(IReadOnlyList<FormerPcSummary> formerPcs)
+        {
+            ClearDisplaySurfaceForLoginInfo();
+            _showFormerPcs = true;
+            _showParty = false;
+            _showMyHeroBriefing = false;
+            _partyHeroes = [];
+            formerPcsToolStripMenuItem.Enabled = false;
+            BuildFormerPcsPanel(formerPcs);
+            SetStatusBarMessage(formerPcs.Count == 0
+                ? "Former PCs unavailable: no former PCs were found."
+                : $"Former PCs: {formerPcs.Count} former PC{(formerPcs.Count == 1 ? string.Empty : "s")} loaded.");
+            Invalidate();
+        }
+
         private void ShowMyHeroBriefing(MyHeroBriefing briefing)
         {
             ClearDisplaySurfaceForLoginInfo();
@@ -3623,6 +3663,107 @@ namespace PlayerAssistant
             return heroPanel;
         }
 
+        private void BuildFormerPcsPanel(IReadOnlyList<FormerPcSummary> formerPcs)
+        {
+            DisposePartyPanel();
+
+            var panel = new Panel
+            {
+                AutoScroll = true,
+                BackColor = Color.White
+            };
+            _partyPanel = panel;
+            Controls.Add(panel);
+            UpdatePartyPanelBounds();
+
+            panel.Controls.Add(new Label
+            {
+                AutoSize = false,
+                Font = new Font("Segoe UI", 22, FontStyle.Bold),
+                ForeColor = Color.FromArgb(35, 35, 35),
+                Location = new Point(24, 18),
+                Size = new Size(Math.Max(320, panel.ClientSize.Width - 48), 42),
+                Text = "Former PCs"
+            });
+
+            var top = 76;
+            if (formerPcs.Count == 0)
+            {
+                panel.Controls.Add(new Label
+                {
+                    AutoSize = false,
+                    Font = new Font("Segoe UI", 12, FontStyle.Regular),
+                    ForeColor = Color.FromArgb(75, 75, 75),
+                    Location = new Point(24, top),
+                    Size = new Size(Math.Max(320, panel.ClientSize.Width - 48), 36),
+                    Text = "No former PCs were found."
+                });
+            }
+
+            foreach (var formerPc in formerPcs)
+            {
+                var formerPcPanel = CreateFormerPcPanel(formerPc, Math.Max(520, panel.ClientSize.Width - 64));
+                formerPcPanel.Location = new Point(24, top);
+                panel.Controls.Add(formerPcPanel);
+                top += formerPcPanel.Height + 18;
+            }
+
+            panel.BringToFront();
+            menuStrip.BringToFront();
+            statusStrip.BringToFront();
+        }
+
+        private Panel CreateFormerPcPanel(FormerPcSummary formerPc, int width)
+        {
+            var formerPcPanel = new Panel
+            {
+                BackColor = Color.FromArgb(248, 249, 251),
+                BorderStyle = BorderStyle.FixedSingle,
+                Size = new Size(width, 162)
+            };
+            var imageBox = new PictureBox
+            {
+                BackColor = Color.White,
+                BorderStyle = BorderStyle.FixedSingle,
+                Location = new Point(16, 16),
+                Size = new Size(128, 128),
+                SizeMode = PictureBoxSizeMode.Zoom
+            };
+            if (!string.IsNullOrWhiteSpace(formerPc.TokenImagePath) && File.Exists(formerPc.TokenImagePath))
+            {
+                try
+                {
+                    imageBox.Image = LoadImageCopy(formerPc.TokenImagePath);
+                }
+                catch
+                {
+                }
+            }
+
+            formerPcPanel.Controls.Add(imageBox);
+            formerPcPanel.Controls.Add(new Label
+            {
+                AutoEllipsis = true,
+                Font = new Font("Segoe UI", 18, FontStyle.Bold),
+                ForeColor = Color.FromArgb(35, 35, 35),
+                Location = new Point(168, 32),
+                Size = new Size(width - 192, 40),
+                Text = formerPc.Name
+            });
+            formerPcPanel.Controls.Add(new Label
+            {
+                AutoEllipsis = true,
+                Font = new Font("Segoe UI", 12, FontStyle.Bold),
+                ForeColor = Color.FromArgb(75, 75, 75),
+                Location = new Point(168, 82),
+                Size = new Size(width - 192, 34),
+                Text = string.IsNullOrWhiteSpace(formerPc.CharacterClass)
+                    ? "Class unavailable"
+                    : formerPc.CharacterClass
+            });
+            return formerPcPanel;
+        }
+
         private static string FormatPartyHeroSummary(PartyHeroSheet hero)
         {
             var values = new[]
@@ -3749,6 +3890,7 @@ namespace PlayerAssistant
             _showPostTotals = false;
             _showXpTotal = false;
             _showParty = false;
+            _showFormerPcs = false;
             _showMyHeroBriefing = false;
             _xpTotals = [];
             _xpDateLabel = string.Empty;
@@ -3769,6 +3911,7 @@ namespace PlayerAssistant
             _showAttributionText = false;
             _showXpTotal = false;
             _showParty = false;
+            _showFormerPcs = false;
             _showMyHeroBriefing = false;
             _xpTotals = [];
             _xpDateLabel = string.Empty;
@@ -4549,6 +4692,7 @@ namespace PlayerAssistant
                 && HasDiceRollEntries(GetDiceRollsHtmlPath());
             xpToolStripMenuItem.Enabled = showMenuItemsEnabled && !_showXpTotal;
             partyToolStripMenuItem.Enabled = showMenuItemsEnabled && !_showParty;
+            formerPcsToolStripMenuItem.Enabled = showMenuItemsEnabled && !_showFormerPcs;
             myHeroBriefingToolStripMenuItem.Enabled = showMenuItemsEnabled && !_showMyHeroBriefing;
             adventureOutlineToolStripMenuItem.Enabled = showMenuItemsEnabled && _adventureOutlineTextBox is null;
             UpdateRegionalMapMenuItem();
