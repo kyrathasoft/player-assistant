@@ -54,6 +54,9 @@ var tests = new (string Name, Action Test)[]
     ("orcish translator supports Kelpie road and inn vocabulary", OrcishTranslatorSupportsKelpieRoadAndInnVocabulary),
     ("orcish translator supports Kelpie fellowship prayer vocabulary", OrcishTranslatorSupportsKelpieFellowshipPrayerVocabulary),
     ("orcish translator supports heraldic stranger equipment vocabulary", OrcishTranslatorSupportsHeraldicStrangerEquipmentVocabulary),
+    ("orcish translator supports historical wiki fodder vocabulary", OrcishTranslatorSupportsHistoricalWikiFodderVocabulary),
+    ("orcish translator supports twelve page wiki scrape vocabulary", OrcishTranslatorSupportsTwelvePageWikiScrapeVocabulary),
+    ("orcish translator supports recovered scroll vocabulary", OrcishTranslatorSupportsRecoveredScrollVocabulary),
     ("orcish translator propagates repaired roots through derived families", OrcishTranslatorPropagatesRepairedRootsThroughDerivedFamilies),
     ("orcish translator audits review-promoted derived families", OrcishTranslatorAuditsReviewPromotedDerivedFamilies),
     ("orcish translator shortens mechanically lengthened forms", OrcishTranslatorShortensMechanicallyLengthenedForms),
@@ -909,6 +912,201 @@ static void OrcishTranslatorSupportsHeraldicStrangerEquipmentVocabulary()
     AssertEqual("ut-dakur ur", OrcishTranslatorUtility.TranslateEnglishToOrcish("then to", partOfSpeech: "adverb", requiredTags: ["then"])[0].Translation, "unexpected then to translation");
 }
 
+static void OrcishTranslatorSupportsHistoricalWikiFodderVocabulary()
+{
+    AssertEqual("murk-dak-mur-ti", OrcishTranslatorUtility.TranslateEnglishToOrcish("intercontinental", partOfSpeech: "adjective")[0].Translation, "unexpected intercontinental translation");
+    AssertEqual("morz-vrak-rukh", OrcishTranslatorUtility.TranslateEnglishToOrcish("sickness", partOfSpeech: "noun")[0].Translation, "unexpected sickness translation");
+    AssertEqual("brak-grod-nu-hek-ti", OrcishTranslatorUtility.TranslateEnglishToOrcish("violence", partOfSpeech: "noun")[0].Translation, "unexpected violence translation");
+    AssertEqual("mokh-ash-flit", OrcishTranslatorUtility.TranslateEnglishToOrcish("society", partOfSpeech: "noun")[0].Translation, "unexpected society translation");
+    AssertEqual("nul-darg-thog", OrcishTranslatorUtility.TranslateEnglishToOrcish("anarchy", partOfSpeech: "noun")[0].Translation, "unexpected anarchy translation");
+    AssertEqual("margith", OrcishTranslatorUtility.TranslateEnglishToOrcish("humanity", partOfSpeech: "noun")[0].Translation, "unexpected humanity translation");
+    AssertEqual("dak-mur-bant-murkuk", OrcishTranslatorUtility.TranslateEnglishToOrcish("planet", partOfSpeech: "noun")[0].Translation, "unexpected planet translation");
+    AssertEqual("grak-laguk", OrcishTranslatorUtility.TranslateEnglishToOrcish("conventional", partOfSpeech: "adjective")[0].Translation, "unexpected conventional translation");
+    AssertEqual("gash-dakur-hek-ti", OrcishTranslatorUtility.TranslateEnglishToOrcish("warfare", partOfSpeech: "noun")[0].Translation, "unexpected warfare translation");
+    AssertEqual("dakur-thogu-mog", OrcishTranslatorUtility.TranslateEnglishToOrcish("survivor", partOfSpeech: "noun")[0].Translation, "unexpected survivor translation");
+    AssertEqual("brak-thog-ti-morz-dakur", OrcishTranslatorUtility.TranslateEnglishToOrcish("holocaust", partOfSpeech: "noun")[0].Translation, "unexpected holocaust translation");
+    AssertEqual("dak-mogi-zorn", OrcishTranslatorUtility.TranslateEnglishToOrcish("population", partOfSpeech: "noun")[0].Translation, "unexpected population translation");
+    AssertEqual("dak-mur-ti-mur-kaag-tuk", OrcishTranslatorUtility.TranslateEnglishToOrcish("global", partOfSpeech: "adjective")[0].Translation, "unexpected global translation");
+    AssertEqual("dok-ka-thog", OrcishTranslatorUtility.TranslateEnglishToOrcish("relation", partOfSpeech: "noun")[0].Translation, "unexpected relation translation");
+    AssertEqual("heku-yankuk", OrcishTranslatorUtility.TranslateEnglishToOrcish("harden", partOfSpeech: "verb")[0].Translation, "unexpected harden translation");
+    AssertEqual("dak-burzuk-gor-thog", OrcishTranslatorUtility.TranslateEnglishToOrcish("bunker", partOfSpeech: "noun")[0].Translation, "unexpected bunker translation");
+    AssertEqual("darg-gash-mogi", OrcishTranslatorUtility.TranslateEnglishToOrcish("leadership", partOfSpeech: "noun")[0].Translation, "unexpected leadership translation");
+    AssertEqual("drav-zol-mokhuk", OrcishTranslatorUtility.TranslateEnglishToOrcish("affluent", partOfSpeech: "adjective")[0].Translation, "unexpected affluent translation");
+    AssertEqual("darg-thog-laguk", OrcishTranslatorUtility.TranslateEnglishToOrcish("influential", partOfSpeech: "adjective")[0].Translation, "unexpected influential translation");
+    AssertEqual("thrum-zorn-thog", OrcishTranslatorUtility.TranslateEnglishToOrcish("decline", partOfSpeech: "noun")[0].Translation, "unexpected decline translation");
+    AssertEqual("gakh-dakur-tiwi", OrcishTranslatorUtility.TranslateEnglishToOrcish("decade", partOfSpeech: "noun")[0].Translation, "unexpected decade translation");
+    AssertEqual("murk-dak-muri", OrcishTranslatorUtility.TranslateEnglishToOrcish("international", partOfSpeech: "adjective")[0].Translation, "unexpected international translation");
+    AssertEqual("grot-lag-lagu-zorn", OrcishTranslatorUtility.TranslateEnglishToOrcish("crawl", partOfSpeech: "verb")[0].Translation, "unexpected crawl translation");
+    AssertEqual("disasdok-dok-lag-ti", OrcishTranslatorUtility.TranslateEnglishToOrcish("mothball", partOfSpeech: "verb")[0].Translation, "unexpected mothball translation");
+    AssertEqual("morz-dok-hekinuk", OrcishTranslatorUtility.TranslateEnglishToOrcish("medical", partOfSpeech: "adjective")[0].Translation, "unexpected medical translation");
+    AssertEqual("gor-thog-ti-drav-thruk", OrcishTranslatorUtility.TranslateEnglishToOrcish("care", partOfSpeech: "noun")[0].Translation, "unexpected care translation");
+    AssertEqual("lagu-zorn-dok", OrcishTranslatorUtility.TranslateEnglishToOrcish("revert", partOfSpeech: "verb")[0].Translation, "unexpected revert translation");
+    AssertEqual("nu-zorn", OrcishTranslatorUtility.TranslateEnglishToOrcish("shortage", partOfSpeech: "noun")[0].Translation, "unexpected shortage translation");
+    AssertEqual("burz-hek-dak", OrcishTranslatorUtility.TranslateEnglishToOrcish("infrastructure", partOfSpeech: "noun")[0].Translation, "unexpected infrastructure translation");
+    AssertEqual("rukh-gurmog", OrcishTranslatorUtility.TranslateEnglishToOrcish("drug", partOfSpeech: "noun")[0].Translation, "unexpected drug translation");
+    AssertEqual("rukh-gurmog", OrcishTranslatorUtility.TranslateEnglishToOrcish("pharmaceutical", partOfSpeech: "noun")[0].Translation, "unexpected pharmaceutical translation");
+    AssertEqual("ash-ash-dakur-ti", OrcishTranslatorUtility.TranslateEnglishToOrcish("annual", partOfSpeech: "adjective")[0].Translation, "unexpected annual translation");
+    AssertEqual("mograth-hek", OrcishTranslatorUtility.TranslateEnglishToOrcish("observance", partOfSpeech: "noun")[0].Translation, "unexpected observance translation");
+    AssertEqual("ukin", OrcishTranslatorUtility.TranslateEnglishToOrcish("voluntary", partOfSpeech: "adjective")[0].Translation, "unexpected voluntary translation");
+    AssertEqual("dok-lag-ti-dakku-dak", OrcishTranslatorUtility.TranslateEnglishToOrcish("exile", partOfSpeech: "noun")[0].Translation, "unexpected exile translation");
+    AssertEqual("thrum-zorn-thog", OrcishTranslatorUtility.TranslateEnglishToOrcish("decadence", partOfSpeech: "noun")[0].Translation, "unexpected decadence translation");
+    AssertEqual("nargu-grod-zog-dorn", OrcishTranslatorUtility.TranslateEnglishToOrcish("praise", partOfSpeech: "verb")[0].Translation, "unexpected praise translation");
+    AssertEqual("mauk-hek", OrcishTranslatorUtility.TranslateEnglishToOrcish("skill", partOfSpeech: "noun")[0].Translation, "unexpected skill translation");
+    AssertEqual("brak-thog-morz-dok", OrcishTranslatorUtility.TranslateEnglishToOrcish("vengeance", partOfSpeech: "noun")[0].Translation, "unexpected vengeance translation");
+    AssertEqual("nargu-morz-thog-nu", OrcishTranslatorUtility.TranslateEnglishToOrcish("insult", partOfSpeech: "verb")[0].Translation, "unexpected insult translation");
+    AssertEqual("nargash-morz-thog-nu", OrcishTranslatorUtility.TranslateEnglishToOrcish("insulted", partOfSpeech: "verb", requiredTags: ["derived-by-rule", "past"])[0].Translation, "unexpected rule-derived insulted translation");
+
+    var diseaseMeanings = OrcishTranslatorUtility.TranslateOrcishToEnglish("morz-vrak-rukh", partOfSpeech: "noun");
+    AssertTrue(diseaseMeanings.Any(static candidate => candidate.Translation == "sickness"), "reverse disease form should include sickness");
+    var communityMeanings = OrcishTranslatorUtility.TranslateOrcishToEnglish("mokh-ash-flit", partOfSpeech: "noun");
+    AssertTrue(communityMeanings.Any(static candidate => candidate.Translation == "community"), "reverse community form should retain community");
+    AssertTrue(communityMeanings.Any(static candidate => candidate.Translation == "society"), "reverse community form should include society");
+    var chaosMeanings = OrcishTranslatorUtility.TranslateOrcishToEnglish("nul-darg-thog", partOfSpeech: "noun");
+    AssertTrue(chaosMeanings.Any(static candidate => candidate.Translation == "chaos"), "reverse chaos form should retain chaos");
+    AssertTrue(chaosMeanings.Any(static candidate => candidate.Translation == "anarchy"), "reverse chaos form should include anarchy");
+    var humanityMeanings = OrcishTranslatorUtility.TranslateOrcishToEnglish("margith", partOfSpeech: "noun");
+    AssertTrue(humanityMeanings.Any(static candidate => candidate.Translation == "humans"), "reverse humanity form should retain humans");
+    AssertTrue(humanityMeanings.Any(static candidate => candidate.Translation == "humanity"), "reverse humanity form should include humanity");
+    var leadershipMeanings = OrcishTranslatorUtility.TranslateOrcishToEnglish("darg-gash-mogi", partOfSpeech: "noun");
+    AssertTrue(leadershipMeanings.Any(static candidate => candidate.Translation == "leaders"), "reverse leadership form should retain leaders");
+    AssertTrue(leadershipMeanings.Any(static candidate => candidate.Translation == "leadership"), "reverse leadership form should include leadership");
+    var drugMeanings = OrcishTranslatorUtility.TranslateOrcishToEnglish("rukh-gurmog", partOfSpeech: "noun");
+    AssertTrue(drugMeanings.Any(static candidate => candidate.Translation == "drug"), "reverse potion form should include drug");
+    AssertTrue(drugMeanings.Any(static candidate => candidate.Translation == "pharmaceutical"), "reverse potion form should include pharmaceutical");
+    var declineMeanings = OrcishTranslatorUtility.TranslateOrcishToEnglish("thrum-zorn-thog", partOfSpeech: "noun");
+    AssertTrue(declineMeanings.Any(static candidate => candidate.Translation == "decline"), "reverse decline form should retain decline");
+    AssertTrue(declineMeanings.Any(static candidate => candidate.Translation == "decadence"), "reverse decline form should include decadence");
+    var skillMeanings = OrcishTranslatorUtility.TranslateOrcishToEnglish("mauk-hek", partOfSpeech: "noun");
+    AssertTrue(skillMeanings.Any(static candidate => candidate.Translation == "ability"), "reverse skill form should retain ability");
+    AssertTrue(skillMeanings.Any(static candidate => candidate.Translation == "skill"), "reverse skill form should include skill");
+    AssertEqual(0, OrcishTranslatorUtility.TranslateEnglishToOrcish("radiation").Count, "dropped radiation candidate should remain absent");
+    AssertEqual(0, OrcishTranslatorUtility.TranslateEnglishToOrcish("nuclear").Count, "dropped nuclear candidate should remain absent");
+    AssertEqual(0, OrcishTranslatorUtility.TranslateEnglishToOrcish("science").Count, "dropped science candidate should remain absent");
+    AssertEqual(0, OrcishTranslatorUtility.TranslateEnglishToOrcish("program").Count, "dropped program candidate should remain absent");
+}
+
+static void OrcishTranslatorSupportsTwelvePageWikiScrapeVocabulary()
+{
+    var expected = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+    {
+        ["veteran"] = "drath-gash",
+        ["discipline"] = "hekin-gash-darg-lag",
+        ["reliability"] = "gor-laguk-thog",
+        ["incursion"] = "gash-narg-ik-lagu-dak",
+        ["schism"] = "mokh-zorn-dug",
+        ["captivity"] = "darg-varkum-thog",
+        ["reverence"] = "grak-tur-ti-mograth-thog",
+        ["pantheon"] = "mograth-darg-mogi-mokh-zorn",
+        ["convert"] = "varu-mograth-thog",
+        ["layover"] = "nul-vrak-dakur-lagu-dok",
+        ["militia"] = "nak-dakuk-gash-darg-morz",
+        ["craftsman"] = "mauk-hek-heku-mog",
+        ["restriction"] = "gor-dak-dargu-mokh-mokh",
+        ["felony"] = "darg-bib-grum-brak-morz-bibuk",
+        ["judge"] = "darg-bib-grum-brak-mog",
+        ["censorship"] = "dargu-mokh-mokh-narg-bib",
+        ["taxation"] = "darg-thog-quum-drav",
+        ["imprisonment"] = "darg-varkum-thog",
+        ["privilege"] = "var-tiuk-grak-nak-ti",
+        ["decree"] = "darg-narg-darg-bib-grum-brak",
+        ["selflessness"] = "drakuin-mur-kaag-tuk",
+        ["phenomenon"] = "var-tiuk-dakur-hek-ti",
+        ["madness"] = "thog-vrak-nul-darg-thog",
+        ["aberrant"] = "morz-bibuk-var-tiuk",
+        ["resistant"] = "goru-varkuk",
+        ["emanation"] = "gurmog-thog-dok-darg-krag",
+        ["industrial"] = "hek-zol-hek-grum-morzuk",
+        ["machine"] = "hek-grum-morz-hek-zol",
+        ["steam"] = "rukh-ash-dak-rukh-ti-hush",
+        ["dissipation"] = "thrum-zorn-thog"
+    };
+
+    foreach (var pair in expected)
+    {
+        var results = OrcishTranslatorUtility.TranslateEnglishToOrcish(pair.Key);
+        AssertTrue(results.Any(candidate => candidate.Translation == pair.Value), $"unexpected translation for {pair.Key}");
+    }
+
+    var captivityMeanings = OrcishTranslatorUtility.TranslateOrcishToEnglish("darg-varkum-thog", partOfSpeech: "noun");
+    AssertTrue(captivityMeanings.Any(static candidate => candidate.Translation == "captivity"), "reverse captivity form should include captivity");
+    AssertTrue(captivityMeanings.Any(static candidate => candidate.Translation == "imprisonment"), "reverse captivity form should include imprisonment");
+}
+
+static void OrcishTranslatorSupportsRecoveredScrollVocabulary()
+{
+    var expected = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+    {
+        ["dedicate"] = "draku-mur-kaag-tuk",
+        ["curb"] = "dargu-mokh-mokh-gor-dak",
+        ["spread"] = "lagu-zorn-mur-kaag-tuk",
+        ["spore"] = "gruul-rukh-bit",
+        ["epicenter"] = "murk-dak-dakur-hek-ti",
+        ["pay"] = "quum-dravu",
+        ["weak"] = "nu-brak-burz-yankuk",
+        ["third"] = "dug-agh-ash-darg-lag",
+        ["fourth"] = "dug-dug-darg-lag",
+        ["break"] = "braku",
+        ["leg"] = "vrak-lag",
+        ["possible"] = "mauk-grrt-ashuk",
+        ["seize"] = "dravku-krag-flit-darg-gash",
+        ["track"] = "lag-narg-bib",
+        ["source"] = "dok-darg-krag-dak",
+        ["labor"] = "hek-grum-morz",
+        ["prefer"] = "vargu-dak-zog-ti",
+        ["waste"] = "flitu-dok-lag-ti",
+        ["desire"] = "thruk-thog-var",
+        ["reader"] = "bib-oglaru-mog",
+        ["strange"] = "var-tiuk-gi",
+        ["question"] = "narg-bib-thog-var",
+        ["lie"] = "nargu-morz-bibuk",
+        ["remove"] = "dravku-krag-flit-dok-lag-ti",
+        ["deliver"] = "dravku-ik-draku",
+        ["instruction"] = "darg-narg-narg-bib",
+        ["follow"] = "lagu-dok-dak-tuk",
+        ["watcher-mark"] = "thrak-narg-bib",
+        ["thorn"] = "grodu-vrak-zorn-bit-dak",
+        ["hill"] = "thrum-brak-grrt-ti-dak",
+        ["split"] = "heku-dug-dak",
+        ["root"] = "grodu-vrak-mokh-dak",
+        ["collect"] = "mokhu-mur-kaag-tuk",
+        ["hunger"] = "quum-thruk",
+        ["crude"] = "nu-brak-burz-mauk-hek",
+        ["depict"] = "heku-narg-bib",
+        ["jagged"] = "brakuk-zol-nak",
+        ["sinkhole"] = "defuh-burz-dak-ti",
+        ["maw"] = "narg-ik-ti",
+        ["northward"] = "ur-doku-goth-surg-lag",
+        ["rough"] = "brakuk-dak-thrum-ti",
+        ["sketch"] = "nu-brak-burz-mauk-hek-narg-bib",
+        ["route"] = "lag",
+        ["label"] = "mog-narg-narg-bib",
+        ["precise"] = "grak-nak-ti-zorn",
+        ["suggest"] = "nargu-thog-var",
+        ["rendezvous"] = "mokru-dak"
+    };
+
+    foreach (var pair in expected)
+    {
+        var results = OrcishTranslatorUtility.TranslateEnglishToOrcish(pair.Key);
+        AssertTrue(results.Any(candidate => candidate.Translation == pair.Value), $"unexpected translation for {pair.Key}");
+    }
+
+    var sharedForms = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+    {
+        ["braku"] = "break",
+        ["vrak-lag"] = "leg",
+        ["hek-grum-morz"] = "labor",
+        ["lag"] = "route",
+        ["mokru-dak"] = "rendezvous"
+    };
+
+    foreach (var pair in sharedForms)
+    {
+        var meanings = OrcishTranslatorUtility.TranslateOrcishToEnglish(pair.Key);
+        AssertTrue(meanings.Any(candidate => candidate.Translation == pair.Value), $"reverse {pair.Key} form should include {pair.Value}");
+    }
+}
+
 static void OrcishTranslatorPropagatesRepairedRootsThroughDerivedFamilies()
 {
     AssertEqual("dakur-hrowkuk gash-lag", OrcishTranslatorUtility.TranslateEnglishToOrcish("day's march", partOfSpeech: "noun", requiredTags: ["root-repaired"])[0].Translation, "unexpected repaired day's march translation");
@@ -1127,7 +1325,7 @@ static void OrcishTranslatorExposesUniqueEnglishTermCount()
 {
     var terms = OrcishTranslatorUtility.GetEnglishTerms();
 
-    AssertEqual(3639, OrcishTranslatorUtility.GetEnglishTermCount(), "unexpected total English term count");
+    AssertEqual(3757, OrcishTranslatorUtility.GetEnglishTermCount(), "unexpected total English term count");
     AssertEqual(OrcishTranslatorUtility.GetEnglishTermCount(), terms.Count, "term list and count should agree");
     AssertEqual(1, terms.Count(term => string.Equals(term, "I", StringComparison.OrdinalIgnoreCase)), "I should be counted once despite multiple variants");
     AssertEqual(1, terms.Count(term => string.Equals(term, "really", StringComparison.OrdinalIgnoreCase)), "really should be counted once despite multiple variants");
