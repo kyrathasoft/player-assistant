@@ -141,6 +141,7 @@ namespace PlayerAssistant
         private string _lastHeroImageSkipReason = string.Empty;
         private PictureBox? _heroImagePictureBox;
         private Panel? _regionalMapPanel;
+        private ContextMenuStrip? _regionalMapContextMenuStrip;
         private ListBox? _diceRollsListBox;
         private RichTextBox? _adventureOutlineTextBox;
         private RichTextBox? _myHeroBriefingTextBox;
@@ -271,6 +272,7 @@ namespace PlayerAssistant
             }
 
             _regionalMapPanel?.Dispose();
+            _regionalMapContextMenuStrip?.Dispose();
             _heroImagePictureBox?.Image?.Dispose();
             _heroImagePictureBox?.Dispose();
             _diceRollsListBox?.Dispose();
@@ -4955,17 +4957,74 @@ namespace PlayerAssistant
 
         private void InitializeRegionalMapPanel()
         {
+            var saveAsMenuItem = new ToolStripMenuItem("Save As...");
+            saveAsMenuItem.Click += SaveRegionalMapAsMenuItem_Click;
+            _regionalMapContextMenuStrip = new ContextMenuStrip();
+            _regionalMapContextMenuStrip.Items.Add(saveAsMenuItem);
+            _regionalMapContextMenuStrip.Opening += (_, eventArgs) =>
+            {
+                eventArgs.Cancel = !_regionalMapActive || !File.Exists(GetRegionalMapPath());
+            };
+
             _regionalMapPanel = new Panel
             {
                 BackColor = Color.White,
-                Visible = false
+                Visible = false,
+                ContextMenuStrip = _regionalMapContextMenuStrip
             };
             _regionalMapPanel.Paint += RegionalMapPanel_Paint;
+            ContextMenuStrip = _regionalMapContextMenuStrip;
             Controls.Add(_regionalMapPanel);
             UpdateRegionalMapPanelBounds();
             _regionalMapPanel.SendToBack();
             menuStrip.BringToFront();
             statusStrip.BringToFront();
+        }
+
+        private async void SaveRegionalMapAsMenuItem_Click(object? sender, EventArgs e)
+        {
+            var sourcePath = GetRegionalMapPath();
+            if (!_regionalMapActive || !File.Exists(sourcePath))
+            {
+                SetStatusBarMessage($"Regional map unavailable: {sourcePath}");
+                return;
+            }
+
+            using var dialog = new SaveFileDialog
+            {
+                Title = "Save Regional Map As",
+                FileName = RegionalMapFileName,
+                Filter = "PNG image (*.png)|*.png|All files (*.*)|*.*",
+                DefaultExt = "png",
+                AddExtension = true,
+                OverwritePrompt = true
+            };
+
+            if (dialog.ShowDialog(this) != DialogResult.OK)
+            {
+                SetStatusBarMessage("Regional map save canceled.");
+                return;
+            }
+
+            try
+            {
+                var destinationPath = Path.GetFullPath(dialog.FileName);
+                if (!string.Equals(Path.GetFullPath(sourcePath), destinationPath, StringComparison.OrdinalIgnoreCase))
+                {
+                    File.Copy(sourcePath, destinationPath, overwrite: true);
+                }
+
+                SetStatusBarMessage($"Regional map saved: {destinationPath}");
+            }
+            catch (Exception ex)
+            {
+                await ReportOperationFailureAsync(
+                    "regional map save",
+                    "Regional map could not be saved.",
+                    "Regional Map Save Error",
+                    ex,
+                    showDialog: true);
+            }
         }
 
         private void ShowRegionalMapPanel()

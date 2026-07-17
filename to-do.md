@@ -211,8 +211,8 @@
   - [x] Add the Windows Playwright publisher, daily scheduled task, exact broker allowlist, Credential Manager secrets, and desktop snapshot retrieval.
   - [x] Verify live health, publish the approved game root, and retrieve it with a one-day test token before revoking that token.
   - [x] Persist the approved page queue and advance one target per publisher execution so subsequent runs do not restart at the root.
-  - [ ] Confirm all remaining pages accumulate through repeated publisher executions.
-    - Live verification: root, Game Intro, and Cast snapshots stored; cursor advanced to the first thread; 11 pages remain.
+  - [x] Confirm all remaining pages accumulate through repeated publisher executions.
+    - Live verification: all 15 approved targets are stored, including the newly approved Game Links page; the cursor advanced to the first thread after publishing Game Links.
   - [ ] Run a clean-client test with no RPOL administrator credentials before removing or rotating distributed credentials.
 - [x] Run a full release verification/rehearsal now that project files and sidecars are tracked.
   - Status: completed after restoring `settings.local.json` from the local installer payload.

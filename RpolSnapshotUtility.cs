@@ -349,7 +349,8 @@ namespace PlayerAssistant
 
         private static bool IsApprovedLinkLabel(string text)
         {
-            return text.StartsWith("Ch ", StringComparison.OrdinalIgnoreCase)
+            return text.Equals("Game Links", StringComparison.OrdinalIgnoreCase)
+                || text.StartsWith("Ch ", StringComparison.OrdinalIgnoreCase)
                 || text.StartsWith("Notice: Ch", StringComparison.OrdinalIgnoreCase)
                 || text.StartsWith("OOC", StringComparison.OrdinalIgnoreCase)
                 || text.StartsWith("Notice: OOC", StringComparison.OrdinalIgnoreCase)

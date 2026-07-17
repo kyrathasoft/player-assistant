@@ -181,6 +181,7 @@ var tests = new (string Name, Action Test)[]
     ("rpol challenge detection ignores passive cloudflare references", RpolChallengeDetectionIgnoresPassiveCloudflareReferences),
     ("rpol verification recognizes authenticated browser title", RpolVerificationRecognizesAuthenticatedBrowserTitle),
     ("snapshot publisher state advances one target and wraps", SnapshotPublisherStateAdvancesOneTargetAndWraps),
+    ("snapshot discovery approves game links", SnapshotDiscoveryApprovesGameLinks),
     ("snapshot publisher state persists its cursor", SnapshotPublisherStatePersistsItsCursor),
     ("snapshot publisher state rejects an invalid cursor", SnapshotPublisherStateRejectsInvalidCursor),
     ("network allowlist accepts only broker api path", NetworkAllowlistAcceptsOnlyBrokerApiPath),
@@ -10383,6 +10384,21 @@ static void SnapshotPublisherStateAdvancesOneTargetAndWraps()
     AssertEqual(cast, RpolSnapshotUtility.GetNextSourceUri(state), "one success should advance exactly one target");
     state = RpolSnapshotUtility.AdvancePublisherState(state);
     AssertEqual(root, RpolSnapshotUtility.GetNextSourceUri(state), "the publisher queue should wrap after the last target");
+}
+
+static void SnapshotDiscoveryApprovesGameLinks()
+{
+    var approved = (bool)(InvokeStaticMethod(
+        typeof(RpolSnapshotUtility),
+        "IsApprovedLinkLabel",
+        "Game Links") ?? false);
+    var unrelated = (bool)(InvokeStaticMethod(
+        typeof(RpolSnapshotUtility),
+        "IsApprovedLinkLabel",
+        "Edit Game") ?? true);
+
+    AssertTrue(approved, "Game Links should be included in snapshot discovery");
+    AssertFalse(unrelated, "unrelated game administration links should remain excluded");
 }
 
 static void SnapshotPublisherStatePersistsItsCursor()
