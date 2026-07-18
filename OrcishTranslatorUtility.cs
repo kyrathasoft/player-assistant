@@ -4099,6 +4099,13 @@ namespace PlayerAssistant
             entries.AddRange(BuildBlogFollowupCandidateEntries(entries));
             entries.AddRange(BuildBlogHighYieldCandidateEntries(entries));
             entries.AddRange(BuildBlogMixedHighYieldCandidateEntries(entries));
+            entries.AddRange(BuildBlogRandomHundredCandidateEntries(entries));
+            entries.AddRange(BuildBlogFinalSitemapCandidateEntries(entries));
+            entries.AddRange(BuildGutenbergCorpusCandidateEntries(entries));
+            entries.AddRange(BuildGutenbergCorpusSecondCandidateEntries(entries));
+            entries.AddRange(BuildGutenbergCorpusThirdCandidateEntries(entries));
+            entries.AddRange(BuildGutenbergCorpusFourthCandidateEntries(entries));
+            entries.AddRange(BuildStandardEbooksCorpusCandidateEntries(entries));
 
             var baseEntries = entries.ToArray();
             entries.AddRange(BuildDerivedMorphologyEntries(baseEntries));

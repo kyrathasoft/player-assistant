@@ -16,8 +16,15 @@
 
   <ItemGroup>
     <Compile Include="..\OrcishLexiconReviewUtility.cs" Link="OrcishLexiconReviewUtility.cs" />
+    <Compile Include="..\OrcishTranslatorUtility.BlogFinalSitemapBatch.cs" Link="OrcishTranslatorUtility.BlogFinalSitemapBatch.cs" />
     <Compile Include="..\OrcishTranslatorUtility.BlogHighYieldBatch.cs" Link="OrcishTranslatorUtility.BlogHighYieldBatch.cs" />
     <Compile Include="..\OrcishTranslatorUtility.BlogMixedHighYieldBatch.cs" Link="OrcishTranslatorUtility.BlogMixedHighYieldBatch.cs" />
+    <Compile Include="..\OrcishTranslatorUtility.BlogRandomHundredBatch.cs" Link="OrcishTranslatorUtility.BlogRandomHundredBatch.cs" />
+    <Compile Include="..\OrcishTranslatorUtility.GutenbergCorpusBatch.cs" Link="OrcishTranslatorUtility.GutenbergCorpusBatch.cs" />
+    <Compile Include="..\OrcishTranslatorUtility.GutenbergCorpusSecondBatch.cs" Link="OrcishTranslatorUtility.GutenbergCorpusSecondBatch.cs" />
+    <Compile Include="..\OrcishTranslatorUtility.GutenbergCorpusThirdBatch.cs" Link="OrcishTranslatorUtility.GutenbergCorpusThirdBatch.cs" />
+    <Compile Include="..\OrcishTranslatorUtility.GutenbergCorpusFourthBatch.cs" Link="OrcishTranslatorUtility.GutenbergCorpusFourthBatch.cs" />
+    <Compile Include="..\OrcishTranslatorUtility.StandardEbooksCorpusBatch.cs" Link="OrcishTranslatorUtility.StandardEbooksCorpusBatch.cs" />
     <Compile Include="..\OrcishTranslatorUtility.BlogFollowupBatch.cs" Link="OrcishTranslatorUtility.BlogFollowupBatch.cs" />
     <Compile Include="..\OrcishTranslatorUtility.ShadowdimBlogBatch.cs" Link="OrcishTranslatorUtility.ShadowdimBlogBatch.cs" />
     <Compile Include="..\OrcishTranslatorUtility.cs" Link="OrcishTranslatorUtility.cs" />

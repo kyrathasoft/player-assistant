@@ -1,0 +1,357 @@
+namespace PlayerAssistant
+{
+    internal static partial class OrcishTranslatorUtility
+    {
+        private const string BlogRandomHundredSourceCandidateData = """
+advisors
+affable
+aldermen
+altitude
+antiquarian
+arena
+attentive
+auxiliary
+bare-knuckle
+bear-men
+blizzards
+blood-fused
+boisterous
+bond-mate
+canyon
+carmine
+chalice
+childbirth
+cipher
+co-guardian
+cohesion
+columns
+competitive
+danger-sense
+downriver
+elegance
+excavator
+excavators
+exclusivity
+exempt
+explosive
+exsanguinate
+facial
+fatalistic
+fire-starter
+fried
+gatherings
+glorious
+gushing
+handsomely
+harem
+heartlands
+heartsong
+heavyweight
+human-adjacent
+husbandmen
+ibises
+impediment
+inexpensive
+ingenious
+innkeepers
+jotting
+karma
+knapping
+knower
+legitimacy
+lichdom
+locksmiths
+loner
+long-nose
+lounging
+low-ceilinged
+magic-resistant
+major-domo
+malaise
+malignancy
+man-beast
+megalith
+mid-day
+mind-altering
+moose-man
+multifaceted
+nobility
+non-bear
+non-monstrous
+north-east
+north-west
+northwesternmost
+obelisk
+off-shoot
+once-great
+one-minute
+orrery
+overlaid
+pillow
+pillows
+pit-fighters
+prancing
+precipitous
+proleptic
+puddle
+pyrite
+raucous
+re-arranging
+reaction-time
+reciting
+regalia
+reshuffle
+resurrection
+savvy
+saws
+scepter
+seediest
+self-discovery
+self-made
+shamelessly
+shivers
+short-lived
+shuffle
+shuffling
+simian
+snake-heads
+snobbish
+snowfall
+south-west
+spear-use
+spirit-beast
+spirit-possessed
+stews
+stingy
+strong-jaws
+sub-governor
+subvocalizes
+surface-worlders
+surplus
+swift-tail
+tannery
+thegn
+thrice-great
+tide
+torchbearers
+torpid
+tribute-based
+two-natured
+unwashed
+upper-middle
+vessel-locked
+vestiges
+vibrational
+warm-blooded
+well-suited
+wrestling
+""";
+
+        private const string BlogRandomHundredNearKinCandidateData = """
+alderman|aldermen
+altitude's|altitude
+altitudes|altitude
+antiquarian's|antiquarian
+antiquarians|antiquarian
+arena's|arena
+arenas|arena
+attentively|attentive
+auxiliaries|auxiliary
+auxiliary's|auxiliary
+bear-man|bear-men
+blizzard|blizzards
+blizzard's|blizzards
+boisterously|boisterous
+boisterousness|boisterous
+canyon's|canyon
+canyoning|canyon
+canyons|canyon
+carmine's|carmine
+carmines|carmine
+chalice's|chalice
+chalices|chalice
+childbirth's|childbirth
+ciphered|cipher
+ciphering|cipher
+ciphers|cipher
+cohesion's|cohesion
+column's|columns
+columned|columns
+competitively|competitive
+competitiveness|competitive
+elegance's|elegance
+excavator's|excavator
+exclusivity's|exclusivity
+exempted|exempt
+exempting|exempt
+exempts|exempt
+explosive's|explosive
+explosively|explosive
+explosiveness|explosive
+explosives|explosive
+exsanguinated|exsanguinate
+exsanguinates|exsanguinate
+exsanguinating|exsanguinate
+facial's|facial
+facially|facial
+facials|facial
+fries|fried
+fry|fried
+fry's|fried
+frying|fried
+gather's|gatherings
+gatherer|gatherings
+gatherers|gatherings
+gloriously|glorious
+gushingly|gushing
+handsomeness|handsomely
+handsomer|handsomely
+handsomest|handsomely
+harem's|harem
+harems|harem
+heartland|heartlands
+heartland's|heartlands
+heavyweight's|heavyweight
+heavyweights|heavyweight
+husbandman|husbandmen
+impediment's|impediment
+impediments|impediment
+ingeniously|ingenious
+ingeniousness|ingenious
+innkeeper's|innkeepers
+jotting's|jotting
+jottings|jotting
+karma's|karma
+knap|knapping
+knapped|knapping
+knaps|knapping
+legitimacy's|legitimacy
+loner's|loner
+lounge|lounging
+lounge's|lounging
+lounged|lounging
+lounger|lounging
+loungers|lounging
+lounges|lounging
+malaise's|malaise
+malignancies|malignancy
+malignancy's|malignancy
+megalith's|megalith
+nobility's|nobility
+obelisk's|obelisk
+obelisks|obelisk
+overlay|overlaid
+overlaying|overlaid
+overlays|overlaid
+pillow's|pillow
+pillowed|pillow
+pillowing|pillow
+pit-fighter|pit-fighters
+prancingly|prancing
+precipitously|precipitous
+puddle's|puddle
+puddled|puddle
+puddles|puddle
+puddling|puddle
+pyrite's|pyrite
+pyrites|pyrite
+raucously|raucous
+raucousness|raucous
+re-arrange|re-arranging
+re-arranged|re-arranging
+re-arranges|re-arranging
+recited|reciting
+recites|reciting
+regalia's|regalia
+reshuffled|reshuffle
+reshuffles|reshuffle
+reshuffling|reshuffle
+resurrection's|resurrection
+resurrections|resurrection
+savvied|savvy
+savvier|savvy
+savvies|savvy
+savviest|savvy
+savvy's|savvy
+savvying|savvy
+saw's|saws
+sawed|saws
+sawing|saws
+scepter's|scepter
+scepters|scepter
+seedier|seediest
+seedy|seediest
+shameless|shamelessly
+shamelessness|shamelessly
+shuffle's|shuffle
+shuffled|shuffle
+shuffles|shuffle
+simian's|simian
+simians|simian
+snake-head|snake-heads
+snobbishly|snobbish
+snobbishness|snobbish
+snowfall's|snowfall
+snowfalls|snowfall
+stew's|stews
+stewed|stews
+stewing|stews
+stingier|stingy
+stingiest|stingy
+stinginess|stingy
+subvocalize|subvocalizes
+subvocalized|subvocalizes
+subvocalizing|subvocalizes
+surface-worlder|surface-worlders
+surpluses|surplus
+tanneries|tannery
+tannery's|tannery
+tide's|tide
+tided|tide
+tides|tide
+tiding|tide
+torchbearer|torchbearers
+torchbearer's|torchbearers
+torpidly|torpid
+vestige|vestiges
+vestige's|vestiges
+wrestling's|wrestling
+""";
+
+        private static IEnumerable<OrcishLexiconEntry> BuildBlogRandomHundredCandidateEntries(
+            IEnumerable<OrcishLexiconEntry> entries)
+        {
+            var acceptedEntries = entries.ToList();
+            var sourceRoots = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            var sourceOrdinal = 0;
+            foreach (var english in BlogRandomHundredSourceCandidateData.Split(
+                         ['\r', '\n'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+            {
+                var root = $"zugraz-{EncodeTwentyPageOrdinal(sourceOrdinal++)}";
+                sourceRoots.Add(english, root);
+                var candidate = new OrcishLexiconEntry(
+                    english, root,
+                    Tags: ["blog", "blog-random-hundred-candidate-batch", "generated", "review-promoted", "close-form-reviewed", $"family-{english}"]);
+                OrcishLexiconReviewUtility.EnsureCanAdd(candidate, acceptedEntries);
+                acceptedEntries.Add(candidate);
+                yield return candidate;
+            }
+
+            var nearKinOrdinal = 0;
+            foreach (var line in BlogRandomHundredNearKinCandidateData.Split(
+                         ['\r', '\n'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+            {
+                var fields = line.Split('|', 2, StringSplitOptions.TrimEntries);
+                var english = fields[0];
+                var sourceEnglish = fields[1];
+                var root = sourceRoots[sourceEnglish];
+                var candidate = new OrcishLexiconEntry(
+                    english, CreateThirtyPageNearKinForm(root, english, nearKinOrdinal++),
+                    Tags: ["blog", "blog-random-hundred-near-kin", "near-kin", "derived-by-rule", "review-promoted", "close-form-reviewed", $"family-{sourceEnglish}"]);
+                OrcishLexiconReviewUtility.EnsureCanAdd(candidate, acceptedEntries);
+                acceptedEntries.Add(candidate);
+                yield return candidate;
+            }
+        }
+    }
+}
