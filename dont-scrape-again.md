@@ -1,5 +1,58 @@
 # Do Not Scrape Again
 
+## Second random 50-page translation batch
+
+- https://publish.obsidian.md/scarlethorizons/NPCs/Devra+Trueaim
+- https://publish.obsidian.md/scarlethorizons/Code/Player+Assistant+app/GetMarkdownFromURL
+- https://publish.obsidian.md/scarlethorizons/OSE/2.+Classes/5.+Halfling
+- https://publish.obsidian.md/scarlethorizons/Locations/Doors+of+Galduhr
+- https://publish.obsidian.md/scarlethorizons/Powers/Gods/Deep+Duerra
+- https://publish.obsidian.md/scarlethorizons/OSE/2.+Classes/7.+Thief
+- https://publish.obsidian.md/scarlethorizons/Meta/Cumerians
+- https://publish.obsidian.md/scarlethorizons/Meta/Hellbane
+- https://publish.obsidian.md/scarlethorizons/Meta/House+Rules/Rolling+Ability+Scores+At+Character+Creation
+- https://publish.obsidian.md/scarlethorizons/OSE/3.+Equipment+%26+Services/5.+Rules+for+Vehicles
+- https://publish.obsidian.md/scarlethorizons/OSE/4.+Magic/2.+Spell+Books
+- https://publish.obsidian.md/scarlethorizons/Powers/Factions/Order+of+the+Gauntlet
+- https://publish.obsidian.md/scarlethorizons/SoloPlay/The+Earth+It+Cares+Not/Cares+Not+3
+- https://publish.obsidian.md/scarlethorizons/NPCs/Valashinaz
+- https://publish.obsidian.md/scarlethorizons/How-To/Image+Full+Size
+- https://publish.obsidian.md/scarlethorizons/Locations/Principality+of+Brine
+- https://publish.obsidian.md/scarlethorizons/Locations/Far+Realm
+- https://publish.obsidian.md/scarlethorizons/OSE/4.+Magic/Magic-User+Spells/5+-+Feeblemind
+- https://publish.obsidian.md/scarlethorizons/SoloPlay/The+Earth+It+Cares+Not/Cares+Not+10
+- https://publish.obsidian.md/scarlethorizons/OSE/8.+Treasures/11.+Swords
+- https://publish.obsidian.md/scarlethorizons/Powers/Gods/Nergal
+- https://publish.obsidian.md/scarlethorizons/OSE/7.+Monsters/Monster+Stats/Rhinoceros
+- https://publish.obsidian.md/scarlethorizons/Establishments/Brazen+Strumpet
+- https://publish.obsidian.md/scarlethorizons/NPCs/Exodore+Swift
+- https://publish.obsidian.md/scarlethorizons/Meta/Faerzress
+- https://publish.obsidian.md/scarlethorizons/OSE/8.+Treasures/Potions/Potion+of+Poison
+- https://publish.obsidian.md/scarlethorizons/OSE/7.+Monsters/Monster+Stats/Trader
+- https://publish.obsidian.md/scarlethorizons/OSE/8.+Treasures/1.+Placing+Treasure
+- https://publish.obsidian.md/scarlethorizons/Powers/Factions/Red+Bannermen
+- https://publish.obsidian.md/scarlethorizons/Monsters/Geppettin
+- https://publish.obsidian.md/scarlethorizons/OSE/4.+Magic/Magic-User+Spells/2+-+Web
+- https://publish.obsidian.md/scarlethorizons/OSE/4.+Magic/Cleric+Spells/1+-+Purify+Food+and+Water
+- https://publish.obsidian.md/scarlethorizons/OSE/4.+Magic/Magic-User+Spells/5+-+Contact+Higher+Plane
+- https://publish.obsidian.md/scarlethorizons/NPCs/Thelgarr+Blackstaff
+- https://publish.obsidian.md/scarlethorizons/OSE/8.+Treasures/Potions/Potion+of+Polymorph+Self
+- https://publish.obsidian.md/scarlethorizons/Locations/Coalscuttle
+- https://publish.obsidian.md/scarlethorizons/OSE/8.+Treasures/Potions/Potion+of+Gaseous+Form
+- https://publish.obsidian.md/scarlethorizons/OSE/4.+Magic/Magic-User+Spells/2+-+Detect+Evil
+- https://publish.obsidian.md/scarlethorizons/OSE/7.+Monsters/Monster+Stats/Normal+Human
+- https://publish.obsidian.md/scarlethorizons/NPCs/Celaena+Sardothien
+- https://publish.obsidian.md/scarlethorizons/OSE/4.+Magic/Magic-User+Spells/6+-+Anti-Magic+Shell
+- https://publish.obsidian.md/scarlethorizons/OSE/4.+Magic/Magic-User+Spells/1+-+Charm+Person
+- https://publish.obsidian.md/scarlethorizons/OSE/8.+Treasures/Rings/Ring+of+X-Ray+Vision
+- https://publish.obsidian.md/scarlethorizons/OSE/7.+Monsters/Monster+Stats/Warp+Beast
+- https://publish.obsidian.md/scarlethorizons/Historical+Events/The+Industrial+Age
+- https://publish.obsidian.md/scarlethorizons/OSE/4.+Magic/Magic-User+Spells/1+-+Floating+Disc
+- https://publish.obsidian.md/scarlethorizons/Locations/Misty+Mire
+- https://publish.obsidian.md/scarlethorizons/Maps+%26+Travel/Issenda+Overview+by+Sector
+- https://publish.obsidian.md/scarlethorizons/NPCs/Grant+Caddyshanks
+- https://publish.obsidian.md/scarlethorizons/NPCs/Brenda+Halfast
+
 ## Random 50-page translation batch
 
 - https://publish.obsidian.md/scarlethorizons/OSE/6.+Running+Adventures/4.+Monsters+and+NPCs
