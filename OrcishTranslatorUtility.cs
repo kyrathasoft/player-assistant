@@ -4097,6 +4097,7 @@ namespace PlayerAssistant
             entries.AddRange(BuildAllRemainingPageSampleEntries(entries));
             entries.AddRange(BuildShadowdimBlogCandidateEntries(entries));
             entries.AddRange(BuildBlogFollowupCandidateEntries(entries));
+            entries.AddRange(BuildBlogHighYieldCandidateEntries(entries));
 
             var baseEntries = entries.ToArray();
             entries.AddRange(BuildDerivedMorphologyEntries(baseEntries));

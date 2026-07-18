@@ -16,6 +16,9 @@
 
   <ItemGroup>
     <Compile Include="..\OrcishLexiconReviewUtility.cs" Link="OrcishLexiconReviewUtility.cs" />
+    <Compile Include="..\OrcishTranslatorUtility.BlogHighYieldBatch.cs" Link="OrcishTranslatorUtility.BlogHighYieldBatch.cs" />
+    <Compile Include="..\OrcishTranslatorUtility.BlogFollowupBatch.cs" Link="OrcishTranslatorUtility.BlogFollowupBatch.cs" />
+    <Compile Include="..\OrcishTranslatorUtility.ShadowdimBlogBatch.cs" Link="OrcishTranslatorUtility.ShadowdimBlogBatch.cs" />
     <Compile Include="..\OrcishTranslatorUtility.cs" Link="OrcishTranslatorUtility.cs" />
     <Compile Include="..\RandomNumberUtility.cs" Link="RandomNumberUtility.cs" />
   </ItemGroup>

@@ -22,6 +22,21 @@
 - https://bryanmiller.us/blog/2026/01/scene-an-unexpected-return
 - https://bryanmiller.us/blog/2026/05/principality-of-brine
 
+## Bryan Miller blog high-yield Shadowdim batch (12)
+
+- https://bryanmiller.us/blog/2026/04/shadowdim-ap-27
+- https://bryanmiller.us/blog/2026/04/shadowdim-ap-22
+- https://bryanmiller.us/blog/2026/04/shadowdim-ap-30
+- https://bryanmiller.us/blog/2026/03/shadowdim-ap-21
+- https://bryanmiller.us/blog/2026/04/shadowdim-ap-36
+- https://bryanmiller.us/blog/2026/03/shadowdim-ap-20
+- https://bryanmiller.us/blog/2026/04/shadowdim-ap-28
+- https://bryanmiller.us/blog/2026/01/shadowdim-ap-1
+- https://bryanmiller.us/blog/2026/02/shadowdim-ap-23
+- https://bryanmiller.us/blog/2026/03/shadowdim-ap-17
+- https://bryanmiller.us/blog/2026/04/shadowdim-ap-32
+- https://bryanmiller.us/blog/2026/04/shadowdim-ap-34
+
 ## All remaining usable-page translation batch (584)
 
 - https://publish.obsidian.md/scarlethorizons/Classes/Loremaster+Bard
