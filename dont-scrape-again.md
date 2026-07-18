@@ -1,5 +1,27 @@
 # Do Not Scrape Again
 
+## Bryan Miller blog Shadowdim candidate batch (4)
+
+- https://bryanmiller.us/blog/2026/04/shadowdim-ap-35
+- https://bryanmiller.us/blog/2026/04/shadowdim-ap-25
+- https://bryanmiller.us/blog/2026/03/shadowdim-ap-19
+- https://bryanmiller.us/blog/2026/04/shadowdim-ap-33
+
+## Bryan Miller blog follow-up candidate batch (12)
+
+- https://bryanmiller.us/blog/2026/02/the-city-of-prelm
+- https://bryanmiller.us/blog/2026/02/shadowdim-4-treasure-tithing
+- https://bryanmiller.us/blog/2026/02/shadowdim-6-the-syncretic-breakthrough
+- https://bryanmiller.us/blog/2025/12/endless-rime-session-1-scene-sky-glyphs
+- https://bryanmiller.us/blog/2026/01/endless-rime-session-1-scene-the-whispering-wind
+- https://bryanmiller.us/blog/2026/01/scene-last-night-at-home
+- https://bryanmiller.us/blog/2026/02/the-chamber-of-rectitude
+- https://bryanmiller.us/blog/2025/12/endless-rime-session-1
+- https://bryanmiller.us/blog/2026/02/shadowdim-9-the-sovereign-of-the-mushroom-forest
+- https://bryanmiller.us/blog/2026/02/shadowdim-8-the-heartstone-run
+- https://bryanmiller.us/blog/2026/01/scene-an-unexpected-return
+- https://bryanmiller.us/blog/2026/05/principality-of-brine
+
 ## All remaining usable-page translation batch (584)
 
 - https://publish.obsidian.md/scarlethorizons/Classes/Loremaster+Bard

@@ -43,7 +43,7 @@ namespace PlayerAssistant
         string? GrammarClass = null,
         IReadOnlyList<string>? Tags = null);
 
-    internal static class OrcishTranslatorUtility
+    internal static partial class OrcishTranslatorUtility
     {
         private static readonly Regex EmphasizedFirstPersonPronounPattern =
             new(@"(?<!\S)I\s+\{emphasis\}(?!\S)", RegexOptions.Compiled);
@@ -4095,6 +4095,8 @@ namespace PlayerAssistant
             entries.AddRange(BuildSecondFiftyPageSampleEntries(entries));
             entries.AddRange(BuildThirdFiftyPageSampleEntries(entries));
             entries.AddRange(BuildAllRemainingPageSampleEntries(entries));
+            entries.AddRange(BuildShadowdimBlogCandidateEntries(entries));
+            entries.AddRange(BuildBlogFollowupCandidateEntries(entries));
 
             var baseEntries = entries.ToArray();
             entries.AddRange(BuildDerivedMorphologyEntries(baseEntries));
