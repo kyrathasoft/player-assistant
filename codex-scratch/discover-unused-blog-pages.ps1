@@ -1,3 +1,7 @@
+param(
+    [string]$OutputPath = 'codex-scratch\blog-discovery-round3.json'
+)
+
 $ErrorActionPreference = 'Stop'
 
 $headers = [System.Net.Http.Headers.ProductInfoHeaderValue]::new('player-assistant-orcish-discovery', '1.0')
@@ -72,5 +76,5 @@ $manifest = [pscustomobject]@{
     lexiconEntryCount = $entries.Count
     pages = @($results | Sort-Object candidateCount -Descending)
 }
-$manifest | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath 'codex-scratch\blog-discovery-round3.json' -Encoding utf8
+$manifest | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath $OutputPath -Encoding utf8
 $manifest.pages | Select-Object -First 35 url,title,characters,candidateCount | ConvertTo-Json -Depth 3

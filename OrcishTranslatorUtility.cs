@@ -4098,6 +4098,7 @@ namespace PlayerAssistant
             entries.AddRange(BuildShadowdimBlogCandidateEntries(entries));
             entries.AddRange(BuildBlogFollowupCandidateEntries(entries));
             entries.AddRange(BuildBlogHighYieldCandidateEntries(entries));
+            entries.AddRange(BuildBlogMixedHighYieldCandidateEntries(entries));
 
             var baseEntries = entries.ToArray();
             entries.AddRange(BuildDerivedMorphologyEntries(baseEntries));

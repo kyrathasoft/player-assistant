@@ -37,6 +37,33 @@
 - https://bryanmiller.us/blog/2026/04/shadowdim-ap-32
 - https://bryanmiller.us/blog/2026/04/shadowdim-ap-34
 
+## Bryan Miller blog mixed high-yield batch (24)
+
+- https://bryanmiller.us/blog/2026/02/shadowdim-ap-7
+- https://bryanmiller.us/blog/2026/04/shadowdim-ap-29
+- https://bryanmiller.us/blog/2026/04/shadowdim-ap-31
+- https://bryanmiller.us/blog/2025/12/session-0-part-2-influences
+- https://bryanmiller.us/blog/2026/01/solo-flow
+- https://bryanmiller.us/blog/2026/02/shadowdim-ap-10
+- https://bryanmiller.us/blog/2026/04/shadowdim-ap-24
+- https://bryanmiller.us/blog/2025/12/mechanics-for-endless-rime-solo-play
+- https://bryanmiller.us/blog/2026/03/shadowdim-ap-18
+- https://bryanmiller.us/blog/2025/12/endless-rime-terminology
+- https://bryanmiller.us/blog/2026/02/shadowdim-ap-16
+- https://bryanmiller.us/blog/2026/04/shadowdim-ap-26
+- https://bryanmiller.us/blog/2026/02/the-dawnstriders
+- https://bryanmiller.us/blog/2026/01/hex-crawl-algorithm-20260121192549
+- https://bryanmiller.us/blog/2026/02/the-thothian-enclave
+- https://bryanmiller.us/blog/2026/01/the-reddening-part-ii
+- https://bryanmiller.us/blog/2026/02/the-hall-of-records
+- https://bryanmiller.us/blog/2026/02/player-character-snapshots
+- https://bryanmiller.us/blog/2026/02/shadowdim-ap-13
+- https://bryanmiller.us/blog/2026/02/shadowdim-ap-15
+- https://bryanmiller.us/blog/2026/02/shadowdim-3-well-rats
+- https://bryanmiller.us/blog/2026/02/shadowdim-ap-14
+- https://bryanmiller.us/blog/2026/02/shadowdim-ap-11
+- https://bryanmiller.us/blog/2026/02/shadowdim-5-a-hopefully-secure-redoubt
+
 ## All remaining usable-page translation batch (584)
 
 - https://publish.obsidian.md/scarlethorizons/Classes/Loremaster+Bard
