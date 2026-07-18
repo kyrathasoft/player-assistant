@@ -1,5 +1,75 @@
 # Do Not Scrape Again
 
+## Random 67-page batch
+
+- https://publish.obsidian.md/scarlethorizons/OSE/4.+Magic/Magic-User+Spells/2+-+Mirror+Image
+- https://publish.obsidian.md/scarlethorizons/OSE/8.+Treasures/12.+Weapons
+- https://publish.obsidian.md/scarlethorizons/OSE/7.+Monsters/Monster+Stats/Shrew%2C+Giant
+- https://publish.obsidian.md/scarlethorizons/OSE/8.+Treasures/4.+Magic+Items+(General)
+- https://publish.obsidian.md/scarlethorizons/OSE/3.+Equipment+%26+Services/10.+Specialists
+- https://publish.obsidian.md/scarlethorizons/Locations/Lower+Dark
+- https://publish.obsidian.md/scarlethorizons/OSE/7.+Monsters/Monster+Stats/Green+Slime
+- https://publish.obsidian.md/scarlethorizons/OSE/4.+Magic/Cleric+Spells/3+-+Striking
+- https://publish.obsidian.md/scarlethorizons/Establishments/Circle+K+Inn
+- https://publish.obsidian.md/scarlethorizons/OSE/4.+Magic/Magic-User+Spells/6+-+Reincarnate
+- https://publish.obsidian.md/scarlethorizons/OSE/4.+Magic/Magic-User+Spells/4+-+Wall+of+Fire
+- https://publish.obsidian.md/scarlethorizons/OSE/7.+Monsters/Monster+Stats/Nixie
+- https://publish.obsidian.md/scarlethorizons/OSE/3.+Equipment+%26+Services/9.+Mercenaries
+- https://publish.obsidian.md/scarlethorizons/Locations/Inkwell
+- https://publish.obsidian.md/scarlethorizons/OSE/4.+Magic/Magic-User+Spells/4+-+Massmorph
+- https://publish.obsidian.md/scarlethorizons/PCs/Jelb+Garrick%2C+Illusionist
+- https://publish.obsidian.md/scarlethorizons/OSE/8.+Treasures/Potions/Potion+of+Speed
+- https://publish.obsidian.md/scarlethorizons/Locations/Barakuir
+- https://publish.obsidian.md/scarlethorizons/Locations/Slaytonthorpe
+- https://publish.obsidian.md/scarlethorizons/Monsters/Goblin
+- https://publish.obsidian.md/scarlethorizons/OSE/7.+Monsters/Monster+Stats/Rhagodessa
+- https://publish.obsidian.md/scarlethorizons/Powers/Powers+of+Issenda
+- https://publish.obsidian.md/scarlethorizons/OSE/7.+Monsters/Monster+Stats/Troglodyte
+- https://publish.obsidian.md/scarlethorizons/Powers/Gods
+- https://publish.obsidian.md/scarlethorizons/OSE/7.+Monsters/Monster+Stats/Ferret%2C+Giant
+- https://publish.obsidian.md/scarlethorizons/OSE/7.+Monsters/Monster+Stats/Hydra
+- https://publish.obsidian.md/scarlethorizons/OSE/7.+Monsters/Monster+Stats/Camel
+- https://publish.obsidian.md/scarlethorizons/OSE/8.+Treasures/Rods%2C+Staves%2C+Wands/Wand+of+Paralyzation
+- https://publish.obsidian.md/scarlethorizons/Locations/Westkeep
+- https://publish.obsidian.md/scarlethorizons/OSE/7.+Monsters/Monster+Stats/Titanothere
+- https://publish.obsidian.md/scarlethorizons/OSE/7.+Monsters/Monster+Stats/Cave+Locust
+- https://publish.obsidian.md/scarlethorizons/Player-Contributed/Journal+Entry+Excerpt+8a
+- https://publish.obsidian.md/scarlethorizons/NPCs/Urvan+Hall%2C+paladin+of+St.+Ygg
+- https://publish.obsidian.md/scarlethorizons/OSE/7.+Monsters/Monster+Stats/Pterosaur
+- https://publish.obsidian.md/scarlethorizons/OSE/7.+Monsters/Monster+Stats/Leech%2C+Giant
+- https://publish.obsidian.md/scarlethorizons/Historical+Events/Festival+of+Forging
+- https://publish.obsidian.md/scarlethorizons/Locations/Brookhollow
+- https://publish.obsidian.md/scarlethorizons/Powers/Du'mal
+- https://publish.obsidian.md/scarlethorizons/Meta/House+Rules/Spellcaster+Limitations
+- https://publish.obsidian.md/scarlethorizons/OSE/8.+Treasures/2.+Treasure+Types
+- https://publish.obsidian.md/scarlethorizons/OSE/4.+Magic/Cleric+Spells/2+-+Bless
+- https://publish.obsidian.md/scarlethorizons/OSE/8.+Treasures/Potions/Potion+of+Levitation
+- https://publish.obsidian.md/scarlethorizons/Locations/Ironguard+Motte
+- https://publish.obsidian.md/scarlethorizons/Meta/Players
+- https://publish.obsidian.md/scarlethorizons/Player-Contributed/Max+on+Blanrydes
+- https://publish.obsidian.md/scarlethorizons/Monsters/Ulitharid
+- https://publish.obsidian.md/scarlethorizons/Locations/Middenmark
+- https://publish.obsidian.md/scarlethorizons/OSE/8.+Treasures/Miscellaneous/Amulet+of+Protection+Against+Scrying
+- https://publish.obsidian.md/scarlethorizons/Locations/Helix
+- https://publish.obsidian.md/scarlethorizons/NPCs/Triskelion
+- https://publish.obsidian.md/scarlethorizons/OSE/7.+Monsters/Monster+Stats/Zombie
+- https://publish.obsidian.md/scarlethorizons/Powers/Gods/Ilsensine
+- https://publish.obsidian.md/scarlethorizons/Locations/The+Bauthwaf
+- https://publish.obsidian.md/scarlethorizons/OSE/3.+Equipment+%26+Services/2.+Adventuring+Gear
+- https://publish.obsidian.md/scarlethorizons/NPCs/Narinza+Izrut
+- https://publish.obsidian.md/scarlethorizons/OSE/4.+Magic/Magic-User+Spells/6+-+Disintegrate
+- https://publish.obsidian.md/scarlethorizons/Quests/Quest+Caravan+Kirkilston+to+Raven's+Pass
+- https://publish.obsidian.md/scarlethorizons/OSE/7.+Monsters/Monster+Stats/Spectre
+- https://publish.obsidian.md/scarlethorizons/Locations/Bogtown
+- https://publish.obsidian.md/scarlethorizons/SoloPlay/Shadowdim/Shadowdim+3
+- https://publish.obsidian.md/scarlethorizons/OSE/4.+Magic/Magic-User+Spells/1+-+Detect+Magic
+- https://publish.obsidian.md/scarlethorizons/OSE/5.+Adventures/7.+Waterborne+Adventuring
+- https://publish.obsidian.md/scarlethorizons/Powers/Gods/Imperiosa
+- https://publish.obsidian.md/scarlethorizons/Meta/Dice
+- https://publish.obsidian.md/scarlethorizons/Meta/Visitors
+- https://publish.obsidian.md/scarlethorizons/Monsters/Topsy
+- https://publish.obsidian.md/scarlethorizons/OSE/8.+Treasures/Miscellaneous/Helm+of+Alignment+Changing
+
 ## Follow-up 30-page batch
 
 - https://publish.obsidian.md/scarlethorizons/NPCs/Gintarn+Khalidson
