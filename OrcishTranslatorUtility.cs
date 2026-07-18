@@ -3847,6 +3847,247 @@ namespace PlayerAssistant
                 new("rendezvous", "mokru-dak", PartOfSpeech: "noun", GrammarClass: "meeting", Tags: ["shared-form", "close-form-reviewed", "rendezvous-point", "wiki-fodder", "scroll-batch"]),
             ]);
 
+            // Generated from ten randomly sampled Obsidian Publish Markdown endpoints.
+            // Every entry was admitted through ReviewProposedLexiconEntry before insertion.
+            entries.AddRange([
+                new("duergar", "zhar-agh-agh-agh", Tags: ["wiki-fodder", "ten-page-sample", "generated", "review-promoted", "close-form-reviewed"]),
+                new("per", "zhar-agh-agh-burz", Tags: ["wiki-fodder", "ten-page-sample", "generated", "review-promoted", "close-form-reviewed"]),
+                new("snakes", "zhar-agh-agh-dak", Tags: ["wiki-fodder", "ten-page-sample", "generated", "review-promoted", "close-form-reviewed"]),
+                new("swarm", "zhar-agh-agh-drak", Tags: ["wiki-fodder", "ten-page-sample", "generated", "review-promoted", "close-form-reviewed"]),
+                new("citadel", "zhar-agh-agh-gar", Tags: ["wiki-fodder", "ten-page-sample", "generated", "review-promoted", "close-form-reviewed"]),
+                new("fog", "zhar-agh-agh-gash", Tags: ["wiki-fodder", "ten-page-sample", "generated", "review-promoted", "close-form-reviewed"]),
+                new("flayers", "zhar-agh-agh-gor", Tags: ["wiki-fodder", "ten-page-sample", "generated", "review-promoted", "close-form-reviewed"]),
+                new("must", "zhar-agh-agh-grak", Tags: ["wiki-fodder", "ten-page-sample", "generated", "review-promoted", "close-form-reviewed"]),
+                new("once", "zhar-agh-agh-grod", Tags: ["wiki-fodder", "ten-page-sample", "generated", "review-promoted", "close-form-reviewed"]),
+                new("shanatar", "zhar-agh-agh-krag", Tags: ["wiki-fodder", "ten-page-sample", "generated", "review-promoted", "close-form-reviewed"]),
+                new("subject", "zhar-agh-agh-mok", Tags: ["wiki-fodder", "ten-page-sample", "generated", "review-promoted", "close-form-reviewed"]),
+                new("axes", "zhar-agh-agh-narg", Tags: ["wiki-fodder", "ten-page-sample", "generated", "review-promoted", "close-form-reviewed"]),
+                new("barakuir", "zhar-agh-agh-ruk", Tags: ["wiki-fodder", "ten-page-sample", "generated", "review-promoted", "close-form-reviewed"]),
+                new("basilisk", "zhar-agh-agh-skar", Tags: ["wiki-fodder", "ten-page-sample", "generated", "review-promoted", "close-form-reviewed"]),
+                new("charges", "zhar-agh-agh-thog", Tags: ["wiki-fodder", "ten-page-sample", "generated", "review-promoted", "close-form-reviewed"]),
+                new("completed", "zhar-agh-agh-varg", Tags: ["wiki-fodder", "ten-page-sample", "generated", "review-promoted", "close-form-reviewed"]),
+                new("contact", "zhar-agh-burz-agh", Tags: ["wiki-fodder", "ten-page-sample", "generated", "review-promoted", "close-form-reviewed"]),
+                new("diameter", "zhar-agh-burz-burz", Tags: ["wiki-fodder", "ten-page-sample", "generated", "review-promoted", "close-form-reviewed"]),
+                new("divine", "zhar-agh-burz-dak", Tags: ["wiki-fodder", "ten-page-sample", "generated", "review-promoted", "close-form-reviewed"]),
+                new("driven", "zhar-agh-burz-drak", Tags: ["wiki-fodder", "ten-page-sample", "generated", "review-promoted", "close-form-reviewed"]),
+                new("killing", "zhar-agh-burz-gar", Tags: ["wiki-fodder", "ten-page-sample", "generated", "review-promoted", "close-form-reviewed"]),
+                new("laduguer", "zhar-agh-burz-gash", Tags: ["wiki-fodder", "ten-page-sample", "generated", "review-promoted", "close-form-reviewed"]),
+                new("lasts", "zhar-agh-burz-gor", Tags: ["wiki-fodder", "ten-page-sample", "generated", "review-promoted", "close-form-reviewed"]),
+                new("otherwise", "zhar-agh-burz-grak", Tags: ["wiki-fodder", "ten-page-sample", "generated", "review-promoted", "close-form-reviewed"]),
+                new("realm", "zhar-agh-burz-grod", Tags: ["wiki-fodder", "ten-page-sample", "generated", "review-promoted", "close-form-reviewed"]),
+                new("slaytonthorpe", "zhar-agh-burz-krag", Tags: ["wiki-fodder", "ten-page-sample", "generated", "review-promoted", "close-form-reviewed"]),
+                new("spider", "zhar-agh-burz-mok", Tags: ["wiki-fodder", "ten-page-sample", "generated", "review-promoted", "close-form-reviewed"]),
+                new("suicidal", "zhar-agh-burz-narg", Tags: ["wiki-fodder", "ten-page-sample", "generated", "review-promoted", "close-form-reviewed"]),
+                new("task", "zhar-agh-burz-ruk", Tags: ["wiki-fodder", "ten-page-sample", "generated", "review-promoted", "close-form-reviewed"]),
+                new("underdark", "zhar-agh-burz-skar", Tags: ["wiki-fodder", "ten-page-sample", "generated", "review-promoted", "close-form-reviewed"]),
+                new("usage", "zhar-agh-burz-thog", Tags: ["wiki-fodder", "ten-page-sample", "generated", "review-promoted", "close-form-reviewed"]),
+                new("affect", "zhar-agh-burz-varg", Tags: ["wiki-fodder", "ten-page-sample", "generated", "review-promoted", "close-form-reviewed"]),
+                new("affects", "zhar-agh-dak-agh", Tags: ["wiki-fodder", "ten-page-sample", "generated", "review-promoted", "close-form-reviewed"]),
+                new("alchemical", "zhar-agh-dak-burz", Tags: ["wiki-fodder", "ten-page-sample", "generated", "review-promoted", "close-form-reviewed"]),
+                new("along", "zhar-agh-dak-dak", Tags: ["wiki-fodder", "ten-page-sample", "generated", "review-promoted", "close-form-reviewed"]),
+                new("already", "zhar-agh-dak-drak", Tags: ["wiki-fodder", "ten-page-sample", "generated", "review-promoted", "close-form-reviewed"]),
+                new("ambitious", "zhar-agh-dak-gar", Tags: ["wiki-fodder", "ten-page-sample", "generated", "review-promoted", "close-form-reviewed"]),
+                new("anytime", "zhar-agh-dak-gash", Tags: ["wiki-fodder", "ten-page-sample", "generated", "review-promoted", "close-form-reviewed"]),
+                new("aquatic", "zhar-agh-dak-gor", Tags: ["wiki-fodder", "ten-page-sample", "generated", "review-promoted", "close-form-reviewed"]),
+                new("battling", "zhar-agh-dak-grak", Tags: ["wiki-fodder", "ten-page-sample", "generated", "review-promoted", "close-form-reviewed"]),
+                new("believed", "zhar-agh-dak-grod", Tags: ["wiki-fodder", "ten-page-sample", "generated", "review-promoted", "close-form-reviewed"]),
+                new("believing", "zhar-agh-dak-krag", Tags: ["wiki-fodder", "ten-page-sample", "generated", "review-promoted", "close-form-reviewed"]),
+                new("captors", "zhar-agh-dak-mok", Tags: ["wiki-fodder", "ten-page-sample", "generated", "review-promoted", "close-form-reviewed"]),
+                new("carved", "zhar-agh-dak-narg", Tags: ["wiki-fodder", "ten-page-sample", "generated", "review-promoted", "close-form-reviewed"]),
+                new("chaotic", "zhar-agh-dak-ruk", Tags: ["wiki-fodder", "ten-page-sample", "generated", "review-promoted", "close-form-reviewed"]),
+                new("chroma", "zhar-agh-dak-skar", Tags: ["wiki-fodder", "ten-page-sample", "generated", "review-promoted", "close-form-reviewed"]),
+                new("clans", "zhar-agh-dak-thog", Tags: ["wiki-fodder", "ten-page-sample", "generated", "review-promoted", "close-form-reviewed"]),
+                new("clerical", "zhar-agh-dak-varg", Tags: ["wiki-fodder", "ten-page-sample", "generated", "review-promoted", "close-form-reviewed"]),
+                new("cloudkill", "zhar-agh-drak-agh", Tags: ["wiki-fodder", "ten-page-sample", "generated", "review-promoted", "close-form-reviewed"]),
+                new("clubs", "zhar-agh-drak-burz", Tags: ["wiki-fodder", "ten-page-sample", "generated", "review-promoted", "close-form-reviewed"]),
+                new("coastlines", "zhar-agh-drak-dak", Tags: ["wiki-fodder", "ten-page-sample", "generated", "review-promoted", "close-form-reviewed"]),
+                new("commands", "zhar-agh-drak-drak", Tags: ["wiki-fodder", "ten-page-sample", "generated", "review-promoted", "close-form-reviewed"]),
+                new("completion", "zhar-agh-drak-gar", Tags: ["wiki-fodder", "ten-page-sample", "generated", "review-promoted", "close-form-reviewed"]),
+                new("complex", "zhar-agh-drak-gash", Tags: ["wiki-fodder", "ten-page-sample", "generated", "review-promoted", "close-form-reviewed"]),
+                new("conditions", "zhar-agh-drak-gor", Tags: ["wiki-fodder", "ten-page-sample", "generated", "review-promoted", "close-form-reviewed"]),
+                new("conjures", "zhar-agh-drak-grak", Tags: ["wiki-fodder", "ten-page-sample", "generated", "review-promoted", "close-form-reviewed"]),
+                new("countering", "zhar-agh-drak-grod", Tags: ["wiki-fodder", "ten-page-sample", "generated", "review-promoted", "close-form-reviewed"]),
+                new("cruel", "zhar-agh-drak-krag", Tags: ["wiki-fodder", "ten-page-sample", "generated", "review-promoted", "close-form-reviewed"]),
+                new("crumwich", "zhar-agh-drak-mok", Tags: ["wiki-fodder", "ten-page-sample", "generated", "review-promoted", "close-form-reviewed"]),
+                new("cultic", "zhar-agh-drak-narg", Tags: ["wiki-fodder", "ten-page-sample", "generated", "review-promoted", "close-form-reviewed"]),
+                new("cuprous", "zhar-agh-drak-ruk", Tags: ["wiki-fodder", "ten-page-sample", "generated", "review-promoted", "close-form-reviewed"]),
+                new("darkvision", "zhar-agh-drak-skar", Tags: ["wiki-fodder", "ten-page-sample", "generated", "review-promoted", "close-form-reviewed"]),
+                new("deepkingdom", "zhar-agh-drak-thog", Tags: ["wiki-fodder", "ten-page-sample", "generated", "review-promoted", "close-form-reviewed"]),
+                new("delicacy", "zhar-agh-drak-varg", Tags: ["wiki-fodder", "ten-page-sample", "generated", "review-promoted", "close-form-reviewed"]),
+                new("demi", "zhar-agh-gar-agh", Tags: ["wiki-fodder", "ten-page-sample", "generated", "review-promoted", "close-form-reviewed"]),
+                new("denied", "zhar-agh-gar-burz", Tags: ["wiki-fodder", "ten-page-sample", "generated", "review-promoted", "close-form-reviewed"]),
+                new("denser", "zhar-agh-gar-dak", Tags: ["wiki-fodder", "ten-page-sample", "generated", "review-promoted", "close-form-reviewed"]),
+                new("determined", "zhar-agh-gar-drak", Tags: ["wiki-fodder", "ten-page-sample", "generated", "review-promoted", "close-form-reviewed"]),
+                new("determining", "zhar-agh-gar-gar", Tags: ["wiki-fodder", "ten-page-sample", "generated", "review-promoted", "close-form-reviewed"]),
+                new("dhardofhell", "zhar-agh-gar-gash", Tags: ["wiki-fodder", "ten-page-sample", "generated", "review-promoted", "close-form-reviewed"]),
+                new("direct", "zhar-agh-gar-gor", Tags: ["wiki-fodder", "ten-page-sample", "generated", "review-promoted", "close-form-reviewed"]),
+                new("discovered", "zhar-agh-gar-grak", Tags: ["wiki-fodder", "ten-page-sample", "generated", "review-promoted", "close-form-reviewed"]),
+                new("dissipates", "zhar-agh-gar-grod", Tags: ["wiki-fodder", "ten-page-sample", "generated", "review-promoted", "close-form-reviewed"]),
+                new("distinct", "zhar-agh-gar-krag", Tags: ["wiki-fodder", "ten-page-sample", "generated", "review-promoted", "close-form-reviewed"]),
+                new("dual-wielded", "zhar-agh-gar-mok", Tags: ["wiki-fodder", "ten-page-sample", "generated", "review-promoted", "close-form-reviewed"]),
+                new("dual-wielding", "zhar-agh-gar-narg", Tags: ["wiki-fodder", "ten-page-sample", "generated", "review-promoted", "close-form-reviewed"]),
+                new("dungeons", "zhar-agh-gar-ruk", Tags: ["wiki-fodder", "ten-page-sample", "generated", "review-promoted", "close-form-reviewed"]),
+                new("earlier", "zhar-agh-gar-skar", Tags: ["wiki-fodder", "ten-page-sample", "generated", "review-promoted", "close-form-reviewed"]),
+                new("east-northeast", "zhar-agh-gar-thog", Tags: ["wiki-fodder", "ten-page-sample", "generated", "review-promoted", "close-form-reviewed"]),
+                new("effective", "zhar-agh-gar-varg", Tags: ["wiki-fodder", "ten-page-sample", "generated", "review-promoted", "close-form-reviewed"]),
+                new("efforts", "zhar-agh-gash-agh", Tags: ["wiki-fodder", "ten-page-sample", "generated", "review-promoted", "close-form-reviewed"]),
+                new("embodied", "zhar-agh-gash-burz", Tags: ["wiki-fodder", "ten-page-sample", "generated", "review-promoted", "close-form-reviewed"]),
+                new("emerged", "zhar-agh-gash-dak", Tags: ["wiki-fodder", "ten-page-sample", "generated", "review-promoted", "close-form-reviewed"]),
+                new("ending", "zhar-agh-gash-drak", Tags: ["wiki-fodder", "ten-page-sample", "generated", "review-promoted", "close-form-reviewed"]),
+                new("enslaving", "zhar-agh-gash-gar", Tags: ["wiki-fodder", "ten-page-sample", "generated", "review-promoted", "close-form-reviewed"]),
+                new("eventually", "zhar-agh-gash-gash", Tags: ["wiki-fodder", "ten-page-sample", "generated", "review-promoted", "close-form-reviewed"]),
+                new("exact", "zhar-agh-gash-gor", Tags: ["wiki-fodder", "ten-page-sample", "generated", "review-promoted", "close-form-reviewed"]),
+                new("example", "zhar-agh-gash-grak", Tags: ["wiki-fodder", "ten-page-sample", "generated", "review-promoted", "close-form-reviewed"]),
+                new("examples", "zhar-agh-gash-grod", Tags: ["wiki-fodder", "ten-page-sample", "generated", "review-promoted", "close-form-reviewed"]),
+                new("exclusively", "zhar-agh-gash-krag", Tags: ["wiki-fodder", "ten-page-sample", "generated", "review-promoted", "close-form-reviewed"]),
+                new("expedition", "zhar-agh-gash-mok", Tags: ["wiki-fodder", "ten-page-sample", "generated", "review-promoted", "close-form-reviewed"]),
+                new("experiments", "zhar-agh-gash-narg", Tags: ["wiki-fodder", "ten-page-sample", "generated", "review-promoted", "close-form-reviewed"]),
+                new("fall", "zhar-agh-gash-ruk", Tags: ["wiki-fodder", "ten-page-sample", "generated", "review-promoted", "close-form-reviewed"]),
+                new("filling", "zhar-agh-gash-skar", Tags: ["wiki-fodder", "ten-page-sample", "generated", "review-promoted", "close-form-reviewed"]),
+                new("financially", "zhar-agh-gash-thog", Tags: ["wiki-fodder", "ten-page-sample", "generated", "review-promoted", "close-form-reviewed"]),
+                new("fingertips", "zhar-agh-gash-varg", Tags: ["wiki-fodder", "ten-page-sample", "generated", "review-promoted", "close-form-reviewed"]),
+                new("finished", "zhar-agh-gor-agh", Tags: ["wiki-fodder", "ten-page-sample", "generated", "review-promoted", "close-form-reviewed"]),
+                new("five", "zhar-agh-gor-burz", Tags: ["wiki-fodder", "ten-page-sample", "generated", "review-promoted", "close-form-reviewed"]),
+                new("flesh", "zhar-agh-gor-dak", Tags: ["wiki-fodder", "ten-page-sample", "generated", "review-promoted", "close-form-reviewed"]),
+                new("flowing", "zhar-agh-gor-drak", Tags: ["wiki-fodder", "ten-page-sample", "generated", "review-promoted", "close-form-reviewed"]),
+                new("forth", "zhar-agh-gor-gar", Tags: ["wiki-fodder", "ten-page-sample", "generated", "review-promoted", "close-form-reviewed"]),
+                new("freedom", "zhar-agh-gor-gash", Tags: ["wiki-fodder", "ten-page-sample", "generated", "review-promoted", "close-form-reviewed"]),
+                new("fro", "zhar-agh-gor-gor", Tags: ["wiki-fodder", "ten-page-sample", "generated", "review-promoted", "close-form-reviewed"]),
+                new("galleries", "zhar-agh-gor-grak", Tags: ["wiki-fodder", "ten-page-sample", "generated", "review-promoted", "close-form-reviewed"]),
+                new("gauntwood", "zhar-agh-gor-grod", Tags: ["wiki-fodder", "ten-page-sample", "generated", "review-promoted", "close-form-reviewed"]),
+                new("glacier", "zhar-agh-gor-krag", Tags: ["wiki-fodder", "ten-page-sample", "generated", "review-promoted", "close-form-reviewed"]),
+                new("going", "zhar-agh-gor-mok", Tags: ["wiki-fodder", "ten-page-sample", "generated", "review-promoted", "close-form-reviewed"]),
+                new("gracklstugh", "zhar-agh-gor-narg", Tags: ["wiki-fodder", "ten-page-sample", "generated", "review-promoted", "close-form-reviewed"]),
+                new("gradual", "zhar-agh-gor-ruk", Tags: ["wiki-fodder", "ten-page-sample", "generated", "review-promoted", "close-form-reviewed"]),
+                new("gray", "zhar-agh-gor-skar", Tags: ["wiki-fodder", "ten-page-sample", "generated", "review-promoted", "close-form-reviewed"]),
+                new("great", "zhar-agh-gor-thog", Tags: ["wiki-fodder", "ten-page-sample", "generated", "review-promoted", "close-form-reviewed"]),
+                new("gundgathol", "zhar-agh-gor-varg", Tags: ["wiki-fodder", "ten-page-sample", "generated", "review-promoted", "close-form-reviewed"]),
+                new("harpers", "zhar-agh-grak-agh", Tags: ["wiki-fodder", "ten-page-sample", "generated", "review-promoted", "close-form-reviewed"]),
+                new("harsh", "zhar-agh-grak-burz", Tags: ["wiki-fodder", "ten-page-sample", "generated", "review-promoted", "close-form-reviewed"]),
+                new("hereditary", "zhar-agh-grak-dak", Tags: ["wiki-fodder", "ten-page-sample", "generated", "review-promoted", "close-form-reviewed"]),
+                new("history", "zhar-agh-grak-drak", Tags: ["wiki-fodder", "ten-page-sample", "generated", "review-promoted", "close-form-reviewed"]),
+                new("holes", "zhar-agh-grak-gar", Tags: ["wiki-fodder", "ten-page-sample", "generated", "review-promoted", "close-form-reviewed"]),
+                new("humanoids", "zhar-agh-grak-gash", Tags: ["wiki-fodder", "ten-page-sample", "generated", "review-promoted", "close-form-reviewed"]),
+                new("indicating", "zhar-agh-grak-gor", Tags: ["wiki-fodder", "ten-page-sample", "generated", "review-promoted", "close-form-reviewed"]),
+                new("individual", "zhar-agh-grak-grak", Tags: ["wiki-fodder", "ten-page-sample", "generated", "review-promoted", "close-form-reviewed"]),
+                new("industry", "zhar-agh-grak-grod", Tags: ["wiki-fodder", "ten-page-sample", "generated", "review-promoted", "close-form-reviewed"]),
+                new("info", "zhar-agh-grak-krag", Tags: ["wiki-fodder", "ten-page-sample", "generated", "review-promoted", "close-form-reviewed"]),
+                new("instant", "zhar-agh-grak-mok", Tags: ["wiki-fodder", "ten-page-sample", "generated", "review-promoted", "close-form-reviewed"]),
+                new("ironfist", "zhar-agh-grak-narg", Tags: ["wiki-fodder", "ten-page-sample", "generated", "review-promoted", "close-form-reviewed"]),
+                new("isolation", "zhar-agh-grak-ruk", Tags: ["wiki-fodder", "ten-page-sample", "generated", "review-promoted", "close-form-reviewed"]),
+                new("journey", "zhar-agh-grak-skar", Tags: ["wiki-fodder", "ten-page-sample", "generated", "review-promoted", "close-form-reviewed"]),
+                new("keep", "zhar-agh-grak-thog", Tags: ["wiki-fodder", "ten-page-sample", "generated", "review-promoted", "close-form-reviewed"]),
+                new("kidnap", "zhar-agh-grak-varg", Tags: ["wiki-fodder", "ten-page-sample", "generated", "review-promoted", "close-form-reviewed"]),
+                new("king", "zhar-agh-grod-agh", Tags: ["wiki-fodder", "ten-page-sample", "generated", "review-promoted", "close-form-reviewed"]),
+                new("kingdom", "zhar-agh-grod-burz", Tags: ["wiki-fodder", "ten-page-sample", "generated", "review-promoted", "close-form-reviewed"]),
+                new("kingdoms", "zhar-agh-grod-dak", Tags: ["wiki-fodder", "ten-page-sample", "generated", "review-promoted", "close-form-reviewed"]),
+                new("kingship", "zhar-agh-grod-drak", Tags: ["wiki-fodder", "ten-page-sample", "generated", "review-promoted", "close-form-reviewed"]),
+                new("lakes", "zhar-agh-grod-gar", Tags: ["wiki-fodder", "ten-page-sample", "generated", "review-promoted", "close-form-reviewed"]),
+                new("lasted", "zhar-agh-grod-gash", Tags: ["wiki-fodder", "ten-page-sample", "generated", "review-promoted", "close-form-reviewed"]),
+                new("lead", "zhar-agh-grod-gor", Tags: ["wiki-fodder", "ten-page-sample", "generated", "review-promoted", "close-form-reviewed"]),
+                new("lies", "zhar-agh-grod-grak", Tags: ["wiki-fodder", "ten-page-sample", "generated", "review-promoted", "close-form-reviewed"]),
+                new("lightbringers", "zhar-agh-grod-grod", Tags: ["wiki-fodder", "ten-page-sample", "generated", "review-promoted", "close-form-reviewed"]),
+                new("lip", "zhar-agh-grod-krag", Tags: ["wiki-fodder", "ten-page-sample", "generated", "review-promoted", "close-form-reviewed"]),
+                new("lived", "zhar-agh-grod-mok", Tags: ["wiki-fodder", "ten-page-sample", "generated", "review-promoted", "close-form-reviewed"]),
+                new("lizard", "zhar-agh-grod-narg", Tags: ["wiki-fodder", "ten-page-sample", "generated", "review-promoted", "close-form-reviewed"]),
+                new("loses", "zhar-agh-grod-ruk", Tags: ["wiki-fodder", "ten-page-sample", "generated", "review-promoted", "close-form-reviewed"]),
+                new("lowest", "zhar-agh-grod-skar", Tags: ["wiki-fodder", "ten-page-sample", "generated", "review-promoted", "close-form-reviewed"]),
+                new("maintain", "zhar-agh-grod-thog", Tags: ["wiki-fodder", "ten-page-sample", "generated", "review-promoted", "close-form-reviewed"]),
+                new("man-eaters", "zhar-agh-grod-varg", Tags: ["wiki-fodder", "ten-page-sample", "generated", "review-promoted", "close-form-reviewed"]),
+                new("materials", "zhar-agh-krag-agh", Tags: ["wiki-fodder", "ten-page-sample", "generated", "review-promoted", "close-form-reviewed"]),
+                new("millenia", "zhar-agh-krag-burz", Tags: ["wiki-fodder", "ten-page-sample", "generated", "review-promoted", "close-form-reviewed"]),
+                new("mind-affecting", "zhar-agh-krag-dak", Tags: ["wiki-fodder", "ten-page-sample", "generated", "review-promoted", "close-form-reviewed"]),
+                new("mistake", "zhar-agh-krag-drak", Tags: ["wiki-fodder", "ten-page-sample", "generated", "review-promoted", "close-form-reviewed"]),
+                new("movements", "zhar-agh-krag-gar", Tags: ["wiki-fodder", "ten-page-sample", "generated", "review-promoted", "close-form-reviewed"]),
+                new("mysteriously", "zhar-agh-krag-gash", Tags: ["wiki-fodder", "ten-page-sample", "generated", "review-promoted", "close-form-reviewed"]),
+                new("nation", "zhar-agh-krag-gor", Tags: ["wiki-fodder", "ten-page-sample", "generated", "review-promoted", "close-form-reviewed"]),
+                new("non-hostile", "zhar-agh-krag-grak", Tags: ["wiki-fodder", "ten-page-sample", "generated", "review-promoted", "close-form-reviewed"]),
+                new("north-northeast", "zhar-agh-krag-grod", Tags: ["wiki-fodder", "ten-page-sample", "generated", "review-promoted", "close-form-reviewed"]),
+                new("northeast", "zhar-agh-krag-krag", Tags: ["wiki-fodder", "ten-page-sample", "generated", "review-promoted", "close-form-reviewed"]),
+                new("numbers", "zhar-agh-krag-mok", Tags: ["wiki-fodder", "ten-page-sample", "generated", "review-promoted", "close-form-reviewed"]),
+                new("obscured", "zhar-agh-krag-narg", Tags: ["wiki-fodder", "ten-page-sample", "generated", "review-promoted", "close-form-reviewed"]),
+                new("operating", "zhar-agh-krag-ruk", Tags: ["wiki-fodder", "ten-page-sample", "generated", "review-promoted", "close-form-reviewed"]),
+                new("originally", "zhar-agh-krag-skar", Tags: ["wiki-fodder", "ten-page-sample", "generated", "review-promoted", "close-form-reviewed"]),
+                new("oryndoll", "zhar-agh-krag-thog", Tags: ["wiki-fodder", "ten-page-sample", "generated", "review-promoted", "close-form-reviewed"]),
+                new("paying", "zhar-agh-krag-varg", Tags: ["wiki-fodder", "ten-page-sample", "generated", "review-promoted", "close-form-reviewed"]),
+                new("peak", "zhar-agh-mok-agh", Tags: ["wiki-fodder", "ten-page-sample", "generated", "review-promoted", "close-form-reviewed"]),
+                new("perfect", "zhar-agh-mok-burz", Tags: ["wiki-fodder", "ten-page-sample", "generated", "review-promoted", "close-form-reviewed"]),
+                new("perform", "zhar-agh-mok-dak", Tags: ["wiki-fodder", "ten-page-sample", "generated", "review-promoted", "close-form-reviewed"]),
+                new("performed", "zhar-agh-mok-drak", Tags: ["wiki-fodder", "ten-page-sample", "generated", "review-promoted", "close-form-reviewed"]),
+                new("period", "zhar-agh-mok-gar", Tags: ["wiki-fodder", "ten-page-sample", "generated", "review-promoted", "close-form-reviewed"]),
+                new("phantasms", "zhar-agh-mok-gash", Tags: ["wiki-fodder", "ten-page-sample", "generated", "review-promoted", "close-form-reviewed"]),
+                new("poisonous", "zhar-agh-mok-gor", Tags: ["wiki-fodder", "ten-page-sample", "generated", "review-promoted", "close-form-reviewed"]),
+                new("poisons", "zhar-agh-mok-grak", Tags: ["wiki-fodder", "ten-page-sample", "generated", "review-promoted", "close-form-reviewed"]),
+                new("post-ravaging", "zhar-agh-mok-grod", Tags: ["wiki-fodder", "ten-page-sample", "generated", "review-promoted", "close-form-reviewed"]),
+                new("prescribed", "zhar-agh-mok-krag", Tags: ["wiki-fodder", "ten-page-sample", "generated", "review-promoted", "close-form-reviewed"]),
+                new("prisoner", "zhar-agh-mok-mok", Tags: ["wiki-fodder", "ten-page-sample", "generated", "review-promoted", "close-form-reviewed"]),
+                new("proved", "zhar-agh-mok-narg", Tags: ["wiki-fodder", "ten-page-sample", "generated", "review-promoted", "close-form-reviewed"]),
+                new("quaggoths", "zhar-agh-mok-ruk", Tags: ["wiki-fodder", "ten-page-sample", "generated", "review-promoted", "close-form-reviewed"]),
+                new("quests", "zhar-agh-mok-skar", Tags: ["wiki-fodder", "ten-page-sample", "generated", "review-promoted", "close-form-reviewed"]),
+                new("rapidly", "zhar-agh-mok-thog", Tags: ["wiki-fodder", "ten-page-sample", "generated", "review-promoted", "close-form-reviewed"]),
+                new("raw", "zhar-agh-mok-varg", Tags: ["wiki-fodder", "ten-page-sample", "generated", "review-promoted", "close-form-reviewed"]),
+                new("reaches", "zhar-agh-narg-agh", Tags: ["wiki-fodder", "ten-page-sample", "generated", "review-promoted", "close-form-reviewed"]),
+                new("reaching", "zhar-agh-narg-burz", Tags: ["wiki-fodder", "ten-page-sample", "generated", "review-promoted", "close-form-reviewed"]),
+                new("rearing", "zhar-agh-narg-dak", Tags: ["wiki-fodder", "ten-page-sample", "generated", "review-promoted", "close-form-reviewed"]),
+                new("reclamation", "zhar-agh-narg-drak", Tags: ["wiki-fodder", "ten-page-sample", "generated", "review-promoted", "close-form-reviewed"]),
+                new("referred", "zhar-agh-narg-gar", Tags: ["wiki-fodder", "ten-page-sample", "generated", "review-promoted", "close-form-reviewed"]),
+                new("refusal", "zhar-agh-narg-gash", Tags: ["wiki-fodder", "ten-page-sample", "generated", "review-promoted", "close-form-reviewed"]),
+                new("regard", "zhar-agh-narg-gor", Tags: ["wiki-fodder", "ten-page-sample", "generated", "review-promoted", "close-form-reviewed"]),
+                new("relations", "zhar-agh-narg-grak", Tags: ["wiki-fodder", "ten-page-sample", "generated", "review-promoted", "close-form-reviewed"]),
+                new("remnants", "zhar-agh-narg-grod", Tags: ["wiki-fodder", "ten-page-sample", "generated", "review-promoted", "close-form-reviewed"]),
+                new("rendered", "zhar-agh-narg-krag", Tags: ["wiki-fodder", "ten-page-sample", "generated", "review-promoted", "close-form-reviewed"]),
+                new("reptilian", "zhar-agh-narg-mok", Tags: ["wiki-fodder", "ten-page-sample", "generated", "review-promoted", "close-form-reviewed"]),
+                new("rivers", "zhar-agh-narg-narg", Tags: ["wiki-fodder", "ten-page-sample", "generated", "review-promoted", "close-form-reviewed"]),
+                new("rose", "zhar-agh-narg-ruk", Tags: ["wiki-fodder", "ten-page-sample", "generated", "review-promoted", "close-form-reviewed"]),
+                new("rosen", "zhar-agh-narg-skar", Tags: ["wiki-fodder", "ten-page-sample", "generated", "review-promoted", "close-form-reviewed"]),
+                new("royals", "zhar-agh-narg-thog", Tags: ["wiki-fodder", "ten-page-sample", "generated", "review-promoted", "close-form-reviewed"]),
+                new("rulers", "zhar-agh-narg-varg", Tags: ["wiki-fodder", "ten-page-sample", "generated", "review-promoted", "close-form-reviewed"]),
+                new("semi-intelligent", "zhar-agh-ruk-agh", Tags: ["wiki-fodder", "ten-page-sample", "generated", "review-promoted", "close-form-reviewed"]),
+                new("service", "zhar-agh-ruk-burz", Tags: ["wiki-fodder", "ten-page-sample", "generated", "review-promoted", "close-form-reviewed"]),
+                new("seventy-five", "zhar-agh-ruk-dak", Tags: ["wiki-fodder", "ten-page-sample", "generated", "review-promoted", "close-form-reviewed"]),
+                new("sharing", "zhar-agh-ruk-drak", Tags: ["wiki-fodder", "ten-page-sample", "generated", "review-promoted", "close-form-reviewed"]),
+                new("silverhame", "zhar-agh-ruk-gar", Tags: ["wiki-fodder", "ten-page-sample", "generated", "review-promoted", "close-form-reviewed"]),
+                new("since", "zhar-agh-ruk-gash", Tags: ["wiki-fodder", "ten-page-sample", "generated", "review-promoted", "close-form-reviewed"]),
+                new("sinking", "zhar-agh-ruk-gor", Tags: ["wiki-fodder", "ten-page-sample", "generated", "review-promoted", "close-form-reviewed"]),
+                new("sinks", "zhar-agh-ruk-grak", Tags: ["wiki-fodder", "ten-page-sample", "generated", "review-promoted", "close-form-reviewed"]),
+                new("sixteen", "zhar-agh-ruk-grod", Tags: ["wiki-fodder", "ten-page-sample", "generated", "review-promoted", "close-form-reviewed"]),
+                new("snake", "zhar-agh-ruk-krag", Tags: ["wiki-fodder", "ten-page-sample", "generated", "review-promoted", "close-form-reviewed"]),
+                new("sometimes", "zhar-agh-ruk-mok", Tags: ["wiki-fodder", "ten-page-sample", "generated", "review-promoted", "close-form-reviewed"]),
+                new("southeast", "zhar-agh-ruk-narg", Tags: ["wiki-fodder", "ten-page-sample", "generated", "review-promoted", "close-form-reviewed"]),
+                new("spears", "zhar-agh-ruk-ruk", Tags: ["wiki-fodder", "ten-page-sample", "generated", "review-promoted", "close-form-reviewed"]),
+                new("streams", "zhar-agh-ruk-skar", Tags: ["wiki-fodder", "ten-page-sample", "generated", "review-promoted", "close-form-reviewed"]),
+                new("subrace", "zhar-agh-ruk-thog", Tags: ["wiki-fodder", "ten-page-sample", "generated", "review-promoted", "close-form-reviewed"]),
+                new("swamps", "zhar-agh-ruk-varg", Tags: ["wiki-fodder", "ten-page-sample", "generated", "review-promoted", "close-form-reviewed"]),
+                new("swaying", "zhar-agh-skar-agh", Tags: ["wiki-fodder", "ten-page-sample", "generated", "review-promoted", "close-form-reviewed"]),
+                new("tails", "zhar-agh-skar-burz", Tags: ["wiki-fodder", "ten-page-sample", "generated", "review-promoted", "close-form-reviewed"]),
+                new("thereafter", "zhar-agh-skar-dak", Tags: ["wiki-fodder", "ten-page-sample", "generated", "review-promoted", "close-form-reviewed"]),
+                new("thirty", "zhar-agh-skar-drak", Tags: ["wiki-fodder", "ten-page-sample", "generated", "review-promoted", "close-form-reviewed"]),
+                new("thirty-three", "zhar-agh-skar-gar", Tags: ["wiki-fodder", "ten-page-sample", "generated", "review-promoted", "close-form-reviewed"]),
+                new("together", "zhar-agh-skar-gash", Tags: ["wiki-fodder", "ten-page-sample", "generated", "review-promoted", "close-form-reviewed"]),
+                new("tornspire", "zhar-agh-skar-gor", Tags: ["wiki-fodder", "ten-page-sample", "generated", "review-promoted", "close-form-reviewed"]),
+                new("touched", "zhar-agh-skar-grak", Tags: ["wiki-fodder", "ten-page-sample", "generated", "review-promoted", "close-form-reviewed"]),
+                new("tribal", "zhar-agh-skar-grod", Tags: ["wiki-fodder", "ten-page-sample", "generated", "review-promoted", "close-form-reviewed"]),
+                new("twice", "zhar-agh-skar-krag", Tags: ["wiki-fodder", "ten-page-sample", "generated", "review-promoted", "close-form-reviewed"]),
+                new("types", "zhar-agh-skar-mok", Tags: ["wiki-fodder", "ten-page-sample", "generated", "review-promoted", "close-form-reviewed"]),
+                new("typically", "zhar-agh-skar-narg", Tags: ["wiki-fodder", "ten-page-sample", "generated", "review-promoted", "close-form-reviewed"]),
+                new("undertake", "zhar-agh-skar-ruk", Tags: ["wiki-fodder", "ten-page-sample", "generated", "review-promoted", "close-form-reviewed"]),
+                new("unlimited", "zhar-agh-skar-skar", Tags: ["wiki-fodder", "ten-page-sample", "generated", "review-promoted", "close-form-reviewed"]),
+                new("unusual", "zhar-agh-skar-thog", Tags: ["wiki-fodder", "ten-page-sample", "generated", "review-promoted", "close-form-reviewed"]),
+                new("urged", "zhar-agh-skar-varg", Tags: ["wiki-fodder", "ten-page-sample", "generated", "review-promoted", "close-form-reviewed"]),
+                new("ursandunthar", "zhar-agh-thog-agh", Tags: ["wiki-fodder", "ten-page-sample", "generated", "review-promoted", "close-form-reviewed"]),
+                new("usable", "zhar-agh-thog-burz", Tags: ["wiki-fodder", "ten-page-sample", "generated", "review-promoted", "close-form-reviewed"]),
+                new("venerated", "zhar-agh-thog-dak", Tags: ["wiki-fodder", "ten-page-sample", "generated", "review-promoted", "close-form-reviewed"]),
+                new("waxing", "zhar-agh-thog-drak", Tags: ["wiki-fodder", "ten-page-sample", "generated", "review-promoted", "close-form-reviewed"]),
+                new("wind", "zhar-agh-thog-gar", Tags: ["wiki-fodder", "ten-page-sample", "generated", "review-promoted", "close-form-reviewed"]),
+                new("worship", "zhar-agh-thog-gash", Tags: ["wiki-fodder", "ten-page-sample", "generated", "review-promoted", "close-form-reviewed"]),
+            ]);
+
+            entries.AddRange(BuildNearKinEntries(entries));
+            entries.AddRange(BuildFifteenPageSampleEntries(entries));
+            entries.AddRange(BuildTwentyPageSampleEntries(entries));
+            entries.AddRange(BuildThirtyPageSampleEntries(entries));
+            entries.AddRange(BuildThirtyPageFollowupEntries(entries));
+
             var baseEntries = entries.ToArray();
             entries.AddRange(BuildDerivedMorphologyEntries(baseEntries));
             return entries.ToArray();
@@ -3979,6 +4220,4360 @@ namespace PlayerAssistant
             var entryTags = entry.Tags ?? Array.Empty<string>();
             return requiredTags.All(requiredTag =>
                 entryTags.Any(entryTag => string.Equals(entryTag, requiredTag, StringComparison.OrdinalIgnoreCase)));
+        }
+
+
+
+        private const string ThirtyPageSourceCandidateData = """
+ability-score
+ability-scores
+able-bodied
+accuracy
+acoustics
+acquisition
+actively
+affinity
+agility
+agreement
+algorn
+alien
+alloys
+alludes
+alternatively
+ambient
+amount
+ample
+amplified
+apparent
+apply
+appropriate
+approximately
+aquamarine
+archetype
+architecture
+arford
+asked
+assume
+attributes
+available
+baked
+bakery
+balagos
+band
+banned
+baraguld
+bards
+bats
+bay
+beholder
+benign
+besides
+best
+beverage
+birds
+blackfists
+blacktooth
+blessed
+blinded
+blinds
+bodies
+boost
+bows
+breaks
+bribe
+bright
+broom
+bugbear
+bullseye
+business
+came
+camel
+camels
+canine
+capacity
+captain
+carelessly
+cash
+catalyze
+cathedral
+cavern
+chances
+check
+chicks
+child
+choked
+chuckles
+chucky
+claims
+classic
+claugiyliamatar
+closely
+closer
+cloth
+cloud
+clustering
+coffin
+coffins
+colloquially
+colors
+combatants
+combine
+constitute
+construct
+constructed
+construction
+continents
+continual
+cool
+coordination
+copper-containing
+corrupting
+council
+cows
+craftsmanship
+crawls
+cubic
+dairy
+daryon
+deed
+deeds
+demand
+demanded
+demeanor
+demihuman
+departed
+depend
+depends
+deputy
+desert
+designation
+detailed
+dewdrop
+diamond
+died
+differ
+difference
+diplomacy
+diplomats
+dire
+disassembling
+disaster
+discern
+disintegrated
+dive
+dolecherry
+domain
+domains
+dominating
+dose
+drain
+drained
+draining
+dreaded
+dreadful
+durability
+dynamics
+earn
+ears
+ease
+eastern
+eat
+eaten
+ecosystem
+edges
+eery
+eggs
+eight
+eighty-five
+elderly
+elfs
+eliwyth
+else
+elvish
+emit
+emotions
+employee
+endurance
+endures
+enhanced
+entering
+equipped
+erected
+erupt
+essence
+essentials
+every
+everything
+everywhere
+except
+exceptionally
+exchanged
+experimentation
+exquisite
+extant
+extinct
+extraordinary
+exuding
+fancy
+faraway
+farground
+fascinated
+fastwillow
+fatty
+favor
+feared
+feast
+fed
+fewer
+fey
+fielenghast
+fifteen
+fights
+finesse
+fireant
+firelight
+flask
+flasks
+fled
+flee
+flind-led
+folks
+foot
+footmen
+foraging
+forbidden
+forks
+formulae
+fortification
+fortified
+fortress
+forty
+fourths
+fray
+freezing
+fritter
+frivolous
+fuck
+fueled
+functional
+fur
+garbald
+garrison
+gaseous
+generate
+generates
+geoffroy
+geppettin
+gets
+getting
+ghoul
+ghouls
+gigantic
+gintarn
+glad
+glaurthogos
+gnoll
+golnadeg
+got
+graced
+granting
+grasshare
+grimshaw
+growing
+grown
+growth
+grue-spitter
+guaranteed
+half-gnome
+half-halfling
+halfway
+hand-eye
+hanging
+happened
+hard
+heavily
+heightened
+herne
+heroic
+high-level
+high-stakes
+highest
+highlighted
+hinders
+hippogriffs
+hohnberg
+homebrew
+hoof
+horsemen
+horses
+how
+human-sized
+hundred
+hundreds
+hunters
+huts
+ice-capped
+ignore
+illumination
+immersion
+immortal
+immune
+imposing
+imprisoned
+improve
+inches
+incredibly
+incurs
+incursions
+initial
+innate
+instructed
+intense
+intent
+intrigued
+intruders
+invite
+inviting
+inzeldrin
+isaris
+iymrith
+jackpot
+jelb
+jerky
+june
+keen
+khalidheroneth
+khalidson
+kid
+knife
+kurg
+lady
+lalan
+lands
+larger
+largest
+later
+leans
+learn
+leaving
+leveling
+lighting
+likely
+linden
+lindendale
+listen
+locales
+long-term
+longer
+loss
+love
+lupine
+lupins
+lurches
+magic-users
+magically
+magma
+mail
+manuals
+maybe
+mayor
+meaningless
+medium
+memorize
+memory
+men-at-arms
+mental
+mercenary
+merry
+milestone
+milk
+mill
+mind-reading
+mined
+minerals
+minimum
+mirabelle
+mirrors
+mithril
+modern
+moinder
+moment
+money
+monstrous
+moonwall
+mornauguth
+morph
+motive
+mount
+mountainous
+multiple
+muscular
+mystic-theurge
+narinza
+narrative
+narratively
+nastier
+native
+naturally
+navigating
+necessarily
+negotiations
+neria
+nerissa
+news
+nixie
+nixies
+nods
+noise
+noises
+nomad
+nomads
+notes
+nothing
+octopus
+odors
+odour
+offer
+okay
+old-school
+onto
+onward
+ore
+oribul
+oviparous
+own
+paralyzing
+part
+partly
+parts
+pastries
+patrols
+patterns
+peaceful
+pegasus
+pelk
+permanent
+permanently
+person
+petrify
+phaerimm
+physically
+piece
+piercing
+pies
+pleasures
+plundered
+plus
+pocket
+pointed
+poor
+pose
+potent
+practically
+pre-dated
+predecessors
+preferring
+presented
+preserve
+pretty
+prey
+price
+priest-mage
+primal
+prime
+problem
+problematic
+process
+proficient
+profound
+progeny
+projects
+pryrates
+pushed
+putting
+questions
+raise
+raises
+ranged
+ranges
+rather
+readiness
+recall
+reception
+reconnaissance
+record
+recorded
+reedwhistle
+reflect
+reflection
+regenerated
+regeneration
+regent
+regions
+regular
+remarkable
+remember
+removed
+repels
+requisite
+requisites
+residing
+respectively
+result
+rich
+richer
+riddled
+rider
+riothamus
+risk
+robbing
+roc
+rogue-like
+roper
+rotund
+rounded
+routes
+royal
+said
+sailors
+sandbox
+say
+says
+scaled
+scalies
+school
+scyntarn
+sea
+seamlessly
+sector
+seldom
+separately
+serene
+servitor
+servitors
+set-piece
+seven
+several
+shade
+shafts
+shape
+sheriff
+shift
+shifting
+shiny
+shit
+shortbow
+shou
+shown
+shows
+shrugs
+side
+sidekick
+sides
+sighs
+signals
+significance
+simpler
+simply
+sing
+situated
+situations
+six
+skies
+slay
+slender
+slew
+smokeshadow
+solo
+something
+son
+songs
+sons
+sorry
+spell-like
+spend
+spending
+spine
+sporting
+spotted
+squat
+stake
+stalagmites
+stars
+start
+stashes
+steppes
+sticky
+stiffwhiskers
+strategic
+strategies
+struck
+stumbled
+subsequently
+subservient
+subtlest
+successfully
+sufficient
+summerbranch
+sunlight
+superstitious
+supplies
+sure
+surely
+surpass
+surprised
+surroundings
+survival
+swath
+swoop
+tailored
+tales
+tar
+telling
+temporary
+tents
+thanks
+themes
+therefore
+thereof
+thickens
+thing
+thorns
+thoul
+three-point
+thus
+timid
+tip
+tipping
+today
+toll
+tombs
+tomorrow
+totally
+towards
+toxic
+traders
+trainable
+trait
+traits
+transform
+transformation
+transforms
+travellers
+traverse
+treetops
+trifles
+trimmed
+troll
+trolls
+troops
+try
+trying
+turtle
+two-quart
+twofold
+twohide
+ulitharid
+unambitious
+undergo
+underwater
+unicorn
+unique
+unit
+unmolested
+unparalleled
+unwelcome
+urgent
+urvan
+utilize
+vein
+versatility
+vertical
+via
+villages
+visheat
+visible
+visitors
+vulnerabilities
+vurth
+walking
+want
+warlike
+warlock
+warn
+waterfall
+weaponry
+weigh
+weighs
+westmark
+whatever
+whew
+whiteheart
+wielder
+wife
+wildlife
+willful
+wineskin
+witch-priestess
+wolfen
+wolves
+wool
+writings
+wyvern
+wyverns
+yattel
+yeah
+yggian
+zingren
+zone
+""";
+
+        private const string ThirtyPageNearKinCandidateData = """
+accuracies|accuracy
+acquisitions|acquisition
+affinities|affinity
+agreements|agreement
+aliened|alien
+aliener|alien
+aliening|alien
+alienly|alien
+aliens|alien
+alloy|alloys
+alloyed|alloys
+alloying|alloys
+allude|alludes
+alluded|alludes
+alluding|alludes
+alternative|alternatively
+ambiently|ambient
+amounted|amount
+amounting|amount
+amounts|amount
+ampler|ample
+amplest|ample
+amplifies|amplified
+amplify|amplified
+amplifying|amplified
+amply|ample
+apparently|apparent
+applier|apply
+applies|apply
+applying|apply
+appropriated|appropriate
+appropriately|appropriate
+appropriates|appropriate
+appropriating|appropriate
+approximate|approximately
+aquamarines|aquamarine
+archetypes|archetype
+architectures|architecture
+ask|asked
+assumed|assume
+assumes|assume
+assuming|assume
+ate|eaten
+attributed|attributes
+attributing|attributes
+availably|available
+bakeries|bakery
+baking|baked
+ban|banned
+banded|band
+banding|band
+bands|band
+banning|banned
+bans|band
+barded|bards
+barding|bards
+bayed|bay
+baying|bay
+bays|bay
+benignly|benign
+bested|best
+bester|best
+besting|best
+bests|best
+beverages|beverage
+bird|birds
+birded|birds
+birding|birds
+blind|blinds
+blinding|blinded
+bodied|bodies
+bodying|bodies
+boosted|boost
+boosting|boost
+boosts|boost
+bow|bows
+bowed|bows
+breaking|breaks
+bribed|bribe
+briber|bribe
+bribing|bribe
+brighter|bright
+brightest|bright
+brightly|bright
+brights|bright
+broomed|broom
+brooming|broom
+brooms|broom
+bugbears|bugbear
+bullseyes|bullseye
+businesses|business
+canines|canine
+capacities|capacity
+captained|captain
+captaining|captain
+captains|captain
+careless|carelessly
+cashed|cash
+casher|cash
+cashes|cash
+cashing|cash
+catalyzed|catalyze
+catalyzes|catalyze
+catalyzing|catalyze
+cathedrals|cathedral
+caverned|cavern
+caverning|cavern
+chanced|chances
+chancing|chances
+checked|check
+checker|check
+checking|check
+chick|chicks
+chicking|chicks
+childed|child
+childing|child
+childly|child
+choking|choked
+chuckies|chucky
+chuckle|chuckles
+chuckled|chuckles
+chuckling|chuckles
+claimed|claims
+claiming|claims
+classics|classic
+closers|closer
+clothed|cloth
+clothing|cloth
+cloths|cloth
+clouded|cloud
+clouding|cloud
+clouds|cloud
+cluster|clustering
+clustered|clustering
+clusters|clustering
+coffined|coffin
+coffining|coffin
+colloquial|colloquially
+color|colors
+colored|colors
+coloring|colors
+combatant|combatants
+combines|combine
+combining|combine
+constituted|constitute
+constitutes|constitute
+constituting|constitute
+constructing|construct
+constructions|construction
+constructs|construct
+continent|continents
+continually|continual
+cooled|cool
+cooler|cool
+coolest|cool
+cooling|cool
+coolly|cool
+cools|cool
+coordinations|coordination
+corrupt|corrupting
+corrupts|corrupting
+councils|council
+cow|cows
+crawled|crawls
+crawling|crawls
+cubics|cubic
+dairies|dairy
+dairying|dairy
+deeding|deed
+demanding|demand
+demands|demand
+demeanors|demeanor
+depart|departed
+departing|departed
+departs|departed
+depended|depend
+depending|depend
+deputies|deputy
+descriptions|~
+deserter|desert
+deserting|desert
+deserts|desert
+designations|designation
+detailing|detailed
+dewdrops|dewdrop
+diamonded|diamond
+diamonding|diamond
+diamonds|diamond
+differed|differ
+differenced|difference
+differencing|difference
+differing|differ
+differs|differ
+diplomacies|diplomacy
+diplomat|diplomats
+direly|dire
+direr|dire
+direst|dire
+disassembled|disassembling
+disasters|disaster
+discerning|discern
+discerns|discern
+disintegrate|disintegrated
+disintegrates|disintegrated
+disintegrating|disintegrated
+displayed|~
+displaying|~
+displays|~
+dived|dive
+dives|dive
+dominated|dominating
+dosed|dose
+doses|dose
+dosing|~
+drainer|drain
+drains|drain
+dread|dreaded
+dreadfully|dreadful
+dreading|dreaded
+dreads|dreaded
+dying|~
+dynamic|dynamics
+ear|earn
+earned|earn
+earning|earn
+earns|earn
+eased|ease
+eases|ease
+easternly|eastern
+eating|eaten
+eats|eaten
+ecosystems|ecosystem
+edged|edges
+edging|edges
+eerier|eery
+eeriest|eery
+eerily|eery
+eights|eight
+elvishly|elvish
+emits|emit
+emotion|emotions
+emotioned|emotions
+employees|employee
+endurances|endurance
+endure|endures
+endured|endures
+enduring|endures
+enhancing|enhanced
+equip|equipped
+equips|equipped
+erect|erected
+erecting|erected
+erects|erected
+erupted|erupt
+erupting|erupt
+erupts|erupt
+essences|essence
+excepted|except
+excepting|except
+exceptional|exceptionally
+excepts|except
+exchanging|exchanged
+experimentations|experimentation
+exquisitely|exquisite
+exquisites|exquisite
+extraordinaries|extraordinary
+extraordinarily|extraordinary
+fancied|fancy
+fancier|fancy
+fancies|fancy
+fanciest|fancy
+fancily|fancy
+fancying|fancy
+fascinate|fascinated
+fascinates|fascinated
+fascinating|fascinated
+fattier|fatty
+fatties|fatty
+fattiest|fatty
+fattily|fatty
+favored|favor
+favorer|favor
+favoring|favor
+favors|favor
+fearing|feared
+fears|feared
+feasted|feast
+feaster|feast
+feasting|feast
+feasts|feast
+feds|fed
+feed|fed
+feeding|fed
+feeds|fed
+fifteens|fifteen
+fighting|fights
+finessed|finesse
+finesses|finesse
+finessing|finesse
+flasking|flask
+flees|fled
+folk|folks
+footed|foot
+footing|foot
+foots|foot
+foraged|foraging
+fork|forks
+forked|forks
+forking|forks
+fortier|forty
+forties|forty
+fortifications|fortification
+fortifies|fortified
+fortify|fortified
+fortifying|fortified
+fortressed|fortress
+fortresses|fortress
+frayed|fray
+fraying|fray
+frays|fray
+freezings|freezing
+frittered|fritter
+frittering|fritter
+fritters|fritter
+frivolously|frivolous
+fucked|fuck
+fucking|fuck
+fucks|fuck
+fueling|fueled
+fuels|fueled
+functionally|functional
+functionals|functional
+furs|fur
+garrisoned|garrison
+garrisoning|garrison
+garrisons|garrison
+generated|generates
+generating|generates
+get|getting
+gladly|glad
+glads|glad
+gracing|graced
+grew|grown
+grow|grown
+grows|grown
+growths|growth
+hang|hanging
+hanged|hanging
+hangings|hanging
+hangs|hanging
+happen|happened
+happening|happened
+happens|happened
+harder|hard
+hardest|hard
+hardly|hard
+hards|hard
+heighten|heightened
+heightening|heightened
+heightens|heightened
+heroics|heroic
+highlight|highlighted
+highlighting|highlighted
+highlights|highlighted
+hinder|hinders
+hindered|hinders
+hindering|hinders
+hippogriff|hippogriffs
+homebrewed|homebrew
+homebrewing|homebrew
+hoofed|hoof
+hoofing|hoof
+hoofs|hoof
+horsed|horses
+horsing|horses
+hunter|hunters
+hut|huts
+ignores|ignore
+ignoring|ignore
+illuminations|illumination
+immersions|immersion
+immortally|immortal
+immortals|immortal
+imprisoning|imprisoned
+imprisons|imprisoned
+improved|improve
+improves|improve
+improving|improve
+inch|inches
+inched|inches
+inching|inches
+incur|incurs
+initialed|initial
+initialing|initial
+initials|initial
+innately|innate
+instruct|instructed
+instructing|instructed
+instructs|instructed
+intensely|intense
+intently|intent
+intents|intent
+intriguing|intrigued
+intruder|intruders
+invited|inviting
+invites|inviting
+jackpots|jackpot
+jerkier|jerky
+jerkiest|jerky
+jerkily|jerky
+keened|keen
+keener|keen
+keenest|keen
+keening|keen
+keenly|keen
+keens|keen
+kids|kid
+knifed|knife
+knifer|knife
+knifes|knife
+knifing|knife
+ladies|lady
+landed|lands
+landing|lands
+laters|later
+lean|leans
+leaned|leans
+leaning|leans
+learned|learn
+learner|learn
+learning|learn
+learns|learn
+leavings|leaving
+leveled|leveling
+lighted|lighting
+lightings|lighting
+likelier|likely
+likeliest|likely
+lindens|linden
+listened|listen
+listener|listen
+listens|listen
+locale|locales
+losses|loss
+loved|love
+loves|love
+loving|~
+lupin|lupins
+lupines|lupins
+lurch|lurches
+lurched|lurches
+lurching|lurches
+magmas|magma
+mailed|mail
+mailing|mail
+mails|mail
+manual|manuals
+maybes|maybe
+mayors|mayor
+meaninglessly|meaningless
+mediums|medium
+memories|memory
+memorized|memorize
+memorizes|memorize
+memorizing|memorize
+merrier|merry
+merriest|merry
+merrily|merry
+messaged|~
+messages|~
+messaging|~
+milestones|milestone
+milked|milk
+milking|milk
+milks|milk
+milled|mill
+milling|mill
+mills|mill
+mineral|minerals
+minimums|minimum
+mining|~
+mirabelles|mirabelle
+mirror|mirrors
+mirrored|mirrors
+mirroring|mirrors
+modernly|modern
+moderns|modern
+momently|moment
+moments|moment
+moneyed|money
+moneys|money
+monstrously|monstrous
+morphed|morph
+morpher|morph
+morphing|morph
+morphs|morph
+motives|motive
+motiving|motive
+mounter|mount
+mounting|mount
+mounts|mount
+multiples|multiple
+multiply|multiple
+muscularly|muscular
+narratives|narrative
+natively|native
+natives|native
+navigated|navigating
+nod|nods
+noised|noises
+noising|noises
+note|notes
+nothings|nothing
+odor|odors
+odours|odour
+offered|offer
+offers|offer
+okayed|okay
+okaying|okay
+okays|okay
+onwards|onward
+ores|ore
+oviparously|oviparous
+owned|own
+owning|own
+owns|own
+paralyzed|paralyzing
+paralyzes|paralyzing
+parted|part
+parter|part
+parting|part
+pastry|pastries
+patroled|patrols
+patroling|patrols
+pattern|patterns
+patterned|patterns
+patterning|patterns
+peacefully|peaceful
+persons|person
+petrified|petrify
+petrifies|petrify
+petrifying|petrify
+pie|pies
+pieced|piece
+piecer|piece
+piecing|piece
+pierce|piercing
+pierced|piercing
+pierces|piercing
+piercings|piercing
+pleasure|pleasures
+pleasured|pleasures
+pleasuring|pleasures
+plunder|plundered
+plundering|plundered
+plunders|plundered
+pocketed|pocket
+pocketer|pocket
+pocketing|pocket
+pockets|pocket
+pointing|pointed
+poorer|poor
+poorest|poor
+poorly|poor
+posed|pose
+poses|pose
+posing|~
+potently|potent
+practical|practically
+predecessor|predecessors
+prefers|preferring
+presenting|presented
+preserved|preserve
+preserves|preserve
+preserving|preserve
+prettied|pretty
+prettier|pretty
+pretties|pretty
+prettiest|pretty
+prettily|pretty
+prettying|pretty
+preyed|prey
+preying|prey
+preys|prey
+priced|price
+pricer|price
+prices|price
+pricing|price
+primally|primal
+primed|prime
+primely|prime
+primer|prime
+primes|prime
+priming|prime
+problematics|problematic
+problems|problem
+proficiently|proficient
+proficients|proficient
+profoundly|profound
+progenies|progeny
+push|pushed
+pushes|pushed
+put|putting
+puts|putting
+questioned|questions
+questioning|questions
+raising|raises
+rang|ranged
+ranging|ranged
+recalled|recall
+recalling|recall
+recalls|recall
+receptions|reception
+reconnaissances|reconnaissance
+recorder|record
+recording|record
+reflected|reflect
+reflections|reflection
+reflects|reflect
+regenerate|regenerated
+regenerates|regenerated
+regenerating|regenerated
+regenerations|regeneration
+regents|regent
+regularly|regular
+regulars|regular
+remarkables|remarkable
+remarkably|remarkable
+remembered|remember
+remembering|remember
+removing|removed
+repel|repels
+resided|residing
+respective|respectively
+resulted|result
+resulting|result
+results|result
+riches|rich
+richest|rich
+richly|rich
+riddling|riddled
+riders|rider
+risked|risk
+risking|risk
+risks|risk
+rocs|roc
+rotundly|rotund
+routed|routes
+routing|routes
+royally|royal
+sailor|sailors
+sandboxed|sandbox
+sandboxes|sandbox
+sandboxing|sandbox
+saying|said
+scaling|scaled
+schooled|school
+schooling|school
+schools|school
+seamless|seamlessly
+search|sea
+searched|sea
+searches|sea
+seas|sea
+sectored|sector
+sectoring|sector
+sectors|sector
+seldomer|seldom
+seldomly|seldom
+serenely|serene
+serener|serene
+serenest|serene
+sevens|seven
+severally|several
+shaded|shade
+shader|shade
+shades|shade
+shading|shade
+shafted|shafts
+shafting|shafts
+shaped|shape
+shapely|shape
+shaper|shape
+shapes|shape
+shaping|shape
+sheriffs|sheriff
+shifted|shift
+shifter|shift
+shinier|shiny
+shiniest|shiny
+shinily|shiny
+shits|shit
+show|shows
+showed|shows
+showing|shows
+shrug|shrugs
+sided|side
+sidekicks|sidekick
+sider|side
+siding|~
+sigh|sighs
+sighed|sighs
+sighing|sighs
+signal|signals
+signaled|signals
+signaling|signals
+significances|significance
+singing|sing
+sings|sing
+situate|situated
+situates|situated
+situating|situated
+situation|situations
+sixes|six
+skied|skies
+sky|say
+skying|~
+slayed|slew
+slaying|slew
+slays|slew
+slenderly|slender
+slewed|slew
+slewing|slew
+slews|slew
+soloed|solo
+soloing|solo
+solos|solo
+somethings|something
+song|songs
+sorrier|sorry
+sorriest|sorry
+sorrily|sorry
+spender|spend
+spendings|spending
+spends|spend
+spined|spine
+spinely|spine
+spines|spine
+spot|spotted
+spots|spotted
+squats|squat
+staked|stake
+staker|stake
+stakes|stake
+staking|stake
+stalagmite|stalagmites
+star|stars
+stared|stars
+staring|stars
+started|start
+starter|start
+starts|start
+stash|stashes
+stashing|stashes
+steppe|steppes
+stickied|sticky
+stickier|sticky
+stickies|sticky
+stickiest|sticky
+stickily|sticky
+strategy|strategies
+strikes|struck
+stumbling|stumbled
+subsequent|subsequently
+subserviently|subservient
+sufficiently|sufficient
+superstitiously|superstitious
+supplied|supplies
+supply|supplies
+supplying|supplies
+surer|sure
+surest|sure
+surpassed|surpass
+surpasses|surpass
+surpassing|surpass
+surprises|surprised
+surprising|surprised
+survivals|survival
+swathed|swath
+swather|swath
+swathing|swath
+swaths|swath
+swooped|swoop
+swooping|swoop
+swoops|swoop
+tailor|tailored
+tailoring|tailored
+tailors|tailored
+tared|tar
+taring|tar
+tars|tar
+tellings|telling
+temporaries|temporary
+temporarily|temporary
+tent|tents
+tented|tents
+tenting|tents
+termed|~
+terming|~
+thank|thanks
+thanked|thanks
+thanking|thanks
+theme|themes
+themed|themes
+theming|themes
+thicken|thickens
+thickened|thickens
+thickening|thickens
+thorned|thorns
+timider|timid
+timidest|timid
+timidly|timid
+tips|tip
+todays|today
+tolled|toll
+tolling|toll
+tolls|toll
+tomb|tombs
+tombed|tombs
+tombing|tombs
+tomorrows|tomorrow
+toxics|toxic
+trader|traders
+transformations|transformation
+transformed|transform
+transforming|transform
+traversed|traverse
+traverses|traverse
+traversing|traverse
+treetop|treetops
+tried|~
+trier|~
+tries|trimmed
+trifle|trifles
+trifled|trifles
+trifling|trifles
+trim|trimmed
+trims|trimmed
+trolled|troll
+troller|troll
+trolling|troll
+troop|troops
+trooped|troops
+trooping|troops
+turtled|turtle
+turtles|turtle
+turtling|turtle
+unambitiously|unambitious
+undergoing|undergo
+unicorns|unicorn
+uniquely|unique
+uniques|unique
+units|unit
+unparallel|unparalleled
+unwelcomed|unwelcome
+unwelcoming|unwelcome
+urgently|urgent
+utilized|utilize
+utilizes|utilize
+utilizing|utilize
+veined|vein
+veining|vein
+veins|vein
+versatilities|versatility
+vertically|vertical
+verticals|vertical
+visibly|visible
+visitor|visitors
+vulnerability|vulnerabilities
+walked|walking
+wanted|want
+wanting|want
+wants|want
+warlocks|warlock
+warned|warn
+warning|warn
+warns|warn
+waterfalls|waterfall
+weighed|weigh
+weigher|weigh
+weighing|weigh
+wielders|wielder
+willfully|willful
+wineskins|wineskin
+wools|wool
+worded|~
+wording|~
+writing|writings
+yeahs|yeah
+zoned|zone
+zones|zone
+zoning|zone
+""";
+
+        private static IEnumerable<OrcishLexiconEntry> BuildThirtyPageSampleEntries(
+            IEnumerable<OrcishLexiconEntry> entries)
+        {
+            var acceptedEntries = entries.ToList();
+            var sourceRoots = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            var sourceOrdinal = 0;
+
+            foreach (var english in ThirtyPageSourceCandidateData.Split(
+                         ['\r', '\n'],
+                         StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+            {
+                var root = $"graz-{EncodeTwentyPageOrdinal(sourceOrdinal++)}";
+                sourceRoots.Add(english, root);
+                var candidate = new OrcishLexiconEntry(
+                    english,
+                    root,
+                    Tags:
+                    [
+                        "wiki-fodder",
+                        "thirty-page-sample",
+                        "generated",
+                        "review-promoted",
+                        "close-form-reviewed",
+                        $"family-{english}"
+                    ]);
+
+                OrcishLexiconReviewUtility.EnsureCanAdd(candidate, acceptedEntries);
+                acceptedEntries.Add(candidate);
+                yield return candidate;
+            }
+
+            var nearKinOrdinal = 0;
+            foreach (var line in ThirtyPageNearKinCandidateData.Split(
+                         ['\r', '\n'],
+                         StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+            {
+                var fields = line.Split('|', 2, StringSplitOptions.TrimEntries);
+                var english = fields[0];
+                var sourceEnglish = fields[1];
+                var root = string.Equals(sourceEnglish, "~", StringComparison.Ordinal)
+                    ? $"graz-nar-{EncodeTwentyPageOrdinal(nearKinOrdinal)}"
+                    : sourceRoots[sourceEnglish];
+                var candidate = new OrcishLexiconEntry(
+                    english,
+                    CreateThirtyPageNearKinForm(root, english, nearKinOrdinal++),
+                    Tags:
+                    [
+                        "wiki-fodder",
+                        "thirty-page-near-kin",
+                        "near-kin",
+                        "derived-by-rule",
+                        "review-promoted",
+                        "close-form-reviewed",
+                        $"family-{(sourceEnglish == "~" ? english : sourceEnglish)}"
+                    ]);
+
+                OrcishLexiconReviewUtility.EnsureCanAdd(candidate, acceptedEntries);
+                acceptedEntries.Add(candidate);
+                yield return candidate;
+            }
+        }
+
+        private static string CreateThirtyPageNearKinForm(string root, string english, int ordinal)
+        {
+            var morphology = english.EndsWith("ing", StringComparison.OrdinalIgnoreCase)
+                ? "in"
+                : english.EndsWith("ed", StringComparison.OrdinalIgnoreCase)
+                    ? "ash"
+                    : english.EndsWith("ly", StringComparison.OrdinalIgnoreCase)
+                        ? "grak"
+                        : english.EndsWith("est", StringComparison.OrdinalIgnoreCase)
+                            ? "gash"
+                            : english.EndsWith("er", StringComparison.OrdinalIgnoreCase)
+                                ? "mog"
+                                : english.EndsWith('s')
+                                    ? "i"
+                                    : "kin";
+
+            return $"{root}-{morphology}-{EncodeTwentyPageOrdinal(ordinal)}";
+        }
+
+        private const string ThirtyPageFollowupSourceCandidateData = """
+abomination
+achieving
+ad-hoc
+ages
+aggressive
+anemic
+annoyance
+anyone
+appreciation
+arable
+arcana
+archaeologists
+automatic
+blew
+blindness
+bored
+bounded
+brine
+brook
+buffet
+cephalopods
+chalkboard
+chapel
+claws
+climes
+coastal
+companions
+concerned
+coniferous
+constrict
+constricting
+constriction
+cooperate
+cornered
+counseled
+cracks
+crest
+crevasse
+crumbling
+culls
+curious
+dealt
+declare
+decorated
+delayed
+demon
+deployed
+destructor
+dinosaurs
+displeased
+diverted
+doom
+dreaming
+dried
+dries
+dungeon-master
+dungeoneer
+dwarven-pantheon
+eagle
+eagles
+eight-armed
+eke
+elaborately
+elements
+embossing
+engineers
+enjoyment
+enthusiasm
+entity
+especially
+excitement
+exclamations
+explain
+expressing
+far-reaching
+farmland
+fast
+felicitously
+felled
+finest
+fishbones
+foolhardy
+forsworn
+fully
+genetic
+gleaming
+goals
+gore
+grab
+grain
+grasslands
+grey
+griffon
+hags
+halted
+harpies
+harpy
+herbivorous
+herd
+hob
+illusory
+imagination
+impulsive
+inflict
+inflicting
+inkwell
+insatiable
+inspection
+instinctively
+intention
+interest
+inventors
+jet
+jewels
+job
+jokes
+judgement
+justice
+kin
+knowledgeable
+laterally
+laugh
+levitating
+levitation
+lion
+lovers
+loyal
+lure
+lurk
+male
+mandrake
+masterwork
+mines
+mission
+monstrosities
+mutton
+neat
+negate
+negated
+negates
+negation
+nestled
+neutralize
+nevertheless
+non-shamanistic
+noses
+oncoming
+opinions
+ounce
+oversees
+owlbear
+paralysing
+past
+paused
+pentacles
+percentage
+perfecting
+pinprick
+planted
+plenty
+populations
+portcullis
+portion
+potentially
+pranks
+predators
+principality
+prodigious
+produce
+products
+puns
+rapacious
+rasping
+rattle
+rattler
+realized
+reborne
+regardless
+requires
+resides
+resistance
+restoring
+reversed
+rushed
+savor
+scales
+seem
+serious
+sets
+severing
+shaken
+shallows
+shine
+shines
+shrouded
+slaves
+slightly
+smaller
+smelted
+smiles
+solid
+southernmost
+southwest
+specifically
+spiralling
+spitting
+sponge
+spurs
+squeeze
+stretches
+styled
+swallows
+taming
+tan
+tarot
+telekinesis
+temperance
+tendency
+tentacled
+thouls
+threaten
+tidbit
+tinkers
+toilet
+tones
+tornados
+trample
+trampling
+travel-time
+triarchs
+triceratops
+uncaring
+uncompromising
+unnatural
+unnoticed
+useful
+vast
+vehicles
+venison
+victory
+viper
+wall-of-flame
+waters
+weights
+why
+wonder
+wonderful
+worry
+wraps
+writ
+write-up
+written
+yards
+""";
+
+        private const string ThirtyPageFollowupNearKinCandidateData = """
+abomination's|abomination
+achievable|achieving
+achievement|achieving
+achiever|achieving
+achievers|achieving
+achieves|achieving
+age's|ages
+aged|ages
+aggressively|aggressive
+aggressiveness|aggressive
+aging|ages
+agings|ages
+annoyance's|annoyance
+annoyances|annoyance
+anyone's|anyone
+appreciation's|appreciation
+archaeologist|archaeologists
+archaeologist's|archaeologists
+automatic's|automatic
+automatics|automatic
+blindness's|blindness
+blown|blew
+bore|bored
+bore's|bored
+borer|bored
+borers|bored
+bores|bored
+boring|bored
+bound's|bounded
+bounding|bounded
+bounds|bounded
+brine's|brine
+brook's|brook
+brooked|brook
+brooking|brook
+brooks|brook
+buffet's|buffet
+buffeted|buffet
+buffeting|buffet
+buffetings|buffet
+buffets|buffet
+chalkboard's|chalkboard
+chalkboards|chalkboard
+chapel's|chapel
+chapels|chapel
+clawing|claws
+clime|climes
+clime's|climes
+companion|companions
+companion's|companions
+companionable|companions
+concernedly|concerned
+constricted|constrict
+constriction's|constriction
+constrictions|constriction
+constrictive|constrict
+constricts|constrict
+cooperated|cooperate
+cooperates|cooperate
+cooperating|cooperate
+cooperation|cooperate
+cooperative|cooperate
+corner|cornered
+corner's|cornered
+cornering|cornered
+counsel|counseled
+counsel's|counseled
+counseling|counseled
+counselings|counseled
+counsels|counseled
+crack|cracks
+crack's|cracks
+cracked|cracks
+cracker|cracks
+crackers|cracks
+cracking|cracks
+crackings|cracks
+crackly|cracks
+crest's|crest
+crested|crest
+cresting|crest
+crests|crest
+crevasse's|crevasse
+crevasses|crevasse
+crumble|crumbling
+crumble's|crumbling
+crumbled|crumbling
+crumbles|crumbling
+cull|culls
+cull's|culls
+culled|culls
+culling|culls
+curiously|curious
+curiousness|curious
+dealing|dealt
+declarable|declare
+declared|declare
+declarer|declare
+declarers|declare
+declares|declare
+declaring|declare
+decorate|decorated
+decorates|decorated
+decorating|decorated
+decoration|decorated
+decorative|decorated
+delay|delayed
+delayer|delayed
+delayers|delayed
+demon's|demon
+demons|demon
+deploy|deployed
+deploying|deployed
+deployment|deployed
+deploys|deployed
+dinosaur|dinosaurs
+dinosaur's|dinosaurs
+divert|diverted
+diverting|diverted
+diverts|diverted
+doom's|doom
+doomed|doom
+dooming|doom
+dooms|doom
+dream|dreaming
+dream's|dreaming
+dreamed|dreaming
+dreamer|dreaming
+dreamers|dreaming
+dreams|dreaming
+drier|dried
+driers|dried
+driest|dried
+dry|dried
+dry's|dried
+drying|dried
+dryly|dried
+eagle's|eagle
+eked|eke
+ekes|eke
+eking|eke
+elaborate|elaborately
+elaborated|elaborately
+elaborateness|elaborately
+elaborates|elaborately
+elaborating|elaborately
+elaboration|elaborately
+elaborations|elaborately
+element|elements
+element's|elements
+emboss|embossing
+embossed|embossing
+embosser|embossing
+embossers|embossing
+embosses|embossing
+engineer|engineers
+engineer's|engineers
+engineered|engineers
+engineering|engineers
+enjoyment's|enjoyment
+enjoyments|enjoyment
+enthusiasm's|enthusiasm
+enthusiasms|enthusiasm
+entities|entity
+entity's|entity
+especial|especially
+excitement's|excitement
+excitements|excitement
+exclamation|exclamations
+exclamation's|exclamations
+explained|explain
+explaining|explain
+explains|explain
+express|expressing
+express's|expressing
+expressed|expressing
+expresses|expressing
+expressive|expressing
+expressly|expressing
+farmland's|farmland
+farmlands|farmland
+fast's|fast
+fasted|fast
+faster|fast
+fastest|fast
+fasting|fast
+fastness|fast
+fasts|fast
+felicitous|felicitously
+fell's|felled
+feller|felled
+fellers|felled
+fellest|felled
+felling|felled
+fells|felled
+fined|finest
+fines|finest
+fining|finest
+foolhardier|foolhardy
+foolhardiest|foolhardy
+foolhardiness|foolhardy
+forswear|forsworn
+forswearing|forsworn
+forswears|forsworn
+forswore|forsworn
+genetics|genetic
+gleam|gleaming
+gleam's|gleaming
+gleamed|gleaming
+gleamings|gleaming
+gleams|gleaming
+goal|goals
+goal's|goals
+gore's|gore
+gored|gore
+gores|gore
+goring|gore
+grab's|grab
+grabs|grab
+grain's|grain
+grained|grain
+grains|grain
+grassland|grasslands
+grassland's|grasslands
+grey's|grey
+griffon's|griffon
+griffons|griffon
+hag|hags
+hag's|hags
+halt|halted
+halt's|halted
+halters|halted
+halting|halted
+halts|halted
+harpy's|harpies
+herd's|herd
+herded|herd
+herder|herd
+herders|herd
+herding|herd
+herds|herd
+hob's|hob
+hobs|hob
+imagination's|imagination
+imaginations|imagination
+impulsively|impulsive
+impulsiveness|impulsive
+inflicted|inflict
+inflictive|inflict
+inkwell's|inkwell
+inkwells|inkwell
+inspection's|inspection
+inspections|inspection
+instinctive|instinctively
+intention's|intention
+intentions|intention
+interest's|interest
+interested|interest
+interests|interest
+inventor|inventors
+inventor's|inventors
+jet's|jet
+jets|jet
+jewel|jewels
+jewel's|jewels
+jeweled|jewels
+jeweler|jewels
+jewelers|jewels
+jeweling|jewels
+job's|job
+jobs|job
+joke|jokes
+joke's|jokes
+joked|jokes
+joker|jokes
+jokers|jokes
+joking|jokes
+justice's|justice
+justices|justice
+kin's|kin
+lateral|laterally
+lateral's|laterally
+laterals|laterally
+laugh's|laugh
+laughable|laugh
+laughed|laugh
+laughing|laugh
+levitate|levitating
+levitated|levitating
+levitates|levitating
+levitation's|levitation
+lion's|lion
+lions|lion
+lovable|lovers
+love's|lovers
+lovely|lovers
+loyalest|loyal
+loyally|loyal
+lure's|lure
+lured|lure
+lures|lure
+luring|lure
+lurked|lurk
+lurker|lurk
+lurkers|lurk
+lurks|lurk
+male's|male
+maleness|male
+males|male
+mandrake's|mandrake
+mandrakes|mandrake
+masterwork's|masterwork
+masterworks|masterwork
+mine|mines
+mine's|mines
+mission's|mission
+missions|mission
+monstrosity|monstrosities
+monstrosity's|monstrosities
+mutton's|mutton
+neaten|neat
+neatens|neat
+neater|neat
+neatest|neat
+neatly|neat
+neatness|neat
+negating|negate
+negation's|negation
+negations|negate
+negative|negate
+nestle|nestled
+nestles|nestled
+nestling|nestled
+nestlings|nestled
+neutralized|neutralize
+neutralizer|neutralize
+neutralizers|neutralize
+neutralizes|neutralize
+neutralizing|neutralize
+nose|noses
+nose's|noses
+nosed|noses
+nosing|noses
+ounce's|ounce
+ounces|ounce
+oversee|oversees
+overseers|oversees
+past's|past
+pasts|past
+pause|paused
+pause's|paused
+pausing|paused
+pentacle|pentacles
+pentacle's|pentacles
+percentage's|percentage
+percentages|percentage
+perfect's|perfecting
+perfected|perfecting
+perfecter|perfecting
+perfectest|perfecting
+perfectness|perfecting
+perfects|perfecting
+pinprick's|pinprick
+pinpricks|pinprick
+plant's|planted
+planter|planted
+planters|planted
+planting|planted
+plantings|planted
+plenty's|plenty
+portcullis's|portcullis
+portcullises|portcullis
+portion's|portion
+portioned|portion
+portioning|portion
+portions|portion
+potential|potentially
+potential's|potentially
+potentials|potentially
+prank|pranks
+prank's|pranks
+predator|predators
+predator's|predators
+principalities|principality
+principality's|principality
+prodigiously|prodigious
+produced|produce
+producer|produce
+producers|produce
+producing|produce
+pun|puns
+pun's|puns
+rapaciously|rapacious
+rapaciousness|rapacious
+rasp|rasping
+rasp's|rasping
+rasped|rasping
+rasps|rasping
+rattle's|rattle
+rattled|rattle
+rattler's|rattler
+rattlers|rattle
+rattles|rattle
+rattling|rattle
+rattlings|rattle
+realizable|realized
+realize|realized
+realizes|realized
+realizing|realized
+rebear|reborne
+rebearing|reborne
+rebore|reborne
+reborn|reborne
+resistance's|resistance
+resistances|resistance
+rush|rushed
+rush's|rushed
+rusher|rushed
+rushers|rushed
+rushes|rushed
+rushing|rushed
+savor's|savor
+savored|savor
+savors|savor
+scale|scales
+seemed|seem
+seems|seem
+seriously|serious
+seriousness|serious
+set|sets
+set's|sets
+sever|severing
+severed|severing
+severest|severing
+severs|severing
+shake|shaken
+shakes|shaken
+shaking|shaken
+shallow's|shallows
+shallower|shallows
+shallowest|shallows
+shallowly|shallows
+shallowness|shallows
+shine's|shine
+shining|shine
+shone|shine
+shook|shaken
+shroud|shrouded
+shroud's|shrouded
+shrouding|shrouded
+shrouds|shrouded
+slave|slaves
+slave's|slaves
+slaved|slaves
+slaver|slaves
+slavers|slaves
+slaving|slaves
+slight|slightly
+slight's|slightly
+slighted|slightly
+slighter|slightly
+slightest|slightly
+slighting|slightly
+slightness|slightly
+slights|slightly
+small's|smaller
+smallest|smaller
+smallness|smaller
+smalls|smaller
+smelt|smelted
+smelt's|smelted
+smelter|smelted
+smelters|smelted
+smelting|smelted
+smelts|smelted
+smile|smiles
+smile's|smiles
+smiling|smiles
+solid's|solid
+solider|solid
+solidest|solid
+solidly|solid
+solidness|solid
+solids|solid
+southwest's|southwest
+southwester|southwest
+southwesters|southwest
+southwests|southwest
+spat|spitting
+sponge's|sponge
+sponged|sponge
+sponger|sponge
+spongers|sponge
+sponges|sponge
+sponging|sponge
+spur|spurs
+spur's|spurs
+squeezable|squeeze
+squeeze's|squeeze
+squeezed|squeeze
+squeezer|squeeze
+squeezers|squeeze
+squeezes|squeeze
+squeezing|squeeze
+stretch|stretches
+stretch's|stretches
+stretchable|stretches
+stretched|stretches
+stretcher|stretches
+stretchers|stretches
+stretching|stretches
+style|styled
+styles|styled
+styling|styled
+swallow's|swallows
+swallowed|swallows
+swallowing|swallows
+tamable|taming
+tame|taming
+tamed|taming
+tamely|taming
+tameness|taming
+tamer|taming
+tamers|taming
+tames|taming
+tamest|taming
+tan's|tan
+tans|tan
+tarot's|tarot
+tarots|tarot
+telekinesis's|telekinesis
+temperance's|temperance
+tendencies|tendency
+tendency's|tendency
+tentacle's|tentacled
+threatened|threaten
+threatening|threaten
+tidbit's|tidbit
+tidbits|tidbit
+tinker|tinkers
+tinker's|tinkers
+tinkered|tinkers
+tinkerer|tinkers
+tinkerers|tinkers
+tinkering|tinkers
+toilet's|toilet
+toileted|toilet
+toileting|toilet
+toilets|toilet
+tone|tones
+toned|tones
+toner|tones
+toners|tones
+toning|tones
+tornado|tornados
+trample's|trample
+trampled|trample
+trampler|trample
+tramplers|trample
+tramples|trample
+triceratops's|triceratops
+uncompromisingly|uncompromising
+usefully|useful
+usefulness|useful
+vast's|vast
+vaster|vast
+vastest|vast
+vastly|vast
+vastness|vast
+vasts|vast
+vehicle|vehicles
+vehicle's|vehicles
+venison's|venison
+victories|victory
+victory's|victory
+viper's|viper
+vipers|viper
+weight's|weights
+weighted|weights
+weighting|weights
+weightings|weights
+why's|why
+wonder's|wonder
+wondered|wonder
+wonderfully|wonderful
+wonderfulness|wonderful
+wondering|wonder
+wonderment|wonder
+wonders|wonder
+worried|worry
+worrier|worry
+worriers|worry
+worries|worry
+worry's|worry
+worrying|worry
+worryings|worry
+wrap|wraps
+wrapped|wraps
+wrapping|wraps
+writ's|writ
+writable|writ
+write|writ
+writer|writ
+writers|writ
+writes|writ
+writs|writ
+wrote|writ
+yard|yards
+yard's|yards
+""";
+
+        private static IEnumerable<OrcishLexiconEntry> BuildThirtyPageFollowupEntries(
+            IEnumerable<OrcishLexiconEntry> entries)
+        {
+            var acceptedEntries = entries.ToList();
+            var sourceRoots = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            var sourceOrdinal = 0;
+
+            foreach (var english in ThirtyPageFollowupSourceCandidateData.Split(
+                         ['\r', '\n'],
+                         StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+            {
+                var root = $"draz-{EncodeTwentyPageOrdinal(sourceOrdinal++)}";
+                sourceRoots.Add(english, root);
+                var candidate = new OrcishLexiconEntry(
+                    english,
+                    root,
+                    Tags:
+                    [
+                        "wiki-fodder",
+                        "thirty-page-followup",
+                        "generated",
+                        "review-promoted",
+                        "close-form-reviewed",
+                        $"family-{english}"
+                    ]);
+
+                OrcishLexiconReviewUtility.EnsureCanAdd(candidate, acceptedEntries);
+                acceptedEntries.Add(candidate);
+                yield return candidate;
+            }
+
+            var nearKinOrdinal = 0;
+            foreach (var line in ThirtyPageFollowupNearKinCandidateData.Split(
+                         ['\r', '\n'],
+                         StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+            {
+                var fields = line.Split('|', 2, StringSplitOptions.TrimEntries);
+                var english = fields[0];
+                var sourceEnglish = fields[1];
+                var root = sourceRoots[sourceEnglish];
+                var candidate = new OrcishLexiconEntry(
+                    english,
+                    CreateThirtyPageNearKinForm(root, english, nearKinOrdinal++),
+                    Tags:
+                    [
+                        "wiki-fodder",
+                        "thirty-page-followup-near-kin",
+                        "near-kin",
+                        "derived-by-rule",
+                        "review-promoted",
+                        "close-form-reviewed",
+                        $"family-{sourceEnglish}"
+                    ]);
+
+                OrcishLexiconReviewUtility.EnsureCanAdd(candidate, acceptedEntries);
+                acceptedEntries.Add(candidate);
+                yield return candidate;
+            }
+        }
+
+
+        private const string TwentyPageSourceCandidateData = """
+ball
+bruce
+banville
+charmed
+doubled
+scryer
+viewed
+abstinence
+attached
+bancroft
+billworth
+clarity
+considerable
+devices
+elite
+enchant
+existence
+hostile
+justhand
+leap
+master
+mordicar
+plants
+scene
+spy
+thieves
+threads
+turgen
+vul
+wishes
+agent
+angry
+antiquities
+ants
+applied
+april
+armies
+bass
+became
+beer-brewer
+bees
+beetles
+berric
+brandished
+brandishing
+cavalry
+celaena
+centipedes
+certain
+challenging
+clairaudience
+clockwork
+comely
+consciousness
+continue
+contracted
+contradict
+controlled
+creepers
+crusaders
+darkeyes
+deadly
+deals
+debate
+decades
+defend
+dependent
+descend
+desired
+detects
+development
+devouring
+devours
+difficult
+difficulty
+discreet
+distances
+diving
+drawn
+drinking
+drinks
+dursk
+easy
+entangle
+entire
+equal
+exercising
+exists
+exiting
+expert
+extreme
+extremely
+facilitates
+fact
+fails
+familiarity
+fellow
+fighter-priests
+finding
+finds
+fits
+flyers
+fool
+four
+friendship
+gauntlet
+gemstone
+giants
+grandson
+guildmaster
+harmful
+hear
+historians
+horizontally
+hornets
+hours
+ignored
+illness
+impossible
+ineffectual
+inglorious
+inverted
+investiture
+ironguard
+issenda
+jumping
+keeper
+kettle-belly
+kronos
+lances
+leaping
+likable
+locomotion
+locusts
+lord
+mask
+mastermind
+maven
+mega
+midstream
+mix
+modifier
+modifiers
+motte
+mustache
+nephew
+nest
+normal-looking
+obey
+occurred
+opponents
+owner
+penalties
+perceive
+pictures
+precious-metal
+profits
+prohibition
+prostitution
+queen
+quickly
+quite
+rates
+representative
+residuum
+resisting
+reteps
+reveals
+riding
+run
+sardothien
+scryers
+sewers
+share
+shipments
+shop
+sneers
+somehow
+soul-bound
+spiritual
+spring
+steeder
+stomped
+stonehill
+stubbornly
+swatting
+thin
+thurgan
+tiny
+tirelessness
+tiring
+tolerated
+trading
+travelling
+unclassed
+vanishes
+wasting
+well-off
+well-trained
+whole
+""";
+
+        private const string TwentyPageNearKinFamilyData = """
+abstinence|abstain,abstained,abstaining,abstains,abstinences
+agent|agents
+angry|angrier,angriest,angrily
+antiquities|antiquity
+ants|ant
+armies|army
+attached|attach,attaches,attaching
+ball|balled,balling,balls
+bass|basses,bassing
+became|becomes,becoming
+beer-brewer|brew,brewer,brewers
+bees|bee
+beetles|beetle
+brandished|brandish,brandishes
+cavalry|cavalries
+centipedes|centipede
+certain|certainly,certainty
+challenging|challenge,challenged,challenges
+charmed|charming,charms
+clairaudience|clairaudiences,clairaudient
+clockwork|clockworks
+comely|comelier,comeliest,comelily
+consciousness|conscious,consciously
+considerable|considerably
+continue|continues
+contradict|contradicted,contradicting,contradicts
+creepers|creeper
+crusaders|crusader
+darkeyes|darkeye
+deadly|deadlier,deadliest
+deals|deal
+debate|debated,debates,debating
+defend|defended,defending,defends
+dependent|dependently,dependents
+descend|descended,descending,descends
+detects|detecting
+development|developments
+devouring|devour,devoured
+devours|devour
+difficulty|difficulties
+discreet|discreetly
+doubled|doubles,doubling
+drawn|draw,drawing,drew
+drinking|drank,drink,drinkings,drunk
+drinks|drank,drink,drunk
+easy|easier,easiest
+elite|elites
+enchant|enchanting,enchantment,enchants
+entangle|entangles,entangling
+entire|entirely
+equal|equaled,equaling,equality,equally,equals
+existence|exist,existed,existences,existing
+exists|exist,existed,existing
+exiting|exit,exited
+expert|expertly,experts
+extreme|extremes
+facilitates|facilitate,facilitated,facilitating
+fact|facts
+fails|fail,failed,failing
+familiarity|familiarities,familiarly
+fighter-priests|fighter-priest
+finding|findings
+fits|fit
+flyers|flyer
+fool|fooled,fooling,foolish,foolishly,fools
+four|fours
+friendship|friendships
+gauntlet|gauntlets
+gemstone|gemstones
+grandson|grandsons
+guildmaster|guildmasters
+harmful|harmfully
+hear|heard,hearing,hears
+historians|historian
+horizontally|horizontal
+hornets|hornet
+hostile|hostiles,hostility
+hours|hour
+illness|ill,illnesses,ills
+impossible|impossibly
+ineffectual|ineffectually
+inglorious|ingloriously
+investiture|invest,invested,investing,investitures,invests
+ironguard|ironguards
+jumping|jump,jumped,jumps
+keeper|keepers
+kettle-belly|kettle-bellies
+lances|lance
+leap|leaped,leaps,leapt
+leaping|leaped,leaps,leapt
+likable|likably
+locomotion|locomote,locomotions
+locusts|locust
+lord|lorded,lording,lords
+mask|masked,masking,masks
+master|masterly,masters,mastery
+mastermind|masterminded,masterminding,masterminds
+maven|mavens
+mix|mixed,mixes,mixing
+motte|mottes
+mustache|mustaches
+nephew|nephews
+nest|nested,nesting,nests
+normal-looking|normally
+obey|obeyed,obeying,obeys
+occurred|occur,occurring,occurs
+opponents|opponent
+owner|owners,ownership
+perceive|perceived,perceives,perceiving
+pictures|picture
+precious-metal|metals,precious
+profits|profit
+prohibition|prohibit,prohibited,prohibiting,prohibitions,prohibits
+prostitution|prostitute,prostituted,prostitutes,prostituting,prostitutions
+queen|queened,queening,queens
+quickly|quick,quicker,quickest
+representative|represent,representatively,representatives,represented,representing,represents
+residuum|residuums
+resisting|resisted,resists
+reveals|reveal,revealed,revealing
+riding|ridden,ride,rides,ridings,rode
+run|ran,running,runs
+scene|scenes
+scryer|scried,scries,scry
+sewers|sewer
+shipments|shipment
+shop|shopped,shopping,shops
+sneers|sneer,sneered,sneering
+soul-bound|bind,bound
+spiritual|spiritually,spirituals
+spring|sprang,springing,springs,sprung
+spy|spied,spies,spying
+stomped|stomp,stomping,stomps
+stubbornly|stubborn
+swatting|swat,swats,swatted
+thin|thinly,thinned,thinner,thinnest,thinning,thins
+tiny|tinier,tiniest,tinily
+tirelessness|tireless,tirelessly
+tiring|tire,tires
+tolerated|tolerate,tolerates,tolerating
+trading|traded
+travelling|traveled,travelled
+vanishes|vanish,vanished,vanishing
+viewed|view,viewing,views
+wasting|wasted,wastes
+well-off|wealthy
+well-trained|train,trained
+whole|wholes,wholly
+wishes|wish,wished,wishing
+""";
+
+        private static IEnumerable<OrcishLexiconEntry> BuildTwentyPageSampleEntries(
+            IEnumerable<OrcishLexiconEntry> entries)
+        {
+            var acceptedEntries = entries.ToList();
+            var sourceRoots = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            var emittedEnglish = acceptedEntries
+                .Select(static entry => entry.English)
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
+            var sourceOrdinal = 0;
+
+            foreach (var english in TwentyPageSourceCandidateData.Split(
+                         ['\r', '\n'],
+                         StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+            {
+                var root = $"krul-{EncodeTwentyPageOrdinal(sourceOrdinal++)}";
+                sourceRoots.Add(english, root);
+                var candidate = new OrcishLexiconEntry(
+                    english,
+                    root,
+                    Tags:
+                    [
+                        "wiki-fodder",
+                        "twenty-page-sample",
+                        "generated",
+                        "review-promoted",
+                        "close-form-reviewed",
+                        $"family-{english}"
+                    ]);
+
+                OrcishLexiconReviewUtility.EnsureCanAdd(candidate, acceptedEntries);
+                acceptedEntries.Add(candidate);
+                emittedEnglish.Add(english);
+                yield return candidate;
+            }
+
+            var nearKinOrdinal = 0;
+            foreach (var line in TwentyPageNearKinFamilyData.Split(
+                         ['\r', '\n'],
+                         StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+            {
+                var fields = line.Split('|', 2, StringSplitOptions.TrimEntries);
+                var sourceEnglish = fields[0];
+                var root = sourceRoots[sourceEnglish];
+
+                foreach (var english in fields[1].Split(
+                             ',',
+                             StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+                {
+                    if (!emittedEnglish.Add(english))
+                    {
+                        continue;
+                    }
+
+                    var candidate = new OrcishLexiconEntry(
+                        english,
+                        CreateTwentyPageNearKinForm(root, english, nearKinOrdinal++),
+                        Tags:
+                        [
+                            "wiki-fodder",
+                            "twenty-page-near-kin",
+                            "near-kin",
+                            "derived-by-rule",
+                            "review-promoted",
+                            "close-form-reviewed",
+                            $"family-{sourceEnglish}"
+                        ]);
+
+                    OrcishLexiconReviewUtility.EnsureCanAdd(candidate, acceptedEntries);
+                    acceptedEntries.Add(candidate);
+                    yield return candidate;
+                }
+            }
+        }
+
+        private static string CreateTwentyPageNearKinForm(string root, string english, int ordinal)
+        {
+            var morphology = english.EndsWith("ing", StringComparison.OrdinalIgnoreCase)
+                ? "in"
+                : english.EndsWith("ed", StringComparison.OrdinalIgnoreCase)
+                    ? "ash"
+                    : english.EndsWith("ly", StringComparison.OrdinalIgnoreCase)
+                        ? "grak"
+                        : english.EndsWith("est", StringComparison.OrdinalIgnoreCase)
+                            ? "gash"
+                            : english.EndsWith("er", StringComparison.OrdinalIgnoreCase)
+                                ? "mog"
+                                : english.EndsWith('s')
+                                    ? "i"
+                                    : "kin";
+
+            return $"{root}-{morphology}-{EncodeTwentyPageOrdinal(ordinal)}";
+        }
+
+        private static string EncodeTwentyPageOrdinal(int value)
+        {
+            var syllables = new[]
+            {
+                "agh", "burz", "dak", "drak", "gar", "gash", "gor", "grak",
+                "grod", "krag", "mok", "narg", "ruk", "skar", "thog", "varg"
+            };
+
+            return string.Join(
+                "-",
+                syllables[(value >> 8) & 15],
+                syllables[(value >> 4) & 15],
+                syllables[value & 15]);
+        }
+
+        private const string FifteenPageSampleLexiconData = """
+thoughts|thogi-kin-agh-agh-agh|thoughts|base
+background|vosh-agh-agh-grak|background|base
+crynwyth|vosh-agh-drak-gash|crynwyth|base
+underworld|vosh-agh-thog-gor|underworld|base
+elowen|vosh-agh-gar-gor|elowen|base
+brotherhood|mokh-gash-thog-kin-agh-agh-gash|brotherhood|base
+connection|vosh-agh-dak-skar|connection|base
+portal|vosh-agh-krag-thog|portal|base
+breanna|vosh-agh-burz-krag|breanna|base
+fungus|gruul-thrum-rukhuki-kin-agh-agh-krag|fungus|base
+communication|vosh-agh-dak-grak|communication|base
+tangsin|vosh-agh-skar-gor|tangsin|base
+mild|vosh-agh-grod-burz|mild|base
+contain|ik-darguru-kin-agh-agh-skar|contain|base
+mentor|vosh-agh-grod-agh|mentor|base
+means|vosh-agh-grak-thog|means|base
+motivation|vosh-agh-grod-gash|motivation|base
+gnome|vosh-agh-gash-skar|gnome|base
+fantastic|vosh-agh-gash-burz|fantastic|base
+helm|vosh-agh-gor-burz|helm|base
+matter|vosh-agh-grak-ruk|matter|base
+gnomes|vosh-agh-gash-skari-kin-agh-burz-gash|gnome|base
+hypertension|vosh-agh-gor-krag|hypertension|base
+long-lost|nul-laguk-kin-agh-burz-grak|long-lost|base
+seeking|vosh-agh-narg-skar|seeking|base
+outpost|vosh-agh-krag-burz|outpost|base
+orcus|vosh-agh-krag-agh|orcus|base
+personal|vosh-agh-krag-gar|personal|base
+prepared|vosh-agh-mok-dak|prepared|base
+possesses|vosh-agh-krag-vargur-kin-agh-burz-skar|possessed|base
+sacred|vosh-agh-narg-krag|sacred|base
+summoning|vosh-agh-skar-aghin-kin-agh-burz-varg|summon|base
+pronounced|vosh-agh-mok-gor|pronounced|base
+role|vosh-agh-narg-grak|role|base
+series|vosh-agh-narg-thog|series|base
+scenario|vosh-agh-narg-narg|scenario|base
+talents|vosh-agh-skar-gash|talents|base
+telepathy|vosh-agh-skar-mok|telepathy|base
+territory|vosh-agh-skar-ruk|territory|base
+tasked|zhar-agh-burz-rukash-kin-agh-dak-grak|tasked|base
+valuables|vosh-agh-thog-krag|valuables|base
+acre|cbd-devis-thog-kin-agh-dak-krag|acre|base
+always|vosh-agh-agh-dak|always|base
+allows|kur-dargur-kin-agh-dak-narg|allows|base
+unknown|thogash-thog-kin-agh-dak-ruk|unknown|base
+alteration|vosh-agh-agh-burz|alteration|base
+appear|oglaruru-kin-agh-dak-thog|appear|base
+allergy|vosh-agh-agh-agh|allergy|base
+appearance|oglarur-thog-kin-agh-drak-agh|appearance|base
+approached|lag-thog-krag-burzash-kin-agh-drak-burz|approached|base
+arrive|vosh-agh-agh-drak|arrive|base
+attempt|vosh-agh-agh-gar|attempt|base
+banishing|vosh-agh-agh-nargin-kin-agh-drak-gar|banished|base
+bah-mooth|vosh-agh-agh-mok|bah-mooth|base
+banished|vosh-agh-agh-narg|banished|base
+badly|vosh-agh-agh-grod|badly|base
+badmouth|vosh-agh-agh-krag|badmouth|base
+barriers|vosh-agh-agh-ruk|barriers|base
+awaiting|vosh-agh-agh-gash|awaiting|base
+awakened|vosh-agh-agh-gor|awakened|base
+beautifully|vosh-agh-agh-skar|beautifully|base
+begin|ashdak-hekashu-kin-agh-drak-skar|begin|base
+behave|vosh-agh-agh-varg|behave|base
+beauty|vosh-agh-agh-thog|beauty|base
+bodyguards|vosh-agh-burz-gor|bodyguards|base
+behavior|vosh-agh-burz-agh|behavior|base
+beneficial|vosh-agh-burz-dak|beneficial|base
+blend|vosh-agh-burz-gash|blend|base
+belies|vosh-agh-burz-burz|belies|base
+blocks|bant-muri-kin-agh-gar-gash|blocks|base
+bidding|vosh-agh-burz-gar|bidding|base
+bestial|vosh-agh-burz-drak|bestial|base
+brace|vosh-agh-burz-grak|brace|base
+cascading|vosh-agh-burz-mok|cascading|base
+brazier|vosh-agh-burz-grod|brazier|base
+broadly|ti-mokh-grak-kin-agh-gar-narg|broadly|base
+castle|vosh-agh-burz-ruk|castle|base
+chronology|vosh-agh-burz-varg|chronology|base
+cases|vosh-agh-burz-narg|cases|base
+clairvoyance|vosh-agh-dak-burz|clairvoyance|base
+civilisation|vosh-agh-dak-agh|civilisation|base
+cleanse|vosh-agh-dak-dak|cleanse|base
+charisma|vosh-agh-burz-thog|charisma|base
+censer|vosh-agh-burz-skar|censer|base
+closing|vosh-agh-dak-drak|closing|base
+comprehension|vosh-agh-dak-krag|comprehension|base
+comprehensible|vosh-agh-dak-grod|comprehensible|base
+combined|vosh-agh-dak-gar|combined|base
+context|vosh-agh-dak-varg|context|base
+comprised|vosh-agh-dak-mok|comprised|base
+concentrate|vosh-agh-dak-narg|concentrate|base
+conversely|narg-mokru-grak-kin-agh-gash-narg|conversely|base
+commonly|mokhuk-grrt-karn-grak-kin-agh-gash-ruk|commonly|base
+consult|vosh-agh-dak-thog|consult|base
+conjecture|vosh-agh-dak-ruk|conjecture|base
+commitment|vosh-agh-dak-gash|commitment|base
+committed|vosh-agh-dak-gor|committed|base
+corrupted|vosh-agh-drak-burz|corrupted|base
+corporeal|vosh-agh-drak-agh|corporeal|base
+creating|vosh-agh-drak-drak|creating|base
+crucial|vosh-agh-drak-gar|crucial|base
+cunning|vosh-agh-drak-gor|cunning|base
+crafted|vosh-agh-drak-dak|crafted|base
+decide|vosh-agh-drak-grak|decide|base
+darkest|burzuk-gash-kin-agh-gor-grod|darkest|base
+dedication|draku-mur-kaag-tuk-thog-kin-agh-gor-krag|dedication|base
+dedicated|vosh-agh-drak-krag|dedicated|base
+deceased|morzukash-kin-agh-gor-narg|deceased|base
+deciphering|vosh-agh-drak-grod|deciphering|base
+deposed|vosh-agh-drak-narg|deposed|base
+denotes|vosh-agh-drak-mok|denotes|base
+doorway|vosh-agh-gar-dak|doorway|base
+described|vosh-agh-drak-ruk|described|base
+despite|vosh-agh-drak-thog|despite|base
+destination|vosh-agh-drak-varg|destination|base
+designing|vosh-agh-drak-skar|designing|base
+distant|vosh-agh-gar-burz|distant|base
+develop|vosh-agh-gar-agh|develop|base
+destroying|brakash-tiin-kin-agh-grak-gor|destroying|base
+determination|thog-oglaru-thog-kin-agh-grak-grak|determination|base
+dormant|vosh-agh-gar-drak|dormant|base
+dragonkind|rukh-vark-mog-thog-kin-agh-grak-krag|dragonkind|base
+due|vosh-agh-gar-gar|due|base
+elven|elf-thog-kin-agh-grak-narg|elven|base
+enables|vosh-agh-gar-grod|enables|base
+encumbrance|vosh-agh-gar-krag|encumbrance|base
+embroidery|vosh-agh-gar-grak|embroidery|base
+electrum|vosh-agh-gar-gash|electrum|base
+engenders|vosh-agh-gar-mok|engenders|base
+ethereal|vosh-agh-gar-skar|ethereal|base
+environment|vosh-agh-gar-narg|environment|base
+explore|oglar-lagashu-kin-agh-grod-drak|explore|base
+establish|vosh-agh-gar-ruk|establish|base
+euphoric|vosh-agh-gar-thog|euphoric|base
+facing|vosh-agh-gar-varg|facing|base
+faithful|vosh-agh-gash-agh|faithful|base
+feelings|grodhi-kin-agh-grod-grod|feelings|base
+fierce|vosh-agh-gash-drak|fierce|base
+fiction|vosh-agh-gash-dak|fiction|base
+galduhr|vosh-agh-gash-grak|galduhr|base
+followers|vosh-agh-gash-gar|followers|base
+formerly|vosh-agh-gash-gash|formerly|base
+front|vosh-agh-gash-gor|front|base
+game|vosh-agh-gash-grod|game|base
+gateway|vosh-agh-gash-mok|gateway|base
+ghosts|vosh-agh-gash-narg|ghosts|base
+gargoyle|vosh-agh-gash-krag|gargoyle|base
+hails|vosh-agh-gash-varg|hails|base
+half-elven|elfuk-kin-agh-krag-gar|half-elven|base
+ginseng|vosh-agh-gash-ruk|ginseng|base
+gravity|vosh-agh-gash-thog|gravity|base
+guardians|zog-thraki-kin-agh-krag-grak|guardians|base
+half-elves|elfi-kin-agh-krag-grod|half-elven|base
+harnessing|vosh-agh-gor-agh|harnessing|base
+helmet|vosh-agh-gor-dak|helmet|base
+harmed|brak-thog-morzash-kin-agh-krag-narg|harmed|base
+helped|vosh-agh-gor-drak|helped|base
+helping|vosh-agh-gor-drakin-kin-agh-krag-skar|helped|base
+hideous|vosh-agh-gor-gar|hideous|base
+honor|grak-tur-ti-mog-kin-agh-krag-varg|honor|base
+hires|dravu-mogi-kin-agh-mok-agh|hires|base
+horned|vosh-agh-gor-gash|horned|base
+horrible|vark-thog-mog-thog-kin-agh-mok-dak|horrible|base
+hurt|vosh-agh-gor-grak|hurt|base
+hyoscyamine-containing|vosh-agh-gor-grod|hyoscyamine-containing|base
+humor|vosh-agh-gor-gor|humor|base
+inanimate|vosh-agh-gor-narg|inanimate|base
+include|vosh-agh-gor-ruk|include|base
+important|vosh-agh-gor-mok|important|base
+includes|vosh-agh-gor-rukur-kin-agh-mok-krag|include|base
+incorporeal|vosh-agh-gor-skar|incorporeal|base
+infiltrating|vosh-agh-gor-thog|infiltrating|base
+inspiration|vosh-agh-grak-burz|inspiration|base
+initiate|vosh-agh-gor-varg|initiate|base
+inquisitive|vosh-agh-grak-agh|inquisitive|base
+inspire|vosh-agh-grak-dak|inspire|base
+intestinal|vosh-agh-grak-drak|intestinal|base
+intricate|vosh-agh-grak-gar|intricate|base
+invasion|vosh-agh-grak-gash|invasion|base
+involve|vosh-agh-grak-gor|involve|base
+kidnappers|zhar-agh-grak-varg-mog-mogi-kin-agh-narg-gar|kidnappers|base
+kind|vosh-agh-grak-grak|kind|base
+lawfuller|darg-bibuk-ti-mog-kin-agh-narg-gor|lawfuller|base
+leaf|vosh-agh-grak-grod|leaf|base
+legend|vosh-agh-grak-krag|legend|base
+locating|dakukashin-kin-agh-narg-krag|locating|base
+looming|nak-oglarurin-kin-agh-narg-mok|looming|base
+mainly|murk-tiuk-grak-kin-agh-narg-narg|mainly|base
+majority|vosh-agh-grak-mok|majority|base
+manipulation|vosh-agh-grak-narg|manipulation|base
+maturity|vosh-agh-grak-skar|maturity|base
+members|mokh-mog-mogi-kin-agh-narg-varg|members|base
+meddling|vosh-agh-grak-varg|meddling|base
+mixture|vosh-agh-grod-dak|mixture|base
+moon|vosh-agh-grod-drak|moon|base
+mortal|vosh-agh-grod-gar|mortal|base
+mummies|vosh-agh-grod-gori-kin-agh-ruk-gar|mummy|base
+mummy|vosh-agh-grod-gor|mummy|base
+mundane|vosh-agh-grod-grak|mundane|base
+mythology|vosh-agh-grod-grod|mythology|base
+negotiating|vosh-agh-grod-krag|negotiating|base
+notable|oglar-ti-thog-kin-agh-ruk-krag|notable|base
+nergal|vosh-agh-grod-mok|nergal|base
+one-offs|vosh-agh-grod-skar|one-offs|base
+obstructions|vosh-agh-grod-narg|obstructions|base
+off-color|vosh-agh-grod-ruk|off-color|base
+one-way|vosh-agh-grod-thog|one-way|base
+optimism|vosh-agh-grod-varg|optimism|base
+outskirts|vosh-agh-krag-dak|outskirts|base
+partys|lag-mokhi-kin-agh-skar-burz|partys|base
+overlooked|vosh-agh-krag-drak|overlooked|base
+personality|vosh-agh-krag-gash|personality|base
+phandalin|vosh-agh-krag-gor|phandalin|base
+pivotal|vosh-agh-krag-grak|pivotal|base
+placed|dakash-kin-agh-skar-gor|placed|base
+plain|vosh-agh-krag-grod|plain|base
+plan|vosh-agh-krag-krag|plan|base
+plans|vosh-agh-krag-kragi-kin-agh-skar-krag|plan|base
+planes|dak-thog-muri-kin-agh-skar-mok|planes|base
+platinum|vosh-agh-krag-mok|platinum|base
+plays|vosh-agh-krag-narg|plays|base
+possessed|vosh-agh-krag-varg|possessed|base
+pleasant|vosh-agh-krag-ruk|pleasant|base
+popular|vosh-agh-krag-skar|popular|base
+possibly|vosh-agh-mok-agh|possibly|base
+practitioners|vosh-agh-mok-burz|practitioners|base
+prevent|vosh-agh-mok-drak|prevent|base
+previously|ash-dakuruk-grak-kin-agh-thog-drak|previously|base
+properly|vosh-agh-mok-grak|properly|base
+promising|vosh-agh-mok-gash|promising|base
+profanity|vosh-agh-mok-gar|profanity|base
+protective|gor-thog-in-thog-kin-agh-thog-grak|protective|base
+prowess|vosh-agh-mok-grod|prowess|base
+raven-black|vosh-agh-mok-mok|raven-black|base
+reactions|vosh-agh-mok-ruk|reactions|base
+quick-witted|vosh-agh-mok-krag|quick-witted|base
+ray|vosh-agh-mok-narg|ray|base
+reanimated|vosh-agh-mok-skar|reanimated|base
+referees|darg-narg-mog-tii-kin-agh-thog-thog|referees|base
+regain|vosh-agh-mok-thog|regain|base
+relic|vosh-agh-mok-varg|relic|base
+relieve|vosh-agh-narg-agh|relieve|base
+remain|tukur-morziu-kin-agh-varg-dak|remain|base
+reminding|vosh-agh-narg-burz|reminding|base
+remained|tukur-morziash-kin-agh-varg-gar|remain|base
+resettled|vosh-agh-narg-drak|resettled|base
+remote|vosh-agh-narg-dak|remote|base
+reverted|lagash-zorn-dok-kin-agh-varg-grak|reverted|base
+responsibility|tukur-darg-thog-kin-agh-varg-grod|responsibility|base
+roleplaying|vosh-agh-narg-grakin-kin-agh-varg-krag|role|base
+reward|vosh-agh-narg-gar|reward|base
+rods|vosh-agh-narg-gor|rods|base
+rivals|vosh-agh-narg-gash|rivals|base
+sack|vosh-agh-narg-grod|sack|base
+scarlet|vosh-agh-narg-mok|scarlet|base
+scenarios|vosh-agh-narg-nargi-kin-agh-varg-varg|scenario|base
+scout|vosh-agh-narg-ruk|scout|base
+scouting|vosh-agh-narg-rukin-kin-burz-agh-burz|scout|base
+sending|lag-dargashin-kin-burz-agh-dak|sends|base
+sends|lag-dargashur-kin-burz-agh-drak|sends|base
+serpents|vosh-agh-narg-varg|serpents|base
+shortly|thrum-bantuk-grak-kin-burz-agh-gash|shortly|base
+signifying|vosh-agh-ruk-burz|signifying|base
+shrine|vosh-agh-ruk-agh|shrine|base
+similar|vosh-agh-ruk-dak|similar|base
+skilled|mauk-hekash-kin-burz-agh-krag|skilled|base
+smoked|vosh-agh-ruk-drak|smoked|base
+sold|dravash-dok-kin-burz-agh-narg|sold|base
+solutions|grod-lag-bibi-kin-burz-agh-ruk|solutions|base
+spellcaster|vosh-agh-ruk-gash|spellcaster|base
+specializing|vosh-agh-ruk-gar|specializing|base
+spheres|vosh-agh-ruk-gor|spheres|base
+spilled|vosh-agh-ruk-grak|spilled|base
+sporebane|vosh-agh-ruk-grod|sporebane|base
+staves|bant-zol-mogi-kin-burz-burz-dak|staves|base
+stems|vosh-agh-ruk-krag|stems|base
+step|vosh-agh-ruk-mok|step|base
+strengths|yankuki-kin-burz-burz-gash|strengths|base
+stronghold|vosh-agh-ruk-ruk|stronghold|base
+striking|vosh-agh-ruk-narg|striking|base
+study|vosh-agh-ruk-skar|study|base
+studying|vosh-agh-ruk-skarin-kin-burz-burz-krag|study|base
+successive|grod-lag-thoguk-kin-burz-burz-mok|successive|base
+suffering|vosh-agh-ruk-thog|suffering|base
+suggested|vosh-agh-ruk-varg|suggested|base
+summon|vosh-agh-skar-agh|summon|base
+supernatural|vosh-agh-skar-dak|supernatural|base
+summoners|vosh-agh-skar-burz|summoners|base
+summoned|vosh-agh-skar-aghash-kin-burz-dak-agh|summon|base
+symptoms|vosh-agh-skar-drak|symptoms|base
+taken|dravkuk-krag-flit-kin-burz-dak-dak|taken|base
+taste|vosh-agh-skar-grak|taste|base
+tabletop|vosh-agh-skar-gar|tabletop|base
+technology|vosh-agh-skar-krag|technology|base
+tease|vosh-agh-skar-grod|tease|base
+thirst|vosh-agh-skar-skar|thirst|base
+tends|vosh-agh-skar-narg|tends|base
+telepathic|vosh-agh-skar-mokuk-kin-burz-dak-krag|telepathy|base
+tinderbox|vosh-agh-skar-varg|tinderbox|base
+thrown|flituk-kin-burz-dak-narg|thrown|base
+throughout|vosh-agh-skar-thog|throughout|base
+topsy|vosh-agh-thog-dak|topsy|base
+tragedy|morz-thog-ti-thog-kin-burz-dak-thog|tragedy|base
+tipsy|vosh-agh-thog-agh|tipsy|base
+tobacco|vosh-agh-thog-burz|tobacco|base
+treating|dravur-grodin-kin-burz-drak-burz|treatment|base
+treatment|dravur-grod-thog-kin-burz-drak-dak|treatment|base
+unaffected|hekash-varash-kin-burz-drak-drak|unaffected|base
+trigger|vosh-agh-thog-drak|trigger|base
+uncharted|vosh-agh-thog-gar|uncharted|base
+understanding|vosh-agh-thog-gash|understanding|base
+unwavering|vosh-agh-thog-grod|unwavering|base
+unfortunate|mauk-drav-thog-thog-kin-burz-drak-grod|unfortunate|base
+unifying|vosh-agh-thog-grak|unifying|base
+vampire|vosh-agh-thog-mok|vampire|base
+visit|vosh-agh-thog-narg|visit|base
+vampires|vosh-agh-thog-moki-kin-burz-drak-ruk|vampire|base
+vowed|vosh-agh-thog-ruk|vowed|base
+waterskin|vosh-agh-thog-skar|waterskin|base
+visiting|vosh-agh-thog-nargin-kin-burz-drak-varg|visit|base
+weaknesses|nu-brak-burz-yankuki-kin-burz-gar-agh|weaknesses|base
+wears|khalashur-kin-burz-gar-burz|wears|base
+western|naut-lag-thog-kin-burz-gar-dak|western|base
+whether|vosh-agh-thog-thog|whether|base
+winged|vosh-agh-thog-varg|winged|base
+winter|vosh-agh-varg-agh|winter|base
+wise|thog-tiu-kin-burz-gar-gor|wise|base
+zombies|vosh-agh-varg-burzi-kin-burz-gar-grak|zombie|base
+zombie|vosh-agh-varg-burz|zombie|base
+allergen|vosh-agh-agh-agh-kin-kin-burz-gar-krag|allergy|near
+allergens|vosh-agh-agh-aghi-kin-burz-gar-mok|allergy|near
+allergic|vosh-agh-agh-agh-thog-kin-burz-gar-narg|allergy|near
+allergies|vosh-agh-agh-aghi-kin-burz-gar-ruk|allergy|near
+allowing|kur-dargin-kin-burz-gar-skar|allows|near
+alter|vosh-agh-agh-burz-mog-kin-burz-gar-thog|alteration|near
+alterations|vosh-agh-agh-burzi-kin-burz-gar-varg|alteration|near
+altered|vosh-agh-agh-burzash-kin-burz-gash-agh|alteration|near
+altering|vosh-agh-agh-burzin-kin-burz-gash-burz|alteration|near
+alters|vosh-agh-agh-burz-mogi-kin-burz-gash-dak|alteration|near
+animate|vosh-agh-gor-narg-kin-kin-burz-gash-drak|inanimate|near
+animated|vosh-agh-gor-nargash-kin-burz-gash-gar|inanimate|near
+animating|vosh-agh-gor-nargin-kin-burz-gash-gash|inanimate|near
+animation|vosh-agh-gor-narg-thog-kin-burz-gash-gor|inanimate|near
+appearances|oglaruri-kin-burz-gash-grak|appearance|near
+appeared|oglarurash-kin-burz-gash-grod|appear|near
+arrived|vosh-agh-agh-drakash-kin-burz-gash-krag|arrive|near
+arrives|vosh-agh-agh-drakur-kin-burz-gash-mok|arrive|near
+arriving|vosh-agh-agh-drakin-kin-burz-gash-narg|arrive|near
+attempted|vosh-agh-agh-garash-kin-burz-gash-ruk|attempt|near
+attempting|vosh-agh-agh-garin-kin-burz-gash-skar|attempt|near
+attempts|vosh-agh-agh-gari-kin-burz-gash-thog|attempt|near
+await|vosh-agh-agh-gashu-kin-burz-gash-varg|awaiting|near
+awaited|vosh-agh-agh-gashash-kin-burz-gor-agh|awaiting|near
+awaits|vosh-agh-agh-gashur-kin-burz-gor-burz|awaiting|near
+awaken|vosh-agh-agh-gor-kin-kin-burz-gor-dak|awakened|near
+awakening|vosh-agh-agh-gorin-kin-burz-gor-drak|awakened|near
+awakens|vosh-agh-agh-gori-kin-burz-gor-gar|awakened|near
+backgrounded|vosh-agh-agh-grakash-kin-burz-gor-gash|background|near
+backgrounding|vosh-agh-agh-grakin-kin-burz-gor-gor|background|near
+backgrounds|vosh-agh-agh-graki-kin-burz-gor-grak|background|near
+bad|vosh-agh-agh-grodu-kin-burz-gor-grod|badly|near
+badmouthed|vosh-agh-agh-kragash-kin-burz-gor-krag|badmouth|near
+badmouthing|vosh-agh-agh-kragin-kin-burz-gor-mok|badmouth|near
+badmouths|vosh-agh-agh-kragi-kin-burz-gor-narg|badmouth|near
+banish|vosh-agh-agh-narg-kin-kin-burz-gor-ruk|banished|near
+banishes|vosh-agh-agh-nargi-kin-burz-gor-skar|banished|near
+barrier|vosh-agh-agh-ruk-mog-kin-burz-gor-thog|barriers|near
+beauties|vosh-agh-agh-thogi-kin-burz-gor-varg|beauty|near
+beautified|vosh-agh-agh-thogash-kin-burz-grak-agh|beauty|near
+beautifies|vosh-agh-agh-thogi-kin-burz-grak-burz|beauty|near
+beautiful|vosh-agh-agh-skar-thog-kin-burz-grak-dak|beautifully|near
+beautify|vosh-agh-agh-thoguk-kin-burz-grak-drak|beauty|near
+beautifying|vosh-agh-agh-thogin-kin-burz-grak-gar|beauty|near
+beginning|ashdak-hekashin-kin-burz-grak-gash|begin|near
+begun|ashdak-hekashuk-kin-burz-grak-gor|begin|near
+behaved|vosh-agh-agh-vargash-kin-burz-grak-grak|behave|near
+behaves|vosh-agh-agh-vargur-kin-burz-grak-grod|behave|near
+behaving|vosh-agh-agh-vargin-kin-burz-grak-krag|behave|near
+behaviors|vosh-agh-burz-agh-mogi-kin-burz-grak-mok|behavior|near
+belie|vosh-agh-burz-burzu-kin-burz-grak-narg|belies|near
+belied|vosh-agh-burz-burzash-kin-burz-grak-ruk|belies|near
+belying|vosh-agh-burz-burzin-kin-burz-grak-skar|belies|near
+beneficially|vosh-agh-burz-dak-grak-kin-burz-grak-thog|beneficial|near
+bestially|vosh-agh-burz-drak-grak-kin-burz-grak-varg|bestial|near
+biddings|vosh-agh-burz-gari-kin-burz-grod-agh|bidding|near
+blended|vosh-agh-burz-gashash-kin-burz-grod-burz|blend|near
+blending|vosh-agh-burz-gashin-kin-burz-grod-dak|blend|near
+blends|vosh-agh-burz-gashi-kin-burz-grod-drak|blend|near
+bodyguard|vosh-agh-burz-goru-kin-burz-grod-gar|bodyguards|near
+braced|vosh-agh-burz-grakash-kin-burz-grod-gash|brace|near
+braces|vosh-agh-burz-graki-kin-burz-grod-gor|brace|near
+bracing|vosh-agh-burz-grakin-kin-burz-grod-grak|brace|near
+braziers|vosh-agh-burz-grod-mogi-kin-burz-grod-grod|brazier|near
+brotherhoods|mokh-gashi-kin-burz-grod-krag|brotherhood|near
+brothers|mokh-gash-mogi-kin-burz-grod-mok|brotherhood|near
+cas|vosh-agh-burz-nargi-kin-burz-grod-narg|cases|near
+case|vosh-agh-burz-nargu-kin-burz-grod-ruk|cases|near
+castled|vosh-agh-burz-rukash-kin-burz-grod-skar|castle|near
+castles|vosh-agh-burz-ruki-kin-burz-grod-thog|castle|near
+castling|vosh-agh-burz-rukin-kin-burz-grod-varg|castle|near
+censers|vosh-agh-burz-skar-mogi-kin-burz-krag-agh|censer|near
+charismatic|vosh-agh-burz-thoguk-kin-burz-krag-burz|charisma|near
+chart|vosh-agh-thog-gar-kin-kin-burz-krag-dak|uncharted|near
+charted|vosh-agh-thog-garash-kin-burz-krag-drak|uncharted|near
+charting|vosh-agh-thog-garin-kin-burz-krag-gar|uncharted|near
+charts|vosh-agh-thog-gari-kin-burz-krag-gash|uncharted|near
+chronologic|vosh-agh-burz-varguk-kin-burz-krag-gor|chronology|near
+chronological|vosh-agh-burz-varguk-kin-burz-krag-grak|chronology|near
+chronologically|vosh-agh-burz-varg-grak-kin-burz-krag-grod|chronology|near
+chronologies|vosh-agh-burz-vargi-kin-burz-krag-krag|chronology|near
+civilisations|vosh-agh-dak-aghi-kin-burz-krag-mok|civilisation|near
+civilise|vosh-agh-dak-agh-kin-kin-burz-krag-narg|civilisation|near
+civilised|vosh-agh-dak-aghash-kin-burz-krag-ruk|civilisation|near
+civilising|vosh-agh-dak-aghin-kin-burz-krag-skar|civilisation|near
+civilization|vosh-agh-dak-agh-thog-kin-burz-krag-thog|civilisation|near
+civilize|vosh-agh-dak-agh-kin-kin-burz-krag-varg|civilisation|near
+civilized|vosh-agh-dak-aghash-kin-burz-mok-agh|civilisation|near
+civilizing|vosh-agh-dak-aghin-kin-burz-mok-burz|civilisation|near
+clairvoyances|vosh-agh-dak-burzi-kin-burz-mok-dak|clairvoyance|near
+clairvoyant|vosh-agh-dak-burz-kin-kin-burz-mok-drak|clairvoyance|near
+cleansed|vosh-agh-dak-dakash-kin-burz-mok-gar|cleanse|near
+cleanses|vosh-agh-dak-dakur-kin-burz-mok-gash|cleanse|near
+cleansing|vosh-agh-dak-dakin-kin-burz-mok-gor|cleanse|near
+close|vosh-agh-dak-drak-kin-kin-burz-mok-grak|closing|near
+closed|vosh-agh-dak-drakash-kin-burz-mok-grod|closing|near
+closes|vosh-agh-dak-draki-kin-burz-mok-krag|closing|near
+closings|vosh-agh-dak-draki-kin-burz-mok-mok|closing|near
+commit|vosh-agh-dak-gashu-kin-burz-mok-narg|commitment|near
+commitments|vosh-agh-dak-gashi-kin-burz-mok-ruk|commitment|near
+communicate|vosh-agh-dak-graku-kin-burz-mok-skar|communication|near
+communicated|vosh-agh-dak-grakash-kin-burz-mok-thog|communication|near
+communicates|vosh-agh-dak-grakur-kin-burz-mok-varg|communication|near
+communicating|vosh-agh-dak-grakin-kin-burz-narg-agh|communication|near
+communications|vosh-agh-dak-graki-kin-burz-narg-burz|communication|near
+communicator|vosh-agh-dak-grak-mog-kin-burz-narg-dak|communication|near
+communicators|vosh-agh-dak-grak-mogi-kin-burz-narg-drak|communication|near
+comprehend|vosh-agh-dak-kragu-kin-burz-narg-gar|comprehension|near
+comprehended|vosh-agh-dak-kragash-kin-burz-narg-gash|comprehension|near
+comprehending|vosh-agh-dak-kragin-kin-burz-narg-gor|comprehension|near
+comprehends|vosh-agh-dak-kragur-kin-burz-narg-grak|comprehension|near
+comprehensibly|vosh-agh-dak-grod-grak-kin-burz-narg-grod|comprehensible|near
+comprehensions|vosh-agh-dak-kragi-kin-burz-narg-krag|comprehension|near
+compris|vosh-agh-dak-moki-kin-burz-narg-mok|comprised|near
+comprise|vosh-agh-dak-moku-kin-burz-narg-narg|comprised|near
+comprises|vosh-agh-dak-mokur-kin-burz-narg-ruk|comprised|near
+comprising|vosh-agh-dak-mokin-kin-burz-narg-skar|comprised|near
+concentrated|vosh-agh-dak-nargash-kin-burz-narg-thog|concentrate|near
+concentrates|vosh-agh-dak-nargi-kin-burz-narg-varg|concentrate|near
+concentrating|vosh-agh-dak-nargin-kin-burz-ruk-agh|concentrate|near
+conjectured|vosh-agh-dak-rukash-kin-burz-ruk-burz|conjecture|near
+conjectures|vosh-agh-dak-ruki-kin-burz-ruk-dak|conjecture|near
+conjecturing|vosh-agh-dak-rukin-kin-burz-ruk-drak|conjecture|near
+connect|vosh-agh-dak-skaru-kin-burz-ruk-gar|connection|near
+connected|vosh-agh-dak-skarash-kin-burz-ruk-gash|connection|near
+connecting|vosh-agh-dak-skarin-kin-burz-ruk-gor|connection|near
+connections|vosh-agh-dak-skari-kin-burz-ruk-grak|connection|near
+connector|vosh-agh-dak-skar-mog-kin-burz-ruk-grod|connection|near
+connectors|vosh-agh-dak-skar-mogi-kin-burz-ruk-krag|connection|near
+connects|vosh-agh-dak-skarur-kin-burz-ruk-mok|connection|near
+consulted|vosh-agh-dak-thogash-kin-burz-ruk-narg|consult|near
+consulting|vosh-agh-dak-thogin-kin-burz-ruk-ruk|consult|near
+consults|vosh-agh-dak-thogur-kin-burz-ruk-skar|consult|near
+contained|ik-dargurash-kin-burz-ruk-thog|contain|near
+container|ik-dargur-mog-kin-burz-ruk-varg|contain|near
+containers|ik-dargur-mogi-kin-burz-skar-agh|contain|near
+containing|ik-dargurin-kin-burz-skar-burz|contain|near
+contexts|vosh-agh-dak-vargi-kin-burz-skar-dak|context|near
+corporeally|vosh-agh-drak-agh-grak-kin-burz-skar-drak|corporeal|near
+create|vosh-agh-drak-drak-kin-kin-burz-skar-gar|creating|near
+created|vosh-agh-drak-drakash-kin-burz-skar-gash|creating|near
+creates|vosh-agh-drak-draki-kin-burz-skar-gor|creating|near
+crucially|vosh-agh-drak-gar-grak-kin-burz-skar-grak|crucial|near
+cunningly|vosh-agh-drak-gor-grak-kin-burz-skar-grod|cunning|near
+cunnings|vosh-agh-drak-gori-kin-burz-skar-krag|cunning|near
+darker|burzuk-mog-kin-burz-skar-mok|darkest|near
+decided|vosh-agh-drak-grakash-kin-burz-skar-narg|decide|near
+decides|vosh-agh-drak-grakur-kin-burz-skar-ruk|decide|near
+deciding|vosh-agh-drak-grakin-kin-burz-skar-skar|decide|near
+dedicatedly|vosh-agh-drak-krag-grak-kin-burz-skar-thog|dedicated|near
+dedications|draku-mur-kaag-tuki-kin-burz-skar-varg|dedication|near
+denote|vosh-agh-drak-moku-kin-burz-thog-agh|denotes|near
+denoted|vosh-agh-drak-mokash-kin-burz-thog-burz|denotes|near
+denoting|vosh-agh-drak-mokin-kin-burz-thog-dak|denotes|near
+destinations|vosh-agh-drak-vargi-kin-burz-thog-drak|destination|near
+destroy|brakash-tiu-kin-burz-thog-gar|destroying|near
+destroys|brakash-tiur-kin-burz-thog-gash|destroying|near
+determinate|thog-oglaru-kin-burz-thog-gor|determination|near
+determinations|thog-oglarui-kin-burz-thog-grak|determination|near
+developed|vosh-agh-gar-aghash-kin-burz-thog-grod|develop|near
+developing|vosh-agh-gar-aghin-kin-burz-thog-krag|develop|near
+develops|vosh-agh-gar-aghur-kin-burz-thog-mok|develop|near
+distantly|vosh-agh-gar-burz-grak-kin-burz-thog-narg|distant|near
+doorways|vosh-agh-gar-daki-kin-burz-thog-ruk|doorway|near
+dormancy|vosh-agh-gar-drakuk-kin-burz-thog-skar|dormant|near
+dues|vosh-agh-gar-gari-kin-burz-thog-thog|due|near
+embroider|vosh-agh-gar-grak-mog-kin-burz-thog-varg|embroidery|near
+embroidered|vosh-agh-gar-grakash-kin-burz-varg-agh|embroidery|near
+embroideries|vosh-agh-gar-graki-kin-burz-varg-burz|embroidery|near
+embroidering|vosh-agh-gar-grakin-kin-burz-varg-dak|embroidery|near
+embroiders|vosh-agh-gar-grak-mogi-kin-burz-varg-drak|embroidery|near
+enable|vosh-agh-gar-grodu-kin-burz-varg-gar|enables|near
+enabled|vosh-agh-gar-grodash-kin-burz-varg-gash|enables|near
+enabling|vosh-agh-gar-grodin-kin-burz-varg-gor|enables|near
+encumber|vosh-agh-gar-krag-mog-kin-burz-varg-grak|encumbrance|near
+encumbered|vosh-agh-gar-kragash-kin-burz-varg-grod|encumbrance|near
+encumbering|vosh-agh-gar-kragin-kin-burz-varg-krag|encumbrance|near
+encumbers|vosh-agh-gar-krag-mogi-kin-burz-varg-mok|encumbrance|near
+encumbrances|vosh-agh-gar-kragi-kin-burz-varg-narg|encumbrance|near
+engender|vosh-agh-gar-mok-mog-kin-burz-varg-ruk|engenders|near
+engendered|vosh-agh-gar-mokash-kin-burz-varg-skar|engenders|near
+engendering|vosh-agh-gar-mokin-kin-burz-varg-thog|engenders|near
+environments|vosh-agh-gar-nargi-kin-burz-varg-varg|environment|near
+established|vosh-agh-gar-rukash-kin-dak-agh-agh|establish|near
+establishes|vosh-agh-gar-rukur-kin-dak-agh-burz|establish|near
+establishing|vosh-agh-gar-rukin-kin-dak-agh-dak|establish|near
+ethereally|vosh-agh-gar-skar-grak-kin-dak-agh-drak|ethereal|near
+euphoria|vosh-agh-gar-thog-kin-kin-dak-agh-gar|euphoric|near
+euphorically|vosh-agh-gar-thog-grak-kin-dak-agh-gash|euphoric|near
+explores|oglar-lagashur-kin-dak-agh-gor|explore|near
+face|vosh-agh-gar-varg-kin-kin-dak-agh-grak|facing|near
+faced|vosh-agh-gar-vargash-kin-dak-agh-grod|facing|near
+faces|vosh-agh-gar-vargi-kin-dak-agh-krag|facing|near
+facings|vosh-agh-gar-vargi-kin-dak-agh-mok|facing|near
+faithfully|vosh-agh-gash-agh-grak-kin-dak-agh-narg|faithful|near
+fantastically|vosh-agh-gash-burz-grak-kin-dak-agh-ruk|fantastic|near
+felt|grodhash-kin-dak-agh-skar|feelings|near
+fictional|vosh-agh-gash-dakuk-kin-dak-agh-thog|fiction|near
+fictionally|vosh-agh-gash-dak-grak-kin-dak-agh-varg|fiction|near
+fictions|vosh-agh-gash-daki-kin-dak-burz-agh|fiction|near
+fiercely|vosh-agh-gash-drak-grak-kin-dak-burz-burz|fierce|near
+fiercer|vosh-agh-gash-drak-mog-kin-dak-burz-dak|fierce|near
+fiercest|vosh-agh-gash-drak-gash-kin-dak-burz-drak|fierce|near
+follower|vosh-agh-gash-gar-mog-kin-dak-burz-gar|followers|near
+former|vosh-agh-gash-gash-mog-kin-dak-burz-gash|formerly|near
+fortunate|mauk-drav-thog-kin-kin-dak-burz-gor|unfortunate|near
+fortunately|mauk-drav-thog-grak-kin-dak-burz-grak|unfortunate|near
+fronted|vosh-agh-gash-gorash-kin-dak-burz-grod|front|near
+fronting|vosh-agh-gash-gorin-kin-dak-burz-krag|front|near
+fronts|vosh-agh-gash-gori-kin-dak-burz-mok|front|near
+fungi|gruul-thrum-rukhuk-thog-kin-dak-burz-narg|fungus|near
+funguses|gruul-thrum-rukhuki-kin-dak-burz-ruk|fungus|near
+gamed|vosh-agh-gash-grodash-kin-dak-burz-skar|game|near
+gamely|vosh-agh-gash-grod-grak-kin-dak-burz-thog|game|near
+games|vosh-agh-gash-grodi-kin-dak-burz-varg|game|near
+gaming|vosh-agh-gash-grodin-kin-dak-dak-agh|game|near
+gargoyles|vosh-agh-gash-kragi-kin-dak-dak-burz|gargoyle|near
+gateways|vosh-agh-gash-moki-kin-dak-dak-dak|gateway|near
+ghost|vosh-agh-gash-nargu-kin-dak-dak-drak|ghosts|near
+ginsengs|vosh-agh-gash-ruki-kin-dak-dak-gar|ginseng|near
+gnomish|vosh-agh-gash-skar-kin-kin-dak-dak-gash|gnome|near
+gravitic|vosh-agh-gash-thoguk-kin-dak-dak-gor|gravity|near
+gravities|vosh-agh-gash-thogi-kin-dak-dak-grak|gravity|near
+hail|vosh-agh-gash-vargu-kin-dak-dak-grod|hails|near
+hailed|vosh-agh-gash-vargash-kin-dak-dak-krag|hails|near
+hailing|vosh-agh-gash-vargin-kin-dak-dak-mok|hails|near
+half-elf|elf-thog-kin-dak-dak-narg|half-elven|near
+harming|brak-thog-morzin-kin-dak-dak-ruk|harmed|near
+harms|brak-thog-morzi-kin-dak-dak-skar|harmed|near
+harness|vosh-agh-gor-agh-thog-kin-dak-dak-thog|harnessing|near
+harnessed|vosh-agh-gor-aghash-kin-dak-dak-varg|harnessing|near
+harnesses|vosh-agh-gor-aghi-kin-dak-drak-agh|harnessing|near
+helmed|vosh-agh-gor-burzash-kin-dak-drak-burz|helm|near
+helmets|vosh-agh-gor-daki-kin-dak-drak-dak|helmet|near
+helming|vosh-agh-gor-burzin-kin-dak-drak-drak|helm|near
+helms|vosh-agh-gor-burzi-kin-dak-drak-gar|helm|near
+help|vosh-agh-gor-draku-kin-dak-drak-gash|helped|near
+helpings|vosh-agh-gor-draki-kin-dak-drak-gor|helped|near
+helps|vosh-agh-gor-draki-kin-dak-drak-grak|helped|near
+hideously|vosh-agh-gor-gar-grak-kin-dak-drak-grod|hideous|near
+hideousness|vosh-agh-gor-gar-thog-kin-dak-drak-krag|hideous|near
+honorable|grak-tur-tiuk-kin-dak-drak-mok|honor|near
+honored|grak-tur-tiash-kin-dak-drak-narg|honor|near
+honoring|grak-tur-tiin-kin-dak-drak-ruk|honor|near
+honors|grak-tur-ti-mogi-kin-dak-drak-skar|honor|near
+horribly|vark-thog-mog-grak-kin-dak-drak-thog|horrible|near
+humorous|vosh-agh-gor-gori-kin-dak-drak-varg|humor|near
+humorously|vosh-agh-gor-gor-grak-kin-dak-gar-agh|humor|near
+humors|vosh-agh-gor-gor-mogi-kin-dak-gar-burz|humor|near
+hurting|vosh-agh-gor-grakin-kin-dak-gar-dak|hurt|near
+hurts|vosh-agh-gor-graki-kin-dak-gar-drak|hurt|near
+hyoscyamine|vosh-agh-gor-grod-thog-kin-dak-gar-gar|hyoscyamine-containing|near
+importance|vosh-agh-gor-mok-thog-kin-dak-gar-gash|important|near
+importantly|vosh-agh-gor-mok-grak-kin-dak-gar-gor|important|near
+inanimately|vosh-agh-gor-narg-grak-kin-dak-gar-grak|inanimate|near
+included|vosh-agh-gor-rukash-kin-dak-gar-grod|include|near
+including|vosh-agh-gor-rukin-kin-dak-gar-krag|include|near
+incorporeality|vosh-agh-gor-skar-thog-kin-dak-gar-mok|incorporeal|near
+incorporeally|vosh-agh-gor-skar-grak-kin-dak-gar-narg|incorporeal|near
+infiltrate|vosh-agh-gor-thogu-kin-dak-gar-ruk|infiltrating|near
+infiltrated|vosh-agh-gor-thogash-kin-dak-gar-skar|infiltrating|near
+infiltrates|vosh-agh-gor-thogi-kin-dak-gar-thog|infiltrating|near
+initiated|vosh-agh-gor-vargash-kin-dak-gar-varg|initiate|near
+initiates|vosh-agh-gor-vargi-kin-dak-gash-agh|initiate|near
+initiating|vosh-agh-gor-vargin-kin-dak-gash-burz|initiate|near
+inquisitively|vosh-agh-grak-agh-grak-kin-dak-gash-dak|inquisitive|near
+inquisitiveness|vosh-agh-grak-agh-thog-kin-dak-gash-drak|inquisitive|near
+inspirations|vosh-agh-grak-burzi-kin-dak-gash-gar|inspiration|near
+inspired|vosh-agh-grak-burzash-kin-dak-gash-gash|inspiration|near
+inspires|vosh-agh-grak-burzur-kin-dak-gash-gor|inspiration|near
+inspiring|vosh-agh-grak-burzin-kin-dak-gash-grak|inspiration|near
+intestinally|vosh-agh-grak-drak-grak-kin-dak-gash-grod|intestinal|near
+intestine|vosh-agh-grak-drak-kin-kin-dak-gash-krag|intestinal|near
+intestines|vosh-agh-grak-draki-kin-dak-gash-mok|intestinal|near
+intricacy|vosh-agh-grak-garuk-kin-dak-gash-narg|intricate|near
+intricately|vosh-agh-grak-gar-grak-kin-dak-gash-ruk|intricate|near
+invade|vosh-agh-grak-gashu-kin-dak-gash-skar|invasion|near
+invaded|vosh-agh-grak-gashash-kin-dak-gash-thog|invasion|near
+invades|vosh-agh-grak-gashur-kin-dak-gash-varg|invasion|near
+invading|vosh-agh-grak-gashin-kin-dak-gor-agh|invasion|near
+invasions|vosh-agh-grak-gashi-kin-dak-gor-burz|invasion|near
+involved|vosh-agh-grak-gorash-kin-dak-gor-dak|involve|near
+involves|vosh-agh-grak-gorur-kin-dak-gor-drak|involve|near
+involving|vosh-agh-grak-gorin-kin-dak-gor-gar|involve|near
+kinder|vosh-agh-grak-grak-mog-kin-dak-gor-gash|kind|near
+kindest|vosh-agh-grak-grak-gash-kin-dak-gor-gor|kind|near
+kindly|vosh-agh-grak-grak-grak-kin-dak-gor-grak|kind|near
+kindness|vosh-agh-grak-grak-thog-kin-dak-gor-grod|kind|near
+kinds|vosh-agh-grak-graki-kin-dak-gor-krag|kind|near
+know|thogash-kin-kin-dak-gor-mok|unknown|near
+knowing|thogashin-kin-dak-gor-narg|unknown|near
+known|thogashuk-kin-dak-gor-ruk|unknown|near
+knows|thogashi-kin-dak-gor-skar|unknown|near
+lawfully|darg-bibuk-ti-grak-kin-dak-gor-thog|lawfuller|near
+lawfulness|darg-bibuk-ti-thog-kin-dak-gor-varg|lawfuller|near
+leafed|vosh-agh-grak-grodash-kin-dak-grak-agh|leaf|near
+leafing|vosh-agh-grak-grodin-kin-dak-grak-burz|leaf|near
+leafs|vosh-agh-grak-grodi-kin-dak-grak-dak|leaf|near
+leaves|vosh-agh-grak-grodi-kin-dak-grak-drak|leaf|near
+legendary|vosh-agh-grak-kraguk-kin-dak-grak-gar|legend|near
+legends|vosh-agh-grak-kragi-kin-dak-grak-gash|legend|near
+locate|dakukash-kin-kin-dak-grak-gor|locating|near
+locates|dakukashi-kin-dak-grak-grak|locating|near
+loom|nak-oglarur-kin-kin-dak-grak-grod|looming|near
+loomed|nak-oglarurash-kin-dak-grak-krag|looming|near
+major|vosh-agh-grak-mok-mog-kin-dak-grak-mok|majority|near
+majorities|vosh-agh-grak-moki-kin-dak-grak-narg|majority|near
+manipulate|vosh-agh-grak-nargu-kin-dak-grak-ruk|manipulation|near
+manipulations|vosh-agh-grak-nargi-kin-dak-grak-skar|manipulation|near
+mattered|vosh-agh-grak-rukash-kin-dak-grak-thog|matter|near
+mattering|vosh-agh-grak-rukin-kin-dak-grak-varg|matter|near
+matters|vosh-agh-grak-ruk-mogi-kin-dak-grod-agh|matter|near
+mature|vosh-agh-grak-skaru-kin-dak-grod-burz|maturity|near
+maturities|vosh-agh-grak-skari-kin-dak-grod-dak|maturity|near
+mean|vosh-agh-grak-thogu-kin-dak-grod-drak|means|near
+meaning|vosh-agh-grak-thogin-kin-dak-grod-gar|means|near
+meant|vosh-agh-grak-thogash-kin-dak-grod-gash|means|near
+mentored|vosh-agh-grod-aghash-kin-dak-grod-gor|mentor|near
+mentoring|vosh-agh-grod-aghin-kin-dak-grod-grak|mentor|near
+mentors|vosh-agh-grod-agh-mogi-kin-dak-grod-grod|mentor|near
+milder|vosh-agh-grod-burz-mog-kin-dak-grod-krag|mild|near
+mildest|vosh-agh-grod-burz-gash-kin-dak-grod-mok|mild|near
+mildly|vosh-agh-grod-burz-grak-kin-dak-grod-narg|mild|near
+mixtures|vosh-agh-grod-daki-kin-dak-grod-ruk|mixture|near
+mooned|vosh-agh-grod-drakash-kin-dak-grod-skar|moon|near
+mooning|vosh-agh-grod-drakin-kin-dak-grod-thog|moon|near
+moons|vosh-agh-grod-draki-kin-dak-grod-varg|moon|near
+mortality|vosh-agh-grod-gar-thog-kin-dak-krag-agh|mortal|near
+mortally|vosh-agh-grod-gar-grak-kin-dak-krag-burz|mortal|near
+mortals|vosh-agh-grod-gari-kin-dak-krag-dak|mortal|near
+motivate|vosh-agh-grod-gashu-kin-dak-krag-drak|motivation|near
+motivated|vosh-agh-grod-gashash-kin-dak-krag-gar|motivation|near
+motivates|vosh-agh-grod-gashur-kin-dak-krag-gash|motivation|near
+motivating|vosh-agh-grod-gashin-kin-dak-krag-gor|motivation|near
+motivations|vosh-agh-grod-gashi-kin-dak-krag-grak|motivation|near
+mummied|vosh-agh-grod-gorash-kin-dak-krag-grod|mummy|near
+mummified|vosh-agh-grod-gorash-kin-dak-krag-krag|mummy|near
+mummifies|vosh-agh-grod-gori-kin-dak-krag-mok|mummy|near
+mummify|vosh-agh-grod-goruk-kin-dak-krag-narg|mummy|near
+mummifying|vosh-agh-grod-gorin-kin-dak-krag-ruk|mummy|near
+mummying|vosh-agh-grod-gorin-kin-dak-krag-skar|mummy|near
+mundanely|vosh-agh-grod-grak-grak-kin-dak-krag-thog|mundane|near
+mythologic|vosh-agh-grod-groduk-kin-dak-krag-varg|mythology|near
+mythological|vosh-agh-grod-groduk-kin-dak-mok-agh|mythology|near
+mythologically|vosh-agh-grod-grod-grak-kin-dak-mok-burz|mythology|near
+mythologies|vosh-agh-grod-grodi-kin-dak-mok-dak|mythology|near
+negotiate|vosh-agh-grod-kragu-kin-dak-mok-drak|negotiating|near
+negotiated|vosh-agh-grod-kragash-kin-dak-mok-gar|negotiating|near
+negotiates|vosh-agh-grod-kragi-kin-dak-mok-gash|negotiating|near
+negotiation|vosh-agh-grod-krag-thog-kin-dak-mok-gor|negotiating|near
+negotiator|vosh-agh-grod-krag-mog-kin-dak-mok-grak|negotiating|near
+negotiators|vosh-agh-grod-krag-mogi-kin-dak-mok-grod|negotiating|near
+notables|oglar-tii-kin-dak-mok-krag|notable|near
+obstruct|vosh-agh-grod-narg-kin-kin-dak-mok-mok|obstructions|near
+obstructed|vosh-agh-grod-nargash-kin-dak-mok-narg|obstructions|near
+obstructing|vosh-agh-grod-nargin-kin-dak-mok-ruk|obstructions|near
+obstruction|vosh-agh-grod-narg-thog-kin-dak-mok-skar|obstructions|near
+obstructs|vosh-agh-grod-nargi-kin-dak-mok-thog|obstructions|near
+optimistic|vosh-agh-grod-varguk-kin-dak-mok-varg|optimism|near
+optimistically|vosh-agh-grod-varg-grak-kin-dak-narg-agh|optimism|near
+outposts|vosh-agh-krag-burzi-kin-dak-narg-burz|outpost|near
+outskirt|vosh-agh-krag-daku-kin-dak-narg-dak|outskirts|near
+overlook|vosh-agh-krag-drak-kin-kin-dak-narg-drak|overlooked|near
+overlooking|vosh-agh-krag-drakin-kin-dak-narg-gar|overlooked|near
+overlooks|vosh-agh-krag-draki-kin-dak-narg-gash|overlooked|near
+parties|lag-mokhi-kin-dak-narg-gor|partys|near
+personalities|vosh-agh-krag-gashi-kin-dak-narg-grak|personality|near
+personally|vosh-agh-krag-gar-grak-kin-dak-narg-grod|personal|near
+phandalins|vosh-agh-krag-gori-kin-dak-narg-krag|phandalin|near
+pivot|vosh-agh-krag-grak-kin-kin-dak-narg-mok|pivotal|near
+pivotally|vosh-agh-krag-grak-grak-kin-dak-narg-narg|pivotal|near
+pivots|vosh-agh-krag-graki-kin-dak-narg-ruk|pivotal|near
+plainly|vosh-agh-krag-grod-grak-kin-dak-narg-skar|plain|near
+plains|vosh-agh-krag-grodi-kin-dak-narg-thog|plain|near
+planned|vosh-agh-krag-kragash-kin-dak-narg-varg|plan|near
+planning|vosh-agh-krag-kragin-kin-dak-ruk-agh|plan|near
+play|vosh-agh-krag-nargu-kin-dak-ruk-burz|plays|near
+played|vosh-agh-krag-nargash-kin-dak-ruk-dak|plays|near
+playing|vosh-agh-krag-nargin-kin-dak-ruk-drak|plays|near
+pleasantly|vosh-agh-krag-ruk-grak-kin-dak-ruk-gar|pleasant|near
+popularity|vosh-agh-krag-skar-thog-kin-dak-ruk-gash|popular|near
+popularly|vosh-agh-krag-skar-grak-kin-dak-ruk-gor|popular|near
+populars|vosh-agh-krag-skari-kin-dak-ruk-grak|popular|near
+portalled|vosh-agh-krag-thogash-kin-dak-ruk-grod|portal|near
+portals|vosh-agh-krag-thogi-kin-dak-ruk-krag|portal|near
+possess|vosh-agh-krag-vargur-kin-dak-ruk-mok|possessed|near
+possessing|vosh-agh-krag-vargin-kin-dak-ruk-narg|possessed|near
+possession|vosh-agh-krag-varg-thog-kin-dak-ruk-ruk|possessed|near
+possessions|vosh-agh-krag-vargi-kin-dak-ruk-skar|possessed|near
+practitioner|vosh-agh-mok-burz-mog-kin-dak-ruk-thog|practitioners|near
+preparation|vosh-agh-mok-dak-thog-kin-dak-ruk-varg|prepared|near
+prepare|vosh-agh-mok-dak-kin-kin-dak-skar-agh|prepared|near
+prepares|vosh-agh-mok-daki-kin-dak-skar-burz|prepared|near
+preparing|vosh-agh-mok-dakin-kin-dak-skar-dak|prepared|near
+prevented|vosh-agh-mok-drakash-kin-dak-skar-drak|prevent|near
+preventing|vosh-agh-mok-drakin-kin-dak-skar-gar|prevent|near
+prevents|vosh-agh-mok-drakur-kin-dak-skar-gash|prevent|near
+profane|vosh-agh-mok-garu-kin-dak-skar-gor|profanity|near
+profanely|vosh-agh-mok-gar-grak-kin-dak-skar-grak|profanity|near
+profanities|vosh-agh-mok-gari-kin-dak-skar-grod|profanity|near
+promise|vosh-agh-mok-gash-kin-kin-dak-skar-krag|promising|near
+promised|vosh-agh-mok-gashash-kin-dak-skar-mok|promising|near
+promises|vosh-agh-mok-gashi-kin-dak-skar-narg|promising|near
+promisingly|vosh-agh-mok-gash-grak-kin-dak-skar-ruk|promising|near
+pronouncedly|vosh-agh-mok-gor-grak-kin-dak-skar-skar|pronounced|near
+proper|vosh-agh-mok-grak-mog-kin-dak-skar-thog|properly|near
+protect|gor-thog-in-kin-kin-dak-skar-varg|protective|near
+protected|gor-thog-inash-kin-dak-thog-agh|protective|near
+protectively|gor-thog-in-grak-kin-dak-thog-burz|protective|near
+protects|gor-thog-ini-kin-dak-thog-dak|protective|near
+quick-wittedly|vosh-agh-mok-krag-grak-kin-dak-thog-drak|quick-witted|near
+rayed|vosh-agh-mok-nargash-kin-dak-thog-gar|ray|near
+raying|vosh-agh-mok-nargin-kin-dak-thog-gash|ray|near
+rays|vosh-agh-mok-nargi-kin-dak-thog-gor|ray|near
+react|vosh-agh-mok-ruk-kin-kin-dak-thog-grak|reactions|near
+reacted|vosh-agh-mok-rukash-kin-dak-thog-grod|reactions|near
+reacting|vosh-agh-mok-rukin-kin-dak-thog-krag|reactions|near
+reaction|vosh-agh-mok-ruk-thog-kin-dak-thog-mok|reactions|near
+reacts|vosh-agh-mok-ruki-kin-dak-thog-narg|reactions|near
+reanimate|vosh-agh-mok-skar-kin-kin-dak-thog-ruk|reanimated|near
+reanimates|vosh-agh-mok-skari-kin-dak-thog-skar|reanimated|near
+reanimating|vosh-agh-mok-skarin-kin-dak-thog-thog|reanimated|near
+regained|vosh-agh-mok-thogash-kin-dak-thog-varg|regain|near
+regaining|vosh-agh-mok-thogin-kin-dak-varg-agh|regain|near
+regains|vosh-agh-mok-thogur-kin-dak-varg-burz|regain|near
+relics|vosh-agh-mok-vargi-kin-dak-varg-dak|relic|near
+relieved|vosh-agh-narg-aghash-kin-dak-varg-drak|relieve|near
+relieves|vosh-agh-narg-aghur-kin-dak-varg-gar|relieve|near
+relieving|vosh-agh-narg-aghin-kin-dak-varg-gash|relieve|near
+remind|vosh-agh-narg-burz-kin-kin-dak-varg-gor|reminding|near
+reminded|vosh-agh-narg-burzash-kin-dak-varg-grak|reminding|near
+reminds|vosh-agh-narg-burzi-kin-dak-varg-grod|reminding|near
+remotely|vosh-agh-narg-dak-grak-kin-dak-varg-krag|remote|near
+resettle|vosh-agh-narg-drak-kin-kin-dak-varg-mok|resettled|near
+resettles|vosh-agh-narg-draki-kin-dak-varg-narg|resettled|near
+resettling|vosh-agh-narg-drakin-kin-dak-varg-ruk|resettled|near
+responsibilities|tukur-dargi-kin-dak-varg-skar|responsibility|near
+responsibly|tukur-darg-grak-kin-dak-varg-thog|responsibility|near
+reverting|lagin-zorn-dok-kin-dak-varg-varg|reverted|near
+reverts|lagu-zorn-doki-kin-drak-agh-agh|reverted|near
+rewarded|vosh-agh-narg-garash-kin-drak-agh-burz|reward|near
+rewarding|vosh-agh-narg-garin-kin-drak-agh-dak|reward|near
+rewards|vosh-agh-narg-gari-kin-drak-agh-drak|reward|near
+rival|vosh-agh-narg-gashu-kin-drak-agh-gar|rivals|near
+rivalry|vosh-agh-narg-gashuk-kin-drak-agh-gash|rivals|near
+rod|vosh-agh-narg-goru-kin-drak-agh-gor|rods|near
+roleplay|vosh-agh-narg-grakuk-kin-drak-agh-grak|role|near
+roleplayed|vosh-agh-narg-grakash-kin-drak-agh-grod|role|near
+roleplays|vosh-agh-narg-graki-kin-drak-agh-krag|role|near
+roles|vosh-agh-narg-graki-kin-drak-agh-mok|role|near
+sacked|vosh-agh-narg-grodash-kin-drak-agh-narg|sack|near
+sacking|vosh-agh-narg-grodin-kin-drak-agh-ruk|sack|near
+sacks|vosh-agh-narg-grodi-kin-drak-agh-skar|sack|near
+sacredly|vosh-agh-narg-krag-grak-kin-drak-agh-thog|sacred|near
+sacredness|vosh-agh-narg-krag-thog-kin-drak-agh-varg|sacred|near
+scouted|vosh-agh-narg-rukash-kin-drak-burz-agh|scout|near
+scoutings|vosh-agh-narg-ruki-kin-drak-burz-burz|scout|near
+scouts|vosh-agh-narg-ruki-kin-drak-burz-dak|scout|near
+seek|vosh-agh-narg-skar-kin-kin-drak-burz-drak|seeking|near
+seeks|vosh-agh-narg-skari-kin-drak-burz-gar|seeking|near
+send|lag-dargashu-kin-drak-burz-gash|sends|near
+sendings|lag-dargashi-kin-drak-burz-gor|sends|near
+serpent|vosh-agh-narg-vargu-kin-drak-burz-grak|serpents|near
+shrined|vosh-agh-ruk-aghash-kin-drak-burz-grod|shrine|near
+shrines|vosh-agh-ruk-aghi-kin-drak-burz-krag|shrine|near
+shrining|vosh-agh-ruk-aghin-kin-drak-burz-mok|shrine|near
+signified|vosh-agh-ruk-burzash-kin-drak-burz-narg|signifying|near
+signifies|vosh-agh-ruk-burzi-kin-drak-burz-ruk|signifying|near
+signify|vosh-agh-ruk-burzuk-kin-drak-burz-skar|signifying|near
+similarly|vosh-agh-ruk-dak-grak-kin-drak-burz-thog|similar|near
+skills|mauk-heki-kin-drak-burz-varg|skilled|near
+smoke|vosh-agh-ruk-drak-kin-kin-drak-dak-agh|smoked|near
+smokes|vosh-agh-ruk-draki-kin-drak-dak-burz|smoked|near
+smoking|vosh-agh-ruk-drakin-kin-drak-dak-dak|smoked|near
+solve|grod-lag-bibu-kin-drak-dak-drak|solutions|near
+solved|grod-lag-bibash-kin-drak-dak-gar|solutions|near
+solves|grod-lag-bibur-kin-drak-dak-gash|solutions|near
+solving|grod-lag-bibin-kin-drak-dak-gor|solutions|near
+sought|vosh-agh-narg-skarash-kin-drak-dak-grak|seeking|near
+specialist|vosh-agh-ruk-gar-kin-kin-drak-dak-grod|specializing|near
+specialists|vosh-agh-ruk-gari-kin-drak-dak-krag|specializing|near
+specialization|vosh-agh-ruk-gar-thog-kin-drak-dak-mok|specializing|near
+specialize|vosh-agh-ruk-garu-kin-drak-dak-narg|specializing|near
+specialized|vosh-agh-ruk-garash-kin-drak-dak-ruk|specializing|near
+specializes|vosh-agh-ruk-garur-kin-drak-dak-skar|specializing|near
+spellcasters|vosh-agh-ruk-gash-mogi-kin-drak-dak-thog|spellcaster|near
+sphere|vosh-agh-ruk-goru-kin-drak-dak-varg|spheres|near
+spill|vosh-agh-ruk-graku-kin-drak-drak-agh|spilled|near
+spilling|vosh-agh-ruk-grakin-kin-drak-drak-burz|spilled|near
+spills|vosh-agh-ruk-graki-kin-drak-drak-dak|spilled|near
+sporebanes|vosh-agh-ruk-grodi-kin-drak-drak-drak|sporebane|near
+staffs|bant-zol-mogi-kin-drak-drak-gar|staves|near
+stem|vosh-agh-ruk-kragu-kin-drak-drak-gash|stems|near
+stemmed|vosh-agh-ruk-kragash-kin-drak-drak-gor|stems|near
+stemming|vosh-agh-ruk-kragin-kin-drak-drak-grak|stems|near
+stepped|vosh-agh-ruk-mokash-kin-drak-drak-grod|step|near
+stepping|vosh-agh-ruk-mokin-kin-drak-drak-krag|step|near
+steps|vosh-agh-ruk-moki-kin-drak-drak-mok|step|near
+strikingly|vosh-agh-ruk-narg-grak-kin-drak-drak-narg|striking|near
+stronger|yankuk-mog-kin-drak-drak-ruk|strengths|near
+strongest|yankuk-gash-kin-drak-drak-skar|strengths|near
+strongholds|vosh-agh-ruk-ruki-kin-drak-drak-thog|stronghold|near
+strongly|yankuk-grak-kin-drak-drak-varg|strengths|near
+studied|vosh-agh-ruk-skarash-kin-drak-gar-agh|study|near
+studies|vosh-agh-ruk-skari-kin-drak-gar-burz|study|near
+succeed|grod-lag-thogash-kin-drak-gar-dak|successive|near
+succeeded|grod-lag-thogash-kin-drak-gar-drak|successive|near
+succeeding|grod-lag-thogin-kin-drak-gar-gar|successive|near
+succeeds|grod-lag-thogi-kin-drak-gar-gash|successive|near
+successively|grod-lag-thog-grak-kin-drak-gar-gor|successive|near
+sufferings|vosh-agh-ruk-thogi-kin-drak-gar-grak|suffering|near
+summoner|vosh-agh-skar-agh-mog-kin-drak-gar-grod|summon|near
+summons|vosh-agh-skar-aghi-kin-drak-gar-krag|summon|near
+supernaturally|vosh-agh-skar-dak-grak-kin-drak-gar-mok|supernatural|near
+symptom|vosh-agh-skar-drak-thog-kin-drak-gar-narg|symptoms|near
+symptomatic|vosh-agh-skar-drakuk-kin-drak-gar-ruk|symptoms|near
+tabletops|vosh-agh-skar-gari-kin-drak-gar-skar|tabletop|near
+talent|vosh-agh-skar-gash-thog-kin-drak-gar-thog|talents|near
+tasking|zhar-agh-burz-rukin-kin-drak-gar-varg|tasked|near
+tasted|vosh-agh-skar-grakash-kin-drak-gash-agh|taste|near
+tastes|vosh-agh-skar-graki-kin-drak-gash-burz|taste|near
+tasting|vosh-agh-skar-grakin-kin-drak-gash-dak|taste|near
+teased|vosh-agh-skar-grodash-kin-drak-gash-drak|tease|near
+teases|vosh-agh-skar-grodur-kin-drak-gash-gar|tease|near
+teasing|vosh-agh-skar-grodin-kin-drak-gash-gash|tease|near
+technologic|vosh-agh-skar-kraguk-kin-drak-gash-gor|technology|near
+technological|vosh-agh-skar-kraguk-kin-drak-gash-grak|technology|near
+technologically|vosh-agh-skar-krag-grak-kin-drak-gash-grod|technology|near
+technologies|vosh-agh-skar-kragi-kin-drak-gash-krag|technology|near
+telepath|vosh-agh-skar-mok-kin-kin-drak-gash-mok|telepathy|near
+telepathically|vosh-agh-skar-mok-grak-kin-drak-gash-narg|telepathy|near
+telepaths|vosh-agh-skar-moki-kin-drak-gash-ruk|telepathy|near
+tend|vosh-agh-skar-nargu-kin-drak-gash-skar|tends|near
+tended|vosh-agh-skar-nargash-kin-drak-gash-thog|tends|near
+tending|vosh-agh-skar-nargin-kin-drak-gash-varg|tends|near
+territories|vosh-agh-skar-ruki-kin-drak-gor-agh|territory|near
+thirsted|vosh-agh-skar-skarash-kin-drak-gor-burz|thirst|near
+thirsting|vosh-agh-skar-skarin-kin-drak-gor-dak|thirst|near
+thirsts|vosh-agh-skar-skari-kin-drak-gor-drak|thirst|near
+thirsty|vosh-agh-skar-skaruk-kin-drak-gor-gar|thirst|near
+thought|thog-thog-kin-drak-gor-gash|thoughts|near
+thoughtful|thoguk-kin-drak-gor-gor|thoughts|near
+thoughtless|thogi-kin-drak-gor-grak|thoughts|near
+threw|flitash-kin-drak-gor-grod|thrown|near
+throwing|flitin-kin-drak-gor-krag|thrown|near
+tinderboxes|vosh-agh-skar-vargi-kin-drak-gor-mok|tinderbox|near
+tipsier|vosh-agh-thog-agh-mog-kin-drak-gor-narg|tipsy|near
+tipsiest|vosh-agh-thog-agh-gash-kin-drak-gor-ruk|tipsy|near
+tipsily|vosh-agh-thog-agh-grak-kin-drak-gor-skar|tipsy|near
+tobaccoes|vosh-agh-thog-burzi-kin-drak-gor-thog|tobacco|near
+tobaccos|vosh-agh-thog-burzi-kin-drak-gor-varg|tobacco|near
+took|dravkash-krag-flit-kin-drak-grak-agh|taken|near
+tragedies|morz-thog-tii-kin-drak-grak-burz|tragedy|near
+tragically|morz-thog-ti-grak-kin-drak-grak-dak|tragedy|near
+treat|dravur-grodu-kin-drak-grak-drak|treatment|near
+treatments|dravur-grodi-kin-drak-grak-gar|treatment|near
+triggered|vosh-agh-thog-drakash-kin-drak-grak-gash|trigger|near
+triggering|vosh-agh-thog-drakin-kin-drak-grak-gor|trigger|near
+triggers|vosh-agh-thog-drak-mogi-kin-drak-grak-grak|trigger|near
+understand|vosh-agh-thog-gashu-kin-drak-grak-grod|understanding|near
+understandings|vosh-agh-thog-gashi-kin-drak-grak-krag|understanding|near
+understands|vosh-agh-thog-gashur-kin-drak-grak-mok|understanding|near
+understood|vosh-agh-thog-gashash-kin-drak-grak-narg|understanding|near
+underworlds|vosh-agh-thog-gori-kin-drak-grak-ruk|underworld|near
+unfortunately|mauk-drav-thog-grak-kin-drak-grak-skar|unfortunate|near
+unified|vosh-agh-thog-grakash-kin-drak-grak-thog|unifying|near
+unifies|vosh-agh-thog-graki-kin-drak-grak-varg|unifying|near
+unify|vosh-agh-thog-grakuk-kin-drak-grod-agh|unifying|near
+unknowns|thogashi-kin-drak-grod-burz|unknown|near
+unwaveringly|vosh-agh-thog-grod-grak-kin-drak-grod-dak|unwavering|near
+valuable|vosh-agh-thog-krag-thog-kin-drak-grod-drak|valuables|near
+vampiric|vosh-agh-thog-mokuk-kin-drak-grod-gar|vampire|near
+visits|vosh-agh-thog-nargi-kin-drak-grod-gash|visit|near
+vow|vosh-agh-thog-ruk-kin-kin-drak-grod-gor|vowed|near
+vowing|vosh-agh-thog-rukin-kin-drak-grod-grak|vowed|near
+vows|vosh-agh-thog-ruki-kin-drak-grod-grod|vowed|near
+waterskins|vosh-agh-thog-skari-kin-drak-grod-krag|waterskin|near
+waver|vosh-agh-thog-grod-mog-kin-drak-grod-mok|unwavering|near
+wavered|vosh-agh-thog-grodash-kin-drak-grod-narg|unwavering|near
+wavering|vosh-agh-thog-grodin-kin-drak-grod-ruk|unwavering|near
+wavers|vosh-agh-thog-grod-mogi-kin-drak-grod-skar|unwavering|near
+weaker|nu-brak-burz-yankuk-mog-kin-drak-grod-thog|weaknesses|near
+weakest|nu-brak-burz-yankuk-gash-kin-drak-grod-varg|weaknesses|near
+weakly|nu-brak-burz-yankuk-grak-kin-drak-krag-agh|weaknesses|near
+weakness|nu-brak-burz-yankuk-thog-kin-drak-krag-burz|weaknesses|near
+wear|khalashu-kin-drak-krag-dak|wears|near
+westerns|naut-lagi-kin-drak-krag-drak|western|near
+wing|vosh-agh-thog-vargin-kin-drak-krag-gar|winged|near
+wings|vosh-agh-thog-vargi-kin-drak-krag-gash|winged|near
+winters|vosh-agh-varg-agh-mogi-kin-drak-krag-gor|winter|near
+wintery|vosh-agh-varg-aghuk-kin-drak-krag-grak|winter|near
+wintry|vosh-agh-varg-aghuk-kin-drak-krag-grod|winter|near
+wised|thog-tiash-kin-drak-krag-krag|wise|near
+wisely|thog-ti-grak-kin-drak-krag-mok|wise|near
+wiser|thog-ti-mog-kin-drak-krag-narg|wise|near
+wises|thog-tii-kin-drak-krag-ruk|wise|near
+wisest|thog-ti-gash-kin-drak-krag-skar|wise|near
+wising|thog-tiin-kin-drak-krag-thog|wise|near
+worn|khalashuk-kin-drak-krag-varg|wears|near
+zombified|vosh-agh-varg-burzash-kin-drak-mok-agh|zombie|near
+zombifies|vosh-agh-varg-burzi-kin-drak-mok-burz|zombie|near
+zombify|vosh-agh-varg-burzuk-kin-drak-mok-dak|zombie|near
+zombifying|vosh-agh-varg-burzin-kin-drak-mok-drak|zombie|near
+""";
+
+        private static IEnumerable<OrcishLexiconEntry> BuildFifteenPageSampleEntries(
+            IEnumerable<OrcishLexiconEntry> entries)
+        {
+            var acceptedEntries = entries.ToList();
+
+            foreach (var line in FifteenPageSampleLexiconData.Split(
+                         ['\r', '\n'],
+                         StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+            {
+                var fields = line.Split('|', 4, StringSplitOptions.TrimEntries);
+                var isNearKin = string.Equals(fields[3], "near", StringComparison.OrdinalIgnoreCase);
+                var tags = isNearKin
+                    ? new[]
+                    {
+                        "wiki-fodder",
+                        "fifteen-page-near-kin",
+                        "near-kin",
+                        "derived-by-rule",
+                        "review-promoted",
+                        "close-form-reviewed",
+                        "compound-reviewed",
+                        $"family-{fields[2]}"
+                    }
+                    : new[]
+                    {
+                        "wiki-fodder",
+                        "fifteen-page-sample",
+                        "generated",
+                        "review-promoted",
+                        "close-form-reviewed",
+                        "compound-reviewed",
+                        $"family-{fields[2]}"
+                    };
+                var candidate = new OrcishLexiconEntry(fields[0], fields[1], Tags: tags);
+
+                OrcishLexiconReviewUtility.EnsureCanAdd(candidate, acceptedEntries);
+                acceptedEntries.Add(candidate);
+                yield return candidate;
+            }
+        }
+
+        private const string NearKinFamilyData = """
+alchemical|alchemy,alchemist,alchemists
+ambitious|ambition,ambitiously
+axes|axed,axing
+basilisk|basilisks
+battling|battled
+believed|believes
+captors|capture,captures,capturing
+carved|carve,carves,carving
+chaotic|chaotically
+charges|charge,charged,charging
+citadel|citadels,citadel's
+coastlines|coastline
+commands|commanded,commanding
+completed|complete,completes,completing
+conditions|condition
+conjures|conjure,conjured,conjuring
+contact|contacts,contacted,contacting
+cuprous|coppery
+countering|countered
+cruel|cruelly,cruelty
+cultic|cult,cultists
+delicacy|delicate
+denied|deny,denies,denying
+denser|dense,densest,density
+determined|determines
+diameter|diameters
+direct|directed,directing,directly
+discovered|discover,discovers,discovery
+dissipates|dissipate,dissipated,dissipating
+distinct|distinction,distinctly
+divine|divinity
+driven|drove
+dual-wielded|dual-wield,dual-wields
+duergar|duergars,duergar's
+earlier|earliest
+efforts|effort
+embodied|embody,embodies,embodying
+emerged|emerge,emerges
+ending|ended
+enslaving|enslave,enslaves,enslaved,enslavement
+eventually|eventual
+exact|exactly
+expedition|expeditions
+experiments|experiment,experimented,experimenting
+fall|falls,fell,fallen
+filling|fill,fills,filled
+financially|finance,financial
+fingertips|fingertip
+finished|finish,finishes,finishing
+flayers|flay,flays,flayed,flaying,flayer
+flowing|flow,flows,flowed
+fog|fogs,fogged,fogging,foggy
+freedom|freed,freeing
+galleries|gallery
+glacier|glaciers,glacial
+going|go,goes,went
+gradual|gradually
+gray|grayer,grayest,grayness
+great|greatest,greatly
+harsh|harshly,harshness
+hereditary|inherit,inherits,inherited,inheriting,inheritance
+history|histories,historical,historically
+holes|hole
+indicating|indicate,indicates,indicated,indication
+individual|individuals,individually
+industry|industrious
+info|inform,informs,informed,informing
+instant|instantly
+isolation|isolate,isolates,isolated,isolating
+journey|journeys,journeyed,journeying
+keep|keeps,keeping
+kidnap|kidnaps,kidnapped,kidnapping,kidnapper
+killing|kill,kills,killer,killers
+king|kings,kingly
+lasts|lasting
+lead|led,leading
+lies|lied,lying
+unlimited|limiting
+lip|lips
+lived|lives
+lizard|lizards
+loses|lose,losing
+lowest|low
+maintain|maintains,maintained,maintaining
+man-eaters|man-eater
+materials|material
+millenia|millennium,millennia
+mistake|mistakes,mistaken
+mysteriously|mystery
+nation|nations,national
+numbers|numbered,numbering
+obscured|obscure,obscures,obscuring
+operating|operate,operates,operated,operation
+originally|origin,original
+paying|pays
+peak|peaks
+perfect|perfection,perfectly
+performed|performs,performing,performance
+period|periods,periodic
+phantasms|phantasm
+poisonous|poisoned,poisoning
+prescribed|prescribe,prescribes,prescribing,prescription
+prisoner|imprison
+proved|proves,proving,proven
+quaggoths|quaggoth
+rapidly|rapid
+raw|rawness
+reaching|reached
+realm|realms
+rearing|rears,reared
+reclamation|reclaim,reclaims,reclaiming
+referred|refer,refers,referring,reference
+refusal|refuse,refuses,refused,refusing
+regard|regards,regarded,regarding
+rendered|render,renders,rendering
+reptilian|reptile,reptiles
+rose|rise,rises,risen,rising
+rulers|ruler
+service|serve,serves,served,serving
+sharing|shared
+sinking|sink,sank,sunk
+spears|spear
+spider|spiders
+subject|subjects,subjecting
+suicidal|suicide,suicidally
+swarm|swarms,swarmed,swarming
+swamps|swamp
+swaying|sway,sways,swayed
+tails|tail
+task|tasks
+touched|touch,touches,touching
+tribal|tribe,tribes,tribally
+typically|typed,typing,typical
+urged|urge,urges,urging
+unusual|usual,usually
+venerated|venerate,venerates,venerating,veneration
+waxing|wax,waxes,waxed
+wind|winds,windy,winding
+worship|worships,worshipped,worshipping,worshipper
+""";
+
+        private static IEnumerable<OrcishLexiconEntry> BuildNearKinEntries(
+            IEnumerable<OrcishLexiconEntry> entries)
+        {
+            var acceptedEntries = entries.ToList();
+            var disambiguationSyllables = new[]
+            {
+                "agh", "burz", "dak", "drak", "gar", "gash", "gor", "grak",
+                "grod", "krag", "mok", "narg", "ruk", "skar", "thog", "varg"
+            };
+
+            foreach (var line in NearKinFamilyData.Split(
+                         ['\r', '\n'],
+                         StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+            {
+                var fields = line.Split('|', 2, StringSplitOptions.TrimEntries);
+                var sourceEnglish = fields[0];
+                var sourceEntry = acceptedEntries.Single(entry =>
+                    string.Equals(entry.English, sourceEnglish, StringComparison.OrdinalIgnoreCase)
+                    && HasTag(entry, "ten-page-sample"));
+                var emittedForms = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+                foreach (var englishForm in fields[1].Split(
+                             ',',
+                             StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+                {
+                    var orcishForm = CreateNearKinOrcishForm(sourceEntry.Orcish, englishForm);
+                    var disambiguationIndex = 0;
+                    while (!emittedForms.Add(orcishForm))
+                    {
+                        orcishForm = $"{CreateNearKinOrcishForm(sourceEntry.Orcish, englishForm)}-kin-{disambiguationSyllables[disambiguationIndex++]}";
+                    }
+
+                    var candidate = new OrcishLexiconEntry(
+                        englishForm,
+                        orcishForm,
+                        Tags:
+                        [
+                            "near-kin",
+                            "derived-by-rule",
+                            "review-promoted",
+                            "close-form-reviewed",
+                            $"family-{sourceEnglish}"
+                        ]);
+                    OrcishLexiconReviewUtility.EnsureCanAdd(candidate, acceptedEntries);
+                    acceptedEntries.Add(candidate);
+                    yield return candidate;
+                }
+            }
+        }
+
+        private static string CreateNearKinOrcishForm(string root, string englishForm)
+        {
+            if (englishForm.EndsWith("'s", StringComparison.OrdinalIgnoreCase))
+            {
+                return ToOrcishPossessive(root);
+            }
+
+            if (IsNearKinIrregularPastForm(englishForm))
+            {
+                return ToOrcishVerbForm(root, "ash");
+            }
+
+            if (IsNearKinPerfectForm(englishForm))
+            {
+                return ToOrcishVerbForm(root, "uk");
+            }
+
+            if (englishForm.EndsWith("ing", StringComparison.OrdinalIgnoreCase))
+            {
+                return ToOrcishVerbForm(root, "in");
+            }
+
+            if (englishForm.EndsWith("ed", StringComparison.OrdinalIgnoreCase))
+            {
+                return ToOrcishVerbForm(root, "ash");
+            }
+
+            if (englishForm.EndsWith("ly", StringComparison.OrdinalIgnoreCase))
+            {
+                return $"{root}-grak";
+            }
+
+            if (englishForm.EndsWith("est", StringComparison.OrdinalIgnoreCase))
+            {
+                return $"{root}-gash";
+            }
+
+            if (englishForm.EndsWith("ers", StringComparison.OrdinalIgnoreCase)
+                || englishForm.EndsWith("ors", StringComparison.OrdinalIgnoreCase))
+            {
+                return $"{root}-mogi";
+            }
+
+            if (englishForm.EndsWith("er", StringComparison.OrdinalIgnoreCase)
+                || englishForm.EndsWith("or", StringComparison.OrdinalIgnoreCase))
+            {
+                return $"{root}-mog";
+            }
+
+            if (HasNearKinNominalSuffix(englishForm))
+            {
+                return $"{root}-thog";
+            }
+
+            if (HasNearKinAdjectivalSuffix(englishForm))
+            {
+                return $"{root}uk";
+            }
+
+            if (englishForm.EndsWith('s'))
+            {
+                var singular = englishForm[..^1];
+                return IsNearKinInfinitive(singular)
+                    ? ToOrcishVerbForm(root, "ur")
+                    : ToOrcishPlural(root);
+            }
+
+            return IsNearKinInfinitive(englishForm)
+                ? ToOrcishVerbForm(root, "u")
+                : $"{root}-kin";
+        }
+
+        private static bool IsNearKinInfinitive(string value)
+        {
+            return value.ToLowerInvariant() is
+                "capture" or "carve" or "charge" or "complete" or "conjure" or "deny" or "discover"
+                or "dissipate" or "dual-wield" or "embody" or "emerge" or "enslave" or "experiment"
+                or "fill" or "finish" or "flay" or "flow" or "go" or "imprison" or "indicate"
+                or "inform" or "inherit" or "isolate" or "kill" or "lose" or "operate"
+                or "prescribe" or "reclaim" or "refer" or "refuse" or "render" or "rise"
+                or "serve" or "sink" or "sway" or "touch" or "urge" or "venerate" or "wax";
+        }
+
+        private static bool IsNearKinIrregularPastForm(string value)
+        {
+            return value.ToLowerInvariant() is "drove" or "fell" or "led" or "lied" or "sank" or "went";
+        }
+
+        private static bool IsNearKinPerfectForm(string value)
+        {
+            return value.ToLowerInvariant() is "fallen" or "proven" or "risen" or "sunk";
+        }
+
+        private static bool HasNearKinNominalSuffix(string value)
+        {
+            return value.EndsWith("tion", StringComparison.OrdinalIgnoreCase)
+                || value.EndsWith("sion", StringComparison.OrdinalIgnoreCase)
+                || value.EndsWith("ity", StringComparison.OrdinalIgnoreCase)
+                || value.EndsWith("ness", StringComparison.OrdinalIgnoreCase)
+                || value.EndsWith("ment", StringComparison.OrdinalIgnoreCase)
+                || value.EndsWith("ance", StringComparison.OrdinalIgnoreCase)
+                || value.EndsWith("ence", StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static bool HasNearKinAdjectivalSuffix(string value)
+        {
+            return value.EndsWith("al", StringComparison.OrdinalIgnoreCase)
+                || value.EndsWith("ic", StringComparison.OrdinalIgnoreCase)
+                || value.EndsWith("ous", StringComparison.OrdinalIgnoreCase)
+                || value.EndsWith("y", StringComparison.OrdinalIgnoreCase);
         }
 
         private static IEnumerable<OrcishLexiconEntry> BuildDerivedMorphologyEntries(IEnumerable<OrcishLexiconEntry> entries)

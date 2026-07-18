@@ -64,6 +64,12 @@ var tests = new (string Name, Action Test)[]
     ("orcish translator culls low value exonym pass throughs", OrcishTranslatorCullsLowValueExonymPassThroughs),
     ("orcish translator enforces lexicon quality invariants", OrcishTranslatorEnforcesLexiconQualityInvariants),
     ("orcish translator reviews proposed lexicon additions", OrcishTranslatorReviewsProposedLexiconAdditions),
+    ("orcish translator supports ten page wiki sample vocabulary", OrcishTranslatorSupportsTenPageWikiSampleVocabulary),
+    ("orcish translator supports near kin morphology families", OrcishTranslatorSupportsNearKinMorphologyFamilies),
+    ("orcish translator supports fifteen page sample vocabulary", OrcishTranslatorSupportsFifteenPageSampleVocabulary),
+    ("orcish translator supports twenty page sample vocabulary", OrcishTranslatorSupportsTwentyPageSampleVocabulary),
+    ("orcish translator supports thirty page sample vocabulary", OrcishTranslatorSupportsThirtyPageSampleVocabulary),
+    ("orcish translator supports thirty page followup vocabulary", OrcishTranslatorSupportsThirtyPageFollowupVocabulary),
     ("orcish translator exposes unique english term count", OrcishTranslatorExposesUniqueEnglishTermCount),
     ("to-orcish translates terms before trailing punctuation", ToOrcishTranslatesTermsBeforeTrailingPunctuation),
     ("to-orcish translates dotted abbreviation terms", ToOrcishTranslatesDottedAbbreviationTerms),
@@ -1321,11 +1327,216 @@ static string FormatLexiconEntry(OrcishLexiconEntry entry)
     return $"{entry.English}->{entry.Orcish} [{entry.PartOfSpeech ?? "?"}]";
 }
 
+static void OrcishTranslatorSupportsTenPageWikiSampleVocabulary()
+{
+    var entries = OrcishTranslatorUtility.GetLexiconEntries()
+        .Where(entry => HasAnyTag(entry, "ten-page-sample"))
+        .ToArray();
+
+    AssertEqual(230, entries.Length, "expected every candidate from the ten-page wiki sample");
+    foreach (var entry in entries)
+    {
+        var translations = OrcishTranslatorUtility.TranslateEnglishToOrcish(entry.English);
+        AssertTrue(
+            translations.Any(candidate => string.Equals(candidate.Translation, entry.Orcish, StringComparison.OrdinalIgnoreCase)),
+            $"expected '{entry.English}' to translate as '{entry.Orcish}'");
+    }
+}
+
+static void OrcishTranslatorSupportsNearKinMorphologyFamilies()
+{
+    var entries = OrcishTranslatorUtility.GetLexiconEntries()
+        .Where(entry => HasAnyTag(entry, "near-kin"))
+        .Where(entry => !HasAnyTag(entry, "fifteen-page-near-kin", "twenty-page-near-kin", "thirty-page-near-kin", "thirty-page-followup-near-kin"))
+        .ToArray();
+
+    AssertEqual(302, entries.Length, "expected every candidate from the 139 near-kin families");
+    AssertEqual(
+        139,
+        entries.SelectMany(entry => entry.Tags ?? Array.Empty<string>())
+            .Where(tag => tag.StartsWith("family-", StringComparison.OrdinalIgnoreCase))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Count(),
+        "expected all near-kin source families");
+
+    foreach (var entry in entries)
+    {
+        var translations = OrcishTranslatorUtility.TranslateEnglishToOrcish(entry.English);
+        AssertTrue(
+            translations.Any(candidate => string.Equals(candidate.Translation, entry.Orcish, StringComparison.OrdinalIgnoreCase)),
+            $"expected '{entry.English}' to translate as '{entry.Orcish}'");
+    }
+
+    var urgedRoot = OrcishTranslatorUtility.TranslateEnglishToOrcish("urged").Single().Translation;
+    AssertTrue(
+        OrcishTranslatorUtility.TranslateEnglishToOrcish("urge").Single().Translation.StartsWith(urgedRoot, StringComparison.OrdinalIgnoreCase),
+        "urge should retain the urged family root");
+    AssertTrue(
+        OrcishTranslatorUtility.TranslateEnglishToOrcish("urging").Single().Translation.StartsWith(urgedRoot, StringComparison.OrdinalIgnoreCase),
+        "urging should retain the urged family root");
+
+    var sinkingRoot = OrcishTranslatorUtility.TranslateEnglishToOrcish("sinking").Single().Translation;
+    foreach (var form in new[] { "sink", "sank", "sunk" })
+    {
+        AssertTrue(
+            OrcishTranslatorUtility.TranslateEnglishToOrcish(form).Single().Translation.StartsWith(sinkingRoot, StringComparison.OrdinalIgnoreCase),
+            $"{form} should retain the sinking family root");
+    }
+}
+
+static void OrcishTranslatorSupportsFifteenPageSampleVocabulary()
+{
+    var entries = OrcishTranslatorUtility.GetLexiconEntries()
+        .Where(entry => HasAnyTag(entry, "fifteen-page-sample", "fifteen-page-near-kin"))
+        .ToArray();
+
+    AssertEqual(932, entries.Length, "expected every candidate from the fifteen-page sample expansion");
+    AssertEqual(329, entries.Count(entry => HasAnyTag(entry, "fifteen-page-sample")), "expected the scraped source candidates");
+    AssertEqual(603, entries.Count(entry => HasAnyTag(entry, "fifteen-page-near-kin")), "expected the near-kin candidates");
+    AssertEqual(
+        308,
+        entries.SelectMany(entry => entry.Tags ?? Array.Empty<string>())
+            .Where(tag => tag.StartsWith("family-", StringComparison.OrdinalIgnoreCase))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Count(),
+        "expected every reconstructed word family");
+
+    foreach (var entry in entries)
+    {
+        var translations = OrcishTranslatorUtility.TranslateEnglishToOrcish(entry.English);
+        AssertTrue(
+            translations.Any(candidate => string.Equals(candidate.Translation, entry.Orcish, StringComparison.OrdinalIgnoreCase)),
+            $"expected '{entry.English}' to translate as '{entry.Orcish}'");
+    }
+
+    AssertTrue(
+        new[] { "taken", "took" }.Select(term => entries.Single(entry => string.Equals(entry.English, term, StringComparison.OrdinalIgnoreCase)))
+            .All(entry => HasAnyTag(entry, "family-taken")),
+        "taken and took should preserve one Orcish family");
+    AssertTrue(
+        new[] { "tragedy", "tragedies" }.Select(term => entries.Single(entry => string.Equals(entry.English, term, StringComparison.OrdinalIgnoreCase)))
+            .All(entry => HasAnyTag(entry, "family-tragedy")),
+        "tragedy and tragedies should preserve one Orcish family");
+}
+
+static void OrcishTranslatorSupportsTwentyPageSampleVocabulary()
+{
+    var entries = OrcishTranslatorUtility.GetLexiconEntries()
+        .Where(entry => HasAnyTag(entry, "twenty-page-sample", "twenty-page-near-kin"))
+        .ToArray();
+
+    AssertEqual(505, entries.Length, "expected every candidate from the twenty-page sample expansion");
+    AssertEqual(200, entries.Count(entry => HasAnyTag(entry, "twenty-page-sample")), "expected the scraped source candidates");
+    AssertEqual(305, entries.Count(entry => HasAnyTag(entry, "twenty-page-near-kin")), "expected the near-kin candidates");
+
+    foreach (var entry in entries)
+    {
+        var reviewIssues = OrcishTranslatorUtility.ReviewProposedLexiconEntry(entry)
+            .Where(issue => !string.Equals(issue.Code, "exact-duplicate", StringComparison.OrdinalIgnoreCase))
+            .ToArray();
+        AssertEqual(0, reviewIssues.Length, $"expected reviewed entry '{entry.English}' to remain admissible");
+
+        var translations = OrcishTranslatorUtility.TranslateEnglishToOrcish(entry.English);
+        AssertTrue(
+            translations.Any(candidate => string.Equals(candidate.Translation, entry.Orcish, StringComparison.OrdinalIgnoreCase)),
+            $"expected '{entry.English}' to translate as '{entry.Orcish}'");
+    }
+
+    var abstinenceRoot = entries.Single(entry => string.Equals(entry.English, "abstinence", StringComparison.OrdinalIgnoreCase)).Orcish;
+    foreach (var form in new[] { "abstain", "abstained", "abstaining", "abstains", "abstinences" })
+    {
+        AssertTrue(
+            entries.Single(entry => string.Equals(entry.English, form, StringComparison.OrdinalIgnoreCase))
+                .Orcish.StartsWith(abstinenceRoot, StringComparison.OrdinalIgnoreCase),
+            $"{form} should retain the abstinence family root");
+    }
+
+    var springRoot = entries.Single(entry => string.Equals(entry.English, "spring", StringComparison.OrdinalIgnoreCase)).Orcish;
+    foreach (var form in new[] { "sprang", "springing", "springs", "sprung" })
+    {
+        AssertTrue(
+            entries.Single(entry => string.Equals(entry.English, form, StringComparison.OrdinalIgnoreCase))
+                .Orcish.StartsWith(springRoot, StringComparison.OrdinalIgnoreCase),
+            $"{form} should retain the spring family root");
+    }
+}
+
+static void OrcishTranslatorSupportsThirtyPageSampleVocabulary()
+{
+    var entries = OrcishTranslatorUtility.GetLexiconEntries()
+        .Where(entry => HasAnyTag(entry, "thirty-page-sample", "thirty-page-near-kin"))
+        .ToArray();
+
+    AssertEqual(1593, entries.Length, "expected every candidate from the thirty-page sample expansion");
+    AssertEqual(701, entries.Count(entry => HasAnyTag(entry, "thirty-page-sample")), "expected the scraped source candidates");
+    AssertEqual(892, entries.Count(entry => HasAnyTag(entry, "thirty-page-near-kin")), "expected the near-kin candidates");
+
+    foreach (var entry in entries)
+    {
+        var reviewIssues = OrcishTranslatorUtility.ReviewProposedLexiconEntry(entry)
+            .Where(issue => !string.Equals(issue.Code, "exact-duplicate", StringComparison.OrdinalIgnoreCase))
+            .ToArray();
+        AssertEqual(0, reviewIssues.Length, $"expected reviewed entry '{entry.English}' to remain admissible");
+
+        var translations = OrcishTranslatorUtility.TranslateEnglishToOrcish(entry.English);
+        AssertTrue(
+            translations.Any(candidate => string.Equals(candidate.Translation, entry.Orcish, StringComparison.OrdinalIgnoreCase)),
+            $"expected '{entry.English}' to translate as '{entry.Orcish}'");
+    }
+
+    AssertThirtyPageFamilyRoot(entries, "alloys", "alloy", "alloyed", "alloying");
+    AssertThirtyPageFamilyRoot(entries, "fed", "feed", "feeding", "feeds");
+    AssertThirtyPageFamilyRoot(entries, "struck", "strikes");
+    AssertThirtyPageFamilyRoot(entries, "zone", "zoned", "zones", "zoning");
+}
+
+static void AssertThirtyPageFamilyRoot(
+    IReadOnlyList<OrcishLexiconEntry> entries,
+    string sourceEnglish,
+    params string[] nearKin)
+{
+    var sourceRoot = entries.Single(entry =>
+        string.Equals(entry.English, sourceEnglish, StringComparison.OrdinalIgnoreCase)
+        && HasAnyTag(entry, "thirty-page-sample")).Orcish;
+
+    foreach (var english in nearKin)
+    {
+        AssertTrue(
+            entries.Single(entry => string.Equals(entry.English, english, StringComparison.OrdinalIgnoreCase))
+                .Orcish.StartsWith(sourceRoot, StringComparison.OrdinalIgnoreCase),
+            $"{english} should retain the {sourceEnglish} family root");
+    }
+}
+
+static void OrcishTranslatorSupportsThirtyPageFollowupVocabulary()
+{
+    var entries = OrcishTranslatorUtility.GetLexiconEntries()
+        .Where(entry => HasAnyTag(entry, "thirty-page-followup", "thirty-page-followup-near-kin"))
+        .ToArray();
+
+    AssertEqual(862, entries.Length, "expected every candidate from the thirty page followup expansion");
+    AssertEqual(253, entries.Count(entry => HasAnyTag(entry, "thirty-page-followup")), "expected the scraped source candidates");
+    AssertEqual(609, entries.Count(entry => HasAnyTag(entry, "thirty-page-followup-near-kin")), "expected the near-kin candidates");
+
+    foreach (var entry in entries)
+    {
+        var reviewIssues = OrcishTranslatorUtility.ReviewProposedLexiconEntry(entry)
+            .Where(issue => !string.Equals(issue.Code, "exact-duplicate", StringComparison.OrdinalIgnoreCase))
+            .ToArray();
+        AssertEqual(0, reviewIssues.Length, $"expected reviewed entry '{entry.English}' to remain admissible");
+
+        var translations = OrcishTranslatorUtility.TranslateEnglishToOrcish(entry.English);
+        AssertTrue(
+            translations.Any(candidate => string.Equals(candidate.Translation, entry.Orcish, StringComparison.OrdinalIgnoreCase)),
+            $"expected '{entry.English}' to translate as '{entry.Orcish}'");
+    }
+}
+
 static void OrcishTranslatorExposesUniqueEnglishTermCount()
 {
     var terms = OrcishTranslatorUtility.GetEnglishTerms();
 
-    AssertEqual(3757, OrcishTranslatorUtility.GetEnglishTermCount(), "unexpected total English term count");
+    AssertEqual(8181, OrcishTranslatorUtility.GetEnglishTermCount(), "unexpected total English term count");
     AssertEqual(OrcishTranslatorUtility.GetEnglishTermCount(), terms.Count, "term list and count should agree");
     AssertEqual(1, terms.Count(term => string.Equals(term, "I", StringComparison.OrdinalIgnoreCase)), "I should be counted once despite multiple variants");
     AssertEqual(1, terms.Count(term => string.Equals(term, "really", StringComparison.OrdinalIgnoreCase)), "really should be counted once despite multiple variants");

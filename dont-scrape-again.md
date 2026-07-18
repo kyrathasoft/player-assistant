@@ -1,0 +1,116 @@
+# Do Not Scrape Again
+
+## Follow-up 30-page batch
+
+- https://publish.obsidian.md/scarlethorizons/NPCs/Gintarn+Khalidson
+- https://publish.obsidian.md/scarlethorizons/OSE/7.+Monsters/Monster+Stats/Snake
+- https://publish.obsidian.md/scarlethorizons/OSE/4.+Magic/Cleric+Spells/2+-+Speak+with+Animals
+- https://publish.obsidian.md/scarlethorizons/OSE/8.+Treasures/Miscellaneous/Bag+of+Holding
+- https://publish.obsidian.md/scarlethorizons/Player-Contributed/Jelb+Chronicles/Jelb's+Chronicles+-+2
+- https://publish.obsidian.md/scarlethorizons/OSE/4.+Magic/Magic-User+Spells/6+-+Stone+to+Flesh
+- https://publish.obsidian.md/scarlethorizons/Powers/Gods/Zuul
+- https://publish.obsidian.md/scarlethorizons/Locations/Greenlands
+- https://publish.obsidian.md/scarlethorizons/Meta/ur'krik
+- https://publish.obsidian.md/scarlethorizons/OSE/7.+Monsters/Monster+Stats/Harpy
+- https://publish.obsidian.md/scarlethorizons/OSE/2.+Classes/1.+Cleric
+- https://publish.obsidian.md/scarlethorizons/ScriptsListings/generate-manifest
+- https://publish.obsidian.md/scarlethorizons/OSE/5.+Adventures/8.+Encounters
+- https://publish.obsidian.md/scarlethorizons/Locations/Garen's+Way
+- https://publish.obsidian.md/scarlethorizons/Powers/Factions/Calico+Five
+- https://publish.obsidian.md/scarlethorizons/Meta/Sage
+- https://publish.obsidian.md/scarlethorizons/OSE/8.+Treasures/Miscellaneous/Boots+of+Levitation
+- https://publish.obsidian.md/scarlethorizons/OSE/7.+Monsters/Monster+Stats/Thoul
+- https://publish.obsidian.md/scarlethorizons/asset-manifest
+- https://publish.obsidian.md/scarlethorizons/OSE/7.+Monsters/Monster+Stats/Octopus%2C+Giant
+- https://publish.obsidian.md/scarlethorizons/Meta/House+Rules/Bonus+Experience+Points
+- https://publish.obsidian.md/scarlethorizons/Races/Gnome
+- https://publish.obsidian.md/scarlethorizons/OSE/7.+Monsters/Monster+Stats/Griffon
+- https://publish.obsidian.md/scarlethorizons/Locations/Horgrim+Tunnels
+- https://publish.obsidian.md/scarlethorizons/Locations/Southern+Reaches
+- https://publish.obsidian.md/scarlethorizons/OSE/8.+Treasures/Rods%2C+Staves%2C+Wands/Wand+of+Negation
+- https://publish.obsidian.md/scarlethorizons/OSE/7.+Monsters/Monster+Stats/Triceratops
+- https://publish.obsidian.md/scarlethorizons/NPCs/Olophorn+Eld
+- https://publish.obsidian.md/scarlethorizons/NPCs/Garrick+Ironmane
+- https://publish.obsidian.md/scarlethorizons/Locations/Forgehome
+Obsidian wiki pages already selected for Orcish translation work. Match URLs after decoding percent escapes and treating `+` as a space.
+
+## Earlier batches (45)
+
+- https://publish.obsidian.md/scarlethorizons/Classes/RPOL+Fixed+Width+Character+Sheet
+- https://publish.obsidian.md/scarlethorizons/Code/Player+Assistant+app/GetMarkdownFromResponse
+- https://publish.obsidian.md/scarlethorizons/Establishments/Brokenhead+Inn
+- https://publish.obsidian.md/scarlethorizons/Historical+Events/The+Disaster
+- https://publish.obsidian.md/scarlethorizons/Locations/Farrod's+Lake
+- https://publish.obsidian.md/scarlethorizons/Locations/Gauntwood+Galleries
+- https://publish.obsidian.md/scarlethorizons/Locations/Rimbling+Brook
+- https://publish.obsidian.md/scarlethorizons/Locations/Silverhame
+- https://publish.obsidian.md/scarlethorizons/Meta/Campaign
+- https://publish.obsidian.md/scarlethorizons/Meta/Remnant+Bond
+- https://publish.obsidian.md/scarlethorizons/Meta/Tangsin
+- https://publish.obsidian.md/scarlethorizons/Meta/Threads+Index
+- https://publish.obsidian.md/scarlethorizons/Meta/Undead
+- https://publish.obsidian.md/scarlethorizons/NPCs/Banville+Mask
+- https://publish.obsidian.md/scarlethorizons/NPCs/Billworth+Turgen
+- https://publish.obsidian.md/scarlethorizons/NPCs/Bran+Hammerspike
+- https://publish.obsidian.md/scarlethorizons/NPCs/Breanna+Badmouth
+- https://publish.obsidian.md/scarlethorizons/NPCs/Bruce+Bancroft
+- https://publish.obsidian.md/scarlethorizons/NPCs/Elowen+Starshadow
+- https://publish.obsidian.md/scarlethorizons/NPCs/Retep+Garnetstone
+- https://publish.obsidian.md/scarlethorizons/OSE/4.+Magic/Cleric+Spells/2+-+Know+Alignment
+- https://publish.obsidian.md/scarlethorizons/OSE/4.+Magic/Cleric+Spells/2+-+Snake+Charm
+- https://publish.obsidian.md/scarlethorizons/OSE/4.+Magic/Cleric+Spells/5+-+Insect+Plague
+- https://publish.obsidian.md/scarlethorizons/OSE/4.+Magic/Cleric+Spells/5+-+Quest
+- https://publish.obsidian.md/scarlethorizons/OSE/4.+Magic/Magic-User+Spells/3+-+Haste
+- https://publish.obsidian.md/scarlethorizons/OSE/4.+Magic/Magic-User+Spells/5+-+Cloudkill
+- https://publish.obsidian.md/scarlethorizons/OSE/5.+Adventures/3a.+Ability+Checks
+- https://publish.obsidian.md/scarlethorizons/OSE/6.+Running+Adventures/5.+Adventure+Scenarios
+- https://publish.obsidian.md/scarlethorizons/OSE/7.+Monsters/Monster+Stats/Gargoyle
+- https://publish.obsidian.md/scarlethorizons/OSE/7.+Monsters/Monster+Stats/Insect+Swarm
+- https://publish.obsidian.md/scarlethorizons/OSE/7.+Monsters/Monster+Stats/Lizard+Man
+- https://publish.obsidian.md/scarlethorizons/OSE/8.+Treasures/Miscellaneous/Bag+of+Devouring
+- https://publish.obsidian.md/scarlethorizons/OSE/8.+Treasures/Miscellaneous/Boots+of+Travelling+and+Leaping
+- https://publish.obsidian.md/scarlethorizons/OSE/8.+Treasures/Miscellaneous/Crystal+Ball
+- https://publish.obsidian.md/scarlethorizons/OSE/8.+Treasures/Miscellaneous/Elemental+Summoning+Device
+- https://publish.obsidian.md/scarlethorizons/OSE/8.+Treasures/Miscellaneous/Helm+of+Telepathy
+- https://publish.obsidian.md/scarlethorizons/OSE/8.+Treasures/Potions/Potion+of+Clairvoyance
+- https://publish.obsidian.md/scarlethorizons/OSE/8.+Treasures/Potions/Potion+of+Control
+- https://publish.obsidian.md/scarlethorizons/OSE/8.+Treasures/Rods%2C+Staves%2C+Wands/Staff+of+Healing
+- https://publish.obsidian.md/scarlethorizons/Powers/Factions/Basilisk's+Claw
+- https://publish.obsidian.md/scarlethorizons/Powers/Factions/Fire+Blades
+- https://publish.obsidian.md/scarlethorizons/Powers/Factions/Gray+Lances
+- https://publish.obsidian.md/scarlethorizons/Powers/Gods/Set
+- https://publish.obsidian.md/scarlethorizons/Races/Duergar
+- https://publish.obsidian.md/scarlethorizons/ScriptsListings/Scripts+Listing
+
+## Current 30-page batch
+
+- https://publish.obsidian.md/scarlethorizons/Locations/Blacktooth+Keep
+- https://publish.obsidian.md/scarlethorizons/Meta/Visheat+Device
+- https://publish.obsidian.md/scarlethorizons/OSE/1.+Characters/6.+Advancement
+- https://publish.obsidian.md/scarlethorizons/OSE/7.+Monsters/Monster+Stats/Vampire
+- https://publish.obsidian.md/scarlethorizons/Locations/Citadel+Silver
+- https://publish.obsidian.md/scarlethorizons/OSE/7.+Monsters/Monster+Stats/Pegasus
+- https://publish.obsidian.md/scarlethorizons/Meta/House+Rules/Level+Draining+Undead+Attacks
+- https://publish.obsidian.md/scarlethorizons/Locations/Seven+Cities
+- https://publish.obsidian.md/scarlethorizons/OSE/7.+Monsters/Monster+Stats/Nomad
+- https://publish.obsidian.md/scarlethorizons/Intentional+Orphans/XP+Tracking
+- https://publish.obsidian.md/scarlethorizons/Meta/Wealth
+- https://publish.obsidian.md/scarlethorizons/NPCs/Chucky
+- https://publish.obsidian.md/scarlethorizons/Powers/Factions/The+Weighty+Eight
+- https://publish.obsidian.md/scarlethorizons/OSE/7.+Monsters/Monster+Stats/Roc
+- https://publish.obsidian.md/scarlethorizons/SoloPlay/Shadowdim/Shadowdim+2
+- https://publish.obsidian.md/scarlethorizons/OSE/7.+Monsters/Monster+Stats/Hobgoblin
+- https://publish.obsidian.md/scarlethorizons/Meta/Far+Ancients
+- https://publish.obsidian.md/scarlethorizons/OSE/7.+Monsters/7.+Stronghold+Encounters
+- https://publish.obsidian.md/scarlethorizons/Locations/Rosen
+- https://publish.obsidian.md/scarlethorizons/NPCs/Arford+Shrewdbody
+- https://publish.obsidian.md/scarlethorizons/Maps+%26+Travel/Sector+A+of+Issenda
+- https://publish.obsidian.md/scarlethorizons/Locations/The+Spine
+- https://publish.obsidian.md/scarlethorizons/Locations/Lindendale
+- https://publish.obsidian.md/scarlethorizons/Monsters/True+Dragons
+- https://publish.obsidian.md/scarlethorizons/Races/Wolfen
+- https://publish.obsidian.md/scarlethorizons/Meta/Lair
+- https://publish.obsidian.md/scarlethorizons/Monsters/Monster
+- https://publish.obsidian.md/scarlethorizons/Powers/Factions/The+Felicitously+Forsworn
+- https://publish.obsidian.md/scarlethorizons/OSE/2.+Classes/3.+Elf
+- https://publish.obsidian.md/scarlethorizons/NPCs/Algorn+Druff
