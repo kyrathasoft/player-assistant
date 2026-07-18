@@ -1,5 +1,38 @@
 # Do Not Scrape Again
 
+## Random 30-page translation batch
+
+- https://publish.obsidian.md/scarlethorizons/OSE/4.+Magic/Magic-User+Spells/2+-+Continual+Light
+- https://publish.obsidian.md/scarlethorizons/Locations/Glittering+Canopy
+- https://publish.obsidian.md/scarlethorizons/OSE/4.+Magic/1.+Rules
+- https://publish.obsidian.md/scarlethorizons/Locations/Darkforest
+- https://publish.obsidian.md/scarlethorizons/OSE/7.+Monsters/Monster+Stats/Crocodile
+- https://publish.obsidian.md/scarlethorizons/NPCs/Thad+Clovenshield
+- https://publish.obsidian.md/scarlethorizons/Locations/Far+Reach
+- https://publish.obsidian.md/scarlethorizons/OSE/8.+Treasures/Potions/Potion+of+Giant+Strength
+- https://publish.obsidian.md/scarlethorizons/SoloPlay/The+Earth+It+Cares+Not/Cares+Not+1
+- https://publish.obsidian.md/scarlethorizons/PCs/Kelpie+Lawfuller%2C+Fighter
+- https://publish.obsidian.md/scarlethorizons/OSE/7.+Monsters/Monster+Stats/Beetle%2C+Giant
+- https://publish.obsidian.md/scarlethorizons/Quests/Active+Quests
+- https://publish.obsidian.md/scarlethorizons/Establishments/Silver+Standard+Trading+Company
+- https://publish.obsidian.md/scarlethorizons/OSE/7.+Monsters/Monster+Stats/Manticore
+- https://publish.obsidian.md/scarlethorizons/Quests/Completed+Quests
+- https://publish.obsidian.md/scarlethorizons/SoloPlay/Shadowdim/Shadowdim+11
+- https://publish.obsidian.md/scarlethorizons/OSE/7.+Monsters/Monster+Stats/Ghoul
+- https://publish.obsidian.md/scarlethorizons/OSE/7.+Monsters/Monster+Stats/Efreeti+(Lesser)
+- https://publish.obsidian.md/scarlethorizons/OSE/8.+Treasures/Miscellaneous/Helm+of+Reading+Languages+and+Magic
+- https://publish.obsidian.md/scarlethorizons/Intentional+Orphans/Adventure+Outline
+- https://publish.obsidian.md/scarlethorizons/NPCs/Golnadeg+Grue-Spitter
+- https://publish.obsidian.md/scarlethorizons/PCs/Shade+the+Drow+Ranger
+- https://publish.obsidian.md/scarlethorizons/Meta/Necromancer
+- https://publish.obsidian.md/scarlethorizons/Locations/Gosterwick
+- https://publish.obsidian.md/scarlethorizons/NPCs/Theron+Glesteon
+- https://publish.obsidian.md/scarlethorizons/Meta/Downtime
+- https://publish.obsidian.md/scarlethorizons/Establishments/Morgan's+Morsels
+- https://publish.obsidian.md/scarlethorizons/OSE/4.+Magic/Magic-User+Spells/4+-+Confusion
+- https://publish.obsidian.md/scarlethorizons/Decks/PHP+Meals/Five-Day+Meal+Plan+for+PHP+Clients+(%24164.11)
+- https://publish.obsidian.md/scarlethorizons/OSE/7.+Monsters/Monster+Stats/Killer+Bee
+
 ## Random 67-page batch
 
 - https://publish.obsidian.md/scarlethorizons/OSE/4.+Magic/Magic-User+Spells/2+-+Mirror+Image
