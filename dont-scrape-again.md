@@ -1,5 +1,58 @@
 # Do Not Scrape Again
 
+## Random 50-page translation batch
+
+- https://publish.obsidian.md/scarlethorizons/OSE/6.+Running+Adventures/4.+Monsters+and+NPCs
+- https://publish.obsidian.md/scarlethorizons/OSE/8.+Treasures/Rods%2C+Staves%2C+Wands/Wand+of+Enemy+Detection
+- https://publish.obsidian.md/scarlethorizons/Meta/OOC/April+26+to+May+25+of+2026
+- https://publish.obsidian.md/scarlethorizons/PCs/Nerissa+Sedgefry
+- https://publish.obsidian.md/scarlethorizons/OSE/7.+Monsters/Monster+Stats/Doppleganger
+- https://publish.obsidian.md/scarlethorizons/OSE/4.+Magic/Magic-User+Spells/2+-+Detect+Invisible
+- https://publish.obsidian.md/scarlethorizons/NPCs/Orlogast+Highsember
+- https://publish.obsidian.md/scarlethorizons/Meta/Soul+Fungus
+- https://publish.obsidian.md/scarlethorizons/OSE/8.+Treasures/Rods%2C+Staves%2C+Wands/Wand+of+Illusion
+- https://publish.obsidian.md/scarlethorizons/OSE/4.+Magic/Magic-User+Spells/2+-+Phantasmal+Force
+- https://publish.obsidian.md/scarlethorizons/ScriptsListings/vault-grep
+- https://publish.obsidian.md/scarlethorizons/NPCs/Talyan+Querdi
+- https://publish.obsidian.md/scarlethorizons/Classes/Drow+Cleric+Template
+- https://publish.obsidian.md/scarlethorizons/Monsters/Tipsy
+- https://publish.obsidian.md/scarlethorizons/OSE/8.+Treasures/Potions/Potion+of+Invulnerability
+- https://publish.obsidian.md/scarlethorizons/NPCs/Festivus+Chrahl
+- https://publish.obsidian.md/scarlethorizons/Locations/Sector+B+Highlighted
+- https://publish.obsidian.md/scarlethorizons/OSE/4.+Magic/Cleric+Spells/4+-+Cure+Serious+Wounds
+- https://publish.obsidian.md/scarlethorizons/Monsters/Bugbear
+- https://publish.obsidian.md/scarlethorizons/Intentional+Orphans/Jelb+Orphan+Note
+- https://publish.obsidian.md/scarlethorizons/OSE/7.+Monsters/Monster+Stats/Wolf
+- https://publish.obsidian.md/scarlethorizons/OSE/8.+Treasures/Rods%2C+Staves%2C+Wands/Rod+of+Cancellation
+- https://publish.obsidian.md/scarlethorizons/Powers/Factions/Argent+Twilight
+- https://publish.obsidian.md/scarlethorizons/OSE/4.+Magic/Cleric+Spells/3+-+Continual+Light
+- https://publish.obsidian.md/scarlethorizons/Meta/Nabblat
+- https://publish.obsidian.md/scarlethorizons/Player-Contributed/Jelb+Chronicles/Jelb's+Chronicles+-+1
+- https://publish.obsidian.md/scarlethorizons/Locations/Northern+Reaches
+- https://publish.obsidian.md/scarlethorizons/Meta/Plast
+- https://publish.obsidian.md/scarlethorizons/Historical+Events/The+Great+Declension
+- https://publish.obsidian.md/scarlethorizons/OSE/4.+Magic/Cleric+Spells/4+-+Sticks+to+Snakes
+- https://publish.obsidian.md/scarlethorizons/Player-Contributed/Jelb's+Family+Genealogy
+- https://publish.obsidian.md/scarlethorizons/Meta/Sources+of+Experience+Points
+- https://publish.obsidian.md/scarlethorizons/Locations/Reaches
+- https://publish.obsidian.md/scarlethorizons/Meta/Magic
+- https://publish.obsidian.md/scarlethorizons/OSE/8.+Treasures/Miscellaneous/Girdle+of+Giant+Strength
+- https://publish.obsidian.md/scarlethorizons/Meta/Runic+Tablets
+- https://publish.obsidian.md/scarlethorizons/OSE/README
+- https://publish.obsidian.md/scarlethorizons/OSE/8.+Treasures/Rods%2C+Staves%2C+Wands/Wand+of+Cold
+- https://publish.obsidian.md/scarlethorizons/NPCs/Kelda+Rue
+- https://publish.obsidian.md/scarlethorizons/OSE/7.+Monsters/Monster+Stats/Minotaur
+- https://publish.obsidian.md/scarlethorizons/Meta/Luna
+- https://publish.obsidian.md/scarlethorizons/Historical+Events/AD+%26+BC
+- https://publish.obsidian.md/scarlethorizons/OSE/8.+Treasures/Potions/Potion+of+Heroism
+- https://publish.obsidian.md/scarlethorizons/OSE/7.+Monsters/Monster+Stats/Halfling
+- https://publish.obsidian.md/scarlethorizons/OSE/7.+Monsters/Monster+Stats/Elf
+- https://publish.obsidian.md/scarlethorizons/Powers/Gods/Psilofyr
+- https://publish.obsidian.md/scarlethorizons/OSE/7.+Monsters/Monster+Stats/Sea+Serpent+(Lesser)
+- https://publish.obsidian.md/scarlethorizons/Locations/Phandalin
+- https://publish.obsidian.md/scarlethorizons/SoloPlay/Shadowdim/Shadowdim+7
+- https://publish.obsidian.md/scarlethorizons/OSE/7.+Monsters/Monster+Stats/Wraith
+
 ## Random 30-page translation batch
 
 - https://publish.obsidian.md/scarlethorizons/OSE/4.+Magic/Magic-User+Spells/2+-+Continual+Light
