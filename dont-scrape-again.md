@@ -1,5 +1,58 @@
 # Do Not Scrape Again
 
+## Third random 50-page translation batch
+
+- https://publish.obsidian.md/scarlethorizons/OSE/4.+Magic/Magic-User+Spells/5+-+Magic+Jar
+- https://publish.obsidian.md/scarlethorizons/NPCs/Kruger+Gullby
+- https://publish.obsidian.md/scarlethorizons/OSE/7.+Monsters/Monster+Stats/Sprite
+- https://publish.obsidian.md/scarlethorizons/NPCs/Othar+Dellen
+- https://publish.obsidian.md/scarlethorizons/OSE/7.+Monsters/Monster+Stats/Purple+Worm
+- https://publish.obsidian.md/scarlethorizons/OSE/7.+Monsters/Monster+Stats/Djinni+(Lesser)
+- https://publish.obsidian.md/scarlethorizons/OSE/8.+Treasures/Potions/Potion+of+ESP
+- https://publish.obsidian.md/scarlethorizons/OSE/4.+Magic/Magic-User+Spells/2+-+ESP
+- https://publish.obsidian.md/scarlethorizons/How-To/Launch+Codex+CLI+Dangerously
+- https://publish.obsidian.md/scarlethorizons/Powers/Factions/Argent+Shields
+- https://publish.obsidian.md/scarlethorizons/NPCs/Thalas
+- https://publish.obsidian.md/scarlethorizons/NPCs/Sirac+Silverhair
+- https://publish.obsidian.md/scarlethorizons/OSE/1.+Characters/2.+Creating+a+Character
+- https://publish.obsidian.md/scarlethorizons/Establishments/Retep%E2%80%99s+Relics
+- https://publish.obsidian.md/scarlethorizons/PCs/Player+Characters+Listing
+- https://publish.obsidian.md/scarlethorizons/OSE/4.+Magic/Cleric+Spells/2+-+Resist+Fire
+- https://publish.obsidian.md/scarlethorizons/OSE/8.+Treasures/Rings/Ring+of+Invisibility
+- https://publish.obsidian.md/scarlethorizons/NPCs/Cere-Lukh
+- https://publish.obsidian.md/scarlethorizons/OSE/7.+Monsters/Monster+Stats/Kobold
+- https://publish.obsidian.md/scarlethorizons/AGENTS
+- https://publish.obsidian.md/scarlethorizons/OSE/5.+Adventures/4.+Hazards+and+Challenges
+- https://publish.obsidian.md/scarlethorizons/NPCs/Sagius+Nithrexus
+- https://publish.obsidian.md/scarlethorizons/Locations/Branderscar+Prison
+- https://publish.obsidian.md/scarlethorizons/Powers/Gods/Anu-eya
+- https://publish.obsidian.md/scarlethorizons/Locations/Arden+Vul
+- https://publish.obsidian.md/scarlethorizons/OSE/7.+Monsters/Monster+Stats/Grey+Ooze
+- https://publish.obsidian.md/scarlethorizons/Locations/Shallowtown
+- https://publish.obsidian.md/scarlethorizons/NPCs/Feyre+Archeron
+- https://publish.obsidian.md/scarlethorizons/Meta/Evil
+- https://publish.obsidian.md/scarlethorizons/OSE/4.+Magic/Magic-User+Spells/6+-+Geas
+- https://publish.obsidian.md/scarlethorizons/PCs/Maximilian+Yragerne
+- https://publish.obsidian.md/scarlethorizons/OSE/7.+Monsters/Monster+Stats/Fish%2C+Giant
+- https://publish.obsidian.md/scarlethorizons/Meta/Hit+Points
+- https://publish.obsidian.md/scarlethorizons/NPCs/Matthias+D'Slaytonthorpe
+- https://publish.obsidian.md/scarlethorizons/Locations/Stigrix
+- https://publish.obsidian.md/scarlethorizons/OSE/8.+Treasures/Potions/Potion+of+Healing
+- https://publish.obsidian.md/scarlethorizons/Monsters/Gnoll
+- https://publish.obsidian.md/scarlethorizons/OSE/8.+Treasures/Miscellaneous/Drums+of+Panic
+- https://publish.obsidian.md/scarlethorizons/NPCs/Vrakthis
+- https://publish.obsidian.md/scarlethorizons/Locations/Camp+Eastscarp
+- https://publish.obsidian.md/scarlethorizons/OSE/6.+Running+Adventures/1.+The+Referee's+Role
+- https://publish.obsidian.md/scarlethorizons/Quests/Quest+Givers
+- https://publish.obsidian.md/scarlethorizons/Powers/Gods/Valdghar
+- https://publish.obsidian.md/scarlethorizons/OSE/4.+Magic/Magic-User+Spells/3+-+Dispel+Magic
+- https://publish.obsidian.md/scarlethorizons/Races/Dragonkind
+- https://publish.obsidian.md/scarlethorizons/Powers/Gods/The+Futurus
+- https://publish.obsidian.md/scarlethorizons/OSE/8.+Treasures/Rings/Ring+of+Telekinesis
+- https://publish.obsidian.md/scarlethorizons/Locations/Guardians'+Rest
+- https://publish.obsidian.md/scarlethorizons/Establishments/Griffon's+Tongue
+- https://publish.obsidian.md/scarlethorizons/NPCs/Rogier+Van+Der+Weyden
+
 ## Second random 50-page translation batch
 
 - https://publish.obsidian.md/scarlethorizons/NPCs/Devra+Trueaim
