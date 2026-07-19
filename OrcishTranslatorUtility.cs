@@ -2261,7 +2261,6 @@ namespace PlayerAssistant
                 new("minor story arcs", "var-bib-lagi-bit", PartOfSpeech: "noun", GrammarClass: "story", Tags: ["story", "small", "plural", "fixed-phrase", "ooc"]),
                 new("multiclass", "dug-lag-mog-var", PartOfSpeech: "noun", GrammarClass: "game-term", Tags: ["multiple", "classes", "compound", "ooc"]),
                 new("mystic", "mograth-gurmog", PartOfSpeech: "noun", GrammarClass: "person", Tags: ["spiritual", "magic", "compound", "ooc"]),
-                new("non-computerized", "nul-zol-thoguk", PartOfSpeech: "adjective", GrammarClass: "tool", Tags: ["not-machine", "compound", "ooc"]),
                 new("outsmarting", "thog-gash-ti", PartOfSpeech: "verb", GrammarClass: "thought", Tags: ["clever-victory", "compound", "ooc"]),
                 new("paralysis", "gor-vrak", PartOfSpeech: "noun", GrammarClass: "condition", Tags: ["body", "stilled", "compound", "ooc"]),
                 new("pass", "lagu", PartOfSpeech: "verb", GrammarClass: "motion", Tags: ["go-through", "infinitive", "ooc"]),
@@ -4106,6 +4105,9 @@ namespace PlayerAssistant
             entries.AddRange(BuildGutenbergCorpusThirdCandidateEntries(entries));
             entries.AddRange(BuildGutenbergCorpusFourthCandidateEntries(entries));
             entries.AddRange(BuildStandardEbooksCorpusCandidateEntries(entries));
+            entries.AddRange(BuildVariousEbooksCorpusCandidateEntries(entries));
+            entries.AddRange(BuildVariousEbooksCorpusSecondCandidateEntries(entries));
+            entries.AddRange(BuildVariousEbooksCorpusThirdCandidateEntries(entries));
 
             var baseEntries = entries.ToArray();
             entries.AddRange(BuildDerivedMorphologyEntries(baseEntries));
@@ -13890,7 +13892,6 @@ dwellers
 ebony
 elder
 elected
-electrical
 electromagnet
 elevated
 eliciting
@@ -14725,7 +14726,6 @@ elders|elder
 elect|elected
 electing|elected
 elective|elected
-electrically|electrical
 electromagnet's|electromagnet
 electromagnets|electromagnet
 elects|elected
@@ -16937,7 +16937,6 @@ eighteenth
 elapsed
 elapses
 eldest
-electricity
 elegant
 elementalist
 elephants
@@ -20293,7 +20292,6 @@ eighteens|eighteen
 eighteenth's|eighteenth
 elapse|elapsed
 elapsing|elapsed
-electricity's|electricity
 elegantly|elegant
 elephant's|elephants
 eleven's|eleven

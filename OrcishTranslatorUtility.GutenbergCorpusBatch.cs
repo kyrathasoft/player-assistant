@@ -253,7 +253,6 @@ effectual
 effectually
 ejaculated
 election
-electric
 eloquent
 embarked
 embarrassed
@@ -1338,7 +1337,6 @@ ejaculation|ejaculated
 ejaculations|ejaculated
 election's|election
 elections|election
-electrics|electric
 eloquently|eloquent
 embark|embarked
 embarking|embarked

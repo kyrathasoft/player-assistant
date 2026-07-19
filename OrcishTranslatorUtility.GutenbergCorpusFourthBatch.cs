@@ -154,7 +154,6 @@ bye
 cab
 calamities
 calculate
-camera
 camp-fire
 candidate
 candidates
@@ -483,7 +482,6 @@ gal
 gall
 gangway
 garret
-gasoline
 gazette
 gee
 genial
@@ -977,8 +975,6 @@ ripped
 river's
 roadside
 robin
-rocket
-rockets
 roger
 rollers
 rouge
@@ -1117,7 +1113,6 @@ strung
 studio
 stunted
 stupidity
-submarine
 sue
 suitor
 suitors
@@ -1157,7 +1152,6 @@ theology
 therefrom
 thereto
 therewith
-thermometer
 thirdly
 thirty-six
 thirty-two
@@ -1551,8 +1545,6 @@ cabs|cab
 calamity's|calamities
 calculates|calculate
 calculative|calculate
-camera's|camera
-cameras|camera
 candidate's|candidate
 cannibal|cannibals
 cannibal's|cannibals
@@ -2139,7 +2131,6 @@ gangway's|gangway
 gangways|gangway
 garret's|garret
 garrets|garret
-gasoline's|gasoline
 gazette's|gazette
 gazetted|gazette
 gazettes|gazette
@@ -2955,9 +2946,6 @@ roadside's|roadside
 roadsides|roadside
 robin's|robin
 robins|robin
-rocket's|rocket
-rocketed|rocket
-rocketing|rocket
 roger's|roger
 rogered|roger
 rogering|roger
@@ -3227,10 +3215,6 @@ stunting|stunted
 stunts|stunted
 stupidities|stupidity
 stupidity's|stupidity
-submarine's|submarine
-submariner|submarine
-submariners|submarine
-submarines|submarine
 sue's|sue
 sued|sue
 sues|sue
@@ -3301,8 +3285,6 @@ theater's|theater
 theaters|theater
 theologies|theology
 theology's|theology
-thermometer's|thermometer
-thermometers|thermometer
 third's|thirdly
 thirds|thirdly
 thunderbolt's|thunderbolt

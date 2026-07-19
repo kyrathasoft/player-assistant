@@ -14,7 +14,6 @@ ark
 astern
 astray
 author's
-automobile
 bait
 baker
 bales
@@ -173,10 +172,6 @@ ark's|ark
 arks|ark
 authored|author's
 authoring|author's
-automobile's|automobile
-automobiled|automobile
-automobiles|automobile
-automobiling|automobile
 bait's|bait
 baited|bait
 baiting|bait
