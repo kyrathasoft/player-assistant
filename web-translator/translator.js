@@ -40,14 +40,42 @@
     textArea.addEventListener('input', enforceWordLimit);
     enforceWordLimit();
 
+    const downloadUrls = [];
+    const attachTextDownload = (link, contents) => {
+        const textFile = new Blob([contents], { type: 'text/plain;charset=utf-8' });
+        const textUrl = URL.createObjectURL(textFile);
+        link.href = textUrl;
+        downloadUrls.push(textUrl);
+    };
+
     const orcishTextArea = document.getElementById('orcish');
     const downloadOrcish = document.getElementById('download-orcish');
     if (orcishTextArea instanceof HTMLTextAreaElement
         && downloadOrcish instanceof HTMLAnchorElement
         && orcishTextArea.value !== '') {
-        const translationFile = new Blob([orcishTextArea.value], { type: 'text/plain;charset=utf-8' });
-        const translationUrl = URL.createObjectURL(translationFile);
-        downloadOrcish.href = translationUrl;
-        window.addEventListener('pagehide', () => URL.revokeObjectURL(translationUrl), { once: true });
+        attachTextDownload(downloadOrcish, orcishTextArea.value);
+    }
+
+    const downloadUntranslated = document.getElementById('download-untranslated');
+    if (downloadUntranslated instanceof HTMLAnchorElement) {
+        try {
+            const untranslatedWords = JSON.parse(downloadUntranslated.dataset.words || '[]');
+            if (Array.isArray(untranslatedWords) && untranslatedWords.length > 0) {
+                const plainWords = untranslatedWords
+                    .map((word) => String(word).trim())
+                    .filter((word) => word !== '' && !word.includes('\r') && !word.includes('\n'));
+                if (plainWords.length > 0) {
+                    attachTextDownload(downloadUntranslated, `${plainWords.join('\r\n')}\r\n`);
+                }
+            }
+        } catch (error) {
+            downloadUntranslated.removeAttribute('href');
+        }
+    }
+
+    if (downloadUrls.length > 0) {
+        window.addEventListener('pagehide', () => {
+            downloadUrls.forEach((url) => URL.revokeObjectURL(url));
+        }, { once: true });
     }
 })();

@@ -164,6 +164,17 @@ footer {
     text-align: right;
 }
 
+.footer-link-row-with-note {
+    display: flex;
+    justify-content: flex-end;
+    align-items: baseline;
+    gap: 0.35rem;
+}
+
+.download-note {
+    color: #9f927b;
+}
+
 footer a {
     color: #d5b477;
     text-align: right;

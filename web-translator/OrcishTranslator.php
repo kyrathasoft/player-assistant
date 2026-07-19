@@ -84,15 +84,21 @@ final class OrcishTranslator
 
     public function translateSentence(string $input): string
     {
+        return $this->translateSentenceWithUnknownWords($input)['translation'];
+    }
+
+    /** @return array{translation:string,untranslatedWords:array<int,string>} */
+    public function translateSentenceWithUnknownWords(string $input): array
+    {
         $input = trim($input);
         if ($input === '') {
-            return '';
+            return ['translation' => '', 'untranslatedWords' => []];
         }
 
         $input = $this->translateFirstPersonPronouns($input);
         $terms = preg_split('/\s+/u', trim($input), -1, PREG_SPLIT_NO_EMPTY);
         if ($terms === false || count($terms) === 0) {
-            return '';
+            return ['translation' => '', 'untranslatedWords' => []];
         }
 
         $leadingPunctuation = [];
@@ -104,6 +110,7 @@ final class OrcishTranslator
         }
 
         $translatedTerms = [];
+        $untranslatedWords = [];
         $termTotal = count($terms);
         for ($index = 0; $index < $termTotal; $index++) {
             $normalized = $this->normalize($terms[$index]);
@@ -136,14 +143,25 @@ final class OrcishTranslator
                 continue;
             }
 
-            list($translated, $consumedTerms) = $this->translateLongestPhrase($terms, $index);
+            list($translated, $consumedTerms, $untranslatedWord) = $this->translateLongestPhrase($terms, $index);
             $translatedTerms[] = $leadingPunctuation[$index]
                 . $translated
                 . $trailingPunctuation[$index + $consumedTerms - 1];
+
+            if ($untranslatedWord !== null && $this->shouldReportUnknownWord($untranslatedWord)) {
+                $unknownKey = $this->normalize($untranslatedWord);
+                if (!isset($untranslatedWords[$unknownKey])) {
+                    $untranslatedWords[$unknownKey] = $untranslatedWord;
+                }
+            }
+
             $index += $consumedTerms - 1;
         }
 
-        return $this->capitalizeSentenceStarts(implode(' ', $translatedTerms));
+        return [
+            'translation' => $this->capitalizeSentenceStarts(implode(' ', $translatedTerms)),
+            'untranslatedWords' => array_values($untranslatedWords),
+        ];
     }
 
     private function translateFirstPersonPronouns(string $input): string
@@ -192,7 +210,7 @@ final class OrcishTranslator
 
     /**
      * @param array<int,string> $terms
-     * @return array{0:string,1:int}
+     * @return array{0:string,1:int,2:?string}
      */
     private function translateLongestPhrase(array $terms, int $startIndex): array
     {
@@ -209,10 +227,21 @@ final class OrcishTranslator
             return [
                 $this->selectBestTranslation($terms, $startIndex, $termCount, $translations)['translation'],
                 $termCount,
+                null,
             ];
         }
 
-        return [$terms[$startIndex], 1];
+        return [$terms[$startIndex], 1, $terms[$startIndex]];
+    }
+
+    private function shouldReportUnknownWord(string $word): bool
+    {
+        $normalized = $this->normalize($word);
+        if (in_array($normalized, ['ugh', 'grrt', 'grrt-ugh'], true)) {
+            return false;
+        }
+
+        return preg_match('/\p{L}/u', $word) === 1;
     }
 
     /**

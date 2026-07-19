@@ -44,9 +44,11 @@ if (OrcishTranslator::countWords($input) > OrcishTranslator::MAX_INPUT_WORDS) {
 
 try {
     $translator = new OrcishTranslator(__DIR__ . '/orcish-lexicon.json');
+    $result = $translator->translateSentenceWithUnknownWords($input);
     respond([
         'english' => $input,
-        'orcish' => $translator->translateSentence($input),
+        'orcish' => $result['translation'],
+        'untranslatedWords' => $result['untranslatedWords'],
         'knownEnglishTerms' => $translator->getEnglishTermCount(),
     ], 200);
 } catch (Throwable $exception) {

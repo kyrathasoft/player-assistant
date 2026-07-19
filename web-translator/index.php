@@ -24,6 +24,9 @@ unset($_SESSION['orcish_translator_flash']);
 
 $input = isset($flash['input']) ? (string)$flash['input'] : '';
 $translation = isset($flash['translation']) ? (string)$flash['translation'] : '';
+$untranslatedWords = isset($flash['untranslatedWords']) && is_array($flash['untranslatedWords'])
+    ? array_values(array_filter($flash['untranslatedWords'], 'is_string'))
+    : [];
 $error = isset($flash['error']) ? (string)$flash['error'] : '';
 $termCount = 0;
 
@@ -36,12 +39,15 @@ try {
         if (OrcishTranslator::countWords($input) > OrcishTranslator::MAX_INPUT_WORDS) {
             $error = 'Please limit the English text to 5,000 words.';
         } elseif ($input !== '') {
-            $translation = $translator->translateSentence($input);
+            $result = $translator->translateSentenceWithUnknownWords($input);
+            $translation = $result['translation'];
+            $untranslatedWords = $result['untranslatedWords'];
         }
 
         $_SESSION['orcish_translator_flash'] = [
             'input' => $input,
             'translation' => $translation,
+            'untranslatedWords' => $untranslatedWords,
             'error' => $error,
         ];
         session_write_close();
@@ -61,6 +67,11 @@ function escapeHtml(string $value): string
 {
     return htmlspecialchars($value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
 }
+
+$untranslatedWordsJson = json_encode($untranslatedWords, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+if ($untranslatedWordsJson === false) {
+    $untranslatedWordsJson = '[]';
+}
 ?>
 <!doctype html>
 <html lang="en">
@@ -70,7 +81,7 @@ function escapeHtml(string $value): string
     <title>English to Orcish Translator</title>
     <meta name="description" content="Translate English words and sentences into Orcish.">
     <link rel="stylesheet" href="styles.css?v=20260718-2">
-    <script src="translator.js" defer></script>
+    <script src="translator.js?v=20260718-3" defer></script>
 </head>
 <body>
     <main class="translator-shell">
@@ -94,10 +105,12 @@ function escapeHtml(string $value): string
             <button type="submit">Translate to Orcish</button>
         </form>
 
-        <section class="result" aria-live="polite">
-            <label for="orcish" class="result-title">Orcish translation</label>
-            <textarea id="orcish" rows="7" readonly><?= escapeHtml($translation) ?></textarea>
-        </section>
+        <?php if ($translation !== ''): ?>
+            <section class="result" aria-live="polite">
+                <label for="orcish" class="result-title">Orcish translation</label>
+                <textarea id="orcish" rows="7" readonly><?= escapeHtml($translation) ?></textarea>
+            </section>
+        <?php endif; ?>
 
         <footer>
             <span><?= number_format($termCount) ?> known English terms</span>
@@ -108,6 +121,12 @@ function escapeHtml(string $value): string
                 <?php if ($translation !== ''): ?>
                     <div class="footer-link-row">
                         <a id="download-orcish" href="#" download="orcish-translation.txt">Download the Orcish translation (TXT)</a>
+                    </div>
+                <?php endif; ?>
+                <?php if (count($untranslatedWords) > 0): ?>
+                    <div class="footer-link-row footer-link-row-with-note">
+                        <a id="download-untranslated" href="#" download="untranslated-words.txt" data-words="<?= escapeHtml($untranslatedWordsJson) ?>">Download words that couldn't be translated</a>
+                        <span class="download-note">(consider emailing this list to kyrathasoft@gmail.com)</span>
                     </div>
                 <?php endif; ?>
             </div>
