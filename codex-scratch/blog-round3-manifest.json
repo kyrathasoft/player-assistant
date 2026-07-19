@@ -1,0 +1,81 @@
+{
+  "generatedAt": "2026-07-18T16:56:58.7946410Z",
+  "pageCount": 12,
+  "rawCandidateCount": 908,
+  "sourceCandidateCount": 795,
+  "rejectedCandidateCount": 113,
+  "pages": [
+    {
+      "url": "https://bryanmiller.us/blog/2026/04/shadowdim-ap-27",
+      "title": "Shadowdim 27: The Gilded Archive in Newmarket",
+      "characters": 19700,
+      "candidateCount": 132
+    },
+    {
+      "url": "https://bryanmiller.us/blog/2026/04/shadowdim-ap-22",
+      "title": "Shadowdim 22: The Sun Pendant",
+      "characters": 18045,
+      "candidateCount": 110
+    },
+    {
+      "url": "https://bryanmiller.us/blog/2026/04/shadowdim-ap-30",
+      "title": "Shadowdim 30: Mother of Scorpions",
+      "characters": 23641,
+      "candidateCount": 102
+    },
+    {
+      "url": "https://bryanmiller.us/blog/2026/03/shadowdim-ap-21",
+      "title": "Shadowdim 21: Silent Ambush &amp; Destruction of the Horn",
+      "characters": 16098,
+      "candidateCount": 99
+    },
+    {
+      "url": "https://bryanmiller.us/blog/2026/04/shadowdim-ap-36",
+      "title": "Shadowdim 36: The Song of the Looming Sun",
+      "characters": 14009,
+      "candidateCount": 98
+    },
+    {
+      "url": "https://bryanmiller.us/blog/2026/03/shadowdim-ap-20",
+      "title": "Shadowdim 20: Audience with King Weskenim (and Level Up)",
+      "characters": 17193,
+      "candidateCount": 95
+    },
+    {
+      "url": "https://bryanmiller.us/blog/2026/04/shadowdim-ap-28",
+      "title": "Shadowdim 28: The Black Drop &amp; The Hooded Ones",
+      "characters": 20181,
+      "candidateCount": 95
+    },
+    {
+      "url": "https://bryanmiller.us/blog/2026/01/shadowdim-ap-1",
+      "title": "Shadowdim 1: It Begins",
+      "characters": 13752,
+      "candidateCount": 92
+    },
+    {
+      "url": "https://bryanmiller.us/blog/2026/02/shadowdim-ap-23",
+      "title": "Shadowdim 23: A Ghastly End",
+      "characters": 16921,
+      "candidateCount": 90
+    },
+    {
+      "url": "https://bryanmiller.us/blog/2026/03/shadowdim-ap-17",
+      "title": "Shadowdim 17: The Violet Eye Sleeps",
+      "characters": 16976,
+      "candidateCount": 87
+    },
+    {
+      "url": "https://bryanmiller.us/blog/2026/04/shadowdim-ap-32",
+      "title": "Shadowdim 32: Thutmose and the Obsidian Relay Key",
+      "characters": 14512,
+      "candidateCount": 86
+    },
+    {
+      "url": "https://bryanmiller.us/blog/2026/04/shadowdim-ap-34",
+      "title": "Shadowdim 34: The Sun Disk and the Fungal Rot",
+      "characters": 17218,
+      "candidateCount": 80
+    }
+  ]
+}
