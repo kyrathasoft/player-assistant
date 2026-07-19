@@ -19,6 +19,11 @@ if (@($sources | Sort-Object -Unique).Count -ne $sources.Count) { throw 'Source 
 if (@($nearKin | ForEach-Object { ($_ -split '\|', 2)[0] } | Sort-Object -Unique).Count -ne $nearKin.Count) { throw 'Near-kin candidates are not unique.' }
 $sourceData = $sources -join "`r`n"
 $nearKinData = $nearKin -join "`r`n"
+$rootLine = if ($sources.Count -gt 4096) {
+    'var root = $"' + $RootPrefix + '-{EncodeTwentyPageOrdinal(sourceOrdinal / 4096)}-{EncodeTwentyPageOrdinal(sourceOrdinal++ % 4096)}";'
+} else {
+    'var root = $"' + $RootPrefix + '-{EncodeTwentyPageOrdinal(sourceOrdinal++)}";'
+}
 $content = @"
 namespace PlayerAssistant
 {
@@ -39,7 +44,7 @@ $nearKinData
             var sourceOrdinal = 0;
             foreach (var english in ${MemberPrefix}SourceCandidateData.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
             {
-                var root = `$"$RootPrefix-{EncodeTwentyPageOrdinal(sourceOrdinal++)}";
+                $rootLine
                 sourceRoots.Add(english, root);
                 var candidate = new OrcishLexiconEntry(english, root, Tags: ["gutenberg", "$SourceTag", "generated", "review-promoted", "close-form-reviewed", `$"family-{english}"]);
                 OrcishLexiconReviewUtility.EnsureCanAdd(candidate, acceptedEntries);

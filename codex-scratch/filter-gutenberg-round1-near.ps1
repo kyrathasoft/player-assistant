@@ -72,11 +72,17 @@ foreach ($family in $manualFamilies.GetEnumerator()) {
         if (-not $existing.Contains($candidate) -and -not $sources.Contains($candidate) -and -not $rejected.Contains($candidate)) { $candidateToSource[$candidate] = $family.Name }
     }
 }
-$near = @($candidateToSource.Keys | Sort-Object)
-$families = @($candidateToSource.GetEnumerator() | Sort-Object Name | ForEach-Object { "$($_.Name)|$($_.Value)" })
+$preAnachronismNear = @($candidateToSource.Keys | Sort-Object)
+$preAnachronismNear | Set-Content -LiteralPath "$prefix-near-pre-anachronism.txt" -Encoding utf8
+python 'codex-scratch\filter-anachronistic-candidates.py' "$prefix-near-pre-anachronism.txt" "$prefix-near-filtered.txt" "$prefix-near-anachronism-rejected.txt"
+$near = @(Get-Content -LiteralPath "$prefix-near-filtered.txt")
+$acceptedNear = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
+foreach ($word in $near) { [void]$acceptedNear.Add($word) }
+$families = @($candidateToSource.GetEnumerator() | Where-Object { $acceptedNear.Contains($_.Name) } | Sort-Object Name | ForEach-Object { "$($_.Name)|$($_.Value)" })
 $combined = @($sources + $near | Sort-Object -Unique)
 $near | Set-Content -LiteralPath "$prefix-near-candidates.txt" -Encoding utf8
 $families | Set-Content -LiteralPath "$prefix-near-families.txt" -Encoding utf8
 $combined | Set-Content -LiteralPath 'codex-scratch\candidates.txt' -Encoding utf8
-[pscustomobject]@{generatedAt=(Get-Date).ToUniversalTime().ToString('o');sourceCount=$sources.Count;nearKinCount=$near.Count;combinedCount=$combined.Count;lexiconEntryCount=$entries.Count} | ConvertTo-Json | Set-Content -LiteralPath "$prefix-near-manifest.json" -Encoding utf8
-[pscustomobject]@{source=$sources.Count;near=$near.Count;combined=$combined.Count}|ConvertTo-Json
+$nearAnachronismRejected = @(Get-Content -LiteralPath "$prefix-near-anachronism-rejected.txt")
+[pscustomobject]@{generatedAt=(Get-Date).ToUniversalTime().ToString('o');sourceCount=$sources.Count;nearKinCount=$near.Count;combinedCount=$combined.Count;nearKinAnachronismRejectedCount=$nearAnachronismRejected.Count;lexiconEntryCount=$entries.Count} | ConvertTo-Json | Set-Content -LiteralPath "$prefix-near-manifest.json" -Encoding utf8
+[pscustomobject]@{source=$sources.Count;near=$near.Count;combined=$combined.Count;nearAnachronismRejected=$nearAnachronismRejected.Count}|ConvertTo-Json

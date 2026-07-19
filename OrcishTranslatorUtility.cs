@@ -4108,6 +4108,7 @@ namespace PlayerAssistant
             entries.AddRange(BuildVariousEbooksCorpusCandidateEntries(entries));
             entries.AddRange(BuildVariousEbooksCorpusSecondCandidateEntries(entries));
             entries.AddRange(BuildVariousEbooksCorpusThirdCandidateEntries(entries));
+            entries.AddRange(BuildVariousEbooksCorpusFourthCandidateEntries(entries));
 
             var baseEntries = entries.ToArray();
             entries.AddRange(BuildDerivedMorphologyEntries(baseEntries));
