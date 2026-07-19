@@ -15,6 +15,12 @@ final class OrcishTranslator
     /** @var int */
     private $maxEnglishPhraseWords;
 
+    /** @var ?array<string,array<int,string>> */
+    private $orcishTerms;
+
+    /** @var int */
+    private $maxOrcishPhraseWords = 1;
+
     public function __construct(string $lexiconPath)
     {
         $json = @file_get_contents($lexiconPath);
@@ -82,9 +88,70 @@ final class OrcishTranslator
         return $translations;
     }
 
+    /** @return array<int,string> */
+    public function translateOrcishTerm(string $orcish): array
+    {
+        $this->buildOrcishIndex();
+        $key = $this->normalize($orcish);
+        return $key !== '' && $this->orcishTerms !== null && isset($this->orcishTerms[$key])
+            ? $this->orcishTerms[$key]
+            : [];
+    }
+
     public function translateSentence(string $input): string
     {
         return $this->translateSentenceWithUnknownWords($input)['translation'];
+    }
+
+    public function translateOrcishSentence(string $input): string
+    {
+        return $this->translateOrcishSentenceWithUnknownWords($input)['translation'];
+    }
+
+    /** @return array{translation:string,untranslatedWords:array<int,string>} */
+    public function translateOrcishSentenceWithUnknownWords(string $input): array
+    {
+        $input = trim($input);
+        if ($input === '') {
+            return ['translation' => '', 'untranslatedWords' => []];
+        }
+
+        $terms = preg_split('/\s+/u', $input, -1, PREG_SPLIT_NO_EMPTY);
+        if ($terms === false || count($terms) === 0) {
+            return ['translation' => '', 'untranslatedWords' => []];
+        }
+
+        $leadingPunctuation = [];
+        $trailingPunctuation = [];
+        foreach ($terms as $index => $term) {
+            $leadingPunctuation[$index] = $this->stripLeadingPunctuation($term);
+            $trailingPunctuation[$index] = $this->stripTrailingPunctuation($term);
+            $terms[$index] = $term;
+        }
+
+        $translatedTerms = [];
+        $untranslatedWords = [];
+        $termTotal = count($terms);
+        for ($index = 0; $index < $termTotal; $index++) {
+            list($translated, $consumedTerms, $untranslatedWord) = $this->translateLongestOrcishPhrase($terms, $index);
+            $translatedTerms[] = $leadingPunctuation[$index]
+                . $translated
+                . $trailingPunctuation[$index + $consumedTerms - 1];
+
+            if ($untranslatedWord !== null && $this->shouldReportUnknownWord($untranslatedWord)) {
+                $unknownKey = $this->normalize($untranslatedWord);
+                if (!isset($untranslatedWords[$unknownKey])) {
+                    $untranslatedWords[$unknownKey] = $untranslatedWord;
+                }
+            }
+
+            $index += $consumedTerms - 1;
+        }
+
+        return [
+            'translation' => $this->capitalizeSentenceStarts(implode(' ', $translatedTerms)),
+            'untranslatedWords' => array_values($untranslatedWords),
+        ];
     }
 
     /** @return array{translation:string,untranslatedWords:array<int,string>} */
@@ -232,6 +299,68 @@ final class OrcishTranslator
         }
 
         return [$terms[$startIndex], 1, $terms[$startIndex]];
+    }
+
+    /**
+     * @param array<int,string> $terms
+     * @return array{0:string,1:int,2:?string}
+     */
+    private function translateLongestOrcishPhrase(array $terms, int $startIndex): array
+    {
+        $remaining = count($terms) - $startIndex;
+        $maximum = min($remaining, $this->maxOrcishPhraseWords);
+
+        for ($termCount = $maximum; $termCount >= 1; $termCount--) {
+            $candidate = implode(' ', array_slice($terms, $startIndex, $termCount));
+            $translations = $this->translateOrcishTerm($candidate);
+            if (count($translations) === 0) {
+                continue;
+            }
+
+            return [$translations[0], $termCount, null];
+        }
+
+        return [$terms[$startIndex], 1, $terms[$startIndex]];
+    }
+
+    private function buildOrcishIndex(): void
+    {
+        if ($this->orcishTerms !== null) {
+            return;
+        }
+
+        $this->orcishTerms = [];
+        foreach ($this->terms as $term) {
+            if (!is_array($term) || !isset($term[0], $term[1]) || !is_array($term[1])) {
+                continue;
+            }
+
+            $english = (string)$term[0];
+            foreach ($term[1] as $candidate) {
+                if (!is_array($candidate) || !isset($candidate[0])) {
+                    continue;
+                }
+
+                $orcish = (string)$candidate[0];
+                $key = $this->normalize($orcish);
+                if ($key === '') {
+                    continue;
+                }
+
+                if (!isset($this->orcishTerms[$key])) {
+                    $this->orcishTerms[$key] = [];
+                }
+
+                if (!in_array($english, $this->orcishTerms[$key], true)) {
+                    $this->orcishTerms[$key][] = $english;
+                }
+
+                $this->maxOrcishPhraseWords = max(
+                    $this->maxOrcishPhraseWords,
+                    self::countWords($orcish)
+                );
+            }
+        }
     }
 
     private function shouldReportUnknownWord(string $word): bool
