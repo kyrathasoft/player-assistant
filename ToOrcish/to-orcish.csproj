@@ -24,6 +24,7 @@
     <Compile Include="..\OrcishTranslatorUtility.GutenbergCorpusSecondBatch.cs" Link="OrcishTranslatorUtility.GutenbergCorpusSecondBatch.cs" />
     <Compile Include="..\OrcishTranslatorUtility.GutenbergCorpusThirdBatch.cs" Link="OrcishTranslatorUtility.GutenbergCorpusThirdBatch.cs" />
     <Compile Include="..\OrcishTranslatorUtility.GutenbergCorpusFourthBatch.cs" Link="OrcishTranslatorUtility.GutenbergCorpusFourthBatch.cs" />
+    <Compile Include="..\OrcishTranslatorUtility.GutenbergCorpusFifthBatch.cs" Link="OrcishTranslatorUtility.GutenbergCorpusFifthBatch.cs" />
     <Compile Include="..\OrcishTranslatorUtility.StandardEbooksCorpusBatch.cs" Link="OrcishTranslatorUtility.StandardEbooksCorpusBatch.cs" />
     <Compile Include="..\OrcishTranslatorUtility.VariousEbooksCorpusBatch.cs" Link="OrcishTranslatorUtility.VariousEbooksCorpusBatch.cs" />
     <Compile Include="..\OrcishTranslatorUtility.VariousEbooksCorpusSecondBatch.cs" Link="OrcishTranslatorUtility.VariousEbooksCorpusSecondBatch.cs" />

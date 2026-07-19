@@ -91,6 +91,7 @@ var tests = new (string Name, Action Test)[]
     ("orcish translator supports second various ebooks corpus candidate vocabulary", OrcishTranslatorSupportsVariousEbooksCorpusSecondCandidateVocabulary),
     ("orcish translator supports third various ebooks corpus candidate vocabulary", OrcishTranslatorSupportsVariousEbooksCorpusThirdCandidateVocabulary),
     ("orcish translator supports fourth various ebooks corpus candidate vocabulary", OrcishTranslatorSupportsVariousEbooksCorpusFourthCandidateVocabulary),
+    ("orcish translator supports fifth Gutenberg corpus candidate vocabulary", OrcishTranslatorSupportsGutenbergCorpusFifthCandidateVocabulary),
     ("orcish translator excludes approved anachronistic families", OrcishTranslatorExcludesApprovedAnachronisticFamilies),
     ("orcish translator supports software artifact vocabulary", OrcishTranslatorSupportsSoftwareArtifactVocabulary),
     ("orcish translator exposes unique english term count", OrcishTranslatorExposesUniqueEnglishTermCount),
@@ -1370,7 +1371,7 @@ static void OrcishTranslatorSupportsNearKinMorphologyFamilies()
 {
     var entries = OrcishTranslatorUtility.GetLexiconEntries()
         .Where(entry => HasAnyTag(entry, "near-kin"))
-        .Where(entry => !HasAnyTag(entry, "fifteen-page-near-kin", "twenty-page-near-kin", "thirty-page-near-kin", "thirty-page-followup-near-kin", "sixty-seven-page-near-kin", "second-thirty-page-near-kin", "fifty-page-near-kin", "second-fifty-page-near-kin", "third-fifty-page-near-kin", "all-remaining-page-near-kin", "shadowdim-blog-near-kin", "blog-followup-near-kin", "blog-high-yield-near-kin", "blog-mixed-high-yield-near-kin", "blog-random-hundred-near-kin", "blog-final-sitemap-near-kin", "gutenberg-corpus-near-kin", "gutenberg-second-corpus-near-kin", "gutenberg-third-corpus-near-kin", "gutenberg-fourth-corpus-near-kin", "standard-ebooks-corpus-near-kin", "various-ebooks-1000-near-kin", "various-ebooks-second-1000-near-kin", "various-ebooks-third-1500-near-kin"))
+        .Where(entry => !HasAnyTag(entry, "fifteen-page-near-kin", "twenty-page-near-kin", "thirty-page-near-kin", "thirty-page-followup-near-kin", "sixty-seven-page-near-kin", "second-thirty-page-near-kin", "fifty-page-near-kin", "second-fifty-page-near-kin", "third-fifty-page-near-kin", "all-remaining-page-near-kin", "shadowdim-blog-near-kin", "blog-followup-near-kin", "blog-high-yield-near-kin", "blog-mixed-high-yield-near-kin", "blog-random-hundred-near-kin", "blog-final-sitemap-near-kin", "gutenberg-corpus-near-kin", "gutenberg-second-corpus-near-kin", "gutenberg-third-corpus-near-kin", "gutenberg-fourth-corpus-near-kin", "gutenberg-fifth-5000-near-kin", "standard-ebooks-corpus-near-kin", "various-ebooks-1000-near-kin", "various-ebooks-second-1000-near-kin", "various-ebooks-third-1500-near-kin", "various-ebooks-fourth-5100-near-kin"))
         .ToArray();
 
     AssertEqual(302, entries.Length, "expected every candidate from the 139 near-kin families");
@@ -2005,13 +2006,36 @@ static void OrcishTranslatorSupportsVariousEbooksCorpusFourthCandidateVocabulary
         .Where(entry => HasAnyTag(entry, "various-ebooks-fourth-5100-candidate-batch", "various-ebooks-fourth-5100-near-kin"))
         .ToArray();
 
-    AssertEqual(12453, entries.Length, "expected every candidate from the fourth various-ebooks corpus batch");
+    AssertEqual(12452, entries.Length, "expected every candidate from the fourth various-ebooks corpus batch");
     AssertEqual(6257, entries.Count(entry => HasAnyTag(entry, "various-ebooks-fourth-5100-candidate-batch")), "expected the fourth various-ebooks source candidates");
-    AssertEqual(6196, entries.Count(entry => HasAnyTag(entry, "various-ebooks-fourth-5100-near-kin")), "expected the fourth various-ebooks near-kin candidates");
+    AssertEqual(6195, entries.Count(entry => HasAnyTag(entry, "various-ebooks-fourth-5100-near-kin")), "expected the fourth various-ebooks near-kin candidates");
 
     foreach (var english in new[] { "abacus", "zounds", "abacuses", "zebra's" })
     {
         var entry = entries.Single(candidate => string.Equals(candidate.English, english, StringComparison.OrdinalIgnoreCase));
+        var translations = OrcishTranslatorUtility.TranslateEnglishToOrcish(entry.English);
+        AssertTrue(translations.Any(candidate => string.Equals(candidate.Translation, entry.Orcish, StringComparison.OrdinalIgnoreCase)), $"expected '{entry.English}' to translate as '{entry.Orcish}'");
+    }
+}
+
+static void OrcishTranslatorSupportsGutenbergCorpusFifthCandidateVocabulary()
+{
+    var entries = OrcishTranslatorUtility.GetLexiconEntries()
+        .Where(entry => HasAnyTag(entry, "gutenberg-fifth-5000-candidate-batch", "gutenberg-fifth-5000-near-kin"))
+        .ToArray();
+
+    AssertEqual(11290, entries.Length, "expected every candidate from the fifth Gutenberg corpus batch");
+    AssertEqual(7941, entries.Count(entry => HasAnyTag(entry, "gutenberg-fifth-5000-candidate-batch")), "expected the fifth Gutenberg source candidates");
+    AssertEqual(3349, entries.Count(entry => HasAnyTag(entry, "gutenberg-fifth-5000-near-kin")), "expected the fifth Gutenberg near-kin candidates");
+
+    foreach (var english in new[] { "aba", "zoophytes", "abalone's", "zoophyte's" })
+    {
+        var entry = entries.Single(candidate => string.Equals(candidate.English, english, StringComparison.OrdinalIgnoreCase));
+        var reviewIssues = OrcishTranslatorUtility.ReviewProposedLexiconEntry(entry)
+            .Where(issue => !string.Equals(issue.Code, "exact-duplicate", StringComparison.OrdinalIgnoreCase))
+            .ToArray();
+        AssertEqual(0, reviewIssues.Length, $"expected reviewed entry '{entry.English}' to remain admissible");
+
         var translations = OrcishTranslatorUtility.TranslateEnglishToOrcish(entry.English);
         AssertTrue(translations.Any(candidate => string.Equals(candidate.Translation, entry.Orcish, StringComparison.OrdinalIgnoreCase)), $"expected '{entry.English}' to translate as '{entry.Orcish}'");
     }
@@ -2071,7 +2095,7 @@ static void OrcishTranslatorExposesUniqueEnglishTermCount()
 {
     var terms = OrcishTranslatorUtility.GetEnglishTerms();
 
-    AssertEqual(60017, OrcishTranslatorUtility.GetEnglishTermCount(), "unexpected total English term count");
+    AssertEqual(71306, OrcishTranslatorUtility.GetEnglishTermCount(), "unexpected total English term count");
     AssertEqual(OrcishTranslatorUtility.GetEnglishTermCount(), terms.Count, "term list and count should agree");
     AssertEqual(1, terms.Count(term => string.Equals(term, "I", StringComparison.OrdinalIgnoreCase)), "I should be counted once despite multiple variants");
     AssertEqual(1, terms.Count(term => string.Equals(term, "really", StringComparison.OrdinalIgnoreCase)), "really should be counted once despite multiple variants");
