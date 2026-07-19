@@ -13,6 +13,7 @@ ROUND = sys.argv[1] if len(sys.argv) > 1 else "round1"
 SEED = int(sys.argv[2]) if len(sys.argv) > 2 else 20260720
 TARGET = 200
 TARGET = int(sys.argv[3]) if len(sys.argv) > 3 else TARGET
+WORKERS = int(sys.argv[4]) if len(sys.argv) > 4 else 4
 CATALOG_URL = "https://mirror.cs.odu.edu/gutenberg-epub/feeds/pg_catalog.csv"
 MIRROR_TEMPLATE = "https://mirror.cs.odu.edu/gutenberg-epub/{id}/pg{id}.txt"
 EXISTING_PATH = Path(r"codex-scratch\gutenberg-existing-terms.txt")
@@ -22,6 +23,7 @@ LEDGER_PATH = Path("dont-scrape-gutenberg-again.md")
 MANIFEST_PATH = Path(f"codex-scratch/gutenberg-{ROUND}-manifest.json")
 STATS_PATH = Path(f"codex-scratch/gutenberg-{ROUND}-word-stats.tsv")
 CANDIDATE_PATH = Path(f"codex-scratch/gutenberg-{ROUND}-source-candidates.txt")
+PRIOR_MANIFESTS = sorted(Path("codex-scratch").glob("gutenberg-round*-manifest.json"))
 
 RELEVANT = re.compile(
     r"adventure|fantasy|myth|legend|folklore|fairy|war|military|medieval|ancient|"
@@ -121,6 +123,12 @@ def download_book(row):
 def main():
     existing = {line.strip().lower() for line in EXISTING_PATH.read_text(encoding="utf-8-sig").splitlines() if line.strip()}
     used_ids = set(re.findall(r"/ebooks/(\d+)", LEDGER_PATH.read_text(encoding="utf-8-sig"))) if LEDGER_PATH.exists() else set()
+    for path in PRIOR_MANIFESTS:
+        try:
+            manifest = json.loads(path.read_text(encoding="utf-8-sig"))
+        except (json.JSONDecodeError, OSError):
+            continue
+        used_ids.update(str(book.get("id")) for book in manifest.get("books", []) if book.get("id") is not None)
     dictionary = load_valid_words()
     catalog_text = request_bytes(CATALOG_URL).decode("utf-8-sig", errors="replace")
     rows = [row for row in csv.DictReader(io.StringIO(catalog_text)) if row["Text#"] not in used_ids and row["Type"] == "Text" and row["Language"] == "en" and RELEVANT.search((row["Subjects"] or "") + ";" + (row["Bookshelves"] or ""))]
@@ -130,9 +138,9 @@ def main():
     document_frequency = Counter()
     cursor = 0
     while len(selected) < TARGET and cursor < len(rows):
-        batch = rows[cursor:cursor + 40]
+        batch = rows[cursor:cursor + max(40, WORKERS * 4)]
         cursor += len(batch)
-        with ThreadPoolExecutor(max_workers=4) as executor:
+        with ThreadPoolExecutor(max_workers=WORKERS) as executor:
             futures = [executor.submit(download_book, row) for row in batch]
             for future in as_completed(futures):
                 result = future.result()

@@ -10,9 +10,10 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from html.parser import HTMLParser
 from pathlib import Path
 
-SEED = int(sys.argv[1]) if len(sys.argv) > 1 else 20260724
-TARGET = int(sys.argv[2]) if len(sys.argv) > 2 else 100
-PREFIX = Path("codex-scratch/standard-ebooks-round1")
+ROUND = sys.argv[1] if len(sys.argv) > 1 else "round1"
+SEED = int(sys.argv[2]) if len(sys.argv) > 2 else 20260724
+TARGET = int(sys.argv[3]) if len(sys.argv) > 3 else 100
+PREFIX = Path(f"codex-scratch/standard-ebooks-{ROUND}")
 EXISTING_PATH = Path("codex-scratch/gutenberg-existing-terms.txt")
 GUTENBERG_MANIFESTS = sorted(Path("codex-scratch").glob("gutenberg-round*-manifest.json"))
 LEDGER_PATH = Path("dont-scrape-standard-ebooks-again.md")

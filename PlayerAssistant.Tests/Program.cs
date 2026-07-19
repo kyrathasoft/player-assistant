@@ -90,6 +90,7 @@ var tests = new (string Name, Action Test)[]
     ("orcish translator supports various ebooks corpus candidate vocabulary", OrcishTranslatorSupportsVariousEbooksCorpusCandidateVocabulary),
     ("orcish translator supports second various ebooks corpus candidate vocabulary", OrcishTranslatorSupportsVariousEbooksCorpusSecondCandidateVocabulary),
     ("orcish translator supports third various ebooks corpus candidate vocabulary", OrcishTranslatorSupportsVariousEbooksCorpusThirdCandidateVocabulary),
+    ("orcish translator supports fourth various ebooks corpus candidate vocabulary", OrcishTranslatorSupportsVariousEbooksCorpusFourthCandidateVocabulary),
     ("orcish translator excludes approved anachronistic families", OrcishTranslatorExcludesApprovedAnachronisticFamilies),
     ("orcish translator supports software artifact vocabulary", OrcishTranslatorSupportsSoftwareArtifactVocabulary),
     ("orcish translator exposes unique english term count", OrcishTranslatorExposesUniqueEnglishTermCount),
@@ -1998,6 +1999,24 @@ static void OrcishTranslatorSupportsVariousEbooksCorpusThirdCandidateVocabulary(
     }
 }
 
+static void OrcishTranslatorSupportsVariousEbooksCorpusFourthCandidateVocabulary()
+{
+    var entries = OrcishTranslatorUtility.GetLexiconEntries()
+        .Where(entry => HasAnyTag(entry, "various-ebooks-fourth-5100-candidate-batch", "various-ebooks-fourth-5100-near-kin"))
+        .ToArray();
+
+    AssertEqual(12453, entries.Length, "expected every candidate from the fourth various-ebooks corpus batch");
+    AssertEqual(6257, entries.Count(entry => HasAnyTag(entry, "various-ebooks-fourth-5100-candidate-batch")), "expected the fourth various-ebooks source candidates");
+    AssertEqual(6196, entries.Count(entry => HasAnyTag(entry, "various-ebooks-fourth-5100-near-kin")), "expected the fourth various-ebooks near-kin candidates");
+
+    foreach (var english in new[] { "abacus", "zounds", "abacuses", "zebra's" })
+    {
+        var entry = entries.Single(candidate => string.Equals(candidate.English, english, StringComparison.OrdinalIgnoreCase));
+        var translations = OrcishTranslatorUtility.TranslateEnglishToOrcish(entry.English);
+        AssertTrue(translations.Any(candidate => string.Equals(candidate.Translation, entry.Orcish, StringComparison.OrdinalIgnoreCase)), $"expected '{entry.English}' to translate as '{entry.Orcish}'");
+    }
+}
+
 static void OrcishTranslatorExcludesApprovedAnachronisticFamilies()
 {
     var discarded = new[]
@@ -2008,8 +2027,14 @@ static void OrcishTranslatorExcludesApprovedAnachronisticFamilies()
         "rocket", "rocket's", "rocketed", "rocketing", "rockets",
         "thermometer", "thermometer's", "thermometers",
         "electric", "electrics", "electrical", "electrically", "electricity", "electricity's",
+        "earphone", "earphones", "electrician", "gramophone", "gyroscope", "kaleidoscope", "megaphone",
+        "motorboat", "motorcycle", "motorcycles", "motorist", "periscope", "periscopes", "radioactive", "telegraphy",
         "non-computerized",
-        "submarine", "submarine's", "submariner", "submariners", "submarines"
+        "submarine", "submarine's", "submariner", "submariners", "submarines",
+        "zeppelin", "zeppelins",
+        "anthropologist", "anthropologists", "biologist", "ethnologist", "ethnologists", "geologists",
+        "mythologists", "philologist", "philologists", "psychologist", "psychologists",
+        "zoological", "zoologically", "zoologist", "zoologists", "zoology"
     };
     var terms = OrcishTranslatorUtility.GetEnglishTerms();
 
@@ -2046,7 +2071,7 @@ static void OrcishTranslatorExposesUniqueEnglishTermCount()
 {
     var terms = OrcishTranslatorUtility.GetEnglishTerms();
 
-    AssertEqual(47564, OrcishTranslatorUtility.GetEnglishTermCount(), "unexpected total English term count");
+    AssertEqual(60017, OrcishTranslatorUtility.GetEnglishTermCount(), "unexpected total English term count");
     AssertEqual(OrcishTranslatorUtility.GetEnglishTermCount(), terms.Count, "term list and count should agree");
     AssertEqual(1, terms.Count(term => string.Equals(term, "I", StringComparison.OrdinalIgnoreCase)), "I should be counted once despite multiple variants");
     AssertEqual(1, terms.Count(term => string.Equals(term, "really", StringComparison.OrdinalIgnoreCase)), "really should be counted once despite multiple variants");

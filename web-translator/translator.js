@@ -1,8 +1,8 @@
 (() => {
     'use strict';
 
-    const textArea = document.getElementById('english');
-    const wordCount = document.getElementById('english-word-count');
+    const textArea = document.getElementById('source-text');
+    const wordCount = document.getElementById('source-word-count');
     if (!(textArea instanceof HTMLTextAreaElement) || wordCount === null) {
         return;
     }
@@ -40,6 +40,54 @@
     textArea.addEventListener('input', enforceWordLimit);
     enforceWordLimit();
 
+    const directionToggle = document.getElementById('orcish-to-english');
+    const pageHeading = document.getElementById('page-heading');
+    const intro = document.getElementById('translator-intro');
+    const sourceLabel = document.getElementById('source-text-label');
+    const translateButton = document.getElementById('translate-button');
+    const resultSection = document.getElementById('translation-result');
+    const downloadTranslation = document.getElementById('download-translation');
+    const downloadUntranslated = document.getElementById('download-untranslated');
+
+    const updateDirectionLabels = (hideExistingResult = false) => {
+        if (!(directionToggle instanceof HTMLInputElement)) {
+            return;
+        }
+
+        const reverse = directionToggle.checked;
+        document.title = reverse ? 'Orcish to English Translator' : 'English to Orcish Translator';
+        if (pageHeading !== null) {
+            pageHeading.textContent = reverse ? 'Orcish to English' : 'English to Orcish';
+        }
+        if (intro !== null) {
+            intro.textContent = reverse
+                ? 'Enter an Orcish word, phrase, or sentence. Unknown words remain unchanged.'
+                : 'Enter an English word, phrase, or sentence. Unknown words remain unchanged.';
+        }
+        if (sourceLabel !== null) {
+            sourceLabel.textContent = reverse ? 'Orcish text' : 'English text';
+        }
+        if (translateButton instanceof HTMLButtonElement) {
+            translateButton.textContent = reverse ? 'Translate to English' : 'Translate to Orcish';
+        }
+
+        if (hideExistingResult) {
+            if (resultSection instanceof HTMLElement) {
+                resultSection.hidden = true;
+            }
+            [downloadTranslation, downloadUntranslated].forEach((link) => {
+                if (link instanceof HTMLAnchorElement && link.parentElement !== null) {
+                    link.parentElement.hidden = true;
+                }
+            });
+        }
+    };
+
+    if (directionToggle instanceof HTMLInputElement) {
+        directionToggle.addEventListener('change', () => updateDirectionLabels(true));
+        updateDirectionLabels();
+    }
+
     const downloadUrls = [];
     const attachTextDownload = (link, contents) => {
         const textFile = new Blob([contents], { type: 'text/plain;charset=utf-8' });
@@ -48,15 +96,13 @@
         downloadUrls.push(textUrl);
     };
 
-    const orcishTextArea = document.getElementById('orcish');
-    const downloadOrcish = document.getElementById('download-orcish');
-    if (orcishTextArea instanceof HTMLTextAreaElement
-        && downloadOrcish instanceof HTMLAnchorElement
-        && orcishTextArea.value !== '') {
-        attachTextDownload(downloadOrcish, orcishTextArea.value);
+    const translatedTextArea = document.getElementById('translated-text');
+    if (translatedTextArea instanceof HTMLTextAreaElement
+        && downloadTranslation instanceof HTMLAnchorElement
+        && translatedTextArea.value !== '') {
+        attachTextDownload(downloadTranslation, translatedTextArea.value);
     }
 
-    const downloadUntranslated = document.getElementById('download-untranslated');
     if (downloadUntranslated instanceof HTMLAnchorElement) {
         try {
             const untranslatedWords = JSON.parse(downloadUntranslated.dataset.words || '[]');
