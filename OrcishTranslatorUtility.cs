@@ -4105,6 +4105,7 @@ namespace PlayerAssistant
             entries.AddRange(BuildGutenbergCorpusThirdCandidateEntries(entries));
             entries.AddRange(BuildGutenbergCorpusFourthCandidateEntries(entries));
             entries.AddRange(BuildGutenbergCorpusFifthCandidateEntries(entries));
+            entries.AddRange(BuildGutenbergCorpusSixthCandidateEntries(entries));
             entries.AddRange(BuildStandardEbooksCorpusCandidateEntries(entries));
             entries.AddRange(BuildVariousEbooksCorpusCandidateEntries(entries));
             entries.AddRange(BuildVariousEbooksCorpusSecondCandidateEntries(entries));

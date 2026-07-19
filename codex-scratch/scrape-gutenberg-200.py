@@ -95,6 +95,8 @@ def valid_candidate(word, dictionary):
             word = word[:-2]
         else:
             return False
+    if word in STOP:
+        return False
     parts = word.split("-")
     return 1 <= len(parts) <= 4 and all(part in dictionary and len(part) >= 2 for part in parts)
 
