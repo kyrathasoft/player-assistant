@@ -91,6 +91,7 @@ var tests = new (string Name, Action Test)[]
     ("orcish translator supports second various ebooks corpus candidate vocabulary", OrcishTranslatorSupportsVariousEbooksCorpusSecondCandidateVocabulary),
     ("orcish translator supports third various ebooks corpus candidate vocabulary", OrcishTranslatorSupportsVariousEbooksCorpusThirdCandidateVocabulary),
     ("orcish translator supports fourth various ebooks corpus candidate vocabulary", OrcishTranslatorSupportsVariousEbooksCorpusFourthCandidateVocabulary),
+    ("orcish translator supports The Earth It Cares Not vocabulary", OrcishTranslatorSupportsEarthItCaresNotVocabulary),
     ("orcish translator supports fifth Gutenberg corpus candidate vocabulary", OrcishTranslatorSupportsGutenbergCorpusFifthCandidateVocabulary),
     ("orcish translator supports sixth Gutenberg corpus candidate vocabulary", OrcishTranslatorSupportsGutenbergCorpusSixthCandidateVocabulary),
     ("orcish translator excludes approved anachronistic families", OrcishTranslatorExcludesApprovedAnachronisticFamilies),
@@ -1113,7 +1114,9 @@ static void OrcishTranslatorSupportsRecoveredScrollVocabulary()
         ["label"] = "mog-narg-narg-bib",
         ["precise"] = "grak-nak-ti-zorn",
         ["suggest"] = "nargu-thog-var",
-        ["rendezvous"] = "mokru-dak"
+        ["rendezvous"] = "mokru-dak",
+        ["script"] = "bib-narg",
+        ["text"] = "bib-narg"
     };
 
     foreach (var pair in expected)
@@ -1136,6 +1139,17 @@ static void OrcishTranslatorSupportsRecoveredScrollVocabulary()
         var meanings = OrcishTranslatorUtility.TranslateOrcishToEnglish(pair.Key);
         AssertTrue(meanings.Any(candidate => candidate.Translation == pair.Value), $"reverse {pair.Key} form should include {pair.Value}");
     }
+
+    var writtenMeanings = OrcishTranslatorUtility.TranslateOrcishToEnglish("bib-narg", partOfSpeech: "noun");
+    AssertTrue(writtenMeanings.Any(static candidate => candidate.Translation == "script"), "reverse bib-narg form should include script");
+    AssertTrue(writtenMeanings.Any(static candidate => candidate.Translation == "text"), "reverse bib-narg form should include text");
+
+    var textEntry = OrcishTranslatorUtility.GetLexiconEntries()
+        .Single(static entry => string.Equals(entry.English, "text", StringComparison.OrdinalIgnoreCase));
+    var reviewIssues = OrcishTranslatorUtility.ReviewProposedLexiconEntry(textEntry)
+        .Where(static issue => !string.Equals(issue.Code, "exact-duplicate", StringComparison.OrdinalIgnoreCase))
+        .ToArray();
+    AssertEqual(0, reviewIssues.Length, "the intentional text/script shared form should remain admissible");
 }
 
 static void OrcishTranslatorPropagatesRepairedRootsThroughDerivedFamilies()
@@ -1579,6 +1593,7 @@ static void OrcishTranslatorSupportsSixtySevenPageSampleVocabulary()
             translations.Any(candidate => string.Equals(candidate.Translation, entry.Orcish, StringComparison.OrdinalIgnoreCase)),
             $"expected '{entry.English}' to translate as '{entry.Orcish}'");
     }
+
 }
 
 static void OrcishTranslatorSupportsSecondThirtyPageSampleVocabulary()
@@ -2019,6 +2034,59 @@ static void OrcishTranslatorSupportsVariousEbooksCorpusFourthCandidateVocabulary
     }
 }
 
+static void OrcishTranslatorSupportsEarthItCaresNotVocabulary()
+{
+    var entries = OrcishTranslatorUtility.GetLexiconEntries()
+        .Where(entry => HasAnyTag(entry, "earth-it-cares-not"))
+        .ToArray();
+
+    AssertEqual(73, entries.Length, "expected the curated source and morphology entries from The Earth It Cares Not");
+
+    var sourceEntries = entries
+        .Where(entry => !HasAnyTag(entry, "s-form", "present", "past", "progressive"))
+        .ToArray();
+    AssertEqual(57, sourceEntries.Length, "expected every curated source candidate from The Earth It Cares Not");
+
+    foreach (var entry in sourceEntries)
+    {
+        var reviewIssues = OrcishTranslatorUtility.ReviewProposedLexiconEntry(entry)
+            .Where(issue => !string.Equals(issue.Code, "exact-duplicate", StringComparison.OrdinalIgnoreCase))
+            .ToArray();
+        AssertEqual(0, reviewIssues.Length, $"expected reviewed entry '{entry.English}' to remain admissible");
+    }
+
+    foreach (var english in new[]
+             {
+                 "alcohol-fueled", "backswing", "darkflame", "hasiko", "magister", "neshralk",
+                 "plast", "querma", "reconstitute", "upperdark", "cuemess", "cuumess",
+                 "halfling's", "dungeoneer's"
+             })
+    {
+        var entry = entries.Single(candidate => string.Equals(candidate.English, english, StringComparison.OrdinalIgnoreCase));
+        var translations = OrcishTranslatorUtility.TranslateEnglishToOrcish(entry.English);
+        AssertTrue(
+            translations.Any(candidate => string.Equals(candidate.Translation, entry.Orcish, StringComparison.OrdinalIgnoreCase)),
+            $"expected '{entry.English}' to translate as '{entry.Orcish}'");
+    }
+
+    AssertEqual(
+        entries.Single(entry => string.Equals(entry.English, "cuemess", StringComparison.OrdinalIgnoreCase)).Orcish,
+        entries.Single(entry => string.Equals(entry.English, "cuumess", StringComparison.OrdinalIgnoreCase)).Orcish,
+        "expected the documented cuemess spelling variants to share one Orcish form");
+
+    foreach (var derivedEnglish in new[]
+             {
+                 "texts", "fine-tunes", "fine-tuned", "fine-tuning", "over-exerts", "over-exerted",
+                 "over-exerting", "reappears", "reappeared", "reappearing", "reconstitutes",
+                 "reconstituted", "reconstituting", "resecures", "resecured", "resecuring", "resources"
+             })
+    {
+        AssertTrue(
+            OrcishTranslatorUtility.TranslateEnglishToOrcish(derivedEnglish).Count > 0,
+            $"expected morphology to cover source form '{derivedEnglish}'");
+    }
+}
+
 static void OrcishTranslatorSupportsGutenbergCorpusFifthCandidateVocabulary()
 {
     var entries = OrcishTranslatorUtility.GetLexiconEntries()
@@ -2119,7 +2187,7 @@ static void OrcishTranslatorExposesUniqueEnglishTermCount()
 {
     var terms = OrcishTranslatorUtility.GetEnglishTerms();
 
-    AssertEqual(80399, OrcishTranslatorUtility.GetEnglishTermCount(), "unexpected total English term count");
+    AssertEqual(80473, OrcishTranslatorUtility.GetEnglishTermCount(), "unexpected total English term count");
     AssertEqual(OrcishTranslatorUtility.GetEnglishTermCount(), terms.Count, "term list and count should agree");
     AssertEqual(1, terms.Count(term => string.Equals(term, "I", StringComparison.OrdinalIgnoreCase)), "I should be counted once despite multiple variants");
     AssertEqual(1, terms.Count(term => string.Equals(term, "really", StringComparison.OrdinalIgnoreCase)), "really should be counted once despite multiple variants");

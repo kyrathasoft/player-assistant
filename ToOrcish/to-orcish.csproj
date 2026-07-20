@@ -31,6 +31,7 @@
     <Compile Include="..\OrcishTranslatorUtility.VariousEbooksCorpusSecondBatch.cs" Link="OrcishTranslatorUtility.VariousEbooksCorpusSecondBatch.cs" />
     <Compile Include="..\OrcishTranslatorUtility.VariousEbooksCorpusThirdBatch.cs" Link="OrcishTranslatorUtility.VariousEbooksCorpusThirdBatch.cs" />
     <Compile Include="..\OrcishTranslatorUtility.VariousEbooksCorpusFourthBatch.cs" Link="OrcishTranslatorUtility.VariousEbooksCorpusFourthBatch.cs" />
+    <Compile Include="..\OrcishTranslatorUtility.EarthItCaresNotBatch.cs" Link="OrcishTranslatorUtility.EarthItCaresNotBatch.cs" />
     <Compile Include="..\OrcishTranslatorUtility.BlogFollowupBatch.cs" Link="OrcishTranslatorUtility.BlogFollowupBatch.cs" />
     <Compile Include="..\OrcishTranslatorUtility.ShadowdimBlogBatch.cs" Link="OrcishTranslatorUtility.ShadowdimBlogBatch.cs" />
     <Compile Include="..\OrcishTranslatorUtility.cs" Link="OrcishTranslatorUtility.cs" />

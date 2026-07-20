@@ -2048,6 +2048,7 @@ namespace PlayerAssistant
                 new("brokenly", "brak-nargin", PartOfSpeech: "adverb", GrammarClass: "speech", Tags: ["broken", "compound"]),
                 new("gruffly", "grukh-nargin", PartOfSpeech: "adverb", GrammarClass: "speech", Tags: ["rough", "compound"]),
                 new("script", "bib-narg", PartOfSpeech: "noun", GrammarClass: "language", Tags: ["writing", "compound"]),
+                new("text", "bib-narg", PartOfSpeech: "noun", GrammarClass: "language", Tags: ["writing", "compound", "compound-reviewed", "shared-form", "close-form-reviewed", "script", "derive-plural"]),
                 new("scrawl", "bib-narg-grot", PartOfSpeech: "noun", GrammarClass: "language", Tags: ["rough-writing", "compound"]),
                 new("scrutinized", "mur-oglash", PartOfSpeech: "verb", GrammarClass: "perception", Tags: ["past", "close-looking", "compound"]),
                 new("signs", "narg-oglari", PartOfSpeech: "noun", GrammarClass: "evidence", Tags: ["indications", "plural", "compound"]),
@@ -4111,6 +4112,7 @@ namespace PlayerAssistant
             entries.AddRange(BuildVariousEbooksCorpusSecondCandidateEntries(entries));
             entries.AddRange(BuildVariousEbooksCorpusThirdCandidateEntries(entries));
             entries.AddRange(BuildVariousEbooksCorpusFourthCandidateEntries(entries));
+            entries.AddRange(BuildEarthItCaresNotCandidateEntries(entries));
 
             var baseEntries = entries.ToArray();
             entries.AddRange(BuildDerivedMorphologyEntries(baseEntries));
