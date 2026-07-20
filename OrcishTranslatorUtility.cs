@@ -1661,7 +1661,6 @@ namespace PlayerAssistant
                 new("these formidable ones", "lekyanki-doku-vrak", PartOfSpeech: "determiner", GrammarClass: "demonstrative", Tags: ["formidable", "marked"]),
                 new("two", "dug", PartOfSpeech: "numeral", GrammarClass: "cardinal"),
                 new("second", "dug-lag-hrowk", PartOfSpeech: "numeral", GrammarClass: "ordinal"),
-                new("III", "dug-agh-ash-mokh-burz", PartOfSpeech: "numeral", GrammarClass: "ordinal", Tags: ["roman", "third"]),
                 new("IV", "dug-agh-dug", PartOfSpeech: "numeral", GrammarClass: "ordinal", Tags: ["roman", "fourth"]),
                 new("if", "ut", PartOfSpeech: "conjunction", GrammarClass: "condition", Tags: ["variant-a", "plain", "alternating", "root-repaired"]),
                 new("if", "ka", PartOfSpeech: "conjunction", GrammarClass: "condition", Tags: ["variant-b", "plain", "alternating"]),
@@ -4115,6 +4114,7 @@ namespace PlayerAssistant
             entries.AddRange(BuildEarthItCaresNotCandidateEntries(entries));
             entries.AddRange(BuildLocalShadowdimCandidateEntries(entries));
             entries.AddRange(BuildSomethingFoundIICandidateEntries(entries));
+            entries.AddRange(BuildMegadungeonsCandidateEntries(entries));
 
             var baseEntries = entries.ToArray();
             entries.AddRange(BuildDerivedMorphologyEntries(baseEntries));

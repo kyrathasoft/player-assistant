@@ -151,6 +151,14 @@ namespace PlayerAssistant
         private RichTextBox? _adventureOutlineTextBox;
         private RichTextBox? _myHeroBriefingTextBox;
         private Panel? _partyPanel;
+        private Panel? _translatorPanel;
+        private Label? _translatorHeadingLabel;
+        private CheckBox? _translatorDirectionCheckBox;
+        private Label? _translatorInputLabel;
+        private TextBox? _translatorInputTextBox;
+        private Label? _translatorOutputLabel;
+        private TextBox? _translatorOutputTextBox;
+        private Button? _translatorButton;
         private Image? _regionalMapImage;
         private Image? _regionalMapImageCache;
         private string? _regionalMapImageCachePath;
@@ -284,6 +292,7 @@ namespace PlayerAssistant
             _heroNamePictureBox?.Dispose();
             _diceRollsListBox?.Dispose();
             _adventureOutlineTextBox?.Dispose();
+            _translatorPanel?.Dispose();
             _regionalMapImage?.Dispose();
             _regionalMapImageCache?.Dispose();
             BackgroundImage?.Dispose();
@@ -753,6 +762,7 @@ namespace PlayerAssistant
             UpdateAdventureOutlineTextBoxBounds();
             UpdateMyHeroBriefingTextBoxBounds();
             UpdatePartyPanelBounds();
+            UpdateTranslatorPanelBounds();
             UpdateSearchPanelBounds();
         }
 
@@ -865,13 +875,28 @@ namespace PlayerAssistant
             EnableMyHeroBriefingMenuItem();
             EnableAdventureOutlineMenuItem();
 
-            if (_regionalMapActive || _showLoginInfo || _showPostTotals || _showXpTotal || _showParty || _showFormerPcs || _showMyHeroBriefing || _diceRollsListBox is not null || _adventureOutlineTextBox is not null || _myHeroBriefingTextBox is not null)
+            if (_regionalMapActive || _showLoginInfo || _showPostTotals || _showXpTotal || _showParty || _showFormerPcs || _showMyHeroBriefing || _diceRollsListBox is not null || _adventureOutlineTextBox is not null || _myHeroBriefingTextBox is not null || _translatorPanel is not null)
             {
                 ClearDisplaySurfaceForRegionalMap();
                 Refresh();
             }
 
             ShowSearchPanel();
+        }
+
+        private void TranslatorToolStripMenuItem_Click(object? sender, EventArgs e)
+        {
+            ClearDiceRollsDisplayIfVisible();
+            HideSearchPanel();
+            EnableLoginInfoMenuItem();
+            EnableShowPostTotalsMenuItem();
+            EnableShowDiceRollsMenuItem();
+            EnableXpMenuItem();
+            EnablePartyMenuItem();
+            EnableMyHeroBriefingMenuItem();
+            EnableAdventureOutlineMenuItem();
+            ClearDisplaySurfaceForRegionalMap();
+            ShowTranslatorPanel();
         }
 
         private async void LoginInfoToolStripMenuItem_Click(object? sender, EventArgs e)
@@ -3906,6 +3931,7 @@ namespace PlayerAssistant
             DisposeAdventureOutlineTextBox();
             DisposeMyHeroBriefingTextBox();
             DisposePartyPanel();
+            DisposeTranslatorPanel();
             _showWelcomeText = false;
             _showHeroIntroText = false;
             _showAttributionText = false;
@@ -4695,7 +4721,243 @@ namespace PlayerAssistant
             formerPcsToolStripMenuItem.Enabled = showMenuItemsEnabled && !_showFormerPcs;
             myHeroBriefingToolStripMenuItem.Enabled = showMenuItemsEnabled && !_showMyHeroBriefing;
             adventureOutlineToolStripMenuItem.Enabled = showMenuItemsEnabled && _adventureOutlineTextBox is null;
+            translatorToolStripMenuItem.Enabled = showMenuItemsEnabled && _translatorPanel is null;
             UpdateRegionalMapMenuItem();
+        }
+
+        private void ShowTranslatorPanel()
+        {
+            DisposeTranslatorPanel();
+
+            _translatorHeadingLabel = new Label
+            {
+                AutoSize = true,
+                Font = new Font("Segoe UI", 18F, FontStyle.Bold),
+                Name = "lblTranslatorHeading",
+                Text = "English to Orcish"
+            };
+            _translatorDirectionCheckBox = new CheckBox
+            {
+                AutoSize = true,
+                Name = "chkTranslatorOrcishToEnglish",
+                Text = "Orcish to English",
+                UseVisualStyleBackColor = true
+            };
+            _translatorDirectionCheckBox.CheckedChanged += TranslatorDirectionCheckBox_CheckedChanged;
+            _translatorInputLabel = new Label
+            {
+                AutoSize = true,
+                Font = new Font("Segoe UI", 10F, FontStyle.Bold),
+                Name = "lblTranslatorInput",
+                Text = "English text"
+            };
+            _translatorInputTextBox = new TextBox
+            {
+                AcceptsReturn = true,
+                AcceptsTab = true,
+                Font = new Font("Segoe UI", 11F),
+                Multiline = true,
+                Name = "txtTranslatorInput",
+                ScrollBars = ScrollBars.Vertical
+            };
+            _translatorInputTextBox.TextChanged += (_, _) => UpdateTranslatorButtonEnabledState();
+            _translatorOutputLabel = new Label
+            {
+                AutoSize = true,
+                Font = new Font("Segoe UI", 10F, FontStyle.Bold),
+                Name = "lblTranslatorOutput",
+                Text = "Orcish translation"
+            };
+            _translatorOutputTextBox = new TextBox
+            {
+                AcceptsReturn = true,
+                BackColor = Color.White,
+                Font = new Font("Segoe UI", 11F),
+                Multiline = true,
+                Name = "txtTranslatorOutput",
+                ReadOnly = true,
+                ScrollBars = ScrollBars.Vertical
+            };
+            _translatorButton = new Button
+            {
+                AutoSize = true,
+                Enabled = false,
+                Name = "btnTranslatorTranslate",
+                Padding = new Padding(12, 4, 12, 4),
+                Text = "Translate to Orcish",
+                UseVisualStyleBackColor = true
+            };
+            _translatorButton.Click += TranslatorButton_Click;
+
+            _translatorPanel = new Panel
+            {
+                BackColor = Color.WhiteSmoke,
+                Name = "pnlTranslator"
+            };
+            _translatorPanel.Controls.AddRange(
+            [
+                _translatorHeadingLabel,
+                _translatorDirectionCheckBox,
+                _translatorInputLabel,
+                _translatorInputTextBox,
+                _translatorButton,
+                _translatorOutputLabel,
+                _translatorOutputTextBox
+            ]);
+            Controls.Add(_translatorPanel);
+            UpdateTranslatorPanelBounds();
+            _translatorPanel.BringToFront();
+            menuStrip.BringToFront();
+            statusStrip.BringToFront();
+            translatorToolStripMenuItem.Enabled = false;
+            _translatorInputTextBox.Focus();
+        }
+
+        private void TranslatorDirectionCheckBox_CheckedChanged(object? sender, EventArgs e)
+        {
+            if (_translatorDirectionCheckBox is null ||
+                _translatorHeadingLabel is null ||
+                _translatorInputLabel is null ||
+                _translatorOutputLabel is null ||
+                _translatorButton is null)
+            {
+                return;
+            }
+
+            var orcishToEnglish = _translatorDirectionCheckBox.Checked;
+            _translatorHeadingLabel.Text = orcishToEnglish ? "Orcish to English" : "English to Orcish";
+            _translatorInputLabel.Text = orcishToEnglish ? "Orcish text" : "English text";
+            _translatorOutputLabel.Text = orcishToEnglish ? "English translation" : "Orcish translation";
+            _translatorButton.Text = orcishToEnglish ? "Translate to English" : "Translate to Orcish";
+            UpdateTranslatorPanelBounds();
+        }
+
+        private async void TranslatorButton_Click(object? sender, EventArgs e)
+        {
+            if (_translatorInputTextBox is null ||
+                _translatorOutputTextBox is null ||
+                _translatorDirectionCheckBox is null ||
+                _translatorButton is null)
+            {
+                return;
+            }
+
+            var input = _translatorInputTextBox.Text;
+            if (string.IsNullOrWhiteSpace(input))
+            {
+                _translatorOutputTextBox.Clear();
+                return;
+            }
+
+            var orcishToEnglish = _translatorDirectionCheckBox.Checked;
+            _translatorButton.Enabled = false;
+            UseWaitCursor = true;
+            SetStatusBarMessage("Translating...");
+            try
+            {
+                var translation = await Task.Run(() => orcishToEnglish
+                    ? OrcishTranslatorUtility.TranslateOrcishTextToEnglish(input)
+                    : OrcishTranslatorUtility.TranslateEnglishTextToOrcish(input));
+                if (_translatorOutputTextBox is not null && !_translatorOutputTextBox.IsDisposed)
+                {
+                    _translatorOutputTextBox.Text = translation;
+                    SetStatusBarMessage("Translation complete.");
+                }
+            }
+            catch (Exception ex)
+            {
+                await ReportOperationFailureAsync(
+                    "Orcish translation",
+                    "Translation unavailable",
+                    "Translator Error",
+                    ex,
+                    showDialog: true);
+            }
+            finally
+            {
+                UseWaitCursor = false;
+                UpdateTranslatorButtonEnabledState();
+            }
+        }
+
+        private void UpdateTranslatorButtonEnabledState()
+        {
+            if (_translatorButton is null || _translatorInputTextBox is null)
+            {
+                return;
+            }
+
+            _translatorButton.Enabled = !string.IsNullOrWhiteSpace(_translatorInputTextBox.Text);
+        }
+
+        private void UpdateTranslatorPanelBounds()
+        {
+            if (_translatorPanel is null ||
+                _translatorHeadingLabel is null ||
+                _translatorDirectionCheckBox is null ||
+                _translatorInputLabel is null ||
+                _translatorInputTextBox is null ||
+                _translatorOutputLabel is null ||
+                _translatorOutputTextBox is null ||
+                _translatorButton is null)
+            {
+                return;
+            }
+
+            _translatorPanel.Bounds = new Rectangle(
+                10,
+                35,
+                Math.Max(0, ClientSize.Width - 30),
+                Math.Max(0, ClientSize.Height - 70));
+
+            const int maximumContentWidth = 880;
+            const int sidePadding = 20;
+            const int spacing = 8;
+            var contentWidth = Math.Max(120, Math.Min(maximumContentWidth, _translatorPanel.ClientSize.Width - (sidePadding * 2)));
+            var left = Math.Max(sidePadding, (_translatorPanel.ClientSize.Width - contentWidth) / 2);
+            var top = 18;
+
+            _translatorHeadingLabel.Location = new Point(
+                Math.Max(0, (_translatorPanel.ClientSize.Width - _translatorHeadingLabel.Width) / 2),
+                top);
+            _translatorDirectionCheckBox.Location = new Point(
+                Math.Max(0, (_translatorPanel.ClientSize.Width - _translatorDirectionCheckBox.Width) / 2),
+                _translatorHeadingLabel.Bottom + 10);
+            _translatorInputLabel.Location = new Point(left, _translatorDirectionCheckBox.Bottom + 14);
+
+            var reservedHeight = 190;
+            var availableTextHeight = Math.Max(120, _translatorPanel.ClientSize.Height - reservedHeight);
+            var textBoxHeight = Math.Max(60, availableTextHeight / 2);
+            _translatorInputTextBox.Bounds = new Rectangle(left, _translatorInputLabel.Bottom + spacing, contentWidth, textBoxHeight);
+            _translatorButton.Location = new Point(
+                Math.Max(0, (_translatorPanel.ClientSize.Width - _translatorButton.Width) / 2),
+                _translatorInputTextBox.Bottom + 10);
+            _translatorOutputLabel.Location = new Point(left, _translatorButton.Bottom + 10);
+            _translatorOutputTextBox.Bounds = new Rectangle(
+                left,
+                _translatorOutputLabel.Bottom + spacing,
+                contentWidth,
+                Math.Max(50, _translatorPanel.ClientSize.Height - _translatorOutputLabel.Bottom - spacing - 14));
+        }
+
+        private void DisposeTranslatorPanel()
+        {
+            if (_translatorPanel is null)
+            {
+                return;
+            }
+
+            Controls.Remove(_translatorPanel);
+            _translatorPanel.Dispose();
+            _translatorPanel = null;
+            _translatorHeadingLabel = null;
+            _translatorDirectionCheckBox = null;
+            _translatorInputLabel = null;
+            _translatorInputTextBox = null;
+            _translatorOutputLabel = null;
+            _translatorOutputTextBox = null;
+            _translatorButton = null;
+            translatorToolStripMenuItem.Enabled = !_heroImageIntroStarted && !_heroImageShowcaseStarted;
         }
 
         private void EnableLoginInfoMenuItem()

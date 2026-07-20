@@ -19,7 +19,7 @@ Translations use a short-lived PHP session value so the result survives the post
 
 If one or more unique source words cannot be translated, the result footer also offers a plain-text download. In English-to-Orcish mode it is `untranslated-words.txt`; in Orcish-to-English mode it is `untranslated-orcish-words.txt`. Each file contains only the untranslated source words, one per line. The adjacent note invites the user to email that list to `kyrathasoft@gmail.com`; the application does not send email or collect the list automatically.
 
-Set PHP's `memory_limit` to at least `256M` for comfortable headroom with the current 80,645-term lexicon. The reverse Orcish index is built lazily only when Orcish-to-English translation is requested.
+Set PHP's `memory_limit` to at least `256M` for comfortable headroom with the current 80,974-term lexicon. The reverse Orcish index is built lazily only when Orcish-to-English translation is requested.
 
 ## Refresh the lexicon
 

@@ -94,10 +94,12 @@ var tests = new (string Name, Action Test)[]
     ("orcish translator supports The Earth It Cares Not vocabulary", OrcishTranslatorSupportsEarthItCaresNotVocabulary),
     ("orcish translator supports local Shadowdim vocabulary", OrcishTranslatorSupportsLocalShadowdimVocabulary),
     ("orcish translator supports Something Found II vocabulary", OrcishTranslatorSupportsSomethingFoundIIVocabulary),
+    ("orcish translator supports reviewed megadungeon vocabulary", OrcishTranslatorSupportsReviewedMegadungeonVocabulary),
     ("orcish translator supports fifth Gutenberg corpus candidate vocabulary", OrcishTranslatorSupportsGutenbergCorpusFifthCandidateVocabulary),
     ("orcish translator supports sixth Gutenberg corpus candidate vocabulary", OrcishTranslatorSupportsGutenbergCorpusSixthCandidateVocabulary),
     ("orcish translator excludes approved anachronistic families", OrcishTranslatorExcludesApprovedAnachronisticFamilies),
     ("orcish translator supports software artifact vocabulary", OrcishTranslatorSupportsSoftwareArtifactVocabulary),
+    ("orcish translator translates full text in both directions", OrcishTranslatorTranslatesFullTextInBothDirections),
     ("orcish translator exposes unique english term count", OrcishTranslatorExposesUniqueEnglishTermCount),
     ("to-orcish translates terms before trailing punctuation", ToOrcishTranslatesTermsBeforeTrailingPunctuation),
     ("to-orcish translates dotted abbreviation terms", ToOrcishTranslatesDottedAbbreviationTerms),
@@ -263,6 +265,8 @@ var tests = new (string Name, Action Test)[]
     ("show menu contains xp item", ShowMenuContainsXpItem),
     ("show menu contains my hero briefing item", ShowMenuContainsMyHeroBriefingItem),
     ("show menu contains adventure outline item", ShowMenuContainsAdventureOutlineItem),
+    ("show menu contains translator item", ShowMenuContainsTranslatorItem),
+    ("translator view toggles direction without web links", TranslatorViewTogglesDirectionWithoutWebLinks),
     ("adventure outline view displays generated markdown", AdventureOutlineViewDisplaysGeneratedMarkdown),
     ("about menu contains author and update items", AboutMenuContainsAuthorAndUpdateItems),
     ("about author text lists developer info", AboutAuthorTextListsDeveloperInfo),
@@ -1339,6 +1343,24 @@ static void OrcishTranslatorReviewsProposedLexiconAdditions()
         reviewedSharedFormIssues.Any(static issue => issue.Code == "orcish-form-collision"),
         "an intentional shared reverse form should be accepted only with an explicit review tag");
 
+    var repeatedCharacterIssues = OrcishLexiconReviewUtility.ReviewProposedEntry(
+        new OrcishLexiconEntry("coool", "grod", PartOfSpeech: "adjective"),
+        existingEntries);
+    AssertTrue(
+        repeatedCharacterIssues.Any(static issue => issue.Code == "repeated-character-approval-required"),
+        "three consecutive copies of one character should require explicit user approval");
+
+    var approvedRepeatedCharacterIssues = OrcishLexiconReviewUtility.ReviewProposedEntry(
+        new OrcishLexiconEntry(
+            "coool",
+            "grod",
+            PartOfSpeech: "adjective",
+            Tags: ["repeated-character-user-approved"]),
+        existingEntries);
+    AssertFalse(
+        approvedRepeatedCharacterIssues.Any(static issue => issue.Code == "repeated-character-approval-required"),
+        "the explicit user-approval tag should admit a repeated-character candidate");
+
     AssertThrows<InvalidOperationException>(() =>
         OrcishLexiconReviewUtility.EnsureCanAdd(
             new OrcishLexiconEntry("greeting", "zug", PartOfSpeech: "noun"),
@@ -2166,14 +2188,46 @@ aftereffects admittedly all-encompassing ambiance arguably bearhug bloodbath bon
     AssertEqual(0, OrcishTranslatorUtility.TranslateEnglishToOrcish("youth-spirited").Count, "dropped youth-spirited candidate should remain untranslated");
 }
 
+static void OrcishTranslatorSupportsReviewedMegadungeonVocabulary()
+{
+    var sourceEnglish = OrcishTranslatorUtility.GetMegadungeonsSourceCandidates();
+    AssertEqual(332, sourceEnglish.Count, "expected every megadungeon candidate that passed the adoption gates");
+    AssertEqual(
+        sourceEnglish.Count,
+        sourceEnglish.Distinct(StringComparer.OrdinalIgnoreCase).Count(),
+        "megadungeon source candidates should be unique");
+
+    foreach (var english in sourceEnglish)
+    {
+        AssertTrue(
+            OrcishTranslatorUtility.TranslateEnglishToOrcish(english).Count > 0,
+            $"expected reviewed megadungeon source candidate '{english}' to translate");
+    }
+
+    foreach (var dropped in new[] { "co-adaptability", "no-face", "pornographic" })
+    {
+        AssertEqual(
+            0,
+            OrcishTranslatorUtility.TranslateEnglishToOrcish(dropped).Count,
+            $"expected dropped megadungeon candidate '{dropped}' to remain untranslated");
+    }
+
+    foreach (var retainedBase in new[] { "adaptability", "alpha", "werewolf" })
+    {
+        AssertTrue(
+            OrcishTranslatorUtility.TranslateEnglishToOrcish(retainedBase).Count > 0,
+            $"expected established base term '{retainedBase}' to remain translated");
+    }
+}
+
 static void OrcishTranslatorSupportsGutenbergCorpusFifthCandidateVocabulary()
 {
     var entries = OrcishTranslatorUtility.GetLexiconEntries()
         .Where(entry => HasAnyTag(entry, "gutenberg-fifth-5000-candidate-batch", "gutenberg-fifth-5000-near-kin"))
         .ToArray();
 
-    AssertEqual(11290, entries.Length, "expected every candidate from the fifth Gutenberg corpus batch");
-    AssertEqual(7941, entries.Count(entry => HasAnyTag(entry, "gutenberg-fifth-5000-candidate-batch")), "expected the fifth Gutenberg source candidates");
+    AssertEqual(11289, entries.Length, "expected every candidate from the fifth Gutenberg corpus batch after repeated-character culling");
+    AssertEqual(7940, entries.Count(entry => HasAnyTag(entry, "gutenberg-fifth-5000-candidate-batch")), "expected the fifth Gutenberg source candidates after repeated-character culling");
     AssertEqual(3349, entries.Count(entry => HasAnyTag(entry, "gutenberg-fifth-5000-near-kin")), "expected the fifth Gutenberg near-kin candidates");
 
     foreach (var english in new[] { "aba", "zoophytes", "abalone's", "zoophyte's" })
@@ -2195,8 +2249,8 @@ static void OrcishTranslatorSupportsGutenbergCorpusSixthCandidateVocabulary()
         .Where(entry => HasAnyTag(entry, "gutenberg-sixth-5500-candidate-batch", "gutenberg-sixth-5500-near-kin"))
         .ToArray();
 
-    AssertEqual(9093, entries.Length, "expected every candidate from the sixth Gutenberg corpus batch");
-    AssertEqual(7083, entries.Count(entry => HasAnyTag(entry, "gutenberg-sixth-5500-candidate-batch")), "expected the sixth Gutenberg source candidates");
+    AssertEqual(9092, entries.Length, "expected every candidate from the sixth Gutenberg corpus batch after repeated-character culling");
+    AssertEqual(7082, entries.Count(entry => HasAnyTag(entry, "gutenberg-sixth-5500-candidate-batch")), "expected the sixth Gutenberg source candidates after repeated-character culling");
     AssertEqual(2010, entries.Count(entry => HasAnyTag(entry, "gutenberg-sixth-5500-near-kin")), "expected the sixth Gutenberg near-kin candidates");
 
     foreach (var english in new[] { "abbey-church", "zircon", "abjection's", "zircons" })
@@ -2226,6 +2280,7 @@ static void OrcishTranslatorExcludesApprovedAnachronisticFamilies()
         "motorboat", "motorcycle", "motorcycles", "motorist", "periscope", "periscopes", "radioactive", "telegraphy",
         "non-computerized",
         "submarine", "submarine's", "submariner", "submariners", "submarines",
+        "pornography", "pornography's", "pornographic", "pornographer", "pornographers",
         "zeppelin", "zeppelins",
         "anthropologist", "anthropologists", "biologist", "ethnologist", "ethnologists", "geologists",
         "mythologists", "philologist", "philologists", "psychologist", "psychologists",
@@ -2262,11 +2317,27 @@ static void OrcishTranslatorSupportsSoftwareArtifactVocabulary()
     }
 }
 
+static void OrcishTranslatorTranslatesFullTextInBothDirections()
+{
+    AssertEqual(
+        "Zug untranslatedword.",
+        OrcishTranslatorUtility.TranslateEnglishTextToOrcish("hello untranslatedword."),
+        "English text translation should translate known words and preserve unknown words");
+    AssertEqual(
+        "Hello untranslatedword.",
+        OrcishTranslatorUtility.TranslateOrcishTextToEnglish("zug untranslatedword."),
+        "Orcish text translation should translate known words and preserve unknown words");
+    AssertEqual(
+        "\"Zug\" ...",
+        OrcishTranslatorUtility.TranslateEnglishTextToOrcish("\"hello\" ..."),
+        "full-text translation should preserve punctuation-only tokens");
+}
+
 static void OrcishTranslatorExposesUniqueEnglishTermCount()
 {
     var terms = OrcishTranslatorUtility.GetEnglishTerms();
 
-    AssertEqual(80645, OrcishTranslatorUtility.GetEnglishTermCount(), "unexpected total English term count");
+    AssertEqual(80974, OrcishTranslatorUtility.GetEnglishTermCount(), "unexpected total English term count");
     AssertEqual(OrcishTranslatorUtility.GetEnglishTermCount(), terms.Count, "term list and count should agree");
     AssertEqual(1, terms.Count(term => string.Equals(term, "I", StringComparison.OrdinalIgnoreCase)), "I should be counted once despite multiple variants");
     AssertEqual(1, terms.Count(term => string.Equals(term, "really", StringComparison.OrdinalIgnoreCase)), "really should be counted once despite multiple variants");
@@ -6246,6 +6317,55 @@ static void ShowMenuContainsAdventureOutlineItem()
         AssertTrue(
             showMenuItem.DropDownItems.Cast<ToolStripItem>().Contains(adventureOutlineMenuItem),
             "Show menu should contain the Adventure Outline item");
+    });
+}
+
+static void ShowMenuContainsTranslatorItem()
+{
+    RunOnStaThread(() =>
+    {
+        using var form = new Form1(suppressHeroImagesForThisRun: true);
+        var showMenuItem = (ToolStripMenuItem)(GetPrivateField(form, "showToolStripMenuItem")
+            ?? throw new InvalidOperationException("showToolStripMenuItem was null."));
+        var translatorMenuItem = (ToolStripMenuItem)(GetPrivateField(form, "translatorToolStripMenuItem")
+            ?? throw new InvalidOperationException("translatorToolStripMenuItem was null."));
+
+        AssertEqual("Translator", translatorMenuItem.Text ?? string.Empty, "unexpected Translator menu item text");
+        AssertTrue(
+            showMenuItem.DropDownItems.Cast<ToolStripItem>().Contains(translatorMenuItem),
+            "Show menu should contain the Translator item");
+    });
+}
+
+static void TranslatorViewTogglesDirectionWithoutWebLinks()
+{
+    RunOnStaThread(() =>
+    {
+        using var form = new Form1(suppressHeroImagesForThisRun: true);
+        InvokePrivateMethod(form, "ShowTranslatorPanel");
+
+        var panel = (Panel)(GetPrivateField(form, "_translatorPanel")
+            ?? throw new InvalidOperationException("_translatorPanel was null."));
+        var heading = (Label)(GetPrivateField(form, "_translatorHeadingLabel")
+            ?? throw new InvalidOperationException("_translatorHeadingLabel was null."));
+        var direction = (CheckBox)(GetPrivateField(form, "_translatorDirectionCheckBox")
+            ?? throw new InvalidOperationException("_translatorDirectionCheckBox was null."));
+        var inputLabel = (Label)(GetPrivateField(form, "_translatorInputLabel")
+            ?? throw new InvalidOperationException("_translatorInputLabel was null."));
+        var button = (Button)(GetPrivateField(form, "_translatorButton")
+            ?? throw new InvalidOperationException("_translatorButton was null."));
+
+        AssertFalse(direction.Checked, "translator should default to English-to-Orcish mode");
+        AssertEqual("English to Orcish", heading.Text, "unexpected default translator heading");
+        AssertEqual("English text", inputLabel.Text, "unexpected default translator input label");
+        AssertEqual("Translate to Orcish", button.Text, "unexpected default translator button text");
+        AssertEqual(0, panel.Controls.OfType<LinkLabel>().Count(), "native translator should not expose web hyperlinks");
+
+        direction.Checked = true;
+
+        AssertEqual("Orcish to English", heading.Text, "unexpected reverse translator heading");
+        AssertEqual("Orcish text", inputLabel.Text, "unexpected reverse translator input label");
+        AssertEqual("Translate to English", button.Text, "unexpected reverse translator button text");
     });
 }
 

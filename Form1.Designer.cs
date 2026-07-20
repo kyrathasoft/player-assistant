@@ -41,6 +41,7 @@ namespace PlayerAssistant
             myHeroBriefingToolStripMenuItem = new ToolStripMenuItem();
             adventureOutlineToolStripMenuItem = new ToolStripMenuItem();
             regionalMapToolStripMenuItem = new ToolStripMenuItem();
+            translatorToolStripMenuItem = new ToolStripMenuItem();
             searchToolStripMenuItem = new ToolStripMenuItem();
             settingsToolStripMenuItem = new ToolStripMenuItem();
             skipHeroImageParadeAtStartupToolStripMenuItem = new ToolStripMenuItem();
@@ -95,7 +96,7 @@ namespace PlayerAssistant
             // 
             // showToolStripMenuItem
             // 
-            showToolStripMenuItem.DropDownItems.AddRange(new ToolStripItem[] { loginInfoToolStripMenuItem, showPostTotalsToolStripMenuItem, showDiceRollsToolStripMenuItem, xpToolStripMenuItem, partyToolStripMenuItem, formerPcsToolStripMenuItem, myHeroBriefingToolStripMenuItem, adventureOutlineToolStripMenuItem, regionalMapToolStripMenuItem });
+            showToolStripMenuItem.DropDownItems.AddRange(new ToolStripItem[] { loginInfoToolStripMenuItem, showPostTotalsToolStripMenuItem, showDiceRollsToolStripMenuItem, xpToolStripMenuItem, partyToolStripMenuItem, formerPcsToolStripMenuItem, myHeroBriefingToolStripMenuItem, adventureOutlineToolStripMenuItem, regionalMapToolStripMenuItem, translatorToolStripMenuItem });
             showToolStripMenuItem.Name = "showToolStripMenuItem";
             showToolStripMenuItem.Size = new Size(48, 20);
             showToolStripMenuItem.Text = "Show";
@@ -135,9 +136,9 @@ namespace PlayerAssistant
             partyToolStripMenuItem.Size = new Size(163, 22);
             partyToolStripMenuItem.Text = "Party";
             partyToolStripMenuItem.Click += PartyToolStripMenuItem_Click;
-            // 
+            //
             // formerPcsToolStripMenuItem
-            // 
+            //
             formerPcsToolStripMenuItem.Name = "formerPcsToolStripMenuItem";
             formerPcsToolStripMenuItem.Size = new Size(163, 22);
             formerPcsToolStripMenuItem.Text = "Former PCs";
@@ -164,7 +165,14 @@ namespace PlayerAssistant
             regionalMapToolStripMenuItem.Size = new Size(163, 22);
             regionalMapToolStripMenuItem.Text = "Regional Map";
             regionalMapToolStripMenuItem.Click += RegionalMapToolStripMenuItem_Click;
-            // 
+            //
+            // translatorToolStripMenuItem
+            //
+            translatorToolStripMenuItem.Name = "translatorToolStripMenuItem";
+            translatorToolStripMenuItem.Size = new Size(163, 22);
+            translatorToolStripMenuItem.Text = "Translator";
+            translatorToolStripMenuItem.Click += TranslatorToolStripMenuItem_Click;
+            //
             // searchToolStripMenuItem
             // 
             searchToolStripMenuItem.Name = "searchToolStripMenuItem";
@@ -427,6 +435,7 @@ namespace PlayerAssistant
         private ToolStripMenuItem myHeroBriefingToolStripMenuItem;
         private ToolStripMenuItem adventureOutlineToolStripMenuItem;
         private ToolStripMenuItem regionalMapToolStripMenuItem;
+        private ToolStripMenuItem translatorToolStripMenuItem;
         private ToolStripMenuItem exitToolStripMenuItem;
         private ToolStripMenuItem settingsToolStripMenuItem;
         private ToolStripMenuItem skipHeroImageParadeAtStartupToolStripMenuItem;

@@ -34,6 +34,8 @@
     <Compile Include="..\OrcishTranslatorUtility.EarthItCaresNotBatch.cs" Link="OrcishTranslatorUtility.EarthItCaresNotBatch.cs" />
     <Compile Include="..\OrcishTranslatorUtility.LocalShadowdimBatch.cs" Link="OrcishTranslatorUtility.LocalShadowdimBatch.cs" />
     <Compile Include="..\OrcishTranslatorUtility.SomethingFoundIIBatch.cs" Link="OrcishTranslatorUtility.SomethingFoundIIBatch.cs" />
+    <Compile Include="..\OrcishTranslatorUtility.MegadungeonsBatch.cs" Link="OrcishTranslatorUtility.MegadungeonsBatch.cs" />
+    <Compile Include="..\OrcishTranslatorUtility.Text.cs" Link="OrcishTranslatorUtility.Text.cs" />
     <Compile Include="..\OrcishTranslatorUtility.BlogFollowupBatch.cs" Link="OrcishTranslatorUtility.BlogFollowupBatch.cs" />
     <Compile Include="..\OrcishTranslatorUtility.ShadowdimBlogBatch.cs" Link="OrcishTranslatorUtility.ShadowdimBlogBatch.cs" />
     <Compile Include="..\OrcishTranslatorUtility.cs" Link="OrcishTranslatorUtility.cs" />
