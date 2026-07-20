@@ -92,6 +92,8 @@ var tests = new (string Name, Action Test)[]
     ("orcish translator supports third various ebooks corpus candidate vocabulary", OrcishTranslatorSupportsVariousEbooksCorpusThirdCandidateVocabulary),
     ("orcish translator supports fourth various ebooks corpus candidate vocabulary", OrcishTranslatorSupportsVariousEbooksCorpusFourthCandidateVocabulary),
     ("orcish translator supports The Earth It Cares Not vocabulary", OrcishTranslatorSupportsEarthItCaresNotVocabulary),
+    ("orcish translator supports local Shadowdim vocabulary", OrcishTranslatorSupportsLocalShadowdimVocabulary),
+    ("orcish translator supports Something Found II vocabulary", OrcishTranslatorSupportsSomethingFoundIIVocabulary),
     ("orcish translator supports fifth Gutenberg corpus candidate vocabulary", OrcishTranslatorSupportsGutenbergCorpusFifthCandidateVocabulary),
     ("orcish translator supports sixth Gutenberg corpus candidate vocabulary", OrcishTranslatorSupportsGutenbergCorpusSixthCandidateVocabulary),
     ("orcish translator excludes approved anachronistic families", OrcishTranslatorExcludesApprovedAnachronisticFamilies),
@@ -2087,6 +2089,83 @@ static void OrcishTranslatorSupportsEarthItCaresNotVocabulary()
     }
 }
 
+static void OrcishTranslatorSupportsLocalShadowdimVocabulary()
+{
+    var entries = OrcishTranslatorUtility.GetLexiconEntries()
+        .Where(entry => HasAnyTag(entry, "local-shadowdim"))
+        .ToArray();
+
+    AssertEqual(32, entries.Length, "expected the curated source and morphology entries from local Shadowdim Markdown");
+
+    var sourceEnglish = new[]
+    {
+        "world", "section", "tools", "cultist's", "operations", "site", "snap-crack",
+        "document", "dungeon's", "fighter-thief", "instructions", "lapis-lazuli-tiled",
+        "logothete's", "orojiam", "over-muscled", "passphrase", "beastman's",
+        "beastmen's", "caprine's", "colossai", "curation", "sources", "trapdoor's"
+    };
+    AssertEqual(23, sourceEnglish.Length, "expected every curated local Shadowdim source candidate");
+
+    foreach (var english in sourceEnglish)
+    {
+        var entry = entries.Single(candidate => string.Equals(candidate.English, english, StringComparison.OrdinalIgnoreCase));
+        var reviewIssues = OrcishTranslatorUtility.ReviewProposedLexiconEntry(entry)
+            .Where(issue => !string.Equals(issue.Code, "exact-duplicate", StringComparison.OrdinalIgnoreCase))
+            .ToArray();
+        AssertEqual(0, reviewIssues.Length, $"expected reviewed entry '{entry.English}' to remain admissible");
+
+        var translations = OrcishTranslatorUtility.TranslateEnglishToOrcish(entry.English);
+        AssertTrue(
+            translations.Any(candidate => string.Equals(candidate.Translation, entry.Orcish, StringComparison.OrdinalIgnoreCase)),
+            $"expected '{entry.English}' to translate as '{entry.Orcish}'");
+    }
+
+    foreach (var derivedEnglish in new[]
+             {
+                 "sections", "sites", "documents", "passphrases", "tools'", "operations'",
+                 "instructions'", "colossai's", "sources'"
+             })
+    {
+        AssertTrue(
+            entries.Any(entry => string.Equals(entry.English, derivedEnglish, StringComparison.OrdinalIgnoreCase)),
+            $"expected morphology to cover local Shadowdim family form '{derivedEnglish}'");
+    }
+
+    AssertEqual(0, OrcishTranslatorUtility.TranslateEnglishToOrcish("clink-clink-clink").Count, "dropped sound effect should remain untranslated");
+}
+
+static void OrcishTranslatorSupportsSomethingFoundIIVocabulary()
+{
+    var entries = OrcishTranslatorUtility.GetLexiconEntries()
+        .Where(entry => HasAnyTag(entry, "something-found-ii"))
+        .ToArray();
+    var sourceEnglish = """
+aftereffects admittedly all-encompassing ambiance arguably bearhug bloodbath bone-chilling boxy catty-corner cerebral cityscape clamshell cloudscape confounded decades-long disappointment dollop eye-catching gaggle gawking goosebumps gothic grey-black heart-reader heart-racing heart-sinking heart-stopping incomparable invasive landmass lavender-white life-ending liminal liver-spotted metamorphosis mid-stride midship mind-boggling nexus-point nonstop off-guard off-yellow otherness pencil-thin petrichor piggyback reconsider resemblance riptide roiling seabed smaller-framed soul-sinking splat squish starstruck still-standing stone-faced sulfurous thunderheads toasty toothy topsy-turvy unabated unadulterated unbearable unbelievable unbelievably unblemished unbreathable unbridled unearthly unfathomable unfazed unfiltered unheard unhinged uninhabited uninvited unleash unnaturally unorthodox unquenchable unreality unresolvable unruffled unsettlingly unspool unthreatening unwarranted veiny vegetal vertiginous vibrancy viewpoint war-ravaged warzone wasp-like water-whip wild-haired wind-rushing wine-colored world-changing world-ending worrisome yellow-gold
+""".Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+
+    AssertEqual(107, sourceEnglish.Length, "expected every curated Something Found II source candidate except dropped terms");
+    foreach (var english in sourceEnglish)
+    {
+        AssertTrue(
+            OrcishTranslatorUtility.TranslateEnglishToOrcish(english).Count > 0,
+            $"expected source candidate '{english}' to translate");
+    }
+
+    var acceptedEntries = OrcishTranslatorUtility.GetLexiconEntries()
+        .Where(entry => !HasAnyTag(entry, "something-found-ii"))
+        .ToList();
+    foreach (var entry in entries.Where(entry => !HasAnyTag(entry, "derived-by-rule")))
+    {
+        var reviewIssues = OrcishLexiconReviewUtility.ReviewProposedEntry(entry, acceptedEntries);
+        AssertEqual(0, reviewIssues.Count, $"expected reviewed entry '{entry.English}' to remain admissible");
+        acceptedEntries.Add(entry);
+    }
+
+    AssertEqual(0, OrcishTranslatorUtility.TranslateEnglishToOrcish("zaffre").Count, "dropped zaffre candidate should remain untranslated");
+    AssertEqual(0, OrcishTranslatorUtility.TranslateEnglishToOrcish("white-purple").Count, "dropped white-purple candidate should remain untranslated");
+    AssertEqual(0, OrcishTranslatorUtility.TranslateEnglishToOrcish("youth-spirited").Count, "dropped youth-spirited candidate should remain untranslated");
+}
+
 static void OrcishTranslatorSupportsGutenbergCorpusFifthCandidateVocabulary()
 {
     var entries = OrcishTranslatorUtility.GetLexiconEntries()
@@ -2187,7 +2266,7 @@ static void OrcishTranslatorExposesUniqueEnglishTermCount()
 {
     var terms = OrcishTranslatorUtility.GetEnglishTerms();
 
-    AssertEqual(80473, OrcishTranslatorUtility.GetEnglishTermCount(), "unexpected total English term count");
+    AssertEqual(80645, OrcishTranslatorUtility.GetEnglishTermCount(), "unexpected total English term count");
     AssertEqual(OrcishTranslatorUtility.GetEnglishTermCount(), terms.Count, "term list and count should agree");
     AssertEqual(1, terms.Count(term => string.Equals(term, "I", StringComparison.OrdinalIgnoreCase)), "I should be counted once despite multiple variants");
     AssertEqual(1, terms.Count(term => string.Equals(term, "really", StringComparison.OrdinalIgnoreCase)), "really should be counted once despite multiple variants");

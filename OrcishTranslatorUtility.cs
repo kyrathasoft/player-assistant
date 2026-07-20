@@ -4113,6 +4113,8 @@ namespace PlayerAssistant
             entries.AddRange(BuildVariousEbooksCorpusThirdCandidateEntries(entries));
             entries.AddRange(BuildVariousEbooksCorpusFourthCandidateEntries(entries));
             entries.AddRange(BuildEarthItCaresNotCandidateEntries(entries));
+            entries.AddRange(BuildLocalShadowdimCandidateEntries(entries));
+            entries.AddRange(BuildSomethingFoundIICandidateEntries(entries));
 
             var baseEntries = entries.ToArray();
             entries.AddRange(BuildDerivedMorphologyEntries(baseEntries));
