@@ -100,6 +100,8 @@ var tests = new (string Name, Action Test)[]
     ("orcish translator excludes approved anachronistic families", OrcishTranslatorExcludesApprovedAnachronisticFamilies),
     ("orcish translator supports software artifact vocabulary", OrcishTranslatorSupportsSoftwareArtifactVocabulary),
     ("orcish translator translates full text in both directions", OrcishTranslatorTranslatesFullTextInBothDirections),
+    ("orcish translator warmup is shared", OrcishTranslatorWarmupIsShared),
+    ("orcish translator loads embedded snapshot", OrcishTranslatorLoadsEmbeddedSnapshot),
     ("orcish translator exposes unique english term count", OrcishTranslatorExposesUniqueEnglishTermCount),
     ("to-orcish translates terms before trailing punctuation", ToOrcishTranslatesTermsBeforeTrailingPunctuation),
     ("to-orcish translates dotted abbreviation terms", ToOrcishTranslatesDottedAbbreviationTerms),
@@ -267,6 +269,8 @@ var tests = new (string Name, Action Test)[]
     ("show menu contains adventure outline item", ShowMenuContainsAdventureOutlineItem),
     ("show menu contains translator item", ShowMenuContainsTranslatorItem),
     ("translator view toggles direction without web links", TranslatorViewTogglesDirectionWithoutWebLinks),
+    ("translator view translates while input changes", TranslatorViewTranslatesWhileInputChanges),
+    ("translator view exports english to orcish translation", TranslatorViewExportsEnglishToOrcishTranslation),
     ("adventure outline view displays generated markdown", AdventureOutlineViewDisplaysGeneratedMarkdown),
     ("about menu contains author and update items", AboutMenuContainsAuthorAndUpdateItems),
     ("about author text lists developer info", AboutAuthorTextListsDeveloperInfo),
@@ -2331,6 +2335,66 @@ static void OrcishTranslatorTranslatesFullTextInBothDirections()
         "\"Zug\" ...",
         OrcishTranslatorUtility.TranslateEnglishTextToOrcish("\"hello\" ..."),
         "full-text translation should preserve punctuation-only tokens");
+}
+
+static void OrcishTranslatorWarmupIsShared()
+{
+    OrcishTranslatorWarmupUtility.ResetForTests();
+    using var warmupStarted = new ManualResetEventSlim();
+    using var releaseWarmup = new ManualResetEventSlim();
+    var warmupCount = 0;
+    OrcishTranslatorWarmupUtility.WarmupOverrideForTests = () =>
+    {
+        Interlocked.Increment(ref warmupCount);
+        warmupStarted.Set();
+        if (!releaseWarmup.Wait(TimeSpan.FromSeconds(5)))
+        {
+            throw new TimeoutException("test warmup was not released");
+        }
+
+        return 80974;
+    };
+
+    try
+    {
+        var first = OrcishTranslatorWarmupUtility.StartPreloading();
+        var second = OrcishTranslatorWarmupUtility.StartPreloading();
+
+        AssertTrue(ReferenceEquals(first, second), "translator warmup should be shared");
+        WaitForCondition(() => warmupStarted.IsSet, "translator warmup did not start");
+        AssertFalse(OrcishTranslatorWarmupUtility.IsReady, "blocked translator warmup should not report ready");
+
+        releaseWarmup.Set();
+        var result = first.WaitAsync(TimeSpan.FromSeconds(5)).GetAwaiter().GetResult();
+
+        AssertEqual(80974, result.EnglishTermCount, "unexpected warmed English term count");
+        AssertEqual(1, Volatile.Read(ref warmupCount), "translator warmup should run once");
+        AssertTrue(OrcishTranslatorWarmupUtility.IsReady, "completed translator warmup should report ready");
+    }
+    finally
+    {
+        releaseWarmup.Set();
+        try
+        {
+            OrcishTranslatorWarmupUtility.StartPreloading()
+                .WaitAsync(TimeSpan.FromSeconds(5))
+                .GetAwaiter()
+                .GetResult();
+        }
+        catch
+        {
+        }
+
+        OrcishTranslatorWarmupUtility.ResetForTests();
+    }
+}
+
+static void OrcishTranslatorLoadsEmbeddedSnapshot()
+{
+    AssertEqual(80974, OrcishTranslatorUtility.GetEnglishTermCount(), "unexpected embedded snapshot term count");
+    AssertTrue(
+        OrcishLexiconSnapshotUtility.WasEmbeddedSnapshotLoaded,
+        "translator should load the embedded lexicon snapshot instead of cold-JITing generated builders");
 }
 
 static void OrcishTranslatorExposesUniqueEnglishTermCount()
@@ -6339,33 +6403,167 @@ static void ShowMenuContainsTranslatorItem()
 
 static void TranslatorViewTogglesDirectionWithoutWebLinks()
 {
+    Form1.TranslatorTextOverrideForTests = static (_, _) => string.Empty;
+    try
+    {
+        RunOnStaThread(() =>
+        {
+            using var form = new Form1(suppressHeroImagesForThisRun: true);
+            InvokePrivateMethod(form, "ShowTranslatorPanel");
+
+            var panel = (Panel)(GetPrivateField(form, "_translatorPanel")
+                ?? throw new InvalidOperationException("_translatorPanel was null."));
+            var heading = (Label)(GetPrivateField(form, "_translatorHeadingLabel")
+                ?? throw new InvalidOperationException("_translatorHeadingLabel was null."));
+            var direction = (CheckBox)(GetPrivateField(form, "_translatorDirectionCheckBox")
+                ?? throw new InvalidOperationException("_translatorDirectionCheckBox was null."));
+            var inputLabel = (Label)(GetPrivateField(form, "_translatorInputLabel")
+                ?? throw new InvalidOperationException("_translatorInputLabel was null."));
+            var input = (TextBox)(GetPrivateField(form, "_translatorInputTextBox")
+                ?? throw new InvalidOperationException("_translatorInputTextBox was null."));
+            var output = (TextBox)(GetPrivateField(form, "_translatorOutputTextBox")
+                ?? throw new InvalidOperationException("_translatorOutputTextBox was null."));
+            var exportButton = (Button)(GetPrivateField(form, "_translatorExportButton")
+                ?? throw new InvalidOperationException("_translatorExportButton was null."));
+
+            AssertFalse(direction.Checked, "translator should default to English-to-Orcish mode");
+            AssertEqual("English to Orcish", heading.Text, "unexpected default translator heading");
+            AssertEqual("English text", inputLabel.Text, "unexpected default translator input label");
+            AssertEqual(0, panel.Controls.OfType<LinkLabel>().Count(), "native translator should not expose web hyperlinks");
+            AssertEqual("Export Translation", exportButton.Text, "unexpected translator export button text");
+            AssertFalse(exportButton.Enabled, "export should be unavailable until an English-to-Orcish translation exists");
+
+            input.Text = "x";
+            output.Text = "stale translation";
+
+            direction.Checked = true;
+
+            AssertEqual("Orcish to English", heading.Text, "unexpected reverse translator heading");
+            AssertEqual("Orcish text", inputLabel.Text, "unexpected reverse translator input label");
+            AssertEqual(string.Empty, input.Text, "direction changes should clear translator input");
+            AssertEqual(string.Empty, output.Text, "direction changes should clear translator output");
+            AssertFalse(exportButton.Enabled, "export should remain unavailable in Orcish-to-English mode");
+            AssertTrue(ReferenceEquals(form.ActiveControl, input), "direction changes should return focus to translator input");
+        });
+    }
+    finally
+    {
+        Form1.TranslatorTextOverrideForTests = null;
+    }
+}
+
+static void TranslatorViewExportsEnglishToOrcishTranslation()
+{
+    var exportDirectory = Path.Combine(Path.GetTempPath(), $"player-assistant-translator-{Guid.NewGuid():N}");
+    var exportPath = Path.Combine(exportDirectory, "my-orcish-translation.txt");
+    Directory.CreateDirectory(exportDirectory);
+    Form1.TranslatorTextOverrideForTests = static (_, _) => string.Empty;
+    Form1.TranslatorExportPathOverrideForTests = () => exportPath;
+    try
+    {
+        RunOnStaThread(() =>
+        {
+            using var form = new Form1(suppressHeroImagesForThisRun: true);
+            InvokePrivateMethod(form, "ShowTranslatorPanel");
+
+            var direction = (CheckBox)(GetPrivateField(form, "_translatorDirectionCheckBox")
+                ?? throw new InvalidOperationException("_translatorDirectionCheckBox was null."));
+            var input = (TextBox)(GetPrivateField(form, "_translatorInputTextBox")
+                ?? throw new InvalidOperationException("_translatorInputTextBox was null."));
+            var output = (TextBox)(GetPrivateField(form, "_translatorOutputTextBox")
+                ?? throw new InvalidOperationException("_translatorOutputTextBox was null."));
+            var exportButton = (Button)(GetPrivateField(form, "_translatorExportButton")
+                ?? throw new InvalidOperationException("_translatorExportButton was null."));
+
+            input.Text = "Café";
+            output.Text = "Grûk";
+            AssertTrue(exportButton.Enabled, "export should become available for a non-empty English-to-Orcish translation");
+            AssertEqual(
+                "english-5-bytes-to-orcish-5-bytes",
+                Form1.BuildTranslatorExportDefaultFileName(input.Text, output.Text),
+                "export filename should include the current English and Orcish UTF-8 byte counts");
+
+            InvokePrivateMethod(form, "TranslatorExportButton_Click", exportButton, EventArgs.Empty);
+            AssertEqual("Grûk", File.ReadAllText(exportPath), "exported translation content should match the output textbox");
+
+            direction.Checked = true;
+            output.Text = "Hello";
+            AssertFalse(exportButton.Enabled, "export should be unavailable for Orcish-to-English output");
+        });
+    }
+    finally
+    {
+        Form1.TranslatorTextOverrideForTests = null;
+        Form1.TranslatorExportPathOverrideForTests = null;
+        if (Directory.Exists(exportDirectory))
+        {
+            Directory.Delete(exportDirectory, recursive: true);
+        }
+    }
+}
+
+static void TranslatorViewTranslatesWhileInputChanges()
+{
     RunOnStaThread(() =>
     {
-        using var form = new Form1(suppressHeroImagesForThisRun: true);
-        InvokePrivateMethod(form, "ShowTranslatorPanel");
+        using var synchronizationContext = new WindowsFormsSynchronizationContext();
+        SynchronizationContext.SetSynchronizationContext(synchronizationContext);
+        using var translationStarted = new ManualResetEventSlim();
+        using var releaseTranslation = new ManualResetEventSlim();
+        using var firstTranslationReturned = new ManualResetEventSlim();
+        Form1.TranslatorTextOverrideForTests = (input, orcishToEnglish) =>
+        {
+            if (input == "hello")
+            {
+                translationStarted.Set();
+                if (!releaseTranslation.Wait(TimeSpan.FromSeconds(10)))
+                {
+                    throw new TimeoutException("test translation was not released");
+                }
 
-        var panel = (Panel)(GetPrivateField(form, "_translatorPanel")
-            ?? throw new InvalidOperationException("_translatorPanel was null."));
-        var heading = (Label)(GetPrivateField(form, "_translatorHeadingLabel")
-            ?? throw new InvalidOperationException("_translatorHeadingLabel was null."));
-        var direction = (CheckBox)(GetPrivateField(form, "_translatorDirectionCheckBox")
-            ?? throw new InvalidOperationException("_translatorDirectionCheckBox was null."));
-        var inputLabel = (Label)(GetPrivateField(form, "_translatorInputLabel")
-            ?? throw new InvalidOperationException("_translatorInputLabel was null."));
-        var button = (Button)(GetPrivateField(form, "_translatorButton")
-            ?? throw new InvalidOperationException("_translatorButton was null."));
+                firstTranslationReturned.Set();
+            }
 
-        AssertFalse(direction.Checked, "translator should default to English-to-Orcish mode");
-        AssertEqual("English to Orcish", heading.Text, "unexpected default translator heading");
-        AssertEqual("English text", inputLabel.Text, "unexpected default translator input label");
-        AssertEqual("Translate to Orcish", button.Text, "unexpected default translator button text");
-        AssertEqual(0, panel.Controls.OfType<LinkLabel>().Count(), "native translator should not expose web hyperlinks");
+            return orcishToEnglish ? "Hello" : input == "hello" ? "Zug" : "Durb";
+        };
 
-        direction.Checked = true;
+        try
+        {
+            using var form = new Form1(suppressHeroImagesForThisRun: true);
+            InvokePrivateMethod(form, "ShowTranslatorPanel");
 
-        AssertEqual("Orcish to English", heading.Text, "unexpected reverse translator heading");
-        AssertEqual("Orcish text", inputLabel.Text, "unexpected reverse translator input label");
-        AssertEqual("Translate to English", button.Text, "unexpected reverse translator button text");
+            var input = (TextBox)(GetPrivateField(form, "_translatorInputTextBox")
+                ?? throw new InvalidOperationException("_translatorInputTextBox was null."));
+            var output = (TextBox)(GetPrivateField(form, "_translatorOutputTextBox")
+                ?? throw new InvalidOperationException("_translatorOutputTextBox was null."));
+
+            input.Text = "hello";
+            WaitForWindowsFormsCondition(
+                () => translationStarted.IsSet,
+                "pasted translator input should begin translating promptly");
+            WaitForWindowsFormsCondition(
+                () => form.UseWaitCursor,
+                "translator should show the wait cursor when translation takes noticeable time");
+
+            input.Text = "goodbye";
+            WaitForWindowsFormsCondition(
+                () => output.Text == "Durb",
+                "translator output should update automatically when input changes");
+            AssertFalse(form.UseWaitCursor, "translator should restore the normal cursor after translation");
+
+            releaseTranslation.Set();
+            WaitForWindowsFormsCondition(
+                () => firstTranslationReturned.IsSet,
+                "canceled translator work should finish");
+            Application.DoEvents();
+            AssertEqual("Durb", output.Text, "stale translator work should not replace current output");
+        }
+        finally
+        {
+            releaseTranslation.Set();
+            Form1.TranslatorTextOverrideForTests = null;
+            SynchronizationContext.SetSynchronizationContext(null);
+        }
     });
 }
 
@@ -10734,6 +10932,23 @@ static void WaitForCondition(Func<bool> condition, string message)
     var deadline = DateTimeOffset.UtcNow.AddSeconds(2);
     while (DateTimeOffset.UtcNow < deadline)
     {
+        if (condition())
+        {
+            return;
+        }
+
+        Thread.Sleep(10);
+    }
+
+    throw new InvalidOperationException(message);
+}
+
+static void WaitForWindowsFormsCondition(Func<bool> condition, string message)
+{
+    var deadline = DateTimeOffset.UtcNow.AddSeconds(5);
+    while (DateTimeOffset.UtcNow < deadline)
+    {
+        Application.DoEvents();
         if (condition())
         {
             return;

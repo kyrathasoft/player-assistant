@@ -69,6 +69,8 @@
     <EmbeddedResource Include="Assets\dragon-icon.ico" />
     <EmbeddedResource Include="Assets\dragon-dim.png" />
     <EmbeddedResource Include="Assets\white-marble.png" />
+    <EmbeddedResource Include="web-translator\orcish-lexicon.json" LogicalName="PlayerAssistant.OrcishLexiconSnapshot.json" />
+    <None Remove="web-translator\orcish-lexicon.json" />
   </ItemGroup>
 
   <ItemGroup>

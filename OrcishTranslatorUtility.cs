@@ -51,17 +51,29 @@ namespace PlayerAssistant
         private static readonly Regex FirstPersonPronounPattern =
             new(@"(?<!\S)I(?!\S)", RegexOptions.Compiled);
 
-        private static readonly OrcishLexiconEntry[] LexiconEntries =
-            BuildLexiconEntries();
+        private static readonly Lazy<OrcishLexiconEntry[]> LexiconEntriesSource =
+            new(BuildLexiconEntries, LazyThreadSafetyMode.ExecutionAndPublication);
 
-        private static readonly OrcishAffixEntry[] AffixEntries =
-            BuildAffixEntries();
+        private static readonly Lazy<OrcishAffixEntry[]> AffixEntriesSource =
+            new(BuildAffixEntries, LazyThreadSafetyMode.ExecutionAndPublication);
 
-        private static readonly IReadOnlyDictionary<string, OrcishLexiconEntry[]> EnglishIndex =
-            BuildIndex(LexiconEntries, static entry => entry.English);
+        private static readonly Lazy<IReadOnlyDictionary<string, OrcishLexiconEntry[]>> EnglishIndexSource =
+            new(
+                () => BuildIndex(LexiconEntries, static entry => entry.English),
+                LazyThreadSafetyMode.ExecutionAndPublication);
 
-        private static readonly IReadOnlyDictionary<string, OrcishLexiconEntry[]> OrcishIndex =
-            BuildIndex(LexiconEntries, static entry => entry.Orcish);
+        private static readonly Lazy<IReadOnlyDictionary<string, OrcishLexiconEntry[]>> OrcishIndexSource =
+            new(
+                () => BuildIndex(LexiconEntries, static entry => entry.Orcish),
+                LazyThreadSafetyMode.ExecutionAndPublication);
+
+        private static OrcishLexiconEntry[] LexiconEntries => LexiconEntriesSource.Value;
+
+        private static OrcishAffixEntry[] AffixEntries => AffixEntriesSource.Value;
+
+        private static IReadOnlyDictionary<string, OrcishLexiconEntry[]> EnglishIndex => EnglishIndexSource.Value;
+
+        private static IReadOnlyDictionary<string, OrcishLexiconEntry[]> OrcishIndex => OrcishIndexSource.Value;
 
         public static IReadOnlyList<OrcishTranslationCandidate> TranslateEnglishToOrcish(
             string englishText,
@@ -172,6 +184,13 @@ namespace PlayerAssistant
             return EnglishIndex.Count;
         }
 
+        internal static int WarmUpIndexes()
+        {
+            var englishTermCount = EnglishIndex.Count;
+            _ = OrcishIndex.Count;
+            return englishTermCount;
+        }
+
         public static IReadOnlyList<string> GetEnglishTerms()
         {
             return EnglishIndex.Keys
@@ -201,6 +220,12 @@ namespace PlayerAssistant
         }
 
         private static OrcishLexiconEntry[] BuildLexiconEntries()
+        {
+            return OrcishLexiconSnapshotUtility.TryLoadEmbeddedSnapshot()
+                ?? BuildLexiconEntriesFromSource();
+        }
+
+        private static OrcishLexiconEntry[] BuildLexiconEntriesFromSource()
         {
             // Review every proposed addition with ReviewProposedLexiconEntry before placing it here.
             var entries = new List<OrcishLexiconEntry>

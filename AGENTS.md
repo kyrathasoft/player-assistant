@@ -47,6 +47,7 @@ Rules:
 - Use `codex-scratch\candidates.txt` as the current curated backlog for Orcish lexicon work; remove an item only when the exact remaining candidate has been covered, not merely a related root word.
 - Whenever Orcish translation work is being pursued, check root `dont-scrape-again.md` before selecting or scraping wiki URLs, and add every newly selected URL there so previously used pages are not selected again.
 - After lexicon edits, verify representative terms with `to-orcish`; if Debug outputs are locked, use a Release build artifact for confirmation instead of assuming the change worked.
+- The native app embeds `web-translator\orcish-lexicon.json` for fast translator startup. After lexicon edits, run `web-translator\export-lexicon.ps1` before the final app build so the embedded snapshot stays synchronized with `OrcishTranslatorUtility`.
 
 # Generated artifact update policy
 - Treat root `keyword-index.json` and `sitemap-keyword-urls.json` as the tracked campaign search snapshots. They may be committed only after an intentional crawl/index refresh, schema change, or release-data refresh.
