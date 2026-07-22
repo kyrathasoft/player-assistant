@@ -211,6 +211,8 @@
 
 ## Fresh backlog
 
+- [ ] implement-pc-log-in-dashboard-on-programmers-website
+  - Permanent design and security notes: [implement-pc-log-in-dashboard-on-programmers-website.md](implement-pc-log-in-dashboard-on-programmers-website.md)
 - [x] Complete signed RPOL snapshot coverage beyond the verified root page.
   - [x] Deploy the private DreamHost broker configuration with restricted permissions and required PHP extensions.
   - [x] Add signed, sanitized snapshot upload and bearer-token retrieval endpoints.

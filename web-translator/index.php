@@ -102,7 +102,7 @@ $untranslatedFilename = $orcishToEnglish ? 'untranslated-orcish-words.txt' : 'un
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title><?= escapeHtml($pageTitle) ?></title>
     <meta name="description" content="<?= escapeHtml($pageDescription) ?>">
-    <link rel="stylesheet" href="styles.css?v=20260719-1">
+    <link rel="stylesheet" href="styles.css?v=20260721-1">
     <script src="translator.js?v=20260719-1" defer></script>
 </head>
 <body>

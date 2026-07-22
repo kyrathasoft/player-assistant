@@ -15,6 +15,8 @@ Upload these files together to a PHP-enabled directory on the web host:
 
 Open `index.php` in a browser. The PHP process must be able to read `orcish-lexicon.json`; no database is required, and ordinary PHP session storage must be available.
 
+The interface is mobile-first and adapts from edge-to-edge phone screens to tablet and desktop cards. It respects device safe areas, keeps form controls touch-sized, and wraps long download labels without horizontal scrolling.
+
 Translations use a short-lived PHP session value so the result survives the post-to-get redirect exactly once. Reloading the result page clears the English textbox, removes the Orcish result textbox, and prevents accidental form resubmission. When a translation is visible, the footer offers it as a plain-text download beneath the full JSON lexicon download.
 
 If one or more unique source words cannot be translated, the result footer also offers a plain-text download. In English-to-Orcish mode it is `untranslated-words.txt`; in Orcish-to-English mode it is `untranslated-orcish-words.txt`. Each file contains only the untranslated source words, one per line. The adjacent note invites the user to email that list to `kyrathasoft@gmail.com`; the application does not send email or collect the list automatically.
