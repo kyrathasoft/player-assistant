@@ -42,6 +42,8 @@ namespace PlayerAssistant
             adventureOutlineToolStripMenuItem = new ToolStripMenuItem();
             regionalMapToolStripMenuItem = new ToolStripMenuItem();
             translatorToolStripMenuItem = new ToolStripMenuItem();
+            orcishTranslatorToolStripMenuItem = new ToolStripMenuItem();
+            elvenTranslatorToolStripMenuItem = new ToolStripMenuItem();
             searchToolStripMenuItem = new ToolStripMenuItem();
             settingsToolStripMenuItem = new ToolStripMenuItem();
             skipHeroImageParadeAtStartupToolStripMenuItem = new ToolStripMenuItem();
@@ -168,10 +170,24 @@ namespace PlayerAssistant
             //
             // translatorToolStripMenuItem
             //
+            translatorToolStripMenuItem.DropDownItems.AddRange(new ToolStripItem[] { orcishTranslatorToolStripMenuItem, elvenTranslatorToolStripMenuItem });
             translatorToolStripMenuItem.Name = "translatorToolStripMenuItem";
             translatorToolStripMenuItem.Size = new Size(163, 22);
-            translatorToolStripMenuItem.Text = "Translator";
-            translatorToolStripMenuItem.Click += TranslatorToolStripMenuItem_Click;
+            translatorToolStripMenuItem.Text = "Translate";
+            //
+            // orcishTranslatorToolStripMenuItem
+            //
+            orcishTranslatorToolStripMenuItem.Name = "orcishTranslatorToolStripMenuItem";
+            orcishTranslatorToolStripMenuItem.Size = new Size(180, 22);
+            orcishTranslatorToolStripMenuItem.Text = "Orcish";
+            orcishTranslatorToolStripMenuItem.Click += OrcishTranslatorToolStripMenuItem_Click;
+            //
+            // elvenTranslatorToolStripMenuItem
+            //
+            elvenTranslatorToolStripMenuItem.Name = "elvenTranslatorToolStripMenuItem";
+            elvenTranslatorToolStripMenuItem.Size = new Size(180, 22);
+            elvenTranslatorToolStripMenuItem.Text = "Elven";
+            elvenTranslatorToolStripMenuItem.Click += ElvenTranslatorToolStripMenuItem_Click;
             //
             // searchToolStripMenuItem
             // 
@@ -436,6 +452,8 @@ namespace PlayerAssistant
         private ToolStripMenuItem adventureOutlineToolStripMenuItem;
         private ToolStripMenuItem regionalMapToolStripMenuItem;
         private ToolStripMenuItem translatorToolStripMenuItem;
+        private ToolStripMenuItem orcishTranslatorToolStripMenuItem;
+        private ToolStripMenuItem elvenTranslatorToolStripMenuItem;
         private ToolStripMenuItem exitToolStripMenuItem;
         private ToolStripMenuItem settingsToolStripMenuItem;
         private ToolStripMenuItem skipHeroImageParadeAtStartupToolStripMenuItem;

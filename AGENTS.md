@@ -47,6 +47,9 @@ Rules:
 - Use `codex-scratch\candidates.txt` as the current curated backlog for Orcish lexicon work; remove an item only when the exact remaining candidate has been covered, not merely a related root word.
 - Whenever Orcish translation work is being pursued, check root `dont-scrape-again.md` before selecting or scraping wiki URLs, and add every newly selected URL there so previously used pages are not selected again.
 - After lexicon edits, verify representative terms with `to-orcish`; if Debug outputs are locked, use a Release build artifact for confirmation instead of assuming the change worked.
+- Before adopting a locally invented or manually added Elven entry, run it through `ElvenTranslatorUtility.ReviewProposedLexiconEntry()` and reject unresolved review issues.
+- Elven additions must identify `Sindarin` or `Quenya` explicitly and declare established same-language `RootForms`; wholly invented roots require `root-invention-reviewed` after manual linguistic review.
+- Treat `collision-reviewed`, `close-form-reviewed`, `root-change-reviewed`, `compound-reviewed`, and `phonotactics-reviewed` as explicit human-review exceptions, not automatic bypass tags. Preserve Sindarin preference and do not add a Quenya fallback where the English term already has a Sindarin form.
 - The native app embeds `web-translator\orcish-lexicon.json` for fast translator startup. After lexicon edits, run `web-translator\export-lexicon.ps1` before the final app build so the embedded snapshot stays synchronized with `OrcishTranslatorUtility`.
 
 # Generated artifact update policy

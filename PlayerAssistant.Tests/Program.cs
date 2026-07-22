@@ -268,7 +268,13 @@ var tests = new (string Name, Action Test)[]
     ("show menu contains my hero briefing item", ShowMenuContainsMyHeroBriefingItem),
     ("show menu contains adventure outline item", ShowMenuContainsAdventureOutlineItem),
     ("show menu contains translator item", ShowMenuContainsTranslatorItem),
+    ("elven translator prefers Sindarin and falls back to Quenya", ElvenTranslatorPrefersSindarinAndFallsBackToQuenya),
+    ("elven translator preserves text and punctuation", ElvenTranslatorPreservesTextAndPunctuation),
+    ("elven lexicon validator accepts reviewed rooted additions", ElvenLexiconValidatorAcceptsReviewedRootedAdditions),
+    ("elven lexicon validator rejects unsupported additions", ElvenLexiconValidatorRejectsUnsupportedAdditions),
+    ("elven lexicon validator preserves Sindarin preference", ElvenLexiconValidatorPreservesSindarinPreference),
     ("translator view toggles direction without web links", TranslatorViewTogglesDirectionWithoutWebLinks),
+    ("translator view supports Elven mode", TranslatorViewSupportsElvenMode),
     ("translator view translates while input changes", TranslatorViewTranslatesWhileInputChanges),
     ("translator view exports english to orcish translation", TranslatorViewExportsEnglishToOrcishTranslation),
     ("adventure outline view displays generated markdown", AdventureOutlineViewDisplaysGeneratedMarkdown),
@@ -6393,12 +6399,169 @@ static void ShowMenuContainsTranslatorItem()
             ?? throw new InvalidOperationException("showToolStripMenuItem was null."));
         var translatorMenuItem = (ToolStripMenuItem)(GetPrivateField(form, "translatorToolStripMenuItem")
             ?? throw new InvalidOperationException("translatorToolStripMenuItem was null."));
+        var orcishMenuItem = (ToolStripMenuItem)(GetPrivateField(form, "orcishTranslatorToolStripMenuItem")
+            ?? throw new InvalidOperationException("orcishTranslatorToolStripMenuItem was null."));
+        var elvenMenuItem = (ToolStripMenuItem)(GetPrivateField(form, "elvenTranslatorToolStripMenuItem")
+            ?? throw new InvalidOperationException("elvenTranslatorToolStripMenuItem was null."));
 
-        AssertEqual("Translator", translatorMenuItem.Text ?? string.Empty, "unexpected Translator menu item text");
+        AssertEqual("Translate", translatorMenuItem.Text ?? string.Empty, "unexpected Translate menu item text");
         AssertTrue(
             showMenuItem.DropDownItems.Cast<ToolStripItem>().Contains(translatorMenuItem),
-            "Show menu should contain the Translator item");
+            "Show menu should contain the Translate item");
+        AssertEqual("Orcish", orcishMenuItem.Text ?? string.Empty, "unexpected Orcish translator menu text");
+        AssertEqual("Elven", elvenMenuItem.Text ?? string.Empty, "unexpected Elven translator menu text");
+        AssertTrue(translatorMenuItem.DropDownItems.Contains(orcishMenuItem), "Translate should contain Orcish");
+        AssertTrue(translatorMenuItem.DropDownItems.Contains(elvenMenuItem), "Translate should contain Elven");
     });
+}
+
+static void ElvenTranslatorPrefersSindarinAndFallsBackToQuenya()
+{
+    var friend = ElvenTranslatorUtility.TranslateEnglishToElven("friend");
+    AssertTrue(friend.Count > 0, "friend should have an Elven translation");
+    AssertEqual("mellon", friend[0].Translation, "friend should prefer the standard Sindarin form");
+    AssertTrue(friend.All(candidate => candidate.Language == "Sindarin"), "friend should not expose Quenya when Sindarin exists");
+
+    var abandon = ElvenTranslatorUtility.TranslateEnglishToElven("abandon");
+    AssertTrue(abandon.Count > 0, "abandon should have a Quenya fallback");
+    AssertEqual("Quenya", abandon[0].Language, "abandon should use Quenya only because Sindarin is unavailable");
+    AssertEqual("hehta", abandon[0].Translation, "unexpected Quenya fallback for abandon");
+    AssertTrue(ElvenTranslatorUtility.GetEnglishTermCount() > 9000, "embedded Elven lexicon should expose the generated vocabulary");
+}
+
+static void ElvenTranslatorPreservesTextAndPunctuation()
+{
+    AssertEqual(
+        "Mellon hehta untranslatedword.",
+        ElvenTranslatorUtility.TranslateEnglishTextToElven("friend abandon untranslatedword."),
+        "Elven text translation should translate known words and preserve unknown words");
+    AssertEqual(
+        "Friend.",
+        ElvenTranslatorUtility.TranslateElvenTextToEnglish("mellon."),
+        "Elven reverse translation should preserve punctuation");
+}
+
+static void ElvenLexiconValidatorAcceptsReviewedRootedAdditions()
+{
+    var rooted = new ElvenLexiconEntry(
+        "local fellowship test",
+        "mellonath",
+        "Sindarin",
+        PartOfSpeech: "noun",
+        RootForms: ["mellon"],
+        Tags: ["phonotactics-reviewed", "close-form-reviewed"]);
+    AssertEqual(
+        0,
+        ElvenTranslatorUtility.ReviewProposedLexiconEntry(rooted).Count,
+        "a same-language rooted Sindarin addition should pass after exceptional sound patterns are reviewed");
+    ElvenTranslatorUtility.EnsureProposedLexiconEntryCanBeAdded(rooted);
+
+    var reviewedNewRoot = new ElvenLexiconEntry(
+        "local Quenya test root",
+        "závora",
+        "Quenya",
+        Tags: ["root-invention-reviewed", "phonotactics-reviewed", "close-form-reviewed"]);
+    ElvenTranslatorUtility.EnsureProposedLexiconEntryCanBeAdded(reviewedNewRoot);
+}
+
+static void ElvenLexiconValidatorRejectsUnsupportedAdditions()
+{
+    var missingProvenance = ElvenTranslatorUtility.ReviewProposedLexiconEntry(
+        new ElvenLexiconEntry("local unsupported test", "mellonath", "Sindarin"));
+    AssertTrue(
+        missingProvenance.Any(issue => issue.Code == "root-provenance-required"),
+        "local additions should declare established roots or explicit invented-root review");
+
+    var crossLanguage = ElvenTranslatorUtility.ReviewProposedLexiconEntry(
+        new ElvenLexiconEntry(
+            "local cross-language test",
+            "mellonion",
+            "Quenya",
+            RootForms: ["mellon"],
+            Tags: ["phonotactics-reviewed", "close-form-reviewed"]));
+    AssertTrue(
+        crossLanguage.Any(issue => issue.Code == "cross-language-root"),
+        "Quenya additions should not silently derive from a Sindarin root");
+
+    var changedRoot = ElvenTranslatorUtility.ReviewProposedLexiconEntry(
+        new ElvenLexiconEntry(
+            "local changed-root test",
+            "calad",
+            "Sindarin",
+            RootForms: ["mellon"],
+            Tags: ["collision-reviewed", "phonotactics-reviewed", "close-form-reviewed"]));
+    AssertTrue(
+        changedRoot.Any(issue => issue.Code == "root-form-mismatch"),
+        "unexplained root replacement should be rejected");
+
+    var malformed = ElvenTranslatorUtility.ReviewProposedLexiconEntry(
+        new ElvenLexiconEntry(
+            "local malformed test",
+            "mel@lon",
+            "Sindarin",
+            Tags: ["root-invention-reviewed", "phonotactics-reviewed", "close-form-reviewed"]));
+    AssertTrue(
+        malformed.Any(issue => issue.Code == "invalid-elvish-character"),
+        "non-Elvish punctuation should be rejected");
+}
+
+static void ElvenLexiconValidatorPreservesSindarinPreference()
+{
+    var quenyaFriend = ElvenTranslatorUtility.ReviewProposedLexiconEntry(
+        new ElvenLexiconEntry(
+            "friend",
+            "málo",
+            "Quenya",
+            Tags: ["root-invention-reviewed", "phonotactics-reviewed", "close-form-reviewed", "collision-reviewed"]));
+    AssertTrue(
+        quenyaFriend.Any(issue => issue.Code == "quenya-shadowed-by-sindarin"),
+        "Quenya should not be added when Sindarin already covers the English term");
+
+    var closeForm = ElvenTranslatorUtility.ReviewProposedLexiconEntry(
+        new ElvenLexiconEntry(
+            "local close-form test",
+            "mellom",
+            "Sindarin",
+            Tags: ["root-invention-reviewed", "phonotactics-reviewed"]));
+    AssertTrue(
+        closeForm.Any(issue => issue.Code == "close-form-conflict"),
+        "near-colliding Elven forms should require explicit review");
+}
+
+static void TranslatorViewSupportsElvenMode()
+{
+    Form1.TranslatorTextOverrideForTests = static (_, _) => string.Empty;
+    try
+    {
+        RunOnStaThread(() =>
+        {
+            using var form = new Form1(suppressHeroImagesForThisRun: true);
+            var elvenMenuItem = (ToolStripMenuItem)(GetPrivateField(form, "elvenTranslatorToolStripMenuItem")
+                ?? throw new InvalidOperationException("elvenTranslatorToolStripMenuItem was null."));
+            elvenMenuItem.PerformClick();
+
+            var heading = (Label)(GetPrivateField(form, "_translatorHeadingLabel")
+                ?? throw new InvalidOperationException("_translatorHeadingLabel was null."));
+            var direction = (CheckBox)(GetPrivateField(form, "_translatorDirectionCheckBox")
+                ?? throw new InvalidOperationException("_translatorDirectionCheckBox was null."));
+            var output = (TextBox)(GetPrivateField(form, "_translatorOutputTextBox")
+                ?? throw new InvalidOperationException("_translatorOutputTextBox was null."));
+            var exportButton = (Button)(GetPrivateField(form, "_translatorExportButton")
+                ?? throw new InvalidOperationException("_translatorExportButton was null."));
+
+            AssertEqual("English to Elven", heading.Text, "Elven menu should open English-to-Elven mode");
+            AssertEqual("Elven to English", direction.Text, "Elven direction toggle should identify its source language");
+            output.Text = "mellon";
+            AssertFalse(exportButton.Visible, "Orcish export should not appear in Elven mode");
+
+            direction.Checked = true;
+            AssertEqual("Elven to English", heading.Text, "Elven reverse mode should update the heading");
+        });
+    }
+    finally
+    {
+        Form1.TranslatorTextOverrideForTests = null;
+    }
 }
 
 static void TranslatorViewTogglesDirectionWithoutWebLinks()

@@ -37,6 +37,7 @@
     <Compile Remove="Debug-*\**\*.cs" />
     <Compile Remove="codex-scratch\**\*.cs" />
     <Compile Remove="ToOrcish\**\*.cs" />
+    <Compile Remove="ToElvish\**\*" />
     <Compile Remove="PlayerAssistant.Launcher\**\*.cs" />
     <Compile Remove="PlayerAssistant.Tests\**\*.cs" />
     <EmbeddedResource Remove="obj\**\*" />
@@ -49,6 +50,7 @@
     <EmbeddedResource Remove="Debug-*\**\*" />
     <EmbeddedResource Remove="codex-scratch\**\*" />
     <EmbeddedResource Remove="ToOrcish\**\*" />
+    <EmbeddedResource Remove="ToElvish\**\*" />
     <EmbeddedResource Remove="PlayerAssistant.Launcher\**\*" />
     <EmbeddedResource Remove="PlayerAssistant.Tests\**\*" />
     <None Remove="obj\**\*" />
@@ -61,6 +63,7 @@
     <None Remove="Debug-*\**\*" />
     <None Remove="codex-scratch\**\*" />
     <None Remove="ToOrcish\**\*" />
+    <None Remove="ToElvish\**\*" />
     <None Remove="PlayerAssistant.Launcher\**\*" />
     <None Remove="PlayerAssistant.Tests\**\*" />
   </ItemGroup>
@@ -70,7 +73,9 @@
     <EmbeddedResource Include="Assets\dragon-dim.png" />
     <EmbeddedResource Include="Assets\white-marble.png" />
     <EmbeddedResource Include="web-translator\orcish-lexicon.json" LogicalName="PlayerAssistant.OrcishLexiconSnapshot.json" />
+    <EmbeddedResource Include="web-translator\elven-lexicon.json" LogicalName="PlayerAssistant.ElvenLexiconSnapshot.json" />
     <None Remove="web-translator\orcish-lexicon.json" />
+    <None Remove="web-translator\elven-lexicon.json" />
   </ItemGroup>
 
   <ItemGroup>

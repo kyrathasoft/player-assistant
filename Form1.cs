@@ -36,6 +36,12 @@ namespace PlayerAssistant
             Bullet
         }
 
+        private enum TranslatorTargetLanguage
+        {
+            Orcish,
+            Elven
+        }
+
         private static readonly string[] MyHeroBriefingLikelyResponseKeyLines =
         [
             "*First, the app finds the hero's latest authored post in each thread.*",
@@ -163,6 +169,7 @@ namespace PlayerAssistant
         private int _translatorTranslationGeneration;
         private int _translatorPreviousInputLength;
         private bool _translatorWaitCursorActive;
+        private TranslatorTargetLanguage _translatorTargetLanguage = TranslatorTargetLanguage.Orcish;
         internal static Func<string, bool, string>? TranslatorTextOverrideForTests { get; set; }
         internal static Func<string?>? TranslatorExportPathOverrideForTests { get; set; }
         private Image? _regionalMapImage;
@@ -890,7 +897,17 @@ namespace PlayerAssistant
             ShowSearchPanel();
         }
 
-        private void TranslatorToolStripMenuItem_Click(object? sender, EventArgs e)
+        private void OrcishTranslatorToolStripMenuItem_Click(object? sender, EventArgs e)
+        {
+            ShowTranslator(TranslatorTargetLanguage.Orcish);
+        }
+
+        private void ElvenTranslatorToolStripMenuItem_Click(object? sender, EventArgs e)
+        {
+            ShowTranslator(TranslatorTargetLanguage.Elven);
+        }
+
+        private void ShowTranslator(TranslatorTargetLanguage targetLanguage)
         {
             ClearDiceRollsDisplayIfVisible();
             HideSearchPanel();
@@ -902,7 +919,7 @@ namespace PlayerAssistant
             EnableMyHeroBriefingMenuItem();
             EnableAdventureOutlineMenuItem();
             ClearDisplaySurfaceForRegionalMap();
-            ShowTranslatorPanel();
+            ShowTranslatorPanel(targetLanguage);
         }
 
         private async void LoginInfoToolStripMenuItem_Click(object? sender, EventArgs e)
@@ -4727,26 +4744,37 @@ namespace PlayerAssistant
             formerPcsToolStripMenuItem.Enabled = showMenuItemsEnabled && !_showFormerPcs;
             myHeroBriefingToolStripMenuItem.Enabled = showMenuItemsEnabled && !_showMyHeroBriefing;
             adventureOutlineToolStripMenuItem.Enabled = showMenuItemsEnabled && _adventureOutlineTextBox is null;
-            translatorToolStripMenuItem.Enabled = showMenuItemsEnabled && _translatorPanel is null;
+            translatorToolStripMenuItem.Enabled = showMenuItemsEnabled;
+            orcishTranslatorToolStripMenuItem.Enabled = showMenuItemsEnabled &&
+                (_translatorPanel is null || _translatorTargetLanguage != TranslatorTargetLanguage.Orcish);
+            elvenTranslatorToolStripMenuItem.Enabled = showMenuItemsEnabled &&
+                (_translatorPanel is null || _translatorTargetLanguage != TranslatorTargetLanguage.Elven);
             UpdateRegionalMapMenuItem();
         }
 
         private void ShowTranslatorPanel()
         {
+            ShowTranslatorPanel(TranslatorTargetLanguage.Orcish);
+        }
+
+        private void ShowTranslatorPanel(TranslatorTargetLanguage targetLanguage)
+        {
             DisposeTranslatorPanel();
+            _translatorTargetLanguage = targetLanguage;
+            var targetName = GetTranslatorTargetName();
 
             _translatorHeadingLabel = new Label
             {
                 AutoSize = true,
                 Font = new Font("Segoe UI", 18F, FontStyle.Bold),
                 Name = "lblTranslatorHeading",
-                Text = "English to Orcish"
+                Text = $"English to {targetName}"
             };
             _translatorDirectionCheckBox = new CheckBox
             {
                 AutoSize = true,
-                Name = "chkTranslatorOrcishToEnglish",
-                Text = "Orcish to English",
+                Name = "chkTranslatorTargetToEnglish",
+                Text = $"{targetName} to English",
                 UseVisualStyleBackColor = true
             };
             _translatorDirectionCheckBox.CheckedChanged += TranslatorDirectionCheckBox_CheckedChanged;
@@ -4772,7 +4800,7 @@ namespace PlayerAssistant
                 AutoSize = true,
                 Font = new Font("Segoe UI", 10F, FontStyle.Bold),
                 Name = "lblTranslatorOutput",
-                Text = "Orcish translation"
+                Text = $"{targetName} translation"
             };
             _translatorOutputTextBox = new TextBox
             {
@@ -4815,7 +4843,8 @@ namespace PlayerAssistant
             _translatorPanel.BringToFront();
             menuStrip.BringToFront();
             statusStrip.BringToFront();
-            translatorToolStripMenuItem.Enabled = false;
+            orcishTranslatorToolStripMenuItem.Enabled = targetLanguage != TranslatorTargetLanguage.Orcish;
+            elvenTranslatorToolStripMenuItem.Enabled = targetLanguage != TranslatorTargetLanguage.Elven;
             FocusTranslatorInput();
             _ = UpdateTranslatorWarmupStatusAsync();
         }
@@ -4835,6 +4864,7 @@ namespace PlayerAssistant
             }
 
             var shouldBeVisible =
+                _translatorTargetLanguage == TranslatorTargetLanguage.Orcish &&
                 !_translatorDirectionCheckBox.Checked &&
                 !string.IsNullOrWhiteSpace(_translatorOutputTextBox.Text);
             var layoutChanged = _translatorExportButton.Enabled != shouldBeVisible;
@@ -4848,7 +4878,8 @@ namespace PlayerAssistant
 
         private void TranslatorExportButton_Click(object? sender, EventArgs e)
         {
-            if (_translatorDirectionCheckBox?.Checked != false ||
+            if (_translatorTargetLanguage != TranslatorTargetLanguage.Orcish ||
+                _translatorDirectionCheckBox?.Checked != false ||
                 _translatorInputTextBox is null ||
                 _translatorOutputTextBox is null ||
                 string.IsNullOrWhiteSpace(_translatorOutputTextBox.Text))
@@ -4924,10 +4955,11 @@ namespace PlayerAssistant
             }
 
             CancelPendingTranslatorTranslation();
-            var orcishToEnglish = _translatorDirectionCheckBox.Checked;
-            _translatorHeadingLabel.Text = orcishToEnglish ? "Orcish to English" : "English to Orcish";
-            _translatorInputLabel.Text = orcishToEnglish ? "Orcish text" : "English text";
-            _translatorOutputLabel.Text = orcishToEnglish ? "English translation" : "Orcish translation";
+            var targetToEnglish = _translatorDirectionCheckBox.Checked;
+            var targetName = GetTranslatorTargetName();
+            _translatorHeadingLabel.Text = targetToEnglish ? $"{targetName} to English" : $"English to {targetName}";
+            _translatorInputLabel.Text = targetToEnglish ? $"{targetName} text" : "English text";
+            _translatorOutputLabel.Text = targetToEnglish ? "English translation" : $"{targetName} translation";
             _translatorInputTextBox.Clear();
             _translatorOutputTextBox.Clear();
             _translatorPreviousInputLength = 0;
@@ -4957,7 +4989,8 @@ namespace PlayerAssistant
                 return;
             }
 
-            var orcishToEnglish = _translatorDirectionCheckBox.Checked;
+            var targetToEnglish = _translatorDirectionCheckBox.Checked;
+            var targetLanguage = _translatorTargetLanguage;
             var generation = _translatorTranslationGeneration;
             var cancellationSource = new CancellationTokenSource();
             _translatorTranslationCancellationSource = cancellationSource;
@@ -4972,13 +5005,15 @@ namespace PlayerAssistant
                 var waitCursorDelay = Task.Delay(TimeSpan.FromMilliseconds(250), cancellationSource.Token);
                 if (translatorOverride is null)
                 {
-                    var warmupTask = OrcishTranslatorWarmupUtility.WaitUntilReadyAsync(cancellationSource.Token);
+                    var warmupTask = targetLanguage == TranslatorTargetLanguage.Orcish
+                        ? OrcishTranslatorWarmupUtility.WaitUntilReadyAsync(cancellationSource.Token)
+                        : WaitForElvenTranslatorAsync(cancellationSource.Token);
                     if (await Task.WhenAny(warmupTask, waitCursorDelay) == waitCursorDelay &&
                         !cancellationSource.IsCancellationRequested &&
                         generation == _translatorTranslationGeneration)
                     {
                         SetTranslatorWaitCursor(true);
-                        SetStatusBarMessage("Preparing Orcish translator...");
+                        SetStatusBarMessage($"Preparing {GetTranslatorTargetName(targetLanguage)} translator...");
                     }
 
                     await warmupTask;
@@ -4986,10 +5021,8 @@ namespace PlayerAssistant
 
                 var translationTask = Task.Run(
                     () => translatorOverride is not null
-                        ? translatorOverride(input, orcishToEnglish)
-                        : orcishToEnglish
-                            ? OrcishTranslatorUtility.TranslateOrcishTextToEnglish(input)
-                            : OrcishTranslatorUtility.TranslateEnglishTextToOrcish(input),
+                        ? translatorOverride(input, targetToEnglish)
+                        : TranslateText(input, targetLanguage, targetToEnglish),
                     cancellationSource.Token);
                 if (!_translatorWaitCursorActive &&
                     await Task.WhenAny(translationTask, waitCursorDelay) == waitCursorDelay &&
@@ -5018,7 +5051,7 @@ namespace PlayerAssistant
                 if (generation == _translatorTranslationGeneration)
                 {
                     await ReportOperationFailureAsync(
-                        "Orcish translation",
+                        $"{GetTranslatorTargetName(targetLanguage)} translation",
                         "Translation unavailable",
                         "Translator Error",
                         ex,
@@ -5043,30 +5076,38 @@ namespace PlayerAssistant
 
         private async Task UpdateTranslatorWarmupStatusAsync()
         {
+            var targetLanguage = _translatorTargetLanguage;
             if (TranslatorTextOverrideForTests is not null)
             {
                 SetStatusBarMessage("Translator ready.");
                 return;
             }
 
-            if (OrcishTranslatorWarmupUtility.IsReady)
+            var isReady = targetLanguage == TranslatorTargetLanguage.Orcish
+                ? OrcishTranslatorWarmupUtility.IsReady
+                : ElvenTranslatorWarmupUtility.IsReady;
+            if (isReady)
             {
                 SetStatusBarMessage("Translator ready.");
                 return;
             }
 
-            SetStatusBarMessage("Preparing Orcish translator...");
+            SetStatusBarMessage($"Preparing {GetTranslatorTargetName(targetLanguage)} translator...");
             try
             {
-                var result = await OrcishTranslatorWarmupUtility.StartPreloading();
-                if (_translatorPanel is not null && !_translatorPanel.IsDisposed)
+                var englishTermCount = targetLanguage == TranslatorTargetLanguage.Orcish
+                    ? (await OrcishTranslatorWarmupUtility.StartPreloading()).EnglishTermCount
+                    : (await ElvenTranslatorWarmupUtility.StartPreloading()).EnglishTermCount;
+                if (_translatorTargetLanguage == targetLanguage &&
+                    _translatorPanel is not null && !_translatorPanel.IsDisposed)
                 {
-                    SetStatusBarMessage($"Translator ready: {result.EnglishTermCount:N0} English terms loaded.");
+                    SetStatusBarMessage($"Translator ready: {englishTermCount:N0} English terms loaded.");
                 }
             }
             catch
             {
-                if (_translatorPanel is not null && !_translatorPanel.IsDisposed)
+                if (_translatorTargetLanguage == targetLanguage &&
+                    _translatorPanel is not null && !_translatorPanel.IsDisposed)
                 {
                     SetStatusBarMessage("Translator unavailable.");
                 }
@@ -5085,6 +5126,35 @@ namespace PlayerAssistant
 
             SetTranslatorWaitCursor(false);
         }
+
+        private static async Task<OrcishTranslatorWarmupResult> WaitForElvenTranslatorAsync(
+            CancellationToken cancellationToken)
+        {
+            var result = await ElvenTranslatorWarmupUtility.WaitUntilReadyAsync(cancellationToken);
+            return new OrcishTranslatorWarmupResult(result.EnglishTermCount, result.Duration);
+        }
+
+        private static string TranslateText(
+            string input,
+            TranslatorTargetLanguage targetLanguage,
+            bool targetToEnglish)
+        {
+            return targetLanguage switch
+            {
+                TranslatorTargetLanguage.Orcish when targetToEnglish =>
+                    OrcishTranslatorUtility.TranslateOrcishTextToEnglish(input),
+                TranslatorTargetLanguage.Orcish =>
+                    OrcishTranslatorUtility.TranslateEnglishTextToOrcish(input),
+                TranslatorTargetLanguage.Elven when targetToEnglish =>
+                    ElvenTranslatorUtility.TranslateElvenTextToEnglish(input),
+                _ => ElvenTranslatorUtility.TranslateEnglishTextToElven(input)
+            };
+        }
+
+        private string GetTranslatorTargetName() => GetTranslatorTargetName(_translatorTargetLanguage);
+
+        private static string GetTranslatorTargetName(TranslatorTargetLanguage targetLanguage) =>
+            targetLanguage == TranslatorTargetLanguage.Orcish ? "Orcish" : "Elven";
 
         private void SetTranslatorWaitCursor(bool active)
         {
@@ -5181,7 +5251,10 @@ namespace PlayerAssistant
             _translatorOutputTextBox = null;
             _translatorExportButton = null;
             _translatorPreviousInputLength = 0;
-            translatorToolStripMenuItem.Enabled = !_heroImageIntroStarted && !_heroImageShowcaseStarted;
+            var translatorMenuEnabled = !_heroImageIntroStarted && !_heroImageShowcaseStarted;
+            translatorToolStripMenuItem.Enabled = translatorMenuEnabled;
+            orcishTranslatorToolStripMenuItem.Enabled = translatorMenuEnabled;
+            elvenTranslatorToolStripMenuItem.Enabled = translatorMenuEnabled;
         }
 
         private void EnableLoginInfoMenuItem()
