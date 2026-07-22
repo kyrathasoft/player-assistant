@@ -129,6 +129,11 @@ namespace PlayerAssistant
                 return;
             }
 
+            if (HasTag(entry, "derived-by-rule"))
+            {
+                return;
+            }
+
             var attestedBigrams = BuildAttestedBigrams(entry.Language, existingEntries);
             var unattested = TokenizeNormalized(entry.Elvish)
                 .SelectMany(GetBigrams)
@@ -175,7 +180,9 @@ namespace PlayerAssistant
                         $"'{entry.English}' already maps to '{existing.Translation}' in {entry.Language}; add '{CollisionReviewedTag}' only after the distinct sense is reviewed.",
                         existing));
                 }
-                else if (sameElvish && !sameEnglish && !HasAnyTag(entry, "shared-form", CollisionReviewedTag))
+                else if (sameElvish && !sameEnglish &&
+                         !IsUnchangedInflectedRoot(entry, existing) &&
+                         !HasAnyTag(entry, "shared-form", CollisionReviewedTag))
                 {
                     issues.Add(new(
                         "elvish-form-collision",
@@ -228,6 +235,29 @@ namespace PlayerAssistant
                 return;
             }
 
+            var hasDerivedMorphology = HasAnyTag(
+                entry,
+                "plural",
+                "present-active",
+                "active-participle",
+                "possessive",
+                "gerund",
+                "passive-participle",
+                "adverb",
+                "abstract-noun",
+                "agent-noun",
+                "comparative",
+                "superlative",
+                "able-adjective",
+                "semantic-extension");
+            if (hasDerivedMorphology && roots.Length != 1)
+            {
+                issues.Add(new(
+                    "single-root-required",
+                    "A morphology-derived Elven entry must declare exactly one source root."));
+                return;
+            }
+
             foreach (var root in roots)
             {
                 var rootEntry = existingEntries.FirstOrDefault(candidate =>
@@ -243,6 +273,26 @@ namespace PlayerAssistant
                             ? $"Declared {entry.Language} root '{root}' is not present in the curated lexicon."
                             : $"Declared root '{root}' is attested as {otherLanguage.Language}, not {entry.Language}.",
                         otherLanguage));
+                    continue;
+                }
+
+                if (hasDerivedMorphology)
+                {
+                    if (!ElvenMorphologyUtility.TryCreateDerivedForm(entry.Language, root, entry.Tags, out var expected))
+                    {
+                        issues.Add(new(
+                            "unsupported-morphology",
+                            $"No conservative {entry.Language} morphology rule can derive '{entry.English}' from '{root}'.",
+                            rootEntry));
+                    }
+                    else if (!EqualsIgnoreCase(entry.Elvish, expected))
+                    {
+                        issues.Add(new(
+                            "root-morphology-mismatch",
+                            $"The declared morphology derives '{expected}' from '{root}', not '{entry.Elvish}'.",
+                            rootEntry));
+                    }
+
                     continue;
                 }
 
@@ -266,6 +316,14 @@ namespace PlayerAssistant
                 return;
             }
 
+            if (HasTag(entry, "derived-by-rule") &&
+                (entry.RootForms ?? Array.Empty<string>()).Contains(
+                    entry.Elvish,
+                    StringComparer.OrdinalIgnoreCase))
+            {
+                return;
+            }
+
             var rootCount = (entry.RootForms ?? Array.Empty<string>())
                 .Count(static root => !string.IsNullOrWhiteSpace(root));
             if (rootCount < 2)
@@ -281,7 +339,7 @@ namespace PlayerAssistant
             IEnumerable<ElvenTranslationCandidate> existingEntries,
             ICollection<ElvenLexiconReviewIssue> issues)
         {
-            if (HasTag(entry, CloseFormReviewedTag))
+            if (HasAnyTag(entry, CloseFormReviewedTag, "derived-by-rule"))
             {
                 return;
             }
@@ -334,6 +392,14 @@ namespace PlayerAssistant
             return GetSindarinMutationVariants(normalizedRoot)
                 .Any(variant => variant.Length >= 2 && proposed.Contains(variant, StringComparison.Ordinal));
         }
+
+        private static bool IsUnchangedInflectedRoot(
+            ElvenLexiconEntry entry,
+            ElvenTranslationCandidate existing) =>
+            HasTag(entry, "derived-by-rule") &&
+            (entry.RootForms ?? Array.Empty<string>()).Contains(
+                existing.Translation,
+                StringComparer.OrdinalIgnoreCase);
 
         private static IEnumerable<string> GetSindarinMutationVariants(string root)
         {

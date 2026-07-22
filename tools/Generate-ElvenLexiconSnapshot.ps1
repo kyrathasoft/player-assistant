@@ -1,6 +1,8 @@
 param(
     [string] $EldamoRoot = (Join-Path $PSScriptRoot '..\ToElvish'),
-    [string] $OutputPath = (Join-Path $PSScriptRoot '..\web-translator\elven-lexicon.json')
+    [string] $OutputPath = (Join-Path $PSScriptRoot '..\web-translator\elven-lexicon.json'),
+    [string] $DictionaryOutputPath = (Join-Path $PSScriptRoot '..\web-translator\elven-translations.json'),
+    [string] $AuditOutputPath = (Join-Path $PSScriptRoot '..\web-translator\elven-candidate-audit.json')
 )
 
 $ErrorActionPreference = 'Stop'
@@ -42,6 +44,80 @@ function Get-EnglishTerms {
     }
 
     return @($terms | Sort-Object)
+}
+
+function Get-CanonicalElvishForm {
+    param(
+        [Parameter(Mandatory)][string] $Form,
+        [AllowNull()][string] $Gloss
+    )
+
+    $canonical = $Form.Trim()
+    $flags = [System.Collections.Generic.List[string]]::new()
+    if ($canonical.Contains('/')) {
+        $canonical = $canonical.Split('/', 2)[0].Trim()
+        $flags.Add('first-listed-variant')
+    }
+
+    if ($canonical.Contains('(') -or $canonical.Contains(')')) {
+        $canonical = [regex]::Replace($canonical, '\(([^()]*)\)', '$1')
+        $flags.Add('expanded-parenthetical-letters')
+    }
+
+    if ($canonical.Contains('.') -and $Gloss.Contains('abbreviation of ')) {
+        $expansion = $Gloss.Split([string[]]@('abbreviation of '), 2, [System.StringSplitOptions]::None)[1]
+        $expansion = $expansion.Trim(' ', [char]0x2018, [char]0x2019, [char]0x201C, [char]0x201D, '"', "'", '.')
+        if (-not [string]::IsNullOrWhiteSpace($expansion)) {
+            $canonical = $expansion
+            $flags.Add('expanded-attested-abbreviation')
+        }
+    }
+
+    $canonical = [regex]::Replace($canonical, '\s+', ' ').Trim()
+    $isValid = $canonical.Length -gt 0 -and
+        $canonical -match "^[\p{L}\p{M} '\-’]+$" -and
+        -not $canonical.StartsWith('-') -and
+        -not $canonical.EndsWith('-') -and
+        -not $canonical.Contains('--')
+    if (-not $isValid) {
+        $flags.Add('invalid-canonical-form')
+    }
+
+    return [pscustomobject]@{
+        Form = $canonical
+        IsValid = $isValid
+        Flags = @($flags)
+    }
+}
+
+function Get-ElvenCandidateScore {
+    param(
+        [Parameter(Mandatory)][string] $SourceLanguage,
+        [AllowNull()][string] $Mark,
+        [Parameter(Mandatory)][int] $NormalizationPenalty
+    )
+
+    $sourceScores = @{ s = 0; q = 0; n = 20; mq = 20; ns = 40; nq = 40 }
+    $markScores = @{ '' = 0; '#' = 5; '*' = 10; '?' = 15; '†' = 18; '^' = 25; '!' = 50 }
+    $sourceScore = if ($sourceScores.ContainsKey($SourceLanguage)) { $sourceScores[$SourceLanguage] } else { 60 }
+    $markKey = if ([string]::IsNullOrWhiteSpace($Mark)) { '' } else { $Mark }
+    $markScore = if ($markScores.ContainsKey($markKey)) { $markScores[$markKey] } else { 30 }
+    return $sourceScore + $markScore + $NormalizationPenalty
+}
+
+function Get-ReliabilityFlags {
+    param([AllowNull()][string] $Mark)
+
+    $flags = switch ($Mark) {
+        '!' { @('pure-neologism') }
+        '^' { @('adapted-or-reformulated') }
+        '†' { @('archaic-or-poetic') }
+        '#' { @('compound-or-inflected-attestation') }
+        '*' { @('reconstructed') }
+        '?' { @('speculative') }
+        default { @() }
+    }
+    return @($flags)
 }
 
 $xmlPath = Join-Path $EldamoRoot 'content\data-model\eldamo-data.xml'
@@ -182,10 +258,116 @@ $outputDirectory = Split-Path -Parent $OutputPath
 $json = $snapshot | ConvertTo-Json -Depth 6 -Compress
 [System.IO.File]::WriteAllText($OutputPath, $json, [System.Text.UTF8Encoding]::new($false))
 
+$translations = [ordered]@{}
+$candidateReviews = [System.Collections.Generic.List[object]]::new()
+$selectedSindarin = 0
+$selectedQuenya = 0
+$selectedPureNeologisms = 0
+$selectedAdaptedForms = 0
+$selectedArchaicForms = 0
+$normalizedSelectedForms = 0
+foreach ($term in $terms.Keys) {
+    $reviewsForTerm = [System.Collections.Generic.List[object]]::new()
+    foreach ($candidate in $terms[$term]) {
+        $canonical = Get-CanonicalElvishForm -Form $candidate[0] -Gloss $candidate[5]
+        $normalizationPenalty = if ($canonical.Flags -contains 'first-listed-variant') { 4 } elseif ($canonical.Flags.Count -gt 0) { 2 } else { 0 }
+        $score = Get-ElvenCandidateScore -SourceLanguage $candidate[2] -Mark $candidate[4] -NormalizationPenalty $normalizationPenalty
+        $flags = [System.Collections.Generic.List[string]]::new()
+        $flags.AddRange([string[]]@(Get-ReliabilityFlags -Mark $candidate[4]))
+        $flags.AddRange([string[]]@($canonical.Flags))
+        $review = [ordered]@{
+            english = $term
+            originalForm = $candidate[0]
+            canonicalForm = $canonical.Form
+            language = $candidate[1]
+            sourceLanguage = $candidate[2]
+            partOfSpeech = $candidate[3]
+            mark = $candidate[4]
+            gloss = $candidate[5]
+            pageId = $candidate[6]
+            score = $score
+            eligible = $canonical.IsValid
+            selected = $false
+            flags = @($flags)
+        }
+        $reviewsForTerm.Add($review)
+    }
+
+    $selected = $reviewsForTerm |
+        Where-Object eligible |
+        Sort-Object score, canonicalForm, pageId |
+        Select-Object -First 1
+    if ($null -eq $selected) {
+        throw "No linguistically usable Elven candidate remains for English term '$term'."
+    }
+
+    $selected.selected = $true
+    $translations[$term] = @(
+        $selected.canonicalForm,
+        $selected.language,
+        $selected.sourceLanguage,
+        $selected.partOfSpeech,
+        $selected.mark,
+        $selected.gloss,
+        $selected.pageId
+    )
+    if ($selected.language -eq 'Sindarin') { $selectedSindarin++ } else { $selectedQuenya++ }
+    if ($selected.mark -eq '!') { $selectedPureNeologisms++ }
+    if ($selected.mark -eq '^') { $selectedAdaptedForms++ }
+    if ($selected.mark -eq '†') { $selectedArchaicForms++ }
+    if ($selected.originalForm -ne $selected.canonicalForm) { $normalizedSelectedForms++ }
+    foreach ($review in $reviewsForTerm) {
+        $candidateReviews.Add($review)
+    }
+}
+
+$dictionary = [ordered]@{
+    schemaVersion = 1
+    source = 'Eldamo'
+    sourceVersion = $sourceVersion
+    sourceLicense = 'CC BY 4.0'
+    sourceUrl = 'https://eldamo.org/'
+    policy = 'One deterministic translation per English term; prefer Sindarin, use Quenya only when Sindarin is unavailable, then rank attested period and reliability.'
+    candidateCountReviewed = $candidateReviews.Count
+    translationCount = $translations.Keys.Count
+    selectedSindarin = $selectedSindarin
+    selectedQuenya = $selectedQuenya
+    selectedPureNeologisms = $selectedPureNeologisms
+    selectedAdaptedForms = $selectedAdaptedForms
+    selectedArchaicForms = $selectedArchaicForms
+    normalizedSelectedForms = $normalizedSelectedForms
+    translations = $translations
+}
+
+$audit = [ordered]@{
+    schemaVersion = 1
+    source = 'Eldamo'
+    sourceVersion = $sourceVersion
+    candidateCountReviewed = $candidateReviews.Count
+    translationCount = $translations.Keys.Count
+    scoring = [ordered]@{
+        sourcePeriods = 'Late Sindarin/Quenya 0; Noldorin/Middle Quenya 20; Neo-Sindarin/Neo-Quenya 40; unknown 60.'
+        reliability = 'Unmarked 0; compound/inflected # 5; reconstructed * 10; speculative ? 15; archaic † 18; adapted ^ 25; pure neologism ! 50; other 30.'
+        normalization = 'Expanded parenthetical letters +2; first-listed slash variant +4; malformed canonical forms are ineligible.'
+    }
+    candidates = @($candidateReviews)
+}
+
+foreach ($artifact in @(
+    @{ Path = $DictionaryOutputPath; Value = $dictionary },
+    @{ Path = $AuditOutputPath; Value = $audit }
+)) {
+    [System.IO.Directory]::CreateDirectory((Split-Path -Parent $artifact.Path)) | Out-Null
+    $artifactJson = $artifact.Value | ConvertTo-Json -Depth 8 -Compress
+    [System.IO.File]::WriteAllText($artifact.Path, $artifactJson, [System.Text.UTF8Encoding]::new($false))
+}
+
 [pscustomobject]@{
     OutputPath = [System.IO.Path]::GetFullPath($OutputPath)
     SindarinCuratedIds = $sindarinIds.Count
     QuenyaCuratedIds = $quenyaIds.Count
     SnapshotEntries = $entryCount
     EnglishTerms = $terms.Keys.Count
+    FinalTranslations = $translations.Keys.Count
+    CandidateReviews = $candidateReviews.Count
 }

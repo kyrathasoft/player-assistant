@@ -270,6 +270,11 @@ var tests = new (string Name, Action Test)[]
     ("show menu contains translator item", ShowMenuContainsTranslatorItem),
     ("elven translator prefers Sindarin and falls back to Quenya", ElvenTranslatorPrefersSindarinAndFallsBackToQuenya),
     ("elven translator preserves text and punctuation", ElvenTranslatorPreservesTextAndPunctuation),
+    ("elven translator finalizes every English term", ElvenTranslatorFinalizesEveryEnglishTerm),
+    ("elven morphology derives conservative noun and active verb forms", ElvenMorphologyDerivesConservativeForms),
+    ("elven first iteration loads generated translations", ElvenFirstIterationLoadsGeneratedTranslations),
+    ("elven second iteration loads five thousand generated translations", ElvenSecondIterationLoadsGeneratedTranslations),
+    ("elven complete coverage translates every Orcish English term", ElvenCompleteCoverageTranslatesEveryOrcishTerm),
     ("elven lexicon validator accepts reviewed rooted additions", ElvenLexiconValidatorAcceptsReviewedRootedAdditions),
     ("elven lexicon validator rejects unsupported additions", ElvenLexiconValidatorRejectsUnsupportedAdditions),
     ("elven lexicon validator preserves Sindarin preference", ElvenLexiconValidatorPreservesSindarinPreference),
@@ -6439,6 +6444,125 @@ static void ElvenTranslatorPreservesTextAndPunctuation()
         "Friend.",
         ElvenTranslatorUtility.TranslateElvenTextToEnglish("mellon."),
         "Elven reverse translation should preserve punctuation");
+}
+
+static void ElvenTranslatorFinalizesEveryEnglishTerm()
+{
+    var terms = ElvenTranslatorUtility.GetEnglishTerms();
+    var entries = ElvenTranslatorUtility.GetLexiconEntries();
+    AssertEqual(84531, terms.Count, "unexpected finalized English-to-Elven term count");
+    AssertEqual(terms.Count, entries.Count, "every English term should have exactly one finalized translation");
+    AssertTrue(
+        terms.All(term => ElvenTranslatorUtility.TranslateEnglishToElven(term).Count == 1),
+        "every English term should resolve to exactly one selected candidate");
+    AssertTrue(
+        entries.All(entry => !entry.Translation.Contains('(') &&
+                             !entry.Translation.Contains(')') &&
+                             !entry.Translation.Contains('/')),
+        "finalized translations should not expose optional-form notation");
+    AssertEqual(
+        "emecima",
+        ElvenTranslatorUtility.TranslateEnglishToElven("accurate")[0].Translation,
+        "parenthetical letters should be expanded into a usable Quenya form");
+    AssertEqual(
+        "an quetta",
+        ElvenTranslatorUtility.TranslateEnglishToElven("postscriptum")[0].Translation,
+        "attested abbreviations should expand to their full Elvish phrase");
+}
+
+static void ElvenMorphologyDerivesConservativeForms()
+{
+    AssertDerivedElvenForm("Sindarin", "adan", "plural", "edain");
+    AssertDerivedElvenForm("Sindarin", "orch", "plural", "yrch");
+    AssertDerivedElvenForm("Sindarin", "car", "present-active", "câr");
+    AssertDerivedElvenForm("Sindarin", "gala", "active-participle", "galol");
+    AssertDerivedElvenForm("Quenya", "atan", "plural", "atani");
+    AssertDerivedElvenForm("Quenya", "lassë", "plural", "lassi");
+    AssertDerivedElvenForm("Quenya", "mat", "present-active", "matë");
+    AssertDerivedElvenForm("Quenya", "laita", "active-participle", "laitaila");
+    AssertDerivedElvenForm("Sindarin", "gala", "gerund", "galad");
+    AssertDerivedElvenForm("Quenya", "mat", "gerund", "matie");
+    AssertDerivedElvenForm("Sindarin", "gala", "passive-participle", "galannen");
+    AssertDerivedElvenForm("Quenya", "laita", "passive-participle", "laitaina");
+    AssertDerivedElvenForm("Sindarin", "mellon", "possessive", "mellon");
+    AssertDerivedElvenForm("Quenya", "atan", "possessive", "atanwa");
+    AssertDerivedElvenForm("Sindarin", "tanc", "comparative", "athanc");
+    AssertDerivedElvenForm("Sindarin", "tanc", "superlative", "rodanc");
+    AssertDerivedElvenForm("Quenya", "calima", "comparative", "ancalima");
+    AssertDerivedElvenForm("Quenya", "calima", "superlative", "aricalima");
+
+    var mismatch = ElvenTranslatorUtility.ReviewProposedLexiconEntry(
+        new ElvenLexiconEntry(
+            "local invalid agent plural",
+            "caroni",
+            "Sindarin",
+            PartOfSpeech: "noun",
+            RootForms: ["caron"],
+            Tags: ["derived-by-rule", "plural"]));
+    AssertTrue(
+        mismatch.Any(issue => issue.Code == "root-morphology-mismatch"),
+        "a morphology-derived entry should be rejected when it does not match the declared root rule");
+}
+
+static void AssertDerivedElvenForm(string language, string root, string tag, string expected)
+{
+    AssertTrue(
+        ElvenMorphologyUtility.TryCreateDerivedForm(language, root, [tag], out var actual),
+        $"{language} {tag} should be supported for '{root}'");
+    AssertEqual(expected, actual, $"unexpected {language} {tag} for '{root}'");
+}
+
+static void ElvenFirstIterationLoadsGeneratedTranslations()
+{
+    AssertEqual("fuia", ElvenTranslatorUtility.TranslateEnglishToElven("abhors")[0].Translation, "unexpected translation for abhors");
+    AssertEqual("itanqualër", ElvenTranslatorUtility.TranslateEnglishToElven("aconites")[0].Translation, "unexpected translation for aconites");
+    AssertEqual("ceryn", ElvenTranslatorUtility.TranslateEnglishToElven("agents")[0].Translation, "unexpected translation for agents");
+    AssertEqual("antacila", ElvenTranslatorUtility.TranslateEnglishToElven("applying")[0].Translation, "unexpected translation for applying");
+    AssertEqual("pannol", ElvenTranslatorUtility.TranslateEnglishToElven("arranging")[0].Translation, "unexpected translation for arranging");
+    AssertTrue(
+        ElvenTranslatorUtility.GetLexiconEntries()
+            .Where(entry => entry.SourceLanguage?.StartsWith("local-morphology", StringComparison.Ordinal) == true)
+            .All(entry => !string.IsNullOrWhiteSpace(entry.Gloss)),
+        "every first-iteration entry should retain its derivation note");
+}
+
+static void ElvenSecondIterationLoadsGeneratedTranslations()
+{
+    AssertEqual("awarth", ElvenTranslatorUtility.TranslateEnglishToElven("abandonment's")[0].Translation, "unexpected translation for abandonment's");
+    AssertEqual("cuiwed", ElvenTranslatorUtility.TranslateEnglishToElven("alerting")[0].Translation, "unexpected translation for alerting");
+    AssertEqual("ovrannen", ElvenTranslatorUtility.TranslateEnglishToElven("abounded")[0].Translation, "unexpected translation for abounded");
+    AssertEqual("húnalë", ElvenTranslatorUtility.TranslateEnglishToElven("accursedness")[0].Translation, "unexpected translation for accursedness");
+    AssertEqual("trenarnui", ElvenTranslatorUtility.TranslateEnglishToElven("accountable")[0].Translation, "unexpected translation for accountable");
+    AssertEqual(
+        5000,
+        ElvenTranslatorUtility.GetLexiconEntries().Count(entry =>
+            entry.SourceLanguage == "local-morphology:second-iteration"),
+        "the second iteration should contribute exactly 5,000 entries");
+}
+
+static void ElvenCompleteCoverageTranslatesEveryOrcishTerm()
+{
+    var coverageEntries = ElvenTranslatorUtility.GetLexiconEntries()
+        .Where(entry => entry.SourceLanguage == "local-neologism:complete-coverage")
+        .ToArray();
+    AssertEqual(69083, coverageEntries.Length, "complete coverage should add every remaining Orcish English term");
+    AssertTrue(coverageEntries.All(entry => entry.Language == "Sindarin"), "invented fallback vocabulary should remain Sindarin-first");
+    AssertTrue(coverageEntries.All(entry => entry.ReliabilityMark == "!"), "invented fallback vocabulary should be marked as pure neologism");
+
+    var missing = OrcishTranslatorUtility.GetEnglishTerms()
+        .Where(term => ElvenTranslatorUtility.TranslateEnglishToElven(term).Count == 0)
+        .Take(10)
+        .ToArray();
+    AssertEqual(0, missing.Length, $"Orcish English terms remain untranslated: {string.Join(", ", missing)}");
+
+    var abacus = ElvenTranslatorUtility.TranslateEnglishToElven("abacus").Single();
+    AssertEqual("Sindarin", abacus.Language, "abacus should use the generated Sindarin fallback");
+    AssertTrue(
+        ElvenTranslatorUtility.TranslateElvenToEnglish(abacus.Translation).Any(entry => entry.English == "abacus"),
+        "complete-coverage forms should remain available to reverse translation");
+    AssertTrue(
+        ElvenTranslatorUtility.TranslateEnglishToElven("a single gold coin").Count == 1,
+        "complete coverage should include remaining multiword English terms");
 }
 
 static void ElvenLexiconValidatorAcceptsReviewedRootedAdditions()
