@@ -282,6 +282,7 @@ var tests = new (string Name, Action Test)[]
     ("translator view supports Elven mode", TranslatorViewSupportsElvenMode),
     ("translator view translates while input changes", TranslatorViewTranslatesWhileInputChanges),
     ("translator view exports english to orcish translation", TranslatorViewExportsEnglishToOrcishTranslation),
+    ("translator view exports english to elvish translation", TranslatorViewExportsEnglishToElvishTranslation),
     ("adventure outline view displays generated markdown", AdventureOutlineViewDisplaysGeneratedMarkdown),
     ("about menu contains author and update items", AboutMenuContainsAuthorAndUpdateItems),
     ("about author text lists developer info", AboutAuthorTextListsDeveloperInfo),
@@ -3314,9 +3315,9 @@ static void ApplicationVersionMetadataMatchesHardeningRelease()
         .InformationalVersion;
     var fileVersion = FileVersionInfo.GetVersionInfo(assembly.Location).FileVersion;
 
-    AssertEqual(new Version(0, 9, 4, 0), name.Version!, "unexpected assembly version");
-    AssertEqual("0.9.4.0", fileVersion!, "unexpected file version");
-    AssertEqual("0.9.4", informationalVersion, "unexpected informational version");
+    AssertEqual(new Version(0, 9, 5, 0), name.Version!, "unexpected assembly version");
+    AssertEqual("0.9.5.0", fileVersion!, "unexpected file version");
+    AssertEqual("0.9.5", informationalVersion, "unexpected informational version");
 }
 
 static void ApplicationVersionArgumentReturnsVersionText()
@@ -3337,7 +3338,7 @@ static void ApplicationVersionArgumentReturnsVersionText()
     var versionText = (string?)InvokeStaticMethod(programType, "GetVersionText")
         ?? throw new InvalidOperationException("GetVersionText returned null.");
     AssertContains(versionText, "player-assistant");
-    AssertContains(versionText, "0.9.4");
+    AssertContains(versionText, "0.9.5");
 }
 
 static void StartupManifestStatusDistinguishesSkippedAndFailed()
@@ -6676,10 +6677,11 @@ static void TranslatorViewSupportsElvenMode()
             AssertEqual("English to Elven", heading.Text, "Elven menu should open English-to-Elven mode");
             AssertEqual("Elven to English", direction.Text, "Elven direction toggle should identify its source language");
             output.Text = "mellon";
-            AssertFalse(exportButton.Visible, "Orcish export should not appear in Elven mode");
+            AssertTrue(exportButton.Enabled, "export should be available for a non-empty English-to-Elven translation");
 
             direction.Checked = true;
             AssertEqual("Elven to English", heading.Text, "Elven reverse mode should update the heading");
+            AssertFalse(exportButton.Enabled, "export should be unavailable in Elven-to-English mode");
         });
     }
     finally
@@ -6776,6 +6778,58 @@ static void TranslatorViewExportsEnglishToOrcishTranslation()
             direction.Checked = true;
             output.Text = "Hello";
             AssertFalse(exportButton.Enabled, "export should be unavailable for Orcish-to-English output");
+        });
+    }
+    finally
+    {
+        Form1.TranslatorTextOverrideForTests = null;
+        Form1.TranslatorExportPathOverrideForTests = null;
+        if (Directory.Exists(exportDirectory))
+        {
+            Directory.Delete(exportDirectory, recursive: true);
+        }
+    }
+}
+
+static void TranslatorViewExportsEnglishToElvishTranslation()
+{
+    var exportDirectory = Path.Combine(Path.GetTempPath(), $"player-assistant-elvish-translator-{Guid.NewGuid():N}");
+    var exportPath = Path.Combine(exportDirectory, "my-elvish-translation.txt");
+    Directory.CreateDirectory(exportDirectory);
+    Form1.TranslatorTextOverrideForTests = static (_, _) => string.Empty;
+    Form1.TranslatorExportPathOverrideForTests = () => exportPath;
+    try
+    {
+        RunOnStaThread(() =>
+        {
+            using var form = new Form1(suppressHeroImagesForThisRun: true);
+            var elvenMenuItem = (ToolStripMenuItem)(GetPrivateField(form, "elvenTranslatorToolStripMenuItem")
+                ?? throw new InvalidOperationException("elvenTranslatorToolStripMenuItem was null."));
+            elvenMenuItem.PerformClick();
+
+            var direction = (CheckBox)(GetPrivateField(form, "_translatorDirectionCheckBox")
+                ?? throw new InvalidOperationException("_translatorDirectionCheckBox was null."));
+            var input = (TextBox)(GetPrivateField(form, "_translatorInputTextBox")
+                ?? throw new InvalidOperationException("_translatorInputTextBox was null."));
+            var output = (TextBox)(GetPrivateField(form, "_translatorOutputTextBox")
+                ?? throw new InvalidOperationException("_translatorOutputTextBox was null."));
+            var exportButton = (Button)(GetPrivateField(form, "_translatorExportButton")
+                ?? throw new InvalidOperationException("_translatorExportButton was null."));
+
+            input.Text = "Café";
+            output.Text = "Mellon";
+            AssertTrue(exportButton.Enabled, "export should become available for a non-empty English-to-Elven translation");
+            AssertEqual(
+                "english-5-bytes-to-elvish-6-bytes",
+                Form1.BuildTranslatorExportDefaultFileName(input.Text, output.Text, "elvish"),
+                "Elvish export filename should include the current UTF-8 byte counts");
+
+            InvokePrivateMethod(form, "TranslatorExportButton_Click", exportButton, EventArgs.Empty);
+            AssertEqual("Mellon", File.ReadAllText(exportPath), "exported Elvish content should match the output textbox");
+
+            direction.Checked = true;
+            output.Text = "Friend";
+            AssertFalse(exportButton.Enabled, "export should be unavailable for Elven-to-English output");
         });
     }
     finally
@@ -7009,7 +7063,7 @@ static void AboutVersionTextShowsAppVersion()
 {
     var versionText = (string)(InvokeStaticMethod(typeof(Form1), "GetAppVersionText")
         ?? throw new InvalidOperationException("GetAppVersionText returned null."));
-    AssertEqual("RPOL Scarlet Horizon Campaign Assistant 0.9.4", versionText, "unexpected About Version text");
+    AssertEqual("RPOL Scarlet Horizon Campaign Assistant 0.9.5", versionText, "unexpected About Version text");
 }
 
 static void UpdateCheckVerifiesSignedPAssistManifest()
@@ -10259,8 +10313,8 @@ static void HardeningWorkflowBuildsAndUploadsSignedReleaseUpdateArtifacts()
     AssertContains(workflow, "p-assist-updates.json");
     AssertContains(workflow, "p-assist-updates.json.sig");
     AssertContains(workflow, "p-assist-updates.public-key.xml");
-    AssertContains(workflow, "p-assist-0.9.4.zip");
-    AssertContains(workflow, "p-assist-0.9.4.exe");
+    AssertContains(workflow, "p-assist-0.9.5.zip");
+    AssertContains(workflow, "p-assist-0.9.5.exe");
     AssertContains(workflow, "Build Release test harness");
     AssertContains(workflow, "Verify hosted settings fetch and decrypt path");
     AssertContains(workflow, "app settings loads hosted encrypted xp tracking url from fixture server");

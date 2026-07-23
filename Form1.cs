@@ -4864,7 +4864,6 @@ namespace PlayerAssistant
             }
 
             var shouldBeVisible =
-                _translatorTargetLanguage == TranslatorTargetLanguage.Orcish &&
                 !_translatorDirectionCheckBox.Checked &&
                 !string.IsNullOrWhiteSpace(_translatorOutputTextBox.Text);
             var layoutChanged = _translatorExportButton.Enabled != shouldBeVisible;
@@ -4878,8 +4877,7 @@ namespace PlayerAssistant
 
         private void TranslatorExportButton_Click(object? sender, EventArgs e)
         {
-            if (_translatorTargetLanguage != TranslatorTargetLanguage.Orcish ||
-                _translatorDirectionCheckBox?.Checked != false ||
+            if (_translatorDirectionCheckBox?.Checked != false ||
                 _translatorInputTextBox is null ||
                 _translatorOutputTextBox is null ||
                 string.IsNullOrWhiteSpace(_translatorOutputTextBox.Text))
@@ -4897,7 +4895,8 @@ namespace PlayerAssistant
             {
                 var defaultFileName = BuildTranslatorExportDefaultFileName(
                     _translatorInputTextBox.Text,
-                    _translatorOutputTextBox.Text);
+                    _translatorOutputTextBox.Text,
+                    GetTranslatorExportLanguageToken());
                 using var saveDialog = new SaveFileDialog
                 {
                     AddExtension = true,
@@ -4936,10 +4935,21 @@ namespace PlayerAssistant
 
         internal static string BuildTranslatorExportDefaultFileName(string englishText, string orcishText)
         {
-            var englishByteCount = Encoding.UTF8.GetByteCount(englishText ?? string.Empty);
-            var orcishByteCount = Encoding.UTF8.GetByteCount(orcishText ?? string.Empty);
-            return $"english-{englishByteCount}-bytes-to-orcish-{orcishByteCount}-bytes";
+            return BuildTranslatorExportDefaultFileName(englishText, orcishText, "orcish");
         }
+
+        internal static string BuildTranslatorExportDefaultFileName(
+            string englishText,
+            string translatedText,
+            string targetLanguageToken)
+        {
+            var englishByteCount = Encoding.UTF8.GetByteCount(englishText ?? string.Empty);
+            var translatedByteCount = Encoding.UTF8.GetByteCount(translatedText ?? string.Empty);
+            return $"english-{englishByteCount}-bytes-to-{targetLanguageToken}-{translatedByteCount}-bytes";
+        }
+
+        private string GetTranslatorExportLanguageToken() =>
+            _translatorTargetLanguage == TranslatorTargetLanguage.Orcish ? "orcish" : "elvish";
 
         private void TranslatorDirectionCheckBox_CheckedChanged(object? sender, EventArgs e)
         {

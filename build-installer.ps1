@@ -1,7 +1,7 @@
 param(
     [string]$OutputDir = (Join-Path $PSScriptRoot 'Release\installer'),
     [string]$PublishDir = (Join-Path $PSScriptRoot 'Release\publish'),
-    [string]$Version = '0.9.4',
+    [string]$Version = '0.9.5',
     [string]$InnoCompilerPath,
     [string]$ExpectedSignerSubject = $env:PLAYER_ASSISTANT_RELEASE_SIGNER_SUBJECT,
     [string]$ExpectedSignerThumbprint = $env:PLAYER_ASSISTANT_RELEASE_SIGNER_THUMBPRINT,
