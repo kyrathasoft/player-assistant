@@ -1,0 +1,74 @@
+'use strict';
+
+const CACHE_VERSION = 'player-assistant-pwa-0.9.5-v1';
+const SHELL_CACHE = `${CACHE_VERSION}-shell`;
+const DATA_CACHE = `${CACHE_VERSION}-data`;
+const SHELL_ASSETS = [
+    './',
+    './index.html',
+    './styles.css',
+    './app.js',
+    './translator-worker.js',
+    './offline.html',
+    './manifest.webmanifest',
+    './icons/icon-192.png',
+    './icons/icon-512.png',
+    './icons/dragon-mark.png'
+];
+
+self.addEventListener('install', (event) => {
+    event.waitUntil(
+        caches.open(SHELL_CACHE)
+            .then((cache) => cache.addAll(SHELL_ASSETS))
+            .then(() => self.skipWaiting())
+    );
+});
+
+self.addEventListener('activate', (event) => {
+    event.waitUntil((async () => {
+        const keys = await caches.keys();
+        await Promise.all(keys
+            .filter((key) => key.startsWith('player-assistant-pwa-') && ![SHELL_CACHE, DATA_CACHE].includes(key))
+            .map((key) => caches.delete(key)));
+        await self.clients.claim();
+    })());
+});
+
+const cacheFirst = async (request, cacheName) => {
+    const cache = await caches.open(cacheName);
+    const cached = await cache.match(request);
+    if (cached) return cached;
+    const response = await fetch(request);
+    if (response.ok) await cache.put(request, response.clone());
+    return response;
+};
+
+const networkFirstNavigation = async (request) => {
+    const cache = await caches.open(SHELL_CACHE);
+    try {
+        const response = await fetch(request);
+        if (response.ok) await cache.put('./index.html', response.clone());
+        return response;
+    } catch {
+        return (await cache.match('./index.html')) || (await cache.match('./offline.html'));
+    }
+};
+
+self.addEventListener('fetch', (event) => {
+    const request = event.request;
+    if (request.method !== 'GET') return;
+    const url = new URL(request.url);
+    if (url.origin !== self.location.origin) return;
+
+    if (request.mode === 'navigate') {
+        event.respondWith(networkFirstNavigation(request));
+        return;
+    }
+
+    if (url.pathname.includes('/data/')) {
+        event.respondWith(cacheFirst(request, DATA_CACHE));
+        return;
+    }
+
+    event.respondWith(cacheFirst(request, SHELL_CACHE));
+});

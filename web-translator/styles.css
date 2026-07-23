@@ -38,6 +38,91 @@ body {
     background: rgba(35, 29, 20, 0.96);
 }
 
+.translator-nav {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem 1rem;
+    margin-bottom: 1.5rem;
+    font: 700 0.85rem/1.4 Arial, sans-serif;
+}
+
+.translator-nav a {
+    color: #d5b477;
+    text-underline-offset: 0.2em;
+}
+
+.translator-choice-shell {
+    align-content: start;
+}
+
+.translator-choices {
+    display: grid;
+    gap: 1rem;
+}
+
+.translator-choice {
+    display: grid;
+    gap: 0.45rem;
+    min-height: 12rem;
+    border: 1px solid #76562f;
+    border-radius: 0.65rem;
+    padding: 1.25rem;
+    color: #f2e6c9;
+    text-decoration: none;
+    background: linear-gradient(145deg, rgba(95, 55, 24, 0.42), rgba(18, 15, 11, 0.92));
+    transition: border-color 120ms ease, transform 120ms ease, background 120ms ease;
+}
+
+.translator-choice:hover,
+.translator-choice:focus-visible {
+    border-color: #d89b45;
+    background: linear-gradient(145deg, rgba(126, 70, 27, 0.54), rgba(24, 19, 13, 0.96));
+    transform: translateY(-0.15rem);
+    outline: none;
+}
+
+.elven-choice {
+    background: linear-gradient(145deg, rgba(42, 85, 62, 0.48), rgba(14, 24, 20, 0.94));
+}
+
+.elven-choice:hover,
+.elven-choice:focus-visible {
+    background: linear-gradient(145deg, rgba(51, 112, 78, 0.58), rgba(15, 31, 24, 0.97));
+}
+
+.choice-kicker {
+    color: #ca9b54;
+    font: 700 0.72rem/1.3 Arial, sans-serif;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+}
+
+.translator-choice strong {
+    align-self: end;
+    font-size: clamp(1.5rem, 7vw, 2.1rem);
+}
+
+.translator-choice > span:not(.choice-kicker):not(.choice-action) {
+    color: #cfc1a5;
+    font: 1rem/1.5 Arial, sans-serif;
+}
+
+.choice-action {
+    align-self: end;
+    color: #e3c183;
+    font: 700 0.9rem/1.4 Arial, sans-serif;
+}
+
+.choice-footer {
+    grid-template-columns: 1fr;
+}
+
+.source-note {
+    margin: 1.5rem 0 0;
+    color: #9f927b;
+    font: 0.78rem/1.5 Arial, sans-serif;
+}
+
 .eyebrow {
     margin: 0 0 0.4rem;
     color: #ca9b54;
@@ -234,6 +319,10 @@ footer a:focus-visible {
 
     .intro {
         margin-bottom: 2rem;
+    }
+
+    .translator-choices {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
     }
 
     .input-guidance {

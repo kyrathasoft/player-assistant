@@ -40,7 +40,11 @@
     textArea.addEventListener('input', enforceWordLimit);
     enforceWordLimit();
 
-    const directionToggle = document.getElementById('orcish-to-english');
+    const translatorShell = document.querySelector('[data-translator-language]');
+    const language = translatorShell instanceof HTMLElement
+        ? translatorShell.dataset.translatorLanguage || 'Orcish'
+        : 'Orcish';
+    const directionToggle = document.querySelector('[data-direction-toggle]');
     const pageHeading = document.getElementById('page-heading');
     const intro = document.getElementById('translator-intro');
     const sourceLabel = document.getElementById('source-text-label');
@@ -55,20 +59,20 @@
         }
 
         const reverse = directionToggle.checked;
-        document.title = reverse ? 'Orcish to English Translator' : 'English to Orcish Translator';
+        document.title = reverse ? `${language} to English Translator` : `English to ${language} Translator`;
         if (pageHeading !== null) {
-            pageHeading.textContent = reverse ? 'Orcish to English' : 'English to Orcish';
+            pageHeading.textContent = reverse ? `${language} to English` : `English to ${language}`;
         }
         if (intro !== null) {
             intro.textContent = reverse
-                ? 'Enter an Orcish word, phrase, or sentence. Unknown words remain unchanged.'
+                ? `Enter an ${language} word, phrase, or sentence. Unknown words remain unchanged.`
                 : 'Enter an English word, phrase, or sentence. Unknown words remain unchanged.';
         }
         if (sourceLabel !== null) {
-            sourceLabel.textContent = reverse ? 'Orcish text' : 'English text';
+            sourceLabel.textContent = reverse ? `${language} text` : 'English text';
         }
         if (translateButton instanceof HTMLButtonElement) {
-            translateButton.textContent = reverse ? 'Translate to English' : 'Translate to Orcish';
+            translateButton.textContent = reverse ? 'Translate to English' : `Translate to ${language}`;
         }
 
         if (hideExistingResult) {
