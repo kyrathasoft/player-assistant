@@ -9,6 +9,33 @@ final class CharacterAuthService
     private const LEGACY_MINIMUM_ITERATIONS = 600000;
     private const LEGACY_HASH_BYTES = 32;
     private const LEGACY_MINIMUM_SALT_BYTES = 16;
+    private const DUNGEON_MASTER_LOGIN_NAME = 'dungeon master';
+    private const DUNGEON_MASTER_LOGIN_ALIASES = [
+        'dungeon master',
+        'dungeon',
+        'master',
+        'dm',
+    ];
+    private const MAXIMILIAN_LOGIN_NAME = 'maximilian';
+    private const MAXIMILIAN_LOGIN_ALIASES = [
+        'max',
+        'maximilian',
+        'maximilian yragerne',
+        'max yragerne',
+        'yragerne',
+    ];
+    private const NERIA_LOGIN_NAME = 'neria';
+    private const NERIA_LOGIN_ALIASES = [
+        'neria',
+        'neria silverdale',
+        'silverdale',
+    ];
+    private const KELPIE_LOGIN_NAME = 'kelpie';
+    private const KELPIE_LOGIN_ALIASES = [
+        'kelpie',
+        'kelpie lawfuller',
+        'lawfuller',
+    ];
 
     private array $authConfig;
 
@@ -42,7 +69,7 @@ final class CharacterAuthService
     {
         $this->requireExpectedOrigin($origin);
         $displayName = $this->validateDisplayName((string)($body['character_name'] ?? ''));
-        $normalizedName = $this->normalizeName($displayName);
+        $normalizedName = $this->resolveLoginNameAlias($this->normalizeName($displayName));
         $password = (string)($body['password'] ?? '');
         if ($password === '' || strlen($password) > 4096) {
             $this->rejectLogin($normalizedName, $remoteAddress, null, $password);
@@ -625,6 +652,25 @@ final class CharacterAuthService
         return function_exists('mb_strtolower')
             ? mb_strtolower($value, 'UTF-8')
             : strtolower($value);
+    }
+
+    private function resolveLoginNameAlias(string $normalizedName): string
+    {
+        if (in_array($normalizedName, self::DUNGEON_MASTER_LOGIN_ALIASES, true)) {
+            return self::DUNGEON_MASTER_LOGIN_NAME;
+        }
+
+        if (in_array($normalizedName, self::MAXIMILIAN_LOGIN_ALIASES, true)) {
+            return self::MAXIMILIAN_LOGIN_NAME;
+        }
+
+        if (in_array($normalizedName, self::NERIA_LOGIN_ALIASES, true)) {
+            return self::NERIA_LOGIN_NAME;
+        }
+
+        return in_array($normalizedName, self::KELPIE_LOGIN_ALIASES, true)
+            ? self::KELPIE_LOGIN_NAME
+            : $normalizedName;
     }
 
     private function validateNewPassword(string $password): string

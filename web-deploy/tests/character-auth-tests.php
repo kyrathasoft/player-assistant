@@ -129,6 +129,221 @@ try {
         '192.0.2.12',
         'https://example.test',
         $nativeSession);
+
+    $dungeonMasterPassword = 'test dungeon master password';
+    $service->createAccount([
+        'character_name' => 'Dungeon Master',
+        'password' => $dungeonMasterPassword,
+        'character_key' => 'dungeon-master',
+        'role' => 'dm',
+    ]);
+    foreach ([
+        'dungeon master',
+        'DUNGEON MASTER',
+        'dungeon',
+        'DuNgEoN',
+        'master',
+        'MASTER',
+        'DM',
+        'dm',
+    ] as $alias) {
+        $aliasSession = [];
+        $aliasLogin = $service->login(
+            ['character_name' => $alias, 'password' => $dungeonMasterPassword],
+            '192.0.2.44',
+            'https://example.test',
+            $aliasSession);
+        assertTrue(
+            $aliasLogin['account']['character_key'] === 'dungeon-master'
+                && $aliasLogin['account']['role'] === 'dm',
+            "Dungeon Master alias '$alias' resolved to the wrong account.");
+    }
+    $wrongAliasSession = [];
+    expectBrokerError(
+        fn() => $service->login(
+            ['character_name' => 'master', 'password' => 'another long password'],
+            '192.0.2.45',
+            'https://example.test',
+            $wrongAliasSession),
+        401,
+        'login_failed');
+    expectBrokerError(
+        fn() => $service->login(
+            ['character_name' => 'DM', 'password' => 'another long password'],
+            '192.0.2.45',
+            'https://example.test',
+            $wrongAliasSession),
+        401,
+        'login_failed');
+    expectBrokerError(
+        fn() => $service->login(
+            ['character_name' => 'dungeon master', 'password' => $dungeonMasterPassword],
+            '192.0.2.45',
+            'https://example.test',
+            $wrongAliasSession),
+        429,
+        'login_failed');
+
+    $maximilianPassword = 'test maximilian password';
+    $service->createAccount([
+        'character_name' => 'Maximilian',
+        'password' => $maximilianPassword,
+        'character_key' => 'maximilian',
+        'role' => 'player',
+    ]);
+    foreach ([
+        'max',
+        'MAX',
+        'maximilian',
+        'MaXiMiLiAn',
+        'Maximilian Yragerne',
+        'MAXIMILIAN YRAGERNE',
+        'Max Yragerne',
+        'mAx yRaGeRnE',
+        'Yragerne',
+        'YRAGERNE',
+    ] as $alias) {
+        $aliasSession = [];
+        $aliasLogin = $service->login(
+            ['character_name' => $alias, 'password' => $maximilianPassword],
+            '192.0.2.46',
+            'https://example.test',
+            $aliasSession);
+        assertTrue(
+            $aliasLogin['account']['character_key'] === 'maximilian'
+                && $aliasLogin['account']['role'] === 'player',
+            "Maximilian alias '$alias' resolved to the wrong account.");
+    }
+    $wrongMaximilianAliasSession = [];
+    expectBrokerError(
+        fn() => $service->login(
+            ['character_name' => 'max', 'password' => 'another long password'],
+            '192.0.2.47',
+            'https://example.test',
+            $wrongMaximilianAliasSession),
+        401,
+        'login_failed');
+    expectBrokerError(
+        fn() => $service->login(
+            ['character_name' => 'Yragerne', 'password' => 'another long password'],
+            '192.0.2.47',
+            'https://example.test',
+            $wrongMaximilianAliasSession),
+        401,
+        'login_failed');
+    expectBrokerError(
+        fn() => $service->login(
+            ['character_name' => 'Maximilian Yragerne', 'password' => $maximilianPassword],
+            '192.0.2.47',
+            'https://example.test',
+            $wrongMaximilianAliasSession),
+        429,
+        'login_failed');
+
+    $neriaPassword = 'test neria password';
+    $service->createAccount([
+        'character_name' => 'Neria',
+        'password' => $neriaPassword,
+        'character_key' => 'neria',
+        'role' => 'player',
+    ]);
+    foreach ([
+        'Neria',
+        'nErIa',
+        'Neria Silverdale',
+        'NERIA SILVERDALE',
+        'Silverdale',
+        'sIlVeRdAlE',
+    ] as $alias) {
+        $aliasSession = [];
+        $aliasLogin = $service->login(
+            ['character_name' => $alias, 'password' => $neriaPassword],
+            '192.0.2.48',
+            'https://example.test',
+            $aliasSession);
+        assertTrue(
+            $aliasLogin['account']['character_key'] === 'neria'
+                && $aliasLogin['account']['role'] === 'player',
+            "Neria alias '$alias' resolved to the wrong account.");
+    }
+    $wrongNeriaAliasSession = [];
+    expectBrokerError(
+        fn() => $service->login(
+            ['character_name' => 'Silverdale', 'password' => 'another long password'],
+            '192.0.2.49',
+            'https://example.test',
+            $wrongNeriaAliasSession),
+        401,
+        'login_failed');
+    expectBrokerError(
+        fn() => $service->login(
+            ['character_name' => 'Neria Silverdale', 'password' => 'another long password'],
+            '192.0.2.49',
+            'https://example.test',
+            $wrongNeriaAliasSession),
+        401,
+        'login_failed');
+    expectBrokerError(
+        fn() => $service->login(
+            ['character_name' => 'Neria', 'password' => $neriaPassword],
+            '192.0.2.49',
+            'https://example.test',
+            $wrongNeriaAliasSession),
+        429,
+        'login_failed');
+
+    $kelpiePassword = 'test kelpie password';
+    $service->createAccount([
+        'character_name' => 'Kelpie',
+        'password' => $kelpiePassword,
+        'character_key' => 'kelpie',
+        'role' => 'player',
+    ]);
+    foreach ([
+        'Kelpie',
+        'kElPiE',
+        'Kelpie Lawfuller',
+        'KELPIE LAWFULLER',
+        'Lawfuller',
+        'lAwFuLlEr',
+    ] as $alias) {
+        $aliasSession = [];
+        $aliasLogin = $service->login(
+            ['character_name' => $alias, 'password' => $kelpiePassword],
+            '192.0.2.50',
+            'https://example.test',
+            $aliasSession);
+        assertTrue(
+            $aliasLogin['account']['character_key'] === 'kelpie'
+                && $aliasLogin['account']['role'] === 'player',
+            "Kelpie alias '$alias' resolved to the wrong account.");
+    }
+    $wrongKelpieAliasSession = [];
+    expectBrokerError(
+        fn() => $service->login(
+            ['character_name' => 'Kelpie Lawfuller', 'password' => 'another long password'],
+            '192.0.2.51',
+            'https://example.test',
+            $wrongKelpieAliasSession),
+        401,
+        'login_failed');
+    expectBrokerError(
+        fn() => $service->login(
+            ['character_name' => 'Lawfuller', 'password' => 'another long password'],
+            '192.0.2.51',
+            'https://example.test',
+            $wrongKelpieAliasSession),
+        401,
+        'login_failed');
+    expectBrokerError(
+        fn() => $service->login(
+            ['character_name' => 'Kelpie', 'password' => $kelpiePassword],
+            '192.0.2.51',
+            'https://example.test',
+            $wrongKelpieAliasSession),
+        429,
+        'login_failed');
+
     $revokedSession = $nativeSession;
     $nativeSession['character_auth']['last_seen_at'] = time() - 61;
     assertTrue(
@@ -192,7 +407,7 @@ try {
         'login_failed');
 
     $accounts = $service->listAccounts();
-    assertTrue(count($accounts) === 2, 'The account listing count was incorrect.');
+    assertTrue(count($accounts) === 6, 'The account listing count was incorrect.');
     foreach ($accounts as $account) {
         assertTrue(!array_key_exists('password_hash', $account), 'An account listing exposed a password hash.');
         assertTrue(!array_key_exists('legacy_hash', $account), 'An account listing exposed a legacy hash.');

@@ -313,5 +313,9 @@
   - Deployed the validated 14-file PWA runtime to `https://bryanmiller.us/scarlethorizons/pwa/`; verified SHA-256 parity, successful HTTPS responses, required MIME types, security headers, service-worker cache policy, and anonymous session handling.
   - Added repeatable local and live PWA verification for manifest scope, install wiring, complete runtime-file parity, MIME/security/cache headers, anonymous sessions, and optional current-XP broker readiness.
   - Excluded the protected XP Tracking source from the public campaign-search index, added regression checks in refresh/build/deployment verification, and rolled the service-worker cache so existing clients retire the exposed search snapshot.
+  - Added case-insensitive Dungeon Master login aliases for `dungeon master`, `dungeon`, `master`, and `DM`, with a shared throttling identity and regression coverage preventing non-DM passwords from authenticating through an alias.
+  - Added case-insensitive Maximilian login aliases for `max`, `maximilian`, `Maximilian Yragerne`, `Max Yragerne`, and `Yragerne`, with a shared throttling identity and regression coverage.
+  - Added case-insensitive Neria login aliases for `Neria`, `Neria Silverdale`, and `Silverdale`, with a shared throttling identity and regression coverage.
+  - Consolidated the retired Kelpie identity into the enabled `kelpie` account with case-insensitive `Kelpie`, `Kelpie Lawfuller`, and `Lawfuller` login aliases and shared throttling coverage; the disabled duplicate production account was removed.
   - [ ] Deploy and configure the current-XP PHP broker update, then pass `pwa\test-deployment.ps1 -RequireCurrentXpApi`; the static PWA is live, but the production broker does not yet expose `/v1/xp`.
   - Expanded `web-translator/` into a two-language landing page with separate Orcish and Elven translators, a consolidated 84,531-term Sindarin-first Elvish web lexicon, reverse Elvish lookup, downloads, and a parallel Elvish JSON API.
