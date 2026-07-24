@@ -1666,9 +1666,9 @@ static void OrcishTranslatorSupportsFiftyPageSampleVocabulary()
         .Where(entry => HasAnyTag(entry, "fifty-page-sample", "fifty-page-near-kin"))
         .ToArray();
 
-    AssertEqual(1718, entries.Length, "expected every candidate from the fifty page sample expansion");
-    AssertEqual(601, entries.Count(entry => HasAnyTag(entry, "fifty-page-sample")), "expected the scraped source candidates");
-    AssertEqual(1117, entries.Count(entry => HasAnyTag(entry, "fifty-page-near-kin")), "expected the near-kin candidates");
+    AssertEqual(1716, entries.Length, "expected every candidate from the fifty page sample expansion");
+    AssertEqual(600, entries.Count(entry => HasAnyTag(entry, "fifty-page-sample")), "expected the scraped source candidates");
+    AssertEqual(1116, entries.Count(entry => HasAnyTag(entry, "fifty-page-near-kin")), "expected the near-kin candidates");
 
     foreach (var entry in entries)
     {
@@ -2286,6 +2286,7 @@ static void OrcishTranslatorExcludesApprovedAnachronisticFamilies()
 {
     var discarded = new[]
     {
+        "academic", "academic's", "academics",
         "automobile", "automobile's", "automobiled", "automobiles", "automobiling",
         "camera", "camera's", "cameras",
         "gasoline", "gasoline's",
@@ -2364,7 +2365,7 @@ static void OrcishTranslatorWarmupIsShared()
             throw new TimeoutException("test warmup was not released");
         }
 
-        return 80974;
+        return 80971;
     };
 
     try
@@ -2379,7 +2380,7 @@ static void OrcishTranslatorWarmupIsShared()
         releaseWarmup.Set();
         var result = first.WaitAsync(TimeSpan.FromSeconds(5)).GetAwaiter().GetResult();
 
-        AssertEqual(80974, result.EnglishTermCount, "unexpected warmed English term count");
+        AssertEqual(80971, result.EnglishTermCount, "unexpected warmed English term count");
         AssertEqual(1, Volatile.Read(ref warmupCount), "translator warmup should run once");
         AssertTrue(OrcishTranslatorWarmupUtility.IsReady, "completed translator warmup should report ready");
     }
@@ -2403,7 +2404,7 @@ static void OrcishTranslatorWarmupIsShared()
 
 static void OrcishTranslatorLoadsEmbeddedSnapshot()
 {
-    AssertEqual(80974, OrcishTranslatorUtility.GetEnglishTermCount(), "unexpected embedded snapshot term count");
+    AssertEqual(80971, OrcishTranslatorUtility.GetEnglishTermCount(), "unexpected embedded snapshot term count");
     AssertTrue(
         OrcishLexiconSnapshotUtility.WasEmbeddedSnapshotLoaded,
         "translator should load the embedded lexicon snapshot instead of cold-JITing generated builders");
@@ -2413,7 +2414,7 @@ static void OrcishTranslatorExposesUniqueEnglishTermCount()
 {
     var terms = OrcishTranslatorUtility.GetEnglishTerms();
 
-    AssertEqual(80974, OrcishTranslatorUtility.GetEnglishTermCount(), "unexpected total English term count");
+    AssertEqual(80971, OrcishTranslatorUtility.GetEnglishTermCount(), "unexpected total English term count");
     AssertEqual(OrcishTranslatorUtility.GetEnglishTermCount(), terms.Count, "term list and count should agree");
     AssertEqual(1, terms.Count(term => string.Equals(term, "I", StringComparison.OrdinalIgnoreCase)), "I should be counted once despite multiple variants");
     AssertEqual(1, terms.Count(term => string.Equals(term, "really", StringComparison.OrdinalIgnoreCase)), "really should be counted once despite multiple variants");

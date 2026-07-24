@@ -1,8 +1,9 @@
 - [ ] Review potentially anachronistic English terms in the Orcish lexicon.
   - Approval only: do not purge an existing entry until the user selects it.
   - Recorded decision, pending batch application: retain `battery` as a verb; remove the noun sense of `battery` and the noun possessive `battery's`.
-  - Current focused shortlist: `codex-scratch\lexicon-anachronism-purge-candidates.txt` (`36` families, `112` exact English entries).
-  - Broad audit with categories, triggers, Orcish forms, and tags: `codex-scratch\lexicon-anachronism-review.tsv` (`151` exact English entries, including medieval-compatible terms intentionally excluded from the focused shortlist).
+  - Approved removal applied: `academic`, `academic's`, and `academics`.
+  - Current focused shortlist: `codex-scratch\lexicon-anachronism-purge-candidates.txt` (`35` families, `109` exact English entries).
+  - Broad audit with categories, triggers, Orcish forms, and tags: `codex-scratch\lexicon-anachronism-review.tsv` (`148` exact English entries, including medieval-compatible terms intentionally excluded from the focused shortlist).
   - After approved removals, update family batch counts and the unique-English count regression, rebuild the app and `to-orcish` in Release, run focused absence and quality tests, refresh both audit files, and update graphify.
 
 - [x] Resume Orcish invalid retranslation review.

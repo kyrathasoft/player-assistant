@@ -100,7 +100,9 @@ namespace PlayerAssistant
             }
             catch (Exception ex) when (ex is JsonException or InvalidDataException or InvalidOperationException)
             {
+#if !TO_ORCISH_STANDALONE
                 StartupLoggingUtility.Append("Orcish lexicon snapshot load", ex);
+#endif
                 return null;
             }
         }

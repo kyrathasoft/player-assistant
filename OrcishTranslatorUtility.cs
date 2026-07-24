@@ -2804,7 +2804,6 @@ namespace PlayerAssistant
                 new("absurd", "dargi-gori-hekash", Tags: ["frequency", "freq-xls-ge100", "generated"]),
                 new("abuse", "brak-bruku", Tags: ["frequency", "freq-xls-ge100", "generated", "review-repaired", "root-derived"]),
                 new("abused", "flindi-banti-hrowkash", Tags: ["frequency", "freq-xls-ge100", "generated"]),
-                new("academic", "gor-gord-flitin", Tags: ["frequency", "freq-xls-ge100", "generated"]),
                 new("academy", "heku-kangstuk-dakur", Tags: ["frequency", "freq-xls-ge100", "generated"]),
                 new("accent", "flit-gor-narg-rukh", Tags: ["frequency", "freq-xls-ge100", "generated", "name-substring-cleanup"]),
                 new("accepted", "mokra-dravkuash", Tags: ["frequency", "freq-xls-ge100", "generated", "review-repaired", "root-derived"]),
@@ -12045,7 +12044,6 @@ twilight
 unbroken
 vessel
 woven
-academics
 accidentally
 accompanying
 accorded
@@ -12558,7 +12556,6 @@ yep
 """;
 
         private const string FiftyPageNearKinCandidateData = """
-academic's|academics
 accidental's|accidentally
 accidentals|accidentally
 accompanies|accompanying

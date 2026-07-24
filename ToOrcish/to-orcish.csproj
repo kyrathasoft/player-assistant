@@ -12,10 +12,12 @@
     <OutputPath>..\Release\</OutputPath>
     <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
     <AppendRuntimeIdentifierToOutputPath>false</AppendRuntimeIdentifierToOutputPath>
+    <DefineConstants>$(DefineConstants);TO_ORCISH_STANDALONE</DefineConstants>
   </PropertyGroup>
 
   <ItemGroup>
     <Compile Include="..\OrcishLexiconReviewUtility.cs" Link="OrcishLexiconReviewUtility.cs" />
+    <Compile Include="..\OrcishLexiconSnapshotUtility.cs" Link="OrcishLexiconSnapshotUtility.cs" />
     <Compile Include="..\OrcishTranslatorUtility.BlogFinalSitemapBatch.cs" Link="OrcishTranslatorUtility.BlogFinalSitemapBatch.cs" />
     <Compile Include="..\OrcishTranslatorUtility.BlogHighYieldBatch.cs" Link="OrcishTranslatorUtility.BlogHighYieldBatch.cs" />
     <Compile Include="..\OrcishTranslatorUtility.BlogMixedHighYieldBatch.cs" Link="OrcishTranslatorUtility.BlogMixedHighYieldBatch.cs" />
@@ -40,6 +42,7 @@
     <Compile Include="..\OrcishTranslatorUtility.ShadowdimBlogBatch.cs" Link="OrcishTranslatorUtility.ShadowdimBlogBatch.cs" />
     <Compile Include="..\OrcishTranslatorUtility.cs" Link="OrcishTranslatorUtility.cs" />
     <Compile Include="..\RandomNumberUtility.cs" Link="RandomNumberUtility.cs" />
+    <EmbeddedResource Include="..\web-translator\orcish-lexicon.json" LogicalName="PlayerAssistant.OrcishLexiconSnapshot.json" />
   </ItemGroup>
 
 </Project>
