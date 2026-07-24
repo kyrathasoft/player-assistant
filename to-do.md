@@ -1,5 +1,6 @@
 - [ ] Review potentially anachronistic English terms in the Orcish lexicon.
   - Approval only: do not purge an existing entry until the user selects it.
+  - Recorded decision, pending batch application: retain `battery` as a verb; remove the noun sense of `battery` and the noun possessive `battery's`.
   - Current focused shortlist: `codex-scratch\lexicon-anachronism-purge-candidates.txt` (`36` families, `112` exact English entries).
   - Broad audit with categories, triggers, Orcish forms, and tags: `codex-scratch\lexicon-anachronism-review.tsv` (`151` exact English entries, including medieval-compatible terms intentionally excluded from the focused shortlist).
   - After approved removals, update family batch counts and the unique-English count regression, rebuild the app and `to-orcish` in Release, run focused absence and quality tests, refresh both audit files, and update graphify.
@@ -317,5 +318,6 @@
   - Added case-insensitive Maximilian login aliases for `max`, `maximilian`, `Maximilian Yragerne`, `Max Yragerne`, and `Yragerne`, with a shared throttling identity and regression coverage.
   - Added case-insensitive Neria login aliases for `Neria`, `Neria Silverdale`, and `Silverdale`, with a shared throttling identity and regression coverage.
   - Consolidated the retired Kelpie identity into the enabled `kelpie` account with case-insensitive `Kelpie`, `Kelpie Lawfuller`, and `Lawfuller` login aliases and shared throttling coverage; the disabled duplicate production account was removed.
-  - [ ] Deploy and configure the current-XP PHP broker update, then pass `pwa\test-deployment.ps1 -RequireCurrentXpApi`; the static PWA is live, but the production broker does not yet expose `/v1/xp`.
+  - [x] Deploy and configure the current-XP PHP broker update, then pass `pwa\test-deployment.ps1 -RequireCurrentXpApi`.
+    - Live verification: production health reports XP tracking configured, anonymous `/v1/xp` fails closed with HTTP 401 and `Cache-Control: no-store`, the broker fetched and parsed the fresh six-character `As of 7.24.2026` snapshot, and all 13 public PWA runtime files match.
   - Expanded `web-translator/` into a two-language landing page with separate Orcish and Elven translators, a consolidated 84,531-term Sindarin-first Elvish web lexicon, reverse Elvish lookup, downloads, and a parallel Elvish JSON API.
