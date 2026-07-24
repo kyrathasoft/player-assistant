@@ -1,6 +1,6 @@
 # PC Login Dashboard on Programmer's Website
 
-Status: character authentication implemented; player-specific private dashboard data remains a separate feature.
+Status: character authentication and protected current-XP dashboard implemented.
 
 ## Implemented authentication
 
@@ -16,10 +16,25 @@ Status: character authentication implemented; player-specific private dashboard 
 - PWA service-worker exclusion for all authentication API requests; protected responses are never cached for offline use.
 - Focused PHP authentication tests under `web-deploy/tests/character-auth-tests.php`.
 
+## Implemented protected XP dashboard
+
+- Protected `GET /v1/xp` route requiring a current enabled character session.
+- Fixed server-configured Obsidian Publish source; browsers cannot supply or receive the source URL.
+- HTTPS-only fetches, redirect rejection, strict host/path allowlisting, short connection and request timeouts, response-size limits, and narrow content-type acceptance.
+- Latest `As of` markdown-table validation before any snapshot is cached or returned.
+- Player authorization by the server-stored character key, with exactly one matching total required.
+- Fail-closed handling for missing, invalid, or ambiguous mappings.
+- Dungeon Master role access to the validated current party totals.
+- Last-known-good server cache with a bounded stale window; stale responses are labeled.
+- PWA **Current XP** card, explicit refresh, authenticated-session restoration, safe text rendering, and DM party table.
+- API-wide `Cache-Control: no-store`; service-worker exclusion for `/scarlethorizons/api/`.
+- Focused service, routing, malformed-source, cache, stale-fallback, and authorization tests.
+
 ## Implemented files
 
 - `web-deploy/player-assistant-broker/BrokerHttpException.php`
 - `web-deploy/player-assistant-broker/CharacterAuthService.php`
+- `web-deploy/player-assistant-broker/XpTrackingService.php`
 - `web-deploy/player-assistant-broker/BrokerService.php`
 - `web-deploy/bryanmiller.us/scarlethorizons/api/index.php`
 - `web-deploy/import-character-accounts.ps1`
@@ -31,14 +46,10 @@ Create a PHP application on the programmer's website where a player can sign in 
 
 The website must fetch the offsite data on the server. A player's browser must not receive the offsite URL, upstream credentials, unfiltered records, or records belonging to another player.
 
-## Future protected-data decisions
+## Remaining protected-data decisions
 
-- Identify the exact offsite HTTPS URL and its response format: JSON, HTML, XML, or another format.
-- Identify how the offsite service authenticates the website, if authentication is required.
-- Define the stable key that maps each website account to its permitted player-character record or records.
 - Accounts are administrator-created; self-registration is intentionally excluded.
-- Decide what dashboard fields each player may see and whether the Dungeon Master receives a broader view.
-- Define acceptable cache age and behavior when the offsite service is unavailable.
+- Decide which protected fields beyond current XP should be added.
 - Decide whether password reset is administrator-assisted or email-based. Do not implement security questions.
 
 ## Protected dashboard architecture

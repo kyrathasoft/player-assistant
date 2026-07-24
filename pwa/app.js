@@ -21,6 +21,8 @@
     let campaignSearchLoading = null;
     let authenticatedAccount = null;
     let authenticationCsrfToken = '';
+    let authenticatedXpSnapshot = null;
+    let xpRequestId = 0;
 
     const worker = typeof Worker !== 'undefined'
         ? new Worker('translator-worker.js')
@@ -95,6 +97,124 @@
         }
     };
 
+    const renderXpUi = () => {
+        const authenticated = authenticatedAccount !== null;
+        const refreshButton = byId('xp-refresh');
+        const status = byId('xp-status');
+        const characterSummary = byId('xp-character-summary');
+        const partySummary = byId('xp-party-summary');
+        const characterName = byId('xp-character-name');
+        const xpTotal = byId('xp-total');
+        const xpDate = byId('xp-date');
+        const partyDate = byId('xp-party-date');
+        const partyRows = byId('xp-party-rows');
+        if (refreshButton) refreshButton.hidden = !authenticated;
+        if (characterSummary) characterSummary.hidden = true;
+        if (partySummary) partySummary.hidden = true;
+        if (characterName) characterName.textContent = '';
+        if (xpTotal) xpTotal.textContent = '';
+        if (xpDate) xpDate.textContent = '';
+        if (partyDate) partyDate.textContent = '';
+        partyRows?.replaceChildren();
+
+        if (!authenticated) {
+            if (status) status.textContent = 'Log in to view your current XP total.';
+            return;
+        }
+        if (authenticatedXpSnapshot === null) {
+            if (status) status.textContent = 'Loading current XP…';
+            return;
+        }
+
+        if (authenticatedXpSnapshot.scope === 'character') {
+            const character = authenticatedXpSnapshot.character;
+            if (status) status.textContent = authenticatedXpSnapshot.stale
+                ? 'The XP source is temporarily unavailable. Showing the last validated total.'
+                : '';
+            if (characterSummary) characterSummary.hidden = false;
+            if (characterName) characterName.textContent = character.character_name;
+            if (xpTotal) xpTotal.textContent = Number(character.xp_total).toLocaleString('en-US');
+            if (xpDate) xpDate.textContent = authenticatedXpSnapshot.date_label;
+            return;
+        }
+
+        if (status) status.textContent = authenticatedXpSnapshot.stale
+            ? 'The XP source is temporarily unavailable. Showing the last validated party totals.'
+            : 'Dungeon Master party access';
+        if (partySummary) partySummary.hidden = false;
+        if (partyDate) partyDate.textContent = authenticatedXpSnapshot.date_label;
+        if (partyRows) {
+            const fragment = document.createDocumentFragment();
+            authenticatedXpSnapshot.characters.forEach((character) => {
+                const row = document.createElement('tr');
+                const nameCell = document.createElement('th');
+                const totalCell = document.createElement('td');
+                nameCell.scope = 'row';
+                nameCell.textContent = character.character_name;
+                totalCell.textContent = Number(character.xp_total).toLocaleString('en-US');
+                row.append(nameCell, totalCell);
+                fragment.append(row);
+            });
+            partyRows.replaceChildren(fragment);
+        }
+    };
+
+    const validateXpSnapshot = (payload) => {
+        if (!payload
+            || payload.schema_version !== 1
+            || typeof payload.date_label !== 'string'
+            || payload.date_label.length === 0
+            || payload.date_label.length > 200
+            || typeof payload.stale !== 'boolean') {
+            throw new Error('The XP service returned an invalid response.');
+        }
+        const validCharacter = (character) => character
+            && typeof character.character_name === 'string'
+            && character.character_name.length > 0
+            && character.character_name.length <= 100
+            && Number.isSafeInteger(character.xp_total)
+            && character.xp_total >= 0;
+        if (payload.scope === 'character' && validCharacter(payload.character)) {
+            return payload;
+        }
+        if (payload.scope === 'party'
+            && Array.isArray(payload.characters)
+            && payload.characters.length > 0
+            && payload.characters.length <= 200
+            && payload.characters.every(validCharacter)) {
+            return payload;
+        }
+        throw new Error('The XP service returned an invalid response.');
+    };
+
+    const loadXpSummary = async () => {
+        const requestId = ++xpRequestId;
+        if (authenticatedAccount === null) {
+            authenticatedXpSnapshot = null;
+            renderXpUi();
+            return;
+        }
+        const accountId = authenticatedAccount.id;
+        const refreshButton = byId('xp-refresh');
+        if (refreshButton instanceof HTMLButtonElement) refreshButton.disabled = true;
+        authenticatedXpSnapshot = null;
+        renderXpUi();
+        try {
+            const snapshot = validateXpSnapshot(await requestAuthenticationApi('/xp'));
+            if (requestId !== xpRequestId || authenticatedAccount?.id !== accountId) return;
+            authenticatedXpSnapshot = snapshot;
+            renderXpUi();
+        } catch (error) {
+            if (requestId !== xpRequestId || authenticatedAccount?.id !== accountId) return;
+            const status = byId('xp-status');
+            if (status) status.textContent = error.message;
+        } finally {
+            if (requestId === xpRequestId && refreshButton instanceof HTMLButtonElement) {
+                refreshButton.disabled = false;
+            }
+        }
+    };
+
     const updateAuthenticationUi = () => {
         const authenticated = authenticatedAccount !== null;
         const buttonLabel = byId('auth-button-label');
@@ -120,6 +240,7 @@
                 ? `Signed in as ${authenticatedAccount.character_name}. Protected requests are authorized from this server session.`
                 : 'Log in with your character name and password. The server determines which character record the session may access; passwords and private records are never embedded in this browser application.';
         }
+        renderXpUi();
     };
 
     const requestAuthenticationApi = async (path, options = {}) => {
@@ -163,7 +284,9 @@
             authenticatedAccount = null;
             authenticationCsrfToken = '';
         }
+        authenticatedXpSnapshot = null;
         updateAuthenticationUi();
+        if (authenticatedAccount !== null) await loadXpSummary();
     };
 
     authButton?.addEventListener('click', () => {
@@ -202,6 +325,7 @@
             });
             authenticationCsrfToken = String(session.csrf_token || '');
             authenticatedAccount = session.account;
+            authenticatedXpSnapshot = null;
             try {
                 const identity = await requestAuthenticationApi('/me');
                 authenticatedAccount = identity.account || authenticatedAccount;
@@ -212,9 +336,11 @@
             setAuthenticationMessage('');
             setAuthenticationMessage('Character login succeeded.', false, true);
             updateAuthenticationUi();
+            await loadXpSummary();
         } catch (error) {
             authenticatedAccount = null;
             authenticationCsrfToken = '';
+            authenticatedXpSnapshot = null;
             setAuthenticationMessage(error.message, true);
             updateAuthenticationUi();
         } finally {
@@ -232,6 +358,8 @@
             await requestAuthenticationApi('/logout', { method: 'POST', csrf: true });
             authenticatedAccount = null;
             authenticationCsrfToken = '';
+            authenticatedXpSnapshot = null;
+            xpRequestId++;
             updateAuthenticationUi();
             if (authDialog instanceof HTMLDialogElement) authDialog.close();
         } catch (error) {
@@ -239,6 +367,10 @@
         } finally {
             logoutButton.disabled = false;
         }
+    });
+
+    byId('xp-refresh')?.addEventListener('click', () => {
+        void loadXpSummary();
     });
 
     updateAuthenticationUi();

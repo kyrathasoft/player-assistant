@@ -860,6 +860,87 @@ textarea[readonly] {
     margin-top: 1rem;
 }
 
+.xp-card {
+    display: grid;
+    gap: 1rem;
+    margin-top: 1rem;
+    border: 1px solid var(--line-strong);
+    border-radius: 1rem;
+    padding: clamp(1rem, 3vw, 1.5rem);
+    background:
+        radial-gradient(circle at 90% 10%, rgba(213, 177, 115, 0.13), transparent 34%),
+        linear-gradient(145deg, rgba(43, 31, 24, 0.98), rgba(27, 21, 17, 0.98));
+}
+
+.xp-card [hidden] {
+    display: none !important;
+}
+
+.xp-card-heading {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+}
+
+.xp-card-heading h2,
+.xp-card-heading p,
+.xp-status,
+.xp-party-summary p {
+    margin: 0;
+}
+
+.xp-status {
+    color: var(--muted);
+}
+
+.xp-character-summary {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    align-items: end;
+    gap: 0.25rem 1rem;
+}
+
+.xp-character-summary span {
+    color: var(--muted);
+    font-weight: 800;
+}
+
+.xp-character-summary strong {
+    grid-column: 2;
+    grid-row: 1 / 3;
+    color: var(--gold-bright);
+    font-family: Georgia, "Times New Roman", serif;
+    font-size: clamp(2.5rem, 8vw, 4.5rem);
+    line-height: 1;
+}
+
+.xp-character-summary small {
+    color: var(--quiet);
+}
+
+.xp-party-table-wrap {
+    margin-top: 0.75rem;
+    overflow-x: auto;
+}
+
+.xp-party-summary table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.xp-party-summary th,
+.xp-party-summary td {
+    border-bottom: 1px solid var(--line);
+    padding: 0.65rem 0.5rem;
+    text-align: left;
+}
+
+.xp-party-summary td,
+.xp-party-summary thead th:last-child {
+    text-align: right;
+}
+
 .security-note {
     border-left: 0.28rem solid var(--gold);
 }
@@ -1073,6 +1154,20 @@ button:disabled {
     .portal-grid,
     .dice-layout {
         grid-template-columns: 1fr;
+    }
+
+    .xp-card-heading {
+        align-items: stretch;
+        flex-direction: column;
+    }
+
+    .xp-character-summary {
+        grid-template-columns: 1fr;
+    }
+
+    .xp-character-summary strong {
+        grid-column: 1;
+        grid-row: auto;
     }
 
     .translation-grid {

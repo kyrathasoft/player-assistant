@@ -1,7 +1,8 @@
 param(
     [string]$SiteUrl = 'https://publish.obsidian.md/scarlethorizons',
     [string]$OutputPath = (Join-Path $PSScriptRoot 'campaign-search.json'),
-    [ValidateRange(1, 64)][int]$Concurrency = 12
+    [ValidateRange(1, 64)][int]$Concurrency = 12,
+    [string[]]$ExcludedPageTitles = @('XP Tracking')
 )
 
 $ErrorActionPreference = 'Stop'
@@ -90,9 +91,13 @@ try {
 
     $requests = foreach ($pageUrl in $pageUrls) {
         $pageUri = [uri]$pageUrl
+        $pageTitle = Get-PageTitle -PageUri $pageUri
+        if ($ExcludedPageTitles -contains $pageTitle) {
+            continue
+        }
         $accessPath = ConvertTo-AccessPath -PageUri $pageUri -SiteSlug $siteSlug
         [pscustomobject]@{
-            Title = Get-PageTitle -PageUri $pageUri
+            Title = $pageTitle
             Url = $pageUri.AbsoluteUri
             MarkdownUrl = "https://$publishHost/access/$uid/$accessPath"
         }

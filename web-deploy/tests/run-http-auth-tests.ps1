@@ -67,6 +67,13 @@ try {
     Assert-Condition -Condition ($health.Headers['Cache-Control'] -contains 'no-store') -Message 'The API response was cacheable.'
     Assert-Condition -Condition ($health.Headers['Strict-Transport-Security'] -contains 'max-age=31536000') -Message 'The HSTS header was missing.'
 
+    $unauthenticatedXp = Invoke-WebRequest `
+        -UseBasicParsing `
+        -SkipHttpErrorCheck `
+        -Uri "$baseUrl/v1/xp"
+    Assert-Condition -Condition ($unauthenticatedXp.StatusCode -eq 401) -Message 'The HTTP XP route was not session-protected.'
+    Assert-Condition -Condition ([string]$unauthenticatedXp.Headers['Cache-Control'] -match '(?i)(^|,\s*)no-store($|,)') -Message 'The rejected XP response was cacheable.'
+
     $adminHeaders = @{ 'X-Broker-Admin-Key' = 'http-test-administrator-key' }
     $createResponse = Invoke-WebRequest `
         -UseBasicParsing `
@@ -115,6 +122,16 @@ try {
         -Headers @{ Cookie = $cookieHeader }
     $identity = $identityResponse.Content | ConvertFrom-Json
     Assert-Condition -Condition ($identity.account.character_key -eq 'http-hero') -Message 'The protected identity was not session-authorized.'
+
+    $unconfiguredXp = Invoke-WebRequest `
+        -UseBasicParsing `
+        -SkipHttpErrorCheck `
+        -Uri "$baseUrl/v1/xp" `
+        -Headers @{ Cookie = $cookieHeader }
+    $unconfiguredXpBody = $unconfiguredXp.Content | ConvertFrom-Json
+    Assert-Condition -Condition ($unconfiguredXp.StatusCode -eq 503) -Message 'The unconfigured HTTP XP route did not fail closed.'
+    Assert-Condition -Condition ($unconfiguredXpBody.error -eq 'xp_unavailable') -Message 'The unconfigured HTTP XP route returned the wrong error.'
+    Assert-Condition -Condition ($unconfiguredXp.Content -notmatch 'publish\.obsidian\.md') -Message 'The HTTP XP error exposed its source URL.'
 
     $logoutResponse = Invoke-WebRequest `
         -UseBasicParsing `

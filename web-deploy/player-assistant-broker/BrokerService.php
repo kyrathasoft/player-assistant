@@ -7,10 +7,12 @@ final class BrokerService
     private PDO $database;
     private array $apiConfig;
     private CharacterAuthService $characterAuth;
+    private XpTrackingService $xpTracking;
 
     public function __construct(
         private readonly array $config,
-        private readonly RpolClient $rpolClient)
+        private readonly RpolClient $rpolClient,
+        ?callable $xpMarkdownFetcher = null)
     {
         if (!extension_loaded('pdo_sqlite')) {
             throw new RuntimeException('The PHP PDO SQLite extension is required.');
@@ -29,6 +31,10 @@ final class BrokerService
         $this->characterAuth = new CharacterAuthService(
             $this->database,
             is_array($config['auth'] ?? null) ? $config['auth'] : []);
+        $this->xpTracking = new XpTrackingService(
+            $this->database,
+            is_array($config['xp'] ?? null) ? $config['xp'] : [],
+            $xpMarkdownFetcher);
     }
 
     public function dispatch(
@@ -51,6 +57,7 @@ final class BrokerService
                 'snapshot_signing_configured' => $this->snapshotSigningConfigured(),
                 'snapshot_count' => $this->snapshotCount(),
                 'character_account_count' => $this->characterAuth->accountCount(),
+                'xp_tracking_configured' => $this->xpTracking->isConfigured(),
             ]);
         }
 
@@ -71,6 +78,13 @@ final class BrokerService
 
         if ($method === 'GET' && $route === '/v1/me') {
             return $this->response(200, $this->characterAuth->requireCurrentAccount($session));
+        }
+
+        if ($method === 'GET' && $route === '/v1/xp') {
+            $current = $this->characterAuth->requireCurrentAccount($session);
+            return $this->response(
+                200,
+                $this->xpTracking->getForAccount($current['account']));
         }
 
         if ($method === 'POST' && $route === '/v1/logout') {

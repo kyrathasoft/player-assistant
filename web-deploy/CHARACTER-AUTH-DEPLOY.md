@@ -23,6 +23,7 @@ BrokerHttpException.php
 CharacterAuthService.php
 BrokerService.php
 RpolClient.php
+XpTrackingService.php
 ```
 
 Destination:
@@ -40,6 +41,8 @@ Merge the `auth` section from `player-assistant-broker/config.auth.example.php` 
 ```text
 https://bryanmiller.us
 ```
+
+Merge the `xp` section from `player-assistant-broker/config.xp.example.php` into the same private `config.php`. Keep the XP source URL in this private configuration; never place it in PWA JavaScript or accept it from a browser request.
 
 ## Account import
 
@@ -71,6 +74,7 @@ Player routes:
 POST /scarlethorizons/api/v1/login
 GET  /scarlethorizons/api/v1/session
 GET  /scarlethorizons/api/v1/me
+GET  /scarlethorizons/api/v1/xp
 POST /scarlethorizons/api/v1/logout
 ```
 
@@ -85,9 +89,13 @@ PATCH /scarlethorizons/api/v1/admin/character-accounts/{account-id}
 
 ## Verification
 
-- Health response reports schema version `2` and a nonzero `character_account_count`.
+- Health response reports schema version `2`, a nonzero `character_account_count`, and `xp_tracking_configured: true`.
 - Successful login sets `pa_character_session` with `Secure`, `HttpOnly`, `SameSite=Strict`, and path `/scarlethorizons/api/`.
 - `GET /v1/me` returns the logged-in account's server-stored character key.
+- `GET /v1/xp` returns one matching character for a player account and never includes the party array.
+- A Dungeon Master session receives the validated current party XP table.
+- A missing or ambiguous character-key mapping fails with `xp_not_authorized`.
+- XP responses omit the configured source URL and include `Cache-Control: no-store`.
 - Logout without the CSRF token fails.
 - Correct logout expires the session cookie.
 - Disabled accounts and expired sessions fail closed.

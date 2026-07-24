@@ -12,6 +12,7 @@
 - responsive phone, tablet, Chromebook, and desktop layouts
 - an offline app shell and runtime-cached translator/search data
 - server-validated character login with secure cookie sessions and explicit logout
+- a protected current-XP card that returns one authorized character to players and party totals only to the Dungeon Master
 
 No RPOL password, XP password, password hash, encrypted local setting, session identifier, or private player note is embedded in the PWA. Character credentials are sent only to the same-origin PHP broker over HTTPS. The broker validates the password server-side and keeps the session identifier in a `Secure`, `HttpOnly`, `SameSite=Strict` cookie.
 
@@ -31,7 +32,7 @@ Refresh the full-text campaign search index from the live public Obsidian Publis
 .\pwa\refresh-campaign-search.ps1
 ```
 
-The generated root-level `campaign-search.json` contains only sitemap-listed public pages. Run `build-data.ps1 -RefreshCampaignSearch` when language data and the live campaign index should be refreshed together.
+The generated root-level `campaign-search.json` contains only sitemap-listed public pages and excludes the protected XP Tracking source. Run `build-data.ps1 -RefreshCampaignSearch` when language data and the live campaign index should be refreshed together.
 
 Validate the complete deployable directory with:
 
@@ -39,12 +40,24 @@ Validate the complete deployable directory with:
 .\pwa\verify-pwa.ps1
 ```
 
+Test the deployed PWA against the reviewed local runtime files with:
+
+```powershell
+.\pwa\test-deployment.ps1
+```
+
+After the current-XP broker update is deployed and configured, include its anonymous-access and readiness checks with:
+
+```powershell
+.\pwa\test-deployment.ps1 -RequireCurrentXpApi
+```
+
 ## Deploy
 
 Upload the complete contents of `pwa/` to an HTTPS directory such as:
 
 ```text
-https://bryanmiller.us/pwa/
+https://bryanmiller.us/scarlethorizons/pwa/
 ```
 
 Keep the directory structure unchanged. The web server must serve:
@@ -61,6 +74,8 @@ Character login additionally requires the PHP broker files under `web-deploy/` t
 ```
 
 The import sends only the existing salted PBKDF2 hashes through the administrator-protected HTTPS endpoint. On a character's first successful login, the broker replaces that legacy hash with PHP's current native password-hash format.
+
+Current XP is loaded through the protected same-origin `GET /scarlethorizons/api/v1/xp` route. The PHP broker fetches the fixed Obsidian Publish XP page, validates the latest markdown table, and filters the result using the authenticated account's server-stored character key. Players never receive other characters' totals or the configured source URL. The Dungeon Master role receives the validated current party table.
 
 The included `.htaccess` supplies the important Apache MIME and cache headers when overrides are enabled. The PWA also works on another HTTPS static host with equivalent server configuration.
 

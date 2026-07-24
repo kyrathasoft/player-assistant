@@ -5,6 +5,7 @@ declare(strict_types=1);
 require_once __DIR__ . '/../player-assistant-broker/BrokerHttpException.php';
 require_once __DIR__ . '/../player-assistant-broker/RpolClient.php';
 require_once __DIR__ . '/../player-assistant-broker/CharacterAuthService.php';
+require_once __DIR__ . '/../player-assistant-broker/XpTrackingService.php';
 require_once __DIR__ . '/../player-assistant-broker/BrokerService.php';
 
 function routingAssert(bool $condition, string $message): void
@@ -39,15 +40,42 @@ try {
             'login_max_failures' => 3,
             'login_lockout_seconds' => 300,
         ],
+        'xp' => [
+            'source_url' => 'https://publish.obsidian.md/example/XP',
+            'connect_timeout_seconds' => 1,
+            'timeout_seconds' => 2,
+            'maximum_response_bytes' => 65536,
+            'cache_ttl_seconds' => 60,
+            'maximum_stale_seconds' => 600,
+        ],
         'rpol' => [
             'username' => 'unused',
             'password' => 'unused',
             'game_id' => '80170',
         ],
     ];
-    $broker = new BrokerService($config, new RpolClient($config['rpol']));
+    $broker = new BrokerService(
+        $config,
+        new RpolClient($config['rpol']),
+        static fn(string $url): string => implode("\n", [
+            'As of 7.23.2026',
+            '',
+            '| Name | XP Total |',
+            '| --- | ---: |',
+            '| Routing Hero | 12,345 |',
+            '| Another Hero | 98,765 |',
+        ]));
     $session = [];
     $adminHeaders = ['admin-key' => $config['api']['admin_key']];
+
+    try {
+        $broker->dispatch('GET', '/v1/xp', [], [], [], '192.0.2.30', $session);
+        throw new RuntimeException('The protected XP route accepted an unauthenticated request.');
+    } catch (BrokerHttpException $exception) {
+        routingAssert(
+            $exception->status === 401 && $exception->errorName === 'authentication_required',
+            'The protected XP route failed with the wrong unauthenticated response.');
+    }
 
     $created = $broker->dispatch(
         'POST',
@@ -56,7 +84,7 @@ try {
         [
             'character_name' => 'Routing Hero',
             'password' => 'routing password',
-            'character_key' => 'routing-hero',
+            'character_key' => 'routing',
             'role' => 'player',
         ],
         $adminHeaders,
@@ -97,8 +125,22 @@ try {
         '192.0.2.30',
         $session);
     routingAssert(
-        $identity['body']['account']['character_key'] === 'routing-hero',
+        $identity['body']['account']['character_key'] === 'routing',
         'The protected identity route did not use the session account.');
+
+    $xp = $broker->dispatch(
+        'GET',
+        '/v1/xp',
+        [],
+        [],
+        [],
+        '192.0.2.30',
+        $session);
+    routingAssert($xp['status'] === 200, 'The protected XP route failed.');
+    routingAssert($xp['body']['scope'] === 'character', 'The player XP response had the wrong scope.');
+    routingAssert($xp['body']['character']['xp_total'] === 12345, 'The player XP response had the wrong total.');
+    routingAssert(!isset($xp['body']['characters']), 'The player XP response exposed party totals.');
+    routingAssert(!isset($xp['body']['source_url']), 'The player XP response exposed the configured source URL.');
 
     $destroyed = false;
     $logout = $broker->dispatch(
@@ -130,6 +172,7 @@ try {
         $session);
     routingAssert($health['body']['schema_version'] === 2, 'The broker schema version was not advanced.');
     routingAssert($health['body']['character_account_count'] === 1, 'The health route account count was incorrect.');
+    routingAssert($health['body']['xp_tracking_configured'] === true, 'The health route XP configuration state was incorrect.');
 
     fwrite(STDOUT, "Broker authentication routing tests passed.\n");
 } finally {
