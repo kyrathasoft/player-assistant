@@ -26,8 +26,12 @@ if (-not (Test-Path -LiteralPath $assemblyPath -PathType Leaf))
 $assembly = [Reflection.Assembly]::LoadFrom($assemblyPath)
 $translatorType = $assembly.GetType('PlayerAssistant.OrcishTranslatorUtility', $true)
 $bindingFlags = [Reflection.BindingFlags]'Public,NonPublic,Static'
-$entries = @($translatorType.GetMethod('GetLexiconEntries', $bindingFlags).Invoke($null, $null))
-$uniqueEnglishTerms = [int]$translatorType.GetMethod('GetEnglishTermCount', $bindingFlags).Invoke($null, $null)
+$entries = @($translatorType.GetMethod('BuildLexiconEntriesFromSource', $bindingFlags).Invoke($null, $null))
+$uniqueEnglishTerms = @(
+    $entries |
+        ForEach-Object { ([string]$_.English).Trim() } |
+        Sort-Object -Unique
+).Count
 
 $groups = [Collections.Generic.Dictionary[string, Collections.Generic.List[object]]]::new([StringComparer]::OrdinalIgnoreCase)
 $canonicalTerms = [Collections.Generic.Dictionary[string, string]]::new([StringComparer]::OrdinalIgnoreCase)

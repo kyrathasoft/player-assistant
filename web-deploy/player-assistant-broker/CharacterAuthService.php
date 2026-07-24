@@ -1,0 +1,801 @@
+<?php
+
+declare(strict_types=1);
+
+final class CharacterAuthService
+{
+    private const SESSION_KEY = 'character_auth';
+    private const LEGACY_ALGORITHM = 'PBKDF2-HMAC-SHA256';
+    private const LEGACY_MINIMUM_ITERATIONS = 600000;
+    private const LEGACY_HASH_BYTES = 32;
+    private const LEGACY_MINIMUM_SALT_BYTES = 16;
+    private const DUNGEON_MASTER_LOGIN_NAME = 'dungeon master';
+    private const DUNGEON_MASTER_LOGIN_ALIASES = [
+        'dungeon master',
+        'dungeon',
+        'master',
+        'dm',
+    ];
+    private const MAXIMILIAN_LOGIN_NAME = 'maximilian';
+    private const MAXIMILIAN_LOGIN_ALIASES = [
+        'max',
+        'maximilian',
+        'maximilian yragerne',
+        'max yragerne',
+        'yragerne',
+    ];
+    private const NERIA_LOGIN_NAME = 'neria';
+    private const NERIA_LOGIN_ALIASES = [
+        'neria',
+        'neria silverdale',
+        'silverdale',
+    ];
+    private const KELPIE_LOGIN_NAME = 'kelpie';
+    private const KELPIE_LOGIN_ALIASES = [
+        'kelpie',
+        'kelpie lawfuller',
+        'lawfuller',
+    ];
+
+    private array $authConfig;
+
+    public function __construct(
+        private readonly PDO $database,
+        array $authConfig)
+    {
+        $this->authConfig = array_replace([
+            'expected_origin' => 'https://bryanmiller.us',
+            'idle_timeout_seconds' => 1800,
+            'absolute_timeout_seconds' => 28800,
+            'login_window_seconds' => 900,
+            'login_max_failures' => 5,
+            'login_lockout_seconds' => 900,
+        ], $authConfig);
+        $this->validateConfiguration();
+        $this->ensureSchema();
+    }
+
+    public function accountCount(): int
+    {
+        return (int)$this->database->query('SELECT COUNT(*) FROM character_accounts')->fetchColumn();
+    }
+
+    public function login(
+        array $body,
+        string $remoteAddress,
+        string $origin,
+        array &$session,
+        ?callable $regenerateSession = null): array
+    {
+        $this->requireExpectedOrigin($origin);
+        $displayName = $this->validateDisplayName((string)($body['character_name'] ?? ''));
+        $normalizedName = $this->resolveLoginNameAlias($this->normalizeName($displayName));
+        $password = (string)($body['password'] ?? '');
+        if ($password === '' || strlen($password) > 4096) {
+            $this->rejectLogin($normalizedName, $remoteAddress, null, $password);
+        }
+
+        if ($this->isLoginBlocked($normalizedName, $remoteAddress)) {
+            $this->performDummyPasswordVerification($password);
+            throw new BrokerHttpException(
+                429,
+                'login_failed',
+                'The character name or password did not match. Please wait before trying again.');
+        }
+
+        $statement = $this->database->prepare(
+            'SELECT * FROM character_accounts WHERE normalized_name = ? LIMIT 1');
+        $statement->execute([$normalizedName]);
+        $account = $statement->fetch();
+        $passwordValid = is_array($account)
+            ? $this->verifyPassword($password, $account)
+            : $this->performDummyPasswordVerification($password);
+
+        if (!is_array($account) || !$passwordValid || (int)$account['enabled'] !== 1) {
+            $this->rejectLogin(
+                $normalizedName,
+                $remoteAddress,
+                is_array($account) ? (string)$account['id'] : null,
+                $password,
+                $passwordValid || !is_array($account));
+        }
+
+        $this->upgradePasswordHashIfNeeded($password, $account);
+        $account = $this->loadEnabledAccount((string)$account['id']);
+        $this->clearLoginFailures($normalizedName, $remoteAddress);
+        if ($regenerateSession !== null) {
+            $regenerateSession();
+        }
+
+        $now = time();
+        $session[self::SESSION_KEY] = [
+            'account_id' => (string)$account['id'],
+            'issued_at' => $now,
+            'last_seen_at' => $now,
+            'absolute_expires_at' => $now + (int)$this->authConfig['absolute_timeout_seconds'],
+            'csrf_token' => $this->base64UrlEncode(random_bytes(32)),
+            'session_version' => (int)$account['session_version'],
+        ];
+        $this->database->prepare(
+            'UPDATE character_accounts SET last_login_at = ? WHERE id = ?')
+            ->execute([$now, $account['id']]);
+        $this->recordAuthAudit((string)$account['id'], $remoteAddress, 'login_success');
+
+        $freshAccount = $this->loadEnabledAccount((string)$account['id']);
+        return $this->sessionResponse($freshAccount, $session[self::SESSION_KEY]);
+    }
+
+    public function currentSession(array &$session): array
+    {
+        $resolved = $this->resolveSession($session, false);
+        if ($resolved === null) {
+            return ['authenticated' => false];
+        }
+
+        return $this->sessionResponse($resolved['account'], $resolved['session']);
+    }
+
+    public function requireCurrentAccount(array &$session): array
+    {
+        $resolved = $this->resolveSession($session, true);
+        return [
+            'authenticated' => true,
+            'account' => $this->publicAccount($resolved['account']),
+        ];
+    }
+
+    public function logout(
+        array $headers,
+        string $remoteAddress,
+        array &$session,
+        ?callable $destroySession = null): array
+    {
+        $this->requireExpectedOrigin((string)($headers['origin'] ?? ''));
+        $resolved = $this->resolveSession($session, true);
+        $providedToken = (string)($headers['csrf-token'] ?? '');
+        $expectedToken = (string)($resolved['session']['csrf_token'] ?? '');
+        if ($providedToken === '' || $expectedToken === '' || !hash_equals($expectedToken, $providedToken)) {
+            throw new BrokerHttpException(403, 'csrf_rejected', 'The request could not be authorized.');
+        }
+
+        $this->recordAuthAudit(
+            (string)$resolved['account']['id'],
+            $remoteAddress,
+            'logout');
+        $session = [];
+        if ($destroySession !== null) {
+            $destroySession();
+        }
+        return ['authenticated' => false];
+    }
+
+    public function importLegacyAccounts(array $document): array
+    {
+        if ((int)($document['schema_version'] ?? 0) !== 1
+            || (string)($document['format'] ?? '') !== 'xp-password-hashes-v1'
+            || !is_array($document['entries'] ?? null)
+            || count($document['entries']) === 0) {
+            throw new BrokerHttpException(
+                400,
+                'invalid_password_import',
+                'The password import document is invalid.');
+        }
+
+        $records = [];
+        $names = [];
+        $salts = [];
+        foreach ($document['entries'] as $entry) {
+            if (!is_array($entry)) {
+                throw new BrokerHttpException(400, 'invalid_password_import', 'A password entry is invalid.');
+            }
+            $displayName = $this->validateDisplayName((string)($entry['name'] ?? ''));
+            $normalizedName = $this->normalizeName($displayName);
+            if (isset($names[$normalizedName])) {
+                throw new BrokerHttpException(400, 'invalid_password_import', 'The password import contains duplicate names.');
+            }
+            $names[$normalizedName] = true;
+
+            $iterations = filter_var(
+                $entry['iterations'] ?? null,
+                FILTER_VALIDATE_INT,
+                ['options' => ['min_range' => self::LEGACY_MINIMUM_ITERATIONS, 'max_range' => 5000000]]);
+            $salt = $this->decodeLegacyValue((string)($entry['salt'] ?? ''), self::LEGACY_MINIMUM_SALT_BYTES, null);
+            $hash = $this->decodeLegacyValue((string)($entry['hash'] ?? ''), self::LEGACY_HASH_BYTES, self::LEGACY_HASH_BYTES);
+            if ((string)($entry['algorithm'] ?? '') !== self::LEGACY_ALGORITHM || $iterations === false) {
+                throw new BrokerHttpException(400, 'invalid_password_import', 'A password entry uses an unsupported algorithm.');
+            }
+            $saltKey = base64_encode($salt);
+            if (isset($salts[$saltKey])) {
+                throw new BrokerHttpException(400, 'invalid_password_import', 'The password import reuses a salt.');
+            }
+            $salts[$saltKey] = true;
+
+            $role = strcasecmp($displayName, 'Dungeon Master') === 0 ? 'dm' : 'player';
+            $records[] = [
+                'id' => bin2hex(random_bytes(16)),
+                'normalized_name' => $normalizedName,
+                'display_name' => $displayName,
+                'character_key' => $this->defaultCharacterKey($displayName),
+                'role' => $role,
+                'iterations' => (int)$iterations,
+                'salt' => base64_encode($salt),
+                'hash' => base64_encode($hash),
+            ];
+        }
+
+        $this->database->beginTransaction();
+        try {
+            $statement = $this->database->prepare(
+                'INSERT INTO character_accounts (
+                    id, normalized_name, display_name, character_key, role, enabled,
+                    password_hash, legacy_algorithm, legacy_iterations, legacy_salt, legacy_hash,
+                    created_at, password_changed_at
+                 ) VALUES (?, ?, ?, ?, ?, 1, NULL, ?, ?, ?, ?, ?, ?)
+                 ON CONFLICT(normalized_name) DO UPDATE SET
+                    display_name = excluded.display_name,
+                    character_key = excluded.character_key,
+                    role = excluded.role,
+                    enabled = 1,
+                    password_hash = NULL,
+                    legacy_algorithm = excluded.legacy_algorithm,
+                    legacy_iterations = excluded.legacy_iterations,
+                    legacy_salt = excluded.legacy_salt,
+                    legacy_hash = excluded.legacy_hash,
+                    password_changed_at = excluded.password_changed_at,
+                    session_version = character_accounts.session_version + 1');
+            $now = time();
+            foreach ($records as $record) {
+                $statement->execute([
+                    $record['id'],
+                    $record['normalized_name'],
+                    $record['display_name'],
+                    $record['character_key'],
+                    $record['role'],
+                    self::LEGACY_ALGORITHM,
+                    $record['iterations'],
+                    $record['salt'],
+                    $record['hash'],
+                    $now,
+                    $now,
+                ]);
+            }
+            $this->database->commit();
+        } catch (Throwable $exception) {
+            $this->database->rollBack();
+            throw new BrokerHttpException(
+                409,
+                'account_import_conflict',
+                'The character accounts could not be imported.',
+                $exception);
+        }
+
+        return ['imported' => count($records)];
+    }
+
+    public function createAccount(array $body): array
+    {
+        $displayName = $this->validateDisplayName((string)($body['character_name'] ?? ''));
+        $normalizedName = $this->normalizeName($displayName);
+        $password = $this->validateNewPassword((string)($body['password'] ?? ''));
+        $role = $this->validateRole((string)($body['role'] ?? 'player'));
+        $characterKey = $this->validateCharacterKey(
+            (string)($body['character_key'] ?? $this->defaultCharacterKey($displayName)));
+        $now = time();
+        $id = bin2hex(random_bytes(16));
+
+        try {
+            $statement = $this->database->prepare(
+                'INSERT INTO character_accounts (
+                    id, normalized_name, display_name, character_key, role, enabled,
+                    password_hash, created_at, password_changed_at
+                 ) VALUES (?, ?, ?, ?, ?, 1, ?, ?, ?)');
+            $statement->execute([
+                $id,
+                $normalizedName,
+                $displayName,
+                $characterKey,
+                $role,
+                password_hash($password, PASSWORD_DEFAULT),
+                $now,
+                $now,
+            ]);
+        } catch (PDOException $exception) {
+            throw new BrokerHttpException(
+                409,
+                'account_conflict',
+                'The character account conflicts with an existing account.',
+                $exception);
+        }
+
+        return $this->publicAccount($this->loadAccount($id));
+    }
+
+    public function updateAccount(string $accountId, array $body): array
+    {
+        $account = $this->loadAccount($accountId);
+        $updates = [];
+        $parameters = [];
+
+        if (array_key_exists('character_name', $body)) {
+            $displayName = $this->validateDisplayName((string)$body['character_name']);
+            $updates[] = 'display_name = ?';
+            $parameters[] = $displayName;
+            $updates[] = 'normalized_name = ?';
+            $parameters[] = $this->normalizeName($displayName);
+        }
+        if (array_key_exists('character_key', $body)) {
+            $updates[] = 'character_key = ?';
+            $parameters[] = $this->validateCharacterKey((string)$body['character_key']);
+        }
+        if (array_key_exists('role', $body)) {
+            $updates[] = 'role = ?';
+            $parameters[] = $this->validateRole((string)$body['role']);
+        }
+        if (array_key_exists('enabled', $body)) {
+            if (!is_bool($body['enabled'])) {
+                throw new BrokerHttpException(400, 'invalid_account', 'The enabled value must be true or false.');
+            }
+            $updates[] = 'enabled = ?';
+            $parameters[] = $body['enabled'] ? 1 : 0;
+        }
+        if (array_key_exists('password', $body)) {
+            $password = $this->validateNewPassword((string)$body['password']);
+            $updates[] = 'password_hash = ?';
+            $parameters[] = password_hash($password, PASSWORD_DEFAULT);
+            $updates[] = 'legacy_algorithm = NULL';
+            $updates[] = 'legacy_iterations = NULL';
+            $updates[] = 'legacy_salt = NULL';
+            $updates[] = 'legacy_hash = NULL';
+            $updates[] = 'password_changed_at = ?';
+            $parameters[] = time();
+        }
+        if ($updates === []) {
+            throw new BrokerHttpException(400, 'invalid_account', 'No supported account changes were supplied.');
+        }
+
+        $updates[] = 'session_version = session_version + 1';
+        $parameters[] = $account['id'];
+        try {
+            $statement = $this->database->prepare(
+                'UPDATE character_accounts SET ' . implode(', ', $updates) . ' WHERE id = ?');
+            $statement->execute($parameters);
+        } catch (PDOException $exception) {
+            throw new BrokerHttpException(
+                409,
+                'account_conflict',
+                'The character account conflicts with an existing account.',
+                $exception);
+        }
+
+        return $this->publicAccount($this->loadAccount($accountId));
+    }
+
+    public function listAccounts(): array
+    {
+        $accounts = $this->database->query(
+            'SELECT * FROM character_accounts ORDER BY normalized_name')->fetchAll();
+        return array_map(fn(array $account): array => $this->publicAccount($account), $accounts);
+    }
+
+    private function resolveSession(array &$session, bool $required): ?array
+    {
+        $payload = $session[self::SESSION_KEY] ?? null;
+        if (!is_array($payload)) {
+            return $this->missingSession($required);
+        }
+
+        $now = time();
+        $lastSeenAt = (int)($payload['last_seen_at'] ?? 0);
+        $absoluteExpiresAt = (int)($payload['absolute_expires_at'] ?? 0);
+        $accountId = (string)($payload['account_id'] ?? '');
+        if (preg_match('/^[a-f0-9]{32}$/', $accountId) !== 1
+            || $lastSeenAt <= 0
+            || $absoluteExpiresAt <= $now
+            || $now - $lastSeenAt > (int)$this->authConfig['idle_timeout_seconds']) {
+            unset($session[self::SESSION_KEY]);
+            return $this->missingSession($required);
+        }
+
+        try {
+            $account = $this->loadEnabledAccount($accountId);
+        } catch (BrokerHttpException) {
+            unset($session[self::SESSION_KEY]);
+            return $this->missingSession($required);
+        }
+        if ((int)($payload['session_version'] ?? 0) !== (int)$account['session_version']) {
+            unset($session[self::SESSION_KEY]);
+            return $this->missingSession($required);
+        }
+
+        $payload['last_seen_at'] = $now;
+        $session[self::SESSION_KEY] = $payload;
+        return ['account' => $account, 'session' => $payload];
+    }
+
+    private function missingSession(bool $required): ?array
+    {
+        if ($required) {
+            throw new BrokerHttpException(401, 'authentication_required', 'Character login is required.');
+        }
+        return null;
+    }
+
+    private function sessionResponse(array $account, array $session): array
+    {
+        return [
+            'authenticated' => true,
+            'account' => $this->publicAccount($account),
+            'csrf_token' => (string)$session['csrf_token'],
+            'idle_expires_at' => gmdate(
+                DATE_ATOM,
+                (int)$session['last_seen_at'] + (int)$this->authConfig['idle_timeout_seconds']),
+            'absolute_expires_at' => gmdate(DATE_ATOM, (int)$session['absolute_expires_at']),
+        ];
+    }
+
+    private function publicAccount(array $account): array
+    {
+        return [
+            'id' => (string)$account['id'],
+            'character_name' => (string)$account['display_name'],
+            'character_key' => (string)$account['character_key'],
+            'role' => (string)$account['role'],
+            'enabled' => (int)$account['enabled'] === 1,
+            'password_changed_at' => gmdate(DATE_ATOM, (int)$account['password_changed_at']),
+            'last_login_at' => $account['last_login_at'] === null
+                ? null
+                : gmdate(DATE_ATOM, (int)$account['last_login_at']),
+        ];
+    }
+
+    private function verifyPassword(string $password, array $account): bool
+    {
+        $passwordHash = (string)($account['password_hash'] ?? '');
+        if ($passwordHash !== '') {
+            return password_verify($password, $passwordHash);
+        }
+        if ((string)($account['legacy_algorithm'] ?? '') !== self::LEGACY_ALGORITHM) {
+            return $this->performDummyPasswordVerification($password);
+        }
+
+        $salt = base64_decode((string)$account['legacy_salt'], true);
+        $expectedHash = base64_decode((string)$account['legacy_hash'], true);
+        $iterations = (int)$account['legacy_iterations'];
+        if ($salt === false
+            || $expectedHash === false
+            || strlen($salt) < self::LEGACY_MINIMUM_SALT_BYTES
+            || strlen($expectedHash) !== self::LEGACY_HASH_BYTES
+            || $iterations < self::LEGACY_MINIMUM_ITERATIONS) {
+            return false;
+        }
+
+        $candidateHash = hash_pbkdf2(
+            'sha256',
+            $password,
+            $salt,
+            $iterations,
+            strlen($expectedHash),
+            true);
+        return hash_equals($expectedHash, $candidateHash);
+    }
+
+    private function upgradePasswordHashIfNeeded(string $password, array $account): void
+    {
+        $existingHash = (string)($account['password_hash'] ?? '');
+        if ($existingHash !== '' && !password_needs_rehash($existingHash, PASSWORD_DEFAULT)) {
+            return;
+        }
+
+        $this->database->prepare(
+            'UPDATE character_accounts SET
+                password_hash = ?,
+                legacy_algorithm = NULL,
+                legacy_iterations = NULL,
+                legacy_salt = NULL,
+                legacy_hash = NULL,
+                password_changed_at = ?
+             WHERE id = ?')
+            ->execute([password_hash($password, PASSWORD_DEFAULT), time(), $account['id']]);
+    }
+
+    private function performDummyPasswordVerification(string $password): bool
+    {
+        static $dummyHash = null;
+        if (!is_string($dummyHash)) {
+            $dummyHash = password_hash(bin2hex(random_bytes(32)), PASSWORD_DEFAULT);
+        }
+        password_verify($password, $dummyHash);
+        return false;
+    }
+
+    private function rejectLogin(
+        string $normalizedName,
+        string $remoteAddress,
+        ?string $accountId,
+        string $password,
+        bool $passwordWasVerified = false): never
+    {
+        if (!$passwordWasVerified && $accountId === null) {
+            $this->performDummyPasswordVerification($password);
+        }
+        $this->recordLoginFailure($normalizedName, $remoteAddress);
+        $this->recordAuthAudit($accountId, $remoteAddress, 'login_failure');
+        throw new BrokerHttpException(
+            401,
+            'login_failed',
+            'The character name or password did not match.');
+    }
+
+    private function isLoginBlocked(string $normalizedName, string $remoteAddress): bool
+    {
+        $statement = $this->database->prepare(
+            'SELECT blocked_until FROM auth_rate_limits WHERE scope_hash IN (?, ?)');
+        $statement->execute($this->loginScopeHashes($normalizedName, $remoteAddress));
+        $now = time();
+        foreach ($statement->fetchAll() as $row) {
+            if ((int)$row['blocked_until'] > $now) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private function recordLoginFailure(string $normalizedName, string $remoteAddress): void
+    {
+        $now = time();
+        $windowSeconds = (int)$this->authConfig['login_window_seconds'];
+        $maximumFailures = (int)$this->authConfig['login_max_failures'];
+        $lockoutSeconds = (int)$this->authConfig['login_lockout_seconds'];
+        $this->database->beginTransaction();
+        try {
+            $select = $this->database->prepare(
+                'SELECT window_start, failure_count, blocked_until FROM auth_rate_limits WHERE scope_hash = ?');
+            $upsert = $this->database->prepare(
+                'INSERT INTO auth_rate_limits (scope_hash, window_start, failure_count, blocked_until)
+                 VALUES (?, ?, ?, ?)
+                 ON CONFLICT(scope_hash) DO UPDATE SET
+                    window_start = excluded.window_start,
+                    failure_count = excluded.failure_count,
+                    blocked_until = excluded.blocked_until');
+            foreach ($this->loginScopeHashes($normalizedName, $remoteAddress) as $scopeHash) {
+                $select->execute([$scopeHash]);
+                $row = $select->fetch();
+                $failureCount = 1;
+                $windowStart = $now;
+                $blockedUntil = 0;
+                if (is_array($row) && $now - (int)$row['window_start'] < $windowSeconds) {
+                    $windowStart = (int)$row['window_start'];
+                    $failureCount = (int)$row['failure_count'] + 1;
+                    $blockedUntil = max(0, (int)$row['blocked_until']);
+                }
+                if ($failureCount >= $maximumFailures) {
+                    $blockedUntil = max($blockedUntil, $now + $lockoutSeconds);
+                }
+                $upsert->execute([$scopeHash, $windowStart, $failureCount, $blockedUntil]);
+            }
+            $this->database->prepare('DELETE FROM auth_rate_limits WHERE window_start < ? AND blocked_until < ?')
+                ->execute([$now - (2 * $windowSeconds), $now]);
+            $this->database->commit();
+        } catch (Throwable $exception) {
+            $this->database->rollBack();
+            throw $exception;
+        }
+    }
+
+    private function clearLoginFailures(string $normalizedName, string $remoteAddress): void
+    {
+        $statement = $this->database->prepare(
+            'DELETE FROM auth_rate_limits WHERE scope_hash IN (?, ?)');
+        $statement->execute($this->loginScopeHashes($normalizedName, $remoteAddress));
+    }
+
+    private function loginScopeHashes(string $normalizedName, string $remoteAddress): array
+    {
+        return [
+            hash('sha256', 'account:' . $normalizedName),
+            hash('sha256', 'address:' . $remoteAddress),
+        ];
+    }
+
+    private function recordAuthAudit(?string $accountId, string $remoteAddress, string $event): void
+    {
+        $this->database->prepare(
+            'INSERT INTO auth_audit_events (account_id, occurred_at, remote_address, event)
+             VALUES (?, ?, ?, ?)')
+            ->execute([$accountId, time(), substr($remoteAddress, 0, 64), $event]);
+        $this->database->prepare('DELETE FROM auth_audit_events WHERE occurred_at < ?')
+            ->execute([time() - (90 * 86400)]);
+    }
+
+    private function loadAccount(string $accountId): array
+    {
+        if (preg_match('/^[a-f0-9]{32}$/', $accountId) !== 1) {
+            throw new BrokerHttpException(404, 'account_not_found', 'The character account was not found.');
+        }
+        $statement = $this->database->prepare(
+            'SELECT * FROM character_accounts WHERE id = ? LIMIT 1');
+        $statement->execute([$accountId]);
+        $account = $statement->fetch();
+        if (!is_array($account)) {
+            throw new BrokerHttpException(404, 'account_not_found', 'The character account was not found.');
+        }
+        return $account;
+    }
+
+    private function loadEnabledAccount(string $accountId): array
+    {
+        $account = $this->loadAccount($accountId);
+        if ((int)$account['enabled'] !== 1) {
+            throw new BrokerHttpException(401, 'authentication_required', 'Character login is required.');
+        }
+        return $account;
+    }
+
+    private function validateDisplayName(string $value): string
+    {
+        $value = preg_replace('/\s+/u', ' ', trim($value));
+        if (!is_string($value)
+            || $value === ''
+            || strlen($value) > 100
+            || preg_match('//u', $value) !== 1
+            || preg_match('/[\x00-\x1F\x7F]/u', $value) === 1) {
+            throw new BrokerHttpException(
+                400,
+                'invalid_credentials',
+                'The character name or password did not match.');
+        }
+        return $value;
+    }
+
+    private function normalizeName(string $value): string
+    {
+        return function_exists('mb_strtolower')
+            ? mb_strtolower($value, 'UTF-8')
+            : strtolower($value);
+    }
+
+    private function resolveLoginNameAlias(string $normalizedName): string
+    {
+        if (in_array($normalizedName, self::DUNGEON_MASTER_LOGIN_ALIASES, true)) {
+            return self::DUNGEON_MASTER_LOGIN_NAME;
+        }
+
+        if (in_array($normalizedName, self::MAXIMILIAN_LOGIN_ALIASES, true)) {
+            return self::MAXIMILIAN_LOGIN_NAME;
+        }
+
+        if (in_array($normalizedName, self::NERIA_LOGIN_ALIASES, true)) {
+            return self::NERIA_LOGIN_NAME;
+        }
+
+        return in_array($normalizedName, self::KELPIE_LOGIN_ALIASES, true)
+            ? self::KELPIE_LOGIN_NAME
+            : $normalizedName;
+    }
+
+    private function validateNewPassword(string $password): string
+    {
+        if ($password === '' || strlen($password) > 4096) {
+            throw new BrokerHttpException(400, 'invalid_account', 'A non-empty password is required.');
+        }
+        return $password;
+    }
+
+    private function validateRole(string $role): string
+    {
+        if (!in_array($role, ['player', 'dm'], true)) {
+            throw new BrokerHttpException(400, 'invalid_account', 'The account role is invalid.');
+        }
+        return $role;
+    }
+
+    private function validateCharacterKey(string $characterKey): string
+    {
+        $characterKey = trim($characterKey);
+        if (preg_match('/^[A-Za-z0-9][A-Za-z0-9._:-]{0,99}$/', $characterKey) !== 1) {
+            throw new BrokerHttpException(400, 'invalid_account', 'The character key is invalid.');
+        }
+        return strtolower($characterKey);
+    }
+
+    private function defaultCharacterKey(string $displayName): string
+    {
+        $keySource = strcasecmp($displayName, 'Dungeon Master') === 0
+            ? $displayName
+            : explode(' ', $displayName, 2)[0];
+        $key = strtolower((string)preg_replace('/[^A-Za-z0-9]+/', '-', $keySource));
+        return trim($key, '-') ?: bin2hex(random_bytes(8));
+    }
+
+    private function decodeLegacyValue(string $value, int $minimumBytes, ?int $exactBytes): string
+    {
+        $decoded = base64_decode($value, true);
+        if ($decoded === false
+            || strlen($decoded) < $minimumBytes
+            || ($exactBytes !== null && strlen($decoded) !== $exactBytes)) {
+            throw new BrokerHttpException(400, 'invalid_password_import', 'A password hash value is invalid.');
+        }
+        return $decoded;
+    }
+
+    private function requireExpectedOrigin(string $origin): void
+    {
+        $expectedOrigin = rtrim((string)$this->authConfig['expected_origin'], '/');
+        if ($origin === '' || !hash_equals($expectedOrigin, rtrim($origin, '/'))) {
+            throw new BrokerHttpException(403, 'origin_rejected', 'The request origin is not authorized.');
+        }
+    }
+
+    private function validateConfiguration(): void
+    {
+        if (!filter_var($this->authConfig['expected_origin'], FILTER_VALIDATE_URL)
+            || !str_starts_with((string)$this->authConfig['expected_origin'], 'https://')) {
+            throw new RuntimeException('Character authentication requires an HTTPS expected origin.');
+        }
+        foreach ([
+            'idle_timeout_seconds',
+            'absolute_timeout_seconds',
+            'login_window_seconds',
+            'login_max_failures',
+            'login_lockout_seconds',
+        ] as $key) {
+            if (!is_int($this->authConfig[$key]) || $this->authConfig[$key] <= 0) {
+                throw new RuntimeException("Character authentication setting '$key' must be a positive integer.");
+            }
+        }
+        if ($this->authConfig['absolute_timeout_seconds'] <= $this->authConfig['idle_timeout_seconds']) {
+            throw new RuntimeException('The absolute session timeout must exceed the idle timeout.');
+        }
+    }
+
+    private function ensureSchema(): void
+    {
+        $this->database->exec(
+            'CREATE TABLE IF NOT EXISTS character_accounts (
+                id TEXT PRIMARY KEY,
+                normalized_name TEXT NOT NULL UNIQUE,
+                display_name TEXT NOT NULL,
+                character_key TEXT NOT NULL,
+                role TEXT NOT NULL CHECK(role IN (\'player\', \'dm\')),
+                enabled INTEGER NOT NULL CHECK(enabled IN (0, 1)),
+                password_hash TEXT NULL,
+                legacy_algorithm TEXT NULL,
+                legacy_iterations INTEGER NULL,
+                legacy_salt TEXT NULL,
+                legacy_hash TEXT NULL,
+                created_at INTEGER NOT NULL,
+                password_changed_at INTEGER NOT NULL,
+                last_login_at INTEGER NULL,
+                session_version INTEGER NOT NULL DEFAULT 1,
+                CHECK(password_hash IS NOT NULL OR legacy_hash IS NOT NULL)
+            );
+            CREATE TABLE IF NOT EXISTS auth_rate_limits (
+                scope_hash TEXT PRIMARY KEY,
+                window_start INTEGER NOT NULL,
+                failure_count INTEGER NOT NULL,
+                blocked_until INTEGER NOT NULL
+            );
+            CREATE TABLE IF NOT EXISTS auth_audit_events (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                account_id TEXT NULL,
+                occurred_at INTEGER NOT NULL,
+                remote_address TEXT NOT NULL,
+                event TEXT NOT NULL,
+                FOREIGN KEY (account_id) REFERENCES character_accounts(id) ON DELETE SET NULL
+            );
+            CREATE INDEX IF NOT EXISTS ix_auth_audit_account_time
+                ON auth_audit_events(account_id, occurred_at);');
+
+        $columns = $this->database->query('PRAGMA table_info(character_accounts)')->fetchAll();
+        $columnNames = array_map(static fn(array $column): string => (string)$column['name'], $columns);
+        if (!in_array('session_version', $columnNames, true)) {
+            $this->database->exec(
+                'ALTER TABLE character_accounts ADD COLUMN session_version INTEGER NOT NULL DEFAULT 1');
+        }
+    }
+
+    private function base64UrlEncode(string $bytes): string
+    {
+        return rtrim(strtr(base64_encode($bytes), '+/', '-_'), '=');
+    }
+}

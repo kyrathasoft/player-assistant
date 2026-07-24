@@ -8,10 +8,10 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <AssemblyName>player-assistant</AssemblyName>
     <RootNamespace>PlayerAssistant</RootNamespace>
-    <Version>0.9.4</Version>
-    <AssemblyVersion>0.9.4.0</AssemblyVersion>
-    <FileVersion>0.9.4.0</FileVersion>
-    <InformationalVersion>0.9.4</InformationalVersion>
+    <Version>0.9.5</Version>
+    <AssemblyVersion>0.9.5.0</AssemblyVersion>
+    <FileVersion>0.9.5.0</FileVersion>
+    <InformationalVersion>0.9.5</InformationalVersion>
     <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
     <ApplicationIcon>Assets\dragon-icon.ico</ApplicationIcon>
     <RuntimeIdentifier>win-x64</RuntimeIdentifier>
@@ -37,6 +37,7 @@
     <Compile Remove="Debug-*\**\*.cs" />
     <Compile Remove="codex-scratch\**\*.cs" />
     <Compile Remove="ToOrcish\**\*.cs" />
+    <Compile Remove="ToElvish\**\*" />
     <Compile Remove="PlayerAssistant.Launcher\**\*.cs" />
     <Compile Remove="PlayerAssistant.Tests\**\*.cs" />
     <EmbeddedResource Remove="obj\**\*" />
@@ -49,6 +50,7 @@
     <EmbeddedResource Remove="Debug-*\**\*" />
     <EmbeddedResource Remove="codex-scratch\**\*" />
     <EmbeddedResource Remove="ToOrcish\**\*" />
+    <EmbeddedResource Remove="ToElvish\**\*" />
     <EmbeddedResource Remove="PlayerAssistant.Launcher\**\*" />
     <EmbeddedResource Remove="PlayerAssistant.Tests\**\*" />
     <None Remove="obj\**\*" />
@@ -61,6 +63,7 @@
     <None Remove="Debug-*\**\*" />
     <None Remove="codex-scratch\**\*" />
     <None Remove="ToOrcish\**\*" />
+    <None Remove="ToElvish\**\*" />
     <None Remove="PlayerAssistant.Launcher\**\*" />
     <None Remove="PlayerAssistant.Tests\**\*" />
   </ItemGroup>
@@ -69,6 +72,18 @@
     <EmbeddedResource Include="Assets\dragon-icon.ico" />
     <EmbeddedResource Include="Assets\dragon-dim.png" />
     <EmbeddedResource Include="Assets\white-marble.png" />
+    <EmbeddedResource Include="web-translator\orcish-lexicon.json" LogicalName="PlayerAssistant.OrcishLexiconSnapshot.json" />
+    <EmbeddedResource Include="web-translator\elven-lexicon.json" LogicalName="PlayerAssistant.ElvenLexiconSnapshot.json" />
+    <EmbeddedResource Include="web-translator\elven-translations.json" LogicalName="PlayerAssistant.ElvenTranslationDictionary.json" />
+    <EmbeddedResource Include="web-translator\elven-first-iteration.json" LogicalName="PlayerAssistant.ElvenFirstIteration.json" />
+    <EmbeddedResource Include="web-translator\elven-second-iteration.json" LogicalName="PlayerAssistant.ElvenSecondIteration.json" />
+    <EmbeddedResource Include="web-translator\elven-complete-coverage.json" LogicalName="PlayerAssistant.ElvenCompleteCoverage.json" />
+    <None Remove="web-translator\orcish-lexicon.json" />
+    <None Remove="web-translator\elven-lexicon.json" />
+    <None Remove="web-translator\elven-translations.json" />
+    <None Remove="web-translator\elven-first-iteration.json" />
+    <None Remove="web-translator\elven-second-iteration.json" />
+    <None Remove="web-translator\elven-complete-coverage.json" />
   </ItemGroup>
 
   <ItemGroup>

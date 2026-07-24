@@ -91,8 +91,17 @@ var tests = new (string Name, Action Test)[]
     ("orcish translator supports second various ebooks corpus candidate vocabulary", OrcishTranslatorSupportsVariousEbooksCorpusSecondCandidateVocabulary),
     ("orcish translator supports third various ebooks corpus candidate vocabulary", OrcishTranslatorSupportsVariousEbooksCorpusThirdCandidateVocabulary),
     ("orcish translator supports fourth various ebooks corpus candidate vocabulary", OrcishTranslatorSupportsVariousEbooksCorpusFourthCandidateVocabulary),
+    ("orcish translator supports The Earth It Cares Not vocabulary", OrcishTranslatorSupportsEarthItCaresNotVocabulary),
+    ("orcish translator supports local Shadowdim vocabulary", OrcishTranslatorSupportsLocalShadowdimVocabulary),
+    ("orcish translator supports Something Found II vocabulary", OrcishTranslatorSupportsSomethingFoundIIVocabulary),
+    ("orcish translator supports reviewed megadungeon vocabulary", OrcishTranslatorSupportsReviewedMegadungeonVocabulary),
+    ("orcish translator supports fifth Gutenberg corpus candidate vocabulary", OrcishTranslatorSupportsGutenbergCorpusFifthCandidateVocabulary),
+    ("orcish translator supports sixth Gutenberg corpus candidate vocabulary", OrcishTranslatorSupportsGutenbergCorpusSixthCandidateVocabulary),
     ("orcish translator excludes approved anachronistic families", OrcishTranslatorExcludesApprovedAnachronisticFamilies),
     ("orcish translator supports software artifact vocabulary", OrcishTranslatorSupportsSoftwareArtifactVocabulary),
+    ("orcish translator translates full text in both directions", OrcishTranslatorTranslatesFullTextInBothDirections),
+    ("orcish translator warmup is shared", OrcishTranslatorWarmupIsShared),
+    ("orcish translator loads embedded snapshot", OrcishTranslatorLoadsEmbeddedSnapshot),
     ("orcish translator exposes unique english term count", OrcishTranslatorExposesUniqueEnglishTermCount),
     ("to-orcish translates terms before trailing punctuation", ToOrcishTranslatesTermsBeforeTrailingPunctuation),
     ("to-orcish translates dotted abbreviation terms", ToOrcishTranslatesDottedAbbreviationTerms),
@@ -258,6 +267,22 @@ var tests = new (string Name, Action Test)[]
     ("show menu contains xp item", ShowMenuContainsXpItem),
     ("show menu contains my hero briefing item", ShowMenuContainsMyHeroBriefingItem),
     ("show menu contains adventure outline item", ShowMenuContainsAdventureOutlineItem),
+    ("show menu contains translator item", ShowMenuContainsTranslatorItem),
+    ("elven translator prefers Sindarin and falls back to Quenya", ElvenTranslatorPrefersSindarinAndFallsBackToQuenya),
+    ("elven translator preserves text and punctuation", ElvenTranslatorPreservesTextAndPunctuation),
+    ("elven translator finalizes every English term", ElvenTranslatorFinalizesEveryEnglishTerm),
+    ("elven morphology derives conservative noun and active verb forms", ElvenMorphologyDerivesConservativeForms),
+    ("elven first iteration loads generated translations", ElvenFirstIterationLoadsGeneratedTranslations),
+    ("elven second iteration loads five thousand generated translations", ElvenSecondIterationLoadsGeneratedTranslations),
+    ("elven complete coverage translates every Orcish English term", ElvenCompleteCoverageTranslatesEveryOrcishTerm),
+    ("elven lexicon validator accepts reviewed rooted additions", ElvenLexiconValidatorAcceptsReviewedRootedAdditions),
+    ("elven lexicon validator rejects unsupported additions", ElvenLexiconValidatorRejectsUnsupportedAdditions),
+    ("elven lexicon validator preserves Sindarin preference", ElvenLexiconValidatorPreservesSindarinPreference),
+    ("translator view toggles direction without web links", TranslatorViewTogglesDirectionWithoutWebLinks),
+    ("translator view supports Elven mode", TranslatorViewSupportsElvenMode),
+    ("translator view translates while input changes", TranslatorViewTranslatesWhileInputChanges),
+    ("translator view exports english to orcish translation", TranslatorViewExportsEnglishToOrcishTranslation),
+    ("translator view exports english to elvish translation", TranslatorViewExportsEnglishToElvishTranslation),
     ("adventure outline view displays generated markdown", AdventureOutlineViewDisplaysGeneratedMarkdown),
     ("about menu contains author and update items", AboutMenuContainsAuthorAndUpdateItems),
     ("about author text lists developer info", AboutAuthorTextListsDeveloperInfo),
@@ -1111,7 +1136,9 @@ static void OrcishTranslatorSupportsRecoveredScrollVocabulary()
         ["label"] = "mog-narg-narg-bib",
         ["precise"] = "grak-nak-ti-zorn",
         ["suggest"] = "nargu-thog-var",
-        ["rendezvous"] = "mokru-dak"
+        ["rendezvous"] = "mokru-dak",
+        ["script"] = "bib-narg",
+        ["text"] = "bib-narg"
     };
 
     foreach (var pair in expected)
@@ -1134,6 +1161,17 @@ static void OrcishTranslatorSupportsRecoveredScrollVocabulary()
         var meanings = OrcishTranslatorUtility.TranslateOrcishToEnglish(pair.Key);
         AssertTrue(meanings.Any(candidate => candidate.Translation == pair.Value), $"reverse {pair.Key} form should include {pair.Value}");
     }
+
+    var writtenMeanings = OrcishTranslatorUtility.TranslateOrcishToEnglish("bib-narg", partOfSpeech: "noun");
+    AssertTrue(writtenMeanings.Any(static candidate => candidate.Translation == "script"), "reverse bib-narg form should include script");
+    AssertTrue(writtenMeanings.Any(static candidate => candidate.Translation == "text"), "reverse bib-narg form should include text");
+
+    var textEntry = OrcishTranslatorUtility.GetLexiconEntries()
+        .Single(static entry => string.Equals(entry.English, "text", StringComparison.OrdinalIgnoreCase));
+    var reviewIssues = OrcishTranslatorUtility.ReviewProposedLexiconEntry(textEntry)
+        .Where(static issue => !string.Equals(issue.Code, "exact-duplicate", StringComparison.OrdinalIgnoreCase))
+        .ToArray();
+    AssertEqual(0, reviewIssues.Length, "the intentional text/script shared form should remain admissible");
 }
 
 static void OrcishTranslatorPropagatesRepairedRootsThroughDerivedFamilies()
@@ -1321,6 +1359,24 @@ static void OrcishTranslatorReviewsProposedLexiconAdditions()
         reviewedSharedFormIssues.Any(static issue => issue.Code == "orcish-form-collision"),
         "an intentional shared reverse form should be accepted only with an explicit review tag");
 
+    var repeatedCharacterIssues = OrcishLexiconReviewUtility.ReviewProposedEntry(
+        new OrcishLexiconEntry("coool", "grod", PartOfSpeech: "adjective"),
+        existingEntries);
+    AssertTrue(
+        repeatedCharacterIssues.Any(static issue => issue.Code == "repeated-character-approval-required"),
+        "three consecutive copies of one character should require explicit user approval");
+
+    var approvedRepeatedCharacterIssues = OrcishLexiconReviewUtility.ReviewProposedEntry(
+        new OrcishLexiconEntry(
+            "coool",
+            "grod",
+            PartOfSpeech: "adjective",
+            Tags: ["repeated-character-user-approved"]),
+        existingEntries);
+    AssertFalse(
+        approvedRepeatedCharacterIssues.Any(static issue => issue.Code == "repeated-character-approval-required"),
+        "the explicit user-approval tag should admit a repeated-character candidate");
+
     AssertThrows<InvalidOperationException>(() =>
         OrcishLexiconReviewUtility.EnsureCanAdd(
             new OrcishLexiconEntry("greeting", "zug", PartOfSpeech: "noun"),
@@ -1370,7 +1426,7 @@ static void OrcishTranslatorSupportsNearKinMorphologyFamilies()
 {
     var entries = OrcishTranslatorUtility.GetLexiconEntries()
         .Where(entry => HasAnyTag(entry, "near-kin"))
-        .Where(entry => !HasAnyTag(entry, "fifteen-page-near-kin", "twenty-page-near-kin", "thirty-page-near-kin", "thirty-page-followup-near-kin", "sixty-seven-page-near-kin", "second-thirty-page-near-kin", "fifty-page-near-kin", "second-fifty-page-near-kin", "third-fifty-page-near-kin", "all-remaining-page-near-kin", "shadowdim-blog-near-kin", "blog-followup-near-kin", "blog-high-yield-near-kin", "blog-mixed-high-yield-near-kin", "blog-random-hundred-near-kin", "blog-final-sitemap-near-kin", "gutenberg-corpus-near-kin", "gutenberg-second-corpus-near-kin", "gutenberg-third-corpus-near-kin", "gutenberg-fourth-corpus-near-kin", "standard-ebooks-corpus-near-kin", "various-ebooks-1000-near-kin", "various-ebooks-second-1000-near-kin", "various-ebooks-third-1500-near-kin"))
+        .Where(entry => !HasAnyTag(entry, "fifteen-page-near-kin", "twenty-page-near-kin", "thirty-page-near-kin", "thirty-page-followup-near-kin", "sixty-seven-page-near-kin", "second-thirty-page-near-kin", "fifty-page-near-kin", "second-fifty-page-near-kin", "third-fifty-page-near-kin", "all-remaining-page-near-kin", "shadowdim-blog-near-kin", "blog-followup-near-kin", "blog-high-yield-near-kin", "blog-mixed-high-yield-near-kin", "blog-random-hundred-near-kin", "blog-final-sitemap-near-kin", "gutenberg-corpus-near-kin", "gutenberg-second-corpus-near-kin", "gutenberg-third-corpus-near-kin", "gutenberg-fourth-corpus-near-kin", "gutenberg-fifth-5000-near-kin", "gutenberg-sixth-5500-near-kin", "standard-ebooks-corpus-near-kin", "various-ebooks-1000-near-kin", "various-ebooks-second-1000-near-kin", "various-ebooks-third-1500-near-kin", "various-ebooks-fourth-5100-near-kin"))
         .ToArray();
 
     AssertEqual(302, entries.Length, "expected every candidate from the 139 near-kin families");
@@ -1577,6 +1633,7 @@ static void OrcishTranslatorSupportsSixtySevenPageSampleVocabulary()
             translations.Any(candidate => string.Equals(candidate.Translation, entry.Orcish, StringComparison.OrdinalIgnoreCase)),
             $"expected '{entry.English}' to translate as '{entry.Orcish}'");
     }
+
 }
 
 static void OrcishTranslatorSupportsSecondThirtyPageSampleVocabulary()
@@ -1609,9 +1666,9 @@ static void OrcishTranslatorSupportsFiftyPageSampleVocabulary()
         .Where(entry => HasAnyTag(entry, "fifty-page-sample", "fifty-page-near-kin"))
         .ToArray();
 
-    AssertEqual(1718, entries.Length, "expected every candidate from the fifty page sample expansion");
-    AssertEqual(601, entries.Count(entry => HasAnyTag(entry, "fifty-page-sample")), "expected the scraped source candidates");
-    AssertEqual(1117, entries.Count(entry => HasAnyTag(entry, "fifty-page-near-kin")), "expected the near-kin candidates");
+    AssertEqual(1716, entries.Length, "expected every candidate from the fifty page sample expansion");
+    AssertEqual(600, entries.Count(entry => HasAnyTag(entry, "fifty-page-sample")), "expected the scraped source candidates");
+    AssertEqual(1116, entries.Count(entry => HasAnyTag(entry, "fifty-page-near-kin")), "expected the near-kin candidates");
 
     foreach (var entry in entries)
     {
@@ -2005,9 +2062,9 @@ static void OrcishTranslatorSupportsVariousEbooksCorpusFourthCandidateVocabulary
         .Where(entry => HasAnyTag(entry, "various-ebooks-fourth-5100-candidate-batch", "various-ebooks-fourth-5100-near-kin"))
         .ToArray();
 
-    AssertEqual(12453, entries.Length, "expected every candidate from the fourth various-ebooks corpus batch");
+    AssertEqual(12452, entries.Length, "expected every candidate from the fourth various-ebooks corpus batch");
     AssertEqual(6257, entries.Count(entry => HasAnyTag(entry, "various-ebooks-fourth-5100-candidate-batch")), "expected the fourth various-ebooks source candidates");
-    AssertEqual(6196, entries.Count(entry => HasAnyTag(entry, "various-ebooks-fourth-5100-near-kin")), "expected the fourth various-ebooks near-kin candidates");
+    AssertEqual(6195, entries.Count(entry => HasAnyTag(entry, "various-ebooks-fourth-5100-near-kin")), "expected the fourth various-ebooks near-kin candidates");
 
     foreach (var english in new[] { "abacus", "zounds", "abacuses", "zebra's" })
     {
@@ -2017,10 +2074,219 @@ static void OrcishTranslatorSupportsVariousEbooksCorpusFourthCandidateVocabulary
     }
 }
 
+static void OrcishTranslatorSupportsEarthItCaresNotVocabulary()
+{
+    var entries = OrcishTranslatorUtility.GetLexiconEntries()
+        .Where(entry => HasAnyTag(entry, "earth-it-cares-not"))
+        .ToArray();
+
+    AssertEqual(73, entries.Length, "expected the curated source and morphology entries from The Earth It Cares Not");
+
+    var sourceEntries = entries
+        .Where(entry => !HasAnyTag(entry, "s-form", "present", "past", "progressive"))
+        .ToArray();
+    AssertEqual(57, sourceEntries.Length, "expected every curated source candidate from The Earth It Cares Not");
+
+    foreach (var entry in sourceEntries)
+    {
+        var reviewIssues = OrcishTranslatorUtility.ReviewProposedLexiconEntry(entry)
+            .Where(issue => !string.Equals(issue.Code, "exact-duplicate", StringComparison.OrdinalIgnoreCase))
+            .ToArray();
+        AssertEqual(0, reviewIssues.Length, $"expected reviewed entry '{entry.English}' to remain admissible");
+    }
+
+    foreach (var english in new[]
+             {
+                 "alcohol-fueled", "backswing", "darkflame", "hasiko", "magister", "neshralk",
+                 "plast", "querma", "reconstitute", "upperdark", "cuemess", "cuumess",
+                 "halfling's", "dungeoneer's"
+             })
+    {
+        var entry = entries.Single(candidate => string.Equals(candidate.English, english, StringComparison.OrdinalIgnoreCase));
+        var translations = OrcishTranslatorUtility.TranslateEnglishToOrcish(entry.English);
+        AssertTrue(
+            translations.Any(candidate => string.Equals(candidate.Translation, entry.Orcish, StringComparison.OrdinalIgnoreCase)),
+            $"expected '{entry.English}' to translate as '{entry.Orcish}'");
+    }
+
+    AssertEqual(
+        entries.Single(entry => string.Equals(entry.English, "cuemess", StringComparison.OrdinalIgnoreCase)).Orcish,
+        entries.Single(entry => string.Equals(entry.English, "cuumess", StringComparison.OrdinalIgnoreCase)).Orcish,
+        "expected the documented cuemess spelling variants to share one Orcish form");
+
+    foreach (var derivedEnglish in new[]
+             {
+                 "texts", "fine-tunes", "fine-tuned", "fine-tuning", "over-exerts", "over-exerted",
+                 "over-exerting", "reappears", "reappeared", "reappearing", "reconstitutes",
+                 "reconstituted", "reconstituting", "resecures", "resecured", "resecuring", "resources"
+             })
+    {
+        AssertTrue(
+            OrcishTranslatorUtility.TranslateEnglishToOrcish(derivedEnglish).Count > 0,
+            $"expected morphology to cover source form '{derivedEnglish}'");
+    }
+}
+
+static void OrcishTranslatorSupportsLocalShadowdimVocabulary()
+{
+    var entries = OrcishTranslatorUtility.GetLexiconEntries()
+        .Where(entry => HasAnyTag(entry, "local-shadowdim"))
+        .ToArray();
+
+    AssertEqual(32, entries.Length, "expected the curated source and morphology entries from local Shadowdim Markdown");
+
+    var sourceEnglish = new[]
+    {
+        "world", "section", "tools", "cultist's", "operations", "site", "snap-crack",
+        "document", "dungeon's", "fighter-thief", "instructions", "lapis-lazuli-tiled",
+        "logothete's", "orojiam", "over-muscled", "passphrase", "beastman's",
+        "beastmen's", "caprine's", "colossai", "curation", "sources", "trapdoor's"
+    };
+    AssertEqual(23, sourceEnglish.Length, "expected every curated local Shadowdim source candidate");
+
+    foreach (var english in sourceEnglish)
+    {
+        var entry = entries.Single(candidate => string.Equals(candidate.English, english, StringComparison.OrdinalIgnoreCase));
+        var reviewIssues = OrcishTranslatorUtility.ReviewProposedLexiconEntry(entry)
+            .Where(issue => !string.Equals(issue.Code, "exact-duplicate", StringComparison.OrdinalIgnoreCase))
+            .ToArray();
+        AssertEqual(0, reviewIssues.Length, $"expected reviewed entry '{entry.English}' to remain admissible");
+
+        var translations = OrcishTranslatorUtility.TranslateEnglishToOrcish(entry.English);
+        AssertTrue(
+            translations.Any(candidate => string.Equals(candidate.Translation, entry.Orcish, StringComparison.OrdinalIgnoreCase)),
+            $"expected '{entry.English}' to translate as '{entry.Orcish}'");
+    }
+
+    foreach (var derivedEnglish in new[]
+             {
+                 "sections", "sites", "documents", "passphrases", "tools'", "operations'",
+                 "instructions'", "colossai's", "sources'"
+             })
+    {
+        AssertTrue(
+            entries.Any(entry => string.Equals(entry.English, derivedEnglish, StringComparison.OrdinalIgnoreCase)),
+            $"expected morphology to cover local Shadowdim family form '{derivedEnglish}'");
+    }
+
+    AssertEqual(0, OrcishTranslatorUtility.TranslateEnglishToOrcish("clink-clink-clink").Count, "dropped sound effect should remain untranslated");
+}
+
+static void OrcishTranslatorSupportsSomethingFoundIIVocabulary()
+{
+    var entries = OrcishTranslatorUtility.GetLexiconEntries()
+        .Where(entry => HasAnyTag(entry, "something-found-ii"))
+        .ToArray();
+    var sourceEnglish = """
+aftereffects admittedly all-encompassing ambiance arguably bearhug bloodbath bone-chilling boxy catty-corner cerebral cityscape clamshell cloudscape confounded decades-long disappointment dollop eye-catching gaggle gawking goosebumps gothic grey-black heart-reader heart-racing heart-sinking heart-stopping incomparable invasive landmass lavender-white life-ending liminal liver-spotted metamorphosis mid-stride midship mind-boggling nexus-point nonstop off-guard off-yellow otherness pencil-thin petrichor piggyback reconsider resemblance riptide roiling seabed smaller-framed soul-sinking splat squish starstruck still-standing stone-faced sulfurous thunderheads toasty toothy topsy-turvy unabated unadulterated unbearable unbelievable unbelievably unblemished unbreathable unbridled unearthly unfathomable unfazed unfiltered unheard unhinged uninhabited uninvited unleash unnaturally unorthodox unquenchable unreality unresolvable unruffled unsettlingly unspool unthreatening unwarranted veiny vegetal vertiginous vibrancy viewpoint war-ravaged warzone wasp-like water-whip wild-haired wind-rushing wine-colored world-changing world-ending worrisome yellow-gold
+""".Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+
+    AssertEqual(107, sourceEnglish.Length, "expected every curated Something Found II source candidate except dropped terms");
+    foreach (var english in sourceEnglish)
+    {
+        AssertTrue(
+            OrcishTranslatorUtility.TranslateEnglishToOrcish(english).Count > 0,
+            $"expected source candidate '{english}' to translate");
+    }
+
+    var acceptedEntries = OrcishTranslatorUtility.GetLexiconEntries()
+        .Where(entry => !HasAnyTag(entry, "something-found-ii"))
+        .ToList();
+    foreach (var entry in entries.Where(entry => !HasAnyTag(entry, "derived-by-rule")))
+    {
+        var reviewIssues = OrcishLexiconReviewUtility.ReviewProposedEntry(entry, acceptedEntries);
+        AssertEqual(0, reviewIssues.Count, $"expected reviewed entry '{entry.English}' to remain admissible");
+        acceptedEntries.Add(entry);
+    }
+
+    AssertEqual(0, OrcishTranslatorUtility.TranslateEnglishToOrcish("zaffre").Count, "dropped zaffre candidate should remain untranslated");
+    AssertEqual(0, OrcishTranslatorUtility.TranslateEnglishToOrcish("white-purple").Count, "dropped white-purple candidate should remain untranslated");
+    AssertEqual(0, OrcishTranslatorUtility.TranslateEnglishToOrcish("youth-spirited").Count, "dropped youth-spirited candidate should remain untranslated");
+}
+
+static void OrcishTranslatorSupportsReviewedMegadungeonVocabulary()
+{
+    var sourceEnglish = OrcishTranslatorUtility.GetMegadungeonsSourceCandidates();
+    AssertEqual(332, sourceEnglish.Count, "expected every megadungeon candidate that passed the adoption gates");
+    AssertEqual(
+        sourceEnglish.Count,
+        sourceEnglish.Distinct(StringComparer.OrdinalIgnoreCase).Count(),
+        "megadungeon source candidates should be unique");
+
+    foreach (var english in sourceEnglish)
+    {
+        AssertTrue(
+            OrcishTranslatorUtility.TranslateEnglishToOrcish(english).Count > 0,
+            $"expected reviewed megadungeon source candidate '{english}' to translate");
+    }
+
+    foreach (var dropped in new[] { "co-adaptability", "no-face", "pornographic" })
+    {
+        AssertEqual(
+            0,
+            OrcishTranslatorUtility.TranslateEnglishToOrcish(dropped).Count,
+            $"expected dropped megadungeon candidate '{dropped}' to remain untranslated");
+    }
+
+    foreach (var retainedBase in new[] { "adaptability", "alpha", "werewolf" })
+    {
+        AssertTrue(
+            OrcishTranslatorUtility.TranslateEnglishToOrcish(retainedBase).Count > 0,
+            $"expected established base term '{retainedBase}' to remain translated");
+    }
+}
+
+static void OrcishTranslatorSupportsGutenbergCorpusFifthCandidateVocabulary()
+{
+    var entries = OrcishTranslatorUtility.GetLexiconEntries()
+        .Where(entry => HasAnyTag(entry, "gutenberg-fifth-5000-candidate-batch", "gutenberg-fifth-5000-near-kin"))
+        .ToArray();
+
+    AssertEqual(11289, entries.Length, "expected every candidate from the fifth Gutenberg corpus batch after repeated-character culling");
+    AssertEqual(7940, entries.Count(entry => HasAnyTag(entry, "gutenberg-fifth-5000-candidate-batch")), "expected the fifth Gutenberg source candidates after repeated-character culling");
+    AssertEqual(3349, entries.Count(entry => HasAnyTag(entry, "gutenberg-fifth-5000-near-kin")), "expected the fifth Gutenberg near-kin candidates");
+
+    foreach (var english in new[] { "aba", "zoophytes", "abalone's", "zoophyte's" })
+    {
+        var entry = entries.Single(candidate => string.Equals(candidate.English, english, StringComparison.OrdinalIgnoreCase));
+        var reviewIssues = OrcishTranslatorUtility.ReviewProposedLexiconEntry(entry)
+            .Where(issue => !string.Equals(issue.Code, "exact-duplicate", StringComparison.OrdinalIgnoreCase))
+            .ToArray();
+        AssertEqual(0, reviewIssues.Length, $"expected reviewed entry '{entry.English}' to remain admissible");
+
+        var translations = OrcishTranslatorUtility.TranslateEnglishToOrcish(entry.English);
+        AssertTrue(translations.Any(candidate => string.Equals(candidate.Translation, entry.Orcish, StringComparison.OrdinalIgnoreCase)), $"expected '{entry.English}' to translate as '{entry.Orcish}'");
+    }
+}
+
+static void OrcishTranslatorSupportsGutenbergCorpusSixthCandidateVocabulary()
+{
+    var entries = OrcishTranslatorUtility.GetLexiconEntries()
+        .Where(entry => HasAnyTag(entry, "gutenberg-sixth-5500-candidate-batch", "gutenberg-sixth-5500-near-kin"))
+        .ToArray();
+
+    AssertEqual(9092, entries.Length, "expected every candidate from the sixth Gutenberg corpus batch after repeated-character culling");
+    AssertEqual(7082, entries.Count(entry => HasAnyTag(entry, "gutenberg-sixth-5500-candidate-batch")), "expected the sixth Gutenberg source candidates after repeated-character culling");
+    AssertEqual(2010, entries.Count(entry => HasAnyTag(entry, "gutenberg-sixth-5500-near-kin")), "expected the sixth Gutenberg near-kin candidates");
+
+    foreach (var english in new[] { "abbey-church", "zircon", "abjection's", "zircons" })
+    {
+        var entry = entries.Single(candidate => string.Equals(candidate.English, english, StringComparison.OrdinalIgnoreCase));
+        var reviewIssues = OrcishTranslatorUtility.ReviewProposedLexiconEntry(entry)
+            .Where(issue => !string.Equals(issue.Code, "exact-duplicate", StringComparison.OrdinalIgnoreCase))
+            .ToArray();
+        AssertEqual(0, reviewIssues.Length, $"expected reviewed entry '{entry.English}' to remain admissible");
+
+        var translations = OrcishTranslatorUtility.TranslateEnglishToOrcish(entry.English);
+        AssertTrue(translations.Any(candidate => string.Equals(candidate.Translation, entry.Orcish, StringComparison.OrdinalIgnoreCase)), $"expected '{entry.English}' to translate as '{entry.Orcish}'");
+    }
+}
+
 static void OrcishTranslatorExcludesApprovedAnachronisticFamilies()
 {
     var discarded = new[]
     {
+        "academic", "academic's", "academics",
         "automobile", "automobile's", "automobiled", "automobiles", "automobiling",
         "camera", "camera's", "cameras",
         "gasoline", "gasoline's",
@@ -2031,6 +2297,7 @@ static void OrcishTranslatorExcludesApprovedAnachronisticFamilies()
         "motorboat", "motorcycle", "motorcycles", "motorist", "periscope", "periscopes", "radioactive", "telegraphy",
         "non-computerized",
         "submarine", "submarine's", "submariner", "submariners", "submarines",
+        "pornography", "pornography's", "pornographic", "pornographer", "pornographers",
         "zeppelin", "zeppelins",
         "anthropologist", "anthropologists", "biologist", "ethnologist", "ethnologists", "geologists",
         "mythologists", "philologist", "philologists", "psychologist", "psychologists",
@@ -2067,11 +2334,87 @@ static void OrcishTranslatorSupportsSoftwareArtifactVocabulary()
     }
 }
 
+static void OrcishTranslatorTranslatesFullTextInBothDirections()
+{
+    AssertEqual(
+        "Zug untranslatedword.",
+        OrcishTranslatorUtility.TranslateEnglishTextToOrcish("hello untranslatedword."),
+        "English text translation should translate known words and preserve unknown words");
+    AssertEqual(
+        "Hello untranslatedword.",
+        OrcishTranslatorUtility.TranslateOrcishTextToEnglish("zug untranslatedword."),
+        "Orcish text translation should translate known words and preserve unknown words");
+    AssertEqual(
+        "\"Zug\" ...",
+        OrcishTranslatorUtility.TranslateEnglishTextToOrcish("\"hello\" ..."),
+        "full-text translation should preserve punctuation-only tokens");
+}
+
+static void OrcishTranslatorWarmupIsShared()
+{
+    OrcishTranslatorWarmupUtility.ResetForTests();
+    using var warmupStarted = new ManualResetEventSlim();
+    using var releaseWarmup = new ManualResetEventSlim();
+    var warmupCount = 0;
+    OrcishTranslatorWarmupUtility.WarmupOverrideForTests = () =>
+    {
+        Interlocked.Increment(ref warmupCount);
+        warmupStarted.Set();
+        if (!releaseWarmup.Wait(TimeSpan.FromSeconds(5)))
+        {
+            throw new TimeoutException("test warmup was not released");
+        }
+
+        return 80971;
+    };
+
+    try
+    {
+        var first = OrcishTranslatorWarmupUtility.StartPreloading();
+        var second = OrcishTranslatorWarmupUtility.StartPreloading();
+
+        AssertTrue(ReferenceEquals(first, second), "translator warmup should be shared");
+        WaitForCondition(() => warmupStarted.IsSet, "translator warmup did not start");
+        AssertFalse(OrcishTranslatorWarmupUtility.IsReady, "blocked translator warmup should not report ready");
+
+        releaseWarmup.Set();
+        var result = first.WaitAsync(TimeSpan.FromSeconds(5)).GetAwaiter().GetResult();
+
+        AssertEqual(80971, result.EnglishTermCount, "unexpected warmed English term count");
+        AssertEqual(1, Volatile.Read(ref warmupCount), "translator warmup should run once");
+        AssertTrue(OrcishTranslatorWarmupUtility.IsReady, "completed translator warmup should report ready");
+    }
+    finally
+    {
+        releaseWarmup.Set();
+        try
+        {
+            OrcishTranslatorWarmupUtility.StartPreloading()
+                .WaitAsync(TimeSpan.FromSeconds(5))
+                .GetAwaiter()
+                .GetResult();
+        }
+        catch
+        {
+        }
+
+        OrcishTranslatorWarmupUtility.ResetForTests();
+    }
+}
+
+static void OrcishTranslatorLoadsEmbeddedSnapshot()
+{
+    AssertEqual(80971, OrcishTranslatorUtility.GetEnglishTermCount(), "unexpected embedded snapshot term count");
+    AssertTrue(
+        OrcishLexiconSnapshotUtility.WasEmbeddedSnapshotLoaded,
+        "translator should load the embedded lexicon snapshot instead of cold-JITing generated builders");
+}
+
 static void OrcishTranslatorExposesUniqueEnglishTermCount()
 {
     var terms = OrcishTranslatorUtility.GetEnglishTerms();
 
-    AssertEqual(60017, OrcishTranslatorUtility.GetEnglishTermCount(), "unexpected total English term count");
+    AssertEqual(80971, OrcishTranslatorUtility.GetEnglishTermCount(), "unexpected total English term count");
     AssertEqual(OrcishTranslatorUtility.GetEnglishTermCount(), terms.Count, "term list and count should agree");
     AssertEqual(1, terms.Count(term => string.Equals(term, "I", StringComparison.OrdinalIgnoreCase)), "I should be counted once despite multiple variants");
     AssertEqual(1, terms.Count(term => string.Equals(term, "really", StringComparison.OrdinalIgnoreCase)), "really should be counted once despite multiple variants");
@@ -2973,9 +3316,9 @@ static void ApplicationVersionMetadataMatchesHardeningRelease()
         .InformationalVersion;
     var fileVersion = FileVersionInfo.GetVersionInfo(assembly.Location).FileVersion;
 
-    AssertEqual(new Version(0, 9, 4, 0), name.Version!, "unexpected assembly version");
-    AssertEqual("0.9.4.0", fileVersion!, "unexpected file version");
-    AssertEqual("0.9.4", informationalVersion, "unexpected informational version");
+    AssertEqual(new Version(0, 9, 5, 0), name.Version!, "unexpected assembly version");
+    AssertEqual("0.9.5.0", fileVersion!, "unexpected file version");
+    AssertEqual("0.9.5", informationalVersion, "unexpected informational version");
 }
 
 static void ApplicationVersionArgumentReturnsVersionText()
@@ -2996,7 +3339,7 @@ static void ApplicationVersionArgumentReturnsVersionText()
     var versionText = (string?)InvokeStaticMethod(programType, "GetVersionText")
         ?? throw new InvalidOperationException("GetVersionText returned null.");
     AssertContains(versionText, "player-assistant");
-    AssertContains(versionText, "0.9.4");
+    AssertContains(versionText, "0.9.5");
 }
 
 static void StartupManifestStatusDistinguishesSkippedAndFailed()
@@ -6054,6 +6397,518 @@ static void ShowMenuContainsAdventureOutlineItem()
     });
 }
 
+static void ShowMenuContainsTranslatorItem()
+{
+    RunOnStaThread(() =>
+    {
+        using var form = new Form1(suppressHeroImagesForThisRun: true);
+        var showMenuItem = (ToolStripMenuItem)(GetPrivateField(form, "showToolStripMenuItem")
+            ?? throw new InvalidOperationException("showToolStripMenuItem was null."));
+        var translatorMenuItem = (ToolStripMenuItem)(GetPrivateField(form, "translatorToolStripMenuItem")
+            ?? throw new InvalidOperationException("translatorToolStripMenuItem was null."));
+        var orcishMenuItem = (ToolStripMenuItem)(GetPrivateField(form, "orcishTranslatorToolStripMenuItem")
+            ?? throw new InvalidOperationException("orcishTranslatorToolStripMenuItem was null."));
+        var elvenMenuItem = (ToolStripMenuItem)(GetPrivateField(form, "elvenTranslatorToolStripMenuItem")
+            ?? throw new InvalidOperationException("elvenTranslatorToolStripMenuItem was null."));
+
+        AssertEqual("Translate", translatorMenuItem.Text ?? string.Empty, "unexpected Translate menu item text");
+        AssertTrue(
+            showMenuItem.DropDownItems.Cast<ToolStripItem>().Contains(translatorMenuItem),
+            "Show menu should contain the Translate item");
+        AssertEqual("Orcish", orcishMenuItem.Text ?? string.Empty, "unexpected Orcish translator menu text");
+        AssertEqual("Elven", elvenMenuItem.Text ?? string.Empty, "unexpected Elven translator menu text");
+        AssertTrue(translatorMenuItem.DropDownItems.Contains(orcishMenuItem), "Translate should contain Orcish");
+        AssertTrue(translatorMenuItem.DropDownItems.Contains(elvenMenuItem), "Translate should contain Elven");
+    });
+}
+
+static void ElvenTranslatorPrefersSindarinAndFallsBackToQuenya()
+{
+    var friend = ElvenTranslatorUtility.TranslateEnglishToElven("friend");
+    AssertTrue(friend.Count > 0, "friend should have an Elven translation");
+    AssertEqual("mellon", friend[0].Translation, "friend should prefer the standard Sindarin form");
+    AssertTrue(friend.All(candidate => candidate.Language == "Sindarin"), "friend should not expose Quenya when Sindarin exists");
+
+    var abandon = ElvenTranslatorUtility.TranslateEnglishToElven("abandon");
+    AssertTrue(abandon.Count > 0, "abandon should have a Quenya fallback");
+    AssertEqual("Quenya", abandon[0].Language, "abandon should use Quenya only because Sindarin is unavailable");
+    AssertEqual("hehta", abandon[0].Translation, "unexpected Quenya fallback for abandon");
+    AssertTrue(ElvenTranslatorUtility.GetEnglishTermCount() > 9000, "embedded Elven lexicon should expose the generated vocabulary");
+}
+
+static void ElvenTranslatorPreservesTextAndPunctuation()
+{
+    AssertEqual(
+        "Mellon hehta untranslatedword.",
+        ElvenTranslatorUtility.TranslateEnglishTextToElven("friend abandon untranslatedword."),
+        "Elven text translation should translate known words and preserve unknown words");
+    AssertEqual(
+        "Friend.",
+        ElvenTranslatorUtility.TranslateElvenTextToEnglish("mellon."),
+        "Elven reverse translation should preserve punctuation");
+}
+
+static void ElvenTranslatorFinalizesEveryEnglishTerm()
+{
+    var terms = ElvenTranslatorUtility.GetEnglishTerms();
+    var entries = ElvenTranslatorUtility.GetLexiconEntries();
+    AssertEqual(84531, terms.Count, "unexpected finalized English-to-Elven term count");
+    AssertEqual(terms.Count, entries.Count, "every English term should have exactly one finalized translation");
+    AssertTrue(
+        terms.All(term => ElvenTranslatorUtility.TranslateEnglishToElven(term).Count == 1),
+        "every English term should resolve to exactly one selected candidate");
+    AssertTrue(
+        entries.All(entry => !entry.Translation.Contains('(') &&
+                             !entry.Translation.Contains(')') &&
+                             !entry.Translation.Contains('/')),
+        "finalized translations should not expose optional-form notation");
+    AssertEqual(
+        "emecima",
+        ElvenTranslatorUtility.TranslateEnglishToElven("accurate")[0].Translation,
+        "parenthetical letters should be expanded into a usable Quenya form");
+    AssertEqual(
+        "an quetta",
+        ElvenTranslatorUtility.TranslateEnglishToElven("postscriptum")[0].Translation,
+        "attested abbreviations should expand to their full Elvish phrase");
+}
+
+static void ElvenMorphologyDerivesConservativeForms()
+{
+    AssertDerivedElvenForm("Sindarin", "adan", "plural", "edain");
+    AssertDerivedElvenForm("Sindarin", "orch", "plural", "yrch");
+    AssertDerivedElvenForm("Sindarin", "car", "present-active", "câr");
+    AssertDerivedElvenForm("Sindarin", "gala", "active-participle", "galol");
+    AssertDerivedElvenForm("Quenya", "atan", "plural", "atani");
+    AssertDerivedElvenForm("Quenya", "lassë", "plural", "lassi");
+    AssertDerivedElvenForm("Quenya", "mat", "present-active", "matë");
+    AssertDerivedElvenForm("Quenya", "laita", "active-participle", "laitaila");
+    AssertDerivedElvenForm("Sindarin", "gala", "gerund", "galad");
+    AssertDerivedElvenForm("Quenya", "mat", "gerund", "matie");
+    AssertDerivedElvenForm("Sindarin", "gala", "passive-participle", "galannen");
+    AssertDerivedElvenForm("Quenya", "laita", "passive-participle", "laitaina");
+    AssertDerivedElvenForm("Sindarin", "mellon", "possessive", "mellon");
+    AssertDerivedElvenForm("Quenya", "atan", "possessive", "atanwa");
+    AssertDerivedElvenForm("Sindarin", "tanc", "comparative", "athanc");
+    AssertDerivedElvenForm("Sindarin", "tanc", "superlative", "rodanc");
+    AssertDerivedElvenForm("Quenya", "calima", "comparative", "ancalima");
+    AssertDerivedElvenForm("Quenya", "calima", "superlative", "aricalima");
+
+    var mismatch = ElvenTranslatorUtility.ReviewProposedLexiconEntry(
+        new ElvenLexiconEntry(
+            "local invalid agent plural",
+            "caroni",
+            "Sindarin",
+            PartOfSpeech: "noun",
+            RootForms: ["caron"],
+            Tags: ["derived-by-rule", "plural"]));
+    AssertTrue(
+        mismatch.Any(issue => issue.Code == "root-morphology-mismatch"),
+        "a morphology-derived entry should be rejected when it does not match the declared root rule");
+}
+
+static void AssertDerivedElvenForm(string language, string root, string tag, string expected)
+{
+    AssertTrue(
+        ElvenMorphologyUtility.TryCreateDerivedForm(language, root, [tag], out var actual),
+        $"{language} {tag} should be supported for '{root}'");
+    AssertEqual(expected, actual, $"unexpected {language} {tag} for '{root}'");
+}
+
+static void ElvenFirstIterationLoadsGeneratedTranslations()
+{
+    AssertEqual("fuia", ElvenTranslatorUtility.TranslateEnglishToElven("abhors")[0].Translation, "unexpected translation for abhors");
+    AssertEqual("itanqualër", ElvenTranslatorUtility.TranslateEnglishToElven("aconites")[0].Translation, "unexpected translation for aconites");
+    AssertEqual("ceryn", ElvenTranslatorUtility.TranslateEnglishToElven("agents")[0].Translation, "unexpected translation for agents");
+    AssertEqual("antacila", ElvenTranslatorUtility.TranslateEnglishToElven("applying")[0].Translation, "unexpected translation for applying");
+    AssertEqual("pannol", ElvenTranslatorUtility.TranslateEnglishToElven("arranging")[0].Translation, "unexpected translation for arranging");
+    AssertTrue(
+        ElvenTranslatorUtility.GetLexiconEntries()
+            .Where(entry => entry.SourceLanguage?.StartsWith("local-morphology", StringComparison.Ordinal) == true)
+            .All(entry => !string.IsNullOrWhiteSpace(entry.Gloss)),
+        "every first-iteration entry should retain its derivation note");
+}
+
+static void ElvenSecondIterationLoadsGeneratedTranslations()
+{
+    AssertEqual("awarth", ElvenTranslatorUtility.TranslateEnglishToElven("abandonment's")[0].Translation, "unexpected translation for abandonment's");
+    AssertEqual("cuiwed", ElvenTranslatorUtility.TranslateEnglishToElven("alerting")[0].Translation, "unexpected translation for alerting");
+    AssertEqual("ovrannen", ElvenTranslatorUtility.TranslateEnglishToElven("abounded")[0].Translation, "unexpected translation for abounded");
+    AssertEqual("húnalë", ElvenTranslatorUtility.TranslateEnglishToElven("accursedness")[0].Translation, "unexpected translation for accursedness");
+    AssertEqual("trenarnui", ElvenTranslatorUtility.TranslateEnglishToElven("accountable")[0].Translation, "unexpected translation for accountable");
+    AssertEqual(
+        5000,
+        ElvenTranslatorUtility.GetLexiconEntries().Count(entry =>
+            entry.SourceLanguage == "local-morphology:second-iteration"),
+        "the second iteration should contribute exactly 5,000 entries");
+}
+
+static void ElvenCompleteCoverageTranslatesEveryOrcishTerm()
+{
+    var coverageEntries = ElvenTranslatorUtility.GetLexiconEntries()
+        .Where(entry => entry.SourceLanguage == "local-neologism:complete-coverage")
+        .ToArray();
+    AssertEqual(69083, coverageEntries.Length, "complete coverage should add every remaining Orcish English term");
+    AssertTrue(coverageEntries.All(entry => entry.Language == "Sindarin"), "invented fallback vocabulary should remain Sindarin-first");
+    AssertTrue(coverageEntries.All(entry => entry.ReliabilityMark == "!"), "invented fallback vocabulary should be marked as pure neologism");
+
+    var missing = OrcishTranslatorUtility.GetEnglishTerms()
+        .Where(term => ElvenTranslatorUtility.TranslateEnglishToElven(term).Count == 0)
+        .Take(10)
+        .ToArray();
+    AssertEqual(0, missing.Length, $"Orcish English terms remain untranslated: {string.Join(", ", missing)}");
+
+    var abacus = ElvenTranslatorUtility.TranslateEnglishToElven("abacus").Single();
+    AssertEqual("Sindarin", abacus.Language, "abacus should use the generated Sindarin fallback");
+    AssertTrue(
+        ElvenTranslatorUtility.TranslateElvenToEnglish(abacus.Translation).Any(entry => entry.English == "abacus"),
+        "complete-coverage forms should remain available to reverse translation");
+    AssertTrue(
+        ElvenTranslatorUtility.TranslateEnglishToElven("a single gold coin").Count == 1,
+        "complete coverage should include remaining multiword English terms");
+}
+
+static void ElvenLexiconValidatorAcceptsReviewedRootedAdditions()
+{
+    var rooted = new ElvenLexiconEntry(
+        "local fellowship test",
+        "mellonath",
+        "Sindarin",
+        PartOfSpeech: "noun",
+        RootForms: ["mellon"],
+        Tags: ["phonotactics-reviewed", "close-form-reviewed"]);
+    AssertEqual(
+        0,
+        ElvenTranslatorUtility.ReviewProposedLexiconEntry(rooted).Count,
+        "a same-language rooted Sindarin addition should pass after exceptional sound patterns are reviewed");
+    ElvenTranslatorUtility.EnsureProposedLexiconEntryCanBeAdded(rooted);
+
+    var reviewedNewRoot = new ElvenLexiconEntry(
+        "local Quenya test root",
+        "závora",
+        "Quenya",
+        Tags: ["root-invention-reviewed", "phonotactics-reviewed", "close-form-reviewed"]);
+    ElvenTranslatorUtility.EnsureProposedLexiconEntryCanBeAdded(reviewedNewRoot);
+}
+
+static void ElvenLexiconValidatorRejectsUnsupportedAdditions()
+{
+    var missingProvenance = ElvenTranslatorUtility.ReviewProposedLexiconEntry(
+        new ElvenLexiconEntry("local unsupported test", "mellonath", "Sindarin"));
+    AssertTrue(
+        missingProvenance.Any(issue => issue.Code == "root-provenance-required"),
+        "local additions should declare established roots or explicit invented-root review");
+
+    var crossLanguage = ElvenTranslatorUtility.ReviewProposedLexiconEntry(
+        new ElvenLexiconEntry(
+            "local cross-language test",
+            "mellonion",
+            "Quenya",
+            RootForms: ["mellon"],
+            Tags: ["phonotactics-reviewed", "close-form-reviewed"]));
+    AssertTrue(
+        crossLanguage.Any(issue => issue.Code == "cross-language-root"),
+        "Quenya additions should not silently derive from a Sindarin root");
+
+    var changedRoot = ElvenTranslatorUtility.ReviewProposedLexiconEntry(
+        new ElvenLexiconEntry(
+            "local changed-root test",
+            "calad",
+            "Sindarin",
+            RootForms: ["mellon"],
+            Tags: ["collision-reviewed", "phonotactics-reviewed", "close-form-reviewed"]));
+    AssertTrue(
+        changedRoot.Any(issue => issue.Code == "root-form-mismatch"),
+        "unexplained root replacement should be rejected");
+
+    var malformed = ElvenTranslatorUtility.ReviewProposedLexiconEntry(
+        new ElvenLexiconEntry(
+            "local malformed test",
+            "mel@lon",
+            "Sindarin",
+            Tags: ["root-invention-reviewed", "phonotactics-reviewed", "close-form-reviewed"]));
+    AssertTrue(
+        malformed.Any(issue => issue.Code == "invalid-elvish-character"),
+        "non-Elvish punctuation should be rejected");
+}
+
+static void ElvenLexiconValidatorPreservesSindarinPreference()
+{
+    var quenyaFriend = ElvenTranslatorUtility.ReviewProposedLexiconEntry(
+        new ElvenLexiconEntry(
+            "friend",
+            "málo",
+            "Quenya",
+            Tags: ["root-invention-reviewed", "phonotactics-reviewed", "close-form-reviewed", "collision-reviewed"]));
+    AssertTrue(
+        quenyaFriend.Any(issue => issue.Code == "quenya-shadowed-by-sindarin"),
+        "Quenya should not be added when Sindarin already covers the English term");
+
+    var closeForm = ElvenTranslatorUtility.ReviewProposedLexiconEntry(
+        new ElvenLexiconEntry(
+            "local close-form test",
+            "mellom",
+            "Sindarin",
+            Tags: ["root-invention-reviewed", "phonotactics-reviewed"]));
+    AssertTrue(
+        closeForm.Any(issue => issue.Code == "close-form-conflict"),
+        "near-colliding Elven forms should require explicit review");
+}
+
+static void TranslatorViewSupportsElvenMode()
+{
+    Form1.TranslatorTextOverrideForTests = static (_, _) => string.Empty;
+    try
+    {
+        RunOnStaThread(() =>
+        {
+            using var form = new Form1(suppressHeroImagesForThisRun: true);
+            var elvenMenuItem = (ToolStripMenuItem)(GetPrivateField(form, "elvenTranslatorToolStripMenuItem")
+                ?? throw new InvalidOperationException("elvenTranslatorToolStripMenuItem was null."));
+            elvenMenuItem.PerformClick();
+
+            var heading = (Label)(GetPrivateField(form, "_translatorHeadingLabel")
+                ?? throw new InvalidOperationException("_translatorHeadingLabel was null."));
+            var direction = (CheckBox)(GetPrivateField(form, "_translatorDirectionCheckBox")
+                ?? throw new InvalidOperationException("_translatorDirectionCheckBox was null."));
+            var output = (TextBox)(GetPrivateField(form, "_translatorOutputTextBox")
+                ?? throw new InvalidOperationException("_translatorOutputTextBox was null."));
+            var exportButton = (Button)(GetPrivateField(form, "_translatorExportButton")
+                ?? throw new InvalidOperationException("_translatorExportButton was null."));
+
+            AssertEqual("English to Elven", heading.Text, "Elven menu should open English-to-Elven mode");
+            AssertEqual("Elven to English", direction.Text, "Elven direction toggle should identify its source language");
+            output.Text = "mellon";
+            AssertTrue(exportButton.Enabled, "export should be available for a non-empty English-to-Elven translation");
+
+            direction.Checked = true;
+            AssertEqual("Elven to English", heading.Text, "Elven reverse mode should update the heading");
+            AssertFalse(exportButton.Enabled, "export should be unavailable in Elven-to-English mode");
+        });
+    }
+    finally
+    {
+        Form1.TranslatorTextOverrideForTests = null;
+    }
+}
+
+static void TranslatorViewTogglesDirectionWithoutWebLinks()
+{
+    Form1.TranslatorTextOverrideForTests = static (_, _) => string.Empty;
+    try
+    {
+        RunOnStaThread(() =>
+        {
+            using var form = new Form1(suppressHeroImagesForThisRun: true);
+            InvokePrivateMethod(form, "ShowTranslatorPanel");
+
+            var panel = (Panel)(GetPrivateField(form, "_translatorPanel")
+                ?? throw new InvalidOperationException("_translatorPanel was null."));
+            var heading = (Label)(GetPrivateField(form, "_translatorHeadingLabel")
+                ?? throw new InvalidOperationException("_translatorHeadingLabel was null."));
+            var direction = (CheckBox)(GetPrivateField(form, "_translatorDirectionCheckBox")
+                ?? throw new InvalidOperationException("_translatorDirectionCheckBox was null."));
+            var inputLabel = (Label)(GetPrivateField(form, "_translatorInputLabel")
+                ?? throw new InvalidOperationException("_translatorInputLabel was null."));
+            var input = (TextBox)(GetPrivateField(form, "_translatorInputTextBox")
+                ?? throw new InvalidOperationException("_translatorInputTextBox was null."));
+            var output = (TextBox)(GetPrivateField(form, "_translatorOutputTextBox")
+                ?? throw new InvalidOperationException("_translatorOutputTextBox was null."));
+            var exportButton = (Button)(GetPrivateField(form, "_translatorExportButton")
+                ?? throw new InvalidOperationException("_translatorExportButton was null."));
+
+            AssertFalse(direction.Checked, "translator should default to English-to-Orcish mode");
+            AssertEqual("English to Orcish", heading.Text, "unexpected default translator heading");
+            AssertEqual("English text", inputLabel.Text, "unexpected default translator input label");
+            AssertEqual(0, panel.Controls.OfType<LinkLabel>().Count(), "native translator should not expose web hyperlinks");
+            AssertEqual("Export Translation", exportButton.Text, "unexpected translator export button text");
+            AssertFalse(exportButton.Enabled, "export should be unavailable until an English-to-Orcish translation exists");
+
+            input.Text = "x";
+            output.Text = "stale translation";
+
+            direction.Checked = true;
+
+            AssertEqual("Orcish to English", heading.Text, "unexpected reverse translator heading");
+            AssertEqual("Orcish text", inputLabel.Text, "unexpected reverse translator input label");
+            AssertEqual(string.Empty, input.Text, "direction changes should clear translator input");
+            AssertEqual(string.Empty, output.Text, "direction changes should clear translator output");
+            AssertFalse(exportButton.Enabled, "export should remain unavailable in Orcish-to-English mode");
+            AssertTrue(ReferenceEquals(form.ActiveControl, input), "direction changes should return focus to translator input");
+        });
+    }
+    finally
+    {
+        Form1.TranslatorTextOverrideForTests = null;
+    }
+}
+
+static void TranslatorViewExportsEnglishToOrcishTranslation()
+{
+    var exportDirectory = Path.Combine(Path.GetTempPath(), $"player-assistant-translator-{Guid.NewGuid():N}");
+    var exportPath = Path.Combine(exportDirectory, "my-orcish-translation.txt");
+    Directory.CreateDirectory(exportDirectory);
+    Form1.TranslatorTextOverrideForTests = static (_, _) => string.Empty;
+    Form1.TranslatorExportPathOverrideForTests = () => exportPath;
+    try
+    {
+        RunOnStaThread(() =>
+        {
+            using var form = new Form1(suppressHeroImagesForThisRun: true);
+            InvokePrivateMethod(form, "ShowTranslatorPanel");
+
+            var direction = (CheckBox)(GetPrivateField(form, "_translatorDirectionCheckBox")
+                ?? throw new InvalidOperationException("_translatorDirectionCheckBox was null."));
+            var input = (TextBox)(GetPrivateField(form, "_translatorInputTextBox")
+                ?? throw new InvalidOperationException("_translatorInputTextBox was null."));
+            var output = (TextBox)(GetPrivateField(form, "_translatorOutputTextBox")
+                ?? throw new InvalidOperationException("_translatorOutputTextBox was null."));
+            var exportButton = (Button)(GetPrivateField(form, "_translatorExportButton")
+                ?? throw new InvalidOperationException("_translatorExportButton was null."));
+
+            input.Text = "Café";
+            output.Text = "Grûk";
+            AssertTrue(exportButton.Enabled, "export should become available for a non-empty English-to-Orcish translation");
+            AssertEqual(
+                "english-5-bytes-to-orcish-5-bytes",
+                Form1.BuildTranslatorExportDefaultFileName(input.Text, output.Text),
+                "export filename should include the current English and Orcish UTF-8 byte counts");
+
+            InvokePrivateMethod(form, "TranslatorExportButton_Click", exportButton, EventArgs.Empty);
+            AssertEqual("Grûk", File.ReadAllText(exportPath), "exported translation content should match the output textbox");
+
+            direction.Checked = true;
+            output.Text = "Hello";
+            AssertFalse(exportButton.Enabled, "export should be unavailable for Orcish-to-English output");
+        });
+    }
+    finally
+    {
+        Form1.TranslatorTextOverrideForTests = null;
+        Form1.TranslatorExportPathOverrideForTests = null;
+        if (Directory.Exists(exportDirectory))
+        {
+            Directory.Delete(exportDirectory, recursive: true);
+        }
+    }
+}
+
+static void TranslatorViewExportsEnglishToElvishTranslation()
+{
+    var exportDirectory = Path.Combine(Path.GetTempPath(), $"player-assistant-elvish-translator-{Guid.NewGuid():N}");
+    var exportPath = Path.Combine(exportDirectory, "my-elvish-translation.txt");
+    Directory.CreateDirectory(exportDirectory);
+    Form1.TranslatorTextOverrideForTests = static (_, _) => string.Empty;
+    Form1.TranslatorExportPathOverrideForTests = () => exportPath;
+    try
+    {
+        RunOnStaThread(() =>
+        {
+            using var form = new Form1(suppressHeroImagesForThisRun: true);
+            var elvenMenuItem = (ToolStripMenuItem)(GetPrivateField(form, "elvenTranslatorToolStripMenuItem")
+                ?? throw new InvalidOperationException("elvenTranslatorToolStripMenuItem was null."));
+            elvenMenuItem.PerformClick();
+
+            var direction = (CheckBox)(GetPrivateField(form, "_translatorDirectionCheckBox")
+                ?? throw new InvalidOperationException("_translatorDirectionCheckBox was null."));
+            var input = (TextBox)(GetPrivateField(form, "_translatorInputTextBox")
+                ?? throw new InvalidOperationException("_translatorInputTextBox was null."));
+            var output = (TextBox)(GetPrivateField(form, "_translatorOutputTextBox")
+                ?? throw new InvalidOperationException("_translatorOutputTextBox was null."));
+            var exportButton = (Button)(GetPrivateField(form, "_translatorExportButton")
+                ?? throw new InvalidOperationException("_translatorExportButton was null."));
+
+            input.Text = "Café";
+            output.Text = "Mellon";
+            AssertTrue(exportButton.Enabled, "export should become available for a non-empty English-to-Elven translation");
+            AssertEqual(
+                "english-5-bytes-to-elvish-6-bytes",
+                Form1.BuildTranslatorExportDefaultFileName(input.Text, output.Text, "elvish"),
+                "Elvish export filename should include the current UTF-8 byte counts");
+
+            InvokePrivateMethod(form, "TranslatorExportButton_Click", exportButton, EventArgs.Empty);
+            AssertEqual("Mellon", File.ReadAllText(exportPath), "exported Elvish content should match the output textbox");
+
+            direction.Checked = true;
+            output.Text = "Friend";
+            AssertFalse(exportButton.Enabled, "export should be unavailable for Elven-to-English output");
+        });
+    }
+    finally
+    {
+        Form1.TranslatorTextOverrideForTests = null;
+        Form1.TranslatorExportPathOverrideForTests = null;
+        if (Directory.Exists(exportDirectory))
+        {
+            Directory.Delete(exportDirectory, recursive: true);
+        }
+    }
+}
+
+static void TranslatorViewTranslatesWhileInputChanges()
+{
+    RunOnStaThread(() =>
+    {
+        using var synchronizationContext = new WindowsFormsSynchronizationContext();
+        SynchronizationContext.SetSynchronizationContext(synchronizationContext);
+        using var translationStarted = new ManualResetEventSlim();
+        using var releaseTranslation = new ManualResetEventSlim();
+        using var firstTranslationReturned = new ManualResetEventSlim();
+        Form1.TranslatorTextOverrideForTests = (input, orcishToEnglish) =>
+        {
+            if (input == "hello")
+            {
+                translationStarted.Set();
+                if (!releaseTranslation.Wait(TimeSpan.FromSeconds(10)))
+                {
+                    throw new TimeoutException("test translation was not released");
+                }
+
+                firstTranslationReturned.Set();
+            }
+
+            return orcishToEnglish ? "Hello" : input == "hello" ? "Zug" : "Durb";
+        };
+
+        try
+        {
+            using var form = new Form1(suppressHeroImagesForThisRun: true);
+            InvokePrivateMethod(form, "ShowTranslatorPanel");
+
+            var input = (TextBox)(GetPrivateField(form, "_translatorInputTextBox")
+                ?? throw new InvalidOperationException("_translatorInputTextBox was null."));
+            var output = (TextBox)(GetPrivateField(form, "_translatorOutputTextBox")
+                ?? throw new InvalidOperationException("_translatorOutputTextBox was null."));
+
+            input.Text = "hello";
+            WaitForWindowsFormsCondition(
+                () => translationStarted.IsSet,
+                "pasted translator input should begin translating promptly");
+            WaitForWindowsFormsCondition(
+                () => form.UseWaitCursor,
+                "translator should show the wait cursor when translation takes noticeable time");
+
+            input.Text = "goodbye";
+            WaitForWindowsFormsCondition(
+                () => output.Text == "Durb",
+                "translator output should update automatically when input changes");
+            AssertFalse(form.UseWaitCursor, "translator should restore the normal cursor after translation");
+
+            releaseTranslation.Set();
+            WaitForWindowsFormsCondition(
+                () => firstTranslationReturned.IsSet,
+                "canceled translator work should finish");
+            Application.DoEvents();
+            AssertEqual("Durb", output.Text, "stale translator work should not replace current output");
+        }
+        finally
+        {
+            releaseTranslation.Set();
+            Form1.TranslatorTextOverrideForTests = null;
+            SynchronizationContext.SetSynchronizationContext(null);
+        }
+    });
+}
+
 static void AdventureOutlineViewDisplaysGeneratedMarkdown()
 {
     RunOnStaThread(() =>
@@ -6209,7 +7064,7 @@ static void AboutVersionTextShowsAppVersion()
 {
     var versionText = (string)(InvokeStaticMethod(typeof(Form1), "GetAppVersionText")
         ?? throw new InvalidOperationException("GetAppVersionText returned null."));
-    AssertEqual("RPOL Scarlet Horizon Campaign Assistant 0.9.4", versionText, "unexpected About Version text");
+    AssertEqual("RPOL Scarlet Horizon Campaign Assistant 0.9.5", versionText, "unexpected About Version text");
 }
 
 static void UpdateCheckVerifiesSignedPAssistManifest()
@@ -9459,8 +10314,8 @@ static void HardeningWorkflowBuildsAndUploadsSignedReleaseUpdateArtifacts()
     AssertContains(workflow, "p-assist-updates.json");
     AssertContains(workflow, "p-assist-updates.json.sig");
     AssertContains(workflow, "p-assist-updates.public-key.xml");
-    AssertContains(workflow, "p-assist-0.9.4.zip");
-    AssertContains(workflow, "p-assist-0.9.4.exe");
+    AssertContains(workflow, "p-assist-0.9.5.zip");
+    AssertContains(workflow, "p-assist-0.9.5.exe");
     AssertContains(workflow, "Build Release test harness");
     AssertContains(workflow, "Verify hosted settings fetch and decrypt path");
     AssertContains(workflow, "app settings loads hosted encrypted xp tracking url from fixture server");
@@ -10419,6 +11274,23 @@ static void WaitForCondition(Func<bool> condition, string message)
     var deadline = DateTimeOffset.UtcNow.AddSeconds(2);
     while (DateTimeOffset.UtcNow < deadline)
     {
+        if (condition())
+        {
+            return;
+        }
+
+        Thread.Sleep(10);
+    }
+
+    throw new InvalidOperationException(message);
+}
+
+static void WaitForWindowsFormsCondition(Func<bool> condition, string message)
+{
+    var deadline = DateTimeOffset.UtcNow.AddSeconds(5);
+    while (DateTimeOffset.UtcNow < deadline)
+    {
+        Application.DoEvents();
         if (condition())
         {
             return;

@@ -41,6 +41,9 @@ namespace PlayerAssistant
             myHeroBriefingToolStripMenuItem = new ToolStripMenuItem();
             adventureOutlineToolStripMenuItem = new ToolStripMenuItem();
             regionalMapToolStripMenuItem = new ToolStripMenuItem();
+            translatorToolStripMenuItem = new ToolStripMenuItem();
+            orcishTranslatorToolStripMenuItem = new ToolStripMenuItem();
+            elvenTranslatorToolStripMenuItem = new ToolStripMenuItem();
             searchToolStripMenuItem = new ToolStripMenuItem();
             settingsToolStripMenuItem = new ToolStripMenuItem();
             skipHeroImageParadeAtStartupToolStripMenuItem = new ToolStripMenuItem();
@@ -95,7 +98,7 @@ namespace PlayerAssistant
             // 
             // showToolStripMenuItem
             // 
-            showToolStripMenuItem.DropDownItems.AddRange(new ToolStripItem[] { loginInfoToolStripMenuItem, showPostTotalsToolStripMenuItem, showDiceRollsToolStripMenuItem, xpToolStripMenuItem, partyToolStripMenuItem, formerPcsToolStripMenuItem, myHeroBriefingToolStripMenuItem, adventureOutlineToolStripMenuItem, regionalMapToolStripMenuItem });
+            showToolStripMenuItem.DropDownItems.AddRange(new ToolStripItem[] { loginInfoToolStripMenuItem, showPostTotalsToolStripMenuItem, showDiceRollsToolStripMenuItem, xpToolStripMenuItem, partyToolStripMenuItem, formerPcsToolStripMenuItem, myHeroBriefingToolStripMenuItem, adventureOutlineToolStripMenuItem, regionalMapToolStripMenuItem, translatorToolStripMenuItem });
             showToolStripMenuItem.Name = "showToolStripMenuItem";
             showToolStripMenuItem.Size = new Size(48, 20);
             showToolStripMenuItem.Text = "Show";
@@ -135,9 +138,9 @@ namespace PlayerAssistant
             partyToolStripMenuItem.Size = new Size(163, 22);
             partyToolStripMenuItem.Text = "Party";
             partyToolStripMenuItem.Click += PartyToolStripMenuItem_Click;
-            // 
+            //
             // formerPcsToolStripMenuItem
-            // 
+            //
             formerPcsToolStripMenuItem.Name = "formerPcsToolStripMenuItem";
             formerPcsToolStripMenuItem.Size = new Size(163, 22);
             formerPcsToolStripMenuItem.Text = "Former PCs";
@@ -164,7 +167,28 @@ namespace PlayerAssistant
             regionalMapToolStripMenuItem.Size = new Size(163, 22);
             regionalMapToolStripMenuItem.Text = "Regional Map";
             regionalMapToolStripMenuItem.Click += RegionalMapToolStripMenuItem_Click;
-            // 
+            //
+            // translatorToolStripMenuItem
+            //
+            translatorToolStripMenuItem.DropDownItems.AddRange(new ToolStripItem[] { orcishTranslatorToolStripMenuItem, elvenTranslatorToolStripMenuItem });
+            translatorToolStripMenuItem.Name = "translatorToolStripMenuItem";
+            translatorToolStripMenuItem.Size = new Size(163, 22);
+            translatorToolStripMenuItem.Text = "Translate";
+            //
+            // orcishTranslatorToolStripMenuItem
+            //
+            orcishTranslatorToolStripMenuItem.Name = "orcishTranslatorToolStripMenuItem";
+            orcishTranslatorToolStripMenuItem.Size = new Size(180, 22);
+            orcishTranslatorToolStripMenuItem.Text = "Orcish";
+            orcishTranslatorToolStripMenuItem.Click += OrcishTranslatorToolStripMenuItem_Click;
+            //
+            // elvenTranslatorToolStripMenuItem
+            //
+            elvenTranslatorToolStripMenuItem.Name = "elvenTranslatorToolStripMenuItem";
+            elvenTranslatorToolStripMenuItem.Size = new Size(180, 22);
+            elvenTranslatorToolStripMenuItem.Text = "Elven";
+            elvenTranslatorToolStripMenuItem.Click += ElvenTranslatorToolStripMenuItem_Click;
+            //
             // searchToolStripMenuItem
             // 
             searchToolStripMenuItem.Name = "searchToolStripMenuItem";
@@ -427,6 +451,9 @@ namespace PlayerAssistant
         private ToolStripMenuItem myHeroBriefingToolStripMenuItem;
         private ToolStripMenuItem adventureOutlineToolStripMenuItem;
         private ToolStripMenuItem regionalMapToolStripMenuItem;
+        private ToolStripMenuItem translatorToolStripMenuItem;
+        private ToolStripMenuItem orcishTranslatorToolStripMenuItem;
+        private ToolStripMenuItem elvenTranslatorToolStripMenuItem;
         private ToolStripMenuItem exitToolStripMenuItem;
         private ToolStripMenuItem settingsToolStripMenuItem;
         private ToolStripMenuItem skipHeroImageParadeAtStartupToolStripMenuItem;

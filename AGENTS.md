@@ -37,6 +37,8 @@ Rules:
 - Focus strictly on source files inside /src or specific .cs files mentioned.
 - Before adopting a new Orcish lexicon term, first check for exact collisions and close-form conflicts against existing translator entries and affix patterns.
 - Run the proposed entry through `OrcishTranslatorUtility.ReviewProposedLexiconEntry()` before adding it. Do not add entries with review issues; intentional shared forms, close forms, exceptional roots, or compounds require the corresponding explicit review tag documented by the validator.
+- Reject any candidate whose English term contains three or more consecutive copies of the same character unless the user explicitly approves that exact term; record that approval with the validator's `repeated-character-user-approved` tag.
+- Reject the `pornography` English family from Orcish translation; Orcish has no pornography vocabulary.
 - Before adding a new explicit Orcish lexicon word, first consult the morphology rules engine in `OrcishTranslatorUtility.cs`; use or extend a reusable rule for predictable plural, possessive, past, progressive, or present forms instead of hand-adding a derived entry.
 - For Orcish lexicon additions, prefer extending existing roots, compounds, plural patterns, and affix meanings instead of inventing unrelated forms when an established pattern already fits.
 - When an English term is better represented as a fixed Orcish phrase or compound, add the full entry explicitly rather than assuming the CLI translator will compose it from separate words.
@@ -45,6 +47,10 @@ Rules:
 - Use `codex-scratch\candidates.txt` as the current curated backlog for Orcish lexicon work; remove an item only when the exact remaining candidate has been covered, not merely a related root word.
 - Whenever Orcish translation work is being pursued, check root `dont-scrape-again.md` before selecting or scraping wiki URLs, and add every newly selected URL there so previously used pages are not selected again.
 - After lexicon edits, verify representative terms with `to-orcish`; if Debug outputs are locked, use a Release build artifact for confirmation instead of assuming the change worked.
+- Before adopting a locally invented or manually added Elven entry, run it through `ElvenTranslatorUtility.ReviewProposedLexiconEntry()` and reject unresolved review issues.
+- Elven additions must identify `Sindarin` or `Quenya` explicitly and declare established same-language `RootForms`; wholly invented roots require `root-invention-reviewed` after manual linguistic review.
+- Treat `collision-reviewed`, `close-form-reviewed`, `root-change-reviewed`, `compound-reviewed`, and `phonotactics-reviewed` as explicit human-review exceptions, not automatic bypass tags. Preserve Sindarin preference and do not add a Quenya fallback where the English term already has a Sindarin form.
+- The native app embeds `web-translator\orcish-lexicon.json` for fast translator startup. After lexicon edits, run `web-translator\export-lexicon.ps1` before the final app build so the embedded snapshot stays synchronized with `OrcishTranslatorUtility`.
 
 # Generated artifact update policy
 - Treat root `keyword-index.json` and `sitemap-keyword-urls.json` as the tracked campaign search snapshots. They may be committed only after an intentional crawl/index refresh, schema change, or release-data refresh.

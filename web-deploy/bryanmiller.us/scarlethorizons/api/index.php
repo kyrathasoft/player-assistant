@@ -7,6 +7,8 @@ header('Cache-Control: no-store');
 header('X-Content-Type-Options: nosniff');
 header('Referrer-Policy: no-referrer');
 header("Content-Security-Policy: default-src 'none'; frame-ancestors 'none'");
+header('Permissions-Policy: camera=(), microphone=(), geolocation=()');
+header('Strict-Transport-Security: max-age=31536000');
 
 $requestId = bin2hex(random_bytes(8));
 header('X-Request-Id: ' . $requestId);
@@ -15,19 +17,51 @@ try {
     requireHttps();
 
     $privateDirectory = dirname(__DIR__, 3) . '/player-assistant-broker';
+    require_once $privateDirectory . '/BrokerHttpException.php';
     require_once $privateDirectory . '/RpolClient.php';
+    require_once $privateDirectory . '/CharacterAuthService.php';
+    require_once $privateDirectory . '/XpTrackingService.php';
     require_once $privateDirectory . '/BrokerService.php';
-    $config = require $privateDirectory . '/config.php';
+    $configPathOverride = getenv('PLAYER_ASSISTANT_BROKER_CONFIG');
+    $configPath = is_string($configPathOverride) && $configPathOverride !== ''
+        ? $configPathOverride
+        : $privateDirectory . '/config.php';
+    if (!is_file($configPath)) {
+        throw new RuntimeException('The private broker configuration is unavailable.');
+    }
+    $config = require $configPath;
 
+    $method = strtoupper($_SERVER['REQUEST_METHOD'] ?? 'GET');
+    $route = getRoutePath((string)($config['api']['base_path'] ?? ''));
+    requireJsonContentType($method);
     $requestBody = readJsonRequestBody(8 * 1024 * 1024);
+    $sessionState = [];
+    $regenerateSession = null;
+    $destroySession = null;
+    if (isCharacterSessionRoute($route)) {
+        startCharacterSession(is_array($config['auth'] ?? null) ? $config['auth'] : []);
+        $sessionState =& $_SESSION;
+        $regenerateSession = static function (): void {
+            if (!session_regenerate_id(true)) {
+                throw new RuntimeException('Unable to regenerate the character session.');
+            }
+        };
+        $destroySession = static function (): void {
+            destroyCharacterSession();
+        };
+    }
+
     $service = new BrokerService($config, new RpolClient($config['rpol']));
     $response = $service->dispatch(
-        strtoupper($_SERVER['REQUEST_METHOD'] ?? 'GET'),
-        getRoutePath((string)($config['api']['base_path'] ?? '')),
+        $method,
+        $route,
         $_GET,
         $requestBody,
         getRequestHeadersForBroker(),
-        (string)($_SERVER['REMOTE_ADDR'] ?? 'unknown'));
+        (string)($_SERVER['REMOTE_ADDR'] ?? 'unknown'),
+        $sessionState,
+        $regenerateSession,
+        $destroySession);
 
     sendJson($response['status'], $response['body']);
 } catch (BrokerHttpException $exception) {
@@ -106,6 +140,22 @@ function readJsonRequestBody(int $maxBytes): array
     return $decoded;
 }
 
+function requireJsonContentType(string $method): void
+{
+    if (!in_array($method, ['POST', 'PUT', 'PATCH'], true)
+        || (int)($_SERVER['CONTENT_LENGTH'] ?? 0) === 0) {
+        return;
+    }
+
+    $contentType = strtolower(trim(explode(';', (string)($_SERVER['CONTENT_TYPE'] ?? ''), 2)[0]));
+    if ($contentType !== 'application/json') {
+        throw new BrokerHttpException(
+            415,
+            'unsupported_media_type',
+            'The request body must use application/json.');
+    }
+}
+
 function getRequestHeadersForBroker(): array
 {
     return [
@@ -114,7 +164,68 @@ function getRequestHeadersForBroker(): array
             ?? $_SERVER['REDIRECT_HTTP_AUTHORIZATION']
             ?? ''),
         'admin-key' => (string)($_SERVER['HTTP_X_BROKER_ADMIN_KEY'] ?? ''),
+        'csrf-token' => (string)($_SERVER['HTTP_X_CSRF_TOKEN'] ?? ''),
+        'origin' => (string)($_SERVER['HTTP_ORIGIN'] ?? ''),
     ];
+}
+
+function isCharacterSessionRoute(string $route): bool
+{
+    return in_array($route, ['/v1/login', '/v1/session', '/v1/me', '/v1/xp', '/v1/logout'], true);
+}
+
+function startCharacterSession(array $authConfig): void
+{
+    if (session_status() === PHP_SESSION_ACTIVE) {
+        return;
+    }
+
+    $cookiePath = (string)($authConfig['cookie_path'] ?? '/scarlethorizons/api/');
+    if (!str_starts_with($cookiePath, '/') || str_contains($cookiePath, "\r") || str_contains($cookiePath, "\n")) {
+        throw new RuntimeException('The character session cookie path is invalid.');
+    }
+
+    ini_set('session.use_strict_mode', '1');
+    ini_set('session.use_only_cookies', '1');
+    ini_set('session.use_trans_sid', '0');
+    ini_set('session.cookie_secure', '1');
+    ini_set('session.cookie_httponly', '1');
+    ini_set('session.cookie_samesite', 'Strict');
+    ini_set(
+        'session.gc_maxlifetime',
+        (string)max(28800, (int)($authConfig['absolute_timeout_seconds'] ?? 28800)));
+    session_name('pa_character_session');
+    session_cache_limiter('nocache');
+    if (!session_start([
+        'cookie_lifetime' => 0,
+        'cookie_path' => $cookiePath,
+        'cookie_secure' => true,
+        'cookie_httponly' => true,
+        'cookie_samesite' => 'Strict',
+    ])) {
+        throw new RuntimeException('Unable to start the character session.');
+    }
+}
+
+function destroyCharacterSession(): void
+{
+    if (session_status() !== PHP_SESSION_ACTIVE) {
+        return;
+    }
+
+    $cookie = session_get_cookie_params();
+    $_SESSION = [];
+    setcookie(session_name(), '', [
+        'expires' => time() - 42000,
+        'path' => (string)$cookie['path'],
+        'domain' => (string)$cookie['domain'],
+        'secure' => true,
+        'httponly' => true,
+        'samesite' => 'Strict',
+    ]);
+    if (!session_destroy()) {
+        throw new RuntimeException('Unable to destroy the character session.');
+    }
 }
 
 function sendJson(int $status, array $body): never

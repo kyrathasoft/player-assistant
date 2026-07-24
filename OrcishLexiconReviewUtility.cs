@@ -11,6 +11,7 @@ namespace PlayerAssistant
         private const string CloseFormReviewedTag = "close-form-reviewed";
         private const string RootExceptionReviewedTag = "root-exception-reviewed";
         private const string CompoundReviewedTag = "compound-reviewed";
+        private const string RepeatedCharacterUserApprovedTag = "repeated-character-user-approved";
 
         public static IReadOnlyList<OrcishLexiconReviewIssue> ReviewProposedEntry(
             OrcishLexiconEntry proposedEntry,
@@ -23,6 +24,7 @@ namespace PlayerAssistant
             var issues = new List<OrcishLexiconReviewIssue>();
 
             ReviewRequiredValues(proposedEntry, issues);
+            ReviewRepeatedCharacterRuns(proposedEntry, issues);
             ReviewExactCollisions(proposedEntry, entries, issues);
             ReviewRootFidelity(proposedEntry, entries, issues);
             ReviewCloseForms(proposedEntry, entries, issues);
@@ -42,7 +44,7 @@ namespace PlayerAssistant
             }
 
             throw new InvalidOperationException(
-                $"The proposed Orcish lexicon entry requires review: {string.Join("; ", issues.Select(static issue => issue.Message))}");
+                $"The proposed Orcish lexicon entry '{proposedEntry.English}' -> '{proposedEntry.Orcish}' requires review: {string.Join("; ", issues.Select(static issue => issue.Message))}");
         }
 
         private static void ReviewRequiredValues(
@@ -57,6 +59,38 @@ namespace PlayerAssistant
             if (string.IsNullOrWhiteSpace(proposedEntry.Orcish))
             {
                 issues.Add(new OrcishLexiconReviewIssue("missing-orcish", "The Orcish form is required."));
+            }
+        }
+
+        private static void ReviewRepeatedCharacterRuns(
+            OrcishLexiconEntry proposedEntry,
+            ICollection<OrcishLexiconReviewIssue> issues)
+        {
+            if (string.IsNullOrWhiteSpace(proposedEntry.English) ||
+                HasTag(proposedEntry, RepeatedCharacterUserApprovedTag))
+            {
+                return;
+            }
+
+            var runLength = 1;
+            for (var index = 1; index < proposedEntry.English.Length; index++)
+            {
+                if (char.ToUpperInvariant(proposedEntry.English[index]) ==
+                    char.ToUpperInvariant(proposedEntry.English[index - 1]))
+                {
+                    runLength++;
+                    if (runLength >= 3)
+                    {
+                        issues.Add(new OrcishLexiconReviewIssue(
+                            "repeated-character-approval-required",
+                            $"'{proposedEntry.English}' contains three or more consecutive copies of the same character; add '{RepeatedCharacterUserApprovedTag}' only after explicit user approval."));
+                        return;
+                    }
+                }
+                else
+                {
+                    runLength = 1;
+                }
             }
         }
 

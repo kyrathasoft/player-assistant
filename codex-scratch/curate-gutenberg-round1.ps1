@@ -15,7 +15,11 @@ $rejected = [System.Collections.Generic.HashSet[string]]::new([System.StringComp
     # Publication, transcription, navigation, software, and corpus scaffolding.
     'application','average','built','button','call','chapters','cited','colophon','comment','content','contributors','copyrighted','course','courses','digital','digitization','document','documents','download','edited','editorial','errors','essay','file','hist','illustrated','image','images','import','index','instance','instructions','internet','introduction','issue','issued','issuing','list','lists','log','logs','magazine','magazines','margin','markup','memoirs','metadata','method','methods','model','newspaper','newspapers','non-authorship','novel','operations','org','page','pages','paper','papers','paragraph','patent','photographs','post','posted','posts','preliminary','print','procedure','program','publication','published','publishers','quotation','quote','quoted','readers','references','removal','request','requested','response','revision','science','scope','section','sections','seen','select','selected','sentence','site','sources','state','states','stating','students','submit','submitted','system','systems','test','text','tools','transcriber''s','typefaces','typography','typos','university','updates','users','version','vol','volunteer-driven','worldwide','www',
     # Unsuitable slurs, malformed contractions, low-value function residue, and notation.
-    'did','divers','during','either','esq','est','here','here''s','it''s','just','leave','mon','mrs','negro','negroes','none','off','one''s','ones','other''s','others','our','ours','out','que','rev','reverend','sex','somebody','thereby','to-day','to-morrow','to-night','true','twas','twenty-eight','twenty-one','twenty-two','viz','where''s','whereas','whereby','wherefore','whereupon','who''s','wife''s','world'
+    'avg','bio','did','divers','during','eek','eff','either','esq','est','fax','fug','here','here''s','it''s','just','leave','mfg','mon','mrs','negro','negroes','none','off','ohm','ohs','one''s','ones','other''s','others','our','ours','out','pix','pyx','que','rev','reverend','rho','rte','sex','somebody','thereby','to-day','to-morrow','to-night','true','twas','twenty-eight','twenty-one','twenty-two','vac','viz','where''s','whereas','whereby','wherefore','whereupon','who''s','wife''s','world','yrs'
+) | ForEach-Object { [void]$rejected.Add($_) }
+@(
+    # Scraper stop words are repeated here so possessive forms are culled by family.
+    'about','after','again','against','also','among','another','because','before','being','between','both','could','does','doing','each','every','from','further','have','having','herself','himself','into','itself','more','most','much','must','only','other','ourselves','should','some','such','than','that','their','theirs','them','themselves','then','there','these','they','this','those','through','under','until','very','what','when','where','which','while','whom','whose','with','would','your','yours','yourself','yourselves','chapter','volume','project','gutenberg','ebook','ebooks','license','copyright','contents','illustration','illustrations','editor','translator','transcriber','proofreading','printed','publisher','edition','preface','appendix'
 ) | ForEach-Object { [void]$rejected.Add($_) }
 @(
     # Final third-corpus review: residual names, publication terms, and modern abstractions.
@@ -25,7 +29,7 @@ $rejected = [System.Collections.Generic.HashSet[string]]::new([System.StringComp
     # Third mixed-corpus review: real-world peoples, places, sects, names, and slurs.
     'afghan','arabians','arnold''s','asiatics','assyrians','aztecs','babylonians','basque','bedouins','ben''s','britain''s','buddhists','bushman','bushmen','campbell''s','carthaginians','catherine''s','cherokees','cicero''s','coon','creole','dominicans','english-speaking','eskimos','ethiopians','finns','france''s','franciscans','french''s','gordon''s','half-breeds','half-caste','hamilton''s','harrison''s','hellenes','hessian','hollanders','hottentots','huguenots','hungarians','incas','jerry''s','jew''s','johnston''s','jove''s','kaiser''s','malays','mcclellan','milton''s','moore''s','murray''s','norwegians','patrick''s','peruvians','pharaohs','pharisees','phoenicians','plutarch''s','presbyterians','ptolemies','putnam''s','quakers','redskin','rome''s','russia''s','sahib','satan''s','sherman''s','sicilians','simon''s','slavs','stanley''s','stewart''s','stuart''s','stuarts','syrians','thompson''s','tommy''s','trojans','vedas','wellington''s','zulus',
     # Modern technology, science, military hardware, measurement, and transport.
-    'airlock','airmen','analytical','anthropological','approximation','arithmetical','averaged','binoculars','carbon','championship','climatic','coke','collegiate','computation','corona','curvature','decreasing','deg','derivative','demolition','documentary','equations','ethnological','ethnology','etymology','fiber','fiscal','frontal','galactic','generator','generators','geographers','geologist','glossary','graphically','gravitational','hangar','hemorrhage','homogeneous','hyphenation','hypotheses','indicator','infantile','incision','inflection','intensive','interpolated','interpolation','interstellar','ionic','italic','jiffy','kilometers','lancet','ligature','linguistic','litigation','magnesia','malaria','mapped','margins','martian','math','median','metamorphosis','meteorological','meter','meters','militarism','nomenclature','noun','nouns','optic','orthography','parachute','patents','percussion','phenomenal','philological','philology','phonetic','posterior','postpaid','practicability','prefix','prescriptions','present-day','preventive','projector','projectors','proportional','prototype','quantum','quarantine','radar','refraction','rifleman','robot','saline','saliva','sextant','six-shooter','small-pox','snipers','spaceport','spaceship','spellings','steamer''s','synthetic','take-off','terminal','text-books','textual','topographical','transcript','translators','transmitter','transmitting','transverse','tuition','underscores','veterinary','zeppelin','zinc',
+    'acetone','airlock','airmen','analytical','anthropological','approximation','arithmetical','automobile','averaged','binoculars','carbon','championship','climatic','coke','collegiate','computation','corona','curvature','decreasing','deg','derivative','demolition','documentary','equations','ethnological','ethnology','etymology','fiber','fiscal','frontal','galactic','generator','generators','geographers','geologist','glossary','graphically','gravitational','hangar','hemorrhage','homogeneous','hyphenation','hypotheses','indicator','infantile','incision','inflection','intensive','interpolated','interpolation','interstellar','ionic','italic','jiffy','kilometers','lancet','ligature','linguistic','litigation','magnesia','malaria','mapped','margins','martian','math','median','metamorphosis','meteorological','meter','meters','militarism','nomenclature','noun','nouns','optic','orthography','parachute','patents','percussion','phenomenal','philological','philology','phonetic','posterior','postpaid','practicability','prefix','prescriptions','present-day','preventive','projector','projectors','proportional','prototype','quantum','quarantine','radar','refraction','rifleman','robot','saline','saliva','sextant','six-shooter','small-pox','snipers','spaceport','spaceship','spellings','steamer''s','synthetic','take-off','terminal','text-books','textual','topographical','transcript','translators','transmitter','transmitting','transverse','tuition','underscores','veterinary','wristwatch','yearbook','zeppelin','zinc','zipper',
     # Modern government, institutional, legal, academic, and publication vocabulary.
     'absolutism','abstention','academies','acclaimed','admissible','admittedly','admixture','advisability','amendments','appellations','attachments','attestation','attorney-general','attributable','authenticated','autocracy','autocrat','autograph','boroughs','consular','consulship','controversial','custom-house','dependencies','diplomatist','diplomatists','disciplinary','disunion','electoral','entente','examiners','expeditionary','governmental','imperialists','impeached','impeachment','intermediary','jurisprudence','junta','legislator','legislators','lieutenant-governor','loyalist','loyalists','municipality','plaintiff','plenipotentiaries','plenipotentiary','protectorate','reactionary','rear-admiral','requisitions','resumption','senatorial','seniority','solicitation','solicitations','state''s','statecraft','statesmanship','subdivided','subdivision','subdivisions','submits','surveyor','unconstitutional','unofficial','vice-admiral',
     # Numeric compounds, abbreviations, foreign fragments, and low-value corpus residue.
@@ -48,23 +52,59 @@ $rejected = [System.Collections.Generic.HashSet[string]]::new([System.StringComp
 
 $capitalized = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::Ordinal)
 $lowercase = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::Ordinal)
+$acronymOnly = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
 Get-Content -LiteralPath 'C:\Users\Bryan\AppData\Local\Programs\MiKTeX\hunspell\dicts\en_US.dic' | Select-Object -Skip 1 | ForEach-Object {
     $stem = ((($_ -split "`t")[0]) -split '/')[0]
     if ($stem -cmatch '^[A-Z][a-z]+$') { [void]$capitalized.Add($stem.ToLowerInvariant()) }
     elseif ($stem -cmatch '^[a-z]') { [void]$lowercase.Add($stem) }
+    if ($stem -cmatch '^[A-Z]{2,}$' -or $stem -cmatch '^[A-Z][a-z]*[A-Z][A-Za-z]*$') { [void]$acronymOnly.Add($stem.ToLowerInvariant()) }
 }
 $capitalizedOnly = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
 foreach ($word in $capitalized) {
     if (-not $lowercase.Contains($word)) { [void]$capitalizedOnly.Add($word) }
 }
 
-function Test-CapitalizedOnlyNameForm([string]$Candidate) {
-    $stem = $Candidate -replace "'s$", ''
-    return $capitalizedOnly.Contains($stem)
+function Get-CandidateBaseForms([string]$Candidate) {
+    $forms = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
+    [void]$forms.Add($Candidate)
+    if ($Candidate.EndsWith("'s")) { [void]$forms.Add($Candidate.Substring(0, $Candidate.Length - 2)) }
+    if ($Candidate.EndsWith('ies') -and $Candidate.Length -gt 4) { [void]$forms.Add($Candidate.Substring(0, $Candidate.Length - 3) + 'y') }
+    if ($Candidate.EndsWith('ing') -and $Candidate.Length -gt 5) {
+        [void]$forms.Add($Candidate.Substring(0, $Candidate.Length - 3))
+        [void]$forms.Add($Candidate.Substring(0, $Candidate.Length - 3) + 'e')
+    }
+    if ($Candidate.EndsWith('ed') -and $Candidate.Length -gt 4) {
+        [void]$forms.Add($Candidate.Substring(0, $Candidate.Length - 2))
+        [void]$forms.Add($Candidate.Substring(0, $Candidate.Length - 2) + 'e')
+    }
+    if ($Candidate.EndsWith('es') -and $Candidate.Length -gt 4) { [void]$forms.Add($Candidate.Substring(0, $Candidate.Length - 2)) }
+    if ($Candidate.EndsWith('s') -and $Candidate.Length -gt 3) { [void]$forms.Add($Candidate.Substring(0, $Candidate.Length - 1)) }
+    return $forms
 }
 
-$acceptedBeforeAnachronism = @($raw | Where-Object { -not $rejected.Contains($_) -and -not (Test-CapitalizedOnlyNameForm $_) -and $_ -notmatch '^(?:[ivxlcdm]+)$' } | Sort-Object)
-$removed = @($raw | Where-Object { $rejected.Contains($_) -or (Test-CapitalizedOnlyNameForm $_) -or $_ -match '^(?:[ivxlcdm]+)$' } | Sort-Object)
+function Test-RejectedFamilyForm([string]$Candidate) {
+    foreach ($form in Get-CandidateBaseForms $Candidate) {
+        if ($rejected.Contains($form)) { return $true }
+    }
+    return $false
+}
+
+function Test-CapitalizedOnlyNameForm([string]$Candidate) {
+    foreach ($form in Get-CandidateBaseForms $Candidate) {
+        if ($capitalizedOnly.Contains($form)) { return $true }
+    }
+    return $false
+}
+
+function Test-AcronymOnlyForm([string]$Candidate) {
+    foreach ($form in Get-CandidateBaseForms $Candidate) {
+        if ($acronymOnly.Contains($form)) { return $true }
+    }
+    return $false
+}
+
+$acceptedBeforeAnachronism = @($raw | Where-Object { -not (Test-RejectedFamilyForm $_) -and -not (Test-CapitalizedOnlyNameForm $_) -and -not (Test-AcronymOnlyForm $_) -and $_ -notmatch '^(?:[ivxlcdm]+)$' -and $_ -notmatch '^([a-z])\1{2,}$' } | Sort-Object)
+$removed = @($raw | Where-Object { (Test-RejectedFamilyForm $_) -or (Test-CapitalizedOnlyNameForm $_) -or (Test-AcronymOnlyForm $_) -or $_ -match '^(?:[ivxlcdm]+)$' -or $_ -match '^([a-z])\1{2,}$' } | Sort-Object)
 $raw | Set-Content -LiteralPath "$prefix-threshold-candidates.txt" -Encoding utf8
 $acceptedBeforeAnachronism | Set-Content -LiteralPath "$prefix-pre-anachronism-candidates.txt" -Encoding utf8
 python 'codex-scratch\filter-anachronistic-candidates.py' "$prefix-pre-anachronism-candidates.txt" "$prefix-source-candidates.txt" "$prefix-anachronism-rejected-candidates.txt"

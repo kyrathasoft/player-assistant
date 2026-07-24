@@ -1,4 +1,9 @@
-param([string]$Round = 'round1', [string]$Corpus = 'gutenberg', [string[]]$ExcludeExistingTag = @())
+param(
+    [string]$Round = 'round1',
+    [string]$Corpus = 'gutenberg',
+    [string[]]$ExcludeExistingTag = @(),
+    [switch]$ClearMorphologyOnly
+)
 $ErrorActionPreference = 'Stop'
 $prefix = "codex-scratch\$Corpus-$Round"
 $data = Get-Content -Raw -LiteralPath "$prefix-near-raw.json" | ConvertFrom-Json
@@ -24,10 +29,35 @@ $rejected = [System.Collections.Generic.HashSet[string]]::new([System.StringComp
     'somewhats','patientest','forwardest','acridest','balmiest','brashest','coyest','falser','falsest','flashest','gravest','grislier','grisliest','saltest','sheerer','sheerest','slipperier','slipperiest','vivider','vividest'
 ) | ForEach-Object { [void]$rejected.Add($_) }
 
+function Test-IsClearDerivedForm([string]$Base, [string]$Form) {
+    if ($Form -eq "$Base's") { return $true }
+    foreach ($suffix in @('s','es','ed','d','ing','er','ers','ly','ness','ment','ments')) {
+        if ($Form -eq "$Base$suffix") { return $true }
+    }
+    if ($Base.EndsWith('y')) {
+        $stem = $Base.Substring(0, $Base.Length - 1)
+        foreach ($ending in @('ies','ied','ier','iest','ily','iness')) {
+            if ($Form -eq "$stem$ending") { return $true }
+        }
+    }
+    if ($Base.EndsWith('e') -and $Form -eq ($Base.Substring(0, $Base.Length - 1) + 'ing')) { return $true }
+    return $false
+}
+
+function Test-ClearMorphologyRelationship([string]$Candidate, [string]$Source) {
+    if ($Source.Length -le 5) { return $false }
+    return ((Test-IsClearDerivedForm $Source $Candidate) -or (Test-IsClearDerivedForm $Candidate $Source))
+}
+
 $candidateToSource = [ordered]@{}
+$morphologyRejected = [System.Collections.Generic.List[string]]::new()
 foreach ($family in $data.families.PSObject.Properties) {
     foreach ($candidate in $family.Value) {
         if ($candidate.Length -lt 3 -or $candidate -match "s's$" -or $existing.Contains($candidate) -or $sources.Contains($candidate) -or $rejected.Contains($candidate)) { continue }
+        if ($ClearMorphologyOnly -and -not (Test-ClearMorphologyRelationship $candidate $family.Name)) {
+            $morphologyRejected.Add("$candidate|$($family.Name)")
+            continue
+        }
         if (-not $candidateToSource.Contains($candidate)) { $candidateToSource[$candidate] = $family.Name }
     }
 }
@@ -69,7 +99,13 @@ $manualFamilies = [ordered]@{
 }
 foreach ($family in $manualFamilies.GetEnumerator()) {
     foreach ($candidate in $family.Value) {
-        if (-not $existing.Contains($candidate) -and -not $sources.Contains($candidate) -and -not $rejected.Contains($candidate)) { $candidateToSource[$candidate] = $family.Name }
+        if (-not $existing.Contains($candidate) -and -not $sources.Contains($candidate) -and -not $rejected.Contains($candidate)) {
+            if ($ClearMorphologyOnly -and -not (Test-ClearMorphologyRelationship $candidate $family.Name)) {
+                $morphologyRejected.Add("$candidate|$($family.Name)")
+                continue
+            }
+            $candidateToSource[$candidate] = $family.Name
+        }
     }
 }
 $preAnachronismNear = @($candidateToSource.Keys | Sort-Object)
@@ -82,7 +118,8 @@ $families = @($candidateToSource.GetEnumerator() | Where-Object { $acceptedNear.
 $combined = @($sources + $near | Sort-Object -Unique)
 $near | Set-Content -LiteralPath "$prefix-near-candidates.txt" -Encoding utf8
 $families | Set-Content -LiteralPath "$prefix-near-families.txt" -Encoding utf8
+$morphologyRejected | Sort-Object -Unique | Set-Content -LiteralPath "$prefix-near-families-rejected.txt" -Encoding utf8
 $combined | Set-Content -LiteralPath 'codex-scratch\candidates.txt' -Encoding utf8
 $nearAnachronismRejected = @(Get-Content -LiteralPath "$prefix-near-anachronism-rejected.txt")
-[pscustomobject]@{generatedAt=(Get-Date).ToUniversalTime().ToString('o');sourceCount=$sources.Count;nearKinCount=$near.Count;combinedCount=$combined.Count;nearKinAnachronismRejectedCount=$nearAnachronismRejected.Count;lexiconEntryCount=$entries.Count} | ConvertTo-Json | Set-Content -LiteralPath "$prefix-near-manifest.json" -Encoding utf8
-[pscustomobject]@{source=$sources.Count;near=$near.Count;combined=$combined.Count;nearAnachronismRejected=$nearAnachronismRejected.Count}|ConvertTo-Json
+[pscustomobject]@{generatedAt=(Get-Date).ToUniversalTime().ToString('o');sourceCount=$sources.Count;nearKinCount=$near.Count;combinedCount=$combined.Count;nearKinAnachronismRejectedCount=$nearAnachronismRejected.Count;morphologyRejectedCount=@($morphologyRejected | Sort-Object -Unique).Count;clearMorphologyOnly=[bool]$ClearMorphologyOnly;lexiconEntryCount=$entries.Count} | ConvertTo-Json | Set-Content -LiteralPath "$prefix-near-manifest.json" -Encoding utf8
+[pscustomobject]@{source=$sources.Count;near=$near.Count;combined=$combined.Count;nearAnachronismRejected=$nearAnachronismRejected.Count;morphologyRejected=@($morphologyRejected | Sort-Object -Unique).Count}|ConvertTo-Json

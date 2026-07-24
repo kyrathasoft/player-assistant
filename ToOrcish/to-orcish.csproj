@@ -12,10 +12,12 @@
     <OutputPath>..\Release\</OutputPath>
     <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
     <AppendRuntimeIdentifierToOutputPath>false</AppendRuntimeIdentifierToOutputPath>
+    <DefineConstants>$(DefineConstants);TO_ORCISH_STANDALONE</DefineConstants>
   </PropertyGroup>
 
   <ItemGroup>
     <Compile Include="..\OrcishLexiconReviewUtility.cs" Link="OrcishLexiconReviewUtility.cs" />
+    <Compile Include="..\OrcishLexiconSnapshotUtility.cs" Link="OrcishLexiconSnapshotUtility.cs" />
     <Compile Include="..\OrcishTranslatorUtility.BlogFinalSitemapBatch.cs" Link="OrcishTranslatorUtility.BlogFinalSitemapBatch.cs" />
     <Compile Include="..\OrcishTranslatorUtility.BlogHighYieldBatch.cs" Link="OrcishTranslatorUtility.BlogHighYieldBatch.cs" />
     <Compile Include="..\OrcishTranslatorUtility.BlogMixedHighYieldBatch.cs" Link="OrcishTranslatorUtility.BlogMixedHighYieldBatch.cs" />
@@ -24,15 +26,23 @@
     <Compile Include="..\OrcishTranslatorUtility.GutenbergCorpusSecondBatch.cs" Link="OrcishTranslatorUtility.GutenbergCorpusSecondBatch.cs" />
     <Compile Include="..\OrcishTranslatorUtility.GutenbergCorpusThirdBatch.cs" Link="OrcishTranslatorUtility.GutenbergCorpusThirdBatch.cs" />
     <Compile Include="..\OrcishTranslatorUtility.GutenbergCorpusFourthBatch.cs" Link="OrcishTranslatorUtility.GutenbergCorpusFourthBatch.cs" />
+    <Compile Include="..\OrcishTranslatorUtility.GutenbergCorpusFifthBatch.cs" Link="OrcishTranslatorUtility.GutenbergCorpusFifthBatch.cs" />
+    <Compile Include="..\OrcishTranslatorUtility.GutenbergCorpusSixthBatch.cs" Link="OrcishTranslatorUtility.GutenbergCorpusSixthBatch.cs" />
     <Compile Include="..\OrcishTranslatorUtility.StandardEbooksCorpusBatch.cs" Link="OrcishTranslatorUtility.StandardEbooksCorpusBatch.cs" />
     <Compile Include="..\OrcishTranslatorUtility.VariousEbooksCorpusBatch.cs" Link="OrcishTranslatorUtility.VariousEbooksCorpusBatch.cs" />
     <Compile Include="..\OrcishTranslatorUtility.VariousEbooksCorpusSecondBatch.cs" Link="OrcishTranslatorUtility.VariousEbooksCorpusSecondBatch.cs" />
     <Compile Include="..\OrcishTranslatorUtility.VariousEbooksCorpusThirdBatch.cs" Link="OrcishTranslatorUtility.VariousEbooksCorpusThirdBatch.cs" />
     <Compile Include="..\OrcishTranslatorUtility.VariousEbooksCorpusFourthBatch.cs" Link="OrcishTranslatorUtility.VariousEbooksCorpusFourthBatch.cs" />
+    <Compile Include="..\OrcishTranslatorUtility.EarthItCaresNotBatch.cs" Link="OrcishTranslatorUtility.EarthItCaresNotBatch.cs" />
+    <Compile Include="..\OrcishTranslatorUtility.LocalShadowdimBatch.cs" Link="OrcishTranslatorUtility.LocalShadowdimBatch.cs" />
+    <Compile Include="..\OrcishTranslatorUtility.SomethingFoundIIBatch.cs" Link="OrcishTranslatorUtility.SomethingFoundIIBatch.cs" />
+    <Compile Include="..\OrcishTranslatorUtility.MegadungeonsBatch.cs" Link="OrcishTranslatorUtility.MegadungeonsBatch.cs" />
+    <Compile Include="..\OrcishTranslatorUtility.Text.cs" Link="OrcishTranslatorUtility.Text.cs" />
     <Compile Include="..\OrcishTranslatorUtility.BlogFollowupBatch.cs" Link="OrcishTranslatorUtility.BlogFollowupBatch.cs" />
     <Compile Include="..\OrcishTranslatorUtility.ShadowdimBlogBatch.cs" Link="OrcishTranslatorUtility.ShadowdimBlogBatch.cs" />
     <Compile Include="..\OrcishTranslatorUtility.cs" Link="OrcishTranslatorUtility.cs" />
     <Compile Include="..\RandomNumberUtility.cs" Link="RandomNumberUtility.cs" />
+    <EmbeddedResource Include="..\web-translator\orcish-lexicon.json" LogicalName="PlayerAssistant.OrcishLexiconSnapshot.json" />
   </ItemGroup>
 
 </Project>

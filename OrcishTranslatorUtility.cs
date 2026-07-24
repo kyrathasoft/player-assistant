@@ -51,17 +51,29 @@ namespace PlayerAssistant
         private static readonly Regex FirstPersonPronounPattern =
             new(@"(?<!\S)I(?!\S)", RegexOptions.Compiled);
 
-        private static readonly OrcishLexiconEntry[] LexiconEntries =
-            BuildLexiconEntries();
+        private static readonly Lazy<OrcishLexiconEntry[]> LexiconEntriesSource =
+            new(BuildLexiconEntries, LazyThreadSafetyMode.ExecutionAndPublication);
 
-        private static readonly OrcishAffixEntry[] AffixEntries =
-            BuildAffixEntries();
+        private static readonly Lazy<OrcishAffixEntry[]> AffixEntriesSource =
+            new(BuildAffixEntries, LazyThreadSafetyMode.ExecutionAndPublication);
 
-        private static readonly IReadOnlyDictionary<string, OrcishLexiconEntry[]> EnglishIndex =
-            BuildIndex(LexiconEntries, static entry => entry.English);
+        private static readonly Lazy<IReadOnlyDictionary<string, OrcishLexiconEntry[]>> EnglishIndexSource =
+            new(
+                () => BuildIndex(LexiconEntries, static entry => entry.English),
+                LazyThreadSafetyMode.ExecutionAndPublication);
 
-        private static readonly IReadOnlyDictionary<string, OrcishLexiconEntry[]> OrcishIndex =
-            BuildIndex(LexiconEntries, static entry => entry.Orcish);
+        private static readonly Lazy<IReadOnlyDictionary<string, OrcishLexiconEntry[]>> OrcishIndexSource =
+            new(
+                () => BuildIndex(LexiconEntries, static entry => entry.Orcish),
+                LazyThreadSafetyMode.ExecutionAndPublication);
+
+        private static OrcishLexiconEntry[] LexiconEntries => LexiconEntriesSource.Value;
+
+        private static OrcishAffixEntry[] AffixEntries => AffixEntriesSource.Value;
+
+        private static IReadOnlyDictionary<string, OrcishLexiconEntry[]> EnglishIndex => EnglishIndexSource.Value;
+
+        private static IReadOnlyDictionary<string, OrcishLexiconEntry[]> OrcishIndex => OrcishIndexSource.Value;
 
         public static IReadOnlyList<OrcishTranslationCandidate> TranslateEnglishToOrcish(
             string englishText,
@@ -172,6 +184,13 @@ namespace PlayerAssistant
             return EnglishIndex.Count;
         }
 
+        internal static int WarmUpIndexes()
+        {
+            var englishTermCount = EnglishIndex.Count;
+            _ = OrcishIndex.Count;
+            return englishTermCount;
+        }
+
         public static IReadOnlyList<string> GetEnglishTerms()
         {
             return EnglishIndex.Keys
@@ -201,6 +220,12 @@ namespace PlayerAssistant
         }
 
         private static OrcishLexiconEntry[] BuildLexiconEntries()
+        {
+            return OrcishLexiconSnapshotUtility.TryLoadEmbeddedSnapshot()
+                ?? BuildLexiconEntriesFromSource();
+        }
+
+        private static OrcishLexiconEntry[] BuildLexiconEntriesFromSource()
         {
             // Review every proposed addition with ReviewProposedLexiconEntry before placing it here.
             var entries = new List<OrcishLexiconEntry>
@@ -1661,7 +1686,6 @@ namespace PlayerAssistant
                 new("these formidable ones", "lekyanki-doku-vrak", PartOfSpeech: "determiner", GrammarClass: "demonstrative", Tags: ["formidable", "marked"]),
                 new("two", "dug", PartOfSpeech: "numeral", GrammarClass: "cardinal"),
                 new("second", "dug-lag-hrowk", PartOfSpeech: "numeral", GrammarClass: "ordinal"),
-                new("III", "dug-agh-ash-mokh-burz", PartOfSpeech: "numeral", GrammarClass: "ordinal", Tags: ["roman", "third"]),
                 new("IV", "dug-agh-dug", PartOfSpeech: "numeral", GrammarClass: "ordinal", Tags: ["roman", "fourth"]),
                 new("if", "ut", PartOfSpeech: "conjunction", GrammarClass: "condition", Tags: ["variant-a", "plain", "alternating", "root-repaired"]),
                 new("if", "ka", PartOfSpeech: "conjunction", GrammarClass: "condition", Tags: ["variant-b", "plain", "alternating"]),
@@ -2048,6 +2072,7 @@ namespace PlayerAssistant
                 new("brokenly", "brak-nargin", PartOfSpeech: "adverb", GrammarClass: "speech", Tags: ["broken", "compound"]),
                 new("gruffly", "grukh-nargin", PartOfSpeech: "adverb", GrammarClass: "speech", Tags: ["rough", "compound"]),
                 new("script", "bib-narg", PartOfSpeech: "noun", GrammarClass: "language", Tags: ["writing", "compound"]),
+                new("text", "bib-narg", PartOfSpeech: "noun", GrammarClass: "language", Tags: ["writing", "compound", "compound-reviewed", "shared-form", "close-form-reviewed", "script", "derive-plural"]),
                 new("scrawl", "bib-narg-grot", PartOfSpeech: "noun", GrammarClass: "language", Tags: ["rough-writing", "compound"]),
                 new("scrutinized", "mur-oglash", PartOfSpeech: "verb", GrammarClass: "perception", Tags: ["past", "close-looking", "compound"]),
                 new("signs", "narg-oglari", PartOfSpeech: "noun", GrammarClass: "evidence", Tags: ["indications", "plural", "compound"]),
@@ -2779,7 +2804,6 @@ namespace PlayerAssistant
                 new("absurd", "dargi-gori-hekash", Tags: ["frequency", "freq-xls-ge100", "generated"]),
                 new("abuse", "brak-bruku", Tags: ["frequency", "freq-xls-ge100", "generated", "review-repaired", "root-derived"]),
                 new("abused", "flindi-banti-hrowkash", Tags: ["frequency", "freq-xls-ge100", "generated"]),
-                new("academic", "gor-gord-flitin", Tags: ["frequency", "freq-xls-ge100", "generated"]),
                 new("academy", "heku-kangstuk-dakur", Tags: ["frequency", "freq-xls-ge100", "generated"]),
                 new("accent", "flit-gor-narg-rukh", Tags: ["frequency", "freq-xls-ge100", "generated", "name-substring-cleanup"]),
                 new("accepted", "mokra-dravkuash", Tags: ["frequency", "freq-xls-ge100", "generated", "review-repaired", "root-derived"]),
@@ -4104,11 +4128,17 @@ namespace PlayerAssistant
             entries.AddRange(BuildGutenbergCorpusSecondCandidateEntries(entries));
             entries.AddRange(BuildGutenbergCorpusThirdCandidateEntries(entries));
             entries.AddRange(BuildGutenbergCorpusFourthCandidateEntries(entries));
+            entries.AddRange(BuildGutenbergCorpusFifthCandidateEntries(entries));
+            entries.AddRange(BuildGutenbergCorpusSixthCandidateEntries(entries));
             entries.AddRange(BuildStandardEbooksCorpusCandidateEntries(entries));
             entries.AddRange(BuildVariousEbooksCorpusCandidateEntries(entries));
             entries.AddRange(BuildVariousEbooksCorpusSecondCandidateEntries(entries));
             entries.AddRange(BuildVariousEbooksCorpusThirdCandidateEntries(entries));
             entries.AddRange(BuildVariousEbooksCorpusFourthCandidateEntries(entries));
+            entries.AddRange(BuildEarthItCaresNotCandidateEntries(entries));
+            entries.AddRange(BuildLocalShadowdimCandidateEntries(entries));
+            entries.AddRange(BuildSomethingFoundIICandidateEntries(entries));
+            entries.AddRange(BuildMegadungeonsCandidateEntries(entries));
 
             var baseEntries = entries.ToArray();
             entries.AddRange(BuildDerivedMorphologyEntries(baseEntries));
@@ -12014,7 +12044,6 @@ twilight
 unbroken
 vessel
 woven
-academics
 accidentally
 accompanying
 accorded
@@ -12527,7 +12556,6 @@ yep
 """;
 
         private const string FiftyPageNearKinCandidateData = """
-academic's|academics
 accidental's|accidentally
 accidentals|accidentally
 accompanies|accompanying
