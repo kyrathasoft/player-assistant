@@ -16558,7 +16558,6 @@ cheerfulness
 cheerily
 cheerless
 chef
-chemical
 cherries
 childhood
 chilled
@@ -19664,9 +19663,6 @@ cheerlessly|cheerless
 cheerlessness|cheerless
 chef's|chef
 chefs|chef
-chemical's|chemical
-chemically|chemical
-chemicals|chemical
 cherry|cherries
 cherry's|cherries
 childhood's|childhood

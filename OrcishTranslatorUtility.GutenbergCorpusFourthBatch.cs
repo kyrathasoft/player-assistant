@@ -185,7 +185,6 @@ chat
 chauffeur
 cheat
 cheated
-chemistry
 chestnut
 chevalier
 chocolate
@@ -1607,7 +1606,6 @@ cheater|cheat
 cheaters|cheat
 cheating|cheat
 cheats|cheat
-chemistry's|chemistry
 chestnut's|chestnut
 chestnuts|chestnut
 chevalier's|chevalier

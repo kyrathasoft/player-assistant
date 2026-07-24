@@ -1738,9 +1738,9 @@ static void OrcishTranslatorSupportsAllRemainingPageSampleVocabulary()
         .Where(entry => HasAnyTag(entry, "all-remaining-page-sample", "all-remaining-page-near-kin"))
         .ToArray();
 
-    AssertEqual(7688, entries.Length, "expected every retained candidate from the all remaining page sample expansion");
-    AssertEqual(2832, entries.Count(entry => HasAnyTag(entry, "all-remaining-page-sample")), "expected the retained scraped source candidates");
-    AssertEqual(4856, entries.Count(entry => HasAnyTag(entry, "all-remaining-page-near-kin")), "expected the retained near-kin candidates");
+    AssertEqual(7684, entries.Length, "expected every retained candidate from the all remaining page sample expansion");
+    AssertEqual(2831, entries.Count(entry => HasAnyTag(entry, "all-remaining-page-sample")), "expected the retained scraped source candidates");
+    AssertEqual(4853, entries.Count(entry => HasAnyTag(entry, "all-remaining-page-near-kin")), "expected the retained near-kin candidates");
 
     foreach (var entry in entries)
     {
@@ -1966,9 +1966,9 @@ static void OrcishTranslatorSupportsGutenbergCorpusFourthCandidateVocabulary()
         .Where(entry => HasAnyTag(entry, "gutenberg-fourth-corpus-candidate-batch", "gutenberg-fourth-corpus-near-kin"))
         .ToArray();
 
-    AssertEqual(3493, entries.Length, "expected every retained candidate from the fourth Gutenberg corpus batch");
-    AssertEqual(1286, entries.Count(entry => HasAnyTag(entry, "gutenberg-fourth-corpus-candidate-batch")), "expected the retained fourth corpus source candidates");
-    AssertEqual(2207, entries.Count(entry => HasAnyTag(entry, "gutenberg-fourth-corpus-near-kin")), "expected the retained fourth corpus near-kin candidates");
+    AssertEqual(3491, entries.Length, "expected every retained candidate from the fourth Gutenberg corpus batch");
+    AssertEqual(1285, entries.Count(entry => HasAnyTag(entry, "gutenberg-fourth-corpus-candidate-batch")), "expected the retained fourth corpus source candidates");
+    AssertEqual(2206, entries.Count(entry => HasAnyTag(entry, "gutenberg-fourth-corpus-near-kin")), "expected the retained fourth corpus near-kin candidates");
 
     foreach (var entry in entries)
     {
@@ -2287,6 +2287,7 @@ static void OrcishTranslatorExcludesApprovedAnachronisticFamilies()
     var discarded = new[]
     {
         "academic", "academic's", "academics",
+        "chemical", "chemical's", "chemically", "chemicals", "chemistry", "chemistry's",
         "automobile", "automobile's", "automobiled", "automobiles", "automobiling",
         "camera", "camera's", "cameras",
         "gasoline", "gasoline's",
@@ -2365,7 +2366,7 @@ static void OrcishTranslatorWarmupIsShared()
             throw new TimeoutException("test warmup was not released");
         }
 
-        return 80971;
+        return 80965;
     };
 
     try
@@ -2380,7 +2381,7 @@ static void OrcishTranslatorWarmupIsShared()
         releaseWarmup.Set();
         var result = first.WaitAsync(TimeSpan.FromSeconds(5)).GetAwaiter().GetResult();
 
-        AssertEqual(80971, result.EnglishTermCount, "unexpected warmed English term count");
+        AssertEqual(80965, result.EnglishTermCount, "unexpected warmed English term count");
         AssertEqual(1, Volatile.Read(ref warmupCount), "translator warmup should run once");
         AssertTrue(OrcishTranslatorWarmupUtility.IsReady, "completed translator warmup should report ready");
     }
@@ -2404,7 +2405,7 @@ static void OrcishTranslatorWarmupIsShared()
 
 static void OrcishTranslatorLoadsEmbeddedSnapshot()
 {
-    AssertEqual(80971, OrcishTranslatorUtility.GetEnglishTermCount(), "unexpected embedded snapshot term count");
+    AssertEqual(80965, OrcishTranslatorUtility.GetEnglishTermCount(), "unexpected embedded snapshot term count");
     AssertTrue(
         OrcishLexiconSnapshotUtility.WasEmbeddedSnapshotLoaded,
         "translator should load the embedded lexicon snapshot instead of cold-JITing generated builders");
@@ -2414,7 +2415,7 @@ static void OrcishTranslatorExposesUniqueEnglishTermCount()
 {
     var terms = OrcishTranslatorUtility.GetEnglishTerms();
 
-    AssertEqual(80971, OrcishTranslatorUtility.GetEnglishTermCount(), "unexpected total English term count");
+    AssertEqual(80965, OrcishTranslatorUtility.GetEnglishTermCount(), "unexpected total English term count");
     AssertEqual(OrcishTranslatorUtility.GetEnglishTermCount(), terms.Count, "term list and count should agree");
     AssertEqual(1, terms.Count(term => string.Equals(term, "I", StringComparison.OrdinalIgnoreCase)), "I should be counted once despite multiple variants");
     AssertEqual(1, terms.Count(term => string.Equals(term, "really", StringComparison.OrdinalIgnoreCase)), "really should be counted once despite multiple variants");

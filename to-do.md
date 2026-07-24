@@ -2,8 +2,10 @@
   - Approval only: do not purge an existing entry until the user selects it.
   - Recorded decision, pending batch application: retain `battery` as a verb; remove the noun sense of `battery` and the noun possessive `battery's`.
   - Approved removal applied: `academic`, `academic's`, and `academics`.
-  - Current focused shortlist: `codex-scratch\lexicon-anachronism-purge-candidates.txt` (`35` families, `109` exact English entries).
-  - Broad audit with categories, triggers, Orcish forms, and tags: `codex-scratch\lexicon-anachronism-review.tsv` (`148` exact English entries, including medieval-compatible terms intentionally excluded from the focused shortlist).
+  - Approved retention applied: `biological`, `biology`, and `biology's`.
+  - Approved removal applied: `chemical`, `chemical's`, `chemically`, `chemicals`, `chemistry`, and `chemistry's`; Orcish culture uses magic or alchemy instead.
+  - Current focused shortlist: `codex-scratch\lexicon-anachronism-purge-candidates.txt` (`33` families, `101` exact English entries).
+  - Broad audit with categories, triggers, Orcish forms, and tags: `codex-scratch\lexicon-anachronism-review.tsv` (`140` exact English entries, including medieval-compatible terms intentionally excluded from the focused shortlist).
   - After approved removals, update family batch counts and the unique-English count regression, rebuild the app and `to-orcish` in Release, run focused absence and quality tests, refresh both audit files, and update graphify.
 
 - [x] Resume Orcish invalid retranslation review.
