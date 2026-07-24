@@ -34,6 +34,10 @@
                     <span class="status-dot" aria-hidden="true"></span>
                     <span id="connection-label">Online</span>
                 </span>
+                <button class="account-button" id="auth-button" type="button">
+                    <span aria-hidden="true">♙</span>
+                    <span id="auth-button-label">Log in</span>
+                </button>
                 <button class="install-button" id="install-app" type="button">
                     <span aria-hidden="true">⬇</span>
                     Install app
@@ -187,7 +191,7 @@
                         <span aria-hidden="true">⌕</span>
                         <input id="campaign-search" type="search" autocomplete="off" placeholder="Search people, places, quests, rules…">
                     </label>
-                    <p class="search-guidance" id="search-guidance">Enter at least two characters. Results open in the public Obsidian campaign vault.</p>
+                    <p class="search-guidance" id="search-guidance">Whole words are matched by default. Use wildcards for partial words: *king, king*, or *king*. Search covers titles and public page text.</p>
                     <div class="search-results" id="search-results" aria-live="polite"></div>
                 </div>
             </section>
@@ -261,7 +265,7 @@
 
                 <aside class="security-note">
                     <strong>Protected player information</strong>
-                    <p>XP credentials, authenticated RPOL downloads, private briefings, and tagged encrypted notes remain server-protected. They are not embedded in this browser application.</p>
+                    <p id="protected-player-status">Log in with your character name and password. The server determines which character record the session may access; passwords and private records are never embedded in this browser application.</p>
                 </aside>
 
                 <div class="credits-card">
@@ -276,6 +280,39 @@
             <span id="offline-readiness">App shell available offline after first load.</span>
         </footer>
     </div>
+
+    <dialog id="auth-dialog">
+        <div class="auth-dialog-surface">
+            <button class="dialog-close" id="auth-dialog-close" type="button" aria-label="Close character login">×</button>
+            <p class="eyebrow">Protected player access</p>
+
+            <form class="auth-login-form" id="auth-login-form">
+                <h2>Character login</h2>
+                <p>Use the character name and XP password provided by the Dungeon Master.</p>
+                <label for="auth-character-name">
+                    <span>Character name</span>
+                    <input id="auth-character-name" name="character_name" type="text" maxlength="100" autocomplete="username" required>
+                </label>
+                <label for="auth-password">
+                    <span>Password</span>
+                    <input id="auth-password" name="password" type="password" maxlength="4096" autocomplete="current-password" required>
+                </label>
+                <p class="auth-message" id="auth-message" role="status" aria-live="polite"></p>
+                <button class="primary-button" id="auth-submit" type="submit">Log in</button>
+            </form>
+
+            <section class="auth-account-panel" id="auth-account-panel" hidden>
+                <h2>Signed in</h2>
+                <dl>
+                    <div><dt>Character</dt><dd id="auth-account-name"></dd></div>
+                    <div><dt>Access</dt><dd id="auth-account-role"></dd></div>
+                </dl>
+                <p>Your session is held in a secure, HTTP-only server cookie. Player Assistant does not store your password in browser storage.</p>
+                <p class="auth-message" id="auth-account-message" role="status" aria-live="polite"></p>
+                <button class="secondary-button" id="auth-logout" type="button">Log out</button>
+            </section>
+        </div>
+    </dialog>
 
     <dialog id="install-help">
         <form method="dialog">

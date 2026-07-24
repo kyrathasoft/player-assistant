@@ -1,5 +1,6 @@
 param(
-    [string]$RepositoryRoot = (Split-Path -Parent $PSScriptRoot)
+    [string]$RepositoryRoot = (Split-Path -Parent $PSScriptRoot),
+    [switch]$RefreshCampaignSearch
 )
 
 $ErrorActionPreference = 'Stop'
@@ -145,10 +146,14 @@ $elvishPayload = [ordered]@{
 }
 Write-CompactJson -Value $elvishPayload -Path (Join-Path $dataDirectory 'elvish.json')
 
-$campaignSearchSource = Join-Path $RepositoryRoot 'sitemap-keyword-urls.json'
-$campaignSearchDestination = Join-Path $dataDirectory 'campaign-search.json'
-Copy-Item -LiteralPath $campaignSearchSource -Destination $campaignSearchDestination -Force
-[void](Read-Json -Path $campaignSearchDestination)
+$campaignSearchDestination = Join-Path $PSScriptRoot 'campaign-search.json'
+if ($RefreshCampaignSearch) {
+    & (Join-Path $PSScriptRoot 'refresh-campaign-search.ps1') -OutputPath $campaignSearchDestination
+}
+$campaignSearch = Read-Json -Path $campaignSearchDestination
+if ([int]$campaignSearch.schemaVersion -ne 2 -or @($campaignSearch.pages).Count -eq 0) {
+    throw 'The PWA campaign search index is missing full-text page data. Run pwa\refresh-campaign-search.ps1.'
+}
 
 Add-Type -AssemblyName System.Drawing
 $dragonPath = Join-Path $RepositoryRoot 'Assets\dragon-dim.png'

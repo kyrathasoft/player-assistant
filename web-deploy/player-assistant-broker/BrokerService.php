@@ -2,22 +2,11 @@
 
 declare(strict_types=1);
 
-final class BrokerHttpException extends RuntimeException
-{
-    public function __construct(
-        public readonly int $status,
-        public readonly string $errorName,
-        string $publicMessage,
-        ?Throwable $previous = null)
-    {
-        parent::__construct($publicMessage, 0, $previous);
-    }
-}
-
 final class BrokerService
 {
     private PDO $database;
     private array $apiConfig;
+    private CharacterAuthService $characterAuth;
 
     public function __construct(
         private readonly array $config,
@@ -37,6 +26,9 @@ final class BrokerService
         $this->database->exec('PRAGMA foreign_keys = ON');
         $this->database->exec('PRAGMA busy_timeout = 5000');
         $this->ensureSchema();
+        $this->characterAuth = new CharacterAuthService(
+            $this->database,
+            is_array($config['auth'] ?? null) ? $config['auth'] : []);
     }
 
     public function dispatch(
@@ -45,17 +37,73 @@ final class BrokerService
         array $query,
         array $body,
         array $headers,
-        string $remoteAddress): array
+        string $remoteAddress,
+        array &$session,
+        ?callable $regenerateSession = null,
+        ?callable $destroySession = null): array
     {
         if ($method === 'GET' && $route === '/v1/health') {
             return $this->response(200, [
                 'service' => 'player-assistant-broker',
-                'schema_version' => 1,
+                'schema_version' => 2,
                 'status' => 'ok',
                 'rpol_credentials_configured' => $this->rpolCredentialsConfigured(),
                 'snapshot_signing_configured' => $this->snapshotSigningConfigured(),
                 'snapshot_count' => $this->snapshotCount(),
+                'character_account_count' => $this->characterAuth->accountCount(),
             ]);
+        }
+
+        if ($method === 'POST' && $route === '/v1/login') {
+            return $this->response(
+                200,
+                $this->characterAuth->login(
+                    $body,
+                    $remoteAddress,
+                    (string)($headers['origin'] ?? ''),
+                    $session,
+                    $regenerateSession));
+        }
+
+        if ($method === 'GET' && $route === '/v1/session') {
+            return $this->response(200, $this->characterAuth->currentSession($session));
+        }
+
+        if ($method === 'GET' && $route === '/v1/me') {
+            return $this->response(200, $this->characterAuth->requireCurrentAccount($session));
+        }
+
+        if ($method === 'POST' && $route === '/v1/logout') {
+            return $this->response(
+                200,
+                $this->characterAuth->logout(
+                    $headers,
+                    $remoteAddress,
+                    $session,
+                    $destroySession));
+        }
+
+        if ($route === '/v1/admin/character-accounts/import' && $method === 'POST') {
+            $this->requireAdminKey($headers);
+            return $this->response(200, $this->characterAuth->importLegacyAccounts($body));
+        }
+
+        if ($route === '/v1/admin/character-accounts' && $method === 'GET') {
+            $this->requireAdminKey($headers);
+            return $this->response(200, ['accounts' => $this->characterAuth->listAccounts()]);
+        }
+
+        if ($route === '/v1/admin/character-accounts' && $method === 'POST') {
+            $this->requireAdminKey($headers);
+            return $this->response(201, $this->characterAuth->createAccount($body));
+        }
+
+        if ($method === 'PATCH'
+            && preg_match('#^/v1/admin/character-accounts/([a-f0-9]{32})$#', $route, $matches) === 1) {
+            $this->requireAdminKey($headers);
+            return $this->response(
+                200,
+                $this->characterAuth->updateAccount($matches[1], $body));
         }
 
         if ($method === 'POST' && $route === '/v1/tokens') {

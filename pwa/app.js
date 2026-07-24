@@ -3,6 +3,7 @@
 
     const APP_NAME = 'Player Assistant';
     const APP_VERSION = '0.9.5';
+    const AUTH_API_ROOT = '/scarlethorizons/api/v1';
     const MAX_SEARCH_RESULTS = 40;
     const MAX_TRANSLATOR_WORDS = 5000;
     const textEncoder = new TextEncoder();
@@ -18,6 +19,8 @@
     let translatorDebounce = 0;
     let campaignSearchIndex = null;
     let campaignSearchLoading = null;
+    let authenticatedAccount = null;
+    let authenticationCsrfToken = '';
 
     const worker = typeof Worker !== 'undefined'
         ? new Worker('translator-worker.js')
@@ -78,6 +81,168 @@
     window.addEventListener('online', updateConnectionStatus);
     window.addEventListener('offline', updateConnectionStatus);
     updateConnectionStatus();
+
+    const authButton = byId('auth-button');
+    const authDialog = byId('auth-dialog');
+    const authLoginForm = byId('auth-login-form');
+    const authAccountPanel = byId('auth-account-panel');
+
+    const setAuthenticationMessage = (message, isError = false, accountPanel = false) => {
+        const element = byId(accountPanel ? 'auth-account-message' : 'auth-message');
+        if (element) {
+            element.textContent = message;
+            element.classList.toggle('is-error', isError);
+        }
+    };
+
+    const updateAuthenticationUi = () => {
+        const authenticated = authenticatedAccount !== null;
+        const buttonLabel = byId('auth-button-label');
+        if (buttonLabel) {
+            buttonLabel.textContent = authenticated
+                ? authenticatedAccount.character_name
+                : 'Log in';
+        }
+        authButton?.classList.toggle('is-authenticated', authenticated);
+        if (authLoginForm instanceof HTMLFormElement) authLoginForm.hidden = authenticated;
+        if (authAccountPanel) authAccountPanel.hidden = !authenticated;
+        const accountName = byId('auth-account-name');
+        const accountRole = byId('auth-account-role');
+        if (accountName) accountName.textContent = authenticatedAccount?.character_name || '';
+        if (accountRole) {
+            accountRole.textContent = authenticatedAccount?.role === 'dm'
+                ? 'Dungeon Master'
+                : 'Player';
+        }
+        const protectedStatus = byId('protected-player-status');
+        if (protectedStatus) {
+            protectedStatus.textContent = authenticated
+                ? `Signed in as ${authenticatedAccount.character_name}. Protected requests are authorized from this server session.`
+                : 'Log in with your character name and password. The server determines which character record the session may access; passwords and private records are never embedded in this browser application.';
+        }
+    };
+
+    const requestAuthenticationApi = async (path, options = {}) => {
+        const method = options.method || 'GET';
+        const headers = new Headers({ Accept: 'application/json' });
+        if (options.body !== undefined) headers.set('Content-Type', 'application/json');
+        if (options.csrf === true && authenticationCsrfToken) {
+            headers.set('X-CSRF-Token', authenticationCsrfToken);
+        }
+        let response;
+        try {
+            response = await fetch(`${AUTH_API_ROOT}${path}`, {
+                method,
+                headers,
+                body: options.body === undefined ? undefined : JSON.stringify(options.body),
+                credentials: 'same-origin',
+                cache: 'no-store',
+                redirect: 'error'
+            });
+        } catch {
+            throw new Error('The character login service is unavailable.');
+        }
+        let payload = {};
+        try {
+            payload = await response.json();
+        } catch {
+            throw new Error('The character login service returned an invalid response.');
+        }
+        if (!response.ok) {
+            throw new Error(payload.message || 'The character login request failed.');
+        }
+        return payload;
+    };
+
+    const restoreAuthentication = async () => {
+        try {
+            const session = await requestAuthenticationApi('/session');
+            authenticatedAccount = session.authenticated ? session.account : null;
+            authenticationCsrfToken = session.authenticated ? String(session.csrf_token || '') : '';
+        } catch {
+            authenticatedAccount = null;
+            authenticationCsrfToken = '';
+        }
+        updateAuthenticationUi();
+    };
+
+    authButton?.addEventListener('click', () => {
+        setAuthenticationMessage('');
+        setAuthenticationMessage('', false, true);
+        if (authDialog instanceof HTMLDialogElement) {
+            authDialog.showModal();
+            if (!authenticatedAccount) byId('auth-character-name')?.focus();
+        }
+    });
+
+    byId('auth-dialog-close')?.addEventListener('click', () => {
+        if (authDialog instanceof HTMLDialogElement) authDialog.close();
+    });
+
+    authLoginForm?.addEventListener('submit', async (event) => {
+        event.preventDefault();
+        const characterName = byId('auth-character-name');
+        const password = byId('auth-password');
+        const submit = byId('auth-submit');
+        if (!(characterName instanceof HTMLInputElement)
+            || !(password instanceof HTMLInputElement)
+            || !(submit instanceof HTMLButtonElement)) {
+            return;
+        }
+
+        submit.disabled = true;
+        setAuthenticationMessage('Signing in…');
+        try {
+            const session = await requestAuthenticationApi('/login', {
+                method: 'POST',
+                body: {
+                    character_name: characterName.value,
+                    password: password.value
+                }
+            });
+            authenticationCsrfToken = String(session.csrf_token || '');
+            authenticatedAccount = session.account;
+            try {
+                const identity = await requestAuthenticationApi('/me');
+                authenticatedAccount = identity.account || authenticatedAccount;
+            } catch {
+                // The login response is already bound to the same server session.
+            }
+            authLoginForm.reset();
+            setAuthenticationMessage('');
+            setAuthenticationMessage('Character login succeeded.', false, true);
+            updateAuthenticationUi();
+        } catch (error) {
+            authenticatedAccount = null;
+            authenticationCsrfToken = '';
+            setAuthenticationMessage(error.message, true);
+            updateAuthenticationUi();
+        } finally {
+            password.value = '';
+            submit.disabled = false;
+        }
+    });
+
+    byId('auth-logout')?.addEventListener('click', async () => {
+        const logoutButton = byId('auth-logout');
+        if (!(logoutButton instanceof HTMLButtonElement)) return;
+        logoutButton.disabled = true;
+        setAuthenticationMessage('Signing out…', false, true);
+        try {
+            await requestAuthenticationApi('/logout', { method: 'POST', csrf: true });
+            authenticatedAccount = null;
+            authenticationCsrfToken = '';
+            updateAuthenticationUi();
+            if (authDialog instanceof HTMLDialogElement) authDialog.close();
+        } catch (error) {
+            setAuthenticationMessage(error.message, true, true);
+        } finally {
+            logoutButton.disabled = false;
+        }
+    });
+
+    updateAuthenticationUi();
+    restoreAuthentication();
 
     const isStandalone = () => window.matchMedia('(display-mode: standalone)').matches
         || window.navigator.standalone === true;
@@ -332,15 +497,27 @@
             return campaignSearchLoading;
         }
 
-        campaignSearchLoading = fetch('data/campaign-search.json')
+        campaignSearchLoading = fetch('campaign-search.json')
             .then((response) => {
                 if (!response.ok) throw new Error(`Search data returned ${response.status}.`);
                 return response.json();
             })
             .then((data) => {
-                campaignSearchIndex = Object.entries(data)
-                    .map(([title, url]) => ({ title, url: String(url) }))
-                    .filter((entry) => /^https:\/\//i.test(entry.url));
+                const sourceEntries = Array.isArray(data.pages)
+                    ? data.pages
+                    : Object.entries(data).map(([title, url]) => ({ title, url, content: '' }));
+                campaignSearchIndex = sourceEntries
+                    .map((entry) => ({
+                        title: String(entry.title || ''),
+                        url: String(entry.url || ''),
+                        content: String(entry.content || '')
+                    }))
+                    .filter((entry) => entry.title.length > 0 && /^https:\/\//i.test(entry.url))
+                    .map((entry) => ({
+                        ...entry,
+                        normalizedTitle: normalizeSearchText(entry.title),
+                        normalizedContent: normalizeSearchText(entry.content)
+                    }));
                 return campaignSearchIndex;
             })
             .catch((error) => {
@@ -351,6 +528,55 @@
         return campaignSearchLoading;
     }
 
+    const normalizeSearchText = (value) => String(value || '')
+        .normalize('NFKC')
+        .replaceAll('’', "'")
+        .toLocaleLowerCase('en-US')
+        .replace(/[^\p{L}\p{N}'-]+/gu, ' ')
+        .replace(/\s+/gu, ' ')
+        .trim();
+
+    const normalizeSearchQuery = (value) => String(value || '')
+        .normalize('NFKC')
+        .replaceAll('’', "'")
+        .toLocaleLowerCase('en-US')
+        .replace(/[^\p{L}\p{N}'*-]+/gu, ' ')
+        .replace(/\s+/gu, ' ')
+        .trim();
+
+    const searchWordCharacters = "\\p{L}\\p{N}'’-";
+    const escapeRegularExpression = (value) => value.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&');
+
+    const createSearchExpression = (term) => {
+        const leadingWildcard = term.startsWith('*');
+        const trailingWildcard = term.endsWith('*');
+        const core = term
+            .split('*')
+            .map(escapeRegularExpression)
+            .join(`[${searchWordCharacters}]*`);
+        if (!core) return null;
+        const prefix = leadingWildcard ? '' : `(^|[^${searchWordCharacters}])`;
+        const suffix = trailingWildcard ? '' : `(?=$|[^${searchWordCharacters}])`;
+        return new RegExp(`${prefix}${core}${suffix}`, 'iu');
+    };
+
+    const matchesSearchTerm = (text, term) => createSearchExpression(term)?.test(text) === true;
+
+    const buildSearchSnippet = (entry, queryTerms) => {
+        if (!entry.content) return 'Title match';
+        const lowerContent = entry.content.toLocaleLowerCase('en-US');
+        const matchIndex = queryTerms
+            .map((term) => lowerContent.indexOf(term.replaceAll('*', '')))
+            .filter((index) => index >= 0)
+            .sort((left, right) => left - right)[0] ?? 0;
+        const visibleQueryLength = Math.max(1, ...queryTerms.map((term) => term.replaceAll('*', '').length));
+        const start = Math.max(0, matchIndex - 70);
+        const end = Math.min(entry.content.length, matchIndex + visibleQueryLength + 110);
+        const prefix = start > 0 ? '…' : '';
+        const suffix = end < entry.content.length ? '…' : '';
+        return `${prefix}${entry.content.slice(start, end).trim()}${suffix}`;
+    };
+
     const renderSearchResults = async () => {
         const searchInput = byId('campaign-search');
         const results = byId('search-results');
@@ -358,17 +584,30 @@
             return;
         }
 
-        const query = searchInput.value.trim().toLocaleLowerCase();
+        const query = searchInput.value.trim();
+        const normalizedQuery = normalizeSearchQuery(query);
         results.replaceChildren();
-        if (query.length < 2) {
+        if (normalizedQuery.length < 2) {
             return;
         }
 
+        const queryTerms = [...new Set(normalizedQuery.split(' ').filter(Boolean))];
+        const literalQuery = normalizedQuery.replaceAll('*', '').replace(/\s+/gu, ' ').trim();
+        const hasWildcards = normalizedQuery.includes('*');
         const entries = await loadCampaignSearch();
         const matches = entries
             .map((entry) => {
-                const normalized = entry.title.toLocaleLowerCase();
-                const score = normalized === query ? 0 : normalized.startsWith(query) ? 1 : normalized.includes(query) ? 2 : 99;
+                const title = entry.normalizedTitle;
+                const content = entry.normalizedContent;
+                const combined = `${title} ${content}`;
+                const titleMatchesAll = queryTerms.every((term) => matchesSearchTerm(title, term));
+                const allTermsMatch = queryTerms.every((term) => matchesSearchTerm(combined, term));
+                const score = !hasWildcards && title === literalQuery ? 0
+                    : matchesSearchTerm(title, normalizedQuery) ? 10
+                    : titleMatchesAll ? 20
+                    : matchesSearchTerm(content, normalizedQuery) ? 30
+                    : allTermsMatch ? 40
+                    : 99;
                 return { ...entry, score };
             })
             .filter((entry) => entry.score < 99)
@@ -392,9 +631,12 @@
             link.rel = 'noopener noreferrer';
             const title = document.createElement('strong');
             title.textContent = entry.title;
+            const snippet = document.createElement('span');
+            snippet.className = 'search-result-snippet';
+            snippet.textContent = buildSearchSnippet(entry, queryTerms);
             const hint = document.createElement('small');
             hint.textContent = 'Open ↗';
-            link.append(title, hint);
+            link.append(title, snippet, hint);
             fragment.append(link);
         });
         results.append(fragment);

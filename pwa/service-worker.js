@@ -1,6 +1,6 @@
 'use strict';
 
-const CACHE_VERSION = 'player-assistant-pwa-0.9.5-v1';
+const CACHE_VERSION = 'player-assistant-pwa-0.9.5-v7';
 const SHELL_CACHE = `${CACHE_VERSION}-shell`;
 const DATA_CACHE = `${CACHE_VERSION}-data`;
 const SHELL_ASSETS = [
@@ -19,7 +19,8 @@ const SHELL_ASSETS = [
 self.addEventListener('install', (event) => {
     event.waitUntil(
         caches.open(SHELL_CACHE)
-            .then((cache) => cache.addAll(SHELL_ASSETS))
+            .then((cache) => cache.addAll(
+                SHELL_ASSETS.map((asset) => new Request(asset, { cache: 'reload' }))))
             .then(() => self.skipWaiting())
     );
 });
@@ -59,13 +60,14 @@ self.addEventListener('fetch', (event) => {
     if (request.method !== 'GET') return;
     const url = new URL(request.url);
     if (url.origin !== self.location.origin) return;
+    if (url.pathname.startsWith('/scarlethorizons/api/')) return;
 
     if (request.mode === 'navigate') {
         event.respondWith(networkFirstNavigation(request));
         return;
     }
 
-    if (url.pathname.includes('/data/')) {
+    if (url.pathname.includes('/data/') || url.pathname.endsWith('/campaign-search.json')) {
         event.respondWith(cacheFirst(request, DATA_CACHE));
         return;
     }

@@ -1,6 +1,29 @@
 # PC Login Dashboard on Programmer's Website
 
-Status: proposed and unimplemented.
+Status: character authentication implemented; player-specific private dashboard data remains a separate feature.
+
+## Implemented authentication
+
+- PWA character-name/password dialog, session restoration, authenticated identity display, and explicit logout.
+- `POST /v1/login`, `GET /v1/session`, protected `GET /v1/me`, and CSRF-protected `POST /v1/logout`.
+- Private SQLite character accounts with random IDs, normalized names, stable character authorization keys, player/DM roles, enabled state, and password timestamps.
+- Existing `xp-password-hashes-v1` PBKDF2-HMAC-SHA256 hashes accepted through an administrator-only import endpoint.
+- Automatic migration to PHP `password_hash()` storage after the first successful legacy-password login.
+- Strict server sessions with `Secure`, `HttpOnly`, `SameSite=Strict`, path-restricted cookies, session-ID regeneration, idle expiry, and absolute expiry.
+- Generic authentication failures, account-and-address throttling, bounded lockout, and redacted authentication auditing.
+- Exact-Origin validation for login/logout, CSRF validation for logout, JSON content-type enforcement, HTTPS/HSTS, no-store responses, and restrictive browser headers.
+- Administrator-only account listing, creation, enable/disable, role/key changes, and password reset endpoints.
+- PWA service-worker exclusion for all authentication API requests; protected responses are never cached for offline use.
+- Focused PHP authentication tests under `web-deploy/tests/character-auth-tests.php`.
+
+## Implemented files
+
+- `web-deploy/player-assistant-broker/BrokerHttpException.php`
+- `web-deploy/player-assistant-broker/CharacterAuthService.php`
+- `web-deploy/player-assistant-broker/BrokerService.php`
+- `web-deploy/bryanmiller.us/scarlethorizons/api/index.php`
+- `web-deploy/import-character-accounts.ps1`
+- `pwa/index.html`, `pwa/app.js`, `pwa/styles.css`, and `pwa/service-worker.js`
 
 ## Goal
 
@@ -8,19 +31,17 @@ Create a PHP application on the programmer's website where a player can sign in 
 
 The website must fetch the offsite data on the server. A player's browser must not receive the offsite URL, upstream credentials, unfiltered records, or records belonging to another player.
 
-## Decisions still required
+## Future protected-data decisions
 
-- Confirm the web host's supported PHP version and extensions.
-- Confirm whether MySQL or another server-side database is available.
 - Identify the exact offsite HTTPS URL and its response format: JSON, HTML, XML, or another format.
 - Identify how the offsite service authenticates the website, if authentication is required.
 - Define the stable key that maps each website account to its permitted player-character record or records.
-- Decide whether accounts are created only by the Dungeon Master or whether self-registration is required. Administrator-created accounts are the safer initial scope.
+- Accounts are administrator-created; self-registration is intentionally excluded.
 - Decide what dashboard fields each player may see and whether the Dungeon Master receives a broader view.
 - Define acceptable cache age and behavior when the offsite service is unavailable.
 - Decide whether password reset is administrator-assisted or email-based. Do not implement security questions.
 
-## Proposed architecture
+## Protected dashboard architecture
 
 Keep this feature in a separate web application directory rather than adding authentication concerns to `web-translator`.
 

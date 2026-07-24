@@ -170,6 +170,7 @@ a {
 }
 
 .install-button,
+.account-button,
 .primary-button,
 .secondary-button {
     min-height: 2.75rem;
@@ -178,6 +179,28 @@ a {
     padding: 0.7rem 1rem;
     font-weight: 800;
     cursor: pointer;
+}
+
+.account-button {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+    max-width: 13rem;
+    background: var(--surface-soft);
+    border-color: var(--line-strong);
+    color: var(--ink);
+}
+
+.account-button:hover,
+.account-button.is-authenticated {
+    border-color: var(--gold);
+    color: var(--gold-bright);
+}
+
+.account-button span:last-child {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 .install-button,
@@ -694,6 +717,17 @@ textarea[readonly] {
     color: var(--muted);
 }
 
+.search-result-snippet {
+    color: var(--muted);
+    display: -webkit-box;
+    font-size: 0.88rem;
+    grid-column: 1;
+    line-height: 1.45;
+    overflow: hidden;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+}
+
 .empty-state {
     border: 1px dashed var(--line-strong);
     border-radius: 0.7rem;
@@ -880,6 +914,84 @@ dialog form {
     cursor: pointer;
 }
 
+.auth-dialog-surface {
+    position: relative;
+    padding: 1.5rem;
+}
+
+.auth-dialog-surface h2 {
+    margin: 0.2rem 0 0.6rem;
+}
+
+.auth-dialog-surface p {
+    color: var(--muted);
+}
+
+.auth-dialog-surface .auth-login-form {
+    display: grid;
+    gap: 1rem;
+    padding: 0;
+}
+
+.auth-login-form label {
+    display: grid;
+    gap: 0.4rem;
+    color: var(--quiet);
+    font-size: 0.82rem;
+    font-weight: 800;
+}
+
+.auth-login-form input {
+    width: 100%;
+    min-height: 3rem;
+    border: 1px solid var(--line-strong);
+    border-radius: 0.55rem;
+    padding: 0.75rem 0.85rem;
+    background: #15110f;
+    color: var(--ink);
+}
+
+.auth-login-form input:focus {
+    outline: 3px solid var(--gold-bright);
+    outline-offset: 2px;
+}
+
+.auth-message {
+    min-height: 1.4rem;
+    margin: 0;
+}
+
+.auth-message.is-error {
+    color: #ff9e8f;
+}
+
+.auth-account-panel dl {
+    display: grid;
+    gap: 0.6rem;
+    margin: 1rem 0;
+}
+
+.auth-account-panel dl div {
+    display: grid;
+    grid-template-columns: 6rem 1fr;
+    gap: 0.7rem;
+}
+
+.auth-account-panel dt {
+    color: var(--quiet);
+    font-weight: 800;
+}
+
+.auth-account-panel dd {
+    margin: 0;
+    color: var(--ink);
+}
+
+button:disabled {
+    cursor: wait;
+    opacity: 0.65;
+}
+
 #install-help-content {
     margin: 1rem 0 1.25rem;
     color: var(--muted);
@@ -950,6 +1062,13 @@ dialog form {
         font-size: 0.82rem;
     }
 
+    .account-button {
+        max-width: 9rem;
+        min-height: 2.5rem;
+        padding: 0.55rem 0.7rem;
+        font-size: 0.82rem;
+    }
+
     .card-grid,
     .portal-grid,
     .dice-layout {
@@ -999,6 +1118,10 @@ dialog form {
 
     .install-button span {
         display: none;
+    }
+
+    .account-button {
+        max-width: 7rem;
     }
 
     .nav-item {

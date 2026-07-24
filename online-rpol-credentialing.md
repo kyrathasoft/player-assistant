@@ -21,6 +21,7 @@ The desktop app must never receive the RPOL administrator username, password, co
 - Verified all PHP files with PHP 8.4 syntax linting.
 - Verified the SQLite schema and reset it to zero token, audit, and rate-limit rows after local smoke testing.
 - Verified local health-route and bearer-token issuance smoke tests.
+- Added character-name/password authentication to the same private PHP/SQLite broker, including strict cookie sessions, CSRF-protected logout, legacy XP-hash migration, account/IP throttling, administrator account management, and server-derived character authorization.
 - Verified the live health endpoint returns HTTP 200:
 
 ```text
@@ -59,6 +60,8 @@ Private files:
 
 ```text
 C:\repos\player-assistant\web-deploy\player-assistant-broker\config.php
+C:\repos\player-assistant\web-deploy\player-assistant-broker\BrokerHttpException.php
+C:\repos\player-assistant\web-deploy\player-assistant-broker\CharacterAuthService.php
 C:\repos\player-assistant\web-deploy\player-assistant-broker\RpolClient.php
 C:\repos\player-assistant\web-deploy\player-assistant-broker\BrokerService.php
 C:\repos\player-assistant\web-deploy\player-assistant-broker\broker.sqlite
@@ -77,6 +80,8 @@ C:\repos\player-assistant\web-deploy\player-assistant-broker\broker.sqlite
 |           `-- .htaccess
 `-- player-assistant-broker/
     |-- config.php
+    |-- BrokerHttpException.php
+    |-- CharacterAuthService.php
     |-- RpolClient.php
     |-- BrokerService.php
     `-- broker.sqlite
@@ -102,6 +107,10 @@ Only the two files under `/scarlethorizons/api/` are web-accessible. The private
 - Audit records that retain only token ID, time, remote address, target path, and outcome.
 - Generic client-facing upstream errors without RPOL credentials or session details.
 - RPOL content returned as base64 inside bounded JSON to preserve the original response bytes.
+- Character passwords validated only by the private broker; existing PBKDF2 hashes are upgraded to PHP-native hashes after successful login.
+- Path-restricted `Secure`, `HttpOnly`, `SameSite=Strict` sessions with ID regeneration, idle/absolute expiry, and administrative session revocation.
+- Exact-Origin login/logout enforcement, CSRF-protected logout, generic failures, per-account/per-address throttling, and redacted authentication audits.
+- Server-side character keys and roles loaded from the authenticated account on every protected request.
 
 ## Current Blocker
 
