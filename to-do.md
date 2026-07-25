@@ -1,12 +1,14 @@
-- [ ] Review potentially anachronistic English terms in the Orcish lexicon.
+- [x] Review potentially anachronistic English terms in the Orcish lexicon.
   - Approval only: do not purge an existing entry until the user selects it.
   - Approved retention applied: `battery` remains as a verb.
   - Approved removal applied: the noun sense of `battery`, `battery's`, `college`, `college's`, and `colleges`.
   - Approved removal applied: `academic`, `academic's`, and `academics`.
   - Approved retention applied: `biological`, `biology`, and `biology's`.
   - Approved removal applied: `chemical`, `chemical's`, `chemically`, `chemicals`, `chemistry`, and `chemistry's`; Orcish culture uses magic or alchemy instead.
-  - Current focused shortlist: `codex-scratch\lexicon-anachronism-purge-candidates.txt` (`31` families, `96` exact English entries).
-  - Broad audit with categories, triggers, Orcish forms, and tags: `codex-scratch\lexicon-anachronism-review.tsv` (`135` exact English entries, including medieval-compatible terms intentionally excluded from the focused shortlist).
+  - Approved removal applied: dictionary, editor, engine, evolution, footnote, geological, gravity-based science-fiction, hypothesis, motor, oxygen, photograph, plastic, psychology, radiation, radio, railroad, railway, science, statistics, telegraph, telephone, and telescope families (`86` exact English forms including dependent derivatives).
+  - Approved retention applied: essay, frequency, journal, laboratory, lecture, professor, publication, and research remain available; `film`, `film's`, and `films` remain only as nouns meaning a smear or layer, while `filmed` and `filming` were removed.
+  - Current focused shortlist: `codex-scratch\lexicon-anachronism-purge-candidates.txt` (`0` families, `0` exact English entries).
+  - Broad audit with categories, triggers, Orcish forms, and tags: `codex-scratch\lexicon-anachronism-review.tsv` (`65` exact English entries, including medieval-compatible terms intentionally excluded from the focused shortlist).
   - After approved removals, update family batch counts and the unique-English count regression, rebuild the app and `to-orcish` in Release, run focused absence and quality tests, refresh both audit files, and update graphify.
 
 - [x] Resume Orcish invalid retranslation review.

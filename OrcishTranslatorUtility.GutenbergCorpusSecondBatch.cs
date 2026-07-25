@@ -55,7 +55,6 @@ entreated
 excursion
 executive
 fan
-footnote
 forgiven
 forsake
 forty-five
@@ -104,7 +103,6 @@ pebbles
 pencil
 perfume
 perspiration
-photograph
 pier
 pilgrims
 planets
@@ -135,7 +133,6 @@ sundry
 surf
 taylor
 telegram
-telescope
 tenants
 tested
 testified
@@ -259,10 +256,6 @@ executive's|executive
 executives|executive
 fan's|fan
 fans|fan
-footnote's|footnote
-footnoted|footnote
-footnotes|footnote
-footnoting|footnote
 forsakes|forsake
 forsaking|forsake
 frailer|frail
@@ -364,11 +357,6 @@ perfumers|perfume
 perfumes|perfume
 perfuming|perfume
 perspiration's|perspiration
-photograph's|photograph
-photographed|photograph
-photographer|photograph
-photographers|photograph
-photographing|photograph
 pier's|pier
 pilgrim|pilgrims
 pilgrim's|pilgrims
@@ -433,10 +421,6 @@ surfs|surf
 taylor's|taylor
 telegram's|telegram
 telegrams|telegram
-telescope's|telescope
-telescoped|telescope
-telescopes|telescope
-telescoping|telescope
 tenant|tenants
 tenant's|tenants
 tenanted|tenants

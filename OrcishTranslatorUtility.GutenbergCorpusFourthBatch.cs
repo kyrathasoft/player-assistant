@@ -327,7 +327,6 @@ deuce
 devilish
 diabolical
 diction
-dictionary
 diffused
 dilemma
 dingy
@@ -365,7 +364,6 @@ ecclesiastics
 eclipse
 ecstasy
 eddies
-editors
 educational
 elastic
 elbows
@@ -558,7 +556,6 @@ humane
 humph
 hunter's
 husky
-hypothesis
 hysterical
 idly
 idolatry
@@ -798,7 +795,6 @@ overcoat
 overflowing
 overhung
 overjoyed
-oxygen
 oyster
 oysters
 pagan
@@ -912,7 +908,6 @@ prosecute
 prosecuted
 prosecution
 prow
-psychology
 publications
 publish
 publishing
@@ -1008,8 +1003,6 @@ scant
 scarcity
 scarf
 schoolmaster
-scientist
-scientists
 scolded
 scrape
 scraped
@@ -1837,8 +1830,6 @@ devilishly|devilish
 devilishness|devilish
 diabolically|diabolical
 diction's|diction
-dictionaries|dictionary
-dictionary's|dictionary
 diffuse|diffused
 diffusely|diffused
 diffuseness|diffused
@@ -1922,8 +1913,6 @@ eddied|eddies
 eddy|eddies
 eddy's|eddies
 eddying|eddies
-editor|editors
-editor's|editors
 educationally|educational
 elastic's|elastic
 elastics|elastic
@@ -2633,7 +2622,6 @@ overflows|overflowing
 overjoy|overjoyed
 overjoying|overjoyed
 overjoys|overjoyed
-oxygen's|oxygen
 oyster's|oyster
 pagan's|pagan
 pagans|pagan
@@ -2823,8 +2811,6 @@ prosecution's|prosecution
 prosecutions|prosecute
 prow's|prow
 prows|prow
-psychologies|psychology
-psychology's|psychology
 publication|publications
 publication's|publications
 published|publish
@@ -3019,7 +3005,6 @@ scarfing|scarf
 scarfs|scarf
 schoolmaster's|schoolmaster
 schoolmasters|schoolmaster
-scientist's|scientist
 scold|scolded
 scold's|scolded
 scolding|scolded

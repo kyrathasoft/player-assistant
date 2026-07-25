@@ -217,7 +217,6 @@ mid-swing
 mock
 monastic
 monkeys
-moon-gravity
 moonstone
 mortar
 mournful
@@ -264,7 +263,6 @@ pristine
 professional
 protest
 psionically
-psychological
 pulleys
 pulsating
 punching
@@ -784,7 +782,6 @@ preternaturally|preternatural
 professional's|professional
 professionally|professional
 professionals|professional
-psychologically|psychological
 pulley's|pulleys
 pulley|pulleys
 pulsate|pulsating

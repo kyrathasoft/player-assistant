@@ -1094,6 +1094,7 @@ namespace PlayerAssistant
                 new("australia", "grodhi-khal", PartOfSpeech: "noun", GrammarClass: "place", Tags: ["proper-noun", "exonym", "compound"]),
                 new("ax", "zol-rukh-bant", PartOfSpeech: "noun", GrammarClass: "object", Tags: ["weapon", "blade", "haft", "compound"]),
                 new("baloney", "ik-dakkin", PartOfSpeech: "noun", GrammarClass: "speech", Tags: ["nonsense", "falsehood", "compound"]),
+                new("battery", "gabh-dar", PartOfSpeech: "verb", GrammarClass: "combat", Tags: ["striking", "verb-sense", "noun-sense-removed", "root-derived"]),
                 new("battering", "gabh-dargin", PartOfSpeech: "verb", GrammarClass: "combat", Tags: ["striking", "progressive", "compound"]),
                 new("battles", "giodon-bibnakin", PartOfSpeech: "noun", GrammarClass: "combat", Tags: ["conflict", "plural", "compound"]),
                 new("boobs", "grod-burz-vraki", PartOfSpeech: "noun", GrammarClass: "body", Tags: ["chest", "flesh", "plural", "compound"]),
@@ -2244,6 +2245,9 @@ namespace PlayerAssistant
                 new("fragment", "bib-brak", PartOfSpeech: "noun", GrammarClass: "object", Tags: ["broken", "text", "compound", "ooc"]),
                 new("free resource", "surgar drav", PartOfSpeech: "noun", GrammarClass: "resource", Tags: ["free", "valuable", "fixed-phrase", "ooc"]),
                 new("frequency", "dakur-zorn", PartOfSpeech: "noun", GrammarClass: "time", Tags: ["rate", "count", "compound", "ooc"]),
+                new("film", "krul-agh-narg-mok-gruz-agh-gor-gar", PartOfSpeech: "noun", GrammarClass: "substance", Tags: ["thin", "coating", "smear", "layer", "noun-sense", "verb-sense-removed", "compound", "compound-reviewed", "wiki-fodder", "all-remaining-page-sample", "review-promoted", "close-form-reviewed", "family-film"]),
+                new("film's", "krul-agh-narg-mok-gruz-agh-gor-garuk", PartOfSpeech: "noun", GrammarClass: "substance", Tags: ["thin", "coating", "smear", "layer", "possessive", "noun-sense", "verb-sense-removed", "compound", "compound-reviewed", "wiki-fodder", "all-remaining-page-near-kin", "near-kin", "derived-by-rule", "review-promoted", "close-form-reviewed", "family-film"]),
+                new("films", "krul-agh-narg-mok-gruz-agh-gor-gari", PartOfSpeech: "noun", GrammarClass: "substance", Tags: ["thin", "coating", "smear", "layer", "plural", "noun-sense", "verb-sense-removed", "compound", "compound-reviewed", "wiki-fodder", "all-remaining-page-near-kin", "near-kin", "derived-by-rule", "review-promoted", "close-form-reviewed", "family-film"]),
                 new("gain", "dravu", PartOfSpeech: "verb", GrammarClass: "action", Tags: ["obtain", "infinitive", "ooc"]),
                 new("gaining", "dravin-hrowk", PartOfSpeech: "verb", GrammarClass: "action", Tags: ["obtaining", "progressive", "compound", "ooc"]),
                 new("gold", "zol-ti", PartOfSpeech: "noun", GrammarClass: "material", Tags: ["valuable-metal", "compound", "ooc"]),
@@ -2692,7 +2696,6 @@ namespace PlayerAssistant
                 new("ceiling", "ti-khal-dak", Tags: ["blog"]),
                 new("chisel", "zol-hek-bit", Tags: ["blog"]),
                 new("climb", "ti-lagu-vrak", Tags: ["blog"]),
-                new("engine", "zol-hek-mokh", Tags: ["blog"]),
                 new("archontean", "archon-thoguk", Tags: ["blog"]),
                 new("blood-bond", "pukh-bant-mokh", Tags: ["blog"]),
                 new("cistern", "dak-rukh-gor", Tags: ["blog"]),
@@ -7431,7 +7434,6 @@ pilots
 pips
 pixie
 plaques
-plastic
 plinths
 poke
 pole
@@ -8654,8 +8656,6 @@ pixie's|pixie
 pixies|pixie
 plaque|plaques
 plaque's|plaques
-plastic's|plastic
-plastics|plastic
 plateau's|plateau
 plateaued|plateau
 plateauing|plateau
@@ -12440,7 +12440,6 @@ satisfaction
 satisfied
 savage
 schemes
-sciences
 sculpture
 secretive
 seed
@@ -14247,7 +14246,6 @@ spices
 spins
 standards
 stare
-statistics
 stature
 staving
 steadied
@@ -15305,8 +15303,6 @@ spin|spins
 spin's|spins
 standard's|standards
 stare's|stare
-statistic|statistics
-statistic's|statistics
 stature's|stature
 statures|stature
 stave|staving
@@ -17115,7 +17111,6 @@ fibrous
 fiefdom
 fifteenth
 fifth
-film
 fingernails
 fired
 fireplace
@@ -18333,7 +18328,6 @@ scattered
 scavenged
 scavengers
 scholarship
-scientific
 scion
 scoops
 scorched
@@ -20594,10 +20588,6 @@ fiefdoms|fiefdom
 fifteenth's|fifteenth
 fifth's|fifth
 fifthly|fifth
-film's|film
-filmed|film
-filming|film
-films|film
 fingernail|fingernails
 fingernail's|fingernails
 fireplace's|fireplace
@@ -22376,7 +22366,6 @@ racking|racks
 radiance's|radiance
 radiate|radiates
 radiated|radiates
-radiations|radiates
 rain's|rain
 rained|rain
 raining|rain
