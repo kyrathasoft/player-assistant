@@ -143,6 +143,7 @@ namespace PlayerAssistant
         private int _heroImageShowcaseIndex;
         private bool _currentHeroImageWasVisible;
         private bool _playerCharacterListingUpdateStarted;
+        private bool _initialPlayerCharacterListingRefreshCompleted;
         private bool _heroImageShowcaseCompleted;
         private bool _heroImageIntroStarted;
         private bool _regionalMapActive;
@@ -260,11 +261,6 @@ namespace PlayerAssistant
                 {
                     StartBackgroundTask("hero image showcase startup", StartHeroImageShowcaseAfterDelayAsync);
                 }
-                StartBackgroundTask(
-                    "player character refresh",
-                    cancellationToken => StartPlayerCharacterListingUpdateAsync(
-                        showFailureDialog: false,
-                        cancellationToken));
                 Invalidate();
             };
             _welcomeTimer.Start();
@@ -321,6 +317,11 @@ namespace PlayerAssistant
             UpdateSearchPanelBounds();
             ShowStartupConfigurationWarning();
             InitializeCachedActiveHeroImages();
+            StartBackgroundTask(
+                "player character initial refresh",
+                cancellationToken => StartPlayerCharacterListingUpdateAsync(
+                    showFailureDialog: false,
+                    cancellationToken));
             StartBackgroundTask("regional map preload", PreloadRegionalMapImageAsync);
             await Task.Yield();
             StartBackgroundTask(
@@ -331,12 +332,6 @@ namespace PlayerAssistant
                     {
                         StartKeywordIndexCrawler();
                     }
-
-                    StartBackgroundTask(
-                        "player character refresh",
-                        playerCharacterCancellationToken => StartPlayerCharacterListingUpdateAsync(
-                            showFailureDialog: false,
-                            playerCharacterCancellationToken));
                 });
         }
 
@@ -5488,7 +5483,8 @@ namespace PlayerAssistant
                 return;
             }
 
-            if (_showWelcomeText
+            if (!_initialPlayerCharacterListingRefreshCompleted
+                || _showWelcomeText
                 || _showHeroIntroText
                 || _regionalMapActive
                 || _heroImageIntroStarted
@@ -5509,7 +5505,8 @@ namespace PlayerAssistant
                 return;
             }
 
-            if (_regionalMapActive
+            if (!_initialPlayerCharacterListingRefreshCompleted
+                || _regionalMapActive
                 || _activePlayerCharacterImagePaths.Length == 0
                 || _heroImageShowcaseStarted
                 || _heroImageShowcaseCompleted)
@@ -5538,7 +5535,8 @@ namespace PlayerAssistant
                 return;
             }
 
-            if (_showWelcomeText
+            if (!_initialPlayerCharacterListingRefreshCompleted
+                || _showWelcomeText
                 || _showHeroIntroText
                 || _regionalMapActive
                 || _heroImageIntroStarted
@@ -5638,11 +5636,9 @@ namespace PlayerAssistant
             CancellationToken cancellationToken = default)
         {
             if (_playerCharacterListingUpdateStarted
-                || _showWelcomeText
                 || _showHeroIntroText
                 || _regionalMapActive
-                || _heroImageShowcaseStarted
-                || ShouldDelayPlayerCharacterRefreshForHeroShowcase())
+                || _heroImageShowcaseStarted)
             {
                 return;
             }
@@ -5655,14 +5651,12 @@ namespace PlayerAssistant
             finally
             {
                 _playerCharacterListingUpdateStarted = false;
+                _initialPlayerCharacterListingRefreshCompleted = true;
+                if (!IsDisposed)
+                {
+                    StartHeroImageShowcaseIfReady();
+                }
             }
-        }
-
-        private bool ShouldDelayPlayerCharacterRefreshForHeroShowcase()
-        {
-            return !_suppressHeroImagesForThisRun
-                && _activePlayerCharacterImagePaths.Length > 0
-                && !_heroImageShowcaseCompleted;
         }
 
         private void UpdateHeroImageShowcase()

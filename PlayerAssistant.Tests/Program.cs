@@ -198,7 +198,7 @@ var tests = new (string Name, Action Test)[]
     ("active hero markdown cancellation writes no files", ActiveHeroMarkdownCancellationWritesNoFiles),
     ("former hero markdown cancellation writes no inactive files", FormerHeroMarkdownCancellationWritesNoInactiveFiles),
     ("player character refresh cancellation clears in progress flag", PlayerCharacterRefreshCancellationClearsInProgressFlag),
-    ("player character refresh is not delayed when hero images are suppressed", PlayerCharacterRefreshIsNotDelayedWhenHeroImagesAreSuppressed),
+    ("hero image showcase waits for initial player character refresh", HeroImageShowcaseWaitsForInitialPlayerCharacterRefresh),
     ("game forum startup cancellation writes no manifests", GameForumStartupCancellationWritesNoManifests),
     ("keyword index loader quarantines malformed json", KeywordIndexLoaderQuarantinesMalformedJson),
     ("keyword index loader salvages legacy disallowed urls", KeywordIndexLoaderSalvagesLegacyDisallowedUrls),
@@ -4662,23 +4662,24 @@ static void PlayerCharacterRefreshCancellationClearsInProgressFlag()
     });
 }
 
-static void PlayerCharacterRefreshIsNotDelayedWhenHeroImagesAreSuppressed()
+static void HeroImageShowcaseWaitsForInitialPlayerCharacterRefresh()
 {
     RunOnStaThread(() =>
     {
-        using var suppressedForm = new Form1(suppressHeroImagesForThisRun: true);
-        SetPrivateField(suppressedForm, "_activePlayerCharacterImagePaths", new[] { "cached-hero.webp" });
-        SetPrivateField(suppressedForm, "_heroImageShowcaseCompleted", false);
-        AssertFalse(
-            (bool)(InvokePrivateMethod(suppressedForm, "ShouldDelayPlayerCharacterRefreshForHeroShowcase") ?? true),
-            "suppressed hero images should not delay player-character markdown refresh");
+        using var form = new Form1(suppressHeroImagesForThisRun: false);
+        SetPrivateField(form, "_showWelcomeText", false);
+        SetPrivateField(form, "_activePlayerCharacterImagePaths", new[] { "cached-nerissa-token.webp" });
 
-        using var normalForm = new Form1(suppressHeroImagesForThisRun: false);
-        SetPrivateField(normalForm, "_activePlayerCharacterImagePaths", new[] { "cached-hero.webp" });
-        SetPrivateField(normalForm, "_heroImageShowcaseCompleted", false);
+        InvokePrivateMethod(form, "StartHeroImageShowcaseIfReady");
+        AssertFalse(
+            (bool)(GetPrivateField(form, "_heroImageIntroStarted") ?? true),
+            "cached hero images should not start before the active listing has been refreshed");
+
+        SetPrivateField(form, "_initialPlayerCharacterListingRefreshCompleted", true);
+        InvokePrivateMethod(form, "StartHeroImageShowcaseIfReady");
         AssertTrue(
-            (bool)(InvokePrivateMethod(normalForm, "ShouldDelayPlayerCharacterRefreshForHeroShowcase") ?? false),
-            "normal hero image startup should still wait for the showcase before refreshing player characters");
+            (bool)(GetPrivateField(form, "_heroImageIntroStarted") ?? false),
+            "the showcase should become eligible after the active listing refresh completes");
     });
 }
 
