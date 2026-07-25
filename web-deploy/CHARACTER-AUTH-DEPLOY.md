@@ -42,7 +42,7 @@ Merge the `auth` section from `player-assistant-broker/config.auth.example.php` 
 https://bryanmiller.us
 ```
 
-Merge the `xp` section from `player-assistant-broker/config.xp.example.php` into the same private `config.php`. Keep the XP source URL in this private configuration; never place it in PWA JavaScript or accept it from a browser request.
+Merge the `xp` section from `player-assistant-broker/config.xp.example.php` into the same private `config.php`. Keep the XP and active-character source URLs in this private configuration; never place them in PWA JavaScript or accept them from a browser request. When `character_source_url` is omitted, the broker derives the `PCs/Player Characters Listing` page from the fixed XP source's Obsidian vault.
 
 ## Account import
 
@@ -92,7 +92,7 @@ PATCH /scarlethorizons/api/v1/admin/character-accounts/{account-id}
 - Health response reports schema version `2`, a nonzero `character_account_count`, and `xp_tracking_configured: true`.
 - Successful login sets `pa_character_session` with `Secure`, `HttpOnly`, `SameSite=Strict`, and path `/scarlethorizons/api/`.
 - `GET /v1/me` returns the logged-in account's server-stored character key.
-- `GET /v1/xp` returns one matching character for a player account and never includes the party array.
+- `GET /v1/xp` returns one matching character's XP, class, attained level, and hit points for a player account and never includes the party array.
 - A Dungeon Master session receives the validated current party XP table.
 - A missing or ambiguous character-key mapping fails with `xp_not_authorized`.
 - XP responses omit the configured source URL and include `Cache-Control: no-store`.

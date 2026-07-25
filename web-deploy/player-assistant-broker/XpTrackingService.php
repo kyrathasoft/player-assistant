@@ -20,12 +20,18 @@ final class XpTrackingService
     {
         $this->xpConfig = array_replace([
             'source_url' => '',
+            'character_source_url' => '',
             'connect_timeout_seconds' => 3,
             'timeout_seconds' => 8,
             'maximum_response_bytes' => 524288,
             'cache_ttl_seconds' => 300,
             'maximum_stale_seconds' => 86400,
         ], $xpConfig);
+        if ((string)$this->xpConfig['character_source_url'] === ''
+            && (string)$this->xpConfig['source_url'] !== '') {
+            $this->xpConfig['character_source_url'] = $this->deriveCharacterSourceUrl(
+                (string)$this->xpConfig['source_url']);
+        }
         $this->markdownFetcher = $markdownFetcher;
         $this->validateConfiguration();
         $this->ensureSchema();
@@ -98,8 +104,20 @@ final class XpTrackingService
         }
 
         try {
-            $markdown = $this->fetchMarkdown();
-            $parsed = $this->parseSnapshot($markdown);
+            $parsed = $this->parseSnapshot($this->fetchMarkdown(
+                (string)$this->xpConfig['source_url']));
+            $hitPointsByCharacterKey = $this->parseCharacterHitPoints(
+                $this->fetchMarkdown((string)$this->xpConfig['character_source_url']));
+            foreach ($parsed['characters'] as &$character) {
+                $characterKey = $this->characterKeyForName(
+                    (string)$character['character_name']);
+                if (!array_key_exists($characterKey, $hitPointsByCharacterKey)) {
+                    throw new RuntimeException(
+                        'The active character listing did not contain every current XP character.');
+                }
+                $character['hit_points'] = $hitPointsByCharacterKey[$characterKey];
+            }
+            unset($character);
             $snapshot = [
                 'date_label' => $parsed['date_label'],
                 'characters' => $parsed['characters'],
@@ -120,10 +138,10 @@ final class XpTrackingService
         }
     }
 
-    private function fetchMarkdown(): string
+    private function fetchMarkdown(string $sourceUrl): string
     {
         if ($this->markdownFetcher !== null) {
-            $markdown = ($this->markdownFetcher)((string)$this->xpConfig['source_url']);
+            $markdown = ($this->markdownFetcher)($sourceUrl);
             if (!is_string($markdown)
                 || strlen($markdown) === 0
                 || strlen($markdown) > (int)$this->xpConfig['maximum_response_bytes']) {
@@ -133,7 +151,7 @@ final class XpTrackingService
         }
 
         $page = $this->fetchUrl(
-            (string)$this->xpConfig['source_url'],
+            $sourceUrl,
             ['text/html', 'text/markdown', 'text/plain']);
         if ($page['content_type'] === 'text/markdown' || $page['content_type'] === 'text/plain') {
             return $page['content'];
@@ -248,6 +266,8 @@ final class XpTrackingService
             $cells = $this->splitTableRow((string)$lines[$index]);
             if ($cells !== []
                 && $this->findCellIndex($cells, 'Name') >= 0
+                && $this->findCellIndex($cells, 'Class') >= 0
+                && $this->findCellIndex($cells, 'Level') >= 0
                 && $this->findCellIndex($cells, 'XP Total') >= 0) {
                 return $index;
             }
@@ -262,7 +282,10 @@ final class XpTrackingService
     {
         $headers = $this->splitTableRow((string)$lines[$headerIndex]);
         $nameIndex = $this->findCellIndex($headers, 'Name');
+        $classIndex = $this->findCellIndex($headers, 'Class');
+        $levelIndex = $this->findCellIndex($headers, 'Level');
         $xpIndex = $this->findCellIndex($headers, 'XP Total');
+        $hitPointsIndex = $this->findCellIndex($headers, 'HP');
         $characters = [];
         $seenNames = [];
 
@@ -275,16 +298,29 @@ final class XpTrackingService
             if ($cells === [] || $this->isSeparatorRow($cells)) {
                 continue;
             }
-            if (count($cells) <= max($nameIndex, $xpIndex)) {
+            if (count($cells) <= max($nameIndex, $classIndex, $levelIndex, $xpIndex)) {
                 throw new RuntimeException('An XP table row was incomplete.');
             }
 
             $name = $this->cleanMarkdownCell($cells[$nameIndex]);
+            $characterClass = $this->cleanMarkdownCell($cells[$classIndex]);
+            $levelDigits = preg_replace('/\D+/', '', $cells[$levelIndex]);
             $xpDigits = preg_replace('/\D+/', '', $cells[$xpIndex]);
             if ($name === ''
                 || strlen($name) > 100
                 || preg_match('//u', $name) !== 1
                 || preg_match('/[\x00-\x1F\x7F]/u', $name) === 1
+                || $characterClass === ''
+                || strlen($characterClass) > 100
+                || str_contains($characterClass, '|')
+                || preg_match('//u', $characterClass) !== 1
+                || preg_match('/[\x00-\x1F\x7F]/u', $characterClass) === 1
+                || !is_string($levelDigits)
+                || $levelDigits === ''
+                || filter_var(
+                    $levelDigits,
+                    FILTER_VALIDATE_INT,
+                    ['options' => ['min_range' => 0, 'max_range' => 1000]]) === false
                 || !is_string($xpDigits)
                 || $xpDigits === ''
                 || filter_var(
@@ -300,8 +336,25 @@ final class XpTrackingService
             $seenNames[$normalizedName] = true;
             $characters[] = [
                 'character_name' => $name,
+                'character_class' => $characterClass,
+                'level' => (int)$levelDigits,
                 'xp_total' => (int)$xpDigits,
             ];
+            if ($hitPointsIndex >= 0) {
+                if (count($cells) <= $hitPointsIndex) {
+                    throw new RuntimeException('A cached XP table row was incomplete.');
+                }
+                $hitPointDigits = preg_replace('/\D+/', '', $cells[$hitPointsIndex]);
+                if (!is_string($hitPointDigits)
+                    || $hitPointDigits === ''
+                    || filter_var(
+                        $hitPointDigits,
+                        FILTER_VALIDATE_INT,
+                        ['options' => ['min_range' => 0, 'max_range' => 1000000]]) === false) {
+                    throw new RuntimeException('A cached XP hit-point total was invalid.');
+                }
+                $characters[array_key_last($characters)]['hit_points'] = (int)$hitPointDigits;
+            }
             if (count($characters) > self::MAXIMUM_CHARACTERS) {
                 throw new RuntimeException('The XP table contained too many characters.');
             }
@@ -313,13 +366,97 @@ final class XpTrackingService
         return $characters;
     }
 
+    private function parseCharacterHitPoints(string $markdown): array
+    {
+        $lines = preg_split('/\r\n|\r|\n/', $markdown);
+        if (!is_array($lines)) {
+            throw new RuntimeException('The active character listing could not be read.');
+        }
+
+        foreach ($lines as $headerIndex => $line) {
+            $headers = $this->splitTableRow((string)$line);
+            $nameIndex = $this->findCellIndex($headers, 'Name');
+            $hitPointsIndex = $this->findCellIndex($headers, 'HP');
+            if ($nameIndex < 0 || $hitPointsIndex < 0) {
+                continue;
+            }
+
+            $hitPointsByCharacterKey = [];
+            for ($index = $headerIndex + 1; $index < count($lines); $index++) {
+                $row = (string)$lines[$index];
+                if (!str_starts_with(ltrim($row), '|')) {
+                    break;
+                }
+                $cells = $this->splitTableRow($row);
+                if ($cells === [] || $this->isSeparatorRow($cells)) {
+                    continue;
+                }
+                if (count($cells) <= max($nameIndex, $hitPointsIndex)) {
+                    throw new RuntimeException('An active character row was incomplete.');
+                }
+
+                $name = $this->cleanMarkdownCell($cells[$nameIndex]);
+                $hitPointDigits = preg_replace('/\D+/', '', $cells[$hitPointsIndex]);
+                $characterKey = $this->characterKeyForName($name);
+                if ($name === ''
+                    || $characterKey === ''
+                    || !is_string($hitPointDigits)
+                    || $hitPointDigits === ''
+                    || filter_var(
+                        $hitPointDigits,
+                        FILTER_VALIDATE_INT,
+                        ['options' => ['min_range' => 0, 'max_range' => 1000000]]) === false
+                    || array_key_exists($characterKey, $hitPointsByCharacterKey)) {
+                    throw new RuntimeException(
+                        'The active character listing contained an invalid or ambiguous row.');
+                }
+                $hitPointsByCharacterKey[$characterKey] = (int)$hitPointDigits;
+            }
+
+            if ($hitPointsByCharacterKey !== []) {
+                return $hitPointsByCharacterKey;
+            }
+        }
+
+        throw new RuntimeException(
+            'The active character listing did not contain a Name and HP table.');
+    }
+
     private function splitTableRow(string $line): array
     {
         $trimmed = trim($line);
         if (!str_starts_with($trimmed, '|') || !str_ends_with($trimmed, '|')) {
             return [];
         }
-        return array_map('trim', explode('|', trim($trimmed, '|')));
+
+        $cells = [];
+        $current = '';
+        $escaped = false;
+        $content = trim($trimmed, '|');
+        $length = strlen($content);
+        for ($index = 0; $index < $length; $index++) {
+            $character = $content[$index];
+            if ($escaped) {
+                $current .= $character;
+                $escaped = false;
+                continue;
+            }
+            if ($character === '\\') {
+                $escaped = true;
+                continue;
+            }
+            if ($character === '|') {
+                $cells[] = trim($current);
+                $current = '';
+                continue;
+            }
+            $current .= $character;
+        }
+        if ($escaped) {
+            $current .= '\\';
+        }
+        $cells[] = trim($current);
+        return $cells;
     }
 
     private function findCellIndex(array $cells, string $expected): int
@@ -403,17 +540,20 @@ final class XpTrackingService
         $lines = [
             (string)$payload['date_label'],
             '',
-            '| Name | XP Total |',
-            '| --- | ---: |',
+            '| Name | Class | Level | XP Total | HP |',
+            '| --- | --- | ---: | ---: | ---: |',
         ];
         foreach ($payload['characters'] as $character) {
             if (!is_array($character)) {
                 throw new RuntimeException('The cached XP snapshot was invalid.');
             }
             $lines[] = sprintf(
-                '| %s | %s |',
+                '| %s | %s | %s | %s | %s |',
                 (string)($character['character_name'] ?? ''),
-                (string)($character['xp_total'] ?? ''));
+                (string)($character['character_class'] ?? ''),
+                (string)($character['level'] ?? ''),
+                (string)($character['xp_total'] ?? ''),
+                (string)($character['hit_points'] ?? ''));
         }
         return implode("\n", $lines);
     }
@@ -443,6 +583,7 @@ final class XpTrackingService
     {
         if ($this->isConfigured()) {
             $this->validatePageUrl((string)$this->xpConfig['source_url']);
+            $this->validatePageUrl((string)$this->xpConfig['character_source_url']);
         }
         foreach ([
             'connect_timeout_seconds',
@@ -476,6 +617,24 @@ final class XpTrackingService
             || isset($parts['fragment'])) {
             throw new RuntimeException('The XP source URL must be a fixed Obsidian Publish HTTPS page.');
         }
+    }
+
+    private function deriveCharacterSourceUrl(string $xpSourceUrl): string
+    {
+        $parts = parse_url($xpSourceUrl);
+        if (!is_array($parts)) {
+            return '';
+        }
+        $segments = explode(
+            '/',
+            trim((string)($parts['path'] ?? ''), '/'));
+        $vaultName = $segments[0] ?? '';
+        if ($vaultName === '') {
+            return '';
+        }
+        return 'https://publish.obsidian.md/'
+            . rawurlencode(rawurldecode($vaultName))
+            . '/PCs/Player+Characters+Listing';
     }
 
     private function validateMarkdownUrl(string $url): void

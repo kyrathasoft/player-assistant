@@ -42,6 +42,7 @@ try {
         ],
         'xp' => [
             'source_url' => 'https://publish.obsidian.md/example/XP',
+            'character_source_url' => 'https://publish.obsidian.md/example/PCs/Player+Characters+Listing',
             'connect_timeout_seconds' => 1,
             'timeout_seconds' => 2,
             'maximum_response_bytes' => 65536,
@@ -57,14 +58,21 @@ try {
     $broker = new BrokerService(
         $config,
         new RpolClient($config['rpol']),
-        static fn(string $url): string => implode("\n", [
-            'As of 7.23.2026',
-            '',
-            '| Name | XP Total |',
-            '| --- | ---: |',
-            '| Routing Hero | 12,345 |',
-            '| Another Hero | 98,765 |',
-        ]));
+        static fn(string $url): string => str_contains($url, 'Player+Characters+Listing')
+            ? implode("\n", [
+                '| Name | Class | Level | HP |',
+                '| --- | --- | ---: | ---: |',
+                '| Routing Hero | Ranger | 4 | 17 |',
+                '| Another Hero | Fighter | 5 | 29 |',
+            ])
+            : implode("\n", [
+                'As of 7.23.2026',
+                '',
+                '| Name | Class | Level | XP Total |',
+                '| --- | --- | ---: | ---: |',
+                '| Routing Hero | Ranger | 4 | 12,345 |',
+                '| Another Hero | Fighter | 5 | 98,765 |',
+            ]));
     $session = [];
     $adminHeaders = ['admin-key' => $config['api']['admin_key']];
     $rpolClient = new RpolClient($config['rpol']);
@@ -146,6 +154,9 @@ try {
     routingAssert($xp['status'] === 200, 'The protected XP route failed.');
     routingAssert($xp['body']['scope'] === 'character', 'The player XP response had the wrong scope.');
     routingAssert($xp['body']['character']['xp_total'] === 12345, 'The player XP response had the wrong total.');
+    routingAssert($xp['body']['character']['character_class'] === 'Ranger', 'The player XP response had the wrong class.');
+    routingAssert($xp['body']['character']['level'] === 4, 'The player XP response had the wrong level.');
+    routingAssert($xp['body']['character']['hit_points'] === 17, 'The player XP response had the wrong hit points.');
     routingAssert(!isset($xp['body']['characters']), 'The player XP response exposed party totals.');
     routingAssert(!isset($xp['body']['source_url']), 'The player XP response exposed the configured source URL.');
 

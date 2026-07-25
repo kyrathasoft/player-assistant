@@ -9,6 +9,7 @@ declare(strict_types=1);
 return [
     'xp' => [
         'source_url' => 'https://publish.obsidian.md/example/XP',
+        'character_source_url' => 'https://publish.obsidian.md/example/PCs/Player+Characters+Listing',
         'connect_timeout_seconds' => 3,
         'timeout_seconds' => 8,
         'maximum_response_bytes' => 524288,
