@@ -8,6 +8,7 @@ final class RpolClient
         '/game.php' => ['gi', 'date', 'filter'],
         '/gameinfo.php' => ['gi', 'action', 'ci'],
         '/display.cgi' => ['gi', 'ti', 'date', 'msgpage', 'show', 'new'],
+        '/usermodules/diceroller.cgi' => ['gi'],
     ];
 
     private CurlHandle $curl;
@@ -218,6 +219,9 @@ final class RpolClient
             CURLOPT_PROTOCOLS => CURLPROTO_HTTPS,
             CURLOPT_ENCODING => '',
             CURLOPT_USERAGENT => (string)$this->config['user_agent'],
+            CURLOPT_REFERER => $this->isDiceRollerUrl($url)
+                ? (string)$this->config['initial_url']
+                : '',
             CURLOPT_HEADERFUNCTION => static function (CurlHandle $handle, string $line) use (&$responseHeaders): int {
                 $length = strlen($line);
                 $trimmed = trim($line);
@@ -259,6 +263,11 @@ final class RpolClient
             'headers' => $responseHeaders,
             'body' => $responseBody,
         ];
+    }
+
+    private function isDiceRollerUrl(string $url): bool
+    {
+        return parse_url($url, PHP_URL_PATH) === '/usermodules/diceroller.cgi';
     }
 
     public function validateTargetUrl(string $url): void

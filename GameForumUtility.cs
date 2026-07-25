@@ -44,7 +44,10 @@ namespace PlayerAssistant
         private static readonly Regex HtmlTagRegex = new(@"<[^>]+>", RegexOptions.Compiled);
         private static readonly Regex WhitespaceRegex = new(@"\s+", RegexOptions.Compiled);
         private static readonly Regex DieRollLineRegex = new(
-            @"^(?<line>(?:\d{1,2}:\d{2},\s+)?[^:\r\n]+:\s+.+?\s+rolled\s+.+?\s+using\s+.+?\.\s+.+?\s+[–-]\s+\[roll=(?<rollId>\d+\.\d+\.\d+)\])$",
+            @"^(?<line>(?:\d{1,2}:\d{2},\s+)?[^:\r\n]+:\s+.+?\s+rolled\s+.+?\s+using\s+.+?\.(?:\s+.*?)?\s+[–-]\s+\[roll=(?<rollId>\d+\.\d+\.\d+)\])$",
+            RegexOptions.Compiled | RegexOptions.IgnoreCase);
+        private static readonly Regex DieRollWithoutIdRegex = new(
+            @"^(?<line>(?:\d{1,2}:\d{2},\s+)?[^:\r\n]+:\s+.+?\s+rolled\s+.+?\s+using\s+.+?\.(?:\s+.*)?)$",
             RegexOptions.Compiled | RegexOptions.IgnoreCase);
         private static DateTimeOffset? _lastRpolDownloadAttemptUtc;
 
@@ -426,7 +429,7 @@ namespace PlayerAssistant
             {
                 foreach (Match paragraphMatch in paragraphMatches)
                 {
-                    AddDieRollEntry(entries, paragraphMatch.Groups["content"].Value);
+                    AddDieRollEntry(entries, paragraphMatch.Groups["content"].Value, allowSyntheticId: true);
                 }
             }
             else
@@ -434,7 +437,7 @@ namespace PlayerAssistant
                 foreach (var line in HtmlBreakRegex.Replace(html, Environment.NewLine)
                              .Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries))
                 {
-                    AddDieRollEntry(entries, line);
+                    AddDieRollEntry(entries, line, allowSyntheticId: false);
                 }
             }
 
@@ -479,6 +482,18 @@ namespace PlayerAssistant
             }
 
             return newEntries.Length;
+        }
+
+        internal static string NormalizeDieRollSnapshotHtml(string sourceHtml)
+        {
+            ArgumentNullException.ThrowIfNull(sourceHtml);
+            var entries = ExtractDieRollEntries(sourceHtml);
+            if (entries.Length == 0)
+            {
+                throw new InvalidOperationException("The RPOL Dice Roller page did not contain any recognizable saved rolls.");
+            }
+
+            return BuildDieRollHtml(entries);
         }
 
         public static async Task<TheCastLoginInfo[]> WriteTheCastLoginInfoJsonAsync(
@@ -604,7 +619,10 @@ namespace PlayerAssistant
                 .Trim();
         }
 
-        private static void AddDieRollEntry(List<DieRollEntry> entries, string rawContent)
+        private static void AddDieRollEntry(
+            List<DieRollEntry> entries,
+            string rawContent,
+            bool allowSyntheticId)
         {
             var formattedLine = NormalizeDieRollLine(rawContent);
             if (formattedLine.Length == 0)
@@ -613,20 +631,50 @@ namespace PlayerAssistant
             }
 
             var match = DieRollLineRegex.Match(formattedLine);
+            if (match.Success)
+            {
+                entries.Add(new DieRollEntry(
+                    match.Groups["rollId"].Value,
+                    match.Groups["line"].Value));
+                return;
+            }
+
+            if (!allowSyntheticId
+                || formattedLine.Contains("[roll=", StringComparison.OrdinalIgnoreCase))
+            {
+                return;
+            }
+
+            match = DieRollWithoutIdRegex.Match(formattedLine);
             if (!match.Success)
             {
                 return;
             }
 
+            var line = match.Groups["line"].Value;
             entries.Add(new DieRollEntry(
-                match.Groups["rollId"].Value,
-                match.Groups["line"].Value));
+                CreateSyntheticRollId(line),
+                line));
+        }
+
+        private static string CreateSyntheticRollId(string line)
+        {
+            var hash = System.Security.Cryptography.SHA256.HashData(
+                System.Text.Encoding.UTF8.GetBytes(line));
+            return string.Join(
+                '.',
+                System.Buffers.Binary.BinaryPrimitives.ReadUInt32BigEndian(hash.AsSpan(0, 4)),
+                System.Buffers.Binary.BinaryPrimitives.ReadUInt32BigEndian(hash.AsSpan(4, 4)),
+                System.Buffers.Binary.BinaryPrimitives.ReadUInt32BigEndian(hash.AsSpan(8, 4)));
         }
 
         private static string BuildDieRollHtml(IEnumerable<DieRollEntry> entries)
         {
             var encodedLines = entries
-                .Select(entry => WebUtility.HtmlEncode(entry.Line))
+                .Select(entry => entry.Line.Contains("[roll=", StringComparison.OrdinalIgnoreCase)
+                    ? entry.Line
+                    : $"{entry.Line} – [roll={entry.RollId}]")
+                .Select(WebUtility.HtmlEncode)
                 .ToArray();
             var preformattedBody = encodedLines.Length == 0
                 ? string.Empty

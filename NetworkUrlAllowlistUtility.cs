@@ -43,6 +43,10 @@ namespace PlayerAssistant
                 uri => IsHost(uri, "rpol.net") && PathEquals(uri, "/display.cgi")),
             new(
                 NetworkUrlPurpose.Rpol,
+                "RPOL Dice Roller URLs must use rpol.net with the exact '/usermodules/diceroller.cgi' path.",
+                uri => IsHost(uri, "rpol.net") && PathEquals(uri, "/usermodules/diceroller.cgi")),
+            new(
+                NetworkUrlPurpose.Rpol,
                 "RPOL hosted image URLs must use rpol.net with the '/c-webp/' path.",
                 uri => IsHost(uri, "rpol.net") && PathStartsWith(uri, "/c-webp/")),
             new(
