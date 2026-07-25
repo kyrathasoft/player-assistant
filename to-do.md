@@ -1,9 +1,12 @@
 - [ ] Review potentially anachronistic English terms in the Orcish lexicon.
   - Approval only: do not purge an existing entry until the user selects it.
-  - Recorded decision, pending batch application: retain `battery` as a verb; remove the noun sense of `battery` and the noun possessive `battery's`.
+  - Approved retention applied: `battery` remains as a verb.
+  - Approved removal applied: the noun sense of `battery`, `battery's`, `college`, `college's`, and `colleges`.
   - Approved removal applied: `academic`, `academic's`, and `academics`.
-  - Current focused shortlist: `codex-scratch\lexicon-anachronism-purge-candidates.txt` (`35` families, `109` exact English entries).
-  - Broad audit with categories, triggers, Orcish forms, and tags: `codex-scratch\lexicon-anachronism-review.tsv` (`148` exact English entries, including medieval-compatible terms intentionally excluded from the focused shortlist).
+  - Approved retention applied: `biological`, `biology`, and `biology's`.
+  - Approved removal applied: `chemical`, `chemical's`, `chemically`, `chemicals`, `chemistry`, and `chemistry's`; Orcish culture uses magic or alchemy instead.
+  - Current focused shortlist: `codex-scratch\lexicon-anachronism-purge-candidates.txt` (`31` families, `96` exact English entries).
+  - Broad audit with categories, triggers, Orcish forms, and tags: `codex-scratch\lexicon-anachronism-review.tsv` (`135` exact English entries, including medieval-compatible terms intentionally excluded from the focused shortlist).
   - After approved removals, update family batch counts and the unique-English count regression, rebuild the app and `to-orcish` in Release, run focused absence and quality tests, refresh both audit files, and update graphify.
 
 - [x] Resume Orcish invalid retranslation review.
@@ -213,7 +216,7 @@
 
 ## Fresh backlog
 
-- [ ] implement-pc-log-in-dashboard-on-programmers-website
+- [x] Implement PC login dashboard on programmer's website.
   - Permanent design and security notes: [implement-pc-log-in-dashboard-on-programmers-website.md](implement-pc-log-in-dashboard-on-programmers-website.md)
 - [x] Complete signed RPOL snapshot coverage beyond the verified root page.
   - [x] Deploy the private DreamHost broker configuration with restricted permissions and required PHP extensions.
@@ -224,7 +227,12 @@
   - [x] Confirm all remaining pages accumulate through repeated publisher executions.
     - Live verification: all 15 approved targets are stored, including the newly approved Game Links page; the cursor advanced to the first thread after publishing Game Links.
 - [ ] Run a clean-client test with no RPOL administrator credentials before removing or rotating distributed credentials.
-  - Status: delegated to a player for independent verification of credential-free snapshot retrieval.
+  - [x] Verify `Adventure Outline`, `My Hero Briefing`, and `Party` work with only a short-lived `PlayerAssistant/Broker/Token`.
+  - [x] Confirm the clean client does not create `PlayerAssistant/RPOL/UserName`, `PlayerAssistant/RPOL/Password`, or `PlayerAssistant/RPOL/StorageState`, including after opening the menu.
+  - [x] Add and deploy signed snapshot coverage for `/usermodules/diceroller.cgi?gi=80170`, including exact broker/client allowlists, existing publisher-queue migration, RPOL referrer handling, and identifier-free live roll parsing.
+  - [x] Re-test the bearer-only Dice Rolls pipeline: the live snapshot produced 174 unique entries and satisfied the menu-enablement condition.
+  - [x] Revoke the short-lived clean-client test token.
+  - [ ] Complete the clean-machine diagnostic inspection: verify no credential, token, cookie, or browser-state leakage.
 - [x] Run a full release verification/rehearsal now that project files and sidecars are tracked.
   - Status: completed after restoring `settings.local.json` from the local installer payload.
 - [x] Continue refining `Show > Adventure Outline` summary quality so generated bullets are consistently specific, player-facing scene updates rather than generic fallback phrases.
@@ -236,7 +244,7 @@
   - Status: completed.
   - Findings: root `keyword-index.json` and `sitemap-keyword-urls.json` are the tracked generated search snapshots; Release/publish copies, diagnostics, installer payloads, and credential sidecars are generated runtime/distribution output.
   - Policy: documented in `AGENTS.md`; refreshed the root tracked snapshots from the current validated `Release` copies.
-- [ ] Implement `Show > My Hero Briefing` as the next player-facing feature.
+- [x] Implement `Show > My Hero Briefing`.
   - [x] Define the `MyHeroBriefing` data model and utility boundary.
     - Inputs: active party rows, authenticated hero identity if available, RPOL thread/post cache, XP totals, encrypted note/search metadata, and app settings.
     - Output: one player-safe briefing object containing current hero summary, recent activity, likely open response items, relevant unlocked notes, and quick links.
@@ -259,7 +267,7 @@
     - Reuse tagged/encrypted-note access rules with the hero's class, level, name, and tags.
     - Show only note titles/excerpts the current hero is allowed to read.
     - Keep locked or mismatched encrypted content hidden.
-- [x] Add the WinForms UI entry point.
+  - [x] Add the WinForms UI entry point.
     - Add `Show > My Hero Briefing`.
     - Render the briefing in the existing display surface with refresh, hero selector when needed, and empty/error states.
     - Preserve existing status-bar activity and operation-failure reporting patterns.

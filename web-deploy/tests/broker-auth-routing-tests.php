@@ -67,6 +67,13 @@ try {
         ]));
     $session = [];
     $adminHeaders = ['admin-key' => $config['api']['admin_key']];
+    $rpolClient = new RpolClient($config['rpol']);
+    $rpolClient->validateTargetUrl('https://rpol.net/usermodules/diceroller.cgi?gi=80170');
+    try {
+        $rpolClient->validateTargetUrl('https://rpol.net/usermodules/diceroller.cgi?gi=80170&admin=1');
+        throw new RuntimeException('The Dice Roller allowlist accepted an unsupported query parameter.');
+    } catch (InvalidArgumentException) {
+    }
 
     try {
         $broker->dispatch('GET', '/v1/xp', [], [], [], '192.0.2.30', $session);

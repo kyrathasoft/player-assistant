@@ -225,8 +225,10 @@ var tests = new (string Name, Action Test)[]
     ("rpol snapshot rejects login-only content", RpolSnapshotRejectsLoginOnlyContent),
     ("rpol challenge detection ignores passive cloudflare references", RpolChallengeDetectionIgnoresPassiveCloudflareReferences),
     ("rpol verification recognizes authenticated browser title", RpolVerificationRecognizesAuthenticatedBrowserTitle),
+    ("rpol dice roller navigation uses game page referrer", RpolDiceRollerNavigationUsesGamePageReferrer),
     ("snapshot publisher state advances one target and wraps", SnapshotPublisherStateAdvancesOneTargetAndWraps),
-    ("snapshot discovery approves game links", SnapshotDiscoveryApprovesGameLinks),
+    ("snapshot discovery approves game links and dice roller", SnapshotDiscoveryApprovesGameLinksAndDiceRoller),
+    ("snapshot publisher state injects required dice roller target", SnapshotPublisherStateInjectsRequiredDiceRollerTarget),
     ("snapshot publisher state persists its cursor", SnapshotPublisherStatePersistsItsCursor),
     ("snapshot publisher state rejects an invalid cursor", SnapshotPublisherStateRejectsInvalidCursor),
     ("network allowlist accepts only broker api path", NetworkAllowlistAcceptsOnlyBrokerApiPath),
@@ -242,6 +244,7 @@ var tests = new (string Name, Action Test)[]
     ("rpol thread export rejects collapsed source and preserves existing output", RpolThreadExportRejectsCollapsedSourceAndPreservesExistingOutput),
     ("die roll extraction keeps only saved-log lines", DieRollExtractionKeepsOnlySavedLogLines),
     ("die roll extraction handles live rpol paragraph markup", DieRollExtractionHandlesLiveRpolParagraphMarkup),
+    ("die roll extraction derives stable ids when rpol omits roll ids", DieRollExtractionDerivesStableIdsWhenRpolOmitsRollIds),
     ("die roll sync appends only unsaved rolls", DieRollSyncAppendsOnlyUnsavedRolls),
     ("regional map downloads when missing", RegionalMapDownloadsWhenMissing),
     ("regional map downloads when older than one hour", RegionalMapDownloadsWhenOlderThanOneHour),
@@ -360,7 +363,7 @@ var tests = new (string Name, Action Test)[]
     ("show menu contains party item", ShowMenuContainsPartyItem),
     ("show menu contains former pcs item", ShowMenuContainsFormerPcsItem),
     ("former pcs view displays token name and class", FormerPcsViewDisplaysTokenNameAndClass),
-    ("external url launch policy accepts http and https", ExternalUrlLaunchPolicyAcceptsHttpAndHttps),
+    ("external url launch policy accepts https and rejects http", ExternalUrlLaunchPolicyAcceptsHttpsAndRejectsHttp),
     ("external url launch policy rejects unsafe inputs", ExternalUrlLaunchPolicyRejectsUnsafeInputs),
     ("hero image paths follow listing markdown table", HeroImagePathsFollowListingMarkdownTable),
     ("hero asset paths reject escaped targets", HeroAssetPathsRejectEscapedTargets),
@@ -1738,9 +1741,9 @@ static void OrcishTranslatorSupportsAllRemainingPageSampleVocabulary()
         .Where(entry => HasAnyTag(entry, "all-remaining-page-sample", "all-remaining-page-near-kin"))
         .ToArray();
 
-    AssertEqual(7688, entries.Length, "expected every retained candidate from the all remaining page sample expansion");
-    AssertEqual(2832, entries.Count(entry => HasAnyTag(entry, "all-remaining-page-sample")), "expected the retained scraped source candidates");
-    AssertEqual(4856, entries.Count(entry => HasAnyTag(entry, "all-remaining-page-near-kin")), "expected the retained near-kin candidates");
+    AssertEqual(7684, entries.Length, "expected every retained candidate from the all remaining page sample expansion");
+    AssertEqual(2831, entries.Count(entry => HasAnyTag(entry, "all-remaining-page-sample")), "expected the retained scraped source candidates");
+    AssertEqual(4853, entries.Count(entry => HasAnyTag(entry, "all-remaining-page-near-kin")), "expected the retained near-kin candidates");
 
     foreach (var entry in entries)
     {
@@ -1810,9 +1813,9 @@ static void OrcishTranslatorSupportsBlogHighYieldCandidateVocabulary()
         .Where(entry => HasAnyTag(entry, "blog-high-yield-candidate-batch", "blog-high-yield-near-kin"))
         .ToArray();
 
-    AssertEqual(1778, entries.Length, "expected every candidate from the blog high-yield batch");
-    AssertEqual(795, entries.Count(entry => HasAnyTag(entry, "blog-high-yield-candidate-batch")), "expected the scraped source candidates");
-    AssertEqual(983, entries.Count(entry => HasAnyTag(entry, "blog-high-yield-near-kin")), "expected the near-kin candidates");
+    AssertEqual(1776, entries.Length, "expected every retained candidate from the blog high-yield batch");
+    AssertEqual(794, entries.Count(entry => HasAnyTag(entry, "blog-high-yield-candidate-batch")), "expected the retained scraped source candidates");
+    AssertEqual(982, entries.Count(entry => HasAnyTag(entry, "blog-high-yield-near-kin")), "expected the retained near-kin candidates");
 
     foreach (var entry in entries)
     {
@@ -1903,9 +1906,9 @@ static void OrcishTranslatorSupportsGutenbergCorpusCandidateVocabulary()
         .Where(entry => HasAnyTag(entry, "gutenberg-corpus-candidate-batch", "gutenberg-corpus-near-kin"))
         .ToArray();
 
-    AssertEqual(2479, entries.Length, "expected every retained candidate from the Gutenberg corpus batch");
-    AssertEqual(892, entries.Count(entry => HasAnyTag(entry, "gutenberg-corpus-candidate-batch")), "expected the retained corpus source candidates");
-    AssertEqual(1587, entries.Count(entry => HasAnyTag(entry, "gutenberg-corpus-near-kin")), "expected the retained near-kin candidates");
+    AssertEqual(2476, entries.Length, "expected every retained candidate from the Gutenberg corpus batch");
+    AssertEqual(891, entries.Count(entry => HasAnyTag(entry, "gutenberg-corpus-candidate-batch")), "expected the retained corpus source candidates");
+    AssertEqual(1585, entries.Count(entry => HasAnyTag(entry, "gutenberg-corpus-near-kin")), "expected the retained near-kin candidates");
 
     foreach (var entry in entries)
     {
@@ -1966,9 +1969,9 @@ static void OrcishTranslatorSupportsGutenbergCorpusFourthCandidateVocabulary()
         .Where(entry => HasAnyTag(entry, "gutenberg-fourth-corpus-candidate-batch", "gutenberg-fourth-corpus-near-kin"))
         .ToArray();
 
-    AssertEqual(3493, entries.Length, "expected every retained candidate from the fourth Gutenberg corpus batch");
-    AssertEqual(1286, entries.Count(entry => HasAnyTag(entry, "gutenberg-fourth-corpus-candidate-batch")), "expected the retained fourth corpus source candidates");
-    AssertEqual(2207, entries.Count(entry => HasAnyTag(entry, "gutenberg-fourth-corpus-near-kin")), "expected the retained fourth corpus near-kin candidates");
+    AssertEqual(3491, entries.Length, "expected every retained candidate from the fourth Gutenberg corpus batch");
+    AssertEqual(1285, entries.Count(entry => HasAnyTag(entry, "gutenberg-fourth-corpus-candidate-batch")), "expected the retained fourth corpus source candidates");
+    AssertEqual(2206, entries.Count(entry => HasAnyTag(entry, "gutenberg-fourth-corpus-near-kin")), "expected the retained fourth corpus near-kin candidates");
 
     foreach (var entry in entries)
     {
@@ -2287,6 +2290,9 @@ static void OrcishTranslatorExcludesApprovedAnachronisticFamilies()
     var discarded = new[]
     {
         "academic", "academic's", "academics",
+        "battery's",
+        "chemical", "chemical's", "chemically", "chemicals", "chemistry", "chemistry's",
+        "college", "college's", "colleges",
         "automobile", "automobile's", "automobiled", "automobiles", "automobiling",
         "camera", "camera's", "cameras",
         "gasoline", "gasoline's",
@@ -2365,7 +2371,7 @@ static void OrcishTranslatorWarmupIsShared()
             throw new TimeoutException("test warmup was not released");
         }
 
-        return 80971;
+        return 80961;
     };
 
     try
@@ -2380,7 +2386,7 @@ static void OrcishTranslatorWarmupIsShared()
         releaseWarmup.Set();
         var result = first.WaitAsync(TimeSpan.FromSeconds(5)).GetAwaiter().GetResult();
 
-        AssertEqual(80971, result.EnglishTermCount, "unexpected warmed English term count");
+        AssertEqual(80961, result.EnglishTermCount, "unexpected warmed English term count");
         AssertEqual(1, Volatile.Read(ref warmupCount), "translator warmup should run once");
         AssertTrue(OrcishTranslatorWarmupUtility.IsReady, "completed translator warmup should report ready");
     }
@@ -2404,7 +2410,7 @@ static void OrcishTranslatorWarmupIsShared()
 
 static void OrcishTranslatorLoadsEmbeddedSnapshot()
 {
-    AssertEqual(80971, OrcishTranslatorUtility.GetEnglishTermCount(), "unexpected embedded snapshot term count");
+    AssertEqual(80961, OrcishTranslatorUtility.GetEnglishTermCount(), "unexpected embedded snapshot term count");
     AssertTrue(
         OrcishLexiconSnapshotUtility.WasEmbeddedSnapshotLoaded,
         "translator should load the embedded lexicon snapshot instead of cold-JITing generated builders");
@@ -2414,7 +2420,7 @@ static void OrcishTranslatorExposesUniqueEnglishTermCount()
 {
     var terms = OrcishTranslatorUtility.GetEnglishTerms();
 
-    AssertEqual(80971, OrcishTranslatorUtility.GetEnglishTermCount(), "unexpected total English term count");
+    AssertEqual(80961, OrcishTranslatorUtility.GetEnglishTermCount(), "unexpected total English term count");
     AssertEqual(OrcishTranslatorUtility.GetEnglishTermCount(), terms.Count, "term list and count should agree");
     AssertEqual(1, terms.Count(term => string.Equals(term, "I", StringComparison.OrdinalIgnoreCase)), "I should be counted once despite multiple variants");
     AssertEqual(1, terms.Count(term => string.Equals(term, "really", StringComparison.OrdinalIgnoreCase)), "really should be counted once despite multiple variants");
@@ -3879,7 +3885,7 @@ static void NetworkRequestRetriesTransientFailures()
 
     using var response = NetworkRequestUtility.SendAsync(
         httpClient,
-        () => new HttpRequestMessage(HttpMethod.Get, "https://rpol.net/retry"),
+        () => new HttpRequestMessage(HttpMethod.Get, "https://rpol.net/game.php?gi=80170&test=retry"),
         policy: new NetworkRequestPolicy(TimeSpan.FromSeconds(1), MaxAttempts: 2, TimeSpan.Zero)).GetAwaiter().GetResult();
 
     AssertEqual(HttpStatusCode.OK, response.StatusCode, "expected retry to return successful response");
@@ -3999,7 +4005,7 @@ static void NetworkRequestDoesNotRetryUnauthorized()
 
     using var response = NetworkRequestUtility.SendAsync(
         httpClient,
-        () => new HttpRequestMessage(HttpMethod.Get, "https://rpol.net/auth"),
+        () => new HttpRequestMessage(HttpMethod.Get, "https://rpol.net/game.php?gi=80170&test=auth"),
         policy: new NetworkRequestPolicy(TimeSpan.FromSeconds(1), MaxAttempts: 3, TimeSpan.Zero)).GetAwaiter().GetResult();
 
     AssertEqual(HttpStatusCode.Unauthorized, response.StatusCode, "expected unauthorized response to be returned to caller");
@@ -4023,14 +4029,14 @@ static void NetworkCircuitBreakerOpensAfterRepeatedTerminalFailures()
 
         using (NetworkRequestUtility.SendAsync(
             httpClient,
-            () => new HttpRequestMessage(HttpMethod.Get, "https://rpol.net/breaker-one"),
+            () => new HttpRequestMessage(HttpMethod.Get, "https://rpol.net/game.php?gi=80170&test=breaker-one"),
             policy: new NetworkRequestPolicy(TimeSpan.FromSeconds(1), MaxAttempts: 1, TimeSpan.Zero)).GetAwaiter().GetResult())
         {
         }
 
         using (NetworkRequestUtility.SendAsync(
             httpClient,
-            () => new HttpRequestMessage(HttpMethod.Get, "https://rpol.net/breaker-two"),
+            () => new HttpRequestMessage(HttpMethod.Get, "https://rpol.net/game.php?gi=80170&test=breaker-two"),
             policy: new NetworkRequestPolicy(TimeSpan.FromSeconds(1), MaxAttempts: 1, TimeSpan.Zero)).GetAwaiter().GetResult())
         {
         }
@@ -4038,7 +4044,7 @@ static void NetworkCircuitBreakerOpensAfterRepeatedTerminalFailures()
         var exception = AssertThrows<NetworkRequestException>(() =>
             NetworkRequestUtility.SendAsync(
                 httpClient,
-                () => new HttpRequestMessage(HttpMethod.Get, "https://rpol.net/breaker-three"),
+                () => new HttpRequestMessage(HttpMethod.Get, "https://rpol.net/game.php?gi=80170&test=breaker-three"),
                 policy: new NetworkRequestPolicy(TimeSpan.FromSeconds(1), MaxAttempts: 1, TimeSpan.Zero)).GetAwaiter().GetResult());
 
         AssertEqual(NetworkFailureKind.CircuitOpen, exception.Kind, "expected repeated terminal failures to open the circuit breaker");
@@ -4113,7 +4119,7 @@ static void NetworkRequestWrapsTimeout()
     var exception = AssertThrows<NetworkRequestException>(() =>
         NetworkRequestUtility.SendAsync(
             httpClient,
-            () => new HttpRequestMessage(HttpMethod.Get, "https://rpol.net/timeout"),
+            () => new HttpRequestMessage(HttpMethod.Get, "https://rpol.net/game.php?gi=80170&test=timeout"),
             policy: new NetworkRequestPolicy(TimeSpan.FromMilliseconds(20), MaxAttempts: 1, TimeSpan.Zero)).GetAwaiter().GetResult());
 
     AssertEqual(NetworkFailureKind.TimedOut, exception.Kind, "expected timeout failures to be classified");
@@ -4143,11 +4149,15 @@ static void NetworkAllowlistRejectsCredentialedAndEscapedHosts()
     var credentialed = NetworkUrlAllowlistUtility.Validate("https://user:password@rpol.net/game.php", NetworkUrlPurpose.Rpol);
     var escapedHost = NetworkUrlAllowlistUtility.Validate("https://rpol%2enet/game.php", NetworkUrlPurpose.Rpol);
     var threadDisplay = NetworkUrlAllowlistUtility.Validate("https://rpol.net/display.cgi?gi=80170&ti=12&msgpage=&show=all", NetworkUrlPurpose.Rpol);
+    var diceRoller = NetworkUrlAllowlistUtility.Validate("https://rpol.net/usermodules/diceroller.cgi?gi=80170", NetworkUrlPurpose.Rpol);
+    var unrelatedUserModule = NetworkUrlAllowlistUtility.Validate("https://rpol.net/usermodules/admin.cgi?gi=80170", NetworkUrlPurpose.Rpol);
 
     AssertFalse(credentialed.IsAllowed, "credentialed URLs should not be allowed");
     AssertContains(credentialed.RejectionReason ?? string.Empty, "credentials");
     AssertFalse(escapedHost.IsAllowed, "escaped host URLs should not be allowed");
     AssertTrue(threadDisplay.IsAllowed, "RPOL thread display URLs should remain valid local search results");
+    AssertTrue(diceRoller.IsAllowed, "the exact RPOL Dice Roller URL should be allowed");
+    AssertFalse(unrelatedUserModule.IsAllowed, "unrelated RPOL user-module URLs should remain blocked");
 }
 
 static void NetworkAllowlistAcceptsObsidianPublishContentHosts()
@@ -4957,7 +4967,7 @@ static void KeywordIndexValidationRejectsPoisonedUrlEntries()
             """));
 
     AssertContains(exception.Message, "keyword-index urls contains a URL that is not allowed");
-    AssertContains(exception.Message, "Obsidian Publish URLs");
+    AssertContains(exception.Message, "Obsidian Publish page and note URLs");
 }
 
 static void KeywordIndexValidationRejectsPoisonedMatchUrls()
@@ -5504,6 +5514,40 @@ static void DieRollExtractionHandlesLiveRpolParagraphMarkup()
     AssertContains(entries[2].Line, "Kelpie Lawfuller rolled 17,8 using d20+2,d8+2.");
 }
 
+static void DieRollExtractionDerivesStableIdsWhenRpolOmitsRollIds()
+{
+    const string html = """
+        <div class="info_box">
+        <p style="margin-left: 2em; text-indent: -2em;">04:24, Tue 21 July: Shade rolled 1 using 1d20.&nbsp; Recall.</p>
+        <p style="margin-left: 2em; text-indent: -2em;">05:33, Sun 19 July: Maximilian Yragerne rolled 13 using 1d20.&nbsp; charisma.</p>
+        <p style="margin-left: 2em; text-indent: -2em;">05:25, Sun 19 July: Maximilian Yragerne rolled 15 using 1d20.</p>
+        <p style="margin-left: 2em; text-indent: -2em;">04:24, Tue 21 July: Shade rolled 1 using 1d20.&nbsp; Recall.</p>
+        </div>
+        """;
+
+    var first = GameForumUtility.ExtractDieRollEntries(html);
+    var second = GameForumUtility.ExtractDieRollEntries(html);
+
+    AssertEqual(3, first.Length, "identifier-free duplicate rolls should be collapsed");
+    AssertEqual(first[0].RollId, second[0].RollId, "synthetic roll IDs should be stable");
+    AssertTrue(
+        System.Text.RegularExpressions.Regex.IsMatch(first[0].RollId, @"^\d+\.\d+\.\d+$"),
+        "synthetic roll IDs should preserve the saved roll ID shape");
+    AssertContains(first[0].Line, "Shade rolled 1 using 1d20.");
+
+    using var directory = TemporaryDirectory.Create();
+    var cachePath = Path.Combine(directory.Path, "dice-rolls.html");
+    var appended = GameForumUtility.AppendNewDieRollEntriesAsync(html, cachePath).GetAwaiter().GetResult();
+    var saved = GameForumUtility.ExtractDieRollEntries(File.ReadAllText(cachePath));
+    var normalizedSnapshot = GameForumUtility.NormalizeDieRollSnapshotHtml(html);
+    var normalizedSnapshotEntries = GameForumUtility.ExtractDieRollEntries(normalizedSnapshot);
+    AssertEqual(3, appended, "identifier-free live rolls should be saved");
+    AssertEqual(3, saved.Length, "saved synthetic roll IDs should remain parseable");
+    AssertEqual(first[0].RollId, saved[0].RollId, "saved synthetic roll IDs should remain stable");
+    AssertEqual(3, normalizedSnapshotEntries.Length, "normalized snapshots should retain every unique live roll");
+    AssertContains(normalizedSnapshot, $"[roll={first[0].RollId}]");
+}
+
 static void DieRollSyncAppendsOnlyUnsavedRolls()
 {
     using var directory = TemporaryDirectory.Create();
@@ -5982,30 +6026,46 @@ static void AdventureOutlineIgnoresFailedFallbackMarkdownFetch()
 
 static void AdjustedPostTalliesAggregateSavedIcHtml()
 {
-    var repositoryRoot = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", ".."));
-    var postsDirectory = Path.Combine(repositoryRoot, "Release", "Posts", "IC");
+    using var directory = TemporaryDirectory.Create();
+    var postsDirectory = Path.Combine(directory.Path, "Posts", "IC");
     var asideDirectory = Path.Combine(postsDirectory, "Aside");
+    var outOfCharacterDirectory = Path.Combine(directory.Path, "Posts", "OOC");
+    Directory.CreateDirectory(postsDirectory);
+    Directory.CreateDirectory(asideDirectory);
+    Directory.CreateDirectory(outOfCharacterDirectory);
 
-    var outOfCharacterDirectory = Path.Combine(repositoryRoot, "Release", "Posts", "OOC");
+    File.WriteAllText(
+        Path.Combine(postsDirectory, "chapter.html"),
+        CreateRpolSourceHtml(
+            (1, RpolThreadPostUtility.DungeonMasterAuthor, "Mon 1 Jan 2026", "01:00", "The party arrives."),
+            (2, RpolThreadPostUtility.NuandaAuthor, "Mon 1 Jan 2026", "01:05", "Nuanda answers."),
+            (3, "Jelb Garrick", "Mon 1 Jan 2026", "01:10", "Jelb listens.")));
+    File.WriteAllText(
+        Path.Combine(asideDirectory, "aside.html"),
+        CreateRpolSourceHtml(
+            (4, RpolThreadPostUtility.NuandaNemereAuthor, "Mon 1 Jan 2026", "01:15", "Nemere answers."),
+            (5, RpolThreadPostUtility.BillworthTurgenAuthor, "Mon 1 Jan 2026", "01:20", "Billworth watches.")));
+    File.WriteAllText(
+        Path.Combine(outOfCharacterDirectory, "ooc.html"),
+        CreateRpolSourceHtml(
+            (6, RpolThreadPostUtility.ThurganNewlAuthor, "Mon 1 Jan 2026", "01:25", "Thurgan comments."),
+            (7, RpolThreadPostUtility.TheArchonAuthor, "Mon 1 Jan 2026", "01:30", "The Archon comments."),
+            (8, "Kelpie Lawfuller", "Mon 1 Jan 2026", "01:35", "Kelpie comments.")));
 
     var counts = RpolThreadPostUtility.GetAdjustedPostTalliesFromSavedHtmlDirectories(
         postsDirectory,
         asideDirectory,
         outOfCharacterDirectory);
 
-    AssertEqual(12, counts.Count, "expected adjusted author count");
-    AssertEqual(62, counts[RpolThreadPostUtility.DungeonMasterAuthor], "unexpected Dungeon Master count");
-    AssertEqual(0, counts.GetValueOrDefault(RpolThreadPostUtility.BillworthTurgenAuthor, 0), "unexpected Billworth count");
-    AssertEqual(6, counts["Geoffroy Morin"], "unexpected Geoffroy count");
-    AssertEqual(19, counts["Jelb Garrick"], "unexpected Jelb count");
-    AssertEqual(28, counts["Kelpie Lawfuller"], "unexpected Kelpie count");
-    AssertEqual(10, counts["Maximilian Yragerne"], "unexpected Maximilian count");
-    AssertEqual(5, counts[RpolThreadPostUtility.NuandaAuthor], "unexpected Nuanda count");
-    AssertEqual(6, counts[RpolThreadPostUtility.NuandaNemereAuthor], "unexpected Nuanda Nemere count");
-    AssertEqual(1, counts["temp-name"], "unexpected temp-name count");
-    AssertEqual(1, counts["The-Archon"], "unexpected The-Archon count");
-    AssertEqual(3, counts[RpolThreadPostUtility.ThurganNewlAuthor], "unexpected Thurgan count");
-    AssertEqual(17, counts["Urvan Hall"], "unexpected Urvan count");
+    AssertEqual(8, counts.Count, "expected adjusted author count");
+    AssertEqual(6, counts[RpolThreadPostUtility.DungeonMasterAuthor], "unexpected Dungeon Master count");
+    AssertEqual(1, counts[RpolThreadPostUtility.BillworthTurgenAuthor], "unexpected Billworth count");
+    AssertEqual(1, counts["Jelb Garrick"], "unexpected Jelb count");
+    AssertEqual(1, counts["Kelpie Lawfuller"], "unexpected Kelpie count");
+    AssertEqual(1, counts[RpolThreadPostUtility.NuandaAuthor], "unexpected Nuanda count");
+    AssertEqual(2, counts[RpolThreadPostUtility.NuandaNemereAuthor], "unexpected Nuanda Nemere count");
+    AssertEqual(1, counts[RpolThreadPostUtility.TheArchonAuthor], "unexpected The-Archon count");
+    AssertEqual(1, counts[RpolThreadPostUtility.ThurganNewlAuthor], "unexpected Thurgan count");
 }
 
 static void KeywordSearchFallsBackToThePrefixedTerm()
@@ -7273,21 +7333,21 @@ static void UpdateCheckRejectsRetiredManifestSigningKey()
 static void UpdateCheckComparesAgainstCurrentAppVersion()
 {
     var currentVersion = PlayerAssistantUpdateUtility.GetCurrentAppVersion();
-    AssertEqual(new Version(0, 9, 1), currentVersion, "unexpected current app update-comparison version");
+    AssertEqual(new Version(0, 9, 5), currentVersion, "unexpected current app update-comparison version");
 
     var sameVersion = new PlayerAssistantUpdateInfo(
-        new Version(0, 9, 1),
-        "0.9.1",
-        new Uri("https://bryanmiller.us/scarlethorizons/p-assist-0.9.1.zip"),
+        new Version(0, 9, 5),
+        "0.9.5",
+        new Uri("https://bryanmiller.us/scarlethorizons/p-assist-0.9.5.zip"),
         new string('A', 64),
-        new Uri("https://bryanmiller.us/scarlethorizons/p-assist-0.9.1.exe"),
+        new Uri("https://bryanmiller.us/scarlethorizons/p-assist-0.9.5.exe"),
         new string('B', 64));
     var newerVersion = new PlayerAssistantUpdateInfo(
-        new Version(0, 9, 2),
-        "0.9.2",
-        new Uri("https://bryanmiller.us/scarlethorizons/p-assist-0.9.2.zip"),
+        new Version(0, 9, 6),
+        "0.9.6",
+        new Uri("https://bryanmiller.us/scarlethorizons/p-assist-0.9.6.zip"),
         new string('C', 64),
-        new Uri("https://bryanmiller.us/scarlethorizons/p-assist-0.9.2.exe"),
+        new Uri("https://bryanmiller.us/scarlethorizons/p-assist-0.9.6.exe"),
         new string('D', 64));
 
     AssertFalse(sameVersion.IsNewerThan(currentVersion), "same version should not be offered as an update");
@@ -7874,7 +7934,7 @@ static void SearchEnterTriggersClickWhenEnabled()
                   "total_occurrences": 1,
                   "matches": [
                     {
-                      "url": "https://example.test/entry",
+                      "url": "https://publish.obsidian.md/scarlethorizons/entry",
                       "count": 1,
                       "last_indexed": "2026-06-30T00:00:00.0000000+00:00"
                     }
@@ -7886,22 +7946,35 @@ static void SearchEnterTriggersClickWhenEnabled()
             () =>
             {
                 using var form = new Form1(suppressHeroImagesForThisRun: true);
+                using var buttonHost = new Form();
+
                 var txtSearch = GetControl<TextBox>(form, "txtSearch");
                 var btnSearch = GetControl<Button>(form, "btnSearch");
-                var lstSearchResults = GetControl<ListBox>(form, "lstSearchResults");
+                buttonHost.Controls.Add(btnSearch);
+                buttonHost.Show();
+                Application.DoEvents();
+
+                var clickCount = 0;
+                btnSearch.Click += (_, _) => clickCount++;
 
                 txtSearch.Text = "entry";
                 AssertTrue(btnSearch.Enabled, "expected search button to be enabled for a valid search term");
 
                 InvokePrivateMethod(
                     form,
-                    "TxtSearch_KeyDown",
+                    "TxtSearch_EnterPressed",
                     txtSearch,
-                    new KeyEventArgs(Keys.Enter));
+                    EventArgs.Empty);
 
-                var results = lstSearchResults.Items.Cast<object>().Select(item => item?.ToString()).ToArray();
-                AssertEqual(1, results.Length, "expected Enter to trigger the existing search click path");
-                AssertContains(string.Join("\n", results), "https://example.test/entry");
+                AssertEqual(1, clickCount, "expected Enter to trigger the existing search click path");
+                var completionTimeout = Stopwatch.StartNew();
+                while (!btnSearch.Enabled && completionTimeout.Elapsed < TimeSpan.FromSeconds(5))
+                {
+                    Application.DoEvents();
+                    Thread.Sleep(10);
+                }
+
+                AssertTrue(btnSearch.Enabled, "expected the Enter-triggered search to complete");
             });
     });
 }
@@ -9313,14 +9386,12 @@ static void XpTrackingMissingPcMessageDirectsPlayersToDm()
     AssertFalse(message.Contains("https://", StringComparison.OrdinalIgnoreCase), "missing-PC message should not expose URL-shaped text");
 }
 
-static void ExternalUrlLaunchPolicyAcceptsHttpAndHttps()
+static void ExternalUrlLaunchPolicyAcceptsHttpsAndRejectsHttp()
 {
     var http = ExternalUrlLaunchUtility.Validate(" http://rpol.net/path?q=one ");
-    var https = ExternalUrlLaunchUtility.Validate("https://publish.obsidian.md/entry");
+    var https = ExternalUrlLaunchUtility.Validate("https://rpol.net/game.php?gi=80170");
 
-    AssertTrue(http.IsAllowed, "HTTP URLs should be allowed");
-    AssertEqual("http://rpol.net/path?q=one", http.Url ?? string.Empty, "HTTP URL should be normalized before launch");
-    AssertEqual("rpol.net", http.Host ?? string.Empty, "HTTP host should be exposed for confirmation");
+    AssertFalse(http.IsAllowed, "HTTP URLs should be rejected");
     AssertTrue(https.IsAllowed, "HTTPS URLs should be allowed");
 }
 
@@ -9385,18 +9456,18 @@ static void HeroAssetPathsRejectEscapedTargets()
 
     var safePath = (string)(InvokeStaticMethod(
         utilityType,
-        "GetActiveHeroAssetPath",
+        "GetHeroAssetPath",
         activeDirectory,
-        "alice-token.webp") ?? throw new InvalidOperationException("GetActiveHeroAssetPath returned null."));
+        "alice-token.webp") ?? throw new InvalidOperationException("GetHeroAssetPath returned null."));
 
     AssertTrue(
         safePath.StartsWith(activeDirectory, StringComparison.OrdinalIgnoreCase),
         "safe hero asset path should remain under the active PCs directory");
 
     AssertThrows<InvalidOperationException>(() =>
-        InvokeStaticMethod(utilityType, "GetActiveHeroAssetPath", activeDirectory, "..\\escape.webp"));
+        InvokeStaticMethod(utilityType, "GetHeroAssetPath", activeDirectory, "..\\escape.webp"));
     AssertThrows<InvalidOperationException>(() =>
-        InvokeStaticMethod(utilityType, "GetActiveHeroAssetPath", activeDirectory, "/escape.webp"));
+        InvokeStaticMethod(utilityType, "GetHeroAssetPath", activeDirectory, "/escape.webp"));
 }
 
 static void LocalSettingsAreEncryptedOnLoad()
@@ -10174,7 +10245,7 @@ static void ReleaseUpdateArtifactVerificationAcceptsGeneratedSignedManifest()
     WithCopiedPublishDirectory(publishDirectory =>
     {
         using var outputDirectory = TemporaryDirectory.Create();
-        var installerPath = Path.Combine(outputDirectory.Path, "p-assist-0.9.1.exe");
+        var installerPath = Path.Combine(outputDirectory.Path, "p-assist-0.9.5.exe");
         File.Copy(Path.Combine(publishDirectory, "player-assistant.exe"), installerPath, overwrite: true);
 
         var buildOutput = RunPowerShell(
@@ -10204,7 +10275,7 @@ static void ReleaseUpdateArtifactVerificationAcceptsGeneratedSignedManifest()
                 "-File",
                 Path.Combine(GetRepositoryRoot(), "verify-release-update-artifacts.ps1"),
                 "-PublishArchivePath",
-                Path.Combine(outputDirectory.Path, "p-assist-0.9.1.zip"),
+                Path.Combine(outputDirectory.Path, "p-assist-0.9.5.zip"),
                 "-InstallerPath",
                 installerPath,
                 "-ManifestPath",
@@ -10226,7 +10297,7 @@ static void ReleaseUpdateArtifactVerificationRejectsManifestHashMismatch()
     WithCopiedPublishDirectory(publishDirectory =>
     {
         using var outputDirectory = TemporaryDirectory.Create();
-        var installerPath = Path.Combine(outputDirectory.Path, "p-assist-0.9.1.exe");
+        var installerPath = Path.Combine(outputDirectory.Path, "p-assist-0.9.5.exe");
         File.Copy(Path.Combine(publishDirectory, "player-assistant.exe"), installerPath, overwrite: true);
 
         var buildOutput = RunPowerShell(
@@ -10272,7 +10343,7 @@ static void ReleaseUpdateArtifactVerificationRejectsManifestHashMismatch()
                 "-File",
                 Path.Combine(GetRepositoryRoot(), "verify-release-update-artifacts.ps1"),
                 "-PublishArchivePath",
-                Path.Combine(outputDirectory.Path, "p-assist-0.9.1.zip"),
+                Path.Combine(outputDirectory.Path, "p-assist-0.9.5.zip"),
                 "-InstallerPath",
                 installerPath,
                 "-ManifestPath",
@@ -12374,6 +12445,21 @@ static void RpolVerificationRecognizesAuthenticatedBrowserTitle()
         "a challenge window title should remain open");
 }
 
+static void RpolDiceRollerNavigationUsesGamePageReferrer()
+{
+    AssertTrue(
+        string.Equals(
+            AppSettingsUtility.GameForumUrl,
+            RpolAuthUtility.GetNavigationReferer(
+                new Uri("https://rpol.net/usermodules/diceroller.cgi?gi=80170")),
+            StringComparison.Ordinal),
+        "Dice Roller navigation should carry the configured game page as its referrer");
+    AssertTrue(
+        RpolAuthUtility.GetNavigationReferer(
+            new Uri("https://rpol.net/display.cgi?gi=80170&ti=7")) is null,
+        "ordinary RPOL navigation should not receive a synthetic referrer");
+}
+
 static void SnapshotPublisherStateAdvancesOneTargetAndWraps()
 {
     var root = new Uri("https://rpol.net/game.php?gi=80170");
@@ -12387,19 +12473,44 @@ static void SnapshotPublisherStateAdvancesOneTargetAndWraps()
     AssertEqual(root, RpolSnapshotUtility.GetNextSourceUri(state), "the publisher queue should wrap after the last target");
 }
 
-static void SnapshotDiscoveryApprovesGameLinks()
+static void SnapshotDiscoveryApprovesGameLinksAndDiceRoller()
 {
-    var approved = (bool)(InvokeStaticMethod(
+    var gameLinksApproved = (bool)(InvokeStaticMethod(
         typeof(RpolSnapshotUtility),
         "IsApprovedLinkLabel",
         "Game Links") ?? false);
+    var diceRollerApproved = (bool)(InvokeStaticMethod(
+        typeof(RpolSnapshotUtility),
+        "IsApprovedLinkLabel",
+        "Die Roller") ?? false);
     var unrelated = (bool)(InvokeStaticMethod(
         typeof(RpolSnapshotUtility),
         "IsApprovedLinkLabel",
         "Edit Game") ?? true);
 
-    AssertTrue(approved, "Game Links should be included in snapshot discovery");
+    AssertTrue(gameLinksApproved, "Game Links should be included in snapshot discovery");
+    AssertTrue(diceRollerApproved, "Die Roller should be included in snapshot discovery");
     AssertFalse(unrelated, "unrelated game administration links should remain excluded");
+}
+
+static void SnapshotPublisherStateInjectsRequiredDiceRollerTarget()
+{
+    var root = new Uri("https://rpol.net/game.php?gi=80170");
+    var cast = new Uri("https://rpol.net/gameinfo.php?action=cast&gi=80170");
+    var state = RpolSnapshotUtility.AdvancePublisherState(
+        RpolSnapshotUtility.CreatePublisherState([root, cast]));
+
+    var updated = RpolSnapshotUtility.EnsureRequiredSourceUris(state);
+
+    AssertEqual(3, updated.SourceUrls.Count, "the required Dice Roller target should be inserted once");
+    AssertEqual(
+        "https://rpol.net/usermodules/diceroller.cgi?gi=80170",
+        updated.SourceUrls[updated.NextIndex],
+        "the newly required target should be the next publisher item");
+    AssertEqual(cast.AbsoluteUri, updated.SourceUrls[updated.NextIndex + 1], "the previous next target should be preserved");
+    AssertTrue(
+        ReferenceEquals(updated, RpolSnapshotUtility.EnsureRequiredSourceUris(updated)),
+        "a current publisher queue should not be rewritten");
 }
 
 static void SnapshotPublisherStatePersistsItsCursor()

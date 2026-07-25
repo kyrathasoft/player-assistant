@@ -1433,7 +1433,8 @@ namespace PlayerAssistant
                     page.GotoAsync(uri.ToString(), new PageGotoOptions
                     {
                         WaitUntil = WaitUntilState.DOMContentLoaded,
-                        Timeout = (float)PlaywrightOperationTimeout.TotalMilliseconds
+                        Timeout = (float)PlaywrightOperationTimeout.TotalMilliseconds,
+                        Referer = GetNavigationReferer(uri)
                     }),
                     $"loading '{uri}'",
                     cancellationToken);
@@ -1442,6 +1443,17 @@ namespace PlayerAssistant
             {
                 NavigationSemaphore.Release();
             }
+        }
+
+        internal static string? GetNavigationReferer(Uri uri)
+        {
+            ArgumentNullException.ThrowIfNull(uri);
+            return string.Equals(
+                uri.AbsolutePath,
+                "/usermodules/diceroller.cgi",
+                StringComparison.OrdinalIgnoreCase)
+                    ? AppSettingsUtility.GameForumUrl
+                    : null;
         }
 
         private static void EnsureSuccessfulResponse(Uri uri, IResponse? response, string? responseBody = null)

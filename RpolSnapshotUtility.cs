@@ -37,6 +37,7 @@ namespace PlayerAssistant
         private const int SchemaVersion = 1;
         private const int PublisherStateSchemaVersion = 1;
         private const string PublisherStateFileName = "rpol-snapshot-publisher-state.json";
+        private static readonly Uri DiceRollerUri = new($"https://rpol.net/usermodules/diceroller.cgi?gi={GameId}");
         private static readonly HttpClient HttpClient = new(new SocketsHttpHandler
         {
             AutomaticDecompression = DecompressionMethods.All,
@@ -94,6 +95,15 @@ namespace PlayerAssistant
                 state = CreatePublisherState(discovery.SourceUris);
                 await SavePublisherStateAsync(statePath, state, cancellationToken);
             }
+            else
+            {
+                var updatedState = EnsureRequiredSourceUris(state);
+                if (!ReferenceEquals(updatedState, state))
+                {
+                    state = updatedState;
+                    await SavePublisherStateAsync(statePath, state, cancellationToken);
+                }
+            }
 
             var sourceUri = GetNextSourceUri(state);
             try
@@ -110,6 +120,11 @@ namespace PlayerAssistant
                     var response = await RpolAuthUtility.GetSnapshotResponseAsync(sourceUri, cancellationToken);
                     html = Encoding.UTF8.GetString(response.Body);
                     contentType = response.ContentType ?? "text/html; charset=utf-8";
+                }
+
+                if (sourceUri == DiceRollerUri)
+                {
+                    html = GameForumUtility.NormalizeDieRollSnapshotHtml(html);
                 }
 
                 var sanitizedHtml = SanitizeHtml(html);
@@ -168,6 +183,25 @@ namespace PlayerAssistant
         {
             ValidatePublisherState(state);
             return state with { NextIndex = (state.NextIndex + 1) % state.SourceUrls.Count };
+        }
+
+        internal static RpolSnapshotPublisherState EnsureRequiredSourceUris(RpolSnapshotPublisherState state)
+        {
+            ValidatePublisherState(state);
+            var missingUris = new[] { DiceRollerUri }
+                .Where(requiredUri => !state.SourceUrls.Contains(
+                    requiredUri.AbsoluteUri,
+                    StringComparer.OrdinalIgnoreCase))
+                .Select(requiredUri => requiredUri.AbsoluteUri)
+                .ToArray();
+            if (missingUris.Length == 0)
+            {
+                return state;
+            }
+
+            var sourceUrls = state.SourceUrls.ToList();
+            sourceUrls.InsertRange(state.NextIndex, missingUris);
+            return state with { SourceUrls = sourceUrls };
         }
 
         internal static RpolSnapshotPublisherState? LoadPublisherState(string statePath)
@@ -322,7 +356,8 @@ namespace PlayerAssistant
             {
                 rootUri,
                 new(AppSettingsUtility.GameIntroUrl),
-                new(AppSettingsUtility.TheCastUrl)
+                new(AppSettingsUtility.TheCastUrl),
+                DiceRollerUri
             };
             candidates.AddRange(HtmlUtility.GetHyperlinksFromHtml(rootHtml, rootUri)
                 .Where(link => IsApprovedLinkLabel(link.Text))
@@ -350,6 +385,7 @@ namespace PlayerAssistant
         private static bool IsApprovedLinkLabel(string text)
         {
             return text.Equals("Game Links", StringComparison.OrdinalIgnoreCase)
+                || text.Equals("Die Roller", StringComparison.OrdinalIgnoreCase)
                 || text.StartsWith("Ch ", StringComparison.OrdinalIgnoreCase)
                 || text.StartsWith("Notice: Ch", StringComparison.OrdinalIgnoreCase)
                 || text.StartsWith("OOC", StringComparison.OrdinalIgnoreCase)
@@ -379,7 +415,16 @@ namespace PlayerAssistant
                 HttpCompletionOption.ResponseHeadersRead,
                 purpose: NetworkUrlPurpose.PlayerAssistantBroker,
                 cancellationToken: cancellationToken);
-            response.EnsureSuccessStatusCode();
+            if (!response.IsSuccessStatusCode)
+            {
+                var responseBody = await NetworkRequestUtility.ReadStringAsync(
+                    response.Content,
+                    NetworkResponseContentLimit.JsonCache,
+                    cancellationToken);
+                throw new InvalidOperationException(
+                    $"The RPOL snapshot broker returned HTTP {(int)response.StatusCode}: "
+                    + SensitiveTextRedactionUtility.Redact(responseBody));
+            }
         }
 
         private static HttpRequestMessage CreateRequest(HttpMethod method, Uri uri, string? bearerToken)

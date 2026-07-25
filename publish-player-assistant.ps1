@@ -1710,7 +1710,7 @@ if (Test-Path -LiteralPath $releaseLocalSettingsPath -PathType Leaf) {
     Remove-Item -LiteralPath $releaseLocalSettingsPath -Force
 }
 
-Get-ChildItem -Path $resolvedOutputDir -Filter *.pdb -File | Remove-Item -Force
+Get-ChildItem -LiteralPath $resolvedOutputDir -Recurse -Filter '*.pdb' -File | Remove-Item -Force
 
 Copy-Item -LiteralPath (Join-Path $PSScriptRoot "Release\$KeywordIndexFileName") -Destination (Join-Path $resolvedOutputDir $KeywordIndexFileName) -Force
 Copy-Item -LiteralPath (Join-Path $PSScriptRoot "Release\$KeywordTermsFileName") -Destination (Join-Path $resolvedOutputDir $KeywordTermsFileName) -Force
