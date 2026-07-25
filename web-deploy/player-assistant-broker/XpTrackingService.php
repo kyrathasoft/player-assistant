@@ -6,6 +6,9 @@ final class XpTrackingService
 {
     private const CACHE_KEY = 'current';
     private const MAXIMUM_CHARACTERS = 200;
+    private const CHARACTER_KEY_ALIASES = [
+        'max' => 'maximilian',
+    ];
 
     private array $xpConfig;
     private $markdownFetcher;
@@ -356,7 +359,8 @@ final class XpTrackingService
     {
         $firstName = explode(' ', trim($name), 2)[0];
         $key = strtolower((string)preg_replace('/[^A-Za-z0-9]+/', '-', $firstName));
-        return trim($key, '-');
+        $key = trim($key, '-');
+        return self::CHARACTER_KEY_ALIASES[$key] ?? $key;
     }
 
     private function loadCachedSnapshot(): ?array

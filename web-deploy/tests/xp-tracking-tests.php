@@ -60,6 +60,7 @@ try {
         '| --- | --- | ---: |',
         '| [[Jelb]] | Wizard | 12,345 |',
         '| Dorn | Fighter | 98,765 |',
+        '| Max | Theurge | 6,100 |',
         '',
         'As of 7.20.2026',
         '| Name | XP Total |',
@@ -84,12 +85,21 @@ try {
     xpAssert($player['date_label'] === 'As of 7.23.2026', 'The latest XP date was not selected.');
     xpAssert(!isset($player['characters']), 'A player response exposed the party XP array.');
 
+    $maximilian = $service->getForAccount([
+        'role' => 'player',
+        'character_key' => 'maximilian',
+    ]);
+    xpAssert($maximilian['scope'] === 'character', 'Maximilian did not receive character-scoped XP.');
+    xpAssert($maximilian['character']['character_name'] === 'Max', 'Maximilian did not receive the Max XP row.');
+    xpAssert($maximilian['character']['xp_total'] === 6100, 'Maximilian received the wrong current XP total.');
+    xpAssert(!isset($maximilian['characters']), 'Maximilian received the party XP array.');
+
     $dm = $service->getForAccount([
         'role' => 'dm',
         'character_key' => 'dungeon-master',
     ]);
     xpAssert($dm['scope'] === 'party', 'The Dungeon Master did not receive party-scoped XP.');
-    xpAssert(count($dm['characters']) === 2, 'The Dungeon Master did not receive every current XP row.');
+    xpAssert(count($dm['characters']) === 3, 'The Dungeon Master did not receive every current XP row.');
     xpAssert($fetchCount === 1, 'The validated XP snapshot was not served from the server cache.');
 
     expectXpError(
