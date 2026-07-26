@@ -81,13 +81,31 @@ jobs:
           }
 
           if (-not (Test-Path -LiteralPath .\xp-passwords.json -PathType Leaf)) {
-            @'
-          {
-            "schema_version": 1,
-            "Dungeon Master": "ci-fixture-password",
-            "Kelpie": "ci-fixture-password"
-          }
-          '@ | Set-Content -LiteralPath .\xp-passwords.json -Encoding UTF8
+            $entries = foreach ($name in @('Dungeon Master', 'Kelpie')) {
+              $salt = [Security.Cryptography.RandomNumberGenerator]::GetBytes(16)
+              $hash = [Security.Cryptography.Rfc2898DeriveBytes]::Pbkdf2(
+                'ci-fixture-password',
+                $salt,
+                600000,
+                [Security.Cryptography.HashAlgorithmName]::SHA256,
+                32)
+              [ordered]@{
+                name = $name
+                algorithm = 'PBKDF2-HMAC-SHA256'
+                iterations = 600000
+                salt = [Convert]::ToBase64String($salt)
+                hash = [Convert]::ToBase64String($hash)
+              }
+              [Security.Cryptography.CryptographicOperations]::ZeroMemory($hash)
+            }
+
+            [ordered]@{
+              schema_version = 1
+              format = 'xp-password-hashes-v1'
+              entries = @($entries)
+            } |
+              ConvertTo-Json -Depth 5 |
+              Set-Content -LiteralPath .\xp-passwords.json -Encoding UTF8
           }
 
       - name: Seed Release runtime artifacts
