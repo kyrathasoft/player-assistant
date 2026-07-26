@@ -35,6 +35,7 @@ $RequiredHealthPhases = @(
     'configuration validation'
 )
 $PublishDiagnosticsToRestore = @(
+    'last-crash.json',
     'startup-health.json',
     'startup-errors.log',
     'startup-remediation.txt',
