@@ -28,6 +28,7 @@
 - Never commit installer files unless explicitly requested.
 - Never commit incidental generated artifacts.
 - Commit only intentional source or tracked data changes.
+- Work from and push directly to `master`, bypassing the branch/PR workflow unless the user instructs otherwise.
 
 ## Response Style
 - Be concise.
