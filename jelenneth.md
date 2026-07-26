@@ -1,0 +1,1 @@
+- the morning the party left Raven's Pass, entering the Red Thicket, marked 11 days since Jelenneth went missing

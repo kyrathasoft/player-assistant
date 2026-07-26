@@ -22,6 +22,7 @@
 - Read `to-do.md` at the start of every coding session.
 - Use it for priorities, hardening status, and backlog context.
 - If a backlog task updates `to-do.md`, include it in the commit.
+- If a user question includes the word `Jelenneth`, read `jelenneth.md` before answering.
 
 ## Commits
 - Never commit installer files unless explicitly requested.
@@ -40,6 +41,10 @@
 - For code explanations, use bullet points only.
 - Before acting, do not describe intended actions.
 - After acting, provide only a brief summary.
+- Do not display commands.
+- Do not display shell invocations.
+- Do not display tool calls.
+- Report only results. 
 
 ## Reporting
 Do not show:

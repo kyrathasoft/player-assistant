@@ -106,6 +106,9 @@
         const characterName = byId('xp-character-name');
         const xpTotal = byId('xp-total');
         const xpDate = byId('xp-date');
+        const classLevel = byId('xp-class-level');
+        const hitPoints = byId('xp-hit-points');
+        const tnl = byId('xp-tnl');
         const partyDate = byId('xp-party-date');
         const partyRows = byId('xp-party-rows');
         if (refreshButton) refreshButton.hidden = !authenticated;
@@ -114,6 +117,9 @@
         if (characterName) characterName.textContent = '';
         if (xpTotal) xpTotal.textContent = '';
         if (xpDate) xpDate.textContent = '';
+        if (classLevel) classLevel.textContent = '';
+        if (hitPoints) hitPoints.textContent = '';
+        if (tnl) tnl.textContent = '';
         if (partyDate) partyDate.textContent = '';
         partyRows?.replaceChildren();
 
@@ -135,6 +141,11 @@
             if (characterName) characterName.textContent = character.character_name;
             if (xpTotal) xpTotal.textContent = Number(character.xp_total).toLocaleString('en-US');
             if (xpDate) xpDate.textContent = authenticatedXpSnapshot.date_label;
+            if (classLevel) classLevel.textContent = `${character.character_class} ${character.level}`;
+            if (hitPoints) hitPoints.textContent = Number(character.hit_points).toLocaleString('en-US');
+            if (tnl) tnl.textContent = character.xp_to_next_level === null
+                ? 'Max level'
+                : Number(character.xp_to_next_level).toLocaleString('en-US');
             return;
         }
 
@@ -172,8 +183,20 @@
             && typeof character.character_name === 'string'
             && character.character_name.length > 0
             && character.character_name.length <= 100
+            && typeof character.character_class === 'string'
+            && character.character_class.length > 0
+            && character.character_class.length <= 100
+            && Number.isSafeInteger(character.level)
+            && character.level >= 0
+            && character.level <= 1000
+            && Number.isSafeInteger(character.hit_points)
+            && character.hit_points >= 0
+            && character.hit_points <= 1000000
             && Number.isSafeInteger(character.xp_total)
-            && character.xp_total >= 0;
+            && character.xp_total >= 0
+            && (character.xp_to_next_level === null
+                || (Number.isSafeInteger(character.xp_to_next_level)
+                    && character.xp_to_next_level >= 0));
         if (payload.scope === 'character' && validCharacter(payload.character)) {
             return payload;
         }

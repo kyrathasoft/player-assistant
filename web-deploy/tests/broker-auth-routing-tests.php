@@ -42,6 +42,8 @@ try {
         ],
         'xp' => [
             'source_url' => 'https://publish.obsidian.md/example/XP',
+            'character_source_url' => 'https://publish.obsidian.md/example/PCs/Player+Characters+Listing',
+            'class_progression_index_url' => 'https://publish.obsidian.md/example/Classes/Class+Level+Progression',
             'connect_timeout_seconds' => 1,
             'timeout_seconds' => 2,
             'maximum_response_bytes' => 65536,
@@ -57,14 +59,46 @@ try {
     $broker = new BrokerService(
         $config,
         new RpolClient($config['rpol']),
-        static fn(string $url): string => implode("\n", [
-            'As of 7.23.2026',
-            '',
-            '| Name | XP Total |',
-            '| --- | ---: |',
-            '| Routing Hero | 12,345 |',
-            '| Another Hero | 98,765 |',
-        ]));
+        static function (string $url): string {
+            if (str_contains($url, 'Player+Characters+Listing')) {
+                return implode("\n", [
+                '| Name | Class | Level | HP |',
+                '| --- | --- | ---: | ---: |',
+                '| Routing Hero | Ranger | 4 | 17 |',
+                '| Another Hero | Fighter | 5 | 29 |',
+                ]);
+            }
+            if (str_contains($url, 'Class+Level+Progression')) {
+                return "- [[Fighter]]\n- [[Ranger]]";
+            }
+            if (str_contains($url, '/Classes/Ranger')) {
+                return implode("\n", [
+                    '| 1 | 0 |',
+                    '| 2 | 2,250 |',
+                    '| 3 | 4,500 |',
+                    '| 4 | 10,000 |',
+                    '| 5 | 20,000 |',
+                ]);
+            }
+            if (str_contains($url, '/Classes/Fighter')) {
+                return implode("\n", [
+                    '| 1 | 0 |',
+                    '| 2 | 2,000 |',
+                    '| 3 | 4,000 |',
+                    '| 4 | 8,000 |',
+                    '| 5 | 16,000 |',
+                    '| 6 | 32,000 |',
+                ]);
+            }
+            return implode("\n", [
+                'As of 7.23.2026',
+                '',
+                '| Name | Class | Level | XP Total |',
+                '| --- | --- | ---: | ---: |',
+                '| Routing Hero | Ranger | 4 | 12,345 |',
+                '| Another Hero | Fighter | 5 | 98,765 |',
+            ]);
+        });
     $session = [];
     $adminHeaders = ['admin-key' => $config['api']['admin_key']];
     $rpolClient = new RpolClient($config['rpol']);
@@ -146,6 +180,10 @@ try {
     routingAssert($xp['status'] === 200, 'The protected XP route failed.');
     routingAssert($xp['body']['scope'] === 'character', 'The player XP response had the wrong scope.');
     routingAssert($xp['body']['character']['xp_total'] === 12345, 'The player XP response had the wrong total.');
+    routingAssert($xp['body']['character']['character_class'] === 'Ranger', 'The player XP response had the wrong class.');
+    routingAssert($xp['body']['character']['level'] === 4, 'The player XP response had the wrong level.');
+    routingAssert($xp['body']['character']['hit_points'] === 17, 'The player XP response had the wrong hit points.');
+    routingAssert($xp['body']['character']['xp_to_next_level'] === 7655, 'The player XP response had the wrong TNL value.');
     routingAssert(!isset($xp['body']['characters']), 'The player XP response exposed party totals.');
     routingAssert(!isset($xp['body']['source_url']), 'The player XP response exposed the configured source URL.');
 

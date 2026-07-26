@@ -1,0 +1,265 @@
+{
+  "schema_version": 1,
+  "ruleset": "Advanced Fantasy",
+  "source": {
+    "title": "Advanced Fantasy Player's Tome",
+    "publisher": "Necrotic Gnome",
+    "file_name": "advanced fantasy player tome.pdf",
+    "printed_pages": [62, 63],
+    "pdf_pages": [64, 65]
+  },
+  "progression_semantics": {
+    "minimum_xp": "Total experience points required to attain the listed level.",
+    "spell_slots": "Number of spells available at spell levels 1 through 6."
+  },
+  "classes": {
+    "illusionist": {
+      "name": "Illusionist",
+      "requirements": {
+        "minimum_dexterity": 9
+      },
+      "prime_requisite": "INT",
+      "hit_die": "1d4",
+      "maximum_level": 36,
+      "published_maximum_level": 14,
+      "extended_progression": {
+        "starts_after_level": 14,
+        "xp_per_additional_level": 150000,
+        "basis": "User-requested extrapolation of the published level 10-14 increment.",
+        "mechanical_statistics_available": false
+      },
+      "armour": ["None"],
+      "weapons": ["Dagger", "Staff (optional)"],
+      "languages": ["Alignment", "Common"],
+      "level_progression": [
+        {
+          "level": 1,
+          "minimum_xp": 0,
+          "hit_dice": "1d4",
+          "thac0": {"descending": 19, "ascending_bonus": 0},
+          "saving_throws": {"death_poison": 13, "wands": 14, "paralysis_petrify": 13, "breath_attacks": 16, "spells_rods_staves": 15},
+          "spell_slots": [1, 0, 0, 0, 0, 0]
+        },
+        {
+          "level": 2,
+          "minimum_xp": 2500,
+          "hit_dice": "2d4",
+          "thac0": {"descending": 19, "ascending_bonus": 0},
+          "saving_throws": {"death_poison": 13, "wands": 14, "paralysis_petrify": 13, "breath_attacks": 16, "spells_rods_staves": 15},
+          "spell_slots": [2, 0, 0, 0, 0, 0]
+        },
+        {
+          "level": 3,
+          "minimum_xp": 5000,
+          "hit_dice": "3d4",
+          "thac0": {"descending": 19, "ascending_bonus": 0},
+          "saving_throws": {"death_poison": 13, "wands": 14, "paralysis_petrify": 13, "breath_attacks": 16, "spells_rods_staves": 15},
+          "spell_slots": [2, 1, 0, 0, 0, 0]
+        },
+        {
+          "level": 4,
+          "minimum_xp": 10000,
+          "hit_dice": "4d4",
+          "thac0": {"descending": 19, "ascending_bonus": 0},
+          "saving_throws": {"death_poison": 13, "wands": 14, "paralysis_petrify": 13, "breath_attacks": 16, "spells_rods_staves": 15},
+          "spell_slots": [2, 2, 0, 0, 0, 0]
+        },
+        {
+          "level": 5,
+          "minimum_xp": 20000,
+          "hit_dice": "5d4",
+          "thac0": {"descending": 19, "ascending_bonus": 0},
+          "saving_throws": {"death_poison": 13, "wands": 14, "paralysis_petrify": 13, "breath_attacks": 16, "spells_rods_staves": 15},
+          "spell_slots": [2, 2, 1, 0, 0, 0]
+        },
+        {
+          "level": 6,
+          "minimum_xp": 40000,
+          "hit_dice": "6d4",
+          "thac0": {"descending": 17, "ascending_bonus": 2},
+          "saving_throws": {"death_poison": 11, "wands": 12, "paralysis_petrify": 11, "breath_attacks": 14, "spells_rods_staves": 12},
+          "spell_slots": [2, 2, 2, 0, 0, 0]
+        },
+        {
+          "level": 7,
+          "minimum_xp": 80000,
+          "hit_dice": "7d4",
+          "thac0": {"descending": 17, "ascending_bonus": 2},
+          "saving_throws": {"death_poison": 11, "wands": 12, "paralysis_petrify": 11, "breath_attacks": 14, "spells_rods_staves": 12},
+          "spell_slots": [3, 2, 2, 1, 0, 0]
+        },
+        {
+          "level": 8,
+          "minimum_xp": 150000,
+          "hit_dice": "8d4",
+          "thac0": {"descending": 17, "ascending_bonus": 2},
+          "saving_throws": {"death_poison": 11, "wands": 12, "paralysis_petrify": 11, "breath_attacks": 14, "spells_rods_staves": 12},
+          "spell_slots": [3, 3, 2, 2, 0, 0]
+        },
+        {
+          "level": 9,
+          "minimum_xp": 300000,
+          "hit_dice": "9d4",
+          "thac0": {"descending": 17, "ascending_bonus": 2},
+          "saving_throws": {"death_poison": 11, "wands": 12, "paralysis_petrify": 11, "breath_attacks": 14, "spells_rods_staves": 12},
+          "spell_slots": [3, 3, 3, 2, 1, 0]
+        },
+        {
+          "level": 10,
+          "minimum_xp": 450000,
+          "hit_dice": "9d4+1",
+          "constitution_modifier_applies": false,
+          "thac0": {"descending": 17, "ascending_bonus": 2},
+          "saving_throws": {"death_poison": 11, "wands": 12, "paralysis_petrify": 11, "breath_attacks": 14, "spells_rods_staves": 12},
+          "spell_slots": [3, 3, 3, 3, 2, 0]
+        },
+        {
+          "level": 11,
+          "minimum_xp": 600000,
+          "hit_dice": "9d4+2",
+          "constitution_modifier_applies": false,
+          "thac0": {"descending": 14, "ascending_bonus": 5},
+          "saving_throws": {"death_poison": 8, "wands": 9, "paralysis_petrify": 8, "breath_attacks": 11, "spells_rods_staves": 8},
+          "spell_slots": [4, 3, 3, 3, 2, 1]
+        },
+        {
+          "level": 12,
+          "minimum_xp": 750000,
+          "hit_dice": "9d4+3",
+          "constitution_modifier_applies": false,
+          "thac0": {"descending": 14, "ascending_bonus": 5},
+          "saving_throws": {"death_poison": 8, "wands": 9, "paralysis_petrify": 8, "breath_attacks": 11, "spells_rods_staves": 8},
+          "spell_slots": [4, 4, 3, 3, 3, 2]
+        },
+        {
+          "level": 13,
+          "minimum_xp": 900000,
+          "hit_dice": "9d4+4",
+          "constitution_modifier_applies": false,
+          "thac0": {"descending": 14, "ascending_bonus": 5},
+          "saving_throws": {"death_poison": 8, "wands": 9, "paralysis_petrify": 8, "breath_attacks": 11, "spells_rods_staves": 8},
+          "spell_slots": [4, 4, 4, 3, 3, 3]
+        },
+        {
+          "level": 14,
+          "minimum_xp": 1050000,
+          "hit_dice": "9d4+5",
+          "constitution_modifier_applies": false,
+          "thac0": {"descending": 14, "ascending_bonus": 5},
+          "saving_throws": {"death_poison": 8, "wands": 9, "paralysis_petrify": 8, "breath_attacks": 11, "spells_rods_staves": 8},
+          "spell_slots": [4, 4, 4, 4, 3, 3]
+        },
+        {
+          "level": 15,
+          "minimum_xp": 1200000,
+          "extrapolated": true
+        },
+        {
+          "level": 16,
+          "minimum_xp": 1350000,
+          "extrapolated": true
+        },
+        {
+          "level": 17,
+          "minimum_xp": 1500000,
+          "extrapolated": true
+        },
+        {
+          "level": 18,
+          "minimum_xp": 1650000,
+          "extrapolated": true
+        },
+        {
+          "level": 19,
+          "minimum_xp": 1800000,
+          "extrapolated": true
+        },
+        {
+          "level": 20,
+          "minimum_xp": 1950000,
+          "extrapolated": true
+        },
+        {
+          "level": 21,
+          "minimum_xp": 2100000,
+          "extrapolated": true
+        },
+        {
+          "level": 22,
+          "minimum_xp": 2250000,
+          "extrapolated": true
+        },
+        {
+          "level": 23,
+          "minimum_xp": 2400000,
+          "extrapolated": true
+        },
+        {
+          "level": 24,
+          "minimum_xp": 2550000,
+          "extrapolated": true
+        },
+        {
+          "level": 25,
+          "minimum_xp": 2700000,
+          "extrapolated": true
+        },
+        {
+          "level": 26,
+          "minimum_xp": 2850000,
+          "extrapolated": true
+        },
+        {
+          "level": 27,
+          "minimum_xp": 3000000,
+          "extrapolated": true
+        },
+        {
+          "level": 28,
+          "minimum_xp": 3150000,
+          "extrapolated": true
+        },
+        {
+          "level": 29,
+          "minimum_xp": 3300000,
+          "extrapolated": true
+        },
+        {
+          "level": 30,
+          "minimum_xp": 3450000,
+          "extrapolated": true
+        },
+        {
+          "level": 31,
+          "minimum_xp": 3600000,
+          "extrapolated": true
+        },
+        {
+          "level": 32,
+          "minimum_xp": 3750000,
+          "extrapolated": true
+        },
+        {
+          "level": 33,
+          "minimum_xp": 3900000,
+          "extrapolated": true
+        },
+        {
+          "level": 34,
+          "minimum_xp": 4050000,
+          "extrapolated": true
+        },
+        {
+          "level": 35,
+          "minimum_xp": 4200000,
+          "extrapolated": true
+        },
+        {
+          "level": 36,
+          "minimum_xp": 4350000,
+          "extrapolated": true
+        }
+      ]
+    }
+  }
+}

@@ -40,7 +40,6 @@ barrister
 bash
 bastion
 batteries
-battery
 beading
 beast-grease
 beast-kings
@@ -512,7 +511,6 @@ psychically
 putrid
 questionable
 quieter
-radio
 rag
 rags
 rails
@@ -844,7 +842,6 @@ bashed|bash
 bashes|bash
 bashing|bash
 bastion's|bastion
-battery's|batteries
 beading's|beading
 beast-king|beast-kings
 bicep's|bicep
@@ -1426,10 +1423,6 @@ quietens|quieter
 quieting|quieter
 quietness|quieter
 quiets|quieter
-radio's|radio
-radioed|radio
-radioing|radio
-radios|radio
 rag's|rag
 rail|rails
 railed|rails

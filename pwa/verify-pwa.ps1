@@ -84,7 +84,7 @@ Assert-Condition -Condition ($appScript.Contains("credentials: 'same-origin'")) 
 Assert-Condition -Condition ($appScript.Contains("cache: 'no-store'")) -Message 'Character authentication requests must bypass browser caching.'
 Assert-Condition -Condition ($appScript.Contains("'/login'") -and $appScript.Contains("'/session'") -and $appScript.Contains("'/xp'") -and $appScript.Contains("'/logout'")) -Message 'Character authentication and XP routes are incomplete.'
 Assert-Condition -Condition ($html.Contains('autocomplete="current-password"')) -Message 'The character password field is not configured safely.'
-Assert-Condition -Condition ($html.Contains('id="xp-card"') -and $html.Contains('id="xp-total"') -and $html.Contains('id="xp-party-rows"')) -Message 'The protected XP dashboard card is incomplete.'
+Assert-Condition -Condition ($html.Contains('id="xp-card"') -and $html.Contains('id="xp-total"') -and $html.Contains('id="xp-class-level"') -and $html.Contains('id="xp-hit-points"') -and $html.Contains('id="xp-tnl"') -and $html.Contains('id="xp-party-rows"')) -Message 'The protected XP dashboard card is incomplete.'
 Assert-Condition -Condition (!$appScript.Contains('publish.obsidian.md') -and !$html.Contains('XP+Tracking')) -Message 'The XP source URL must remain outside the browser application.'
 Assert-Condition -Condition ($serviceWorker.Contains("url.pathname.startsWith('/scarlethorizons/api/')")) -Message 'The service worker must exclude protected API responses.'
 Assert-Condition -Condition ($serviceWorker.Contains("new Request(asset, { cache: 'reload' })")) -Message 'Service-worker upgrades must bypass stale browser shell caches.'

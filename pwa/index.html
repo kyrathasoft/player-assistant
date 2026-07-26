@@ -119,9 +119,23 @@
                     </div>
                     <p class="xp-status" id="xp-status" role="status" aria-live="polite">Log in to view your current XP total.</p>
                     <div class="xp-character-summary" id="xp-character-summary" hidden>
-                        <span id="xp-character-name"></span>
+                        <span class="xp-character-name" id="xp-character-name"></span>
                         <strong id="xp-total"></strong>
-                        <small id="xp-date"></small>
+                        <small class="xp-date" id="xp-date"></small>
+                        <div class="xp-character-details">
+                            <span>
+                                <small>Class level</small>
+                                <b id="xp-class-level"></b>
+                            </span>
+                            <span>
+                                <small>Hit points</small>
+                                <b id="xp-hit-points"></b>
+                            </span>
+                            <span>
+                                <small>TNL</small>
+                                <b id="xp-tnl"></b>
+                            </span>
+                        </div>
                     </div>
                     <div class="xp-party-summary" id="xp-party-summary" hidden>
                         <p id="xp-party-date"></p>

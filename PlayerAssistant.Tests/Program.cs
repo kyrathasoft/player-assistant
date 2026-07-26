@@ -98,6 +98,7 @@ var tests = new (string Name, Action Test)[]
     ("orcish translator supports fifth Gutenberg corpus candidate vocabulary", OrcishTranslatorSupportsGutenbergCorpusFifthCandidateVocabulary),
     ("orcish translator supports sixth Gutenberg corpus candidate vocabulary", OrcishTranslatorSupportsGutenbergCorpusSixthCandidateVocabulary),
     ("orcish translator excludes approved anachronistic families", OrcishTranslatorExcludesApprovedAnachronisticFamilies),
+    ("orcish translator retains approved knowledge vocabulary and noun film sense", OrcishTranslatorRetainsApprovedKnowledgeVocabularyAndNounFilmSense),
     ("orcish translator supports software artifact vocabulary", OrcishTranslatorSupportsSoftwareArtifactVocabulary),
     ("orcish translator translates full text in both directions", OrcishTranslatorTranslatesFullTextInBothDirections),
     ("orcish translator warmup is shared", OrcishTranslatorWarmupIsShared),
@@ -197,7 +198,7 @@ var tests = new (string Name, Action Test)[]
     ("active hero markdown cancellation writes no files", ActiveHeroMarkdownCancellationWritesNoFiles),
     ("former hero markdown cancellation writes no inactive files", FormerHeroMarkdownCancellationWritesNoInactiveFiles),
     ("player character refresh cancellation clears in progress flag", PlayerCharacterRefreshCancellationClearsInProgressFlag),
-    ("player character refresh is not delayed when hero images are suppressed", PlayerCharacterRefreshIsNotDelayedWhenHeroImagesAreSuppressed),
+    ("hero image showcase waits for initial player character refresh", HeroImageShowcaseWaitsForInitialPlayerCharacterRefresh),
     ("game forum startup cancellation writes no manifests", GameForumStartupCancellationWritesNoManifests),
     ("keyword index loader quarantines malformed json", KeywordIndexLoaderQuarantinesMalformedJson),
     ("keyword index loader salvages legacy disallowed urls", KeywordIndexLoaderSalvagesLegacyDisallowedUrls),
@@ -360,6 +361,7 @@ var tests = new (string Name, Action Test)[]
     ("xp tracking parser rejects missing latest table", XpTrackingParserRejectsMissingLatestTable),
     ("xp tracking failure message hides url and directs players to dm", XpTrackingFailureMessageHidesUrlAndDirectsPlayersToDm),
     ("xp tracking missing pc message directs players to dm", XpTrackingMissingPcMessageDirectsPlayersToDm),
+    ("illusionist progression data exposes XP thresholds", IllusionistProgressionDataExposesXpThresholds),
     ("show menu contains party item", ShowMenuContainsPartyItem),
     ("show menu contains former pcs item", ShowMenuContainsFormerPcsItem),
     ("former pcs view displays token name and class", FormerPcsViewDisplaysTokenNameAndClass),
@@ -1620,9 +1622,9 @@ static void OrcishTranslatorSupportsSixtySevenPageSampleVocabulary()
         .Where(entry => HasAnyTag(entry, "sixty-seven-page-sample", "sixty-seven-page-near-kin"))
         .ToArray();
 
-    AssertEqual(2260, entries.Length, "expected every candidate from the sixty seven page sample expansion");
-    AssertEqual(761, entries.Count(entry => HasAnyTag(entry, "sixty-seven-page-sample")), "expected the scraped source candidates");
-    AssertEqual(1499, entries.Count(entry => HasAnyTag(entry, "sixty-seven-page-near-kin")), "expected the near-kin candidates");
+    AssertEqual(2257, entries.Length, "expected every candidate from the sixty seven page sample expansion");
+    AssertEqual(760, entries.Count(entry => HasAnyTag(entry, "sixty-seven-page-sample")), "expected the scraped source candidates");
+    AssertEqual(1497, entries.Count(entry => HasAnyTag(entry, "sixty-seven-page-near-kin")), "expected the near-kin candidates");
 
     foreach (var entry in entries)
     {
@@ -1669,8 +1671,8 @@ static void OrcishTranslatorSupportsFiftyPageSampleVocabulary()
         .Where(entry => HasAnyTag(entry, "fifty-page-sample", "fifty-page-near-kin"))
         .ToArray();
 
-    AssertEqual(1716, entries.Length, "expected every candidate from the fifty page sample expansion");
-    AssertEqual(600, entries.Count(entry => HasAnyTag(entry, "fifty-page-sample")), "expected the scraped source candidates");
+    AssertEqual(1715, entries.Length, "expected every candidate from the fifty page sample expansion");
+    AssertEqual(599, entries.Count(entry => HasAnyTag(entry, "fifty-page-sample")), "expected the scraped source candidates");
     AssertEqual(1116, entries.Count(entry => HasAnyTag(entry, "fifty-page-near-kin")), "expected the near-kin candidates");
 
     foreach (var entry in entries)
@@ -1693,9 +1695,9 @@ static void OrcishTranslatorSupportsSecondFiftyPageSampleVocabulary()
         .Where(entry => HasAnyTag(entry, "second-fifty-page-sample", "second-fifty-page-near-kin"))
         .ToArray();
 
-    AssertEqual(1754, entries.Length, "expected every retained candidate from the second fifty page sample expansion");
-    AssertEqual(612, entries.Count(entry => HasAnyTag(entry, "second-fifty-page-sample")), "expected the retained scraped source candidates");
-    AssertEqual(1142, entries.Count(entry => HasAnyTag(entry, "second-fifty-page-near-kin")), "expected the retained near-kin candidates");
+    AssertEqual(1751, entries.Length, "expected every retained candidate from the second fifty page sample expansion");
+    AssertEqual(611, entries.Count(entry => HasAnyTag(entry, "second-fifty-page-sample")), "expected the retained scraped source candidates");
+    AssertEqual(1140, entries.Count(entry => HasAnyTag(entry, "second-fifty-page-near-kin")), "expected the retained near-kin candidates");
 
     foreach (var entry in entries)
     {
@@ -1741,9 +1743,9 @@ static void OrcishTranslatorSupportsAllRemainingPageSampleVocabulary()
         .Where(entry => HasAnyTag(entry, "all-remaining-page-sample", "all-remaining-page-near-kin"))
         .ToArray();
 
-    AssertEqual(7684, entries.Length, "expected every retained candidate from the all remaining page sample expansion");
-    AssertEqual(2831, entries.Count(entry => HasAnyTag(entry, "all-remaining-page-sample")), "expected the retained scraped source candidates");
-    AssertEqual(4853, entries.Count(entry => HasAnyTag(entry, "all-remaining-page-near-kin")), "expected the retained near-kin candidates");
+    AssertEqual(7681, entries.Length, "expected every retained candidate from the all remaining page sample expansion");
+    AssertEqual(2830, entries.Count(entry => HasAnyTag(entry, "all-remaining-page-sample")), "expected the retained scraped source candidates");
+    AssertEqual(4851, entries.Count(entry => HasAnyTag(entry, "all-remaining-page-near-kin")), "expected the retained near-kin candidates");
 
     foreach (var entry in entries)
     {
@@ -1765,9 +1767,9 @@ static void OrcishTranslatorSupportsShadowdimBlogCandidateVocabulary()
         .Where(entry => HasAnyTag(entry, "shadowdim-blog-candidate-batch", "shadowdim-blog-near-kin"))
         .ToArray();
 
-    AssertEqual(1009, entries.Length, "expected every candidate from the Shadowdim blog batch");
-    AssertEqual(397, entries.Count(entry => HasAnyTag(entry, "shadowdim-blog-candidate-batch")), "expected the scraped source candidates");
-    AssertEqual(612, entries.Count(entry => HasAnyTag(entry, "shadowdim-blog-near-kin")), "expected the near-kin candidates");
+    AssertEqual(1006, entries.Length, "expected every candidate from the Shadowdim blog batch");
+    AssertEqual(395, entries.Count(entry => HasAnyTag(entry, "shadowdim-blog-candidate-batch")), "expected the scraped source candidates");
+    AssertEqual(611, entries.Count(entry => HasAnyTag(entry, "shadowdim-blog-near-kin")), "expected the near-kin candidates");
 
     foreach (var entry in entries)
     {
@@ -1789,9 +1791,9 @@ static void OrcishTranslatorSupportsBlogFollowupCandidateVocabulary()
         .Where(entry => HasAnyTag(entry, "blog-followup-candidate-batch", "blog-followup-near-kin"))
         .ToArray();
 
-    AssertEqual(1133, entries.Length, "expected every candidate from the blog follow-up batch");
-    AssertEqual(440, entries.Count(entry => HasAnyTag(entry, "blog-followup-candidate-batch")), "expected the scraped source candidates");
-    AssertEqual(693, entries.Count(entry => HasAnyTag(entry, "blog-followup-near-kin")), "expected the near-kin candidates");
+    AssertEqual(1128, entries.Length, "expected every candidate from the blog follow-up batch");
+    AssertEqual(437, entries.Count(entry => HasAnyTag(entry, "blog-followup-candidate-batch")), "expected the scraped source candidates");
+    AssertEqual(691, entries.Count(entry => HasAnyTag(entry, "blog-followup-near-kin")), "expected the near-kin candidates");
 
     foreach (var entry in entries)
     {
@@ -1813,9 +1815,9 @@ static void OrcishTranslatorSupportsBlogHighYieldCandidateVocabulary()
         .Where(entry => HasAnyTag(entry, "blog-high-yield-candidate-batch", "blog-high-yield-near-kin"))
         .ToArray();
 
-    AssertEqual(1776, entries.Length, "expected every retained candidate from the blog high-yield batch");
-    AssertEqual(794, entries.Count(entry => HasAnyTag(entry, "blog-high-yield-candidate-batch")), "expected the retained scraped source candidates");
-    AssertEqual(982, entries.Count(entry => HasAnyTag(entry, "blog-high-yield-near-kin")), "expected the retained near-kin candidates");
+    AssertEqual(1771, entries.Length, "expected every retained candidate from the blog high-yield batch");
+    AssertEqual(793, entries.Count(entry => HasAnyTag(entry, "blog-high-yield-candidate-batch")), "expected the retained scraped source candidates");
+    AssertEqual(978, entries.Count(entry => HasAnyTag(entry, "blog-high-yield-near-kin")), "expected the retained near-kin candidates");
 
     foreach (var entry in entries)
     {
@@ -1837,9 +1839,9 @@ static void OrcishTranslatorSupportsBlogMixedHighYieldCandidateVocabulary()
         .Where(entry => HasAnyTag(entry, "blog-mixed-high-yield-candidate-batch", "blog-mixed-high-yield-near-kin"))
         .ToArray();
 
-    AssertEqual(787, entries.Length, "expected every candidate from the blog mixed high-yield batch");
-    AssertEqual(374, entries.Count(entry => HasAnyTag(entry, "blog-mixed-high-yield-candidate-batch")), "expected the scraped source candidates");
-    AssertEqual(413, entries.Count(entry => HasAnyTag(entry, "blog-mixed-high-yield-near-kin")), "expected the near-kin candidates");
+    AssertEqual(785, entries.Length, "expected every candidate from the blog mixed high-yield batch");
+    AssertEqual(373, entries.Count(entry => HasAnyTag(entry, "blog-mixed-high-yield-candidate-batch")), "expected the scraped source candidates");
+    AssertEqual(412, entries.Count(entry => HasAnyTag(entry, "blog-mixed-high-yield-near-kin")), "expected the near-kin candidates");
 
     foreach (var entry in entries)
     {
@@ -1906,9 +1908,9 @@ static void OrcishTranslatorSupportsGutenbergCorpusCandidateVocabulary()
         .Where(entry => HasAnyTag(entry, "gutenberg-corpus-candidate-batch", "gutenberg-corpus-near-kin"))
         .ToArray();
 
-    AssertEqual(2476, entries.Length, "expected every retained candidate from the Gutenberg corpus batch");
-    AssertEqual(891, entries.Count(entry => HasAnyTag(entry, "gutenberg-corpus-candidate-batch")), "expected the retained corpus source candidates");
-    AssertEqual(1585, entries.Count(entry => HasAnyTag(entry, "gutenberg-corpus-near-kin")), "expected the retained near-kin candidates");
+    AssertEqual(2446, entries.Length, "expected every retained candidate from the Gutenberg corpus batch");
+    AssertEqual(885, entries.Count(entry => HasAnyTag(entry, "gutenberg-corpus-candidate-batch")), "expected the retained corpus source candidates");
+    AssertEqual(1561, entries.Count(entry => HasAnyTag(entry, "gutenberg-corpus-near-kin")), "expected the retained near-kin candidates");
 
     foreach (var entry in entries)
     {
@@ -1927,9 +1929,9 @@ static void OrcishTranslatorSupportsGutenbergCorpusSecondCandidateVocabulary()
         .Where(entry => HasAnyTag(entry, "gutenberg-second-corpus-candidate-batch", "gutenberg-second-corpus-near-kin"))
         .ToArray();
 
-    AssertEqual(472, entries.Length, "expected every retained candidate from the second Gutenberg corpus batch");
-    AssertEqual(156, entries.Count(entry => HasAnyTag(entry, "gutenberg-second-corpus-candidate-batch")), "expected the retained second corpus source candidates");
-    AssertEqual(316, entries.Count(entry => HasAnyTag(entry, "gutenberg-second-corpus-near-kin")), "expected the retained second corpus near-kin candidates");
+    AssertEqual(456, entries.Length, "expected every retained candidate from the second Gutenberg corpus batch");
+    AssertEqual(153, entries.Count(entry => HasAnyTag(entry, "gutenberg-second-corpus-candidate-batch")), "expected the retained second corpus source candidates");
+    AssertEqual(303, entries.Count(entry => HasAnyTag(entry, "gutenberg-second-corpus-near-kin")), "expected the retained second corpus near-kin candidates");
 
     foreach (var entry in entries)
     {
@@ -1969,9 +1971,9 @@ static void OrcishTranslatorSupportsGutenbergCorpusFourthCandidateVocabulary()
         .Where(entry => HasAnyTag(entry, "gutenberg-fourth-corpus-candidate-batch", "gutenberg-fourth-corpus-near-kin"))
         .ToArray();
 
-    AssertEqual(3491, entries.Length, "expected every retained candidate from the fourth Gutenberg corpus batch");
-    AssertEqual(1285, entries.Count(entry => HasAnyTag(entry, "gutenberg-fourth-corpus-candidate-batch")), "expected the retained fourth corpus source candidates");
-    AssertEqual(2206, entries.Count(entry => HasAnyTag(entry, "gutenberg-fourth-corpus-near-kin")), "expected the retained fourth corpus near-kin candidates");
+    AssertEqual(3476, entries.Length, "expected every retained candidate from the fourth Gutenberg corpus batch");
+    AssertEqual(1278, entries.Count(entry => HasAnyTag(entry, "gutenberg-fourth-corpus-candidate-batch")), "expected the retained fourth corpus source candidates");
+    AssertEqual(2198, entries.Count(entry => HasAnyTag(entry, "gutenberg-fourth-corpus-near-kin")), "expected the retained fourth corpus near-kin candidates");
 
     foreach (var entry in entries)
     {
@@ -2293,6 +2295,28 @@ static void OrcishTranslatorExcludesApprovedAnachronisticFamilies()
         "battery's",
         "chemical", "chemical's", "chemically", "chemicals", "chemistry", "chemistry's",
         "college", "college's", "colleges",
+        "dictionaries", "dictionary", "dictionary's",
+        "editor", "editor's", "editors",
+        "engine", "engine's", "engines",
+        "evolution", "evolution's",
+        "footnote", "footnote's", "footnoted", "footnotes", "footnoting",
+        "geological", "geologically",
+        "gravity-chute", "gravity-chutes", "gravity-train", "moon-gravity",
+        "hypothesis",
+        "motor", "motor's", "motored", "motoring", "motors",
+        "oxygen", "oxygen's",
+        "photograph", "photograph's", "photographed", "photographer", "photographers", "photographing",
+        "plastic", "plastic's", "plastics",
+        "psychological", "psychologically", "psychologies", "psychology", "psychology's",
+        "radiations",
+        "radio", "radio's", "radioed", "radioing", "radios",
+        "railroad", "railroad's", "railroaded", "railroader", "railroaders", "railroading", "railroads",
+        "railway", "railway's", "railways",
+        "sciences", "scientific", "scientist", "scientist's", "scientists",
+        "statistic", "statistic's", "statistics",
+        "telegraph", "telegraph's", "telegraphed", "telegrapher", "telegraphers", "telegraphing",
+        "telephone", "telephone's", "telephoned", "telephoner", "telephoners", "telephones", "telephoning",
+        "telescope", "telescope's", "telescoped", "telescopes", "telescoping",
         "automobile", "automobile's", "automobiled", "automobiles", "automobiling",
         "camera", "camera's", "cameras",
         "gasoline", "gasoline's",
@@ -2315,6 +2339,33 @@ static void OrcishTranslatorExcludesApprovedAnachronisticFamilies()
     {
         AssertTrue(!terms.Contains(english, StringComparer.OrdinalIgnoreCase), $"expected discarded anachronistic term '{english}' to be absent");
         AssertEqual(0, OrcishTranslatorUtility.TranslateEnglishToOrcish(english).Count, $"expected discarded anachronistic term '{english}' not to translate");
+    }
+}
+
+static void OrcishTranslatorRetainsApprovedKnowledgeVocabularyAndNounFilmSense()
+{
+    var terms = OrcishTranslatorUtility.GetEnglishTerms();
+    foreach (var english in new[]
+    {
+        "essay", "film", "frequency", "journal", "laboratory",
+        "lecture", "professor", "publication", "research"
+    })
+    {
+        AssertTrue(terms.Contains(english, StringComparer.OrdinalIgnoreCase), $"expected approved Orcish knowledge term '{english}'");
+        AssertTrue(OrcishTranslatorUtility.TranslateEnglishToOrcish(english).Count > 0, $"expected approved term '{english}' to translate");
+    }
+
+    var filmEntries = OrcishTranslatorUtility.GetLexiconEntries()
+        .Where(entry => new[] { "film", "film's", "films" }.Contains(entry.English, StringComparer.OrdinalIgnoreCase))
+        .ToArray();
+    AssertEqual(3, filmEntries.Length, "expected only noun film forms");
+    AssertTrue(filmEntries.All(entry => string.Equals(entry.PartOfSpeech, "noun", StringComparison.OrdinalIgnoreCase)), "film forms should be nouns");
+    AssertTrue(filmEntries.All(entry => string.Equals(entry.GrammarClass, "substance", StringComparison.OrdinalIgnoreCase)), "film forms should mean a smear or layer");
+
+    foreach (var verbForm in new[] { "filmed", "filming" })
+    {
+        AssertTrue(!terms.Contains(verbForm, StringComparer.OrdinalIgnoreCase), $"expected verb film form '{verbForm}' to be absent");
+        AssertEqual(0, OrcishTranslatorUtility.TranslateEnglishToOrcish(verbForm).Count, $"expected verb film form '{verbForm}' not to translate");
     }
 }
 
@@ -2371,7 +2422,7 @@ static void OrcishTranslatorWarmupIsShared()
             throw new TimeoutException("test warmup was not released");
         }
 
-        return 80961;
+        return 80874;
     };
 
     try
@@ -2386,7 +2437,7 @@ static void OrcishTranslatorWarmupIsShared()
         releaseWarmup.Set();
         var result = first.WaitAsync(TimeSpan.FromSeconds(5)).GetAwaiter().GetResult();
 
-        AssertEqual(80961, result.EnglishTermCount, "unexpected warmed English term count");
+        AssertEqual(80874, result.EnglishTermCount, "unexpected warmed English term count");
         AssertEqual(1, Volatile.Read(ref warmupCount), "translator warmup should run once");
         AssertTrue(OrcishTranslatorWarmupUtility.IsReady, "completed translator warmup should report ready");
     }
@@ -2410,7 +2461,7 @@ static void OrcishTranslatorWarmupIsShared()
 
 static void OrcishTranslatorLoadsEmbeddedSnapshot()
 {
-    AssertEqual(80961, OrcishTranslatorUtility.GetEnglishTermCount(), "unexpected embedded snapshot term count");
+    AssertEqual(80874, OrcishTranslatorUtility.GetEnglishTermCount(), "unexpected embedded snapshot term count");
     AssertTrue(
         OrcishLexiconSnapshotUtility.WasEmbeddedSnapshotLoaded,
         "translator should load the embedded lexicon snapshot instead of cold-JITing generated builders");
@@ -2420,7 +2471,7 @@ static void OrcishTranslatorExposesUniqueEnglishTermCount()
 {
     var terms = OrcishTranslatorUtility.GetEnglishTerms();
 
-    AssertEqual(80961, OrcishTranslatorUtility.GetEnglishTermCount(), "unexpected total English term count");
+    AssertEqual(80874, OrcishTranslatorUtility.GetEnglishTermCount(), "unexpected total English term count");
     AssertEqual(OrcishTranslatorUtility.GetEnglishTermCount(), terms.Count, "term list and count should agree");
     AssertEqual(1, terms.Count(term => string.Equals(term, "I", StringComparison.OrdinalIgnoreCase)), "I should be counted once despite multiple variants");
     AssertEqual(1, terms.Count(term => string.Equals(term, "really", StringComparison.OrdinalIgnoreCase)), "really should be counted once despite multiple variants");
@@ -4612,23 +4663,24 @@ static void PlayerCharacterRefreshCancellationClearsInProgressFlag()
     });
 }
 
-static void PlayerCharacterRefreshIsNotDelayedWhenHeroImagesAreSuppressed()
+static void HeroImageShowcaseWaitsForInitialPlayerCharacterRefresh()
 {
     RunOnStaThread(() =>
     {
-        using var suppressedForm = new Form1(suppressHeroImagesForThisRun: true);
-        SetPrivateField(suppressedForm, "_activePlayerCharacterImagePaths", new[] { "cached-hero.webp" });
-        SetPrivateField(suppressedForm, "_heroImageShowcaseCompleted", false);
-        AssertFalse(
-            (bool)(InvokePrivateMethod(suppressedForm, "ShouldDelayPlayerCharacterRefreshForHeroShowcase") ?? true),
-            "suppressed hero images should not delay player-character markdown refresh");
+        using var form = new Form1(suppressHeroImagesForThisRun: false);
+        SetPrivateField(form, "_showWelcomeText", false);
+        SetPrivateField(form, "_activePlayerCharacterImagePaths", new[] { "cached-nerissa-token.webp" });
 
-        using var normalForm = new Form1(suppressHeroImagesForThisRun: false);
-        SetPrivateField(normalForm, "_activePlayerCharacterImagePaths", new[] { "cached-hero.webp" });
-        SetPrivateField(normalForm, "_heroImageShowcaseCompleted", false);
+        InvokePrivateMethod(form, "StartHeroImageShowcaseIfReady");
+        AssertFalse(
+            (bool)(GetPrivateField(form, "_heroImageIntroStarted") ?? true),
+            "cached hero images should not start before the active listing has been refreshed");
+
+        SetPrivateField(form, "_initialPlayerCharacterListingRefreshCompleted", true);
+        InvokePrivateMethod(form, "StartHeroImageShowcaseIfReady");
         AssertTrue(
-            (bool)(InvokePrivateMethod(normalForm, "ShouldDelayPlayerCharacterRefreshForHeroShowcase") ?? false),
-            "normal hero image startup should still wait for the showcase before refreshing player characters");
+            (bool)(GetPrivateField(form, "_heroImageIntroStarted") ?? false),
+            "the showcase should become eligible after the active listing refresh completes");
     });
 }
 
@@ -9393,6 +9445,71 @@ static void ExternalUrlLaunchPolicyAcceptsHttpsAndRejectsHttp()
 
     AssertFalse(http.IsAllowed, "HTTP URLs should be rejected");
     AssertTrue(https.IsAllowed, "HTTPS URLs should be allowed");
+}
+
+static void IllusionistProgressionDataExposesXpThresholds()
+{
+    var path = Path.Combine(GetRepositoryRoot(), "class-progression.json");
+    using var document = JsonDocument.Parse(File.ReadAllText(path));
+    var root = document.RootElement;
+    AssertEqual(1, root.GetProperty("schema_version").GetInt32(), "unexpected class progression schema");
+
+    var illusionist = root
+        .GetProperty("classes")
+        .GetProperty("illusionist");
+    AssertEqual("Illusionist", illusionist.GetProperty("name").GetString() ?? string.Empty, "unexpected class name");
+    AssertEqual(36, illusionist.GetProperty("maximum_level").GetInt32(), "unexpected Illusionist maximum level");
+    AssertEqual(14, illusionist.GetProperty("published_maximum_level").GetInt32(), "unexpected published Illusionist maximum level");
+
+    var extension = illusionist.GetProperty("extended_progression");
+    AssertEqual(14, extension.GetProperty("starts_after_level").GetInt32(), "unexpected Illusionist extension starting level");
+    AssertEqual(150000, extension.GetProperty("xp_per_additional_level").GetInt32(), "unexpected Illusionist extended XP increment");
+    AssertFalse(extension.GetProperty("mechanical_statistics_available").GetBoolean(), "extended Illusionist mechanics should not be presented as published");
+
+    var progression = illusionist.GetProperty("level_progression").EnumerateArray().ToArray();
+    AssertEqual(36, progression.Length, "expected all Illusionist levels");
+    var expectedThresholds = new[]
+    {
+        0, 2500, 5000, 10000, 20000, 40000, 80000,
+        150000, 300000, 450000, 600000, 750000, 900000, 1050000,
+        1200000, 1350000, 1500000, 1650000, 1800000, 1950000, 2100000,
+        2250000, 2400000, 2550000, 2700000, 2850000, 3000000, 3150000,
+        3300000, 3450000, 3600000, 3750000, 3900000, 4050000, 4200000,
+        4350000
+    };
+    for (var index = 0; index < progression.Length; index++)
+    {
+        AssertEqual(index + 1, progression[index].GetProperty("level").GetInt32(), "unexpected Illusionist level");
+        AssertEqual(
+            expectedThresholds[index],
+            progression[index].GetProperty("minimum_xp").GetInt32(),
+            $"unexpected XP threshold for Illusionist level {index + 1}");
+        if (index < 14)
+        {
+            AssertEqual(
+                6,
+                progression[index].GetProperty("spell_slots").GetArrayLength(),
+                $"unexpected spell-slot columns for Illusionist level {index + 1}");
+        }
+        else
+        {
+            AssertTrue(
+                progression[index].GetProperty("extrapolated").GetBoolean(),
+                $"Illusionist level {index + 1} should be marked as extrapolated");
+            AssertFalse(
+                progression[index].TryGetProperty("spell_slots", out _),
+                $"Illusionist level {index + 1} should not invent unpublished spell slots");
+            AssertFalse(
+                progression[index].TryGetProperty("hit_dice", out _),
+                $"Illusionist level {index + 1} should not invent unpublished hit dice");
+            AssertFalse(
+                progression[index].TryGetProperty("thac0", out _),
+                $"Illusionist level {index + 1} should not invent unpublished THAC0");
+            AssertFalse(
+                progression[index].TryGetProperty("saving_throws", out _),
+                $"Illusionist level {index + 1} should not invent unpublished saving throws");
+        }
+    }
 }
 
 static void ExternalUrlLaunchPolicyRejectsUnsafeInputs()

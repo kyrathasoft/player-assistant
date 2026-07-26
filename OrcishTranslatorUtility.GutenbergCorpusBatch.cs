@@ -140,7 +140,6 @@ clasped
 clergyman
 clung
 coach
-college
 collision
 colonel
 commandant
@@ -264,7 +263,6 @@ encamped
 endowed
 enemy's
 engagement
-engines
 enlightened
 enlisted
 enmity
@@ -519,7 +517,6 @@ monsieur
 moonlight
 mother's
 motioned
-motor
 mourning
 multitude
 murderous
@@ -648,8 +645,6 @@ queen's
 queer
 quit
 raged
-railroad
-railway
 rainy
 ramparts
 rapidity
@@ -792,8 +787,6 @@ suspense
 swam
 swan
 swung
-telegraph
-telephone
 tempest
 tender
 tenderly
@@ -1123,8 +1116,6 @@ coach's|coach
 coached|coach
 coaches|coach
 coaching|coach
-college's|college
-colleges|college
 collision's|collision
 collisions|collision
 colonel's|colonel
@@ -1359,7 +1350,6 @@ endowment|endowed
 endows|endowed
 engagement's|engagement
 engagements|engagement
-engine's|engines
 enlighten|enlightened
 enlightening|enlightened
 enlightens|enlightened
@@ -1795,10 +1785,6 @@ moonlights|moonlight
 mothered|mother's
 mothering|mother's
 motherly|mother's
-motor's|motor
-motored|motor
-motoring|motor
-motors|motor
 mourning's|mourning
 multitude's|multitude
 multitudes|multitude
@@ -2037,14 +2023,6 @@ queerly|queer
 queerness|queer
 queers|queer
 quits|quit
-railroad's|railroad
-railroaded|railroad
-railroader|railroad
-railroaders|railroad
-railroading|railroad
-railroads|railroad
-railway's|railway
-railways|railway
 rainier|rainy
 rainiest|rainy
 rampart|ramparts
@@ -2306,17 +2284,6 @@ suspensions|suspense
 swan's|swan
 swans|swan
 swum|swam
-telegraph's|telegraph
-telegraphed|telegraph
-telegrapher|telegraph
-telegraphers|telegraph
-telegraphing|telegraph
-telephone's|telephone
-telephoned|telephone
-telephoner|telephone
-telephoners|telephone
-telephones|telephone
-telephoning|telephone
 tempest's|tempest
 tempests|tempest
 tender's|tender

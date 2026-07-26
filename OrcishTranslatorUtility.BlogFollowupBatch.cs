@@ -157,7 +157,6 @@ frustrate
 frustrated
 fungiculture
 fur-lined
-geological
 ghost-neighborhood
 glossy
 gluttony
@@ -167,8 +166,6 @@ grave
 gravely
 graves
 graveyard
-gravity-chutes
-gravity-train
 green-edged
 grey-skinned
 greywater
@@ -692,7 +689,6 @@ fruitiness|fruity
 frustrates|frustrate
 frustrating|frustrate
 frustrations|frustrate
-geologically|geological
 glossier|glossy
 glossies|glossy
 glossiest|glossy
@@ -708,7 +704,6 @@ graver|grave
 graveyard's|graveyard
 graveyards|graveyard
 graving|grave
-gravity-chute|gravity-chutes
 grisliness|grisly
 hack|hacks
 hack's|hacks

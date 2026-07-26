@@ -93,7 +93,6 @@ encroached
 encroaching
 envious
 establishment
-evolution
 extorting
 extortionists
 extorts
@@ -492,7 +491,6 @@ encroachment|encroached
 enviously|envious
 enviousness|envious
 establishment's|establishment
-evolution's|evolution
 extort|extorting
 extorted|extorting
 extortionist|extortionists
