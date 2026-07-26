@@ -244,6 +244,7 @@ Direct PHP/cURL authentication is rejected by RPOL. The selected design is a tru
 - `publish-rpol-snapshots.ps1` runs the Release executable in publisher mode.
 - The publisher recognizes a loaded RPOL verification window and closes it automatically.
 - HMAC-SHA256 snapshot metadata and content hashes are verified by the private broker before atomic storage.
+- On each upload, the broker removes snapshot files older than the configured retention period (seven days by default, never shorter than `snapshot_max_age_seconds`).
 - The daily `Player Assistant RPOL Snapshot Publisher` task runs at 3:00 AM with `StartWhenAvailable`.
 - The live health response reports `snapshot_signing_configured: true` and `snapshot_count: 3`.
 - Publisher state persists the approved URL queue and advances exactly one target after each accepted upload.

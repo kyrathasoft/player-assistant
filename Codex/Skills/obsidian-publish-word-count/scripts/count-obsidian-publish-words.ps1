@@ -21,14 +21,58 @@ param(
 $ErrorActionPreference = 'Stop'
 $siteRoot = $SiteUrl.TrimEnd('/')
 $sitemapUrl = "$siteRoot/sitemap.xml"
+$markdownHelpersPath = Join-Path $PSScriptRoot 'word-count-markdown-helpers.ps1'
+if (-not [System.IO.File]::Exists($markdownHelpersPath)) {
+    throw "The Markdown counting helpers are missing: $markdownHelpersPath"
+}
+. $markdownHelpersPath
 
-[xml]$sitemap = (Invoke-WebRequest -Uri $sitemapUrl -UseBasicParsing).Content
+function Assert-TrustedHttpsUri {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Url,
+
+        [Parameter(Mandatory = $true)]
+        [string]$ExpectedHost,
+
+        [Parameter(Mandatory = $true)]
+        [string]$Description
+    )
+
+    $uri = [uri]$Url
+    if (-not $uri.IsAbsoluteUri -or
+        $uri.Scheme -ne 'https' -or
+        -not $uri.IsDefaultPort -or
+        -not [string]::IsNullOrEmpty($uri.UserInfo) -or
+        -not $uri.Host.Equals($ExpectedHost, [System.StringComparison]::OrdinalIgnoreCase)) {
+        throw "$Description is outside the trusted HTTPS host: $Url"
+    }
+    return $uri
+}
+
+$siteUri = Assert-TrustedHttpsUri $siteRoot 'publish.obsidian.md' 'Site URL'
+$siteSlug = $siteUri.AbsolutePath.Trim('/')
+if ([string]::IsNullOrWhiteSpace($siteSlug) -or $siteSlug.Contains('/')) {
+    throw "Site URL must identify exactly one Obsidian Publish site: $siteRoot"
+}
+
+[xml]$sitemap = (Invoke-WebRequest -Uri $sitemapUrl -UseBasicParsing -MaximumRedirection 0).Content
 $pageUrls = @($sitemap.urlset.url.loc | ForEach-Object { [string]$_ })
 if ($pageUrls.Count -eq 0) {
     throw "The sitemap contains no page URLs: $sitemapUrl"
 }
 
-$shell = (Invoke-WebRequest -Uri $pageUrls[0] -UseBasicParsing).Content
+$pathPrefix = "/$siteSlug/"
+foreach ($pageUrl in $pageUrls) {
+    $pageUri = Assert-TrustedHttpsUri $pageUrl 'publish.obsidian.md' 'Sitemap URL'
+    if (-not [string]::IsNullOrEmpty($pageUri.Query) -or
+        -not [string]::IsNullOrEmpty($pageUri.Fragment) -or
+        -not $pageUri.AbsolutePath.StartsWith($pathPrefix, [System.StringComparison]::OrdinalIgnoreCase)) {
+        throw "Sitemap URL is outside the expected site path: $pageUrl"
+    }
+}
+
+$shell = (Invoke-WebRequest -Uri $pageUrls[0] -UseBasicParsing -MaximumRedirection 0).Content
 $siteInfoMatch = [regex]::Match(
     $shell,
     'window\.siteInfo=(\{.*?\});',
@@ -39,15 +83,22 @@ if (-not $siteInfoMatch.Success) {
 }
 
 $siteInfo = $siteInfoMatch.Groups[1].Value | ConvertFrom-Json
+$accessHost = [string]$siteInfo.host
+$accessUid = [string]$siteInfo.uid
+if ($accessHost -notmatch '^publish-\d+\.obsidian\.md$') {
+    throw "The Obsidian Publish access host is not trusted: $accessHost"
+}
+if ($accessUid -notmatch '^[A-Za-z0-9_-]{6,128}$') {
+    throw 'The Obsidian Publish site UID is invalid.'
+}
+if (-not ([string]$siteInfo.slug).Equals($siteSlug, [System.StringComparison]::OrdinalIgnoreCase)) {
+    throw 'The Obsidian Publish shell returned a different site slug.'
+}
 $accessRoot = "https://$($siteInfo.host)/access/$($siteInfo.uid)"
-$pathPrefix = "/$($siteInfo.slug)/"
 
 $targets = for ($index = 0; $index -lt $pageUrls.Count; $index++) {
     $pageUrl = $pageUrls[$index]
     $uri = [uri]$pageUrl
-    if (-not $uri.AbsolutePath.StartsWith($pathPrefix, [System.StringComparison]::OrdinalIgnoreCase)) {
-        throw "Sitemap URL is outside the expected site path: $pageUrl"
-    }
 
     $encodedSitePath = $uri.AbsolutePath.Substring($pathPrefix.Length)
     $pagePath = [uri]::UnescapeDataString($encodedSitePath.Replace('+', ' '))
@@ -64,6 +115,7 @@ $targets = for ($index = 0; $index -lt $pageUrls.Count; $index++) {
 }
 
 $results = $targets | ForEach-Object -Parallel {
+    . $using:markdownHelpersPath
     $target = $_
     $maximumAttempts = $using:RetryCount
     $raw = $null
@@ -71,7 +123,7 @@ $results = $targets | ForEach-Object -Parallel {
 
     for ($attempt = 1; $attempt -le $maximumAttempts; $attempt++) {
         try {
-            $raw = (Invoke-WebRequest -Uri $target.MarkdownUrl -UseBasicParsing -TimeoutSec 30).Content
+            $raw = (Invoke-WebRequest -Uri $target.MarkdownUrl -UseBasicParsing -TimeoutSec 30 -MaximumRedirection 0).Content
             $lastError = $null
             break
         }
@@ -102,6 +154,7 @@ $results = $targets | ForEach-Object -Parallel {
             [System.Text.RegularExpressions.RegexOptions]::Singleline
         )
     }
+    $text = Remove-MarkdownFencedBlocks $text
 
     $contentLines = [System.Collections.Generic.List[string]]::new()
     $inForumHeader = $false
@@ -131,7 +184,6 @@ $results = $targets | ForEach-Object -Parallel {
 
     $clean = [regex]::Replace($clean, '<!--.*?-->', ' ', $singleline)
     $clean = [regex]::Replace($clean, '%%.*?%%', ' ', $singleline)
-    $clean = [regex]::Replace($clean, '(?m)^\s*```[^\n]*$', ' ', $multiline)
     $clean = [regex]::Replace($clean, '!\[\[[^\]]+\]\]', ' ')
     $clean = [regex]::Replace($clean, '\[!\[[^\]]*\]\([^\)]*\)\]\([^\)]*\)', ' ')
     $clean = [regex]::Replace($clean, '!\[[^\]]*\]\([^\)]*\)', ' ')
@@ -164,8 +216,16 @@ if (-not [string]::IsNullOrWhiteSpace($outputDirectory)) {
     [System.IO.Directory]::CreateDirectory($outputDirectory) | Out-Null
 }
 
-$orderedResults |
-    Select-Object PagePath, Url, WordCount, Status |
+$csvResults = $orderedResults | ForEach-Object {
+    [pscustomobject]@{
+        PagePath  = Protect-SpreadsheetText ([string]$_.PagePath)
+        Url       = Protect-SpreadsheetText ([string]$_.Url)
+        WordCount = $_.WordCount
+        Status    = $_.Status
+    }
+}
+
+$csvResults |
     Export-Csv -LiteralPath $outputPath -NoTypeInformation -Encoding utf8
 
 $failedPages = @($orderedResults | Where-Object Status -ne 'OK')

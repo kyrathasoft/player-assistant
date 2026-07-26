@@ -18,6 +18,7 @@ function routingAssert(bool $condition, string $message): void
 
 $databasePath = tempnam(sys_get_temp_dir(), 'pa-broker-route-');
 $snapshotDirectory = sys_get_temp_dir() . '/pa-broker-snapshots-' . bin2hex(random_bytes(6));
+$snapshotSigningKey = random_bytes(32);
 if ($databasePath === false) {
     throw new RuntimeException('Unable to create the broker routing test database.');
 }
@@ -31,7 +32,9 @@ try {
             'max_token_lifetime_days' => 30,
             'requests_per_minute' => 10,
             'snapshot_directory' => $snapshotDirectory,
-            'snapshot_signing_key' => base64_encode(random_bytes(32)),
+            'snapshot_signing_key' => base64_encode($snapshotSigningKey),
+            'snapshot_max_age_seconds' => 30,
+            'snapshot_retention_seconds' => 60,
         ],
         'auth' => [
             'expected_origin' => 'https://example.test',
@@ -102,6 +105,49 @@ try {
         });
     $session = [];
     $adminHeaders = ['admin-key' => $config['api']['admin_key']];
+    if (!mkdir($snapshotDirectory, 0700, true) && !is_dir($snapshotDirectory)) {
+        throw new RuntimeException('Unable to create the snapshot retention test directory.');
+    }
+    $staleSnapshotPath = $snapshotDirectory . '/' . str_repeat('a', 64) . '.json';
+    file_put_contents($staleSnapshotPath, '{}');
+    touch($staleSnapshotPath, time() - 120);
+
+    $snapshotSourceUrl = 'https://rpol.net/game.php?gi=80170';
+    $snapshotContent = '<html><body>Sanitized RPOL fixture</body></html>';
+    $snapshotFetchedAt = gmdate(DATE_ATOM);
+    $snapshotContentHash = hash('sha256', $snapshotContent);
+    $snapshotCanonical = implode("\n", [
+        '1',
+        $config['rpol']['game_id'],
+        $snapshotSourceUrl,
+        $snapshotFetchedAt,
+        'text/html; charset=utf-8',
+        $snapshotContentHash,
+    ]);
+    $snapshot = [
+        'schema_version' => 1,
+        'game_id' => $config['rpol']['game_id'],
+        'source_url' => $snapshotSourceUrl,
+        'fetched_at' => $snapshotFetchedAt,
+        'content_type' => 'text/html; charset=utf-8',
+        'content_sha256' => $snapshotContentHash,
+        'content_base64' => base64_encode($snapshotContent),
+        'signature_algorithm' => 'HMAC-SHA256',
+        'signature' => hash_hmac('sha256', $snapshotCanonical, $snapshotSigningKey),
+    ];
+    $storedSnapshot = $broker->dispatch(
+        'PUT',
+        '/v1/snapshots/page',
+        [],
+        $snapshot,
+        $adminHeaders,
+        '192.0.2.30',
+        $session);
+    routingAssert($storedSnapshot['status'] === 201, 'The signed RPOL snapshot upload failed.');
+    routingAssert(!file_exists($staleSnapshotPath), 'The expired RPOL snapshot was not pruned.');
+    $currentSnapshotPath = $snapshotDirectory . '/' . hash('sha256', $snapshotSourceUrl) . '.json';
+    routingAssert(is_file($currentSnapshotPath), 'The current RPOL snapshot was pruned.');
+
     $rpolClient = new RpolClient($config['rpol']);
     $rpolClient->validateTargetUrl('https://rpol.net/usermodules/diceroller.cgi?gi=80170');
     try {
@@ -290,6 +336,9 @@ try {
 } finally {
     @unlink($databasePath);
     if (is_dir($snapshotDirectory)) {
+        foreach (glob($snapshotDirectory . '/*') ?: [] as $snapshotFile) {
+            @unlink($snapshotFile);
+        }
         @rmdir($snapshotDirectory);
     }
 }

@@ -31,7 +31,7 @@ Use the bundled PowerShell script for deterministic counting:
    - Treat internal apostrophes and hyphens as part of one word.
    - Preserve visible link labels.
    - Exclude Publish chrome by counting source Markdown rather than rendered shell HTML.
-   - Exclude YAML frontmatter, Markdown/HTML syntax, comments, embeds, images, URLs, imported forum headers, timestamps, and edit notices.
+   - Exclude YAML frontmatter, fenced code blocks, Markdown/HTML syntax, comments, embeds, images, URLs, imported forum headers, timestamps, and edit notices.
 11. Do not append a history entry, publish a broker snapshot, or claim complete totals if any sitemap page failed or either local post directory cannot be counted completely.
 
 The CSV is sorted in sitemap order and contains `PagePath`, `Url`, `WordCount`, and `Status`.

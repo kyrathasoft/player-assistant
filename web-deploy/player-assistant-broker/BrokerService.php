@@ -274,6 +274,8 @@ final class BrokerService
             @unlink($temporaryPath);
             throw new RuntimeException('Unable to promote the RPOL snapshot.');
         }
+        chmod($path, 0600);
+        $this->pruneExpiredSnapshots($path);
     }
 
     private function loadSnapshot(string $url): array
@@ -296,6 +298,32 @@ final class BrokerService
     private function snapshotDirectory(): string
     {
         return (string)($this->apiConfig['snapshot_directory'] ?? (__DIR__ . '/snapshots'));
+    }
+
+    private function pruneExpiredSnapshots(string $preservePath): void
+    {
+        $maximumAge = max(1, (int)($this->apiConfig['snapshot_max_age_seconds'] ?? 86400));
+        $configuredRetention = (int)($this->apiConfig['snapshot_retention_seconds'] ?? 604800);
+        $retentionSeconds = max($maximumAge, $configuredRetention);
+        $cutoff = time() - $retentionSeconds;
+        $files = glob($this->snapshotDirectory() . '/*.json');
+        if (!is_array($files)) {
+            return;
+        }
+
+        foreach ($files as $path) {
+            if ($path === $preservePath
+                || preg_match('/[\\\\\/][a-f0-9]{64}\.json$/D', $path) !== 1) {
+                continue;
+            }
+            $metadata = @lstat($path);
+            if (!is_array($metadata) || (int)$metadata['mtime'] >= $cutoff) {
+                continue;
+            }
+            if (!@unlink($path)) {
+                throw new RuntimeException('Unable to remove an expired RPOL snapshot.');
+            }
+        }
     }
 
     private function snapshotSigningKey(): string
