@@ -68,20 +68,13 @@ jobs:
 
       - name: Seed CI local sidecars
         shell: pwsh
-        env:
-          RPOL_CI_USER_NAME: ${{ secrets.PLAYER_ASSISTANT_CI_RPOL_USER_NAME }}
-          RPOL_CI_PASSWORD: ${{ secrets.PLAYER_ASSISTANT_CI_RPOL_PASSWORD }}
         run: |
           if (-not (Test-Path -LiteralPath .\settings.local.json -PathType Leaf)) {
-            if ([string]::IsNullOrWhiteSpace($env:RPOL_CI_USER_NAME) -or [string]::IsNullOrWhiteSpace($env:RPOL_CI_PASSWORD)) {
-              throw "CI RPOL credential secrets are required to seed settings.local.json."
-            }
-
             [ordered]@{
               schema_version = 1
               'XP Tracking' = 'https://publish.obsidian.md/scarlethorizons/Intentional+Orphans/XP+Tracking'
-              'RPOL user name' = $env:RPOL_CI_USER_NAME
-              'RPOL password' = $env:RPOL_CI_PASSWORD
+              'RPOL user name' = 'ci-fixture-rpol-user'
+              'RPOL password' = 'ci-fixture-rpol-password'
             } |
               ConvertTo-Json -Depth 4 |
               Set-Content -LiteralPath .\settings.local.json -Encoding UTF8
