@@ -1,0 +1,4 @@
+interface:
+  display_name: "Obsidian Publish Word Count"
+  short_description: "Count content words across an Obsidian Publish site"
+  default_prompt: "Use $obsidian-publish-word-count to crawl this Obsidian Publish sitemap and report page and total word counts."
