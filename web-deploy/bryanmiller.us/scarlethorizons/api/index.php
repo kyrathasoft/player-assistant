@@ -21,6 +21,7 @@ try {
     require_once $privateDirectory . '/RpolClient.php';
     require_once $privateDirectory . '/CharacterAuthService.php';
     require_once $privateDirectory . '/XpTrackingService.php';
+    require_once $privateDirectory . '/WordCountService.php';
     require_once $privateDirectory . '/BrokerService.php';
     $configPathOverride = getenv('PLAYER_ASSISTANT_BROKER_CONFIG');
     $configPath = is_string($configPathOverride) && $configPathOverride !== ''
@@ -171,7 +172,10 @@ function getRequestHeadersForBroker(): array
 
 function isCharacterSessionRoute(string $route): bool
 {
-    return in_array($route, ['/v1/login', '/v1/session', '/v1/me', '/v1/xp', '/v1/logout'], true);
+    return in_array(
+        $route,
+        ['/v1/login', '/v1/session', '/v1/me', '/v1/xp', '/v1/word-counts', '/v1/logout'],
+        true);
 }
 
 function startCharacterSession(array $authConfig): void

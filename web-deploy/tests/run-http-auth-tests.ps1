@@ -133,6 +133,41 @@ try {
     Assert-Condition -Condition ($unconfiguredXpBody.error -eq 'xp_unavailable') -Message 'The unconfigured HTTP XP route returned the wrong error.'
     Assert-Condition -Condition ($unconfiguredXp.Content -notmatch 'publish\.obsidian\.md') -Message 'The HTTP XP error exposed its source URL.'
 
+    $unauthenticatedWordCounts = Invoke-WebRequest `
+        -UseBasicParsing `
+        -SkipHttpErrorCheck `
+        -Uri "$baseUrl/v1/word-counts"
+    Assert-Condition -Condition ($unauthenticatedWordCounts.StatusCode -eq 401) -Message 'The HTTP word-count route was not session-protected.'
+
+    $observedAt = [DateTimeOffset]::UtcNow.ToString('o')
+    $wordCountUpload = Invoke-WebRequest `
+        -UseBasicParsing `
+        -Method Put `
+        -Uri "$baseUrl/v1/admin/word-counts" `
+        -Headers $adminHeaders `
+        -ContentType 'application/json' `
+        -Body (@{
+            schema_version = 1
+            observed_at = $observedAt
+            counting_rule_version = 'obsidian-publish-word-count-v1'
+            wiki = @{ pages = 985; words = 232048 }
+            ic = @{ files = 8; words = 14998 }
+            ooc = @{ files = 6; words = 18652 }
+        } | ConvertTo-Json -Depth 4 -Compress)
+    Assert-Condition -Condition ($wordCountUpload.StatusCode -eq 201) -Message 'The HTTP word-count upload failed.'
+
+    $wordCountResponse = Invoke-WebRequest `
+        -UseBasicParsing `
+        -Uri "$baseUrl/v1/word-counts" `
+        -Headers @{ Cookie = $cookieHeader }
+    $wordCountBody = $wordCountResponse.Content | ConvertFrom-Json
+    Assert-Condition -Condition ($wordCountResponse.StatusCode -eq 200) -Message 'The HTTP word-count read failed.'
+    Assert-Condition -Condition ([DateTimeOffset]$wordCountBody.observed_at -eq [DateTimeOffset]$observedAt) -Message 'The HTTP word-count observation time changed.'
+    Assert-Condition -Condition ([long]$wordCountBody.wiki.words -eq 232048) -Message 'The HTTP wiki word count was incorrect.'
+    Assert-Condition -Condition ([long]$wordCountBody.ic.words -eq 14998) -Message 'The HTTP IC word count was incorrect.'
+    Assert-Condition -Condition ([long]$wordCountBody.ooc.words -eq 18652) -Message 'The HTTP OOC word count was incorrect.'
+    Assert-Condition -Condition ([string]$wordCountResponse.Headers['Cache-Control'] -match '(?i)(^|,\s*)no-store($|,)') -Message 'Word-count responses must use Cache-Control: no-store.'
+
     $logoutResponse = Invoke-WebRequest `
         -UseBasicParsing `
         -Method Post `

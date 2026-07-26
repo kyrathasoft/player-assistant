@@ -6,6 +6,7 @@ require_once __DIR__ . '/../player-assistant-broker/BrokerHttpException.php';
 require_once __DIR__ . '/../player-assistant-broker/RpolClient.php';
 require_once __DIR__ . '/../player-assistant-broker/CharacterAuthService.php';
 require_once __DIR__ . '/../player-assistant-broker/XpTrackingService.php';
+require_once __DIR__ . '/../player-assistant-broker/WordCountService.php';
 require_once __DIR__ . '/../player-assistant-broker/BrokerService.php';
 
 function routingAssert(bool $condition, string $message): void
@@ -118,6 +119,53 @@ try {
             'The protected XP route failed with the wrong unauthenticated response.');
     }
 
+    try {
+        $broker->dispatch('GET', '/v1/word-counts', [], [], [], '192.0.2.30', $session);
+        throw new RuntimeException('The protected word-count route accepted an unauthenticated request.');
+    } catch (BrokerHttpException $exception) {
+        routingAssert(
+            $exception->status === 401 && $exception->errorName === 'authentication_required',
+            'The protected word-count route failed with the wrong unauthenticated response.');
+    }
+
+    $wordCountSnapshot = [
+        'schema_version' => 1,
+        'observed_at' => '2026-07-26T18:30:00Z',
+        'counting_rule_version' => 'obsidian-publish-word-count-v1',
+        'wiki' => ['pages' => 985, 'words' => 232048],
+        'ic' => ['files' => 8, 'words' => 14998],
+        'ooc' => ['files' => 6, 'words' => 18652],
+    ];
+    $storedWordCounts = $broker->dispatch(
+        'PUT',
+        '/v1/admin/word-counts',
+        [],
+        $wordCountSnapshot,
+        $adminHeaders,
+        '192.0.2.30',
+        $session);
+    routingAssert($storedWordCounts['status'] === 201, 'The word-count upload route failed.');
+    routingAssert(
+        $storedWordCounts['body']['wiki']['words'] === 232048,
+        'The word-count upload route returned the wrong total.');
+    try {
+        $invalidSnapshot = $wordCountSnapshot;
+        $invalidSnapshot['wiki'] = ['pages' => 0, 'words' => 1];
+        $broker->dispatch(
+            'PUT',
+            '/v1/admin/word-counts',
+            [],
+            $invalidSnapshot,
+            $adminHeaders,
+            '192.0.2.30',
+            $session);
+        throw new RuntimeException('The word-count upload route accepted an invalid snapshot.');
+    } catch (BrokerHttpException $exception) {
+        routingAssert(
+            $exception->status === 400 && $exception->errorName === 'invalid_word_counts',
+            'The word-count upload route rejected invalid data with the wrong response.');
+    }
+
     $created = $broker->dispatch(
         'POST',
         '/v1/admin/character-accounts',
@@ -187,6 +235,22 @@ try {
     routingAssert(!isset($xp['body']['characters']), 'The player XP response exposed party totals.');
     routingAssert(!isset($xp['body']['source_url']), 'The player XP response exposed the configured source URL.');
 
+    $wordCounts = $broker->dispatch(
+        'GET',
+        '/v1/word-counts',
+        [],
+        [],
+        [],
+        '192.0.2.30',
+        $session);
+    routingAssert($wordCounts['status'] === 200, 'The protected word-count route failed.');
+    routingAssert($wordCounts['body']['wiki']['words'] === 232048, 'The wiki word count was incorrect.');
+    routingAssert($wordCounts['body']['ic']['words'] === 14998, 'The IC word count was incorrect.');
+    routingAssert($wordCounts['body']['ooc']['words'] === 18652, 'The OOC word count was incorrect.');
+    routingAssert(
+        $wordCounts['body']['observed_at'] === $wordCountSnapshot['observed_at'],
+        'The word-count observation time changed during storage.');
+
     $destroyed = false;
     $logout = $broker->dispatch(
         'POST',
@@ -215,9 +279,12 @@ try {
         [],
         '192.0.2.30',
         $session);
-    routingAssert($health['body']['schema_version'] === 2, 'The broker schema version was not advanced.');
+    routingAssert($health['body']['schema_version'] === 3, 'The broker schema version was not advanced.');
     routingAssert($health['body']['character_account_count'] === 1, 'The health route account count was incorrect.');
     routingAssert($health['body']['xp_tracking_configured'] === true, 'The health route XP configuration state was incorrect.');
+    routingAssert(
+        $health['body']['word_count_snapshot_available'] === true,
+        'The health route word-count snapshot state was incorrect.');
 
     fwrite(STDOUT, "Broker authentication routing tests passed.\n");
 } finally {

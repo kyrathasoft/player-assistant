@@ -23,6 +23,8 @@
     let authenticationCsrfToken = '';
     let authenticatedXpSnapshot = null;
     let xpRequestId = 0;
+    let authenticatedWordCountSnapshot = null;
+    let wordCountRequestId = 0;
 
     const worker = typeof Worker !== 'undefined'
         ? new Worker('translator-worker.js')
@@ -238,6 +240,98 @@
         }
     };
 
+    const renderWordCountUi = () => {
+        const authenticated = authenticatedAccount !== null;
+        const refreshButton = byId('word-count-refresh');
+        const status = byId('word-count-status');
+        const summary = byId('word-count-summary');
+        if (refreshButton) refreshButton.hidden = !authenticated;
+        if (summary) summary.hidden = true;
+        for (const id of [
+            'word-count-wiki',
+            'word-count-wiki-pages',
+            'word-count-ic',
+            'word-count-ic-files',
+            'word-count-ooc',
+            'word-count-ooc-files',
+            'word-count-date'
+        ]) {
+            const element = byId(id);
+            if (element) element.textContent = '';
+        }
+
+        if (!authenticated) {
+            if (status) status.textContent = 'Log in to view the latest campaign word counts.';
+            return;
+        }
+        if (authenticatedWordCountSnapshot === null) {
+            if (status) status.textContent = 'Loading campaign word counts…';
+            return;
+        }
+
+        const snapshot = authenticatedWordCountSnapshot;
+        if (status) status.textContent = '';
+        if (summary) summary.hidden = false;
+        byId('word-count-wiki').textContent = Number(snapshot.wiki.words).toLocaleString('en-US');
+        byId('word-count-wiki-pages').textContent = `${Number(snapshot.wiki.pages).toLocaleString('en-US')} pages`;
+        byId('word-count-ic').textContent = Number(snapshot.ic.words).toLocaleString('en-US');
+        byId('word-count-ic-files').textContent = `${Number(snapshot.ic.files).toLocaleString('en-US')} files`;
+        byId('word-count-ooc').textContent = Number(snapshot.ooc.words).toLocaleString('en-US');
+        byId('word-count-ooc-files').textContent = `${Number(snapshot.ooc.files).toLocaleString('en-US')} files`;
+        const observed = new Date(snapshot.observed_at);
+        byId('word-count-date').textContent = `Counted ${observed.toLocaleString('en-US')}`;
+    };
+
+    const validateWordCountSnapshot = (payload) => {
+        const validGroup = (group, unitKey) => group
+            && Number.isSafeInteger(group[unitKey])
+            && group[unitKey] > 0
+            && Number.isSafeInteger(group.words)
+            && group.words >= 0;
+        if (!payload
+            || payload.schema_version !== 1
+            || typeof payload.observed_at !== 'string'
+            || Number.isNaN(Date.parse(payload.observed_at))
+            || typeof payload.counting_rule_version !== 'string'
+            || payload.counting_rule_version.length < 1
+            || payload.counting_rule_version.length > 100
+            || !validGroup(payload.wiki, 'pages')
+            || !validGroup(payload.ic, 'files')
+            || !validGroup(payload.ooc, 'files')) {
+            throw new Error('The word-count service returned an invalid response.');
+        }
+        return payload;
+    };
+
+    const loadWordCountSummary = async () => {
+        const requestId = ++wordCountRequestId;
+        if (authenticatedAccount === null) {
+            authenticatedWordCountSnapshot = null;
+            renderWordCountUi();
+            return;
+        }
+        const accountId = authenticatedAccount.id;
+        const refreshButton = byId('word-count-refresh');
+        if (refreshButton instanceof HTMLButtonElement) refreshButton.disabled = true;
+        authenticatedWordCountSnapshot = null;
+        renderWordCountUi();
+        try {
+            const snapshot = validateWordCountSnapshot(
+                await requestAuthenticationApi('/word-counts'));
+            if (requestId !== wordCountRequestId || authenticatedAccount?.id !== accountId) return;
+            authenticatedWordCountSnapshot = snapshot;
+            renderWordCountUi();
+        } catch (error) {
+            if (requestId !== wordCountRequestId || authenticatedAccount?.id !== accountId) return;
+            const status = byId('word-count-status');
+            if (status) status.textContent = error.message;
+        } finally {
+            if (requestId === wordCountRequestId && refreshButton instanceof HTMLButtonElement) {
+                refreshButton.disabled = false;
+            }
+        }
+    };
+
     const updateAuthenticationUi = () => {
         const authenticated = authenticatedAccount !== null;
         const buttonLabel = byId('auth-button-label');
@@ -264,6 +358,7 @@
                 : 'Log in with your character name and password. The server determines which character record the session may access; passwords and private records are never embedded in this browser application.';
         }
         renderXpUi();
+        renderWordCountUi();
     };
 
     const requestAuthenticationApi = async (path, options = {}) => {
@@ -308,8 +403,11 @@
             authenticationCsrfToken = '';
         }
         authenticatedXpSnapshot = null;
+        authenticatedWordCountSnapshot = null;
         updateAuthenticationUi();
-        if (authenticatedAccount !== null) await loadXpSummary();
+        if (authenticatedAccount !== null) {
+            await Promise.all([loadXpSummary(), loadWordCountSummary()]);
+        }
     };
 
     authButton?.addEventListener('click', () => {
@@ -349,6 +447,7 @@
             authenticationCsrfToken = String(session.csrf_token || '');
             authenticatedAccount = session.account;
             authenticatedXpSnapshot = null;
+            authenticatedWordCountSnapshot = null;
             try {
                 const identity = await requestAuthenticationApi('/me');
                 authenticatedAccount = identity.account || authenticatedAccount;
@@ -359,11 +458,12 @@
             setAuthenticationMessage('');
             setAuthenticationMessage('Character login succeeded.', false, true);
             updateAuthenticationUi();
-            await loadXpSummary();
+            await Promise.all([loadXpSummary(), loadWordCountSummary()]);
         } catch (error) {
             authenticatedAccount = null;
             authenticationCsrfToken = '';
             authenticatedXpSnapshot = null;
+            authenticatedWordCountSnapshot = null;
             setAuthenticationMessage(error.message, true);
             updateAuthenticationUi();
         } finally {
@@ -383,6 +483,8 @@
             authenticationCsrfToken = '';
             authenticatedXpSnapshot = null;
             xpRequestId++;
+            authenticatedWordCountSnapshot = null;
+            wordCountRequestId++;
             updateAuthenticationUi();
             if (authDialog instanceof HTMLDialogElement) authDialog.close();
         } catch (error) {
@@ -394,6 +496,10 @@
 
     byId('xp-refresh')?.addEventListener('click', () => {
         void loadXpSummary();
+    });
+
+    byId('word-count-refresh')?.addEventListener('click', () => {
+        void loadWordCountSummary();
     });
 
     updateAuthenticationUi();

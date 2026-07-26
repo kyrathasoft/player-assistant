@@ -23,6 +23,7 @@ BrokerHttpException.php
 CharacterAuthService.php
 BrokerService.php
 RpolClient.php
+WordCountService.php
 XpTrackingService.php
 ```
 
@@ -75,6 +76,7 @@ POST /scarlethorizons/api/v1/login
 GET  /scarlethorizons/api/v1/session
 GET  /scarlethorizons/api/v1/me
 GET  /scarlethorizons/api/v1/xp
+GET  /scarlethorizons/api/v1/word-counts
 POST /scarlethorizons/api/v1/logout
 ```
 
@@ -85,17 +87,24 @@ POST  /scarlethorizons/api/v1/admin/character-accounts/import
 GET   /scarlethorizons/api/v1/admin/character-accounts
 POST  /scarlethorizons/api/v1/admin/character-accounts
 PATCH /scarlethorizons/api/v1/admin/character-accounts/{account-id}
+PUT   /scarlethorizons/api/v1/admin/word-counts
 ```
+
+Publish a completed, zero-failure count with `web-deploy/publish-word-counts.ps1`.
+The script prompts securely for the administrator key and verifies that the
+broker returns the exact uploaded totals and observation time.
 
 ## Verification
 
-- Health response reports schema version `2`, a nonzero `character_account_count`, and `xp_tracking_configured: true`.
+- Health response reports schema version `3`, a nonzero `character_account_count`, `xp_tracking_configured: true`, and the word-count snapshot availability state.
 - Successful login sets `pa_character_session` with `Secure`, `HttpOnly`, `SameSite=Strict`, and path `/scarlethorizons/api/`.
 - `GET /v1/me` returns the logged-in account's server-stored character key.
 - `GET /v1/xp` returns one matching character's XP, class, attained level, and hit points for a player account and never includes the party array.
 - A Dungeon Master session receives the validated current party XP table.
 - A missing or ambiguous character-key mapping fails with `xp_not_authorized`.
 - XP responses omit the configured source URL and include `Cache-Control: no-store`.
+- Anonymous word-count reads fail with HTTP 401; a logged-in session receives the latest validated wiki, IC, and OOC totals.
+- Invalid uploads do not replace the broker's last known good word-count snapshot.
 - Logout without the CSRF token fails.
 - Correct logout expires the session cookie.
 - Disabled accounts and expired sessions fail closed.

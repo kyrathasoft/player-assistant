@@ -8,6 +8,7 @@ final class BrokerService
     private array $apiConfig;
     private CharacterAuthService $characterAuth;
     private XpTrackingService $xpTracking;
+    private WordCountService $wordCounts;
 
     public function __construct(
         private readonly array $config,
@@ -35,6 +36,7 @@ final class BrokerService
             $this->database,
             is_array($config['xp'] ?? null) ? $config['xp'] : [],
             $xpMarkdownFetcher);
+        $this->wordCounts = new WordCountService($this->database);
     }
 
     public function dispatch(
@@ -51,13 +53,14 @@ final class BrokerService
         if ($method === 'GET' && $route === '/v1/health') {
             return $this->response(200, [
                 'service' => 'player-assistant-broker',
-                'schema_version' => 2,
+                'schema_version' => 3,
                 'status' => 'ok',
                 'rpol_credentials_configured' => $this->rpolCredentialsConfigured(),
                 'snapshot_signing_configured' => $this->snapshotSigningConfigured(),
                 'snapshot_count' => $this->snapshotCount(),
                 'character_account_count' => $this->characterAuth->accountCount(),
                 'xp_tracking_configured' => $this->xpTracking->isConfigured(),
+                'word_count_snapshot_available' => $this->wordCounts->hasSnapshot(),
             ]);
         }
 
@@ -87,6 +90,11 @@ final class BrokerService
                 $this->xpTracking->getForAccount($current['account']));
         }
 
+        if ($method === 'GET' && $route === '/v1/word-counts') {
+            $this->characterAuth->requireCurrentAccount($session);
+            return $this->response(200, $this->wordCounts->latest());
+        }
+
         if ($method === 'POST' && $route === '/v1/logout') {
             return $this->response(
                 200,
@@ -100,6 +108,11 @@ final class BrokerService
         if ($route === '/v1/admin/character-accounts/import' && $method === 'POST') {
             $this->requireAdminKey($headers);
             return $this->response(200, $this->characterAuth->importLegacyAccounts($body));
+        }
+
+        if ($route === '/v1/admin/word-counts' && $method === 'PUT') {
+            $this->requireAdminKey($headers);
+            return $this->response(201, $this->wordCounts->store($body));
         }
 
         if ($route === '/v1/admin/character-accounts' && $method === 'GET') {
