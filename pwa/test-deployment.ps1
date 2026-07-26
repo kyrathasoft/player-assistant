@@ -55,7 +55,24 @@ $runtimeFiles = [ordered]@{
     'icons/dragon-mark.png' = @('image/png')
     'data/orcish.json' = @('application/json', 'text/json')
     'data/elvish.json' = @('application/json', 'text/json')
+    'data/heroes.json' = @('application/json', 'text/json')
     'campaign-search.json' = @('application/json', 'text/json')
+}
+
+$heroData = Get-Content -Raw -LiteralPath (Join-Path $PwaRoot 'data\heroes.json') | ConvertFrom-Json
+$heroContentTypes = @{
+    '.avif' = @('image/avif')
+    '.gif' = @('image/gif')
+    '.jpeg' = @('image/jpeg')
+    '.jpg' = @('image/jpeg')
+    '.png' = @('image/png')
+    '.webp' = @('image/webp')
+}
+foreach ($hero in @($heroData.heroes) + @($heroData.dungeonMaster)) {
+    $relativePath = [string]$hero.token
+    $extension = [System.IO.Path]::GetExtension($relativePath).ToLowerInvariant()
+    Assert-Condition -Condition ($heroContentTypes.ContainsKey($extension)) -Message "Unsupported hero-token extension: $relativePath"
+    $runtimeFiles[$relativePath] = $heroContentTypes[$extension]
 }
 
 $handler = [System.Net.Http.HttpClientHandler]::new()

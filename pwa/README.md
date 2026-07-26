@@ -12,6 +12,7 @@
 - responsive phone, tablet, Chromebook, and desktop layouts
 - an offline app shell and runtime-cached translator/search data
 - server-validated character login with secure cookie sessions and explicit logout
+- the logged-in player's active hero token, sourced from the public Player Characters Listing, or the Dungeon Master token for the DM account; wiki images are preferred with website-hosted fallbacks
 - a protected current-XP card that returns one authorized character to players, calculates XP till next level (TNL) from the published class progression pages, and exposes party totals only to the Dungeon Master
 
 No RPOL password, XP password, password hash, encrypted local setting, session identifier, or private player note is embedded in the PWA. Character credentials are sent only to the same-origin PHP broker over HTTPS. The broker validates the password server-side and keeps the session identifier in a `Secure`, `HttpOnly`, `SameSite=Strict` cookie.
@@ -33,6 +34,14 @@ Refresh the full-text campaign search index from the live public Obsidian Publis
 ```
 
 The generated root-level `campaign-search.json` contains only sitemap-listed public pages and excludes the protected XP Tracking source. Run `build-data.ps1 -RefreshCampaignSearch` when language data and the live campaign index should be refreshed together.
+
+Check the active hero and Dungeon Master token images on the wiki and update only changed website-hosted fallback copies with:
+
+```powershell
+.\pwa\refresh-hero-tokens.ps1
+```
+
+Run `build-data.ps1 -RefreshHeroTokens` when language data and hero tokens should be refreshed together. The generated manifest keeps both the current wiki image URL and the local `pwa/data/hero-tokens/` fallback. At runtime, the PWA tries the wiki image first and automatically falls back to the website copy if the wiki is unavailable.
 
 Validate the complete deployable directory with:
 

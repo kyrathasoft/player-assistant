@@ -1,11 +1,12 @@
 AddType application/manifest+json .webmanifest
 AddType application/javascript .js
+AddType image/webp .webp
 
 <IfModule mod_headers.c>
     Header always set X-Content-Type-Options "nosniff"
     Header always set Referrer-Policy "strict-origin-when-cross-origin"
     Header always set Permissions-Policy "camera=(), microphone=(), geolocation=()"
-    Header always set Content-Security-Policy "default-src 'self'; base-uri 'none'; connect-src 'self'; form-action 'self'; frame-ancestors 'none'; img-src 'self' data:; manifest-src 'self'; script-src 'self'; style-src 'self'; worker-src 'self'"
+    Header always set Content-Security-Policy "default-src 'self'; base-uri 'none'; connect-src 'self'; form-action 'self'; frame-ancestors 'none'; img-src 'self' data: https://*.obsidian.md; manifest-src 'self'; script-src 'self'; style-src 'self'; worker-src 'self'"
     Header always set Strict-Transport-Security "max-age=31536000"
     Header set Cache-Control "no-cache" "expr=%{REQUEST_URI} =~ m#/(service-worker\.js|manifest\.webmanifest)$#"
 </IfModule>

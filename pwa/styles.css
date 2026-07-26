@@ -1119,6 +1119,23 @@ dialog form {
     margin: 1rem 0;
 }
 
+.authenticated-hero-token {
+    width: 128px;
+    height: 128px;
+    flex: 0 0 128px;
+    transform: translateY(10px);
+    border: 2px solid var(--gold);
+    border-radius: 50%;
+    background: var(--surface-soft);
+    box-shadow: var(--shadow);
+    object-fit: cover;
+}
+
+.auth-hero-token {
+    float: right;
+    margin: 0 0 1rem 1rem;
+}
+
 .auth-account-panel dl div {
     display: grid;
     grid-template-columns: 6rem 1fr;

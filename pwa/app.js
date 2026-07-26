@@ -25,6 +25,8 @@
     let xpRequestId = 0;
     let authenticatedWordCountSnapshot = null;
     let wordCountRequestId = 0;
+    let heroTokenData = null;
+    let heroTokenDataLoading = null;
 
     const worker = typeof Worker !== 'undefined'
         ? new Worker('translator-worker.js')
@@ -357,8 +359,99 @@
                 ? `Signed in as ${authenticatedAccount.character_name}. Protected requests are authorized from this server session.`
                 : 'Log in with your character name and password. The server determines which character record the session may access; passwords and private records are never embedded in this browser application.';
         }
+        renderAuthenticatedHeroToken();
         renderXpUi();
         renderWordCountUi();
+    };
+
+    const normalizeHeroName = (value) => String(value || '')
+        .normalize('NFKC')
+        .trim()
+        .toLocaleLowerCase('en-US');
+
+    const loadHeroTokenData = async () => {
+        if (heroTokenData !== null) return heroTokenData;
+        if (heroTokenDataLoading !== null) return heroTokenDataLoading;
+        const validHero = (hero) =>
+            typeof hero?.name === 'string'
+            && Array.isArray(hero.aliases)
+            && hero.aliases.every((alias) => typeof alias === 'string')
+            && typeof hero.token === 'string'
+            && /^data\/hero-tokens\/[a-z0-9][a-z0-9._-]*\.(?:avif|gif|jpe?g|png|webp)$/iu.test(hero.token)
+            && typeof hero.wikiToken === 'string'
+            && /^https:\/\/publish-\d+\.obsidian\.md\/access\/[a-z0-9]+\/[^?#]+$/iu.test(hero.wikiToken);
+        heroTokenDataLoading = fetch('data/heroes.json', { cache: 'no-cache' })
+            .then(async (response) => {
+                if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                const payload = await response.json();
+                if (payload?.schemaVersion !== 1
+                    || !Array.isArray(payload.heroes)
+                    || !validHero(payload.dungeonMaster)) {
+                    throw new Error('Invalid hero-token data.');
+                }
+                return {
+                    dungeonMaster: payload.dungeonMaster,
+                    heroes: payload.heroes.filter(validHero)
+                };
+            })
+            .catch(() => ({ dungeonMaster: null, heroes: [] }))
+            .then((data) => {
+                heroTokenData = data;
+                return data;
+            });
+        return heroTokenDataLoading;
+    };
+
+    const findAuthenticatedHero = (data, account) => {
+        if (!account) return null;
+        if (account.role === 'dm') return data.dungeonMaster;
+        const accountNames = [
+            account.character_name,
+            account.character_key,
+            String(account.character_name || '').split(/\s+/u)[0]
+        ].map(normalizeHeroName).filter(Boolean);
+        return data.heroes.find((hero) =>
+            [hero.name, ...hero.aliases]
+                .map(normalizeHeroName)
+                .some((alias) => accountNames.includes(alias))) || null;
+    };
+
+    const setHeroTokenImage = (image, hero) => {
+        if (!(image instanceof HTMLImageElement)) return;
+        if (hero === null) {
+            image.hidden = true;
+            image.removeAttribute('src');
+            image.removeAttribute('data-fallback-src');
+            image.alt = '';
+            image.onerror = null;
+            return;
+        }
+        image.dataset.fallbackSrc = hero.token;
+        image.alt = `${hero.name} token`;
+        image.onerror = null;
+        image.src = hero.token;
+        image.hidden = false;
+
+        const wikiImage = new Image();
+        wikiImage.addEventListener('load', () => {
+            if (image.dataset.fallbackSrc === hero.token) {
+                image.src = hero.wikiToken;
+            }
+        }, { once: true });
+        wikiImage.src = hero.wikiToken;
+    };
+
+    const renderAuthenticatedHeroToken = async () => {
+        const accountAtStart = authenticatedAccount;
+        if (accountAtStart === null) {
+            setHeroTokenImage(byId('auth-dashboard-token'), null);
+            setHeroTokenImage(byId('auth-account-token'), null);
+            return;
+        }
+        const hero = findAuthenticatedHero(await loadHeroTokenData(), accountAtStart);
+        if (authenticatedAccount?.id !== accountAtStart.id) return;
+        setHeroTokenImage(byId('auth-dashboard-token'), hero);
+        setHeroTokenImage(byId('auth-account-token'), hero);
     };
 
     const requestAuthenticationApi = async (path, options = {}) => {
@@ -568,6 +661,14 @@
     updateInstallButtons();
 
     if ('serviceWorker' in navigator) {
+        const replacingExistingWorker = navigator.serviceWorker.controller !== null;
+        let reloadingForServiceWorker = false;
+        navigator.serviceWorker.addEventListener('controllerchange', () => {
+            if (replacingExistingWorker && !reloadingForServiceWorker) {
+                reloadingForServiceWorker = true;
+                window.location.reload();
+            }
+        });
         window.addEventListener('load', async () => {
             try {
                 const registration = await navigator.serviceWorker.register('service-worker.js', { scope: './' });

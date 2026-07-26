@@ -1,6 +1,7 @@
 param(
     [string]$RepositoryRoot = (Split-Path -Parent $PSScriptRoot),
-    [switch]$RefreshCampaignSearch
+    [switch]$RefreshCampaignSearch,
+    [switch]$RefreshHeroTokens
 )
 
 $ErrorActionPreference = 'Stop'
@@ -158,6 +159,16 @@ if (@($campaignSearch.pages | Where-Object { $_.title -eq 'XP Tracking' }).Count
     throw 'The protected XP Tracking page must not be included in the public PWA campaign search index.'
 }
 
+if ($RefreshHeroTokens) {
+    & (Join-Path $PSScriptRoot 'refresh-hero-tokens.ps1')
+}
+$heroData = Read-Json -Path (Join-Path $dataDirectory 'heroes.json')
+if ([int]$heroData.schemaVersion -ne 1
+    -or @($heroData.heroes).Count -eq 0
+    -or [string]::IsNullOrWhiteSpace([string]$heroData.dungeonMaster.token)) {
+    throw 'The PWA hero-token data is missing. Run pwa\refresh-hero-tokens.ps1.'
+}
+
 Add-Type -AssemblyName System.Drawing
 $dragonPath = Join-Path $RepositoryRoot 'Assets\dragon-dim.png'
 $dragon = [System.Drawing.Image]::FromFile($dragonPath)
@@ -170,4 +181,4 @@ finally {
 }
 Copy-Item -LiteralPath $dragonPath -Destination (Join-Path $iconDirectory 'dragon-mark.png') -Force
 
-Write-Output "PWA data generated: $($orcishTerms.get_Count()) Orcish terms, $($elvishTerms.get_Count()) Elvish terms."
+Write-Output "PWA data generated: $($orcishTerms.get_Count()) Orcish terms, $($elvishTerms.get_Count()) Elvish terms, $(@($heroData.heroes).Count) player tokens and the Dungeon Master token."
