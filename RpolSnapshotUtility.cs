@@ -161,7 +161,7 @@ namespace PlayerAssistant
                 .Select(uri =>
                 {
                     ValidateSourceUri(uri);
-                    return uri.AbsoluteUri;
+                    return NormalizePublisherSourceUri(uri).AbsoluteUri;
                 })
                 .Distinct(StringComparer.OrdinalIgnoreCase)
                 .ToList();
@@ -188,20 +188,42 @@ namespace PlayerAssistant
         internal static RpolSnapshotPublisherState EnsureRequiredSourceUris(RpolSnapshotPublisherState state)
         {
             ValidatePublisherState(state);
+            var nextSourceUrl = NormalizePublisherSourceUri(
+                new Uri(state.SourceUrls[state.NextIndex])).AbsoluteUri;
+            var sourceUrls = state.SourceUrls
+                .Select(sourceUrl => NormalizePublisherSourceUri(new Uri(sourceUrl)).AbsoluteUri)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+            var nextIndex = sourceUrls.FindIndex(sourceUrl =>
+                string.Equals(sourceUrl, nextSourceUrl, StringComparison.OrdinalIgnoreCase));
+            if (nextIndex < 0)
+            {
+                throw new InvalidOperationException("The normalized RPOL snapshot publisher cursor is invalid.");
+            }
+
             var missingUris = new[] { DiceRollerUri }
-                .Where(requiredUri => !state.SourceUrls.Contains(
+                .Where(requiredUri => !sourceUrls.Contains(
                     requiredUri.AbsoluteUri,
                     StringComparer.OrdinalIgnoreCase))
                 .Select(requiredUri => requiredUri.AbsoluteUri)
                 .ToArray();
-            if (missingUris.Length == 0)
+            var urlsChanged = !sourceUrls.SequenceEqual(state.SourceUrls, StringComparer.OrdinalIgnoreCase);
+            if (missingUris.Length == 0 && !urlsChanged && nextIndex == state.NextIndex)
             {
                 return state;
             }
 
-            var sourceUrls = state.SourceUrls.ToList();
-            sourceUrls.InsertRange(state.NextIndex, missingUris);
-            return state with { SourceUrls = sourceUrls };
+            sourceUrls.InsertRange(nextIndex, missingUris);
+            return state with { SourceUrls = sourceUrls, NextIndex = nextIndex };
+        }
+
+        internal static Uri NormalizePublisherSourceUri(Uri sourceUri)
+        {
+            ValidateSourceUri(sourceUri);
+            return sourceUri.AbsolutePath.EndsWith("/display.cgi", StringComparison.OrdinalIgnoreCase)
+                && sourceUri.Query.Contains("ti=", StringComparison.OrdinalIgnoreCase)
+                ? new Uri(RpolThreadPostUtility.GetShowAllThreadUrl(sourceUri.AbsoluteUri))
+                : sourceUri;
         }
 
         internal static RpolSnapshotPublisherState? LoadPublisherState(string statePath)
@@ -289,10 +311,21 @@ namespace PlayerAssistant
                 fetchedAtText,
                 contentType,
                 contentHash,
-                Convert.ToBase64String(content),
+                EncodeBase64ForTransport(content),
                 SignatureAlgorithm,
                 string.Empty);
             return unsigned with { Signature = ComputeSignature(unsigned, base64SigningKey) };
+        }
+
+        private static string EncodeBase64ForTransport(byte[] content)
+        {
+            var base64 = Convert.ToBase64String(content);
+            return string.Join(
+                '\n',
+                Enumerable.Range(0, (base64.Length + 2) / 3)
+                    .Select(index => base64.Substring(
+                        index * 3,
+                        Math.Min(3, base64.Length - (index * 3)))));
         }
 
         internal static bool VerifySignature(RpolSnapshotPayload payload, string base64SigningKey)
@@ -361,7 +394,9 @@ namespace PlayerAssistant
             };
             candidates.AddRange(HtmlUtility.GetHyperlinksFromHtml(rootHtml, rootUri)
                 .Where(link => IsApprovedLinkLabel(link.Text))
-                .Select(link => Uri.TryCreate(link.Url, UriKind.Absolute, out var uri) ? uri : null)
+                .Select(link => Uri.TryCreate(link.Url, UriKind.Absolute, out var uri)
+                    ? NormalizePublisherSourceUri(uri)
+                    : null)
                 .OfType<Uri>());
 
             var sourceUris = candidates

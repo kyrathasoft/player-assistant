@@ -83,7 +83,22 @@ namespace PlayerAssistant
             string outputDirectory,
             CancellationToken cancellationToken = default)
         {
+            return await DownloadChapterHtmlAsync(
+                hyperlinks,
+                outputDirectory,
+                GetHtmlFromUrlWithRateLimitAsync,
+                cancellationToken);
+        }
+
+        internal static async Task<GameForumChapterDownload[]> DownloadChapterHtmlAsync(
+            IEnumerable<Hyperlink> hyperlinks,
+            string outputDirectory,
+            Func<string, CancellationToken, Task<string>> htmlFetcher,
+            CancellationToken cancellationToken = default)
+        {
+            ArgumentNullException.ThrowIfNull(hyperlinks);
             ArgumentException.ThrowIfNullOrWhiteSpace(outputDirectory);
+            ArgumentNullException.ThrowIfNull(htmlFetcher);
 
             Directory.CreateDirectory(outputDirectory);
 
@@ -106,7 +121,8 @@ namespace PlayerAssistant
 
                     if (ShouldDownload(filePath))
                     {
-                        var html = await GetHtmlFromUrlWithRateLimitAsync(hyperlink.Url, cancellationToken);
+                        var showAllUrl = RpolThreadPostUtility.GetShowAllThreadUrl(hyperlink.Url);
+                        var html = await htmlFetcher(showAllUrl, cancellationToken);
                         await AtomicFileUtility.WriteAllTextAsync(filePath, html, cancellationToken);
                         FileDownloadCounters.AddCompletedDownload(filePath);
                         downloaded = true;
@@ -128,8 +144,22 @@ namespace PlayerAssistant
             string outputDirectory,
             CancellationToken cancellationToken = default)
         {
+            return await DownloadAsideHtmlAsync(
+                hyperlinks,
+                outputDirectory,
+                GetHtmlFromUrlWithRateLimitAsync,
+                cancellationToken);
+        }
+
+        internal static async Task<GameForumPostDownload[]> DownloadAsideHtmlAsync(
+            IEnumerable<Hyperlink> hyperlinks,
+            string outputDirectory,
+            Func<string, CancellationToken, Task<string>> htmlFetcher,
+            CancellationToken cancellationToken = default)
+        {
             ArgumentNullException.ThrowIfNull(hyperlinks);
             ArgumentException.ThrowIfNullOrWhiteSpace(outputDirectory);
+            ArgumentNullException.ThrowIfNull(htmlFetcher);
 
             Directory.CreateDirectory(outputDirectory);
 
@@ -145,17 +175,21 @@ namespace PlayerAssistant
                 var filePath = Path.Combine(outputDirectory, $"{GetFileName(hyperlink.Text)}.html");
                 try
                 {
-                    var downloaded = false;
+                    var showAllUrl = RpolThreadPostUtility.GetShowAllThreadUrl(hyperlink.Url);
+                    var html = HtmlUtility.RemoveImagesFromHtml(
+                        await htmlFetcher(showAllUrl, cancellationToken));
+                    var downloaded = !File.Exists(filePath) || !string.Equals(
+                        await File.ReadAllTextAsync(filePath, cancellationToken),
+                        html,
+                        StringComparison.Ordinal);
 
-                    if (!File.Exists(filePath))
+                    if (downloaded)
                     {
-                        var html = await GetHtmlFromUrlWithRateLimitAsync(hyperlink.Url, cancellationToken);
                         await AtomicFileUtility.WriteAllTextAsync(
                             filePath,
-                            HtmlUtility.RemoveImagesFromHtml(html),
+                            html,
                             cancellationToken);
                         FileDownloadCounters.AddCompletedDownload(filePath);
-                        downloaded = true;
                     }
 
                     downloads.Add(new GameForumPostDownload(hyperlink.Text, filePath, downloaded));

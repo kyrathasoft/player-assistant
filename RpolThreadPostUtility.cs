@@ -33,7 +33,7 @@ namespace PlayerAssistant
 
     internal static class RpolThreadPostUtility
     {
-        public const string Ch1KirkilstonShowAllUrl = "https://rpol.net/display.cgi?gi=80170&ti=7&date=1779581880&msgpage=&show=all";
+        public const string Ch1KirkilstonShowAllUrl = "https://rpol.net/display.cgi?gi=80170&ti=7&msgpage=&show=all";
         public const string DungeonMasterAuthor = "Dungeon Master";
         public const string NuandaAuthor = "Nuanda";
         public const string NuandaNemereAuthor = "Nuanda Nemere";
@@ -328,18 +328,19 @@ namespace PlayerAssistant
             }
 
             var queryValues = ParseQueryString(uri.Query);
-            queryValues["msgpage"] = string.Empty;
-            queryValues["show"] = "all";
+            queryValues.Remove("date");
+            queryValues.Remove("msgpage");
+            queryValues.Remove("show");
+            var normalizedQueryValues = queryValues
+                .Append(new KeyValuePair<string, string>("msgpage", string.Empty))
+                .Append(new KeyValuePair<string, string>("show", "all"));
 
-            var builder = new UriBuilder(uri)
-            {
-                Query = string.Join("&", queryValues.Select(pair =>
-                    pair.Value.Length == 0
-                        ? Uri.EscapeDataString(pair.Key) + "="
-                        : $"{Uri.EscapeDataString(pair.Key)}={Uri.EscapeDataString(pair.Value)}"))
-            };
+            var query = string.Join("&", normalizedQueryValues.Select(pair =>
+                pair.Value.Length == 0
+                    ? Uri.EscapeDataString(pair.Key) + "="
+                    : $"{Uri.EscapeDataString(pair.Key)}={Uri.EscapeDataString(pair.Value)}"));
 
-            return builder.Uri.ToString();
+            return $"{uri.GetLeftPart(UriPartial.Path)}?{query}{uri.Fragment}";
         }
 
         private static string CreatePostDocument(RpolThreadPost post, string threadTitle)

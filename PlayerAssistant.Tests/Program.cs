@@ -229,6 +229,7 @@ var tests = new (string Name, Action Test)[]
     ("rpol dice roller navigation uses game page referrer", RpolDiceRollerNavigationUsesGamePageReferrer),
     ("snapshot publisher state advances one target and wraps", SnapshotPublisherStateAdvancesOneTargetAndWraps),
     ("snapshot discovery approves game links and dice roller", SnapshotDiscoveryApprovesGameLinksAndDiceRoller),
+    ("snapshot publisher normalizes thread targets to show all", SnapshotPublisherNormalizesThreadTargetsToShowAll),
     ("snapshot publisher state injects required dice roller target", SnapshotPublisherStateInjectsRequiredDiceRollerTarget),
     ("snapshot publisher state persists its cursor", SnapshotPublisherStatePersistsItsCursor),
     ("snapshot publisher state rejects an invalid cursor", SnapshotPublisherStateRejectsInvalidCursor),
@@ -240,6 +241,8 @@ var tests = new (string Name, Action Test)[]
     ("rpol storage state validation deletes stale state", RpolStorageStateValidationDeletesStaleState),
     ("rpol storage state validation deletes non-rpol state", RpolStorageStateValidationDeletesNonRpolState),
     ("show-all thread url preserves base query and adds show all", ShowAllThreadUrlPreservesBaseQueryAndAddsShowAll),
+    ("chapter downloads use show-all thread urls", ChapterDownloadsUseShowAllThreadUrls),
+    ("aside downloads use show-all urls and refresh existing files", AsideDownloadsUseShowAllUrlsAndRefreshExistingFiles),
     ("rpol thread export preserves existing output on cancellation", RpolThreadExportPreservesExistingOutputOnCancellation),
     ("rpol thread export commits staged output", RpolThreadExportCommitsStagedOutput),
     ("rpol thread export rejects collapsed source and preserves existing output", RpolThreadExportRejectsCollapsedSourceAndPreservesExistingOutput),
@@ -5435,9 +5438,60 @@ static void ShowAllThreadUrlPreservesBaseQueryAndAddsShowAll()
     var showAllUrl = RpolThreadPostUtility.GetShowAllThreadUrl(threadUrl);
 
     AssertEqual(
-        "https://rpol.net/display.cgi?gi=80170&ti=17&date=1779581880&msgpage=&show=all",
+        "https://rpol.net/display.cgi?gi=80170&ti=17&msgpage=&show=all",
         showAllUrl,
         "unexpected show-all thread url");
+}
+
+static void ChapterDownloadsUseShowAllThreadUrls()
+{
+    using var directory = TemporaryDirectory.Create();
+    var requestedUrls = new List<string>();
+    var downloads = GameForumUtility.DownloadChapterHtmlAsync(
+        [new Hyperlink("https://rpol.net/display.cgi?gi=80170&ti=7&date=1779581880&msgpage=2", "Ch 1 - Kirkilston")],
+        directory.Path,
+        (url, _) =>
+        {
+            requestedUrls.Add(url);
+            return Task.FromResult("<html><body>all chapter posts</body></html>");
+        }).GetAwaiter().GetResult();
+
+    AssertEqual(1, requestedUrls.Count, "chapter downloader should fetch one URL");
+    AssertEqual(
+        "https://rpol.net/display.cgi?gi=80170&ti=7&msgpage=&show=all",
+        requestedUrls[0],
+        "chapter downloader should request the complete thread");
+    AssertTrue(downloads[0].Downloaded, "missing chapter file should be downloaded");
+    AssertContains(File.ReadAllText(downloads[0].FilePath), "all chapter posts");
+}
+
+static void AsideDownloadsUseShowAllUrlsAndRefreshExistingFiles()
+{
+    using var directory = TemporaryDirectory.Create();
+    const string linkText = "Aside - Searching the woods";
+    var existingPath = Path.Combine(directory.Path, $"{linkText}.html");
+    File.WriteAllText(existingPath, "<html><body>stale aside page</body></html>");
+    var requestedUrls = new List<string>();
+
+    var downloads = GameForumUtility.DownloadAsideHtmlAsync(
+        [new Hyperlink("https://rpol.net/display.cgi?gi=80170&ti=17&msgpage=1", linkText)],
+        directory.Path,
+        (url, _) =>
+        {
+            requestedUrls.Add(url);
+            return Task.FromResult("<html><body><img src='secret.png'>all aside posts</body></html>");
+        }).GetAwaiter().GetResult();
+
+    AssertEqual(1, requestedUrls.Count, "aside downloader should refresh an existing file");
+    AssertEqual(
+        "https://rpol.net/display.cgi?gi=80170&ti=17&msgpage=&show=all",
+        requestedUrls[0],
+        "aside downloader should request the complete thread");
+    AssertTrue(downloads[0].Downloaded, "changed existing aside should be refreshed");
+    AssertContains(File.ReadAllText(existingPath), "all aside posts");
+    AssertFalse(
+        File.ReadAllText(existingPath).Contains("<img", StringComparison.OrdinalIgnoreCase),
+        "aside refresh should continue removing images");
 }
 
 static void RpolThreadExportPreservesExistingOutputOnCancellation()
@@ -12466,6 +12520,13 @@ static void RpolSnapshotSignsAndVerifiesCanonicalPayload()
         signingKey);
 
     AssertTrue(RpolSnapshotUtility.VerifySignature(payload, signingKey), "snapshot signature should verify");
+    AssertEqual(
+        "<html>campaign</html>",
+        System.Text.Encoding.UTF8.GetString(Convert.FromBase64String(payload.ContentBase64)),
+        "transport-wrapped snapshot content should round-trip");
+    AssertFalse(
+        System.Text.RegularExpressions.Regex.IsMatch(payload.ContentBase64, "[A-Za-z0-9+/]{4}"),
+        "snapshot transport should not expose four-character base64 phrases to request filtering");
     AssertFalse(
         RpolSnapshotUtility.VerifySignature(payload with { ContentSha256 = new string('0', 64) }, signingKey),
         "tampered snapshot metadata should fail signature verification");
@@ -12608,6 +12669,35 @@ static void SnapshotDiscoveryApprovesGameLinksAndDiceRoller()
     AssertTrue(gameLinksApproved, "Game Links should be included in snapshot discovery");
     AssertTrue(diceRollerApproved, "Die Roller should be included in snapshot discovery");
     AssertFalse(unrelated, "unrelated game administration links should remain excluded");
+}
+
+static void SnapshotPublisherNormalizesThreadTargetsToShowAll()
+{
+    var state = RpolSnapshotUtility.CreatePublisherState(
+    [
+        new Uri("https://rpol.net/game.php?gi=80170"),
+        new Uri("https://rpol.net/display.cgi?gi=80170&ti=7&date=1779581880&msgpage=2")
+    ]);
+
+    AssertEqual(
+        "https://rpol.net/display.cgi?gi=80170&ti=7&msgpage=&show=all",
+        state.SourceUrls[1],
+        "new publisher state should normalize thread targets");
+
+    var legacyState = new RpolSnapshotPublisherState(
+        1,
+        [
+            "https://rpol.net/game.php?gi=80170",
+            "https://rpol.net/display.cgi?gi=80170&ti=7&date=1779581880&msgpage=2",
+            "https://rpol.net/usermodules/diceroller.cgi?gi=80170"
+        ],
+        1);
+    var normalized = RpolSnapshotUtility.EnsureRequiredSourceUris(legacyState);
+
+    AssertEqual(
+        "https://rpol.net/display.cgi?gi=80170&ti=7&msgpage=&show=all",
+        normalized.SourceUrls[normalized.NextIndex],
+        "legacy publisher state should normalize its current thread without losing the cursor");
 }
 
 static void SnapshotPublisherStateInjectsRequiredDiceRollerTarget()
