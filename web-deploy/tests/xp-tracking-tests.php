@@ -38,6 +38,7 @@ function xpConfiguration(): array
     return [
         'source_url' => 'https://publish.obsidian.md/example/XP',
         'character_source_url' => 'https://publish.obsidian.md/example/PCs/Player+Characters+Listing',
+        'class_progression_index_url' => 'https://publish.obsidian.md/example/Classes/Class+Level+Progression',
         'connect_timeout_seconds' => 1,
         'timeout_seconds' => 2,
         'maximum_response_bytes' => 65536,
@@ -75,14 +76,70 @@ try {
         '| [[Dorn]] | Fighter | 5 | ![[dorn.webp]] | 27 |',
         '| [[Maximilian Yragerne\|Maximilian]] | Theurge | 2 | ![[max.webp]] | 5 |',
     ]);
+    $progressionIndexMarkdown = implode("\n", [
+        '- [[Fighter]]',
+        '- [[Illusionist]]',
+        '- [[Mystic Theurge]]',
+    ]);
+    $fighterProgressionMarkdown = implode("\n", [
+        '| 1 | 0 |',
+        '| --- | --- |',
+        '| 2 | 2,000 |',
+        '| 3 | 4,000 |',
+        '| 4 | 8,000 |',
+        '| 5 | 16,000 |',
+        '| 6 | 32,000 |',
+    ]);
+    $illusionistProgressionMarkdown = implode("\n", [
+        '| 1 | 0 |',
+        '| --- | --- |',
+        '| 2 | 2,500 |',
+        '| 3 | 5,000 |',
+        '| 4 | 10,000 |',
+        '| 5 | 20,000 |',
+        '| 6 | 40,000 |',
+    ]);
+    $theurgeProgressionMarkdown = implode("\n", [
+        'XP and Level Progression',
+        'Level Spell Progression Level Spell Progression XP HD',
+        '1 1 - - - - - 1 - - - - - 0 1d4',
+        '2 1 - - - - - 2 1 - - - - 2,750 2d4',
+        '3 2 - - - - - 3 1 - - - - 5,500 3d4',
+        '4 2 - - - - - 4 2 - - - - 11,000 4d4',
+        'Spellcasting: fixture text',
+    ]);
+    $progressionFixture = static function (string $url) use (
+        $progressionIndexMarkdown,
+        $fighterProgressionMarkdown,
+        $illusionistProgressionMarkdown,
+        $theurgeProgressionMarkdown): ?string {
+        if (str_contains($url, 'Class+Level+Progression')) {
+            return $progressionIndexMarkdown;
+        }
+        if (str_contains($url, '/Classes/Fighter')) {
+            return $fighterProgressionMarkdown;
+        }
+        if (str_contains($url, '/Classes/Illusionist')) {
+            return $illusionistProgressionMarkdown;
+        }
+        if (str_contains($url, '/Classes/Mystic%20Theurge')) {
+            return $theurgeProgressionMarkdown;
+        }
+        return null;
+    };
     $service = new XpTrackingService(
         xpDatabase($databasePath),
         xpConfiguration(),
-        static function (string $url) use (&$fetchCount, $markdown, $characterMarkdown): string {
+        static function (string $url) use (
+            &$fetchCount,
+            $markdown,
+            $characterMarkdown,
+            $progressionFixture): string {
             $fetchCount++;
-            return str_contains($url, 'Player+Characters+Listing')
-                ? $characterMarkdown
-                : $markdown;
+            if (str_contains($url, 'Player+Characters+Listing')) {
+                return $characterMarkdown;
+            }
+            return $progressionFixture($url) ?? $markdown;
         });
 
     $player = $service->getForAccount([
@@ -95,6 +152,7 @@ try {
     xpAssert($player['character']['level'] === 4, 'The player received the wrong class level.');
     xpAssert($player['character']['hit_points'] === 13, 'The player received the wrong hit-point total.');
     xpAssert($player['character']['xp_total'] === 12345, 'The current player XP total was incorrect.');
+    xpAssert($player['character']['xp_to_next_level'] === 7655, 'The player received the wrong TNL value.');
     xpAssert($player['date_label'] === 'As of 7.23.2026', 'The latest XP date was not selected.');
     xpAssert(!isset($player['characters']), 'A player response exposed the party XP array.');
 
@@ -108,6 +166,7 @@ try {
     xpAssert($maximilian['character']['level'] === 3, 'Maximilian received the stale listing level.');
     xpAssert($maximilian['character']['hit_points'] === 5, 'Maximilian received the wrong hit-point total.');
     xpAssert($maximilian['character']['xp_total'] === 6100, 'Maximilian received the wrong current XP total.');
+    xpAssert($maximilian['character']['xp_to_next_level'] === 4900, 'Maximilian received the wrong TNL value.');
     xpAssert(!isset($maximilian['characters']), 'Maximilian received the party XP array.');
 
     $dm = $service->getForAccount([
@@ -116,7 +175,7 @@ try {
     ]);
     xpAssert($dm['scope'] === 'party', 'The Dungeon Master did not receive party-scoped XP.');
     xpAssert(count($dm['characters']) === 3, 'The Dungeon Master did not receive every current XP row.');
-    xpAssert($fetchCount === 2, 'The validated XP and character snapshots were not served from the server cache.');
+    xpAssert($fetchCount === 6, 'The validated XP, character, and class snapshots were not served from the server cache.');
 
     expectXpError(
         fn() => $service->getForAccount(['role' => 'player', 'character_key' => 'missing']),
@@ -133,6 +192,7 @@ try {
     xpAssert($stale['stale'] === true, 'A recent last-known-good XP snapshot was not preserved.');
     xpAssert($stale['character']['xp_total'] === 12345, 'The stale fallback XP total changed.');
     xpAssert($stale['character']['hit_points'] === 13, 'The stale fallback hit-point total changed.');
+    xpAssert($stale['character']['xp_to_next_level'] === 7655, 'The stale fallback TNL value changed.');
 
     $invalidService = new XpTrackingService(
         xpDatabase($invalidDatabasePath),
@@ -153,19 +213,26 @@ try {
         $ambiguousService = new XpTrackingService(
             xpDatabase($ambiguousPath),
             xpConfiguration(),
-            static fn(string $url): string => str_contains($url, 'Player+Characters+Listing')
-                ? implode("\n", [
-                    '| Name | HP |',
-                    '| --- | ---: |',
-                    '| Jelb | 13 |',
-                ])
-                : implode("\n", [
+            static function (string $url) use ($progressionFixture): string {
+                if (str_contains($url, 'Player+Characters+Listing')) {
+                    return implode("\n", [
+                        '| Name | HP |',
+                        '| --- | ---: |',
+                        '| Jelb | 13 |',
+                    ]);
+                }
+                $progression = $progressionFixture($url);
+                if ($progression !== null) {
+                    return $progression;
+                }
+                return implode("\n", [
                     'As of 7.23.2026',
                     '| Name | Class | Level | XP Total |',
                     '| --- | --- | ---: | ---: |',
                     '| Jelb North | Illusionist | 4 | 1 |',
                     '| Jelb South | Illusionist | 4 | 2 |',
-                ]));
+                ]);
+            });
         expectXpError(
             fn() => $ambiguousService->getForAccount(['role' => 'player', 'character_key' => 'jelb']),
             403,

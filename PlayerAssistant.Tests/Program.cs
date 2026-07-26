@@ -361,6 +361,7 @@ var tests = new (string Name, Action Test)[]
     ("xp tracking parser rejects missing latest table", XpTrackingParserRejectsMissingLatestTable),
     ("xp tracking failure message hides url and directs players to dm", XpTrackingFailureMessageHidesUrlAndDirectsPlayersToDm),
     ("xp tracking missing pc message directs players to dm", XpTrackingMissingPcMessageDirectsPlayersToDm),
+    ("illusionist progression data exposes XP thresholds", IllusionistProgressionDataExposesXpThresholds),
     ("show menu contains party item", ShowMenuContainsPartyItem),
     ("show menu contains former pcs item", ShowMenuContainsFormerPcsItem),
     ("former pcs view displays token name and class", FormerPcsViewDisplaysTokenNameAndClass),
@@ -9444,6 +9445,71 @@ static void ExternalUrlLaunchPolicyAcceptsHttpsAndRejectsHttp()
 
     AssertFalse(http.IsAllowed, "HTTP URLs should be rejected");
     AssertTrue(https.IsAllowed, "HTTPS URLs should be allowed");
+}
+
+static void IllusionistProgressionDataExposesXpThresholds()
+{
+    var path = Path.Combine(GetRepositoryRoot(), "class-progression.json");
+    using var document = JsonDocument.Parse(File.ReadAllText(path));
+    var root = document.RootElement;
+    AssertEqual(1, root.GetProperty("schema_version").GetInt32(), "unexpected class progression schema");
+
+    var illusionist = root
+        .GetProperty("classes")
+        .GetProperty("illusionist");
+    AssertEqual("Illusionist", illusionist.GetProperty("name").GetString() ?? string.Empty, "unexpected class name");
+    AssertEqual(36, illusionist.GetProperty("maximum_level").GetInt32(), "unexpected Illusionist maximum level");
+    AssertEqual(14, illusionist.GetProperty("published_maximum_level").GetInt32(), "unexpected published Illusionist maximum level");
+
+    var extension = illusionist.GetProperty("extended_progression");
+    AssertEqual(14, extension.GetProperty("starts_after_level").GetInt32(), "unexpected Illusionist extension starting level");
+    AssertEqual(150000, extension.GetProperty("xp_per_additional_level").GetInt32(), "unexpected Illusionist extended XP increment");
+    AssertFalse(extension.GetProperty("mechanical_statistics_available").GetBoolean(), "extended Illusionist mechanics should not be presented as published");
+
+    var progression = illusionist.GetProperty("level_progression").EnumerateArray().ToArray();
+    AssertEqual(36, progression.Length, "expected all Illusionist levels");
+    var expectedThresholds = new[]
+    {
+        0, 2500, 5000, 10000, 20000, 40000, 80000,
+        150000, 300000, 450000, 600000, 750000, 900000, 1050000,
+        1200000, 1350000, 1500000, 1650000, 1800000, 1950000, 2100000,
+        2250000, 2400000, 2550000, 2700000, 2850000, 3000000, 3150000,
+        3300000, 3450000, 3600000, 3750000, 3900000, 4050000, 4200000,
+        4350000
+    };
+    for (var index = 0; index < progression.Length; index++)
+    {
+        AssertEqual(index + 1, progression[index].GetProperty("level").GetInt32(), "unexpected Illusionist level");
+        AssertEqual(
+            expectedThresholds[index],
+            progression[index].GetProperty("minimum_xp").GetInt32(),
+            $"unexpected XP threshold for Illusionist level {index + 1}");
+        if (index < 14)
+        {
+            AssertEqual(
+                6,
+                progression[index].GetProperty("spell_slots").GetArrayLength(),
+                $"unexpected spell-slot columns for Illusionist level {index + 1}");
+        }
+        else
+        {
+            AssertTrue(
+                progression[index].GetProperty("extrapolated").GetBoolean(),
+                $"Illusionist level {index + 1} should be marked as extrapolated");
+            AssertFalse(
+                progression[index].TryGetProperty("spell_slots", out _),
+                $"Illusionist level {index + 1} should not invent unpublished spell slots");
+            AssertFalse(
+                progression[index].TryGetProperty("hit_dice", out _),
+                $"Illusionist level {index + 1} should not invent unpublished hit dice");
+            AssertFalse(
+                progression[index].TryGetProperty("thac0", out _),
+                $"Illusionist level {index + 1} should not invent unpublished THAC0");
+            AssertFalse(
+                progression[index].TryGetProperty("saving_throws", out _),
+                $"Illusionist level {index + 1} should not invent unpublished saving throws");
+        }
+    }
 }
 
 static void ExternalUrlLaunchPolicyRejectsUnsafeInputs()

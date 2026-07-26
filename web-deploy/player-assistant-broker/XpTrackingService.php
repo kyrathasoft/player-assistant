@@ -21,6 +21,7 @@ final class XpTrackingService
         $this->xpConfig = array_replace([
             'source_url' => '',
             'character_source_url' => '',
+            'class_progression_index_url' => '',
             'connect_timeout_seconds' => 3,
             'timeout_seconds' => 8,
             'maximum_response_bytes' => 524288,
@@ -31,6 +32,11 @@ final class XpTrackingService
             && (string)$this->xpConfig['source_url'] !== '') {
             $this->xpConfig['character_source_url'] = $this->deriveCharacterSourceUrl(
                 (string)$this->xpConfig['source_url']);
+        }
+        if ((string)$this->xpConfig['class_progression_index_url'] === ''
+            && (string)$this->xpConfig['source_url'] !== '') {
+            $this->xpConfig['class_progression_index_url'] =
+                $this->deriveClassProgressionIndexUrl((string)$this->xpConfig['source_url']);
         }
         $this->markdownFetcher = $markdownFetcher;
         $this->validateConfiguration();
@@ -108,6 +114,9 @@ final class XpTrackingService
                 (string)$this->xpConfig['source_url']));
             $hitPointsByCharacterKey = $this->parseCharacterHitPoints(
                 $this->fetchMarkdown((string)$this->xpConfig['character_source_url']));
+            $classLinks = $this->parseClassProgressionLinks(
+                $this->fetchMarkdown((string)$this->xpConfig['class_progression_index_url']));
+            $progressionByPage = [];
             foreach ($parsed['characters'] as &$character) {
                 $characterKey = $this->characterKeyForName(
                     (string)$character['character_name']);
@@ -116,6 +125,22 @@ final class XpTrackingService
                         'The active character listing did not contain every current XP character.');
                 }
                 $character['hit_points'] = $hitPointsByCharacterKey[$characterKey];
+                $classLink = $this->resolveClassProgressionLink(
+                    (string)$character['character_class'],
+                    $classLinks);
+                $pageKey = $this->normalizeClassName($classLink);
+                if (!array_key_exists($pageKey, $progressionByPage)) {
+                    $pageUrl = $this->deriveClassProgressionPageUrl(
+                        (string)$this->xpConfig['class_progression_index_url'],
+                        $classLink);
+                    $progressionByPage[$pageKey] = $this->parseClassProgression(
+                        $this->fetchMarkdown($pageUrl));
+                }
+                $nextLevel = (int)$character['level'] + 1;
+                $nextLevelXp = $progressionByPage[$pageKey][$nextLevel] ?? null;
+                $character['xp_to_next_level'] = is_int($nextLevelXp)
+                    ? max(0, $nextLevelXp - (int)$character['xp_total'])
+                    : null;
             }
             unset($character);
             $snapshot = [
@@ -286,6 +311,7 @@ final class XpTrackingService
         $levelIndex = $this->findCellIndex($headers, 'Level');
         $xpIndex = $this->findCellIndex($headers, 'XP Total');
         $hitPointsIndex = $this->findCellIndex($headers, 'HP');
+        $tnlIndex = $this->findCellIndex($headers, 'TNL');
         $characters = [];
         $seenNames = [];
 
@@ -355,6 +381,27 @@ final class XpTrackingService
                 }
                 $characters[array_key_last($characters)]['hit_points'] = (int)$hitPointDigits;
             }
+            if ($tnlIndex >= 0) {
+                if (count($cells) <= $tnlIndex) {
+                    throw new RuntimeException('A cached XP table row was incomplete.');
+                }
+                $tnlValue = trim((string)$cells[$tnlIndex]);
+                if ($tnlValue === '—') {
+                    $characters[array_key_last($characters)]['xp_to_next_level'] = null;
+                } else {
+                    $tnlDigits = preg_replace('/\D+/', '', $tnlValue);
+                    if (!is_string($tnlDigits)
+                        || $tnlDigits === ''
+                        || filter_var(
+                            $tnlDigits,
+                            FILTER_VALIDATE_INT,
+                            ['options' => ['min_range' => 0, 'max_range' => PHP_INT_MAX]]) === false) {
+                        throw new RuntimeException('A cached TNL value was invalid.');
+                    }
+                    $characters[array_key_last($characters)]['xp_to_next_level'] =
+                        (int)$tnlDigits;
+                }
+            }
             if (count($characters) > self::MAXIMUM_CHARACTERS) {
                 throw new RuntimeException('The XP table contained too many characters.');
             }
@@ -420,6 +467,175 @@ final class XpTrackingService
 
         throw new RuntimeException(
             'The active character listing did not contain a Name and HP table.');
+    }
+
+    private function parseClassProgressionLinks(string $markdown): array
+    {
+        $matchCount = preg_match_all(
+            '/\[\[(?<target>[^\]|]+)(?:\|[^\]]+)?\]\]/u',
+            $markdown,
+            $matches,
+            PREG_SET_ORDER);
+        if (!is_int($matchCount) || $matchCount < 1) {
+            throw new RuntimeException(
+                'The class progression index did not contain any class links.');
+        }
+
+        $links = [];
+        foreach ($matches as $match) {
+            $target = trim((string)($match['target'] ?? ''));
+            if ($target === ''
+                || strlen($target) > 100
+                || preg_match('/^[A-Za-z0-9][A-Za-z0-9 _-]*$/', $target) !== 1) {
+                throw new RuntimeException(
+                    'The class progression index contained an invalid class link.');
+            }
+            $key = $this->normalizeClassName($target);
+            if ($key === '' || array_key_exists($key, $links)) {
+                throw new RuntimeException(
+                    'The class progression index contained an ambiguous class link.');
+            }
+            $links[$key] = $target;
+        }
+        return $links;
+    }
+
+    private function resolveClassProgressionLink(
+        string $characterClass,
+        array $links): string
+    {
+        $classKey = $this->normalizeClassName($characterClass);
+        if ($classKey === '') {
+            throw new RuntimeException('The XP row contained an invalid class name.');
+        }
+        if (array_key_exists($classKey, $links)) {
+            return (string)$links[$classKey];
+        }
+
+        $matches = [];
+        foreach ($links as $linkKey => $target) {
+            if (str_ends_with((string)$linkKey, ' ' . $classKey)) {
+                $matches[] = (string)$target;
+            }
+        }
+        if (count($matches) !== 1) {
+            throw new RuntimeException(
+                'The class progression index did not unambiguously match an XP class.');
+        }
+        return $matches[0];
+    }
+
+    private function parseClassProgression(string $markdown): array
+    {
+        $lines = preg_split('/\r\n|\r|\n/', $markdown);
+        if (!is_array($lines)) {
+            throw new RuntimeException('The class progression page could not be read.');
+        }
+
+        $progression = [];
+        foreach ($lines as $line) {
+            if (preg_match(
+                '/^\|\s*(?<level>\d{1,3})\s*\|\s*(?<xp>\d[\d,]*)\s*\|$/',
+                trim((string)$line),
+                $matches) !== 1) {
+                continue;
+            }
+            $this->addClassProgressionEntry(
+                $progression,
+                (string)$matches['level'],
+                (string)$matches['xp']);
+        }
+        if ($progression !== []) {
+            return $this->validateClassProgression($progression);
+        }
+
+        $inProgression = false;
+        foreach ($lines as $line) {
+            $normalizedLine = trim(str_replace("\u{00A0}", ' ', (string)$line));
+            if (stripos($normalizedLine, 'XP and Level Progression') !== false) {
+                $inProgression = true;
+                continue;
+            }
+            if (!$inProgression) {
+                continue;
+            }
+            if (stripos($normalizedLine, 'Spellcasting:') === 0) {
+                break;
+            }
+            $tokens = preg_split('/\s+/u', $normalizedLine);
+            if (!is_array($tokens)
+                || count($tokens) < 14
+                || preg_match('/^\d{1,3}$/', (string)$tokens[0]) !== 1
+                || (string)$tokens[7] !== (string)$tokens[0]
+                || preg_match('/^\d[\d,]*$/', (string)$tokens[13]) !== 1) {
+                continue;
+            }
+            $this->addClassProgressionEntry(
+                $progression,
+                (string)$tokens[0],
+                (string)$tokens[13]);
+        }
+        return $this->validateClassProgression($progression);
+    }
+
+    private function addClassProgressionEntry(
+        array &$progression,
+        string $levelText,
+        string $xpText): void
+    {
+        $xpDigits = str_replace(',', '', $xpText);
+        if (filter_var(
+            $levelText,
+            FILTER_VALIDATE_INT,
+            ['options' => ['min_range' => 1, 'max_range' => 1000]]) === false
+            || filter_var(
+                $xpDigits,
+                FILTER_VALIDATE_INT,
+                ['options' => ['min_range' => 0, 'max_range' => PHP_INT_MAX]]) === false) {
+            throw new RuntimeException(
+                'The class progression page contained an invalid level or XP value.');
+        }
+        $level = (int)$levelText;
+        if (array_key_exists($level, $progression)) {
+            throw new RuntimeException(
+                'The class progression page contained a duplicate level.');
+        }
+        $progression[$level] = (int)$xpDigits;
+    }
+
+    private function validateClassProgression(array $progression): array
+    {
+        if (count($progression) < 2) {
+            throw new RuntimeException(
+                'The class progression page did not contain enough levels.');
+        }
+        ksort($progression, SORT_NUMERIC);
+        $expectedLevel = 1;
+        $previousXp = -1;
+        foreach ($progression as $level => $xp) {
+            if ((int)$level !== $expectedLevel
+                || !is_int($xp)
+                || $xp < $previousXp) {
+                throw new RuntimeException(
+                    'The class progression page contained an invalid progression sequence.');
+            }
+            $expectedLevel++;
+            $previousXp = $xp;
+        }
+        if (($progression[1] ?? -1) !== 0) {
+            throw new RuntimeException(
+                'The class progression page did not begin at level 1 with zero XP.');
+        }
+        return $progression;
+    }
+
+    private function normalizeClassName(string $className): string
+    {
+        $normalized = strtolower((string)preg_replace(
+            '/[^A-Za-z0-9]+/',
+            ' ',
+            trim($className)));
+        return trim((string)preg_replace('/\s+/', ' ', $normalized));
     }
 
     private function splitTableRow(string $line): array
@@ -525,6 +741,11 @@ final class XpTrackingService
                 return null;
             }
             $validated = $this->parseSnapshot($this->snapshotToMarkdown($payload));
+            foreach ($validated['characters'] as $character) {
+                if (!array_key_exists('xp_to_next_level', $character)) {
+                    return null;
+                }
+            }
             return [
                 'date_label' => $validated['date_label'],
                 'characters' => $validated['characters'],
@@ -540,20 +761,24 @@ final class XpTrackingService
         $lines = [
             (string)$payload['date_label'],
             '',
-            '| Name | Class | Level | XP Total | HP |',
-            '| --- | --- | ---: | ---: | ---: |',
+            '| Name | Class | Level | XP Total | HP | TNL |',
+            '| --- | --- | ---: | ---: | ---: | ---: |',
         ];
         foreach ($payload['characters'] as $character) {
             if (!is_array($character)) {
                 throw new RuntimeException('The cached XP snapshot was invalid.');
             }
             $lines[] = sprintf(
-                '| %s | %s | %s | %s | %s |',
+                '| %s | %s | %s | %s | %s | %s |',
                 (string)($character['character_name'] ?? ''),
                 (string)($character['character_class'] ?? ''),
                 (string)($character['level'] ?? ''),
                 (string)($character['xp_total'] ?? ''),
-                (string)($character['hit_points'] ?? ''));
+                (string)($character['hit_points'] ?? ''),
+                array_key_exists('xp_to_next_level', $character)
+                    && $character['xp_to_next_level'] === null
+                        ? '—'
+                        : (string)($character['xp_to_next_level'] ?? ''));
         }
         return implode("\n", $lines);
     }
@@ -584,6 +809,8 @@ final class XpTrackingService
         if ($this->isConfigured()) {
             $this->validatePageUrl((string)$this->xpConfig['source_url']);
             $this->validatePageUrl((string)$this->xpConfig['character_source_url']);
+            $this->validatePageUrl(
+                (string)$this->xpConfig['class_progression_index_url']);
         }
         foreach ([
             'connect_timeout_seconds',
@@ -635,6 +862,45 @@ final class XpTrackingService
         return 'https://publish.obsidian.md/'
             . rawurlencode(rawurldecode($vaultName))
             . '/PCs/Player+Characters+Listing';
+    }
+
+    private function deriveClassProgressionIndexUrl(string $xpSourceUrl): string
+    {
+        $parts = parse_url($xpSourceUrl);
+        if (!is_array($parts)) {
+            return '';
+        }
+        $segments = explode(
+            '/',
+            trim((string)($parts['path'] ?? ''), '/'));
+        $vaultName = $segments[0] ?? '';
+        if ($vaultName === '') {
+            return '';
+        }
+        return 'https://publish.obsidian.md/'
+            . rawurlencode(rawurldecode($vaultName))
+            . '/Classes/Class+Level+Progression';
+    }
+
+    private function deriveClassProgressionPageUrl(
+        string $indexUrl,
+        string $classLink): string
+    {
+        $parts = parse_url($indexUrl);
+        if (!is_array($parts)
+            || preg_match('/^[A-Za-z0-9][A-Za-z0-9 _-]{0,99}$/', $classLink) !== 1) {
+            throw new RuntimeException('The class progression link was invalid.');
+        }
+        $directory = str_replace(
+            '\\',
+            '/',
+            dirname((string)($parts['path'] ?? '/')));
+        $url = 'https://publish.obsidian.md'
+            . rtrim($directory, '/')
+            . '/'
+            . rawurlencode($classLink);
+        $this->validatePageUrl($url);
+        return $url;
     }
 
     private function validateMarkdownUrl(string $url): void

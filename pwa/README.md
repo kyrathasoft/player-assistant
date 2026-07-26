@@ -12,7 +12,7 @@
 - responsive phone, tablet, Chromebook, and desktop layouts
 - an offline app shell and runtime-cached translator/search data
 - server-validated character login with secure cookie sessions and explicit logout
-- a protected current-XP card that returns one authorized character to players and party totals only to the Dungeon Master
+- a protected current-XP card that returns one authorized character to players, calculates XP till next level (TNL) from the published class progression pages, and exposes party totals only to the Dungeon Master
 
 No RPOL password, XP password, password hash, encrypted local setting, session identifier, or private player note is embedded in the PWA. Character credentials are sent only to the same-origin PHP broker over HTTPS. The broker validates the password server-side and keeps the session identifier in a `Secure`, `HttpOnly`, `SameSite=Strict` cookie.
 
@@ -75,7 +75,7 @@ Character login additionally requires the PHP broker files under `web-deploy/` t
 
 The import sends only the existing salted PBKDF2 hashes through the administrator-protected HTTPS endpoint. On a character's first successful login, the broker replaces that legacy hash with PHP's current native password-hash format.
 
-Current XP is loaded through the protected same-origin `GET /scarlethorizons/api/v1/xp` route. The PHP broker fetches the fixed Obsidian Publish XP page, validates the latest markdown table, and filters the result using the authenticated account's server-stored character key. Players never receive other characters' totals or the configured source URL. The Dungeon Master role receives the validated current party table.
+Current XP is loaded through the protected same-origin `GET /scarlethorizons/api/v1/xp` route. The PHP broker fetches the fixed Obsidian Publish XP page, validates the latest markdown table, resolves each character's class through the published Class Level Progression index, and subtracts current XP from the next-level threshold to calculate TNL. Players never receive other characters' totals or the configured source URLs. The Dungeon Master role receives the validated current party table.
 
 The included `.htaccess` supplies the important Apache MIME and cache headers when overrides are enabled. The PWA also works on another HTTPS static host with equivalent server configuration.
 
