@@ -75,6 +75,9 @@ Assert-Condition -Condition ($heroData.source -eq 'https://publish.obsidian.md/s
 Assert-Condition -Condition (@($heroData.heroes).Count -gt 0) -Message 'Hero-token data contains no active heroes.'
 Assert-Condition -Condition ($heroData.dungeonMaster.name -eq 'Dungeon Master') -Message 'Dungeon Master token data is missing.'
 Assert-Condition -Condition ($heroData.dungeonMaster.preferLocal -eq $true) -Message 'The approved local Dungeon Master token must override the incorrect wiki image.'
+foreach ($hero in @($heroData.heroes)) {
+    Assert-Condition -Condition ([string]$hero.wikiPage -match '^https://publish\.obsidian\.md/scarlethorizons/PCs/[^?#]+$') -Message "Hero-token entry has an unsafe wiki page URL: $($hero.name)"
+}
 foreach ($hero in @($heroData.heroes) + @($heroData.dungeonMaster)) {
     Assert-Condition -Condition (![string]::IsNullOrWhiteSpace($hero.name)) -Message 'A hero-token entry has no character name.'
     Assert-Condition -Condition (@($hero.aliases).Count -gt 0) -Message "Hero-token entry has no aliases: $($hero.name)"
@@ -114,7 +117,10 @@ Assert-Condition -Condition ($appScript.Contains('payload.schema_version !== 2')
 Assert-Condition -Condition ($html.Contains('id="word-count-card"') -and $html.Contains('id="word-count-wiki"') -and $html.Contains('id="word-count-ic"') -and $html.Contains('id="word-count-ooc"') -and $html.Contains('id="word-count-date"')) -Message 'The protected word-count dashboard card is incomplete.'
 Assert-Condition -Condition ($html.Contains('id="auth-dashboard-token"') -and $html.Contains('id="auth-account-token"')) -Message 'Authenticated hero-token image elements are missing.'
 Assert-Condition -Condition ($appScript.Contains("fetch('data/heroes.json?v=2'") -and $appScript.Contains('findAuthenticatedHero') -and $appScript.Contains("account.role === 'dm'")) -Message 'Authenticated hero-token selection is incomplete or lacks cache-safe manifest versioning.'
+Assert-Condition -Condition ($appScript.Contains('const validHeroToken = (hero) =>') -and $appScript.Contains('const validPlayerHero = (hero) =>') -and $appScript.Contains('!validHeroToken(payload.dungeonMaster)') -and $appScript.Contains('payload.heroes.filter(validPlayerHero)')) -Message 'Player wiki-page validation must not invalidate the Dungeon Master entry or suppress all player tokens.'
 Assert-Condition -Condition ($appScript.Contains('image.src = hero.token') -and $appScript.Contains('wikiImage.src = hero.wikiToken')) -Message 'Hero tokens must display the website copy immediately and prefer the wiki once it loads.'
+Assert-Condition -Condition ($appScript.Contains("window.open(wikiPage, '_blank', 'noopener,noreferrer')") -and $appScript.Contains('image.onclick = openWikiPage') -and $appScript.Contains("event.key === 'Enter'") -and $appScript.Contains("event.key === ' '")) -Message 'Player hero tokens must open their wiki pages in a new tab by mouse or keyboard.'
+Assert-Condition -Condition ($appScript.Contains("image.title = ``click here to go to `${hero.name}'s wiki page...``;") -and $appScript.Contains("image.setAttribute('aria-label', image.title)")) -Message 'Linked hero tokens must provide the requested hover tooltip and accessible label.'
 Assert-Condition -Condition ($appScript.Contains('if (hero.preferLocal === true) return;')) -Message 'The Dungeon Master token must be able to retain its approved local image.'
 Assert-Condition -Condition ($appScript.Contains('const DUNGEON_MASTER_HERO') -and $appScript.Contains("if (accountAtStart.role === 'dm')") -and $appScript.Contains("setHeroTokenImage(byId('auth-dashboard-token'), DUNGEON_MASTER_HERO)")) -Message 'The Dungeon Master dashboard token must render synchronously without depending on the hero manifest.'
 Assert-Condition -Condition ($appScript.Contains("authDialog?.addEventListener('close'") -and $appScript.Contains('void renderAuthenticatedHeroToken()')) -Message 'Closing the login dialog must restore the authenticated dashboard token.'
@@ -127,14 +133,14 @@ Assert-Condition -Condition ($appScript.Contains("'is-dungeon-master-token'") -a
 Assert-Condition -Condition ($styles.Contains('#auth-logout') -and $styles.Contains('margin-top: 5px;')) -Message 'The Log Out button must be positioned 5 pixels lower.'
 $heroTokenStyle = [regex]::Match($styles, '(?s)\.authenticated-hero-token\s*\{(?<body>.*?)\}')
 Assert-Condition -Condition ($heroTokenStyle.Success -and $heroTokenStyle.Groups['body'].Value -notmatch '(?m)^\s*border(?:-(?:top|right|bottom|left|width|style|color))?\s*:') -Message 'Authenticated hero tokens must not have a CSS border.'
-Assert-Condition -Condition (!$appScript.Contains('publish.obsidian.md') -and !$html.Contains('XP+Tracking')) -Message 'The XP source URL must remain outside the browser application.'
+Assert-Condition -Condition (!$appScript.Contains('XP+Tracking') -and !$html.Contains('XP+Tracking')) -Message 'The XP source URL must remain outside the browser application.'
 Assert-Condition -Condition ($serviceWorker.Contains("url.pathname.startsWith('/scarlethorizons/api/')")) -Message 'The service worker must exclude protected API responses.'
 Assert-Condition -Condition ($serviceWorker.Contains("new Request(asset, { cache: 'reload' })")) -Message 'Service-worker upgrades must bypass stale browser shell caches.'
 Assert-Condition -Condition ($serviceWorker.Contains('networkFirstData') -and $serviceWorker.Contains("url.pathname.endsWith('/data/heroes.json')") -and $serviceWorker.Contains("url.pathname.includes('/data/hero-tokens/')")) -Message 'Hero-token manifests and images must refresh from the network before using cached copies.'
 Assert-Condition -Condition ($appScript.Contains("updateViaCache: 'none'") -and $appScript.Contains('await registration.update()')) -Message 'The PWA must explicitly check for uncached service-worker updates.'
 Assert-Condition -Condition ($manifest.start_url -eq './#dashboard' -and $manifest.scope -eq './') -Message 'The manifest must keep navigation inside the deployed PWA directory.'
 Assert-Condition -Condition ($html.Contains('href="manifest.webmanifest"') -and $appScript.Contains('service-worker.js')) -Message 'The install manifest or service-worker registration is missing.'
-Assert-Condition -Condition ($html.Contains('href="styles.css?v=24"') -and $html.Contains('src="app.js?v=24"') -and $serviceWorker.Contains("'./styles.css?v=24'") -and $serviceWorker.Contains("'./app.js?v=24'")) -Message 'The PWA shell must use cache-busting stylesheet and application-script URLs.'
+Assert-Condition -Condition ($html.Contains('href="styles.css?v=26"') -and $html.Contains('src="app.js?v=26"') -and $serviceWorker.Contains("'./styles.css?v=26'") -and $serviceWorker.Contains("'./app.js?v=26'")) -Message 'The PWA shell must use cache-busting stylesheet and application-script URLs.'
 $apacheConfig = Get-Content -Raw -LiteralPath (Join-Path $PwaRoot '.htaccess')
 Assert-Condition -Condition ($apacheConfig.Contains('AddType image/webp .webp')) -Message 'Apache must serve WebP hero tokens with the correct MIME type.'
 Assert-Condition -Condition ($apacheConfig.Contains('img-src ''self'' data: https://*.obsidian.md')) -Message 'The content security policy must allow preferred wiki hero images.'

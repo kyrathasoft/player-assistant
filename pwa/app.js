@@ -382,7 +382,7 @@
     const loadHeroTokenData = async () => {
         if (heroTokenData !== null) return heroTokenData;
         if (heroTokenDataLoading !== null) return heroTokenDataLoading;
-        const validHero = (hero) =>
+        const validHeroToken = (hero) =>
             typeof hero?.name === 'string'
             && Array.isArray(hero.aliases)
             && hero.aliases.every((alias) => typeof alias === 'string')
@@ -391,18 +391,22 @@
             && typeof hero.wikiToken === 'string'
             && /^https:\/\/publish-\d+\.obsidian\.md\/access\/[a-z0-9]+\/[^?#]+$/iu.test(hero.wikiToken)
             && (hero.preferLocal === undefined || typeof hero.preferLocal === 'boolean');
+        const validPlayerHero = (hero) =>
+            validHeroToken(hero)
+            && typeof hero.wikiPage === 'string'
+            && /^https:\/\/publish\.obsidian\.md\/scarlethorizons\/PCs\/[^?#]+$/iu.test(hero.wikiPage);
         heroTokenDataLoading = fetch('data/heroes.json?v=2', { cache: 'reload' })
             .then(async (response) => {
                 if (!response.ok) throw new Error(`HTTP ${response.status}`);
                 const payload = await response.json();
                 if (payload?.schemaVersion !== 1
                     || !Array.isArray(payload.heroes)
-                    || !validHero(payload.dungeonMaster)) {
+                    || !validHeroToken(payload.dungeonMaster)) {
                     throw new Error('Invalid hero-token data.');
                 }
                 return {
                     dungeonMaster: payload.dungeonMaster,
-                    heroes: payload.heroes.filter(validHero)
+                    heroes: payload.heroes.filter(validPlayerHero)
                 };
             })
             .catch(() => ({ dungeonMaster: null, heroes: [] }))
@@ -436,8 +440,15 @@
             image.hidden = true;
             image.removeAttribute('src');
             image.removeAttribute('data-fallback-src');
+            image.classList.remove('is-wiki-link');
+            image.tabIndex = -1;
+            image.removeAttribute('role');
+            image.removeAttribute('title');
+            image.removeAttribute('aria-label');
             image.alt = '';
             image.onerror = null;
+            image.onclick = null;
+            image.onkeydown = null;
             return;
         }
         image.dataset.fallbackSrc = hero.token;
@@ -445,6 +456,30 @@
         image.onerror = null;
         image.src = hero.token;
         image.hidden = false;
+        const wikiPage = typeof hero.wikiPage === 'string' ? hero.wikiPage : '';
+        image.classList.toggle('is-wiki-link', wikiPage !== '');
+        image.tabIndex = wikiPage === '' ? -1 : 0;
+        image.toggleAttribute('role', wikiPage !== '');
+        if (wikiPage !== '') {
+            image.setAttribute('role', 'link');
+            image.title = `click here to go to ${hero.name}'s wiki page...`;
+            image.setAttribute('aria-label', image.title);
+            const openWikiPage = () => {
+                window.open(wikiPage, '_blank', 'noopener,noreferrer');
+            };
+            image.onclick = openWikiPage;
+            image.onkeydown = (event) => {
+                if (event.key === 'Enter' || event.key === ' ') {
+                    event.preventDefault();
+                    openWikiPage();
+                }
+            };
+        } else {
+            image.removeAttribute('title');
+            image.removeAttribute('aria-label');
+            image.onclick = null;
+            image.onkeydown = null;
+        }
 
         if (hero.preferLocal === true) return;
 

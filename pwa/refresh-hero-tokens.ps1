@@ -46,6 +46,39 @@ function Get-WikiLinkNames {
         Select-Object -Unique
 }
 
+function Get-WikiLinkTarget {
+    param([Parameter(Mandatory = $true)][string]$Cell)
+
+    $match = [regex]::Match($Cell, '\[\[(?<target>[^\]|]+)(?:\|[^\]]+)?\]\]')
+    if (!$match.Success) {
+        throw "The hero name is not linked to a wiki page: $Cell"
+    }
+    return $match.Groups['target'].Value.Trim()
+}
+
+function Get-PublishPageUrl {
+    param(
+        [Parameter(Mandatory = $true)][string]$SiteUrl,
+        [Parameter(Mandatory = $true)][string]$ListingPath,
+        [Parameter(Mandatory = $true)][string]$WikiTarget
+    )
+
+    $targetWithoutHeading = ($WikiTarget -split '#', 2)[0].Trim().Trim('/')
+    if ([string]::IsNullOrWhiteSpace($targetWithoutHeading)) {
+        throw "The hero wiki target is empty: $WikiTarget"
+    }
+    $listingDirectory = ($ListingPath -replace '\\', '/') -replace '/[^/]+$', ''
+    $vaultPath = if ($targetWithoutHeading.Contains('/')) {
+        $targetWithoutHeading
+    }
+    else {
+        "$listingDirectory/$targetWithoutHeading".Trim('/')
+    }
+    $publishPath = $vaultPath.Split('/', [System.StringSplitOptions]::RemoveEmptyEntries) |
+        ForEach-Object { [uri]::EscapeDataString($_).Replace('%20', '+') }
+    return "$($SiteUrl.TrimEnd('/'))/$($publishPath -join '/')"
+}
+
 function Get-JsonPayload {
     param([Parameter(Mandatory = $true)][string]$Markdown)
 
@@ -186,6 +219,11 @@ try {
         if ($aliases.Count -eq 0) {
             throw "The listing contains no usable name for hero token: $tokenFileName"
         }
+        $wikiTarget = Get-WikiLinkTarget -Cell $cells[$nameIndex]
+        $wikiPage = Get-PublishPageUrl `
+            -SiteUrl $SiteUrl `
+            -ListingPath $ListingPath `
+            -WikiTarget $wikiTarget
 
         $vaultAssetPath = [string]$assetManifest[$tokenFileName]
         $snapshot = Save-WikiImageSnapshot `
@@ -204,6 +242,7 @@ try {
             aliases = $aliases
             token = "data/hero-tokens/$tokenFileName"
             wikiToken = $snapshot.WikiUrl
+            wikiPage = $wikiPage
             sha256 = $snapshot.Sha256
         })
     }

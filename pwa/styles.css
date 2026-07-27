@@ -1180,6 +1180,15 @@ dialog form {
     object-fit: cover;
 }
 
+.authenticated-hero-token.is-wiki-link {
+    cursor: pointer;
+}
+
+.authenticated-hero-token.is-wiki-link:focus-visible {
+    outline: 3px solid var(--gold-bright);
+    outline-offset: 4px;
+}
+
 #auth-dashboard-token.is-dungeon-master-token {
     width: 192px;
     height: 192px;

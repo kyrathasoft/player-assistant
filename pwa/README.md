@@ -12,7 +12,7 @@
 - responsive phone, tablet, Chromebook, and desktop layouts
 - an offline app shell and runtime-cached translator/search data
 - server-validated character login with secure cookie sessions and explicit logout
-- the logged-in player's active hero token, sourced from the public Player Characters Listing, or the Dungeon Master token for the DM account; wiki images are preferred with website-hosted fallbacks
+- the logged-in player's active hero token, sourced from the public Player Characters Listing, or the Dungeon Master token for the DM account; wiki images are preferred with website-hosted fallbacks, and player tokens link to their wiki pages with hover guidance
 - a protected current-XP card that returns one authorized character to players, calculates XP till next level (TNL) from the published class progression pages, and exposes party totals only to the Dungeon Master
 - a Dungeon Master-only list of other users, marking those active in the PWA within the last two minutes and showing the last login date/time for inactive accounts; player heartbeat responses never expose other accounts
 
