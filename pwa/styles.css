@@ -943,6 +943,7 @@ textarea[readonly] {
 
 .xp-character-name {
     color: var(--muted);
+    font-size: 2rem;
     font-weight: 800;
 }
 
@@ -1170,9 +1171,9 @@ dialog form {
 }
 
 .authenticated-hero-token {
-    width: 128px;
-    height: 128px;
-    flex: 0 0 128px;
+    width: 256px;
+    height: 256px;
+    flex: 0 0 256px;
     transform: translateY(10px);
     border-radius: 50%;
     background: var(--surface-soft);
@@ -1190,9 +1191,9 @@ dialog form {
 }
 
 #auth-dashboard-token.is-dungeon-master-token {
-    width: 192px;
-    height: 192px;
-    flex-basis: 192px;
+    width: 384px;
+    height: 384px;
+    flex-basis: 384px;
 }
 
 .auth-hero-token {
@@ -1312,6 +1313,20 @@ button:disabled {
     .word-count-card-heading {
         align-items: stretch;
         flex-direction: column;
+    }
+
+    .authenticated-hero-token {
+        max-width: 100%;
+        height: auto;
+        aspect-ratio: 1;
+        align-self: center;
+        flex-basis: auto;
+    }
+
+    .auth-hero-token {
+        float: none;
+        display: block;
+        margin: 0 auto 1rem;
     }
 
     .word-count-summary {
