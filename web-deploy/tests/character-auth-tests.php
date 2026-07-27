@@ -169,9 +169,33 @@ try {
             && in_array('Second Hero', $onlineNames, true)
             && !in_array('Dungeon Master', $onlineNames, true),
         'The Dungeon Master did not receive the other active user.');
+    $activeSecondHero = array_values(array_filter(
+        $dungeonMasterPresence['users'],
+        static fn(array $user): bool => $user['character_name'] === 'Second Hero'))[0] ?? null;
+    assertTrue(
+        is_array($activeSecondHero)
+            && $activeSecondHero['active'] === true
+            && is_string($activeSecondHero['last_seen_at'])
+            && is_string($activeSecondHero['last_login_at']),
+        'The active user presence details were incomplete.');
     assertTrue(
         (int)$dungeonMasterPresence['active_window_seconds'] === 120,
         'The presence response used the wrong active window.');
+    $database->prepare(
+        'UPDATE character_session_presence
+         SET last_seen_at = ?
+         WHERE account_id = ?')
+        ->execute([time() - 121, $native['id']]);
+    $inactivePresence = $service->presence($aliasSession);
+    $inactiveSecondHero = array_values(array_filter(
+        $inactivePresence['users'],
+        static fn(array $user): bool => $user['character_name'] === 'Second Hero'))[0] ?? null;
+    assertTrue(
+        is_array($inactiveSecondHero)
+            && $inactiveSecondHero['active'] === false
+            && $inactiveSecondHero['last_seen_at'] === null
+            && is_string($inactiveSecondHero['last_login_at']),
+        'The Dungeon Master did not receive the inactive user last-login time.');
     $wrongAliasSession = [];
     expectBrokerError(
         fn() => $service->login(

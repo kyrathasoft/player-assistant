@@ -515,10 +515,16 @@
             && user.character_name.length > 0
             && user.character_name.length <= 100
             && ['player', 'dm'].includes(user.role)
-            && typeof user.last_seen_at === 'string'
-            && !Number.isNaN(Date.parse(user.last_seen_at));
+            && typeof user.active === 'boolean'
+            && (user.last_seen_at === null
+                || (typeof user.last_seen_at === 'string'
+                    && !Number.isNaN(Date.parse(user.last_seen_at))))
+            && (user.last_login_at === null
+                || (typeof user.last_login_at === 'string'
+                    && !Number.isNaN(Date.parse(user.last_login_at))))
+            && (user.active ? user.last_seen_at !== null : user.last_seen_at === null);
         if (!payload
-            || payload.schema_version !== 1
+            || payload.schema_version !== 2
             || !['self', 'party'].includes(payload.scope)
             || typeof payload.observed_at !== 'string'
             || Number.isNaN(Date.parse(payload.observed_at))
@@ -547,16 +553,30 @@
             return;
         }
         const users = authenticatedPresenceSnapshot.users;
+        const activeCount = users.filter((user) => user.active).length;
+        const inactiveCount = users.length - activeCount;
         if (status) {
             status.textContent = users.length === 0
-                ? 'No other users are active right now.'
-                : `${users.length} other ${users.length === 1 ? 'user is' : 'users are'} active now.`;
+                ? 'No other user accounts are enabled.'
+                : `${activeCount} active now; ${inactiveCount} inactive.`;
         }
         if (list) {
             const fragment = document.createDocumentFragment();
             users.forEach((user) => {
                 const item = document.createElement('li');
-                item.textContent = user.character_name;
+                item.className = user.active ? 'is-active' : 'is-inactive';
+                const name = document.createElement('strong');
+                name.textContent = user.character_name;
+                const activity = document.createElement('span');
+                activity.textContent = user.active
+                    ? 'Active now'
+                    : user.last_login_at === null
+                        ? 'Never logged in'
+                        : `Last login ${new Intl.DateTimeFormat(undefined, {
+                            dateStyle: 'medium',
+                            timeStyle: 'short'
+                        }).format(new Date(user.last_login_at))}`;
+                item.append(name, activity);
                 fragment.append(item);
             });
             list.append(fragment);

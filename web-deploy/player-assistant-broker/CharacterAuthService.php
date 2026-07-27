@@ -152,7 +152,7 @@ final class CharacterAuthService
         $resolved = $this->resolveSession($session, true);
         $account = $resolved['account'];
         $response = [
-            'schema_version' => 1,
+            'schema_version' => 2,
             'scope' => (string)$account['role'] === 'dm' ? 'party' : 'self',
             'observed_at' => gmdate(DATE_ATOM),
             'active_window_seconds' => self::PRESENCE_WINDOW_SECONDS,
@@ -173,22 +173,30 @@ final class CharacterAuthService
                 accounts.id,
                 accounts.display_name,
                 accounts.role,
-                MAX(presence.last_seen_at) AS last_seen_at
-             FROM character_session_presence AS presence
-             INNER JOIN character_accounts AS accounts ON accounts.id = presence.account_id
-             WHERE presence.last_seen_at >= ?
-               AND presence.absolute_expires_at > ?
-               AND presence.account_id <> ?
+                accounts.last_login_at,
+                MAX(presence.last_seen_at) AS active_last_seen_at
+             FROM character_accounts AS accounts
+             LEFT JOIN character_session_presence AS presence
+               ON accounts.id = presence.account_id
+              AND presence.last_seen_at >= ?
+              AND presence.absolute_expires_at > ?
+             WHERE accounts.id <> ?
                AND accounts.enabled = 1
-             GROUP BY accounts.id, accounts.display_name, accounts.role
-             ORDER BY accounts.normalized_name');
+             GROUP BY accounts.id, accounts.display_name, accounts.role, accounts.last_login_at
+             ORDER BY (MAX(presence.last_seen_at) IS NOT NULL) DESC, accounts.normalized_name');
         $statement->execute([$cutoff, $now, $account['id']]);
         $response['users'] = array_map(
             static fn(array $row): array => [
                 'account_id' => (string)$row['id'],
                 'character_name' => (string)$row['display_name'],
                 'role' => (string)$row['role'],
-                'last_seen_at' => gmdate(DATE_ATOM, (int)$row['last_seen_at']),
+                'active' => $row['active_last_seen_at'] !== null,
+                'last_seen_at' => $row['active_last_seen_at'] === null
+                    ? null
+                    : gmdate(DATE_ATOM, (int)$row['active_last_seen_at']),
+                'last_login_at' => $row['last_login_at'] === null
+                    ? null
+                    : gmdate(DATE_ATOM, (int)$row['last_login_at']),
             ],
             $statement->fetchAll());
         return $response;
