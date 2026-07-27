@@ -1,0 +1,33 @@
+  - Character cockpit — portrait, class/level, HP, XP/TNL, character page, journal, and recent posts in one view.
+  - Scene tracker and recaps — current scenes, participants, latest post, inactivity age, and concise recap links.
+  - Bookmarks and offline reading list — save lore pages, searches, maps, and rules for quick offline access.
+  - Quest and clue board — active/completed quests, discovered clues, involved NPCs, and linked locations. Start device-local; add party sharing later.
+  - Interactive map explorer — clickable locations with lore snippets, related NPCs, quests, and “nearby places.”
+  - Player journal workspace — private drafts, prompts, campaign-date tagging, RPOL-ready Markdown export, and optional XP-goal tracking.
+  - Combat scratchpad — current/max HP, conditions, spell/resource counters, initiative, and rest reset; device-local by default.
+  - Rules and spell favorites — pin frequently referenced rules, spells, equipment, and class tables from campaign search.
+  - Saved translator phrasebook — favorite Orcish/Elvish phrases, one-tap copy/share, pronunciation notes, and character-specific sayings.
+  - Campaign timeline — chapters, major events, discoveries, and character milestones linked back to lore and posts.
+  - Party loot ledger — shared treasure, coin splits, claimed items, and audit history. Useful, but requires authenticated write APIs.
+  - Session planner — availability poll, next-session countdown, agenda, and browser notifications.
+  - Campaign-specific generators — setting-appropriate names, rumors, tavern details, travel weather, and character prompts.
+  - Character quick sheet — AC, HP, saves, attacks, movement, languages, and key abilities beside Current XP.
+  - Initiative tracker — DM-managed combat order with round counter, conditions, and duration tracking.
+  - Personal resource tracker — spell slots, ammunition, rages, inspiration, charges, and other per-session resources.
+  - Custom dice macros — saved buttons such as “Longsword +5” or “Fireball 8d6,” with advantage/disadvantage support.
+  - Party status board — DM-controlled HP, conditions, marching order, and current location visible to players.
+  - Session notes — private, device-local notes with optional export to Markdown.
+  - Campaign calendar — in-world date, moon phases, upcoming events, and elapsed travel time.
+  - Quest journal — active, completed, failed, and rumored quests maintained by the DM.
+  - Shared party inventory — treasure, coins, unidentified items, ownership, and encumbrance.
+  - NPC relationship directory — portraits, affiliations, last-known locations, and player-visible notes.
+  - Location bookmarks — save frequently used wiki pages and organize them by settlement, dungeon, faction, or region.
+  - Rules quick reference — searchable house rules, combat actions, conditions, and commonly consulted tables.
+  - Character-specific wiki shortcuts — links to equipment, spells, companions, journals, and related lore beneath the hero image.
+  - Session recap display — the latest DM-written recap and unresolved plot threads, without attempting automatic read tracking.
+  - Downtime activity tracker — training, crafting, research, recovery, and time remaining.
+  - Treasure distribution assistant — record claims, calculate coin shares, and retain a distribution history.
+  - DM announcements — short pinned notices such as the next session date, required preparation, or current campaign status.
+  - Installable content packs — download selected maps, rules, and character pages for offline use.
+  - Theme presets — parchment, dark dungeon, high-contrast, and character-specific accent colors.
+  - Optional notification reminders — session reminders or newly posted DM announcements, requiring explicit player opt-in.
