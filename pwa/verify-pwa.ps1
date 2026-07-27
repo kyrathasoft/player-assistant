@@ -74,6 +74,7 @@ Assert-Condition -Condition ([int]$heroData.schemaVersion -eq 1) -Message 'Hero-
 Assert-Condition -Condition ($heroData.source -eq 'https://publish.obsidian.md/scarlethorizons/PCs/Player+Characters+Listing') -Message 'Hero-token data has an unexpected source.'
 Assert-Condition -Condition (@($heroData.heroes).Count -gt 0) -Message 'Hero-token data contains no active heroes.'
 Assert-Condition -Condition ($heroData.dungeonMaster.name -eq 'Dungeon Master') -Message 'Dungeon Master token data is missing.'
+Assert-Condition -Condition ($heroData.dungeonMaster.preferLocal -eq $true) -Message 'The approved local Dungeon Master token must override the incorrect wiki image.'
 foreach ($hero in @($heroData.heroes) + @($heroData.dungeonMaster)) {
     Assert-Condition -Condition (![string]::IsNullOrWhiteSpace($hero.name)) -Message 'A hero-token entry has no character name.'
     Assert-Condition -Condition (@($hero.aliases).Count -gt 0) -Message "Hero-token entry has no aliases: $($hero.name)"
@@ -109,18 +110,25 @@ Assert-Condition -Condition ($html.Contains('autocomplete="current-password"')) 
 Assert-Condition -Condition ($html.Contains('id="xp-card"') -and $html.Contains('id="xp-total"') -and $html.Contains('id="xp-class-level"') -and $html.Contains('id="xp-hit-points"') -and $html.Contains('id="xp-tnl"') -and $html.Contains('id="xp-party-rows"')) -Message 'The protected XP dashboard card is incomplete.'
 Assert-Condition -Condition ($html.Contains('id="word-count-card"') -and $html.Contains('id="word-count-wiki"') -and $html.Contains('id="word-count-ic"') -and $html.Contains('id="word-count-ooc"') -and $html.Contains('id="word-count-date"')) -Message 'The protected word-count dashboard card is incomplete.'
 Assert-Condition -Condition ($html.Contains('id="auth-dashboard-token"') -and $html.Contains('id="auth-account-token"')) -Message 'Authenticated hero-token image elements are missing.'
-Assert-Condition -Condition ($appScript.Contains("fetch('data/heroes.json'") -and $appScript.Contains('findAuthenticatedHero') -and $appScript.Contains("account.role === 'dm'")) -Message 'Authenticated hero-token selection is incomplete.'
+Assert-Condition -Condition ($appScript.Contains("fetch('data/heroes.json?v=2'") -and $appScript.Contains('findAuthenticatedHero') -and $appScript.Contains("account.role === 'dm'")) -Message 'Authenticated hero-token selection is incomplete or lacks cache-safe manifest versioning.'
 Assert-Condition -Condition ($appScript.Contains('image.src = hero.token') -and $appScript.Contains('wikiImage.src = hero.wikiToken')) -Message 'Hero tokens must display the website copy immediately and prefer the wiki once it loads.'
+Assert-Condition -Condition ($appScript.Contains('if (hero.preferLocal === true) return;')) -Message 'The Dungeon Master token must be able to retain its approved local image.'
 Assert-Condition -Condition ($appScript.Contains("navigator.serviceWorker.addEventListener('controllerchange'") -and $appScript.Contains('window.location.reload()')) -Message 'Existing PWA clients must reload after a service-worker update.'
 Assert-Condition -Condition ($styles.Contains('width: 128px;') -and $styles.Contains('.authenticated-hero-token')) -Message 'Authenticated hero tokens must be displayed at 128 pixels wide.'
 Assert-Condition -Condition ($styles.Contains('transform: translateY(10px);')) -Message 'Authenticated hero tokens must retain their horizontal position and sit 10 pixels lower.'
+$heroTokenStyle = [regex]::Match($styles, '(?s)\.authenticated-hero-token\s*\{(?<body>.*?)\}')
+Assert-Condition -Condition ($heroTokenStyle.Success -and $heroTokenStyle.Groups['body'].Value -notmatch '(?m)^\s*border(?:-(?:top|right|bottom|left|width|style|color))?\s*:') -Message 'Authenticated hero tokens must not have a CSS border.'
 Assert-Condition -Condition (!$appScript.Contains('publish.obsidian.md') -and !$html.Contains('XP+Tracking')) -Message 'The XP source URL must remain outside the browser application.'
 Assert-Condition -Condition ($serviceWorker.Contains("url.pathname.startsWith('/scarlethorizons/api/')")) -Message 'The service worker must exclude protected API responses.'
 Assert-Condition -Condition ($serviceWorker.Contains("new Request(asset, { cache: 'reload' })")) -Message 'Service-worker upgrades must bypass stale browser shell caches.'
+Assert-Condition -Condition ($serviceWorker.Contains('networkFirstData') -and $serviceWorker.Contains("url.pathname.endsWith('/data/heroes.json')") -and $serviceWorker.Contains("url.pathname.includes('/data/hero-tokens/')")) -Message 'Hero-token manifests and images must refresh from the network before using cached copies.'
+Assert-Condition -Condition ($appScript.Contains("updateViaCache: 'none'") -and $appScript.Contains('await registration.update()')) -Message 'The PWA must explicitly check for uncached service-worker updates.'
 Assert-Condition -Condition ($manifest.start_url -eq './#dashboard' -and $manifest.scope -eq './') -Message 'The manifest must keep navigation inside the deployed PWA directory.'
 Assert-Condition -Condition ($html.Contains('href="manifest.webmanifest"') -and $appScript.Contains('service-worker.js')) -Message 'The install manifest or service-worker registration is missing.'
+Assert-Condition -Condition ($html.Contains('href="styles.css?v=20"') -and $html.Contains('src="app.js?v=20"') -and $serviceWorker.Contains("'./styles.css?v=20'") -and $serviceWorker.Contains("'./app.js?v=20'")) -Message 'The PWA shell must use cache-busting stylesheet and application-script URLs.'
 $apacheConfig = Get-Content -Raw -LiteralPath (Join-Path $PwaRoot '.htaccess')
 Assert-Condition -Condition ($apacheConfig.Contains('AddType image/webp .webp')) -Message 'Apache must serve WebP hero tokens with the correct MIME type.'
 Assert-Condition -Condition ($apacheConfig.Contains('img-src ''self'' data: https://*.obsidian.md')) -Message 'The content security policy must allow preferred wiki hero images.'
+Assert-Condition -Condition ($apacheConfig.Contains('data/heroes\.json|data/hero-tokens/[^/]+')) -Message 'Apache must require revalidation for hero-token metadata and images.'
 
 Write-Output "PWA verified: $($lexiconCounts.orcish) Orcish terms, $($lexiconCounts.elvish) Elvish terms, $(@($heroData.heroes).Count) player tokens and the Dungeon Master token, $($campaignSearch.pageCount) full-text campaign pages, install manifest and offline shell valid."

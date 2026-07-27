@@ -216,16 +216,19 @@ try {
     if (!$assetManifest.ContainsKey($dungeonMasterTokenFileName)) {
         throw "The asset manifest does not contain the Dungeon Master token: $dungeonMasterTokenFileName"
     }
-    $dungeonMasterSnapshot = Save-WikiImageSnapshot `
-        -Client $client `
-        -PublishContentHost $publishContentHost `
-        -SiteUid $siteUid `
-        -VaultAssetPath ([string]$assetManifest[$dungeonMasterTokenFileName]) `
-        -TokenFileName $dungeonMasterTokenFileName `
-        -OutputDirectory $OutputDirectory
-    if ($dungeonMasterSnapshot.Changed) {
-        $changedTokenCount++
+    $dungeonMasterAssetPath = [string]$assetManifest[$dungeonMasterTokenFileName]
+    $dungeonMasterWikiPath = ConvertTo-AccessPath -VaultPath $dungeonMasterAssetPath
+    $dungeonMasterWikiUrl = "https://$publishContentHost/access/$siteUid/$dungeonMasterWikiPath"
+    $dungeonMasterLocalPath = Join-Path $OutputDirectory $dungeonMasterTokenFileName
+    if (!(Test-Path -LiteralPath $dungeonMasterLocalPath -PathType Leaf)) {
+        throw "The locally approved Dungeon Master token is missing: $dungeonMasterLocalPath"
     }
+    $dungeonMasterHash = [Convert]::ToHexString(
+        [System.Security.Cryptography.SHA256]::HashData(
+            [System.IO.File]::ReadAllBytes($dungeonMasterLocalPath))).ToLowerInvariant()
+    $dungeonMasterVersionedFileName = "dungeon-master-$($dungeonMasterHash.Substring(0, 12)).webp"
+    $dungeonMasterVersionedPath = Join-Path $OutputDirectory $dungeonMasterVersionedFileName
+    Copy-Item -LiteralPath $dungeonMasterLocalPath -Destination $dungeonMasterVersionedPath -Force
 
     $payload = [ordered]@{
         schemaVersion = 1
@@ -233,9 +236,10 @@ try {
         dungeonMaster = [ordered]@{
             name = 'Dungeon Master'
             aliases = @('Dungeon Master')
-            token = "data/hero-tokens/$dungeonMasterTokenFileName"
-            wikiToken = $dungeonMasterSnapshot.WikiUrl
-            sha256 = $dungeonMasterSnapshot.Sha256
+            token = "data/hero-tokens/$dungeonMasterVersionedFileName"
+            wikiToken = $dungeonMasterWikiUrl
+            preferLocal = $true
+            sha256 = $dungeonMasterHash
         }
         heroes = $heroes
     }

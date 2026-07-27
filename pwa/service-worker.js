@@ -1,13 +1,13 @@
 'use strict';
 
-const CACHE_VERSION = 'player-assistant-pwa-0.9.5-v17';
+const CACHE_VERSION = 'player-assistant-pwa-0.9.5-v20';
 const SHELL_CACHE = `${CACHE_VERSION}-shell`;
 const DATA_CACHE = `${CACHE_VERSION}-data`;
 const SHELL_ASSETS = [
     './',
     './index.html',
-    './styles.css',
-    './app.js',
+    './styles.css?v=20',
+    './app.js?v=20',
     './translator-worker.js',
     './offline.html',
     './manifest.webmanifest',
@@ -44,6 +44,19 @@ const cacheFirst = async (request, cacheName) => {
     return response;
 };
 
+const networkFirstData = async (request) => {
+    const cache = await caches.open(DATA_CACHE);
+    try {
+        const response = await fetch(new Request(request, { cache: 'reload' }));
+        if (response.ok) await cache.put(request, response.clone());
+        return response;
+    } catch {
+        const cached = await cache.match(request);
+        if (cached) return cached;
+        throw new Error('Network and cached PWA data are unavailable.');
+    }
+};
+
 const networkFirstNavigation = async (request) => {
     const cache = await caches.open(SHELL_CACHE);
     try {
@@ -64,6 +77,12 @@ self.addEventListener('fetch', (event) => {
 
     if (request.mode === 'navigate') {
         event.respondWith(networkFirstNavigation(request));
+        return;
+    }
+
+    if (url.pathname.endsWith('/data/heroes.json')
+        || url.pathname.includes('/data/hero-tokens/')) {
+        event.respondWith(networkFirstData(request));
         return;
     }
 

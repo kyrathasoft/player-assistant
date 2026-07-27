@@ -379,8 +379,9 @@
             && typeof hero.token === 'string'
             && /^data\/hero-tokens\/[a-z0-9][a-z0-9._-]*\.(?:avif|gif|jpe?g|png|webp)$/iu.test(hero.token)
             && typeof hero.wikiToken === 'string'
-            && /^https:\/\/publish-\d+\.obsidian\.md\/access\/[a-z0-9]+\/[^?#]+$/iu.test(hero.wikiToken);
-        heroTokenDataLoading = fetch('data/heroes.json', { cache: 'no-cache' })
+            && /^https:\/\/publish-\d+\.obsidian\.md\/access\/[a-z0-9]+\/[^?#]+$/iu.test(hero.wikiToken)
+            && (hero.preferLocal === undefined || typeof hero.preferLocal === 'boolean');
+        heroTokenDataLoading = fetch('data/heroes.json?v=2', { cache: 'reload' })
             .then(async (response) => {
                 if (!response.ok) throw new Error(`HTTP ${response.status}`);
                 const payload = await response.json();
@@ -431,6 +432,8 @@
         image.onerror = null;
         image.src = hero.token;
         image.hidden = false;
+
+        if (hero.preferLocal === true) return;
 
         const wikiImage = new Image();
         wikiImage.addEventListener('load', () => {
@@ -671,7 +674,10 @@
         });
         window.addEventListener('load', async () => {
             try {
-                const registration = await navigator.serviceWorker.register('service-worker.js', { scope: './' });
+                const registration = await navigator.serviceWorker.register(
+                    'service-worker.js',
+                    { scope: './', updateViaCache: 'none' });
+                await registration.update();
                 await navigator.serviceWorker.ready;
                 const offlineReadiness = byId('offline-readiness');
                 if (offlineReadiness) {

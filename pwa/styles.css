@@ -1124,7 +1124,6 @@ dialog form {
     height: 128px;
     flex: 0 0 128px;
     transform: translateY(10px);
-    border: 2px solid var(--gold);
     border-radius: 50%;
     background: var(--surface-soft);
     box-shadow: var(--shadow);

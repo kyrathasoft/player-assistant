@@ -41,7 +41,7 @@ Check the active hero and Dungeon Master token images on the wiki and update onl
 .\pwa\refresh-hero-tokens.ps1
 ```
 
-Run `build-data.ps1 -RefreshHeroTokens` when language data and hero tokens should be refreshed together. The generated manifest keeps both the current wiki image URL and the local `pwa/data/hero-tokens/` fallback. At runtime, the PWA tries the wiki image first and automatically falls back to the website copy if the wiki is unavailable.
+Run `build-data.ps1 -RefreshHeroTokens` when language data and hero tokens should be refreshed together. The generated manifest keeps both the current wiki image URL and the local `pwa/data/hero-tokens/` fallback. At runtime, the PWA tries the wiki image first and automatically falls back to the website copy if the wiki is unavailable. The Dungeon Master entry remains pinned to its locally approved image because the published wiki asset currently contains the wrong portrait.
 
 Validate the complete deployable directory with:
 
