@@ -9,6 +9,7 @@ final class CharacterAuthService
     private const LEGACY_MINIMUM_ITERATIONS = 600000;
     private const LEGACY_HASH_BYTES = 32;
     private const LEGACY_MINIMUM_SALT_BYTES = 16;
+    private const PRESENCE_WINDOW_SECONDS = 120;
     private const DUNGEON_MASTER_LOGIN_NAME = 'dungeon master';
     private const DUNGEON_MASTER_LOGIN_ALIASES = [
         'dungeon master',
@@ -110,12 +111,14 @@ final class CharacterAuthService
         $now = time();
         $session[self::SESSION_KEY] = [
             'account_id' => (string)$account['id'],
+            'presence_id' => bin2hex(random_bytes(16)),
             'issued_at' => $now,
             'last_seen_at' => $now,
             'absolute_expires_at' => $now + (int)$this->authConfig['absolute_timeout_seconds'],
             'csrf_token' => $this->base64UrlEncode(random_bytes(32)),
             'session_version' => (int)$account['session_version'],
         ];
+        $this->recordPresence($session[self::SESSION_KEY]);
         $this->database->prepare(
             'UPDATE character_accounts SET last_login_at = ? WHERE id = ?')
             ->execute([$now, $account['id']]);
@@ -144,6 +147,53 @@ final class CharacterAuthService
         ];
     }
 
+    public function presence(array &$session): array
+    {
+        $resolved = $this->resolveSession($session, true);
+        $account = $resolved['account'];
+        $response = [
+            'schema_version' => 1,
+            'scope' => (string)$account['role'] === 'dm' ? 'party' : 'self',
+            'observed_at' => gmdate(DATE_ATOM),
+            'active_window_seconds' => self::PRESENCE_WINDOW_SECONDS,
+            'users' => [],
+        ];
+        if ((string)$account['role'] !== 'dm') {
+            return $response;
+        }
+
+        $now = time();
+        $cutoff = $now - self::PRESENCE_WINDOW_SECONDS;
+        $this->database->prepare(
+            'DELETE FROM character_session_presence
+             WHERE last_seen_at < ? OR absolute_expires_at <= ?')
+            ->execute([$cutoff, $now]);
+        $statement = $this->database->prepare(
+            'SELECT
+                accounts.id,
+                accounts.display_name,
+                accounts.role,
+                MAX(presence.last_seen_at) AS last_seen_at
+             FROM character_session_presence AS presence
+             INNER JOIN character_accounts AS accounts ON accounts.id = presence.account_id
+             WHERE presence.last_seen_at >= ?
+               AND presence.absolute_expires_at > ?
+               AND presence.account_id <> ?
+               AND accounts.enabled = 1
+             GROUP BY accounts.id, accounts.display_name, accounts.role
+             ORDER BY accounts.normalized_name');
+        $statement->execute([$cutoff, $now, $account['id']]);
+        $response['users'] = array_map(
+            static fn(array $row): array => [
+                'account_id' => (string)$row['id'],
+                'character_name' => (string)$row['display_name'],
+                'role' => (string)$row['role'],
+                'last_seen_at' => gmdate(DATE_ATOM, (int)$row['last_seen_at']),
+            ],
+            $statement->fetchAll());
+        return $response;
+    }
+
     public function logout(
         array $headers,
         string $remoteAddress,
@@ -162,6 +212,7 @@ final class CharacterAuthService
             (string)$resolved['account']['id'],
             $remoteAddress,
             'logout');
+        $this->removePresence((string)($resolved['session']['presence_id'] ?? ''));
         $session = [];
         if ($destroySession !== null) {
             $destroySession();
@@ -392,6 +443,7 @@ final class CharacterAuthService
             || $lastSeenAt <= 0
             || $absoluteExpiresAt <= $now
             || $now - $lastSeenAt > (int)$this->authConfig['idle_timeout_seconds']) {
+            $this->removePresence((string)($payload['presence_id'] ?? ''));
             unset($session[self::SESSION_KEY]);
             return $this->missingSession($required);
         }
@@ -399,17 +451,57 @@ final class CharacterAuthService
         try {
             $account = $this->loadEnabledAccount($accountId);
         } catch (BrokerHttpException) {
+            $this->removePresence((string)($payload['presence_id'] ?? ''));
             unset($session[self::SESSION_KEY]);
             return $this->missingSession($required);
         }
         if ((int)($payload['session_version'] ?? 0) !== (int)$account['session_version']) {
+            $this->removePresence((string)($payload['presence_id'] ?? ''));
             unset($session[self::SESSION_KEY]);
             return $this->missingSession($required);
         }
 
+        if (preg_match('/^[a-f0-9]{32}$/', (string)($payload['presence_id'] ?? '')) !== 1) {
+            $payload['presence_id'] = bin2hex(random_bytes(16));
+        }
         $payload['last_seen_at'] = $now;
         $session[self::SESSION_KEY] = $payload;
+        $this->recordPresence($payload);
         return ['account' => $account, 'session' => $payload];
+    }
+
+    private function recordPresence(array $session): void
+    {
+        $presenceId = (string)($session['presence_id'] ?? '');
+        $accountId = (string)($session['account_id'] ?? '');
+        if (preg_match('/^[a-f0-9]{32}$/', $presenceId) !== 1
+            || preg_match('/^[a-f0-9]{32}$/', $accountId) !== 1) {
+            return;
+        }
+        $this->database->prepare(
+            'INSERT INTO character_session_presence (
+                presence_id, account_id, last_seen_at, absolute_expires_at
+             ) VALUES (?, ?, ?, ?)
+             ON CONFLICT(presence_id) DO UPDATE SET
+                account_id = excluded.account_id,
+                last_seen_at = excluded.last_seen_at,
+                absolute_expires_at = excluded.absolute_expires_at')
+            ->execute([
+                $presenceId,
+                $accountId,
+                (int)($session['last_seen_at'] ?? time()),
+                (int)($session['absolute_expires_at'] ?? time()),
+            ]);
+    }
+
+    private function removePresence(string $presenceId): void
+    {
+        if (preg_match('/^[a-f0-9]{32}$/', $presenceId) !== 1) {
+            return;
+        }
+        $this->database->prepare(
+            'DELETE FROM character_session_presence WHERE presence_id = ?')
+            ->execute([$presenceId]);
     }
 
     private function missingSession(bool $required): ?array
@@ -783,8 +875,17 @@ final class CharacterAuthService
                 event TEXT NOT NULL,
                 FOREIGN KEY (account_id) REFERENCES character_accounts(id) ON DELETE SET NULL
             );
+            CREATE TABLE IF NOT EXISTS character_session_presence (
+                presence_id TEXT PRIMARY KEY,
+                account_id TEXT NOT NULL,
+                last_seen_at INTEGER NOT NULL,
+                absolute_expires_at INTEGER NOT NULL,
+                FOREIGN KEY (account_id) REFERENCES character_accounts(id) ON DELETE CASCADE
+            );
             CREATE INDEX IF NOT EXISTS ix_auth_audit_account_time
-                ON auth_audit_events(account_id, occurred_at);');
+                ON auth_audit_events(account_id, occurred_at);
+            CREATE INDEX IF NOT EXISTS ix_character_presence_activity
+                ON character_session_presence(last_seen_at, absolute_expires_at);');
 
         $columns = $this->database->query('PRAGMA table_info(character_accounts)')->fetchAll();
         $columnNames = array_map(static fn(array $column): string => (string)$column['name'], $columns);

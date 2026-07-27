@@ -139,6 +139,12 @@ try {
         -Uri "$baseUrl/v1/word-counts"
     Assert-Condition -Condition ($unauthenticatedWordCounts.StatusCode -eq 401) -Message 'The HTTP word-count route was not session-protected.'
 
+    $unauthenticatedPresence = Invoke-WebRequest `
+        -UseBasicParsing `
+        -SkipHttpErrorCheck `
+        -Uri "$baseUrl/v1/presence"
+    Assert-Condition -Condition ($unauthenticatedPresence.StatusCode -eq 401) -Message 'The HTTP presence route was not session-protected.'
+
     $observedAt = [DateTimeOffset]::UtcNow.ToString('o')
     $wordCountUpload = Invoke-WebRequest `
         -UseBasicParsing `
@@ -167,6 +173,15 @@ try {
     Assert-Condition -Condition ([long]$wordCountBody.ic.words -eq 14998) -Message 'The HTTP IC word count was incorrect.'
     Assert-Condition -Condition ([long]$wordCountBody.ooc.words -eq 18652) -Message 'The HTTP OOC word count was incorrect.'
     Assert-Condition -Condition ([string]$wordCountResponse.Headers['Cache-Control'] -match '(?i)(^|,\s*)no-store($|,)') -Message 'Word-count responses must use Cache-Control: no-store.'
+
+    $presenceResponse = Invoke-WebRequest `
+        -UseBasicParsing `
+        -Uri "$baseUrl/v1/presence" `
+        -Headers @{ Cookie = $cookieHeader }
+    $presenceBody = $presenceResponse.Content | ConvertFrom-Json
+    Assert-Condition -Condition ($presenceResponse.StatusCode -eq 200) -Message 'The HTTP presence route failed.'
+    Assert-Condition -Condition ($presenceBody.scope -eq 'self' -and @($presenceBody.users).Count -eq 0) -Message 'A player presence response exposed other users.'
+    Assert-Condition -Condition ([string]$presenceResponse.Headers['Cache-Control'] -match '(?i)(^|,\s*)no-store($|,)') -Message 'Presence responses must use Cache-Control: no-store.'
 
     $logoutResponse = Invoke-WebRequest `
         -UseBasicParsing `

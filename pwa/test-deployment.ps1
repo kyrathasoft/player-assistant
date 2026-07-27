@@ -135,7 +135,7 @@ try {
         $healthResponse = $client.GetAsync([uri]::new($apiBaseUri, 'health')).GetAwaiter().GetResult()
         $healthPayload = $healthResponse.Content.ReadAsStringAsync().GetAwaiter().GetResult() | ConvertFrom-Json
         Assert-Condition -Condition $healthResponse.IsSuccessStatusCode -Message 'The broker health endpoint is unavailable.'
-        Assert-Condition -Condition ([int]$healthPayload.schema_version -eq 3) -Message 'The broker health schema is not version 3.'
+        Assert-Condition -Condition ([int]$healthPayload.schema_version -eq 4) -Message 'The broker health schema is not version 4.'
         Assert-Condition -Condition ($healthPayload.PSObject.Properties.Name -contains 'xp_tracking_configured') -Message 'The live broker does not expose XP tracking readiness.'
         Assert-Condition -Condition ($healthPayload.xp_tracking_configured -eq $true) -Message 'XP tracking is not configured on the live broker.'
         Assert-Condition -Condition ($healthPayload.PSObject.Properties.Name -contains 'word_count_snapshot_available') -Message 'The live broker does not expose word-count snapshot readiness.'
@@ -151,6 +151,12 @@ try {
         Assert-Condition -Condition ([int]$wordCountResponse.StatusCode -eq 401) -Message 'Anonymous word-count access must return HTTP 401.'
         Assert-Condition -Condition ([string]$wordCountPayload.error -eq 'authentication_required') -Message 'Anonymous word-count access failed with the wrong error.'
         Assert-Condition -Condition ((Get-HeaderValue $wordCountResponse 'Cache-Control') -match 'no-store') -Message 'Word-count responses must use Cache-Control: no-store.'
+
+        $presenceResponse = $client.GetAsync([uri]::new($apiBaseUri, 'presence')).GetAwaiter().GetResult()
+        $presencePayload = $presenceResponse.Content.ReadAsStringAsync().GetAwaiter().GetResult() | ConvertFrom-Json
+        Assert-Condition -Condition ([int]$presenceResponse.StatusCode -eq 401) -Message 'Anonymous presence access must return HTTP 401.'
+        Assert-Condition -Condition ([string]$presencePayload.error -eq 'authentication_required') -Message 'Anonymous presence access failed with the wrong error.'
+        Assert-Condition -Condition ((Get-HeaderValue $presenceResponse 'Cache-Control') -match 'no-store') -Message 'Presence responses must use Cache-Control: no-store.'
     }
 
     Write-Output "PWA deployment verified: $($runtimeFiles.Count) public runtime files match, security/cache headers are valid, and anonymous session handling is safe."

@@ -77,6 +77,7 @@ GET  /scarlethorizons/api/v1/session
 GET  /scarlethorizons/api/v1/me
 GET  /scarlethorizons/api/v1/xp
 GET  /scarlethorizons/api/v1/word-counts
+GET  /scarlethorizons/api/v1/presence
 POST /scarlethorizons/api/v1/logout
 ```
 
@@ -101,6 +102,7 @@ broker returns the exact uploaded totals and observation time.
 - `GET /v1/me` returns the logged-in account's server-stored character key.
 - `GET /v1/xp` returns one matching character's XP, class, attained level, and hit points for a player account and never includes the party array.
 - A Dungeon Master session receives the validated current party XP table.
+- Authenticated clients heartbeat through `/v1/presence`; players receive no other-user data, while the Dungeon Master receives distinct other accounts active within the last two minutes.
 - A missing or ambiguous character-key mapping fails with `xp_not_authorized`.
 - XP responses omit the configured source URL and include `Cache-Control: no-store`.
 - Anonymous word-count reads fail with HTTP 401; a logged-in session receives the latest validated wiki, IC, and OOC totals.

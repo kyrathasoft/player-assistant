@@ -174,6 +174,15 @@ try {
             'The protected word-count route failed with the wrong unauthenticated response.');
     }
 
+    try {
+        $broker->dispatch('GET', '/v1/presence', [], [], [], '192.0.2.30', $session);
+        throw new RuntimeException('The protected presence route accepted an unauthenticated request.');
+    } catch (BrokerHttpException $exception) {
+        routingAssert(
+            $exception->status === 401 && $exception->errorName === 'authentication_required',
+            'The protected presence route failed with the wrong unauthenticated response.');
+    }
+
     $wordCountSnapshot = [
         'schema_version' => 1,
         'observed_at' => '2026-07-26T18:30:00Z',
@@ -297,6 +306,20 @@ try {
         $wordCounts['body']['observed_at'] === $wordCountSnapshot['observed_at'],
         'The word-count observation time changed during storage.');
 
+    $presence = $broker->dispatch(
+        'GET',
+        '/v1/presence',
+        [],
+        [],
+        [],
+        '192.0.2.30',
+        $session);
+    routingAssert(
+        $presence['status'] === 200
+            && $presence['body']['scope'] === 'self'
+            && $presence['body']['users'] === [],
+        'The player presence route exposed other users.');
+
     $destroyed = false;
     $logout = $broker->dispatch(
         'POST',
@@ -325,7 +348,7 @@ try {
         [],
         '192.0.2.30',
         $session);
-    routingAssert($health['body']['schema_version'] === 3, 'The broker schema version was not advanced.');
+    routingAssert($health['body']['schema_version'] === 4, 'The broker schema version was not advanced.');
     routingAssert($health['body']['character_account_count'] === 1, 'The health route account count was incorrect.');
     routingAssert($health['body']['xp_tracking_configured'] === true, 'The health route XP configuration state was incorrect.');
     routingAssert(

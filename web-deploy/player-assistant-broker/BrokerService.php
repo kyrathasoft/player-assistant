@@ -53,7 +53,7 @@ final class BrokerService
         if ($method === 'GET' && $route === '/v1/health') {
             return $this->response(200, [
                 'service' => 'player-assistant-broker',
-                'schema_version' => 3,
+                'schema_version' => 4,
                 'status' => 'ok',
                 'rpol_credentials_configured' => $this->rpolCredentialsConfigured(),
                 'snapshot_signing_configured' => $this->snapshotSigningConfigured(),
@@ -93,6 +93,10 @@ final class BrokerService
         if ($method === 'GET' && $route === '/v1/word-counts') {
             $this->characterAuth->requireCurrentAccount($session);
             return $this->response(200, $this->wordCounts->latest());
+        }
+
+        if ($method === 'GET' && $route === '/v1/presence') {
+            return $this->response(200, $this->characterAuth->presence($session));
         }
 
         if ($method === 'POST' && $route === '/v1/logout') {

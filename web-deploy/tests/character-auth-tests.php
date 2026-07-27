@@ -124,7 +124,7 @@ try {
     ]);
     assertTrue($native['enabled'] === true, 'The native character account was not enabled.');
     $nativeSession = [];
-    $service->login(
+    $nativeLogin = $service->login(
         ['character_name' => 'Second Hero', 'password' => 'another long password'],
         '192.0.2.12',
         'https://example.test',
@@ -158,6 +158,20 @@ try {
                 && $aliasLogin['account']['role'] === 'dm',
             "Dungeon Master alias '$alias' resolved to the wrong account.");
     }
+    $playerPresence = $service->presence($nativeSession);
+    assertTrue(
+        $playerPresence['scope'] === 'self' && $playerPresence['users'] === [],
+        'A player presence response exposed other users.');
+    $dungeonMasterPresence = $service->presence($aliasSession);
+    $onlineNames = array_column($dungeonMasterPresence['users'], 'character_name');
+    assertTrue(
+        $dungeonMasterPresence['scope'] === 'party'
+            && in_array('Second Hero', $onlineNames, true)
+            && !in_array('Dungeon Master', $onlineNames, true),
+        'The Dungeon Master did not receive the other active user.');
+    assertTrue(
+        (int)$dungeonMasterPresence['active_window_seconds'] === 120,
+        'The presence response used the wrong active window.');
     $wrongAliasSession = [];
     expectBrokerError(
         fn() => $service->login(

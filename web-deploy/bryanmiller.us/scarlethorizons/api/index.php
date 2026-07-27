@@ -174,7 +174,7 @@ function isCharacterSessionRoute(string $route): bool
 {
     return in_array(
         $route,
-        ['/v1/login', '/v1/session', '/v1/me', '/v1/xp', '/v1/word-counts', '/v1/logout'],
+        ['/v1/login', '/v1/session', '/v1/me', '/v1/xp', '/v1/word-counts', '/v1/presence', '/v1/logout'],
         true);
 }
 

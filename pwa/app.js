@@ -7,6 +7,12 @@
     const MAX_SEARCH_RESULTS = 40;
     const MAX_TRANSLATOR_WORDS = 5000;
     const textEncoder = new TextEncoder();
+    const DUNGEON_MASTER_HERO = Object.freeze({
+        name: 'Dungeon Master',
+        aliases: ['Dungeon Master'],
+        token: 'data/hero-tokens/dungeon-master-914c56786be2.webp',
+        preferLocal: true
+    });
 
     const byId = (id) => document.getElementById(id);
     const views = new Map(
@@ -25,6 +31,9 @@
     let xpRequestId = 0;
     let authenticatedWordCountSnapshot = null;
     let wordCountRequestId = 0;
+    let authenticatedPresenceSnapshot = null;
+    let presenceRequestId = 0;
+    let presencePollTimer = 0;
     let heroTokenData = null;
     let heroTokenDataLoading = null;
 
@@ -362,6 +371,7 @@
         renderAuthenticatedHeroToken();
         renderXpUi();
         renderWordCountUi();
+        updatePresencePolling();
     };
 
     const normalizeHeroName = (value) => String(value || '')
@@ -419,6 +429,9 @@
 
     const setHeroTokenImage = (image, hero) => {
         if (!(image instanceof HTMLImageElement)) return;
+        image.classList.toggle(
+            'is-dungeon-master-token',
+            hero?.name === DUNGEON_MASTER_HERO.name);
         if (hero === null) {
             image.hidden = true;
             image.removeAttribute('src');
@@ -449,6 +462,11 @@
         if (accountAtStart === null) {
             setHeroTokenImage(byId('auth-dashboard-token'), null);
             setHeroTokenImage(byId('auth-account-token'), null);
+            return;
+        }
+        if (accountAtStart.role === 'dm') {
+            setHeroTokenImage(byId('auth-dashboard-token'), DUNGEON_MASTER_HERO);
+            setHeroTokenImage(byId('auth-account-token'), DUNGEON_MASTER_HERO);
             return;
         }
         const hero = findAuthenticatedHero(await loadHeroTokenData(), accountAtStart);
@@ -489,6 +507,100 @@
         return payload;
     };
 
+    const validatePresenceSnapshot = (payload) => {
+        const validUser = (user) => user
+            && typeof user.account_id === 'string'
+            && /^[a-f0-9]{32}$/u.test(user.account_id)
+            && typeof user.character_name === 'string'
+            && user.character_name.length > 0
+            && user.character_name.length <= 100
+            && ['player', 'dm'].includes(user.role)
+            && typeof user.last_seen_at === 'string'
+            && !Number.isNaN(Date.parse(user.last_seen_at));
+        if (!payload
+            || payload.schema_version !== 1
+            || !['self', 'party'].includes(payload.scope)
+            || typeof payload.observed_at !== 'string'
+            || Number.isNaN(Date.parse(payload.observed_at))
+            || !Number.isSafeInteger(payload.active_window_seconds)
+            || payload.active_window_seconds < 30
+            || payload.active_window_seconds > 600
+            || !Array.isArray(payload.users)
+            || payload.users.length > 200
+            || !payload.users.every(validUser)
+            || (payload.scope === 'self' && payload.users.length !== 0)) {
+            throw new Error('The online-user service returned an invalid response.');
+        }
+        return payload;
+    };
+
+    const renderPresenceUi = () => {
+        const panel = byId('online-users-summary');
+        const status = byId('online-users-status');
+        const list = byId('online-users-list');
+        const isDungeonMaster = authenticatedAccount?.role === 'dm';
+        if (panel) panel.hidden = !isDungeonMaster;
+        list?.replaceChildren();
+        if (!isDungeonMaster) return;
+        if (authenticatedPresenceSnapshot === null) {
+            if (status) status.textContent = 'Checking who else is logged in…';
+            return;
+        }
+        const users = authenticatedPresenceSnapshot.users;
+        if (status) {
+            status.textContent = users.length === 0
+                ? 'No other users are active right now.'
+                : `${users.length} other ${users.length === 1 ? 'user is' : 'users are'} active now.`;
+        }
+        if (list) {
+            const fragment = document.createDocumentFragment();
+            users.forEach((user) => {
+                const item = document.createElement('li');
+                item.textContent = user.character_name;
+                fragment.append(item);
+            });
+            list.append(fragment);
+        }
+    };
+
+    const loadPresence = async () => {
+        const requestId = ++presenceRequestId;
+        if (authenticatedAccount === null) {
+            authenticatedPresenceSnapshot = null;
+            renderPresenceUi();
+            return;
+        }
+        const accountId = authenticatedAccount.id;
+        try {
+            const snapshot = validatePresenceSnapshot(
+                await requestAuthenticationApi('/presence'));
+            if (requestId !== presenceRequestId || authenticatedAccount?.id !== accountId) return;
+            authenticatedPresenceSnapshot = snapshot;
+            renderPresenceUi();
+        } catch (error) {
+            if (requestId !== presenceRequestId || authenticatedAccount?.id !== accountId) return;
+            authenticatedPresenceSnapshot = null;
+            renderPresenceUi();
+            const status = byId('online-users-status');
+            if (status && authenticatedAccount?.role === 'dm') status.textContent = error.message;
+        }
+    };
+
+    const updatePresencePolling = () => {
+        if (presencePollTimer !== 0) {
+            window.clearInterval(presencePollTimer);
+            presencePollTimer = 0;
+        }
+        presenceRequestId++;
+        authenticatedPresenceSnapshot = null;
+        renderPresenceUi();
+        if (authenticatedAccount === null) return;
+        void loadPresence();
+        presencePollTimer = window.setInterval(() => {
+            void loadPresence();
+        }, 30000);
+    };
+
     const restoreAuthentication = async () => {
         try {
             const session = await requestAuthenticationApi('/session');
@@ -500,6 +612,7 @@
         }
         authenticatedXpSnapshot = null;
         authenticatedWordCountSnapshot = null;
+        authenticatedPresenceSnapshot = null;
         updateAuthenticationUi();
         if (authenticatedAccount !== null) {
             await Promise.all([loadXpSummary(), loadWordCountSummary()]);
@@ -517,6 +630,9 @@
 
     byId('auth-dialog-close')?.addEventListener('click', () => {
         if (authDialog instanceof HTMLDialogElement) authDialog.close();
+    });
+    authDialog?.addEventListener('close', () => {
+        void renderAuthenticatedHeroToken();
     });
 
     authLoginForm?.addEventListener('submit', async (event) => {
