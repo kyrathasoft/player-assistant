@@ -524,6 +524,25 @@
     const validMagicItemText = (value, maximum = 4000) =>
         typeof value === 'string' && value.trim().length > 0 && value.length <= maximum;
 
+    const getMagicItemViewers = (value) => String(value || 'all')
+        .split(',')
+        .map((viewer) => viewer.trim().toLowerCase())
+        .filter((viewer) => viewer !== '');
+
+    const isMagicItemVisible = (item) => {
+        const viewableBy = String(item?.['viewable-by'] || '').toLocaleLowerCase('en-US');
+        if (getMagicItemViewers(viewableBy).includes('all')) return true;
+        if (authenticatedAccount === null) return false;
+        const characterNames = [
+            authenticatedAccount.character_name,
+            authenticatedAccount.character_key,
+            String(authenticatedAccount.character_name || '').split(/\s+/u)[0]
+        ]
+            .map((name) => String(name || '').normalize('NFKC').trim().toLocaleLowerCase('en-US'))
+            .filter((name) => name !== '');
+        return characterNames.some((name) => viewableBy.includes(name));
+    };
+
     const validateMagicItems = (payload) => {
         const validItem = (item) => item
             && validMagicItemText(item.name, 200)
@@ -532,7 +551,9 @@
             && validMagicItemText(item['meta-date-acquired'], 100)
             && MAGIC_ITEM_LONGEVITY_VALUES.includes(item.longevity)
             && validMagicItemText(item.provenance, 1000)
-            && validMagicItemText(item.whereabouts, 500);
+            && validMagicItemText(item.whereabouts, 500)
+            && validMagicItemText(item['viewable-by'], 500)
+            && getMagicItemViewers(item['viewable-by']).length > 0;
         if (!payload
             || payload.schema_version !== 1
             || payload.source !== MAGIC_ITEMS_WIKI_URL
@@ -599,7 +620,8 @@
                 'meta-date-acquired': metadata['meta-date-acquired'] || '',
                 longevity: metadata.longevity || '',
                 provenance: metadata.provenance || '',
-                whereabouts: metadata.whereabouts || ''
+                whereabouts: metadata.whereabouts || '',
+                'viewable-by': metadata['viewable-by'] || 'all'
             };
         }));
         return validateMagicItems({
@@ -644,8 +666,13 @@
                 : 'The campaign wiki is unavailable; showing the bundled offline fallback.';
         }
         if (!list) return;
+        const visibleItems = magicItemSnapshot.items.filter(isMagicItemVisible);
+        if (visibleItems.length === 0) {
+            if (status) status.textContent = 'No magic items are currently visible to this character.';
+            return;
+        }
         const fragment = document.createDocumentFragment();
-        magicItemSnapshot.items.forEach((item) => {
+        visibleItems.forEach((item) => {
             const card = document.createElement('article');
             card.className = 'magic-item-card';
             const heading = document.createElement('header');
@@ -737,6 +764,7 @@
         renderXpUi();
         renderWordCountUi();
         renderQuestUi();
+        renderMagicItems();
         updatePresencePolling();
     };
 

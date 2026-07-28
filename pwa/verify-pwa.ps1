@@ -95,7 +95,7 @@ foreach ($hero in @($heroData.heroes) + @($heroData.dungeonMaster)) {
 }
 
 $magicItems = Get-Content -Raw -LiteralPath (Join-Path $PwaRoot 'magic-items.json') | ConvertFrom-Json
-$magicItemRequiredFields = @('name', 'description', 'date-acquired', 'meta-date-acquired', 'longevity', 'provenance', 'whereabouts')
+$magicItemRequiredFields = @('name', 'description', 'date-acquired', 'meta-date-acquired', 'longevity', 'provenance', 'whereabouts', 'viewable-by')
 $magicItemLongevityValues = @('one-shot', 'limited-use', 'permanent')
 Assert-Condition -Condition ([int]$magicItems.schema_version -eq 1) -Message 'Magic-item fallback data must use schema version 1.'
 Assert-Condition -Condition ($magicItems.source -eq 'https://publish.obsidian.md/scarlethorizons/Magic+Items/Kirkilston+Crew+Magic+Items') -Message 'Magic-item fallback data has an unexpected source.'
@@ -106,7 +106,10 @@ foreach ($magicItem in @($magicItems.items)) {
         Assert-Condition -Condition (![string]::IsNullOrWhiteSpace([string]$magicItem.$fieldName)) -Message "Magic-item fallback entry has an empty '$fieldName'."
     }
     Assert-Condition -Condition ($magicItemLongevityValues -contains [string]$magicItem.longevity) -Message "Magic-item fallback entry has invalid longevity '$($magicItem.longevity)'."
+    $magicItemViewers = @([string]$magicItem.'viewable-by' -split ',' | ForEach-Object { $_.Trim().ToLowerInvariant() } | Where-Object { $_ -ne '' })
+    Assert-Condition -Condition ($magicItemViewers.Count -gt 0) -Message "Magic-item fallback entry has no valid 'viewable-by' values."
 }
+Assert-Condition -Condition (@($magicItems.items | Where-Object { $_.name -eq "Armstrong's Chamois" -and $_.'viewable-by' -eq 'all' }).Count -eq 1) -Message "Armstrong's Chamois must be viewable by all."
 
 foreach ($script in @('app.js', 'translator-worker.js', 'service-worker.js')) {
     & node --check (Join-Path $PwaRoot $script)
@@ -136,6 +139,7 @@ Assert-Condition -Condition ($appScript.Contains("await requestAuthenticationApi
 Assert-Condition -Condition ($html.Contains('data-view="magic-items"') -and $html.Contains('data-view-panel="magic-items"') -and $html.Contains('id="magic-items-status"') -and $html.Contains('id="magic-item-list"')) -Message 'The Magic Items page is incomplete.'
 Assert-Condition -Condition ($appScript.Contains('fetchWikiMagicItems') -and $appScript.Contains('fetchFallbackMagicItems') -and $appScript.Contains("fetch('magic-items.json'") -and $appScript.Contains('data_source: ''fallback''')) -Message 'Magic-item wiki-first fallback loading is incomplete.'
 Assert-Condition -Condition ($appScript.Contains('MAGIC_ITEM_LONGEVITY_VALUES') -and $appScript.Contains("'one-shot'") -and $appScript.Contains("'limited-use'") -and $appScript.Contains("'permanent'")) -Message 'Magic-item longevity validation is incomplete.'
+Assert-Condition -Condition ($appScript.Contains('getMagicItemViewers') -and $appScript.Contains('isMagicItemVisible') -and $appScript.Contains("metadata['viewable-by'] || 'all'") -and $appScript.Contains("getMagicItemViewers(viewableBy).includes('all')") -and $appScript.Contains('viewableBy.includes(name)') -and $appScript.Contains('renderMagicItems();')) -Message "Magic-item 'viewable-by' defaults or character-name filtering are incomplete."
 Assert-Condition -Condition ($html.Contains('id="auth-dashboard-token"') -and $html.Contains('id="auth-account-token"')) -Message 'Authenticated hero-token image elements are missing.'
 Assert-Condition -Condition ($appScript.Contains("fetch('data/heroes.json?v=2'") -and $appScript.Contains('findAuthenticatedHero') -and $appScript.Contains("account.role === 'dm'")) -Message 'Authenticated hero-token selection is incomplete or lacks cache-safe manifest versioning.'
 Assert-Condition -Condition ($appScript.Contains('const validHeroToken = (hero) =>') -and $appScript.Contains('const validPlayerHero = (hero) =>') -and $appScript.Contains('!validHeroToken(payload.dungeonMaster)') -and $appScript.Contains('payload.heroes.filter(validPlayerHero)')) -Message 'Player wiki-page validation must not invalidate the Dungeon Master entry or suppress all player tokens.'
@@ -165,7 +169,7 @@ Assert-Condition -Condition ($serviceWorker.Contains('networkFirstData') -and $s
 Assert-Condition -Condition ($appScript.Contains("updateViaCache: 'none'") -and $appScript.Contains('await registration.update()')) -Message 'The PWA must explicitly check for uncached service-worker updates.'
 Assert-Condition -Condition ($manifest.start_url -eq './#dashboard' -and $manifest.scope -eq './') -Message 'The manifest must keep navigation inside the deployed PWA directory.'
 Assert-Condition -Condition ($html.Contains('href="manifest.webmanifest"') -and $appScript.Contains('service-worker.js')) -Message 'The install manifest or service-worker registration is missing.'
-Assert-Condition -Condition ($html.Contains('href="styles.css?v=30"') -and $html.Contains('src="app.js?v=30"') -and $serviceWorker.Contains("'./styles.css?v=30'") -and $serviceWorker.Contains("'./app.js?v=30'") -and $serviceWorker.Contains("'./magic-items.json'")) -Message 'The PWA shell must use cache-busting assets and preload the magic-item fallback.'
+Assert-Condition -Condition ($html.Contains('href="styles.css?v=32"') -and $html.Contains('src="app.js?v=32"') -and $serviceWorker.Contains("'./styles.css?v=32'") -and $serviceWorker.Contains("'./app.js?v=32'") -and $serviceWorker.Contains("'./magic-items.json'")) -Message 'The PWA shell must use cache-busting assets and preload the magic-item fallback.'
 $apacheConfig = Get-Content -Raw -LiteralPath (Join-Path $PwaRoot '.htaccess')
 Assert-Condition -Condition ($apacheConfig.Contains('AddType image/webp .webp')) -Message 'Apache must serve WebP hero tokens with the correct MIME type.'
 Assert-Condition -Condition ($apacheConfig.Contains('img-src ''self'' data: https://*.obsidian.md')) -Message 'The content security policy must allow preferred wiki hero images.'

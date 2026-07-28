@@ -21,5 +21,11 @@ The root object uses `schema_version`, `source`, and an `items` array. Every ite
 - `longevity`: `one-shot`, `limited-use`, or `permanent`
 - `provenance`
 - `whereabouts`: a PC, NPC, location, or `lost`
+- `viewable-by`: a comma-separated audience list; defaults to `all`. An item is
+  displayed when this field contains `all`, or when it contains the logged-in
+  PC's canonical name as a case-insensitive substring.
 
 Keep the fallback synchronized with the wiki. The Release build copies the tracked PWA file beside the app executable, and publishing carries it into the installer payload as a critical file.
+
+`viewable-by` controls PWA display only. The fallback JSON and public wiki pages
+remain publicly retrievable and must not contain secrets.
