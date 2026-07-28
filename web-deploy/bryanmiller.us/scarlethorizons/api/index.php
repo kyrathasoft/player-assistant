@@ -22,6 +22,7 @@ try {
     require_once $privateDirectory . '/CharacterAuthService.php';
     require_once $privateDirectory . '/XpTrackingService.php';
     require_once $privateDirectory . '/WordCountService.php';
+    require_once $privateDirectory . '/QuestService.php';
     require_once $privateDirectory . '/BrokerService.php';
     $configPathOverride = getenv('PLAYER_ASSISTANT_BROKER_CONFIG');
     $configPath = is_string($configPathOverride) && $configPathOverride !== ''
@@ -174,7 +175,7 @@ function isCharacterSessionRoute(string $route): bool
 {
     return in_array(
         $route,
-        ['/v1/login', '/v1/session', '/v1/me', '/v1/xp', '/v1/word-counts', '/v1/presence', '/v1/logout'],
+        ['/v1/login', '/v1/session', '/v1/me', '/v1/xp', '/v1/word-counts', '/v1/presence', '/v1/quests', '/v1/logout'],
         true);
 }
 

@@ -14,6 +14,7 @@
 - server-validated character login with secure cookie sessions and explicit logout
 - the logged-in player's active hero token, sourced from the public Player Characters Listing, or the Dungeon Master token for the DM account; wiki images are preferred with website-hosted fallbacks, and player tokens link to their wiki pages with hover guidance
 - a protected current-XP card that returns one authorized character to players, calculates XP till next level (TNL) from the published class progression pages, and exposes party totals only to the Dungeon Master
+- a protected Quests dashboard with validated visibility and lifecycle statuses; its current nine quests include Active, Open, and Completed records with Party-Only and Individual-Or-Party visibility
 - a Dungeon Master-only list of other users, marking those active in the PWA within the last two minutes and showing the last login date/time for inactive accounts; player heartbeat responses never expose other accounts
 
 No RPOL password, XP password, password hash, encrypted local setting, session identifier, or private player note is embedded in the PWA. Character credentials are sent only to the same-origin PHP broker over HTTPS. The broker validates the password server-side and keeps the session identifier in a `Secure`, `HttpOnly`, `SameSite=Strict` cookie.
@@ -86,6 +87,8 @@ Character login additionally requires the PHP broker files under `web-deploy/` t
 The import sends only the existing salted PBKDF2 hashes through the administrator-protected HTTPS endpoint. On a character's first successful login, the broker replaces that legacy hash with PHP's current native password-hash format.
 
 Current XP is loaded through the protected same-origin `GET /scarlethorizons/api/v1/xp` route. The PHP broker fetches the fixed Obsidian Publish XP page, validates the latest markdown table, resolves each character's class through the published Class Level Progression index, and subtracts current XP from the next-level threshold to calculate TNL. Players never receive other characters' totals or the configured source URLs. The Dungeon Master role receives the validated current party table.
+
+Quest records are loaded through the protected same-origin `GET /scarlethorizons/api/v1/quests` route. The broker applies character visibility before returning records, so future Individual-Only quests can remain unavailable to other player sessions.
 
 The included `.htaccess` supplies the important Apache MIME and cache headers when overrides are enabled. The PWA also works on another HTTPS static host with equivalent server configuration.
 

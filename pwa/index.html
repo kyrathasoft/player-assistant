@@ -13,8 +13,8 @@
     <link rel="manifest" href="manifest.webmanifest">
     <link rel="icon" href="icons/icon-192.png" sizes="192x192" type="image/png">
     <link rel="apple-touch-icon" href="icons/icon-192.png">
-    <link rel="stylesheet" href="styles.css?v=28">
-    <script src="app.js?v=28" defer></script>
+    <link rel="stylesheet" href="styles.css?v=29">
+    <script src="app.js?v=29" defer></script>
 </head>
 <body>
     <a class="skip-link" href="#main-content">Skip to content</a>
@@ -48,6 +48,9 @@
         <nav class="primary-nav" aria-label="Primary navigation">
             <button class="nav-item is-active" type="button" data-view="dashboard" aria-current="page">
                 <span aria-hidden="true">⌂</span><span>Home</span>
+            </button>
+            <button class="nav-item" type="button" data-view="quests">
+                <span aria-hidden="true">⚑</span><span>Quests</span>
             </button>
             <button class="nav-item" type="button" data-view="translator">
                 <span aria-hidden="true">ᚱ</span><span>Translator</span>
@@ -191,6 +194,20 @@
                     </div>
                     <button class="secondary-button" id="install-app-secondary" type="button">Install app</button>
                 </aside>
+            </section>
+
+            <section class="view" id="view-quests" data-view-panel="quests" aria-labelledby="quests-title" hidden>
+                <div class="page-heading">
+                    <div>
+                        <p class="eyebrow">Adventures and obligations</p>
+                        <h1 id="quests-title">Quests</h1>
+                    </div>
+                </div>
+
+                <div class="quests-dashboard">
+                    <p class="quests-status" id="quests-status" role="status" aria-live="polite">Log in as your character to view available quests.</p>
+                    <div class="quest-list" id="quest-list" hidden></div>
+                </div>
             </section>
 
             <section class="view" id="view-translator" data-view-panel="translator" aria-labelledby="translator-title" hidden>
@@ -350,7 +367,7 @@
         </main>
 
         <footer class="app-footer">
-            <span>Player Assistant <strong>0.9.5 PWA</strong></span>
+            <span>Player Assistant <strong>0.9.7 PWA</strong></span>
             <span id="offline-readiness">App shell available offline after first load.</span>
         </footer>
     </div>

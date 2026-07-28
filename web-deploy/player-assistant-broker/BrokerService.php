@@ -9,6 +9,7 @@ final class BrokerService
     private CharacterAuthService $characterAuth;
     private XpTrackingService $xpTracking;
     private WordCountService $wordCounts;
+    private QuestService $quests;
 
     public function __construct(
         private readonly array $config,
@@ -37,6 +38,7 @@ final class BrokerService
             is_array($config['xp'] ?? null) ? $config['xp'] : [],
             $xpMarkdownFetcher);
         $this->wordCounts = new WordCountService($this->database);
+        $this->quests = new QuestService();
     }
 
     public function dispatch(
@@ -97,6 +99,11 @@ final class BrokerService
 
         if ($method === 'GET' && $route === '/v1/presence') {
             return $this->response(200, $this->characterAuth->presence($session));
+        }
+
+        if ($method === 'GET' && $route === '/v1/quests') {
+            $current = $this->characterAuth->requireCurrentAccount($session);
+            return $this->response(200, $this->quests->forAccount($current['account']));
         }
 
         if ($method === 'POST' && $route === '/v1/logout') {

@@ -157,6 +157,12 @@ try {
         Assert-Condition -Condition ([int]$presenceResponse.StatusCode -eq 401) -Message 'Anonymous presence access must return HTTP 401.'
         Assert-Condition -Condition ([string]$presencePayload.error -eq 'authentication_required') -Message 'Anonymous presence access failed with the wrong error.'
         Assert-Condition -Condition ((Get-HeaderValue $presenceResponse 'Cache-Control') -match 'no-store') -Message 'Presence responses must use Cache-Control: no-store.'
+
+        $questsResponse = $client.GetAsync([uri]::new($apiBaseUri, 'quests')).GetAwaiter().GetResult()
+        $questsPayload = $questsResponse.Content.ReadAsStringAsync().GetAwaiter().GetResult() | ConvertFrom-Json
+        Assert-Condition -Condition ([int]$questsResponse.StatusCode -eq 401) -Message 'Anonymous quest access must return HTTP 401.'
+        Assert-Condition -Condition ([string]$questsPayload.error -eq 'authentication_required') -Message 'Anonymous quest access failed with the wrong error.'
+        Assert-Condition -Condition ((Get-HeaderValue $questsResponse 'Cache-Control') -match 'no-store') -Message 'Quest responses must use Cache-Control: no-store.'
     }
 
     Write-Output "PWA deployment verified: $($runtimeFiles.Count) public runtime files match, security/cache headers are valid, and anonymous session handling is safe."

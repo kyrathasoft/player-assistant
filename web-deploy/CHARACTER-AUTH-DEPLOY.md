@@ -22,6 +22,7 @@ Upload these beside the existing private `config.php` and `broker.sqlite`:
 BrokerHttpException.php
 CharacterAuthService.php
 BrokerService.php
+QuestService.php
 RpolClient.php
 WordCountService.php
 XpTrackingService.php

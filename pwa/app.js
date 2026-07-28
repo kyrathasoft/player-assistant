@@ -2,7 +2,7 @@
     'use strict';
 
     const APP_NAME = 'Player Assistant';
-    const APP_VERSION = '0.9.5';
+    const APP_VERSION = '0.9.7';
     const AUTH_API_ROOT = '/scarlethorizons/api/v1';
     const MAX_SEARCH_RESULTS = 40;
     const MAX_TRANSLATOR_WORDS = 5000;
@@ -12,6 +12,26 @@
         aliases: ['Dungeon Master'],
         token: 'data/hero-tokens/dungeon-master-914c56786be2.webp',
         preferLocal: true
+    });
+    const QUEST_STATUS_VALUES = Object.freeze([
+        'individual-only',
+        'party-only',
+        'individual-or-party',
+        'open',
+        'active',
+        'abandoned-so-open',
+        'completed',
+        'withdrawn'
+    ]);
+    const QUEST_STATUS_LABELS = Object.freeze({
+        'individual-only': 'Individual-Only',
+        'party-only': 'Party-Only',
+        'individual-or-party': 'Individual-Or-Party',
+        open: 'Open',
+        active: 'Active',
+        'abandoned-so-open': 'Abandoned—Open',
+        completed: 'Completed',
+        withdrawn: 'Withdrawn'
     });
 
     const byId = (id) => document.getElementById(id);
@@ -34,6 +54,8 @@
     let authenticatedPresenceSnapshot = null;
     let presenceRequestId = 0;
     let presencePollTimer = 0;
+    let authenticatedQuestSnapshot = null;
+    let questRequestId = 0;
     let heroTokenData = null;
     let heroTokenDataLoading = null;
 
@@ -65,6 +87,11 @@
 
         if (resolvedView === 'search') {
             void loadCampaignSearch();
+        }
+        if (resolvedView === 'quests'
+            && authenticatedAccount !== null
+            && authenticatedQuestSnapshot === null) {
+            void loadQuests();
         }
 
         byId('main-content')?.focus({ preventScroll: true });
@@ -343,6 +370,148 @@
         }
     };
 
+    const validateQuestSnapshot = (payload) => {
+        const validShortText = (value, maximum = 200) =>
+            typeof value === 'string' && value.length <= maximum;
+        const validRequiredText = (value, maximum = 500) =>
+            validShortText(value, maximum) && value.trim().length > 0;
+        const validQuest = (quest) => quest
+            && /^[a-z0-9]+(?:-[a-z0-9]+)*$/u.test(quest.id)
+            && validRequiredText(quest.title, 200)
+            && validRequiredText(quest.summary, 1000)
+            && validRequiredText(quest.quest_giver, 200)
+            && ['individual-only', 'party-only', 'individual-or-party'].includes(quest.visibility)
+            && ['open', 'active', 'abandoned-so-open', 'completed', 'withdrawn'].includes(quest.state)
+            && Array.isArray(quest.objectives)
+            && quest.objectives.length > 0
+            && quest.objectives.length <= 20
+            && quest.objectives.every((objective) => validRequiredText(objective, 500))
+            && validShortText(quest.reward, 500)
+            && validShortText(quest.accepted_on, 100)
+            && validShortText(quest.expires_on, 100)
+            && /^https:\/\/publish\.obsidian\.md\/scarlethorizons\/(?:Quests|NPCs|Meta\/IC|Writings)\/[^?#]+$/u.test(quest.wiki_url);
+        if (!payload
+            || payload.schema_version !== 1
+            || !Array.isArray(payload.status_values)
+            || payload.status_values.length !== QUEST_STATUS_VALUES.length
+            || !QUEST_STATUS_VALUES.every((status) => payload.status_values.includes(status))
+            || !Array.isArray(payload.quests)
+            || payload.quests.length > 100
+            || !payload.quests.every(validQuest)) {
+            throw new Error('The quest service returned an invalid response.');
+        }
+        return payload;
+    };
+
+    const appendQuestDetail = (list, label, value) => {
+        if (!(list instanceof HTMLDListElement) || value === '') return;
+        const wrapper = document.createElement('div');
+        const term = document.createElement('dt');
+        const detail = document.createElement('dd');
+        term.textContent = label;
+        detail.textContent = value;
+        wrapper.append(term, detail);
+        list.append(wrapper);
+    };
+
+    const renderQuestUi = () => {
+        const status = byId('quests-status');
+        const list = byId('quest-list');
+        list?.replaceChildren();
+        if (list) list.hidden = true;
+
+        if (authenticatedAccount === null) {
+            if (status) status.textContent = 'Log in as your character to view available quests.';
+            return;
+        }
+        if (authenticatedQuestSnapshot === null) {
+            if (status) status.textContent = 'Loading quests…';
+            return;
+        }
+        if (authenticatedQuestSnapshot.quests.length === 0) {
+            if (status) status.textContent = 'No quests are currently visible to this character.';
+            return;
+        }
+
+        if (status) status.textContent = '';
+        if (!list) return;
+        const fragment = document.createDocumentFragment();
+        authenticatedQuestSnapshot.quests.forEach((quest) => {
+            const card = document.createElement('article');
+            card.className = 'quest-card';
+
+            const heading = document.createElement('header');
+            heading.className = 'quest-card-heading';
+            const title = document.createElement('h2');
+            title.textContent = quest.title;
+            const tags = document.createElement('div');
+            tags.className = 'quest-tags';
+            for (const tagValue of [quest.state, quest.visibility]) {
+                const tag = document.createElement('span');
+                tag.className = `quest-tag quest-tag-${tagValue}`;
+                tag.textContent = QUEST_STATUS_LABELS[tagValue];
+                tags.append(tag);
+            }
+            heading.append(title, tags);
+
+            const summary = document.createElement('p');
+            summary.className = 'quest-summary';
+            summary.textContent = quest.summary;
+
+            const details = document.createElement('dl');
+            details.className = 'quest-details';
+            appendQuestDetail(details, 'Quest giver', quest.quest_giver);
+            appendQuestDetail(details, 'Accepted', quest.accepted_on);
+            appendQuestDetail(details, 'Deadline', quest.expires_on);
+            appendQuestDetail(details, 'Reward', quest.reward);
+
+            const objectivesTitle = document.createElement('h3');
+            objectivesTitle.textContent = 'Objectives';
+            const objectives = document.createElement('ul');
+            objectives.className = 'quest-objectives';
+            quest.objectives.forEach((objective) => {
+                const item = document.createElement('li');
+                item.textContent = objective;
+                objectives.append(item);
+            });
+
+            const wikiLink = document.createElement('a');
+            wikiLink.className = 'quest-wiki-link';
+            wikiLink.href = quest.wiki_url;
+            wikiLink.target = '_blank';
+            wikiLink.rel = 'noopener noreferrer';
+            wikiLink.textContent = 'Open quest on the campaign wiki';
+
+            card.append(heading, summary, details, objectivesTitle, objectives, wikiLink);
+            fragment.append(card);
+        });
+        list.append(fragment);
+        list.hidden = false;
+    };
+
+    const loadQuests = async () => {
+        const requestId = ++questRequestId;
+        if (authenticatedAccount === null) {
+            authenticatedQuestSnapshot = null;
+            renderQuestUi();
+            return;
+        }
+        const accountId = authenticatedAccount.id;
+        authenticatedQuestSnapshot = null;
+        renderQuestUi();
+        try {
+            const snapshot = validateQuestSnapshot(
+                await requestAuthenticationApi('/quests'));
+            if (requestId !== questRequestId || authenticatedAccount?.id !== accountId) return;
+            authenticatedQuestSnapshot = snapshot;
+            renderQuestUi();
+        } catch (error) {
+            if (requestId !== questRequestId || authenticatedAccount?.id !== accountId) return;
+            const status = byId('quests-status');
+            if (status) status.textContent = error.message;
+        }
+    };
+
     const updateAuthenticationUi = () => {
         const authenticated = authenticatedAccount !== null;
         const buttonLabel = byId('auth-button-label');
@@ -371,6 +540,7 @@
         renderAuthenticatedHeroToken();
         renderXpUi();
         renderWordCountUi();
+        renderQuestUi();
         updatePresencePolling();
     };
 
@@ -668,9 +838,10 @@
         authenticatedXpSnapshot = null;
         authenticatedWordCountSnapshot = null;
         authenticatedPresenceSnapshot = null;
+        authenticatedQuestSnapshot = null;
         updateAuthenticationUi();
         if (authenticatedAccount !== null) {
-            await Promise.all([loadXpSummary(), loadWordCountSummary()]);
+            await Promise.all([loadXpSummary(), loadWordCountSummary(), loadQuests()]);
         }
     };
 
@@ -715,6 +886,7 @@
             authenticatedAccount = session.account;
             authenticatedXpSnapshot = null;
             authenticatedWordCountSnapshot = null;
+            authenticatedQuestSnapshot = null;
             try {
                 const identity = await requestAuthenticationApi('/me');
                 authenticatedAccount = identity.account || authenticatedAccount;
@@ -725,12 +897,13 @@
             setAuthenticationMessage('');
             setAuthenticationMessage('Character login succeeded.', false, true);
             updateAuthenticationUi();
-            await Promise.all([loadXpSummary(), loadWordCountSummary()]);
+            await Promise.all([loadXpSummary(), loadWordCountSummary(), loadQuests()]);
         } catch (error) {
             authenticatedAccount = null;
             authenticationCsrfToken = '';
             authenticatedXpSnapshot = null;
             authenticatedWordCountSnapshot = null;
+            authenticatedQuestSnapshot = null;
             setAuthenticationMessage(error.message, true);
             updateAuthenticationUi();
         } finally {
@@ -752,6 +925,8 @@
             xpRequestId++;
             authenticatedWordCountSnapshot = null;
             wordCountRequestId++;
+            authenticatedQuestSnapshot = null;
+            questRequestId++;
             updateAuthenticationUi();
             if (authDialog instanceof HTMLDialogElement) authDialog.close();
         } catch (error) {

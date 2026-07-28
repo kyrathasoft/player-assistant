@@ -7,6 +7,7 @@ require_once __DIR__ . '/../player-assistant-broker/RpolClient.php';
 require_once __DIR__ . '/../player-assistant-broker/CharacterAuthService.php';
 require_once __DIR__ . '/../player-assistant-broker/XpTrackingService.php';
 require_once __DIR__ . '/../player-assistant-broker/WordCountService.php';
+require_once __DIR__ . '/../player-assistant-broker/QuestService.php';
 require_once __DIR__ . '/../player-assistant-broker/BrokerService.php';
 
 function routingAssert(bool $condition, string $message): void
@@ -183,6 +184,15 @@ try {
             'The protected presence route failed with the wrong unauthenticated response.');
     }
 
+    try {
+        $broker->dispatch('GET', '/v1/quests', [], [], [], '192.0.2.30', $session);
+        throw new RuntimeException('The protected quest route accepted an unauthenticated request.');
+    } catch (BrokerHttpException $exception) {
+        routingAssert(
+            $exception->status === 401 && $exception->errorName === 'authentication_required',
+            'The protected quest route failed with the wrong unauthenticated response.');
+    }
+
     $wordCountSnapshot = [
         'schema_version' => 1,
         'observed_at' => '2026-07-26T18:30:00Z',
@@ -319,6 +329,57 @@ try {
             && $presence['body']['scope'] === 'self'
             && $presence['body']['users'] === [],
         'The player presence route exposed other users.');
+
+    $quests = $broker->dispatch(
+        'GET',
+        '/v1/quests',
+        [],
+        [],
+        [],
+        '192.0.2.30',
+        $session);
+    routingAssert($quests['status'] === 200, 'The protected quest route failed.');
+    $expectedQuestStatuses = [
+        'find-jelenneth' => ['active', 'individual-or-party'],
+        'three-items-for-nuanda' => ['active', 'individual-or-party'],
+        'k-r-k-caravan-run' => ['completed', 'party-only'],
+        'plumb-lost-caverns' => ['open', 'party-only'],
+        'reclaim-keep-on-borderlands' => ['open', 'party-only'],
+        'construct-darkforest-fort' => ['open', 'individual-or-party'],
+        'find-urvan-and-narinza' => ['active', 'individual-or-party'],
+        'free-slaytonthorpe' => ['active', 'individual-or-party'],
+        'investigate-cold-mouth' => ['open', 'party-only'],
+    ];
+    routingAssert(
+        $quests['body']['schema_version'] === 1
+            && count($quests['body']['quests']) === count($expectedQuestStatuses),
+        'The quest route did not return all configured quests.');
+    routingAssert(
+        array_column($quests['body']['quests'], 'id') === array_keys($expectedQuestStatuses),
+        'The quest route returned quests in the wrong display order.');
+    foreach ($quests['body']['quests'] as $quest) {
+        $expectedStatus = $expectedQuestStatuses[$quest['id']] ?? null;
+        routingAssert(
+            is_array($expectedStatus)
+                && $quest['state'] === $expectedStatus[0]
+                && $quest['visibility'] === $expectedStatus[1],
+            'A configured quest returned the wrong status tags.');
+        routingAssert(
+            !array_key_exists('character_keys', $quest),
+            'The quest route exposed its authorization metadata.');
+    }
+    routingAssert(
+        $quests['body']['status_values'] === [
+            'individual-only',
+            'party-only',
+            'individual-or-party',
+            'open',
+            'active',
+            'abandoned-so-open',
+            'completed',
+            'withdrawn',
+        ],
+        'The quest route returned the wrong status vocabulary.');
 
     $destroyed = false;
     $logout = $broker->dispatch(
