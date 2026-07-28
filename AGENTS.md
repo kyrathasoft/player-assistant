@@ -23,6 +23,7 @@
 - Use it for priorities, hardening status, and backlog context.
 - If a backlog task updates `to-do.md`, include it in the commit.
 - If a user question includes the word `Jelenneth`, read `jelenneth.md` before answering.
+- Read `magic-item-tracking.md` before changing magic-item data or packaging. `pwa\magic-items.json` is the canonical offline fallback and must be copied beside the executable in `Release\` and included with other critical installer files.
 
 ## Commits
 - Never commit installer files unless explicitly requested.

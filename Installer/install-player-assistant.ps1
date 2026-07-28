@@ -113,6 +113,7 @@ function Assert-Payload {
     $requiredFiles = @(
         $ExecutableName,
         'settings.json',
+        'magic-items.json',
         'settings.local.json',
         'xp-passwords.json',
         'keyword-index.json',

@@ -163,9 +163,9 @@ if ($RefreshHeroTokens) {
     & (Join-Path $PSScriptRoot 'refresh-hero-tokens.ps1')
 }
 $heroData = Read-Json -Path (Join-Path $dataDirectory 'heroes.json')
-if ([int]$heroData.schemaVersion -ne 1
-    -or @($heroData.heroes).Count -eq 0
-    -or [string]::IsNullOrWhiteSpace([string]$heroData.dungeonMaster.token)) {
+if ([int]$heroData.schemaVersion -ne 1 -or
+    @($heroData.heroes).Count -eq 0 -or
+    [string]::IsNullOrWhiteSpace([string]$heroData.dungeonMaster.token)) {
     throw 'The PWA hero-token data is missing. Run pwa\refresh-hero-tokens.ps1.'
 }
 

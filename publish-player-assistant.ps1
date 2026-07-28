@@ -25,6 +25,7 @@ $KeywordIndexFileName = 'keyword-index.json'
 $KeywordTermsFileName = 'game-posts-key-terms.md'
 $SitemapFileName = 'sitemap.xml'
 $SitemapKeywordUrlsFileName = 'sitemap-keyword-urls.json'
+$MagicItemsFileName = 'magic-items.json'
 $ReleaseManifestFileName = 'release-manifest.json'
 $RuntimeInventoryFileName = 'release-runtime-inventory.json'
 $ReleaseProvenanceFileName = 'release-provenance.json'
@@ -945,6 +946,42 @@ function Assert-PublishedSettingsJson {
     }
 }
 
+function Assert-PublishedMagicItems {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Path
+    )
+
+    $payload = Read-JsonFile -Path $Path -Description 'published magic-item fallback'
+    if ([int]$payload.schema_version -ne 1) {
+        throw 'Published magic-item fallback must use schema version 1.'
+    }
+
+    $expectedSource = 'https://publish.obsidian.md/scarlethorizons/Magic+Items/Kirkilston+Crew+Magic+Items'
+    if ([string]$payload.source -ne $expectedSource) {
+        throw 'Published magic-item fallback has an unexpected source.'
+    }
+
+    $items = @($payload.items)
+    if ($items.Count -eq 0) {
+        throw 'Published magic-item fallback contains no items.'
+    }
+
+    $requiredFields = @('name', 'description', 'date-acquired', 'meta-date-acquired', 'longevity', 'provenance', 'whereabouts')
+    $validLongevity = @('one-shot', 'limited-use', 'permanent')
+    foreach ($item in $items) {
+        foreach ($fieldName in $requiredFields) {
+            if ($item.PSObject.Properties.Name -notcontains $fieldName -or
+                [string]::IsNullOrWhiteSpace([string]$item.$fieldName)) {
+                throw "Published magic-item fallback contains an item with missing or empty '$fieldName'."
+            }
+        }
+        if ($validLongevity -notcontains [string]$item.longevity) {
+            throw "Published magic-item fallback contains invalid longevity '$($item.longevity)'."
+        }
+    }
+}
+
 function Assert-PublishedKeywordIndex {
     param(
         [Parameter(Mandatory = $true)]
@@ -1546,6 +1583,7 @@ function Get-ReleaseManifestFileList {
     return @(
         'player-assistant.exe',
         'settings.json',
+        $MagicItemsFileName,
         $XpPasswordFileName,
         $RuntimeInventoryFileName,
         $KeywordIndexFileName,
@@ -1629,6 +1667,7 @@ function Assert-PublishOutput {
 
     Assert-PublishedExecutableVersion -Path (Join-Path $Directory 'player-assistant.exe')
     Assert-PublishedSettingsJson -Path (Join-Path $Directory 'settings.json')
+    Assert-PublishedMagicItems -Path (Join-Path $Directory $MagicItemsFileName)
     Assert-PublishedKeywordIndex -Path (Join-Path $Directory $KeywordIndexFileName) -Description 'published keyword index'
     Assert-PublishedKeywordTerms -Path (Join-Path $Directory $KeywordTermsFileName)
     Assert-PublishedSitemap -Path (Join-Path $Directory $SitemapFileName)

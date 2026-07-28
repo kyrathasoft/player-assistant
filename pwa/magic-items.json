@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "source": "https://publish.obsidian.md/scarlethorizons/Magic+Items/Kirkilston+Crew+Magic+Items",
+  "items": [
+    {
+      "name": "Armstrong's Chamois",
+      "description": "This soft chamois was gifted to Kelpie on the evening of May 8, 406 PR. Swiping it across a slashing, bludgeoning, or piercing weapon grants that weapon +1 to hit and +1 damage on its next attack within 24 hours. A weapon can benefit only once per 24 hours. Each use requires a usage-die roll; a result of 1 or 2 steps the die down from its initial d20, and the magic is exhausted when that result is rolled on a d4.",
+      "date-acquired": "May 8, 406 PR",
+      "meta-date-acquired": "07/23/2026",
+      "longevity": "limited-use",
+      "provenance": "Created by Samuel Armstrong during a 36-day imbuing process begun March 2, 406 PR.",
+      "whereabouts": "Kelpie Lawfuller"
+    }
+  ]
+}

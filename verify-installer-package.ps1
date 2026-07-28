@@ -128,6 +128,7 @@ function Test-InstallerDirectory {
     $requiredPayloadFiles = @(
         'player-assistant.exe',
         'settings.json',
+        'magic-items.json',
         'settings.local.json',
         'xp-passwords.json',
         'keyword-index.json',

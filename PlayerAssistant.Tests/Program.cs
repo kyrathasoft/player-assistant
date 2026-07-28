@@ -5061,6 +5061,9 @@ static void KeywordIndexValidationRejectsPoisonedMatchUrls()
 
 static void KeywordTermsReleaseCopyGeneratesFromKeywordIndex()
 {
+    using var directory = TemporaryDirectory.Create();
+    var runtimeDirectory = Path.Combine(directory.Path, "runtime");
+    Directory.CreateDirectory(runtimeDirectory);
     const string indexJson =
         """
         {
@@ -5072,20 +5075,15 @@ static void KeywordTermsReleaseCopyGeneratesFromKeywordIndex()
         }
         """;
 
-    WithTemporaryKeywordIndex(
-        indexJson,
-        () => WithTemporaryKeywordTermsFile(
-            () =>
-            {
-                KeywordTermsFileUtility.EnsureReleaseCopy();
+    File.WriteAllText(Path.Combine(runtimeDirectory, "keyword-index.json"), indexJson);
+    KeywordTermsFileUtility.EnsureReleaseCopy(runtimeDirectory);
 
-                var termsPath = GetPlayerAssistantKeywordTermsPath();
-                AssertTrue(File.Exists(termsPath), "expected keyword terms file to be generated");
-                AssertEqual(
-                    "Alpha|beta|zeta",
-                    string.Join("|", File.ReadAllLines(termsPath)),
-                    "generated keyword terms should be sorted from keyword index words");
-            }));
+    var termsPath = Path.Combine(runtimeDirectory, KeywordTermsFileUtility.FileName);
+    AssertTrue(File.Exists(termsPath), "expected keyword terms file to be generated");
+    AssertEqual(
+        "Alpha|beta|zeta",
+        string.Join("|", File.ReadAllLines(termsPath)),
+        "generated keyword terms should be sorted from keyword index words");
 }
 
 static void KeywordTermsPublishCopyPreservesParentReleaseTerms()
@@ -6618,7 +6616,7 @@ static void ElvenTranslatorFinalizesEveryEnglishTerm()
 {
     var terms = ElvenTranslatorUtility.GetEnglishTerms();
     var entries = ElvenTranslatorUtility.GetLexiconEntries();
-    AssertEqual(84531, terms.Count, "unexpected finalized English-to-Elven term count");
+    AssertEqual(84460, terms.Count, "unexpected finalized English-to-Elven term count");
     AssertEqual(terms.Count, entries.Count, "every English term should have exactly one finalized translation");
     AssertTrue(
         terms.All(term => ElvenTranslatorUtility.TranslateEnglishToElven(term).Count == 1),
@@ -6713,7 +6711,7 @@ static void ElvenCompleteCoverageTranslatesEveryOrcishTerm()
     var coverageEntries = ElvenTranslatorUtility.GetLexiconEntries()
         .Where(entry => entry.SourceLanguage == "local-neologism:complete-coverage")
         .ToArray();
-    AssertEqual(69083, coverageEntries.Length, "complete coverage should add every remaining Orcish English term");
+    AssertEqual(69012, coverageEntries.Length, "complete coverage should add every remaining Orcish English term");
     AssertTrue(coverageEntries.All(entry => entry.Language == "Sindarin"), "invented fallback vocabulary should remain Sindarin-first");
     AssertTrue(coverageEntries.All(entry => entry.ReliabilityMark == "!"), "invented fallback vocabulary should be marked as pure neologism");
 
@@ -6722,6 +6720,9 @@ static void ElvenCompleteCoverageTranslatesEveryOrcishTerm()
         .Take(10)
         .ToArray();
     AssertEqual(0, missing.Length, $"Orcish English terms remain untranslated: {string.Join(", ", missing)}");
+    AssertTrue(
+        ElvenTranslatorUtility.TranslateEnglishToElven("films'").Count == 1,
+        "complete coverage should include the plural possessive film form");
 
     var abacus = ElvenTranslatorUtility.TranslateEnglishToElven("abacus").Single();
     AssertEqual("Sindarin", abacus.Language, "abacus should use the generated Sindarin fallback");
@@ -11701,42 +11702,6 @@ static void WithTemporaryKeywordIndex(string json, Action action)
     }
 }
 
-static void WithTemporaryKeywordTermsFile(Action action)
-{
-    var termsPath = GetPlayerAssistantKeywordTermsPath();
-    var backupPath = termsPath + ".test-backup";
-    var hadOriginalTerms = File.Exists(termsPath);
-
-    try
-    {
-        Directory.CreateDirectory(Path.GetDirectoryName(termsPath)!);
-        if (hadOriginalTerms)
-        {
-            File.Copy(termsPath, backupPath, overwrite: true);
-            File.Delete(termsPath);
-        }
-
-        action();
-    }
-    finally
-    {
-        if (File.Exists(termsPath))
-        {
-            File.Delete(termsPath);
-        }
-
-        if (hadOriginalTerms)
-        {
-            if (!File.Exists(backupPath))
-            {
-                throw new FileNotFoundException($"Expected backup file '{backupPath}' to exist for restore.", backupPath);
-            }
-
-            File.Move(backupPath, termsPath, overwrite: true);
-        }
-    }
-}
-
 static void WithTemporaryEncryptedTextIndex(string json, Action action)
 {
     var indexPath = GetPlayerAssistantEncryptedTextIndexPath();
@@ -11793,17 +11758,6 @@ static string GetPlayerAssistantEncryptedTextIndexPath()
     }
 
     return Path.Combine(assemblyDirectory, TaggedNoteCipherUtility.EncryptedTextIndexFileName);
-}
-
-static string GetPlayerAssistantKeywordTermsPath()
-{
-    var assemblyDirectory = Path.GetDirectoryName(typeof(Form1).Assembly.Location);
-    if (string.IsNullOrWhiteSpace(assemblyDirectory))
-    {
-        throw new InvalidOperationException("Unable to resolve the player-assistant assembly directory.");
-    }
-
-    return Path.Combine(assemblyDirectory, KeywordTermsFileUtility.FileName);
 }
 
 static string GetStartupLogPath()
@@ -12044,6 +11998,10 @@ static void WriteRpolStorageState(string storageStatePath, string contents, Date
 
 static void WriteRequiredRuntimeSidecars(string directoryPath)
 {
+    File.Copy(
+        Path.Combine(GetRepositoryRoot(), "pwa", "magic-items.json"),
+        Path.Combine(directoryPath, "magic-items.json"),
+        overwrite: true);
     File.WriteAllText(
         Path.Combine(directoryPath, "keyword-index.json"),
         """
@@ -12253,6 +12211,7 @@ static string[] GetReleaseManifestRelativePaths()
     [
         "player-assistant.exe",
         "settings.json",
+        "magic-items.json",
         XpPasswordStoreUtility.FileName,
         "release-runtime-inventory.json",
         "keyword-index.json",

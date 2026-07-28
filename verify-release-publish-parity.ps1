@@ -17,6 +17,7 @@ $RuntimeOnlyPublishFileNames = @(
 )
 $ParityPairs = @(
     [pscustomobject]@{ ReleasePath = 'settings.json'; PublishPath = 'settings.json' },
+    [pscustomobject]@{ ReleasePath = 'magic-items.json'; PublishPath = 'magic-items.json' },
     [pscustomobject]@{ ReleasePath = 'keyword-index.json'; PublishPath = 'keyword-index.json' },
     [pscustomobject]@{ ReleasePath = 'game-posts-key-terms.md'; PublishPath = 'game-posts-key-terms.md' },
     [pscustomobject]@{ ReleasePath = 'sitemap.xml'; PublishPath = 'sitemap.xml' },

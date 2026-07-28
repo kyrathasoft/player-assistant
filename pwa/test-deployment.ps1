@@ -56,6 +56,7 @@ $runtimeFiles = [ordered]@{
     'data/orcish.json' = @('application/json', 'text/json')
     'data/elvish.json' = @('application/json', 'text/json')
     'data/heroes.json' = @('application/json', 'text/json')
+    'magic-items.json' = @('application/json', 'text/json')
     'campaign-search.json' = @('application/json', 'text/json')
 }
 
@@ -106,9 +107,9 @@ try {
     Assert-Condition -Condition ((Get-HeaderValue $indexResponse 'X-Content-Type-Options') -eq 'nosniff') -Message 'The PWA is missing X-Content-Type-Options: nosniff.'
     Assert-Condition -Condition ((Get-HeaderValue $indexResponse 'Strict-Transport-Security') -match 'max-age=') -Message 'The PWA is missing HSTS.'
     $contentSecurityPolicy = Get-HeaderValue $indexResponse 'Content-Security-Policy'
-    Assert-Condition -Condition ($contentSecurityPolicy.Contains("default-src 'self'") -and $contentSecurityPolicy.Contains("frame-ancestors 'none'")) -Message 'The PWA Content-Security-Policy is incomplete.'
+    Assert-Condition -Condition ($contentSecurityPolicy.Contains("default-src 'self'") -and $contentSecurityPolicy.Contains("frame-ancestors 'none'") -and $contentSecurityPolicy.Contains("connect-src 'self' https://publish-01.obsidian.md")) -Message 'The PWA Content-Security-Policy is incomplete.'
 
-    foreach ($uncachedFile in @('service-worker.js', 'manifest.webmanifest')) {
+    foreach ($uncachedFile in @('service-worker.js', 'manifest.webmanifest', 'magic-items.json')) {
         $cacheControl = Get-HeaderValue $responses[$uncachedFile] 'Cache-Control'
         Assert-Condition -Condition ($cacheControl -match 'no-cache') -Message "$uncachedFile must be served with Cache-Control: no-cache."
     }

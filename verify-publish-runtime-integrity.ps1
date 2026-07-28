@@ -6,6 +6,7 @@ param(
     [string]$VerifyHealthFileOnly,
     [string[]]$TrackedReleaseFile = @(
         'settings.json',
+        'magic-items.json',
         'keyword-index.json',
         'game-posts-key-terms.md',
         'sitemap.xml',
@@ -346,6 +347,7 @@ Assert-PathInsideRepo -Path $resolvedPublishDir -Description 'publish directory'
 $exePath = Join-Path $resolvedPublishDir $ExecutableFileName
 Assert-RequiredFile -Path $exePath -Description 'published player-assistant.exe'
 Assert-RequiredFile -Path (Join-Path $resolvedPublishDir 'settings.json') -Description 'published settings.json'
+Assert-RequiredFile -Path (Join-Path $resolvedPublishDir 'magic-items.json') -Description 'published magic-items.json'
 Assert-RequiredFile -Path (Join-Path $resolvedPublishDir 'settings.local.json') -Description 'published encrypted settings.local.json'
 Assert-RequiredFile -Path (Join-Path $resolvedPublishDir 'keyword-index.json') -Description 'published keyword-index.json'
 Assert-RequiredFile -Path (Join-Path $resolvedPublishDir 'game-posts-key-terms.md') -Description 'published keyword terms file'

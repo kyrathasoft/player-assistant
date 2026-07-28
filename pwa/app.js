@@ -2,8 +2,11 @@
     'use strict';
 
     const APP_NAME = 'Player Assistant';
-    const APP_VERSION = '0.9.7';
+    const APP_VERSION = '0.9.8';
     const AUTH_API_ROOT = '/scarlethorizons/api/v1';
+    const MAGIC_ITEMS_WIKI_URL = 'https://publish.obsidian.md/scarlethorizons/Magic+Items/Kirkilston+Crew+Magic+Items';
+    const MAGIC_ITEMS_MARKDOWN_ROOT = 'https://publish-01.obsidian.md/access/1113217a28a5bfdcc9fbe8e6d82b27ac/Magic%20Items/';
+    const MAGIC_ITEM_LONGEVITY_VALUES = Object.freeze(['one-shot', 'limited-use', 'permanent']);
     const MAX_SEARCH_RESULTS = 40;
     const MAX_TRANSLATOR_WORDS = 5000;
     const textEncoder = new TextEncoder();
@@ -56,6 +59,9 @@
     let presencePollTimer = 0;
     let authenticatedQuestSnapshot = null;
     let questRequestId = 0;
+    let magicItemSnapshot = null;
+    let magicItemLoading = null;
+    let magicItemError = '';
     let heroTokenData = null;
     let heroTokenDataLoading = null;
 
@@ -92,6 +98,9 @@
             && authenticatedAccount !== null
             && authenticatedQuestSnapshot === null) {
             void loadQuests();
+        }
+        if (resolvedView === 'magic-items' && magicItemSnapshot === null) {
+            void loadMagicItems();
         }
 
         byId('main-content')?.focus({ preventScroll: true });
@@ -511,6 +520,193 @@
             if (status) status.textContent = error.message;
         }
     };
+
+    const validMagicItemText = (value, maximum = 4000) =>
+        typeof value === 'string' && value.trim().length > 0 && value.length <= maximum;
+
+    const validateMagicItems = (payload) => {
+        const validItem = (item) => item
+            && validMagicItemText(item.name, 200)
+            && validMagicItemText(item.description, 10000)
+            && validMagicItemText(item['date-acquired'], 200)
+            && validMagicItemText(item['meta-date-acquired'], 100)
+            && MAGIC_ITEM_LONGEVITY_VALUES.includes(item.longevity)
+            && validMagicItemText(item.provenance, 1000)
+            && validMagicItemText(item.whereabouts, 500);
+        if (!payload
+            || payload.schema_version !== 1
+            || payload.source !== MAGIC_ITEMS_WIKI_URL
+            || !Array.isArray(payload.items)
+            || payload.items.length > 100
+            || !payload.items.every(validItem)) {
+            throw new Error('Magic-item data is invalid.');
+        }
+        return payload;
+    };
+
+    const parseMarkdownFrontmatter = (markdown) => {
+        const normalized = String(markdown || '').replace(/\r\n?/gu, '\n');
+        const match = /^---\s*\n([\s\S]*?)\n---\s*\n?([\s\S]*)$/u.exec(normalized);
+        if (!match) throw new Error('A wiki magic-item page has no frontmatter.');
+        const metadata = {};
+        for (const line of match[1].split('\n')) {
+            const property = /^([a-z0-9-]+):\s*(.*?)\s*$/iu.exec(line);
+            if (!property) continue;
+            let value = property[2];
+            if ((value.startsWith('"') && value.endsWith('"'))
+                || (value.startsWith("'") && value.endsWith("'"))) {
+                value = value.slice(1, -1);
+            }
+            metadata[property[1].toLowerCase()] = value;
+        }
+        const description = match[2]
+            .replace(/\[\[([^\]|]+)\|([^\]]+)\]\]/gu, '$2')
+            .replace(/\[\[([^\]]+)\]\]/gu, '$1')
+            .replace(/[_*]+/gu, '')
+            .trim();
+        return { metadata, description };
+    };
+
+    const getMagicItemMarkdownUrl = (pageName) => {
+        if (!/^[^/\\?#]{1,200}$/u.test(pageName)) {
+            throw new Error('The wiki magic-item index contains an invalid link.');
+        }
+        return `${MAGIC_ITEMS_MARKDOWN_ROOT}${encodeURIComponent(pageName)}.md`;
+    };
+
+    const fetchWikiMagicItems = async () => {
+        const indexResponse = await fetch(
+            `${MAGIC_ITEMS_MARKDOWN_ROOT}Kirkilston%20Crew%20Magic%20Items.md`,
+            { cache: 'no-store', mode: 'cors', credentials: 'omit' });
+        if (!indexResponse.ok) throw new Error('The magic-item wiki index is unavailable.');
+        const indexMarkdown = await indexResponse.text();
+        const pageNames = [...indexMarkdown.matchAll(/\[\[([^\]|#]+)(?:#[^\]|]*)?(?:\|[^\]]+)?\]\]/gu)]
+            .map((match) => match[1].trim())
+            .filter((name, index, names) => name !== '' && names.indexOf(name) === index);
+        if (pageNames.length === 0 || pageNames.length > 100) {
+            throw new Error('The magic-item wiki index contains no usable item links.');
+        }
+        const items = await Promise.all(pageNames.map(async (pageName) => {
+            const response = await fetch(
+                getMagicItemMarkdownUrl(pageName),
+                { cache: 'no-store', mode: 'cors', credentials: 'omit' });
+            if (!response.ok) throw new Error(`The wiki page for ${pageName} is unavailable.`);
+            const { metadata, description } = parseMarkdownFrontmatter(await response.text());
+            return {
+                name: metadata.name || pageName,
+                description,
+                'date-acquired': metadata['date-acquired'] || '',
+                'meta-date-acquired': metadata['meta-date-acquired'] || '',
+                longevity: metadata.longevity || '',
+                provenance: metadata.provenance || '',
+                whereabouts: metadata.whereabouts || ''
+            };
+        }));
+        return validateMagicItems({
+            schema_version: 1,
+            source: MAGIC_ITEMS_WIKI_URL,
+            items
+        });
+    };
+
+    const fetchFallbackMagicItems = async () => {
+        const response = await fetch('magic-items.json', { cache: 'no-cache' });
+        if (!response.ok) throw new Error('The bundled magic-item fallback is unavailable.');
+        return validateMagicItems(await response.json());
+    };
+
+    const appendMagicItemDetail = (list, label, value) => {
+        const wrapper = document.createElement('div');
+        const term = document.createElement('dt');
+        const detail = document.createElement('dd');
+        term.textContent = label;
+        detail.textContent = value;
+        wrapper.append(term, detail);
+        list.append(wrapper);
+    };
+
+    const renderMagicItems = () => {
+        const status = byId('magic-items-status');
+        const list = byId('magic-item-list');
+        list?.replaceChildren();
+        if (list) list.hidden = true;
+        if (magicItemSnapshot === null) {
+            if (status) {
+                status.textContent = magicItemLoading
+                    ? 'Loading magic items…'
+                    : (magicItemError || 'Magic items load when this page is opened.');
+            }
+            return;
+        }
+        if (status) {
+            status.textContent = magicItemSnapshot.data_source === 'wiki'
+                ? 'Current information loaded from the campaign wiki.'
+                : 'The campaign wiki is unavailable; showing the bundled offline fallback.';
+        }
+        if (!list) return;
+        const fragment = document.createDocumentFragment();
+        magicItemSnapshot.items.forEach((item) => {
+            const card = document.createElement('article');
+            card.className = 'magic-item-card';
+            const heading = document.createElement('header');
+            heading.className = 'magic-item-card-heading';
+            const title = document.createElement('h2');
+            title.textContent = item.name;
+            const longevity = document.createElement('span');
+            longevity.className = 'magic-item-longevity';
+            longevity.textContent = item.longevity;
+            heading.append(title, longevity);
+            const description = document.createElement('p');
+            description.className = 'magic-item-description';
+            description.textContent = item.description;
+            const details = document.createElement('dl');
+            details.className = 'magic-item-details';
+            appendMagicItemDetail(details, 'Acquired', item['date-acquired']);
+            appendMagicItemDetail(details, 'Real-world date', item['meta-date-acquired']);
+            appendMagicItemDetail(details, 'Provenance', item.provenance);
+            appendMagicItemDetail(details, 'Whereabouts', item.whereabouts);
+            card.append(heading, description, details);
+            fragment.append(card);
+        });
+        list.append(fragment);
+        list.hidden = false;
+    };
+
+    const loadMagicItems = async (force = false) => {
+        if (magicItemLoading && !force) return magicItemLoading;
+        magicItemSnapshot = null;
+        magicItemError = '';
+        renderMagicItems();
+        const refreshButton = byId('magic-items-refresh');
+        if (refreshButton instanceof HTMLButtonElement) refreshButton.disabled = true;
+        magicItemLoading = (async () => {
+            try {
+                magicItemSnapshot = {
+                    ...(await fetchWikiMagicItems()),
+                    data_source: 'wiki'
+                };
+            } catch {
+                try {
+                    magicItemSnapshot = {
+                        ...(await fetchFallbackMagicItems()),
+                        data_source: 'fallback'
+                    };
+                } catch {
+                    magicItemError = 'Magic-item information is unavailable from both the campaign wiki and the bundled fallback.';
+                }
+            } finally {
+                magicItemLoading = null;
+                if (refreshButton instanceof HTMLButtonElement) refreshButton.disabled = false;
+                renderMagicItems();
+            }
+        })();
+        renderMagicItems();
+        return magicItemLoading;
+    };
+
+    byId('magic-items-refresh')?.addEventListener('click', () => {
+        void loadMagicItems(true);
+    });
 
     const updateAuthenticationUi = () => {
         const authenticated = authenticatedAccount !== null;

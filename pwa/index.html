@@ -13,8 +13,8 @@
     <link rel="manifest" href="manifest.webmanifest">
     <link rel="icon" href="icons/icon-192.png" sizes="192x192" type="image/png">
     <link rel="apple-touch-icon" href="icons/icon-192.png">
-    <link rel="stylesheet" href="styles.css?v=29">
-    <script src="app.js?v=29" defer></script>
+    <link rel="stylesheet" href="styles.css?v=30">
+    <script src="app.js?v=30" defer></script>
 </head>
 <body>
     <a class="skip-link" href="#main-content">Skip to content</a>
@@ -51,6 +51,9 @@
             </button>
             <button class="nav-item" type="button" data-view="quests">
                 <span aria-hidden="true">⚑</span><span>Quests</span>
+            </button>
+            <button class="nav-item" type="button" data-view="magic-items">
+                <span aria-hidden="true">✦</span><span>Magic Items</span>
             </button>
             <button class="nav-item" type="button" data-view="translator">
                 <span aria-hidden="true">ᚱ</span><span>Translator</span>
@@ -207,6 +210,24 @@
                 <div class="quests-dashboard">
                     <p class="quests-status" id="quests-status" role="status" aria-live="polite">Log in as your character to view available quests.</p>
                     <div class="quest-list" id="quest-list" hidden></div>
+                </div>
+            </section>
+
+            <section class="view" id="view-magic-items" data-view-panel="magic-items" aria-labelledby="magic-items-title" hidden>
+                <div class="page-heading">
+                    <div>
+                        <p class="eyebrow">Enchanted possessions</p>
+                        <h1 id="magic-items-title">Magic Items</h1>
+                    </div>
+                    <a class="secondary-button" href="https://publish.obsidian.md/scarlethorizons/Magic+Items/Kirkilston+Crew+Magic+Items" target="_blank" rel="noopener noreferrer">Open wiki index</a>
+                </div>
+
+                <div class="magic-items-dashboard">
+                    <div class="magic-items-source-row">
+                        <p class="magic-items-status" id="magic-items-status" role="status" aria-live="polite">Magic items load when this page is opened.</p>
+                        <button class="secondary-button" id="magic-items-refresh" type="button">Refresh</button>
+                    </div>
+                    <div class="magic-item-list" id="magic-item-list" hidden></div>
                 </div>
             </section>
 

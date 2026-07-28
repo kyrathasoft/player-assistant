@@ -1,19 +1,20 @@
 'use strict';
 
-const CACHE_VERSION = 'player-assistant-pwa-0.9.7-v29';
+const CACHE_VERSION = 'player-assistant-pwa-0.9.8-v30';
 const SHELL_CACHE = `${CACHE_VERSION}-shell`;
 const DATA_CACHE = `${CACHE_VERSION}-data`;
 const SHELL_ASSETS = [
     './',
     './index.html',
-    './styles.css?v=29',
-    './app.js?v=29',
+    './styles.css?v=30',
+    './app.js?v=30',
     './translator-worker.js',
     './offline.html',
     './manifest.webmanifest',
     './icons/icon-192.png',
     './icons/icon-512.png',
-    './icons/dragon-mark.png'
+    './icons/dragon-mark.png',
+    './magic-items.json'
 ];
 
 self.addEventListener('install', (event) => {
