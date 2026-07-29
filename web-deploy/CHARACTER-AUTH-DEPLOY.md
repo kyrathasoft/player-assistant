@@ -1,5 +1,14 @@
 # Character authentication deployment
 
+## Configure another Windows computer
+
+Run `setup-dreamhost-codex-access.ps1` from the repository to create or reuse a
+dedicated SSH key, enable the Windows SSH agent, configure a stable host alias,
+and verify access to the three existing deployment directories. If the public
+key is not installed at DreamHost yet, the script displays it and pauses while
+you add it through the DreamHost panel. It never stores a website password,
+token, or private key in the repository.
+
 ## Public API file
 
 Upload:

@@ -99,13 +99,16 @@
         const requestedView = views.has(viewName) ? viewName : 'dashboard';
         const isAuthenticated = authenticatedAccount !== null;
         const isDungeonMaster = isAuthenticated && authenticatedAccount.role === 'dm';
+        const canMessagePlayer = isAuthenticated
+            && (isDungeonMaster
+                || (authenticatedMessageSnapshot?.player_recipients.length || 0) > 0);
         const resolvedView = !isAuthenticated
             ? (requestedView === 'message-dm' || requestedView === 'message-player')
                 ? 'dashboard'
                 : requestedView
             : (requestedView === 'message-dm' && isDungeonMaster)
                 ? 'dashboard'
-                : (requestedView === 'message-player' && !isDungeonMaster)
+                : (requestedView === 'message-player' && !canMessagePlayer)
                     ? 'dashboard'
                     : requestedView;
         activeView = resolvedView;
