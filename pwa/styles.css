@@ -514,6 +514,23 @@ h2 {
     min-height: 12rem;
 }
 
+.magic-item-counts {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.45rem 1rem;
+    color: var(--muted);
+    font-size: 0.9rem;
+}
+
+.magic-item-counts[hidden] {
+    display: none;
+}
+
+.magic-item-counts strong {
+    color: var(--gold-bright);
+    font-size: 1rem;
+}
+
 .magic-items-source-row {
     display: flex;
     align-items: center;

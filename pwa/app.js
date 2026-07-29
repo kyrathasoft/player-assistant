@@ -227,7 +227,10 @@
                 const totalCell = document.createElement('td');
                 nameCell.scope = 'row';
                 nameCell.textContent = character.character_name;
-                totalCell.textContent = Number(character.xp_total).toLocaleString('en-US');
+                const tnlLabel = character.xp_to_next_level === null
+                    ? 'Max level'
+                    : Number(character.xp_to_next_level).toLocaleString('en-US');
+                totalCell.textContent = `${Number(character.xp_total).toLocaleString('en-US')} (TNL: ${tnlLabel})`;
                 row.append(nameCell, totalCell);
                 fragment.append(row);
             });
@@ -701,8 +704,10 @@
     const renderMagicItems = () => {
         const status = byId('magic-items-status');
         const list = byId('magic-item-list');
+        const counts = byId('magic-item-counts');
         list?.replaceChildren();
         if (list) list.hidden = true;
+        if (counts) counts.hidden = true;
         if (magicItemSnapshot === null) {
             if (status) {
                 status.textContent = magicItemLoading
@@ -718,6 +723,16 @@
         }
         if (!list) return;
         const visibleItems = magicItemSnapshot.items.filter(isMagicItemVisible);
+        const longevityCounts = Object.fromEntries(
+            MAGIC_ITEM_LONGEVITY_VALUES.map((longevity) => [
+                longevity,
+                visibleItems.filter((item) => item.longevity === longevity).length
+            ]));
+        MAGIC_ITEM_LONGEVITY_VALUES.forEach((longevity) => {
+            const count = byId(`magic-item-count-${longevity}`);
+            if (count) count.textContent = String(longevityCounts[longevity]);
+        });
+        if (counts) counts.hidden = false;
         if (visibleItems.length === 0) {
             if (status) status.textContent = 'No magic items are currently visible to this character.';
             return;
