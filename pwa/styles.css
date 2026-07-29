@@ -559,6 +559,19 @@ h2 {
     min-height: 12rem;
 }
 
+.message-player-form > #message-player-recipient {
+    margin-block: 5px;
+}
+
+.message-player-form > #message-player-text {
+    display: block;
+    margin-top: 5px;
+}
+
+.message-player-form > .magic-items-source-row {
+    margin-top: 10px;
+}
+
 .magic-item-counts {
     display: flex;
     flex-wrap: wrap;
