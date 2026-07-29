@@ -22,6 +22,55 @@ final class MessageService
                 'The message must be a non-empty text string up to 5000 characters.');
         }
 
+        if ($senderRole === 'dm' && (string)($body['recipient_role'] ?? '') === 'all_players') {
+            $recipients = $this->loadPlayerAccounts();
+            if ($recipients === []) {
+                throw new BrokerHttpException(
+                    404,
+                    'players_unavailable',
+                    'No player accounts are available.');
+            }
+            $statement = $this->database->prepare(
+                'INSERT INTO message_notifications (
+                    id,
+                    sender_account_id,
+                    recipient_account_id,
+                    message,
+                    sent_at,
+                    read_at
+                ) VALUES (?, ?, ?, ?, ?, NULL)');
+            $now = time();
+            $this->database->beginTransaction();
+            try {
+                foreach ($recipients as $recipient) {
+                    $statement->execute([
+                        bin2hex(random_bytes(16)),
+                        (string)($account['id'] ?? ''),
+                        (string)$recipient['id'],
+                        $message,
+                        $now,
+                    ]);
+                }
+                $this->database->commit();
+            } catch (Throwable $exception) {
+                if ($this->database->inTransaction()) {
+                    $this->database->rollBack();
+                }
+                throw $exception;
+            }
+            return [
+                'schema_version' => 1,
+                'message' => [
+                    'recipient_character_name' => 'Every player',
+                    'sender_character_name' => (string)($account['character_name'] ?? ''),
+                    'message' => $message,
+                    'sent_at' => gmdate(DATE_ATOM, $now),
+                    'recipient_count' => count($recipients),
+                    'status' => 'sent',
+                ],
+            ];
+        }
+
         if ($senderRole === 'dm') {
             $recipientId = is_string($body['recipient_account_id'] ?? null)
                 ? (string)$body['recipient_account_id']
@@ -40,20 +89,34 @@ final class MessageService
                     'The selected recipient is not a player account.');
             }
         } elseif ($senderRole === 'player') {
-            if ((string)($body['recipient_role'] ?? '') !== 'dm') {
-                throw new BrokerHttpException(
-                    400,
-                    'invalid_message_recipient',
-                    'Players may only send messages to the Dungeon Master.');
+            if ((string)($body['recipient_role'] ?? '') === 'dm') {
+                $recipient = $this->loadDungeonMasterAccount();
+                if (!is_array($recipient)) {
+                    throw new BrokerHttpException(
+                        404,
+                        'dm_unavailable',
+                        'The Dungeon Master account is not available.');
+                }
+                $recipientId = (string)$recipient['id'];
+            } else {
+                $recipientId = is_string($body['recipient_account_id'] ?? null)
+                    ? (string)$body['recipient_account_id']
+                    : '';
+                if (!preg_match('/^[a-f0-9]{32}$/D', $recipientId)
+                    || hash_equals((string)($account['id'] ?? ''), $recipientId)) {
+                    throw new BrokerHttpException(
+                        400,
+                        'invalid_message_recipient',
+                        'The selected player account identifier is invalid.');
+                }
+                $recipient = $this->loadAccountById($recipientId);
+                if (!is_array($recipient) || (string)($recipient['role'] ?? '') !== 'player') {
+                    throw new BrokerHttpException(
+                        400,
+                        'invalid_message_recipient',
+                        'The selected recipient is not a player account.');
+                }
             }
-            $recipient = $this->loadDungeonMasterAccount();
-            if (!is_array($recipient)) {
-                throw new BrokerHttpException(
-                    404,
-                    'dm_unavailable',
-                    'The Dungeon Master account is not available.');
-            }
-            $recipientId = (string)$recipient['id'];
         } else {
             throw new BrokerHttpException(
                 403,
@@ -124,26 +187,60 @@ final class MessageService
             ];
         }
 
+        $recipientStatement = $this->database->prepare(
+            'SELECT id, display_name
+               FROM character_accounts
+              WHERE role = \'player\'
+                AND enabled = 1
+                AND id <> ?
+              ORDER BY display_name COLLATE NOCASE, id');
+        $recipientStatement->execute([(string)($account['id'] ?? '')]);
+        $recipients = [];
+        foreach ($recipientStatement->fetchAll() as $row) {
+            $recipients[] = [
+                'account_id' => (string)$row['id'],
+                'character_name' => (string)$row['display_name'],
+            ];
+        }
+
         return [
-            'schema_version' => 1,
+            'schema_version' => 2,
             'messages' => $messages,
+            'player_recipients' => $recipients,
         ];
     }
 
-    public function markRead(array $account, string $messageId): void
+    public function markRead(array $account, string $messageId): array
     {
         if (!preg_match('/^[a-f0-9]{32}$/D', $messageId)) {
-            return;
+            throw new BrokerHttpException(
+                404,
+                'message_not_found',
+                'The unread message was not found.');
         }
-        $this->database->prepare(
+        $statement = $this->database->prepare(
             'UPDATE message_notifications
                 SET read_at = COALESCE(read_at, ?)
               WHERE id = ? AND recipient_account_id = ? AND read_at IS NULL'
-        )->execute([
+        );
+        $statement->execute([
             time(),
             $messageId,
             (string)($account['id'] ?? ''),
         ]);
+        if ($statement->rowCount() !== 1) {
+            throw new BrokerHttpException(
+                404,
+                'message_not_found',
+                'The unread message was not found.');
+        }
+        return [
+            'schema_version' => 1,
+            'message' => [
+                'id' => $messageId,
+                'status' => 'read',
+            ],
+        ];
     }
 
     private function loadDungeonMasterAccount(): ?array
@@ -169,6 +266,17 @@ final class MessageService
         $statement->execute([$accountId]);
         $account = $statement->fetch();
         return is_array($account) ? $account : null;
+    }
+
+    private function loadPlayerAccounts(): array
+    {
+        $statement = $this->database->prepare(
+            'SELECT id, display_name, role
+               FROM character_accounts
+              WHERE role = \'player\' AND enabled = 1
+              ORDER BY display_name COLLATE NOCASE, id');
+        $statement->execute();
+        return $statement->fetchAll();
     }
 
     private function ensureSchema(): void

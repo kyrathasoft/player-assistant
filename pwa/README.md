@@ -16,6 +16,7 @@
 - a protected current-XP card that returns one authorized character to players, calculates XP till next level (TNL) from the published class progression pages, and exposes party totals only to the Dungeon Master
 - a protected Quests dashboard with validated visibility and lifecycle statuses; quests are ordered Active, Available, Available (Abandoned), Completed, then Withdrawn, with an indented sidebar control that cycles through the states currently represented
 - a Dungeon Master-only list of other users, marking those active in the PWA within the last two minutes and showing the last login date/time for inactive accounts; player heartbeat responses never expose other accounts
+- authenticated player-to-Dungeon-Master, player-to-player, and Dungeon-Master-to-player messages (including an Every player option for the Dungeon Master), with role-appropriate sidebar actions, login-time unread counts, a header notification icon, message retrieval, and recipient-scoped read acknowledgement
 
 No RPOL password, XP password, password hash, encrypted local setting, session identifier, or private player note is embedded in the PWA. Character credentials are sent only to the same-origin PHP broker over HTTPS. The broker validates the password server-side and keeps the session identifier in a `Secure`, `HttpOnly`, `SameSite=Strict` cookie.
 

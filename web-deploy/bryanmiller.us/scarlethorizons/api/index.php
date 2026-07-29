@@ -199,6 +199,9 @@ function isCharacterSessionRoute(string $route): bool
         true)
         || preg_match(
             '#^/v1/quest-requests/[a-f0-9]{32}/(?:decision|acknowledge)$#',
+            $route) === 1
+        || preg_match(
+            '#^/v1/messages/[a-f0-9]{32}/read$#',
             $route) === 1;
 }
 

@@ -8,6 +8,7 @@ require_once __DIR__ . '/../player-assistant-broker/CharacterAuthService.php';
 require_once __DIR__ . '/../player-assistant-broker/XpTrackingService.php';
 require_once __DIR__ . '/../player-assistant-broker/WordCountService.php';
 require_once __DIR__ . '/../player-assistant-broker/QuestService.php';
+require_once __DIR__ . '/../player-assistant-broker/MessageService.php';
 require_once __DIR__ . '/../player-assistant-broker/BrokerService.php';
 
 function routingAssert(bool $condition, string $message): void
@@ -192,6 +193,15 @@ try {
         routingAssert(
             $exception->status === 401 && $exception->errorName === 'authentication_required',
             'The protected quest route failed with the wrong unauthenticated response.');
+    }
+
+    try {
+        $broker->dispatch('GET', '/v1/messages', [], [], [], '192.0.2.30', $session);
+        throw new RuntimeException('The protected message route accepted an unauthenticated request.');
+    } catch (BrokerHttpException $exception) {
+        routingAssert(
+            $exception->status === 401 && $exception->errorName === 'authentication_required',
+            'The protected message route failed with the wrong unauthenticated response.');
     }
 
     $wordCountSnapshot = [
@@ -446,6 +456,23 @@ try {
         $createdDungeonMaster['status'] === 201,
         'The routing test could not create a Dungeon Master account.');
 
+    $createdSecondPlayer = $broker->dispatch(
+        'POST',
+        '/v1/admin/character-accounts',
+        [],
+        [
+            'character_name' => 'Second Routing Hero',
+            'password' => 'second routing password',
+            'character_key' => 'second-routing-hero',
+            'role' => 'player',
+        ],
+        $adminHeaders,
+        '192.0.2.30',
+        $session);
+    routingAssert(
+        $createdSecondPlayer['status'] === 201,
+        'The routing test could not create a second player account.');
+
     $dungeonMasterSession = [];
     $dungeonMasterLogin = $broker->dispatch(
         'POST',
@@ -462,6 +489,240 @@ try {
         'origin' => 'https://example.test',
         'csrf-token' => $dungeonMasterLogin['body']['csrf_token'],
     ];
+    $secondPlayerSession = [];
+    $secondPlayerLogin = $broker->dispatch(
+        'POST',
+        '/v1/login',
+        [],
+        [
+            'character_name' => 'Second Routing Hero',
+            'password' => 'second routing password',
+        ],
+        ['origin' => 'https://example.test'],
+        '192.0.2.32',
+        $secondPlayerSession);
+    $secondPlayerMutationHeaders = [
+        'origin' => 'https://example.test',
+        'csrf-token' => $secondPlayerLogin['body']['csrf_token'],
+    ];
+
+    $messageForDungeonMaster = $broker->dispatch(
+        'POST',
+        '/v1/messages',
+        [],
+        [
+            'recipient_role' => 'dm',
+            'message' => 'A routing message for the Dungeon Master.',
+        ],
+        $playerMutationHeaders,
+        '192.0.2.30',
+        $session);
+    $messageForDungeonMasterId = $messageForDungeonMaster['body']['message']['id'] ?? '';
+    routingAssert(
+        $messageForDungeonMaster['status'] === 201
+            && preg_match('/^[a-f0-9]{32}$/D', (string)$messageForDungeonMasterId) === 1,
+        'The player could not send a message to the Dungeon Master.');
+
+    $dungeonMasterMessages = $broker->dispatch(
+        'GET',
+        '/v1/messages',
+        [],
+        [],
+        [],
+        '192.0.2.31',
+        $dungeonMasterSession);
+    routingAssert(
+        $dungeonMasterMessages['status'] === 200
+            && count($dungeonMasterMessages['body']['messages']) === 1
+            && $dungeonMasterMessages['body']['schema_version'] === 2
+            && count($dungeonMasterMessages['body']['player_recipients']) === 2
+            && $dungeonMasterMessages['body']['messages'][0]['id'] === $messageForDungeonMasterId
+            && $dungeonMasterMessages['body']['messages'][0]['sender_character_name'] === 'Routing Hero'
+            && $dungeonMasterMessages['body']['messages'][0]['read_at'] === null,
+        'The Dungeon Master did not receive the unread player message.');
+
+    try {
+        $broker->dispatch(
+            'POST',
+            '/v1/messages/' . $messageForDungeonMasterId . '/read',
+            [],
+            [],
+            $playerMutationHeaders,
+            '192.0.2.30',
+            $session);
+        throw new RuntimeException('A player marked another account message as read.');
+    } catch (BrokerHttpException $exception) {
+        routingAssert(
+            $exception->status === 404 && $exception->errorName === 'message_not_found',
+            'Cross-account message acknowledgement failed with the wrong response.');
+    }
+
+    $readByDungeonMaster = $broker->dispatch(
+        'POST',
+        '/v1/messages/' . $messageForDungeonMasterId . '/read',
+        [],
+        [],
+        $dungeonMasterMutationHeaders,
+        '192.0.2.31',
+        $dungeonMasterSession);
+    routingAssert(
+        $readByDungeonMaster['body']['message']['status'] === 'read',
+        'The Dungeon Master could not mark the player message as read.');
+    $dungeonMasterMessagesAfterRead = $broker->dispatch(
+        'GET',
+        '/v1/messages',
+        [],
+        [],
+        [],
+        '192.0.2.31',
+        $dungeonMasterSession);
+    routingAssert(
+        $dungeonMasterMessagesAfterRead['body']['messages'] === [],
+        'The read Dungeon Master message remained unread.');
+
+    $playerRecipients = $broker->dispatch(
+        'GET',
+        '/v1/messages',
+        [],
+        [],
+        [],
+        '192.0.2.30',
+        $session);
+    routingAssert(
+        count($playerRecipients['body']['player_recipients']) === 1
+            && $playerRecipients['body']['player_recipients'][0]['account_id']
+                === $createdSecondPlayer['body']['id'],
+        'A player did not receive the other available PC as a message recipient.');
+
+    $messageForSecondPlayer = $broker->dispatch(
+        'POST',
+        '/v1/messages',
+        [],
+        [
+            'recipient_account_id' => $createdSecondPlayer['body']['id'],
+            'message' => 'A routing message from one player to another.',
+        ],
+        $playerMutationHeaders,
+        '192.0.2.30',
+        $session);
+    $messageForSecondPlayerId = $messageForSecondPlayer['body']['message']['id'] ?? '';
+    $secondPlayerMessages = $broker->dispatch(
+        'GET',
+        '/v1/messages',
+        [],
+        [],
+        [],
+        '192.0.2.32',
+        $secondPlayerSession);
+    routingAssert(
+        $messageForSecondPlayer['status'] === 201
+            && count($secondPlayerMessages['body']['messages']) === 1
+            && $secondPlayerMessages['body']['messages'][0]['id'] === $messageForSecondPlayerId
+            && $secondPlayerMessages['body']['messages'][0]['sender_character_name'] === 'Routing Hero',
+        'The second player did not receive the unread player message.');
+    $broker->dispatch(
+        'POST',
+        '/v1/messages/' . $messageForSecondPlayerId . '/read',
+        [],
+        [],
+        $secondPlayerMutationHeaders,
+        '192.0.2.32',
+        $secondPlayerSession);
+
+    $messageForPlayer = $broker->dispatch(
+        'POST',
+        '/v1/messages',
+        [],
+        [
+            'recipient_account_id' => $created['body']['id'],
+            'message' => 'A routing message for the player.',
+        ],
+        $dungeonMasterMutationHeaders,
+        '192.0.2.31',
+        $dungeonMasterSession);
+    $messageForPlayerId = $messageForPlayer['body']['message']['id'] ?? '';
+    routingAssert(
+        $messageForPlayer['status'] === 201
+            && preg_match('/^[a-f0-9]{32}$/D', (string)$messageForPlayerId) === 1,
+        'The Dungeon Master could not send a message to the player.');
+
+    $playerMessages = $broker->dispatch(
+        'GET',
+        '/v1/messages',
+        [],
+        [],
+        [],
+        '192.0.2.30',
+        $session);
+    routingAssert(
+        count($playerMessages['body']['messages']) === 1
+            && $playerMessages['body']['messages'][0]['id'] === $messageForPlayerId
+            && $playerMessages['body']['messages'][0]['sender_character_name'] === 'Dungeon Master'
+            && $playerMessages['body']['messages'][0]['read_at'] === null,
+        'The player did not receive the unread Dungeon Master message.');
+
+    $readByPlayer = $broker->dispatch(
+        'POST',
+        '/v1/messages/' . $messageForPlayerId . '/read',
+        [],
+        [],
+        $playerMutationHeaders,
+        '192.0.2.30',
+        $session);
+    routingAssert(
+        $readByPlayer['body']['message']['status'] === 'read',
+        'The player could not mark the Dungeon Master message as read.');
+    $playerMessagesAfterRead = $broker->dispatch(
+        'GET',
+        '/v1/messages',
+        [],
+        [],
+        [],
+        '192.0.2.30',
+        $session);
+    routingAssert(
+        $playerMessagesAfterRead['body']['messages'] === [],
+        'The read player message remained unread.');
+
+    $messageForEveryPlayer = $broker->dispatch(
+        'POST',
+        '/v1/messages',
+        [],
+        [
+            'recipient_role' => 'all_players',
+            'message' => 'A routing message for every player.',
+        ],
+        $dungeonMasterMutationHeaders,
+        '192.0.2.31',
+        $dungeonMasterSession);
+    routingAssert(
+        $messageForEveryPlayer['status'] === 201
+            && $messageForEveryPlayer['body']['message']['recipient_count'] === 2,
+        'The Dungeon Master could not message every player.');
+    $firstPlayerBroadcast = $broker->dispatch(
+        'GET',
+        '/v1/messages',
+        [],
+        [],
+        [],
+        '192.0.2.30',
+        $session);
+    $secondPlayerBroadcast = $broker->dispatch(
+        'GET',
+        '/v1/messages',
+        [],
+        [],
+        [],
+        '192.0.2.32',
+        $secondPlayerSession);
+    routingAssert(
+        count($firstPlayerBroadcast['body']['messages']) === 1
+            && count($secondPlayerBroadcast['body']['messages']) === 1
+            && $firstPlayerBroadcast['body']['messages'][0]['message']
+                === 'A routing message for every player.'
+            && $secondPlayerBroadcast['body']['messages'][0]['message']
+                === 'A routing message for every player.',
+        'The every-player message did not reach every player account.');
 
     $dungeonMasterQuests = $broker->dispatch(
         'GET',
@@ -630,7 +891,7 @@ try {
         '192.0.2.30',
         $session);
     routingAssert($health['body']['schema_version'] === 5, 'The broker schema version was not advanced.');
-    routingAssert($health['body']['character_account_count'] === 2, 'The health route account count was incorrect.');
+    routingAssert($health['body']['character_account_count'] === 3, 'The health route account count was incorrect.');
     routingAssert($health['body']['xp_tracking_configured'] === true, 'The health route XP configuration state was incorrect.');
     routingAssert(
         $health['body']['word_count_snapshot_available'] === true,

@@ -77,6 +77,10 @@
     let questRequestId = 0;
     let questStateFilter = '';
     let lastQuestAlertSignature = '';
+    let authenticatedMessageSnapshot = null;
+    let messageRequestId = 0;
+    let messageLoading = false;
+    let messageError = '';
     let magicItemSnapshot = null;
     let magicItemLoading = null;
     let magicItemError = '';
@@ -1095,6 +1099,152 @@
         note.append(italic);
     };
 
+    const validateMessageSnapshot = (payload) => {
+        const validRecipient = (recipient) => recipient
+            && typeof recipient.account_id === 'string'
+            && /^[a-f0-9]{32}$/u.test(recipient.account_id)
+            && typeof recipient.character_name === 'string'
+            && recipient.character_name.trim().length >= 1
+            && recipient.character_name.length <= 100;
+        const validMessage = (message) => message
+            && typeof message.id === 'string'
+            && /^[a-f0-9]{32}$/u.test(message.id)
+            && typeof message.sender_character_name === 'string'
+            && message.sender_character_name.trim().length >= 1
+            && message.sender_character_name.length <= 100
+            && typeof message.recipient_character_name === 'string'
+            && message.recipient_character_name.trim().length >= 1
+            && message.recipient_character_name.length <= 100
+            && typeof message.message === 'string'
+            && message.message.trim().length >= 1
+            && message.message.length <= 5000
+            && typeof message.sent_at === 'string'
+            && Number.isFinite(Date.parse(message.sent_at))
+            && message.read_at === null;
+        if (!payload
+            || payload.schema_version !== 2
+            || !Array.isArray(payload.messages)
+            || payload.messages.length > 200
+            || !payload.messages.every(validMessage)
+            || !Array.isArray(payload.player_recipients)
+            || payload.player_recipients.length > 200
+            || !payload.player_recipients.every(validRecipient)) {
+            throw new Error('The message service returned an invalid response.');
+        }
+        return payload;
+    };
+
+    const formatMessageDate = (value) => new Intl.DateTimeFormat(
+        undefined,
+        { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value));
+
+    const renderMessageNotifications = () => {
+        const button = byId('message-notification-button');
+        const count = byId('message-notification-count');
+        const dialog = byId('message-notification-dialog');
+        const summary = byId('message-notification-summary');
+        const list = byId('message-notification-list');
+        const messages = authenticatedMessageSnapshot?.messages || [];
+        const showNotification = authenticatedAccount !== null && messages.length > 0;
+
+        if (button instanceof HTMLButtonElement) {
+            button.hidden = !showNotification;
+            button.setAttribute(
+                'aria-label',
+                `${messages.length} unread message${messages.length === 1 ? '' : 's'}`);
+            button.title = button.getAttribute('aria-label') || 'Unread messages';
+        }
+        if (count) count.textContent = messages.length > 99 ? '99+' : String(messages.length);
+        if (!(dialog instanceof HTMLDialogElement) || list === null) return;
+
+        list.replaceChildren();
+        if (!showNotification) {
+            if (dialog.open) dialog.close();
+            return;
+        }
+        if (summary) {
+            summary.textContent = `${messages.length} unread message${messages.length === 1 ? '' : 's'}.`;
+        }
+
+        const fragment = document.createDocumentFragment();
+        messages.forEach((message) => {
+            const card = document.createElement('article');
+            card.className = 'message-notification';
+
+            const heading = document.createElement('h3');
+            heading.textContent = `From ${message.sender_character_name}`;
+
+            const meta = document.createElement('p');
+            meta.className = 'message-notification-meta';
+            meta.textContent = formatMessageDate(message.sent_at);
+
+            const body = document.createElement('p');
+            body.className = 'message-notification-message';
+            body.textContent = message.message;
+
+            const actions = document.createElement('div');
+            actions.className = 'quest-alert-actions';
+            const readButton = document.createElement('button');
+            readButton.className = 'secondary-button';
+            readButton.type = 'button';
+            readButton.textContent = 'Mark as read';
+            readButton.addEventListener('click', () => {
+                void markMessageRead(message.id, readButton);
+            });
+            actions.append(readButton);
+            card.append(heading, meta, body, actions);
+            fragment.append(card);
+        });
+        list.append(fragment);
+    };
+
+    const loadMessages = async () => {
+        const requestId = ++messageRequestId;
+        if (authenticatedAccount === null) {
+            authenticatedMessageSnapshot = null;
+            messageLoading = false;
+            messageError = '';
+            renderMessageNotifications();
+            return;
+        }
+        const accountId = authenticatedAccount.id;
+        messageLoading = true;
+        messageError = '';
+        try {
+            const snapshot = validateMessageSnapshot(
+                await requestAuthenticationApi('/messages'));
+            if (requestId !== messageRequestId || authenticatedAccount?.id !== accountId) return;
+            authenticatedMessageSnapshot = snapshot;
+            updateAuthenticationUi();
+        } catch (error) {
+            if (requestId !== messageRequestId || authenticatedAccount?.id !== accountId) return;
+            authenticatedMessageSnapshot = null;
+            messageError = error.message;
+        } finally {
+            if (requestId === messageRequestId && authenticatedAccount?.id === accountId) {
+                messageLoading = false;
+                renderMessageNotifications();
+            }
+        }
+    };
+
+    const markMessageRead = async (messageId, button) => {
+        if (!(button instanceof HTMLButtonElement) || authenticatedAccount === null) return;
+        button.disabled = true;
+        const summary = byId('message-notification-summary');
+        if (summary) summary.textContent = 'Marking message as read...';
+        try {
+            await requestAuthenticationApi(
+                `/messages/${messageId}/read`,
+                { method: 'POST', body: {}, csrf: true });
+            await loadMessages();
+        } catch (error) {
+            messageError = error.message;
+            if (summary) summary.textContent = messageError;
+            button.disabled = false;
+        }
+    };
+
     const isMessageTextReady = (value) => String(value || '').trim().length >= 3;
 
     const updateMessageDmSubmitState = () => {
@@ -1116,7 +1266,8 @@
         const recipient = recipientSelect.value;
         submitButton.disabled = !(
             isMessageTextReady(messageInput.value)
-            && /^[a-f0-9]{32}$/u.test(recipient)
+            && (/^[a-f0-9]{32}$/u.test(recipient)
+                || (authenticatedAccount?.role === 'dm' && recipient === 'all-players'))
         );
     };
 
@@ -1127,29 +1278,13 @@
     };
 
     const renderMessagePlayerRecipients = () => {
-        const isDungeonMaster = authenticatedAccount?.role === 'dm';
         const recipientSelect = byId('message-player-recipient');
         const submitButton = byId('message-player-submit');
         const status = byId('message-player-status');
         if (!(recipientSelect instanceof HTMLSelectElement)) return;
         recipientSelect.replaceChildren();
 
-        if (!isDungeonMaster) {
-            const disabledOption = document.createElement('option');
-            disabledOption.value = '';
-            disabledOption.textContent = 'Dungeon Master only';
-            disabledOption.disabled = true;
-            disabledOption.selected = true;
-            recipientSelect.append(disabledOption);
-            recipientSelect.disabled = true;
-            if (submitButton instanceof HTMLButtonElement) submitButton.disabled = true;
-            if (status) {
-                status.hidden = true;
-            }
-            return;
-        }
-
-        if (authenticatedPresenceSnapshot === null || authenticatedPresenceSnapshot.scope !== 'party') {
+        if (authenticatedMessageSnapshot === null) {
             const loadingOption = document.createElement('option');
             loadingOption.value = '';
             loadingOption.textContent = 'Loading players…';
@@ -1164,8 +1299,7 @@
             return;
         }
 
-        const players = authenticatedPresenceSnapshot.users
-            .filter((user) => user.role === 'player');
+        const players = authenticatedMessageSnapshot.player_recipients;
         if (players.length === 0) {
             const noneOption = document.createElement('option');
             noneOption.value = '';
@@ -1189,13 +1323,17 @@
         defaultOption.disabled = true;
         recipientSelect.append(defaultOption);
 
+        if (authenticatedAccount?.role === 'dm') {
+            const everyPlayerOption = document.createElement('option');
+            everyPlayerOption.value = 'all-players';
+            everyPlayerOption.textContent = 'Every player';
+            recipientSelect.append(everyPlayerOption);
+        }
+
         players.forEach((user) => {
             const option = document.createElement('option');
             option.value = user.account_id;
             option.textContent = user.character_name;
-            if (user.active) {
-                option.textContent += ' (active now)';
-            }
             recipientSelect.append(option);
         });
         recipientSelect.disabled = false;
@@ -1208,11 +1346,7 @@
         updateMessagePlayerSubmitState();
         const status = byId('message-player-status');
         if (!status) return;
-        const isDm = authenticatedAccount?.role === 'dm';
-        const usersAvailable = isDm
-            && authenticatedPresenceSnapshot !== null
-            && authenticatedPresenceSnapshot.scope === 'party'
-            && authenticatedPresenceSnapshot.users.some((user) => user.role === 'player');
+        const usersAvailable = (authenticatedMessageSnapshot?.player_recipients.length || 0) > 0;
         if (usersAvailable) {
             status.hidden = true;
             status.textContent = '';
@@ -1318,7 +1452,9 @@
         }
         const message = messageInput.value;
         const recipient = recipientSelect.value;
-        if (!isMessageTextReady(message) || !/^[a-f0-9]{32}$/u.test(recipient)) {
+        const isEveryPlayer = authenticatedAccount?.role === 'dm' && recipient === 'all-players';
+        if (!isMessageTextReady(message)
+            || (!isEveryPlayer && !/^[a-f0-9]{32}$/u.test(recipient))) {
             submitButton.disabled = true;
             return;
         }
@@ -1334,7 +1470,9 @@
             await requestAuthenticationApi('/messages', {
                 method: 'POST',
                 body: {
-                    recipient_account_id: recipient,
+                    ...(isEveryPlayer
+                        ? { recipient_role: 'all_players' }
+                        : { recipient_account_id: recipient }),
                     message
                 },
                 csrf: true
@@ -1432,13 +1570,16 @@
             messageDmNavButton.hidden = !authenticated || isDungeonMaster;
         }
         const messagePlayerNavButton = byId('message-player-nav');
+        const canMessagePlayer = authenticated
+            && (isDungeonMaster
+                || (authenticatedMessageSnapshot?.player_recipients.length || 0) > 0);
         if (messagePlayerNavButton) {
-            messagePlayerNavButton.hidden = !authenticated || !isDungeonMaster;
+            messagePlayerNavButton.hidden = !canMessagePlayer;
         }
         if (isDungeonMaster && activeView === 'message-dm') {
             setView('dashboard', false);
         }
-        if (!isDungeonMaster && activeView === 'message-player') {
+        if (!canMessagePlayer && activeView === 'message-player') {
             setView('dashboard', false);
         }
         const protectedStatus = byId('protected-player-status');
@@ -1455,6 +1596,7 @@
         renderPartyFunds();
         renderMessageDmUi();
         renderMessagePlayerUi();
+        renderMessageNotifications();
         updatePresencePolling();
     };
 
@@ -1754,11 +1896,15 @@
         authenticatedWordCountSnapshot = null;
         authenticatedPresenceSnapshot = null;
         authenticatedQuestSnapshot = null;
+        authenticatedMessageSnapshot = null;
+        messageRequestId++;
+        messageLoading = false;
+        messageError = '';
         questStateFilter = '';
         lastQuestAlertSignature = '';
         updateAuthenticationUi();
         if (authenticatedAccount !== null) {
-            await Promise.all([loadXpSummary(), loadWordCountSummary(), loadQuests()]);
+            await Promise.all([loadXpSummary(), loadWordCountSummary(), loadQuests(), loadMessages()]);
         }
     };
 
@@ -1777,6 +1923,19 @@
     byId('quest-alert-close')?.addEventListener('click', () => {
         const questAlertDialog = byId('quest-alert-dialog');
         if (questAlertDialog instanceof HTMLDialogElement) questAlertDialog.close();
+    });
+    byId('message-notification-close')?.addEventListener('click', () => {
+        const messageDialog = byId('message-notification-dialog');
+        if (messageDialog instanceof HTMLDialogElement) messageDialog.close();
+    });
+    byId('message-notification-button')?.addEventListener('click', () => {
+        const messageDialog = byId('message-notification-dialog');
+        if (!(messageDialog instanceof HTMLDialogElement)
+            || (authenticatedMessageSnapshot?.messages.length || 0) === 0) {
+            return;
+        }
+        renderMessageNotifications();
+        messageDialog.showModal();
     });
     authDialog?.addEventListener('close', () => {
         void renderAuthenticatedHeroToken();
@@ -1808,6 +1967,10 @@
             authenticatedXpSnapshot = null;
             authenticatedWordCountSnapshot = null;
             authenticatedQuestSnapshot = null;
+            authenticatedMessageSnapshot = null;
+            messageRequestId++;
+            messageLoading = false;
+            messageError = '';
             questStateFilter = '';
             lastQuestAlertSignature = '';
             try {
@@ -1820,13 +1983,17 @@
             setAuthenticationMessage('');
             setAuthenticationMessage('Character login succeeded.', false, true);
             updateAuthenticationUi();
-            await Promise.all([loadXpSummary(), loadWordCountSummary(), loadQuests()]);
+            await Promise.all([loadXpSummary(), loadWordCountSummary(), loadQuests(), loadMessages()]);
         } catch (error) {
             authenticatedAccount = null;
             authenticationCsrfToken = '';
             authenticatedXpSnapshot = null;
             authenticatedWordCountSnapshot = null;
             authenticatedQuestSnapshot = null;
+            authenticatedMessageSnapshot = null;
+            messageRequestId++;
+            messageLoading = false;
+            messageError = '';
             questStateFilter = '';
             lastQuestAlertSignature = '';
             setAuthenticationMessage(error.message, true);
@@ -1852,11 +2019,19 @@
             wordCountRequestId++;
             authenticatedQuestSnapshot = null;
             questRequestId++;
+            authenticatedMessageSnapshot = null;
+            messageRequestId++;
+            messageLoading = false;
+            messageError = '';
             questStateFilter = '';
             lastQuestAlertSignature = '';
             const questAlertDialog = byId('quest-alert-dialog');
             if (questAlertDialog instanceof HTMLDialogElement && questAlertDialog.open) {
                 questAlertDialog.close();
+            }
+            const messageDialog = byId('message-notification-dialog');
+            if (messageDialog instanceof HTMLDialogElement && messageDialog.open) {
+                messageDialog.close();
             }
             updateAuthenticationUi();
             if (authDialog instanceof HTMLDialogElement) authDialog.close();

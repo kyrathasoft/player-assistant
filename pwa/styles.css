@@ -203,6 +203,47 @@ a {
     white-space: nowrap;
 }
 
+.message-notification-button {
+    position: relative;
+    display: inline-grid;
+    width: 2.75rem;
+    height: 2.75rem;
+    flex: 0 0 auto;
+    place-items: center;
+    border: 1px solid var(--gold);
+    border-radius: 50%;
+    background: var(--surface-soft);
+    color: var(--gold-bright);
+    font-size: 1.25rem;
+    cursor: pointer;
+}
+
+.message-notification-button[hidden] {
+    display: none;
+}
+
+.message-notification-button:hover {
+    background: rgba(213, 177, 115, 0.16);
+}
+
+.message-notification-count {
+    position: absolute;
+    top: -0.35rem;
+    right: -0.35rem;
+    display: grid;
+    min-width: 1.35rem;
+    height: 1.35rem;
+    place-items: center;
+    border: 2px solid var(--surface);
+    border-radius: 999px;
+    padding: 0 0.22rem;
+    background: var(--red-bright);
+    color: #fff;
+    font-size: 0.68rem;
+    font-weight: 900;
+    line-height: 1;
+}
+
 .install-button,
 .primary-button {
     background: var(--red);
@@ -757,25 +798,34 @@ h2 {
     width: min(40rem, calc(100% - 2rem));
 }
 
-.quest-alert-dialog-surface {
+#message-notification-dialog {
+    width: min(40rem, calc(100% - 2rem));
+}
+
+.quest-alert-dialog-surface,
+.message-notification-dialog-surface {
     position: relative;
     padding: 1.5rem;
 }
 
-.quest-alert-dialog-surface h2 {
+.quest-alert-dialog-surface h2,
+.message-notification-dialog-surface h2 {
     margin: 0.2rem 0 0.6rem;
 }
 
-.quest-alert-dialog-surface > p {
+.quest-alert-dialog-surface > p,
+.message-notification-dialog-surface > p {
     color: var(--muted);
 }
 
-.quest-alert-list {
+.quest-alert-list,
+.message-notification-list {
     display: grid;
     gap: 0.85rem;
 }
 
-.quest-alert {
+.quest-alert,
+.message-notification {
     display: grid;
     gap: 0.7rem;
     border: 1px solid var(--line);
@@ -785,12 +835,20 @@ h2 {
 }
 
 .quest-alert h3,
-.quest-alert p {
+.quest-alert p,
+.message-notification h3,
+.message-notification p {
     margin: 0;
 }
 
-.quest-alert p {
+.quest-alert p,
+.message-notification-meta {
     color: var(--muted);
+}
+
+.message-notification-message {
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
 }
 
 .translator-toolbar {

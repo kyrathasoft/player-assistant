@@ -151,6 +151,17 @@ final class BrokerService
                 $this->messages->sendForAccount($current['account'], $body));
         }
 
+        if ($method === 'POST'
+            && preg_match(
+                '#^/v1/messages/([a-f0-9]{32})/read$#',
+                $route,
+                $matches) === 1) {
+            $current = $this->characterAuth->requireMutationAccount($headers, $session);
+            return $this->response(
+                200,
+                $this->messages->markRead($current['account'], $matches[1]));
+        }
+
         if ($method === 'POST' && $route === '/v1/logout') {
             return $this->response(
                 200,

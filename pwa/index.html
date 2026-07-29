@@ -13,8 +13,8 @@
     <link rel="manifest" href="manifest.webmanifest">
     <link rel="icon" href="icons/icon-192.png" sizes="192x192" type="image/png">
     <link rel="apple-touch-icon" href="icons/icon-192.png">
-    <link rel="stylesheet" href="styles.css?v=37">
-    <script src="app.js?v=40" defer></script>
+    <link rel="stylesheet" href="styles.css?v=38">
+    <script src="app.js?v=42" defer></script>
 </head>
 <body>
     <a class="skip-link" href="#main-content">Skip to content</a>
@@ -34,6 +34,11 @@
                     <span class="status-dot" aria-hidden="true"></span>
                     <span id="connection-label">Online</span>
                 </span>
+                <button class="message-notification-button" id="message-notification-button" type="button"
+                        aria-label="Unread messages" title="Unread messages" hidden>
+                    <span aria-hidden="true">&#9993;</span>
+                    <span class="message-notification-count" id="message-notification-count">0</span>
+                </button>
                 <button class="account-button" id="auth-button" type="button">
                     <span id="auth-button-label">Log in</span>
                 </button>
@@ -505,11 +510,21 @@
 
     <dialog id="quest-alert-dialog" aria-labelledby="quest-alert-title">
         <div class="quest-alert-dialog-surface">
-                    <button class="dialog-close" id="quest-alert-close" type="button" aria-label="Close quest alerts">&#10005;</button>
+            <button class="dialog-close" id="quest-alert-close" type="button" aria-label="Close quest alerts">&#10005;</button>
             <p class="eyebrow">Quest requests</p>
             <h2 id="quest-alert-title">Quest alerts</h2>
             <p id="quest-alert-summary"></p>
             <div class="quest-alert-list" id="quest-alert-list"></div>
+        </div>
+    </dialog>
+
+    <dialog id="message-notification-dialog" aria-labelledby="message-notification-title">
+        <div class="message-notification-dialog-surface">
+            <button class="dialog-close" id="message-notification-close" type="button" aria-label="Close messages">&#10005;</button>
+            <p class="eyebrow">Messages</p>
+            <h2 id="message-notification-title">Unread messages</h2>
+            <p id="message-notification-summary"></p>
+            <div class="message-notification-list" id="message-notification-list"></div>
         </div>
     </dialog>
 

@@ -22,6 +22,7 @@ Upload these beside the existing private `config.php` and `broker.sqlite`:
 BrokerHttpException.php
 CharacterAuthService.php
 BrokerService.php
+MessageService.php
 QuestService.php
 RpolClient.php
 WordCountService.php
@@ -85,6 +86,9 @@ GET  /scarlethorizons/api/v1/quests
 POST /scarlethorizons/api/v1/quest-requests
 POST /scarlethorizons/api/v1/quest-requests/{request-id}/decision
 POST /scarlethorizons/api/v1/quest-requests/{request-id}/acknowledge
+GET  /scarlethorizons/api/v1/messages
+POST /scarlethorizons/api/v1/messages
+POST /scarlethorizons/api/v1/messages/{message-id}/read
 POST /scarlethorizons/api/v1/logout
 ```
 
