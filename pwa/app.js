@@ -210,13 +210,16 @@
                 : '';
             if (characterSummary) characterSummary.hidden = false;
             if (characterName) characterName.textContent = character.character_name;
-            if (xpTotal) xpTotal.textContent = Number(character.xp_total).toLocaleString('en-US');
+            const tnlLabel = character.xp_to_next_level === null
+                ? 'Max level'
+                : Number(character.xp_to_next_level).toLocaleString('en-US');
+            if (xpTotal) {
+                xpTotal.textContent = `${Number(character.xp_total).toLocaleString('en-US')} (TNL: ${tnlLabel})`;
+            }
             if (xpDate) xpDate.textContent = authenticatedXpSnapshot.date_label;
             if (classLevel) classLevel.textContent = `${character.character_class} ${character.level}`;
             if (hitPoints) hitPoints.textContent = Number(character.hit_points).toLocaleString('en-US');
-            if (tnl) tnl.textContent = character.xp_to_next_level === null
-                ? 'Max level'
-                : Number(character.xp_to_next_level).toLocaleString('en-US');
+            if (tnl) tnl.textContent = tnlLabel;
             return;
         }
 
