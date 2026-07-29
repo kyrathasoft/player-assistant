@@ -183,8 +183,21 @@ function isCharacterSessionRoute(string $route): bool
 {
     return in_array(
         $route,
-        ['/v1/login', '/v1/session', '/v1/me', '/v1/xp', '/v1/word-counts', '/v1/presence', '/v1/quests', '/v1/logout'],
-        true);
+        [
+            '/v1/login',
+            '/v1/session',
+            '/v1/me',
+            '/v1/xp',
+            '/v1/word-counts',
+            '/v1/presence',
+            '/v1/quests',
+            '/v1/quest-requests',
+            '/v1/logout',
+        ],
+        true)
+        || preg_match(
+            '#^/v1/quest-requests/[a-f0-9]{32}/(?:decision|acknowledge)$#',
+            $route) === 1;
 }
 
 function startCharacterSession(array $authConfig): void

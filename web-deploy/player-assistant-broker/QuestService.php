@@ -18,6 +18,17 @@ final class QuestService
         'withdrawn',
     ];
 
+    private const REQUEST_STATUS_VALUES = [
+        'pending',
+        'approved',
+        'denied',
+    ];
+
+    private const REQUESTABLE_STATES = [
+        'available',
+        'available (abandoned)',
+    ];
+
     private const QUEST_FIELDS = [
         'title',
         'summary',
@@ -31,33 +42,362 @@ final class QuestService
         'wiki-url',
     ];
 
-    public function __construct(private readonly string $dataPath)
+    public function __construct(
+        private readonly PDO $database,
+        private readonly string $dataPath)
     {
         if (trim($dataPath) === '') {
             throw new RuntimeException('The quest data path is not configured.');
         }
+        $this->ensureSchema();
     }
 
     public function forAccount(array $account): array
     {
         $characterKey = strtolower(trim((string)($account['character_key'] ?? '')));
+        $accountId = (string)($account['id'] ?? '');
         $isDungeonMaster = (string)($account['role'] ?? '') === 'dm';
+        $allQuests = $this->loadQuests();
+        $questsById = [];
+        foreach ($allQuests as $quest) {
+            $questsById[$quest['id']] = $quest;
+        }
+
+        $latestRequests = $isDungeonMaster
+            ? []
+            : $this->latestRequestsByQuest($accountId);
         $visible = array_values(array_filter(
-            $this->loadQuests(),
+            $allQuests,
             static fn(array $quest): bool =>
                 $isDungeonMaster
                 || $quest['visibility'] !== 'individual-only'
                 || in_array($characterKey, $quest['gated_by'], true)));
 
         return [
-            'schema_version' => 1,
+            'schema_version' => 2,
             'status_values' => array_merge(self::VISIBILITY_VALUES, self::STATE_VALUES),
+            'request_status_values' => self::REQUEST_STATUS_VALUES,
             'quests' => array_map(
-                static function (array $quest): array {
-                    unset($quest['gated_by']);
+                static function (array $quest) use ($latestRequests): array {
+                    $quest['request_status'] = isset($latestRequests[$quest['id']])
+                        ? (string)$latestRequests[$quest['id']]['status']
+                        : null;
+                    unset($quest['gated_by'], $quest['base_state']);
                     return $quest;
                 },
                 $visible),
+            'pending_requests' => $isDungeonMaster
+                ? $this->pendingRequests($questsById)
+                : [],
+            'notifications' => $isDungeonMaster
+                ? []
+                : $this->unacknowledgedNotifications($accountId, $questsById),
+        ];
+    }
+
+    public function requestInterest(array $account, array $body): array
+    {
+        if ((string)($account['role'] ?? '') !== 'player') {
+            throw new BrokerHttpException(
+                403,
+                'quest_request_not_authorized',
+                'Only player characters may request an available quest.');
+        }
+        if (array_keys($body) !== ['quest_id']
+            || !is_string($body['quest_id'])
+            || preg_match('/^[a-z0-9]+(?:-[a-z0-9]+)*$/D', $body['quest_id']) !== 1) {
+            throw new BrokerHttpException(
+                400,
+                'invalid_quest_request',
+                'A valid quest identifier is required.');
+        }
+
+        $quest = $this->questForAccount((string)$body['quest_id'], $account);
+        if (!in_array($quest['state'], self::REQUESTABLE_STATES, true)) {
+            throw new BrokerHttpException(
+                409,
+                'quest_not_available',
+                'Interest may only be requested for an available quest.');
+        }
+
+        $accountId = (string)($account['id'] ?? '');
+        $pending = $this->database->prepare(
+            'SELECT id FROM quest_requests
+             WHERE quest_id = ? AND requester_account_id = ? AND status = \'pending\'
+             LIMIT 1');
+        $pending->execute([$quest['id'], $accountId]);
+        if ($pending->fetch() !== false) {
+            throw new BrokerHttpException(
+                409,
+                'quest_request_pending',
+                'This character already has a pending request for that quest.');
+        }
+
+        $requestId = bin2hex(random_bytes(16));
+        $now = time();
+        try {
+            $this->database->prepare(
+                'INSERT INTO quest_requests (
+                    id, quest_id, requester_account_id, status, created_at,
+                    decided_at, decided_by_account_id, requester_acknowledged_at
+                 ) VALUES (?, ?, ?, \'pending\', ?, NULL, NULL, NULL)')
+                ->execute([$requestId, $quest['id'], $accountId, $now]);
+        } catch (PDOException $exception) {
+            if ((string)$exception->getCode() === '23000') {
+                throw new BrokerHttpException(
+                    409,
+                    'quest_request_pending',
+                    'This character already has a pending request for that quest.',
+                    $exception);
+            }
+            throw $exception;
+        }
+
+        return [
+            'schema_version' => 1,
+            'request' => [
+                'id' => $requestId,
+                'quest_id' => $quest['id'],
+                'quest_title' => $quest['title'],
+                'requester_character_name' => (string)$account['character_name'],
+                'status' => 'pending',
+                'created_at' => gmdate(DATE_ATOM, $now),
+                'decided_at' => null,
+            ],
+        ];
+    }
+
+    public function decide(array $account, string $requestId, array $body): array
+    {
+        if ((string)($account['role'] ?? '') !== 'dm') {
+            throw new BrokerHttpException(
+                403,
+                'quest_decision_not_authorized',
+                'Only the Dungeon Master may decide quest requests.');
+        }
+        if (array_keys($body) !== ['decision']
+            || !is_string($body['decision'])
+            || !in_array($body['decision'], ['approved', 'denied'], true)) {
+            throw new BrokerHttpException(
+                400,
+                'invalid_quest_decision',
+                'The quest decision must be approved or denied.');
+        }
+
+        $this->database->exec('BEGIN IMMEDIATE');
+        try {
+            $statement = $this->database->prepare(
+                'SELECT requests.*, accounts.display_name AS requester_character_name
+                 FROM quest_requests requests
+                 JOIN character_accounts accounts ON accounts.id = requests.requester_account_id
+                 WHERE requests.id = ?');
+            $statement->execute([$requestId]);
+            $request = $statement->fetch();
+            if (!is_array($request)) {
+                throw new BrokerHttpException(
+                    404,
+                    'quest_request_not_found',
+                    'The quest request was not found.');
+            }
+            if ((string)$request['status'] !== 'pending') {
+                throw new BrokerHttpException(
+                    409,
+                    'quest_request_already_decided',
+                    'The quest request has already been decided.');
+            }
+
+            $questsById = [];
+            foreach ($this->loadQuests() as $quest) {
+                $questsById[$quest['id']] = $quest;
+            }
+            $quest = $questsById[(string)$request['quest_id']] ?? null;
+            if (!is_array($quest)) {
+                throw new BrokerHttpException(
+                    409,
+                    'quest_unavailable',
+                    'The requested quest is no longer configured.');
+            }
+
+            $decision = (string)$body['decision'];
+            if ($decision === 'approved'
+                && !in_array($quest['state'], array_merge(self::REQUESTABLE_STATES, ['active']), true)) {
+                throw new BrokerHttpException(
+                    409,
+                    'quest_not_available',
+                    'The requested quest can no longer be activated.');
+            }
+
+            $now = time();
+            $this->database->prepare(
+                'UPDATE quest_requests
+                 SET status = ?, decided_at = ?, decided_by_account_id = ?
+                 WHERE id = ? AND status = \'pending\'')
+                ->execute([$decision, $now, (string)$account['id'], $requestId]);
+
+            if ($decision === 'approved' && in_array($quest['state'], self::REQUESTABLE_STATES, true)) {
+                $this->database->prepare(
+                    'INSERT INTO quest_state_overrides (
+                        quest_id, base_state, state, updated_at, updated_by_account_id
+                     ) VALUES (?, ?, \'active\', ?, ?)
+                     ON CONFLICT(quest_id) DO UPDATE SET
+                        base_state = excluded.base_state,
+                        state = excluded.state,
+                        updated_at = excluded.updated_at,
+                        updated_by_account_id = excluded.updated_by_account_id')
+                    ->execute([
+                        $quest['id'],
+                        $quest['base_state'],
+                        $now,
+                        (string)$account['id'],
+                    ]);
+                $quest['state'] = 'active';
+            }
+
+            $this->database->exec('COMMIT');
+            $request['status'] = $decision;
+            $request['decided_at'] = $now;
+            return [
+                'schema_version' => 1,
+                'request' => $this->publicRequest($request, [$quest['id'] => $quest]),
+                'quest_state' => $quest['state'],
+            ];
+        } catch (Throwable $exception) {
+            if ($this->database->inTransaction()) {
+                $this->database->exec('ROLLBACK');
+            }
+            throw $exception;
+        }
+    }
+
+    public function acknowledge(array $account, string $requestId): array
+    {
+        if ((string)($account['role'] ?? '') !== 'player') {
+            throw new BrokerHttpException(
+                403,
+                'quest_notification_not_authorized',
+                'Only the requesting player may dismiss this notification.');
+        }
+
+        $statement = $this->database->prepare(
+            'SELECT status FROM quest_requests
+             WHERE id = ? AND requester_account_id = ?');
+        $statement->execute([$requestId, (string)$account['id']]);
+        $request = $statement->fetch();
+        if (!is_array($request)) {
+            throw new BrokerHttpException(
+                404,
+                'quest_request_not_found',
+                'The quest request was not found.');
+        }
+        if (!in_array((string)$request['status'], ['approved', 'denied'], true)) {
+            throw new BrokerHttpException(
+                409,
+                'quest_request_pending',
+                'A pending quest request has no decision to dismiss.');
+        }
+        $this->database->prepare(
+            'UPDATE quest_requests
+             SET requester_acknowledged_at = COALESCE(requester_acknowledged_at, ?)
+             WHERE id = ? AND requester_account_id = ?')
+            ->execute([time(), $requestId, (string)$account['id']]);
+
+        return [
+            'schema_version' => 1,
+            'acknowledged' => true,
+            'request_id' => $requestId,
+        ];
+    }
+
+    private function questForAccount(string $questId, array $account): array
+    {
+        $characterKey = strtolower(trim((string)($account['character_key'] ?? '')));
+        foreach ($this->loadQuests() as $quest) {
+            if ($quest['id'] !== $questId) {
+                continue;
+            }
+            if ($quest['visibility'] === 'individual-only'
+                && !in_array($characterKey, $quest['gated_by'], true)) {
+                break;
+            }
+            return $quest;
+        }
+        throw new BrokerHttpException(
+            404,
+            'quest_not_found',
+            'The requested quest is not visible to this character.');
+    }
+
+    private function latestRequestsByQuest(string $accountId): array
+    {
+        $statement = $this->database->prepare(
+            'SELECT quest_id, status
+             FROM quest_requests
+             WHERE requester_account_id = ?
+             ORDER BY created_at DESC, rowid DESC');
+        $statement->execute([$accountId]);
+        $latest = [];
+        foreach ($statement->fetchAll() as $request) {
+            $questId = (string)$request['quest_id'];
+            if (!isset($latest[$questId])) {
+                $latest[$questId] = $request;
+            }
+        }
+        return $latest;
+    }
+
+    private function pendingRequests(array $questsById): array
+    {
+        $rows = $this->database->query(
+            'SELECT requests.*, accounts.display_name AS requester_character_name
+             FROM quest_requests requests
+             JOIN character_accounts accounts ON accounts.id = requests.requester_account_id
+             WHERE requests.status = \'pending\'
+             ORDER BY requests.created_at, requests.id')->fetchAll();
+        $requests = [];
+        foreach ($rows as $row) {
+            if (isset($questsById[(string)$row['quest_id']])) {
+                $requests[] = $this->publicRequest($row, $questsById);
+            }
+        }
+        return $requests;
+    }
+
+    private function unacknowledgedNotifications(string $accountId, array $questsById): array
+    {
+        $statement = $this->database->prepare(
+            'SELECT requests.*, accounts.display_name AS requester_character_name
+             FROM quest_requests requests
+             JOIN character_accounts accounts ON accounts.id = requests.requester_account_id
+             WHERE requests.requester_account_id = ?
+               AND requests.status IN (\'approved\', \'denied\')
+               AND requests.requester_acknowledged_at IS NULL
+             ORDER BY requests.decided_at, requests.id');
+        $statement->execute([$accountId]);
+        $notifications = [];
+        foreach ($statement->fetchAll() as $row) {
+            if (isset($questsById[(string)$row['quest_id']])) {
+                $notifications[] = $this->publicRequest($row, $questsById);
+            }
+        }
+        return $notifications;
+    }
+
+    private function publicRequest(array $request, array $questsById): array
+    {
+        $quest = $questsById[(string)$request['quest_id']] ?? null;
+        if (!is_array($quest)) {
+            throw new RuntimeException('A quest request references an unknown quest.');
+        }
+        return [
+            'id' => (string)$request['id'],
+            'quest_id' => (string)$request['quest_id'],
+            'quest_title' => (string)$quest['title'],
+            'requester_character_name' => (string)$request['requester_character_name'],
+            'status' => (string)$request['status'],
+            'created_at' => gmdate(DATE_ATOM, (int)$request['created_at']),
+            'decided_at' => $request['decided_at'] === null
+                ? null
+                : gmdate(DATE_ATOM, (int)$request['decided_at']),
         ];
     }
 
@@ -91,9 +431,28 @@ final class QuestService
             throw new RuntimeException('The quest data file has an invalid root schema.');
         }
 
+        $overrides = [];
+        foreach ($this->database->query(
+            'SELECT quest_id, base_state, state FROM quest_state_overrides')->fetchAll() as $override) {
+            $overrides[(string)$override['quest_id']] = $override;
+        }
+
         $quests = [];
         foreach ($payload['quests'] as $id => $quest) {
-            $quests[] = $this->validateQuest($id, $quest);
+            $validated = $this->validateQuest($id, $quest);
+            $override = $overrides[$validated['id']] ?? null;
+            if (is_array($override)
+                && (string)$override['base_state'] === $validated['base_state']
+                && (string)$override['state'] === 'active') {
+                $validated['state'] = 'active';
+            } elseif (is_array($override)
+                && (string)$override['base_state'] !== $validated['base_state']) {
+                $this->database->prepare(
+                    'DELETE FROM quest_state_overrides
+                     WHERE quest_id = ? AND base_state <> ?')
+                    ->execute([$validated['id'], $validated['base_state']]);
+            }
+            $quests[] = $validated;
         }
         return $quests;
     }
@@ -170,6 +529,7 @@ final class QuestService
             'quest_giver' => $quest['giver'],
             'visibility' => $quest['visibility'],
             'state' => $quest['state'],
+            'base_state' => $quest['state'],
             'objectives' => $quest['objectives'],
             'reward' => $quest['reward'],
             'accepted_on' => $dates['accepted'],
@@ -177,6 +537,41 @@ final class QuestService
             'wiki_url' => $wikiUrl,
             'gated_by' => $normalizedGates,
         ];
+    }
+
+    private function ensureSchema(): void
+    {
+        $this->database->exec(
+            'CREATE TABLE IF NOT EXISTS quest_requests (
+                id TEXT PRIMARY KEY,
+                quest_id TEXT NOT NULL,
+                requester_account_id TEXT NOT NULL,
+                status TEXT NOT NULL CHECK(status IN (\'pending\', \'approved\', \'denied\')),
+                created_at INTEGER NOT NULL,
+                decided_at INTEGER NULL,
+                decided_by_account_id TEXT NULL,
+                requester_acknowledged_at INTEGER NULL,
+                FOREIGN KEY (requester_account_id)
+                    REFERENCES character_accounts(id) ON DELETE CASCADE,
+                FOREIGN KEY (decided_by_account_id)
+                    REFERENCES character_accounts(id) ON DELETE SET NULL
+            );
+            CREATE UNIQUE INDEX IF NOT EXISTS ux_quest_requests_pending
+                ON quest_requests(quest_id, requester_account_id)
+                WHERE status = \'pending\';
+            CREATE INDEX IF NOT EXISTS ix_quest_requests_status_time
+                ON quest_requests(status, created_at);
+            CREATE INDEX IF NOT EXISTS ix_quest_requests_requester_status
+                ON quest_requests(requester_account_id, status);
+            CREATE TABLE IF NOT EXISTS quest_state_overrides (
+                quest_id TEXT PRIMARY KEY,
+                base_state TEXT NOT NULL,
+                state TEXT NOT NULL CHECK(state = \'active\'),
+                updated_at INTEGER NOT NULL,
+                updated_by_account_id TEXT NOT NULL,
+                FOREIGN KEY (updated_by_account_id)
+                    REFERENCES character_accounts(id) ON DELETE RESTRICT
+            );');
     }
 
     private function requireText(

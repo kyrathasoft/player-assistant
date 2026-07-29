@@ -81,6 +81,9 @@ GET  /scarlethorizons/api/v1/xp
 GET  /scarlethorizons/api/v1/word-counts
 GET  /scarlethorizons/api/v1/presence
 GET  /scarlethorizons/api/v1/quests
+POST /scarlethorizons/api/v1/quest-requests
+POST /scarlethorizons/api/v1/quest-requests/{request-id}/decision
+POST /scarlethorizons/api/v1/quest-requests/{request-id}/acknowledge
 POST /scarlethorizons/api/v1/logout
 ```
 
@@ -100,13 +103,16 @@ broker returns the exact uploaded totals and observation time.
 
 ## Verification
 
-- Health response reports schema version `3`, a nonzero `character_account_count`, `xp_tracking_configured: true`, and the word-count snapshot availability state.
+- Health response reports schema version `5`, a nonzero `character_account_count`, `xp_tracking_configured: true`, the word-count snapshot availability state, and `quest_request_workflow_configured: true`.
 - Successful login sets `pa_character_session` with `Secure`, `HttpOnly`, `SameSite=Strict`, and path `/scarlethorizons/api/`.
 - `GET /v1/me` returns the logged-in account's server-stored character key.
 - `GET /v1/xp` returns one matching character's XP, class, attained level, and hit points for a player account and never includes the party array.
 - A Dungeon Master session receives the validated current party XP table.
 - Authenticated clients heartbeat through `/v1/presence`; players receive no other-user data, while the Dungeon Master receives every other enabled account with active-within-two-minutes state and the last login time for inactive users.
 - `GET /v1/quests` reads `/scarlethorizons/pwa/quests.json`, validates its schema, and removes `gated-by` metadata before returning quests authorized for the current account.
+- Player accounts may request only quests whose current state is `available` or `available (abandoned)`; Dungeon Master accounts cannot request quests.
+- The Dungeon Master may approve or deny pending PC requests. Approval atomically records the decision and overlays that quest's global runtime state as `active` in `broker.sqlite`.
+- Pending requests and unread decisions persist across sessions. Players may acknowledge their own decisions; only the Dungeon Master may decide requests.
 - A missing or ambiguous character-key mapping fails with `xp_not_authorized`.
 - XP responses omit the configured source URL and include `Cache-Control: no-store`.
 - Anonymous word-count reads fail with HTTP 401; a logged-in session receives the latest validated wiki, IC, and OOC totals.

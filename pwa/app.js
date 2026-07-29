@@ -36,6 +36,11 @@
         'individual-or-party',
         ...QUEST_STATE_VALUES
     ]);
+    const QUEST_REQUEST_STATUS_VALUES = Object.freeze([
+        'pending',
+        'approved',
+        'denied'
+    ]);
     const QUEST_STATUS_LABELS = Object.freeze({
         'individual-only': 'Individual-Only',
         'party-only': 'Party-Only',
@@ -70,6 +75,7 @@
     let authenticatedQuestSnapshot = null;
     let questRequestId = 0;
     let questStateFilter = '';
+    let lastQuestAlertSignature = '';
     let magicItemSnapshot = null;
     let magicItemLoading = null;
     let magicItemError = '';
@@ -403,6 +409,22 @@
             typeof value === 'string' && value.length <= maximum;
         const validRequiredText = (value, maximum = 500) =>
             validShortText(value, maximum) && value.trim().length > 0;
+        const validRequest = (request) => request
+            && typeof request.id === 'string'
+            && /^[a-f0-9]{32}$/u.test(request.id)
+            && typeof request.quest_id === 'string'
+            && /^[a-z0-9]+(?:-[a-z0-9]+)*$/u.test(request.quest_id)
+            && validRequiredText(request.quest_title, 200)
+            && validRequiredText(request.requester_character_name, 100)
+            && QUEST_REQUEST_STATUS_VALUES.includes(request.status)
+            && typeof request.created_at === 'string'
+            && !Number.isNaN(Date.parse(request.created_at))
+            && (request.decided_at === null
+                || (typeof request.decided_at === 'string'
+                    && !Number.isNaN(Date.parse(request.decided_at))))
+            && (request.status === 'pending'
+                ? request.decided_at === null
+                : request.decided_at !== null);
         const validQuest = (quest) => quest
             && /^[a-z0-9]+(?:-[a-z0-9]+)*$/u.test(quest.id)
             && validRequiredText(quest.title, 200)
@@ -417,15 +439,32 @@
             && validShortText(quest.reward, 500)
             && validShortText(quest.accepted_on, 100)
             && validShortText(quest.expires_on, 100)
+            && (quest.request_status === null
+                || QUEST_REQUEST_STATUS_VALUES.includes(quest.request_status))
             && /^https:\/\/publish\.obsidian\.md\/scarlethorizons\/(?:Quests|NPCs|Meta\/IC|Writings)\/[^?#]+$/u.test(quest.wiki_url);
         if (!payload
-            || payload.schema_version !== 1
+            || payload.schema_version !== 2
             || !Array.isArray(payload.status_values)
             || payload.status_values.length !== QUEST_STATUS_VALUES.length
             || !QUEST_STATUS_VALUES.every((status) => payload.status_values.includes(status))
+            || !Array.isArray(payload.request_status_values)
+            || payload.request_status_values.length !== QUEST_REQUEST_STATUS_VALUES.length
+            || !QUEST_REQUEST_STATUS_VALUES.every(
+                (status) => payload.request_status_values.includes(status))
             || !Array.isArray(payload.quests)
             || payload.quests.length > 100
-            || !payload.quests.every(validQuest)) {
+            || !payload.quests.every(validQuest)
+            || !Array.isArray(payload.pending_requests)
+            || payload.pending_requests.length > 200
+            || !payload.pending_requests.every(validRequest)
+            || !Array.isArray(payload.notifications)
+            || payload.notifications.length > 200
+            || !payload.notifications.every(validRequest)
+            || (authenticatedAccount?.role === 'dm'
+                && (payload.notifications.length !== 0
+                    || payload.quests.some((quest) => quest.request_status !== null)))
+            || (authenticatedAccount?.role === 'player'
+                && payload.pending_requests.length !== 0)) {
             throw new Error('The quest service returned an invalid response.');
         }
         return payload;
@@ -440,6 +479,149 @@
         detail.textContent = value;
         wrapper.append(term, detail);
         list.append(wrapper);
+    };
+
+    const submitQuestInterest = async (questId, button) => {
+        if (!(button instanceof HTMLButtonElement)
+            || authenticatedAccount?.role !== 'player') {
+            return;
+        }
+        button.disabled = true;
+        const status = byId('quests-status');
+        if (status) status.textContent = 'Sending quest request…';
+        try {
+            await requestAuthenticationApi('/quest-requests', {
+                method: 'POST',
+                body: { quest_id: questId },
+                csrf: true
+            });
+            await loadQuests();
+        } catch (error) {
+            if (status) status.textContent = error.message;
+            button.disabled = false;
+        }
+    };
+
+    const decideQuestRequest = async (requestId, decision, button) => {
+        if (!(button instanceof HTMLButtonElement)
+            || authenticatedAccount?.role !== 'dm'
+            || !['approved', 'denied'].includes(decision)) {
+            return;
+        }
+        button.disabled = true;
+        const summary = byId('quest-alert-summary');
+        if (summary) summary.textContent = decision === 'approved'
+            ? 'Activating quest and recording approval…'
+            : 'Recording denial…';
+        try {
+            await requestAuthenticationApi(
+                `/quest-requests/${requestId}/decision`,
+                {
+                    method: 'POST',
+                    body: { decision },
+                    csrf: true
+                });
+            await loadQuests();
+        } catch (error) {
+            if (summary) summary.textContent = error.message;
+            button.disabled = false;
+        }
+    };
+
+    const acknowledgeQuestNotification = async (requestId, button) => {
+        if (!(button instanceof HTMLButtonElement)
+            || authenticatedAccount?.role !== 'player') {
+            return;
+        }
+        button.disabled = true;
+        const summary = byId('quest-alert-summary');
+        if (summary) summary.textContent = 'Dismissing quest notification…';
+        try {
+            await requestAuthenticationApi(
+                `/quest-requests/${requestId}/acknowledge`,
+                { method: 'POST', body: {}, csrf: true });
+            await loadQuests();
+        } catch (error) {
+            if (summary) summary.textContent = error.message;
+            button.disabled = false;
+        }
+    };
+
+    const renderQuestAlerts = () => {
+        const dialog = byId('quest-alert-dialog');
+        const summary = byId('quest-alert-summary');
+        const list = byId('quest-alert-list');
+        if (!(dialog instanceof HTMLDialogElement) || list === null) return;
+
+        const alerts = authenticatedAccount?.role === 'dm'
+            ? (authenticatedQuestSnapshot?.pending_requests || [])
+            : (authenticatedQuestSnapshot?.notifications || []);
+        list.replaceChildren();
+        if (alerts.length === 0) {
+            if (dialog.open) dialog.close();
+            lastQuestAlertSignature = '';
+            return;
+        }
+
+        if (summary) {
+            summary.textContent = authenticatedAccount?.role === 'dm'
+                ? `${alerts.length} PC quest request${alerts.length === 1 ? '' : 's'} await your decision.`
+                : `${alerts.length} quest request decision${alerts.length === 1 ? '' : 's'} received.`;
+        }
+        const fragment = document.createDocumentFragment();
+        alerts.forEach((request) => {
+            const alert = document.createElement('article');
+            alert.className = 'quest-alert';
+            const heading = document.createElement('h3');
+            const message = document.createElement('p');
+            const actions = document.createElement('div');
+            actions.className = 'quest-alert-actions';
+
+            if (authenticatedAccount?.role === 'dm') {
+                heading.textContent = request.quest_title;
+                message.textContent =
+                    `${request.requester_character_name} would like to take this quest.`;
+                const approve = document.createElement('button');
+                approve.className = 'primary-button';
+                approve.type = 'button';
+                approve.textContent = 'Approve';
+                approve.addEventListener('click', () => {
+                    void decideQuestRequest(request.id, 'approved', approve);
+                });
+                const deny = document.createElement('button');
+                deny.className = 'secondary-button';
+                deny.type = 'button';
+                deny.textContent = 'Deny';
+                deny.addEventListener('click', () => {
+                    void decideQuestRequest(request.id, 'denied', deny);
+                });
+                actions.append(approve, deny);
+            } else {
+                heading.textContent = request.quest_title;
+                message.textContent = request.status === 'approved'
+                    ? 'The Dungeon Master approved your request. This quest is now active.'
+                    : 'The Dungeon Master denied your request.';
+                const dismiss = document.createElement('button');
+                dismiss.className = 'secondary-button';
+                dismiss.type = 'button';
+                dismiss.textContent = 'Dismiss';
+                dismiss.addEventListener('click', () => {
+                    void acknowledgeQuestNotification(request.id, dismiss);
+                });
+                actions.append(dismiss);
+            }
+            alert.append(heading, message, actions);
+            fragment.append(alert);
+        });
+        list.append(fragment);
+
+        const signature = alerts
+            .map((request) => `${request.id}:${request.status}`)
+            .join('|');
+        if (!dialog.open && signature !== lastQuestAlertSignature) {
+            lastQuestAlertSignature = signature;
+            dialog.showModal();
+        }
     };
 
     const renderQuestUi = () => {
@@ -460,6 +642,7 @@
             if (status) status.textContent = 'Loading quests…';
             return;
         }
+        renderQuestAlerts();
         if (authenticatedQuestSnapshot.quests.length === 0) {
             if (status) status.textContent = 'No quests are currently visible to this character.';
             return;
@@ -545,7 +728,31 @@
             wikiLink.rel = 'noopener noreferrer';
             wikiLink.textContent = 'Open quest on the campaign wiki';
 
-            card.append(heading, summary, details, objectivesTitle, objectives, wikiLink);
+            card.append(heading, summary, details, objectivesTitle, objectives);
+            if (authenticatedAccount?.role === 'player'
+                && ['available', 'available (abandoned)'].includes(quest.state)) {
+                const requestActions = document.createElement('div');
+                requestActions.className = 'quest-request-actions';
+                if (quest.request_status === 'pending') {
+                    const pending = document.createElement('span');
+                    pending.className = 'quest-request-pending';
+                    pending.textContent = 'Quest request pending';
+                    requestActions.append(pending);
+                } else {
+                    const requestButton = document.createElement('button');
+                    requestButton.className = 'primary-button';
+                    requestButton.type = 'button';
+                    requestButton.textContent = quest.request_status === 'denied'
+                        ? 'Request again'
+                        : 'Request this quest';
+                    requestButton.addEventListener('click', () => {
+                        void submitQuestInterest(quest.id, requestButton);
+                    });
+                    requestActions.append(requestButton);
+                }
+                card.append(requestActions);
+            }
+            card.append(wikiLink);
             fragment.append(card);
         });
         list.append(fragment);
@@ -1142,6 +1349,7 @@
         authenticatedPresenceSnapshot = null;
         authenticatedQuestSnapshot = null;
         questStateFilter = '';
+        lastQuestAlertSignature = '';
         updateAuthenticationUi();
         if (authenticatedAccount !== null) {
             await Promise.all([loadXpSummary(), loadWordCountSummary(), loadQuests()]);
@@ -1159,6 +1367,10 @@
 
     byId('auth-dialog-close')?.addEventListener('click', () => {
         if (authDialog instanceof HTMLDialogElement) authDialog.close();
+    });
+    byId('quest-alert-close')?.addEventListener('click', () => {
+        const questAlertDialog = byId('quest-alert-dialog');
+        if (questAlertDialog instanceof HTMLDialogElement) questAlertDialog.close();
     });
     authDialog?.addEventListener('close', () => {
         void renderAuthenticatedHeroToken();
@@ -1191,6 +1403,7 @@
             authenticatedWordCountSnapshot = null;
             authenticatedQuestSnapshot = null;
             questStateFilter = '';
+            lastQuestAlertSignature = '';
             try {
                 const identity = await requestAuthenticationApi('/me');
                 authenticatedAccount = identity.account || authenticatedAccount;
@@ -1209,6 +1422,7 @@
             authenticatedWordCountSnapshot = null;
             authenticatedQuestSnapshot = null;
             questStateFilter = '';
+            lastQuestAlertSignature = '';
             setAuthenticationMessage(error.message, true);
             updateAuthenticationUi();
         } finally {
@@ -1233,6 +1447,11 @@
             authenticatedQuestSnapshot = null;
             questRequestId++;
             questStateFilter = '';
+            lastQuestAlertSignature = '';
+            const questAlertDialog = byId('quest-alert-dialog');
+            if (questAlertDialog instanceof HTMLDialogElement && questAlertDialog.open) {
+                questAlertDialog.close();
+            }
             updateAuthenticationUi();
             if (authDialog instanceof HTMLDialogElement) authDialog.close();
         } catch (error) {

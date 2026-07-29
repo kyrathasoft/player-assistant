@@ -147,6 +147,26 @@ final class CharacterAuthService
         ];
     }
 
+    public function requireMutationAccount(array $headers, array &$session): array
+    {
+        $this->requireExpectedOrigin((string)($headers['origin'] ?? ''));
+        $resolved = $this->resolveSession($session, true);
+        $providedToken = (string)($headers['csrf-token'] ?? '');
+        $expectedToken = (string)($resolved['session']['csrf_token'] ?? '');
+        if ($providedToken === ''
+            || $expectedToken === ''
+            || !hash_equals($expectedToken, $providedToken)) {
+            throw new BrokerHttpException(
+                403,
+                'csrf_rejected',
+                'The request could not be authorized.');
+        }
+        return [
+            'authenticated' => true,
+            'account' => $this->publicAccount($resolved['account']),
+        ];
+    }
+
     public function presence(array &$session): array
     {
         $resolved = $this->resolveSession($session, true);

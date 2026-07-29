@@ -68,6 +68,8 @@ try {
     Assert-Condition -Condition ($null -ne $health -and $health.StatusCode -eq 200) -Message 'The HTTP test broker did not start.'
     Assert-Condition -Condition ($health.Headers['Cache-Control'] -contains 'no-store') -Message 'The API response was cacheable.'
     Assert-Condition -Condition ($health.Headers['Strict-Transport-Security'] -contains 'max-age=31536000') -Message 'The HSTS header was missing.'
+    $healthBody = $health.Content | ConvertFrom-Json
+    Assert-Condition -Condition ([int]$healthBody.schema_version -eq 5 -and $healthBody.quest_request_workflow_configured -eq $true) -Message 'The HTTP broker does not expose quest-request readiness.'
 
     $unauthenticatedXp = Invoke-WebRequest `
         -UseBasicParsing `
@@ -191,9 +193,23 @@ try {
         -Headers @{ Cookie = $cookieHeader }
     $questBody = $questResponse.Content | ConvertFrom-Json
     Assert-Condition -Condition ($questResponse.StatusCode -eq 200) -Message 'The HTTP quest route failed.'
-    Assert-Condition -Condition ([int]$questBody.schema_version -eq 1 -and @($questBody.quests).Count -eq 9) -Message 'The HTTP quest route returned invalid JSON-backed data.'
+    Assert-Condition -Condition ([int]$questBody.schema_version -eq 2 -and @($questBody.quests).Count -eq 9) -Message 'The HTTP quest route returned invalid JSON-backed data.'
     Assert-Condition -Condition (@($questBody.quests | Where-Object { $_.PSObject.Properties.Name -contains 'gated-by' -or $_.PSObject.Properties.Name -contains 'gated_by' }).Count -eq 0) -Message 'The HTTP quest route exposed gating metadata.'
     Assert-Condition -Condition ([string]$questResponse.Headers['Cache-Control'] -match '(?i)(^|,\s*)no-store($|,)') -Message 'Quest responses must use Cache-Control: no-store.'
+
+    $questRequestResponse = Invoke-WebRequest `
+        -UseBasicParsing `
+        -Method Post `
+        -Uri "$baseUrl/v1/quest-requests" `
+        -Headers @{
+            Cookie = $cookieHeader
+            Origin = 'https://example.test'
+            'X-CSRF-Token' = [string]$sessionBody.csrf_token
+        } `
+        -ContentType 'application/json' `
+        -Body '{"quest_id":"plumb-lost-caverns"}'
+    $questRequestBody = $questRequestResponse.Content | ConvertFrom-Json
+    Assert-Condition -Condition ($questRequestResponse.StatusCode -eq 201 -and $questRequestBody.request.status -eq 'pending') -Message 'The HTTP quest-request route failed.'
 
     $logoutResponse = Invoke-WebRequest `
         -UseBasicParsing `

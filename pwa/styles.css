@@ -732,6 +732,63 @@ h2 {
     font-weight: 750;
 }
 
+.quest-request-actions,
+.quest-alert-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.65rem;
+}
+
+.quest-request-pending {
+    width: fit-content;
+    border: 1px solid rgba(213, 177, 115, 0.45);
+    border-radius: 999px;
+    padding: 0.5rem 0.75rem;
+    color: var(--gold-bright);
+    font-size: 0.82rem;
+    font-weight: 800;
+}
+
+#quest-alert-dialog {
+    width: min(40rem, calc(100% - 2rem));
+}
+
+.quest-alert-dialog-surface {
+    position: relative;
+    padding: 1.5rem;
+}
+
+.quest-alert-dialog-surface h2 {
+    margin: 0.2rem 0 0.6rem;
+}
+
+.quest-alert-dialog-surface > p {
+    color: var(--muted);
+}
+
+.quest-alert-list {
+    display: grid;
+    gap: 0.85rem;
+}
+
+.quest-alert {
+    display: grid;
+    gap: 0.7rem;
+    border: 1px solid var(--line);
+    border-radius: 0.75rem;
+    padding: 1rem;
+    background: rgba(18, 16, 14, 0.66);
+}
+
+.quest-alert h3,
+.quest-alert p {
+    margin: 0;
+}
+
+.quest-alert p {
+    color: var(--muted);
+}
+
 .translator-toolbar {
     display: flex;
     align-items: end;

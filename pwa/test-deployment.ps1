@@ -137,10 +137,11 @@ try {
         $healthResponse = $client.GetAsync([uri]::new($apiBaseUri, 'health')).GetAwaiter().GetResult()
         $healthPayload = $healthResponse.Content.ReadAsStringAsync().GetAwaiter().GetResult() | ConvertFrom-Json
         Assert-Condition -Condition $healthResponse.IsSuccessStatusCode -Message 'The broker health endpoint is unavailable.'
-        Assert-Condition -Condition ([int]$healthPayload.schema_version -eq 4) -Message 'The broker health schema is not version 4.'
+        Assert-Condition -Condition ([int]$healthPayload.schema_version -eq 5) -Message 'The broker health schema is not version 5.'
         Assert-Condition -Condition ($healthPayload.PSObject.Properties.Name -contains 'xp_tracking_configured') -Message 'The live broker does not expose XP tracking readiness.'
         Assert-Condition -Condition ($healthPayload.xp_tracking_configured -eq $true) -Message 'XP tracking is not configured on the live broker.'
         Assert-Condition -Condition ($healthPayload.PSObject.Properties.Name -contains 'word_count_snapshot_available') -Message 'The live broker does not expose word-count snapshot readiness.'
+        Assert-Condition -Condition ($healthPayload.quest_request_workflow_configured -eq $true) -Message 'The live broker does not expose quest-request workflow readiness.'
 
         $xpResponse = $client.GetAsync([uri]::new($apiBaseUri, 'xp')).GetAwaiter().GetResult()
         $xpPayload = $xpResponse.Content.ReadAsStringAsync().GetAwaiter().GetResult() | ConvertFrom-Json

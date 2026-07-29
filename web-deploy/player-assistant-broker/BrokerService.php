@@ -39,7 +39,7 @@ final class BrokerService
             is_array($config['xp'] ?? null) ? $config['xp'] : [],
             $xpMarkdownFetcher);
         $this->wordCounts = new WordCountService($this->database);
-        $this->quests = new QuestService((string)$questDataPath);
+        $this->quests = new QuestService($this->database, (string)$questDataPath);
     }
 
     public function dispatch(
@@ -56,7 +56,7 @@ final class BrokerService
         if ($method === 'GET' && $route === '/v1/health') {
             return $this->response(200, [
                 'service' => 'player-assistant-broker',
-                'schema_version' => 4,
+                'schema_version' => 5,
                 'status' => 'ok',
                 'rpol_credentials_configured' => $this->rpolCredentialsConfigured(),
                 'snapshot_signing_configured' => $this->snapshotSigningConfigured(),
@@ -64,6 +64,7 @@ final class BrokerService
                 'character_account_count' => $this->characterAuth->accountCount(),
                 'xp_tracking_configured' => $this->xpTracking->isConfigured(),
                 'word_count_snapshot_available' => $this->wordCounts->hasSnapshot(),
+                'quest_request_workflow_configured' => true,
             ]);
         }
 
@@ -105,6 +106,35 @@ final class BrokerService
         if ($method === 'GET' && $route === '/v1/quests') {
             $current = $this->characterAuth->requireCurrentAccount($session);
             return $this->response(200, $this->quests->forAccount($current['account']));
+        }
+
+        if ($method === 'POST' && $route === '/v1/quest-requests') {
+            $current = $this->characterAuth->requireMutationAccount($headers, $session);
+            return $this->response(
+                201,
+                $this->quests->requestInterest($current['account'], $body));
+        }
+
+        if ($method === 'POST'
+            && preg_match(
+                '#^/v1/quest-requests/([a-f0-9]{32})/decision$#',
+                $route,
+                $matches) === 1) {
+            $current = $this->characterAuth->requireMutationAccount($headers, $session);
+            return $this->response(
+                200,
+                $this->quests->decide($current['account'], $matches[1], $body));
+        }
+
+        if ($method === 'POST'
+            && preg_match(
+                '#^/v1/quest-requests/([a-f0-9]{32})/acknowledge$#',
+                $route,
+                $matches) === 1) {
+            $current = $this->characterAuth->requireMutationAccount($headers, $session);
+            return $this->response(
+                200,
+                $this->quests->acknowledge($current['account'], $matches[1]));
         }
 
         if ($method === 'POST' && $route === '/v1/logout') {

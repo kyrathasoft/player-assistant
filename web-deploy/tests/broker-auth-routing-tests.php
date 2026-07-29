@@ -352,7 +352,7 @@ try {
         'investigate-cold-mouth' => ['available', 'party-only'],
     ];
     routingAssert(
-        $quests['body']['schema_version'] === 1
+        $quests['body']['schema_version'] === 2
             && count($quests['body']['quests']) === count($expectedQuestStatuses),
         'The quest route did not return all configured quests.');
     routingAssert(
@@ -363,7 +363,8 @@ try {
         routingAssert(
             is_array($expectedStatus)
                 && $quest['state'] === $expectedStatus[0]
-                && $quest['visibility'] === $expectedStatus[1],
+                && $quest['visibility'] === $expectedStatus[1]
+                && $quest['request_status'] === null,
             'A configured quest returned the wrong status tags.');
         routingAssert(
             !array_key_exists('gated-by', $quest)
@@ -382,6 +383,223 @@ try {
             'withdrawn',
         ],
         'The quest route returned the wrong status vocabulary.');
+    routingAssert(
+        $quests['body']['request_status_values'] === ['pending', 'approved', 'denied']
+            && $quests['body']['pending_requests'] === []
+            && $quests['body']['notifications'] === [],
+        'The player quest response returned invalid request metadata.');
+
+    $playerMutationHeaders = [
+        'origin' => 'https://example.test',
+        'csrf-token' => $restored['body']['csrf_token'],
+    ];
+    $interest = $broker->dispatch(
+        'POST',
+        '/v1/quest-requests',
+        [],
+        ['quest_id' => 'plumb-lost-caverns'],
+        $playerMutationHeaders,
+        '192.0.2.30',
+        $session);
+    routingAssert(
+        $interest['status'] === 201
+            && $interest['body']['request']['status'] === 'pending'
+            && $interest['body']['request']['quest_id'] === 'plumb-lost-caverns',
+        'The player could not request an available quest.');
+    $questRequestId = $interest['body']['request']['id'];
+    routingAssert(
+        is_string($questRequestId)
+            && preg_match('/^[a-f0-9]{32}$/D', $questRequestId) === 1,
+        'The quest request identifier was invalid.');
+
+    try {
+        $broker->dispatch(
+            'POST',
+            '/v1/quest-requests/' . $questRequestId . '/decision',
+            [],
+            ['decision' => 'approved'],
+            $playerMutationHeaders,
+            '192.0.2.30',
+            $session);
+        throw new RuntimeException('A player account decided its own quest request.');
+    } catch (BrokerHttpException $exception) {
+        routingAssert(
+            $exception->status === 403
+                && $exception->errorName === 'quest_decision_not_authorized',
+            'A player quest decision failed with the wrong response.');
+    }
+
+    $createdDungeonMaster = $broker->dispatch(
+        'POST',
+        '/v1/admin/character-accounts',
+        [],
+        [
+            'character_name' => 'Dungeon Master',
+            'password' => 'dungeon master routing password',
+            'character_key' => 'dungeon-master',
+            'role' => 'dm',
+        ],
+        $adminHeaders,
+        '192.0.2.30',
+        $session);
+    routingAssert(
+        $createdDungeonMaster['status'] === 201,
+        'The routing test could not create a Dungeon Master account.');
+
+    $dungeonMasterSession = [];
+    $dungeonMasterLogin = $broker->dispatch(
+        'POST',
+        '/v1/login',
+        [],
+        [
+            'character_name' => 'Dungeon Master',
+            'password' => 'dungeon master routing password',
+        ],
+        ['origin' => 'https://example.test'],
+        '192.0.2.31',
+        $dungeonMasterSession);
+    $dungeonMasterMutationHeaders = [
+        'origin' => 'https://example.test',
+        'csrf-token' => $dungeonMasterLogin['body']['csrf_token'],
+    ];
+
+    $dungeonMasterQuests = $broker->dispatch(
+        'GET',
+        '/v1/quests',
+        [],
+        [],
+        [],
+        '192.0.2.31',
+        $dungeonMasterSession);
+    routingAssert(
+        count($dungeonMasterQuests['body']['pending_requests']) === 1
+            && $dungeonMasterQuests['body']['pending_requests'][0]['id'] === $questRequestId
+            && $dungeonMasterQuests['body']['pending_requests'][0]['requester_character_name']
+                === 'Routing Hero',
+        'The Dungeon Master did not receive the pending quest alert.');
+
+    try {
+        $broker->dispatch(
+            'POST',
+            '/v1/quest-requests',
+            [],
+            ['quest_id' => 'reclaim-keep-on-borderlands'],
+            $dungeonMasterMutationHeaders,
+            '192.0.2.31',
+            $dungeonMasterSession);
+        throw new RuntimeException('The Dungeon Master requested a quest.');
+    } catch (BrokerHttpException $exception) {
+        routingAssert(
+            $exception->status === 403
+                && $exception->errorName === 'quest_request_not_authorized',
+            'The Dungeon Master quest-request restriction returned the wrong response.');
+    }
+
+    $approved = $broker->dispatch(
+        'POST',
+        '/v1/quest-requests/' . $questRequestId . '/decision',
+        [],
+        ['decision' => 'approved'],
+        $dungeonMasterMutationHeaders,
+        '192.0.2.31',
+        $dungeonMasterSession);
+    routingAssert(
+        $approved['body']['request']['status'] === 'approved'
+            && $approved['body']['quest_state'] === 'active',
+        'Approving the quest request did not activate the quest.');
+
+    $playerQuestsAfterApproval = $broker->dispatch(
+        'GET',
+        '/v1/quests',
+        [],
+        [],
+        [],
+        '192.0.2.30',
+        $session);
+    $approvedQuest = array_values(array_filter(
+        $playerQuestsAfterApproval['body']['quests'],
+        static fn(array $quest): bool => $quest['id'] === 'plumb-lost-caverns'))[0] ?? null;
+    routingAssert(
+        is_array($approvedQuest)
+            && $approvedQuest['state'] === 'active'
+            && $approvedQuest['request_status'] === 'approved'
+            && count($playerQuestsAfterApproval['body']['notifications']) === 1
+            && $playerQuestsAfterApproval['body']['notifications'][0]['status'] === 'approved',
+        'The player did not receive the approval or active quest state.');
+
+    $acknowledged = $broker->dispatch(
+        'POST',
+        '/v1/quest-requests/' . $questRequestId . '/acknowledge',
+        [],
+        [],
+        $playerMutationHeaders,
+        '192.0.2.30',
+        $session);
+    routingAssert(
+        $acknowledged['body']['acknowledged'] === true,
+        'The player could not dismiss the quest decision notification.');
+    $afterAcknowledgement = $broker->dispatch(
+        'GET',
+        '/v1/quests',
+        [],
+        [],
+        [],
+        '192.0.2.30',
+        $session);
+    routingAssert(
+        $afterAcknowledgement['body']['notifications'] === [],
+        'The dismissed quest notification remained unread.');
+
+    try {
+        $broker->dispatch(
+            'POST',
+            '/v1/quest-requests',
+            [],
+            ['quest_id' => 'plumb-lost-caverns'],
+            $playerMutationHeaders,
+            '192.0.2.30',
+            $session);
+        throw new RuntimeException('An active quest accepted another interest request.');
+    } catch (BrokerHttpException $exception) {
+        routingAssert(
+            $exception->status === 409 && $exception->errorName === 'quest_not_available',
+            'An active quest request failed with the wrong response.');
+    }
+
+    $denialInterest = $broker->dispatch(
+        'POST',
+        '/v1/quest-requests',
+        [],
+        ['quest_id' => 'reclaim-keep-on-borderlands'],
+        $playerMutationHeaders,
+        '192.0.2.30',
+        $session);
+    $denied = $broker->dispatch(
+        'POST',
+        '/v1/quest-requests/' . $denialInterest['body']['request']['id'] . '/decision',
+        [],
+        ['decision' => 'denied'],
+        $dungeonMasterMutationHeaders,
+        '192.0.2.31',
+        $dungeonMasterSession);
+    routingAssert(
+        $denied['body']['request']['status'] === 'denied'
+            && $denied['body']['quest_state'] === 'available',
+        'Denying a quest request changed the quest lifecycle state.');
+    $playerQuestsAfterDenial = $broker->dispatch(
+        'GET',
+        '/v1/quests',
+        [],
+        [],
+        [],
+        '192.0.2.30',
+        $session);
+    routingAssert(
+        count($playerQuestsAfterDenial['body']['notifications']) === 1
+            && $playerQuestsAfterDenial['body']['notifications'][0]['status'] === 'denied'
+            && $playerQuestsAfterDenial['body']['notifications'][0]['quest_id']
+                === 'reclaim-keep-on-borderlands',
+        'The player did not receive the quest denial notification.');
 
     $destroyed = false;
     $logout = $broker->dispatch(
@@ -411,12 +629,15 @@ try {
         [],
         '192.0.2.30',
         $session);
-    routingAssert($health['body']['schema_version'] === 4, 'The broker schema version was not advanced.');
-    routingAssert($health['body']['character_account_count'] === 1, 'The health route account count was incorrect.');
+    routingAssert($health['body']['schema_version'] === 5, 'The broker schema version was not advanced.');
+    routingAssert($health['body']['character_account_count'] === 2, 'The health route account count was incorrect.');
     routingAssert($health['body']['xp_tracking_configured'] === true, 'The health route XP configuration state was incorrect.');
     routingAssert(
         $health['body']['word_count_snapshot_available'] === true,
         'The health route word-count snapshot state was incorrect.');
+    routingAssert(
+        $health['body']['quest_request_workflow_configured'] === true,
+        'The health route quest-request workflow state was incorrect.');
 
     fwrite(STDOUT, "Broker authentication routing tests passed.\n");
 } finally {
