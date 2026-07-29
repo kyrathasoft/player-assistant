@@ -31,6 +31,8 @@
   - Installable content packs — download selected maps, rules, and character pages for offline use.
   - Theme presets — parchment, dark dungeon, high-contrast, and character-specific accent colors.
   - Optional notification reminders — session reminders or newly posted DM announcements, requiring explicit player opt-in.
+  
+  EASTER EGGS
 
   - The Hair Knows Its Owner — Nuanda’s completed three-component ritual reveals that the slain orc once visited the Cold Mouth and carried the “Deep Friends” watcher mark.
     Unlock: Jelb, Illusionist 4+; personally collect the orc hair; obtain Hwyanthemon and the qualifying amethyst; complete Nuanda’s quest.
@@ -106,3 +108,34 @@
   - Three Buyers for One Secret — Proof identifying the educated second author of the orc orders attracts the Harpers, Basilisk’s Claw and Zhentarim. Each offers a different reward for the same evidence.
     Unlock: Decode the scroll; investigate Red Tusk and the Cold Mouth; establish contact with at least two of the three factions.
     Consequence: The chosen buyer grants an invitation while the rejected factions change later encounters.
+	
+	
+- Install PHP 8.4 from PowerShell:
+
+  winget install --id PHP.PHP.8.4 --exact --source winget
+
+  - Restart Codex so it receives the updated PATH.
+  - Verify installation:
+
+  php --version
+  php --ini
+
+  - If no php.ini is loaded:
+
+  $phpDir = Split-Path (Get-Command php).Source
+  Copy-Item "$phpDir\php.ini-development" "$phpDir\php.ini"
+  notepad "$phpDir\php.ini"
+
+  - In php.ini, set/uncomment:
+
+  extension_dir = "ext"
+  extension=curl
+  extension=pdo_sqlite
+  extension=sqlite3
+
+  - Verify the required extensions:
+
+  php -r 'foreach (["curl","pdo_sqlite","sqlite3"] as $e) echo $e, ": ", extension_loaded($e) ? "yes" : "no", PHP_EOL;'
+
+  The WinGet package uses PHP’s official Windows x64 build and automatically depends on the required Visual C++ runtime. PHP for Windows (https://windows.php.net/download/), WinGet documentation
+  (https://learn.microsoft.com/en-us/windows/package-manager/winget/), PDO SQLite configuration (https://www.php.net/manual/en/pdo.installation.php).
