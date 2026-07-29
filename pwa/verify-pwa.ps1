@@ -29,6 +29,7 @@ $requiredFiles = @(
     'data\heroes.json',
     'level-progression.json',
     'magic-items.json',
+    'party-funds.json',
     'quests.json',
     'campaign-search.json'
 )
@@ -112,6 +113,27 @@ foreach ($magicItem in @($magicItems.items)) {
     Assert-Condition -Condition ($magicItemViewers.Count -gt 0) -Message "Magic-item fallback entry has no valid 'viewable-by' values."
 }
 Assert-Condition -Condition (@($magicItems.items | Where-Object { $_.name -eq "Armstrong's Chamois" -and $_.'viewable-by' -eq 'all' }).Count -eq 1) -Message "Armstrong's Chamois must be viewable by all."
+
+$partyFunds = Get-Content -Raw -LiteralPath (Join-Path $PwaRoot 'party-funds.json') | ConvertFrom-Json
+$partyFundsGemstoneValuePattern = '^\s*(\d+(?:\.\d+)?)\s+gp$'
+$validCoins = ($partyFunds.coins
+    -and $partyFunds.coins.PSObject.Properties.Name -contains 'copper'
+    -and $partyFunds.coins.PSObject.Properties.Name -contains 'silver'
+    -and $partyFunds.coins.PSObject.Properties.Name -contains 'gold'
+    -and [int]$partyFunds.coins.copper -ge 0
+    -and [int]$partyFunds.coins.silver -ge 0
+    -and [int]$partyFunds.coins.gold -ge 0)
+Assert-Condition -Condition ([int]$partyFunds.schema_version -eq 1) -Message 'Party-funds fallback data must use schema version 1.'
+Assert-Condition -Condition ($partyFunds.coins -ne $null) -Message 'Party-funds fallback data is missing coins.'
+Assert-Condition -Condition ($validCoins) -Message 'Party-funds fallback coin totals are invalid.'
+Assert-Condition -Condition ([array]$partyFunds.gemstones -ne $null) -Message 'Party-funds fallback gemstone entries are missing.'
+foreach ($gemstone in @($partyFunds.gemstones)) {
+    foreach ($fieldName in @('type', 'size', 'quality', 'value')) {
+        Assert-Condition -Condition ($gemstone.PSObject.Properties.Name -contains $fieldName) -Message "Party-funds fallback entry is missing '$fieldName'."
+        Assert-Condition -Condition (![string]::IsNullOrWhiteSpace([string]$gemstone.$fieldName) ) -Message "Party-funds fallback entry has an empty '$fieldName'."
+    }
+    Assert-Condition -Condition ([string]$gemstone.value -match $partyFundsGemstoneValuePattern) -Message "Party-funds fallback gemstone value '$($gemstone.value)' is invalid."
+}
 
 $levelProgression = Get-Content -Raw -LiteralPath (Join-Path $PwaRoot 'level-progression.json') | ConvertFrom-Json
 $expectedClassProgression = [ordered]@{
@@ -245,12 +267,13 @@ Assert-Condition -Condition ($appScript.Contains("updateViaCache: 'none'") -and 
 Assert-Condition -Condition ($manifest.start_url -eq './#dashboard' -and $manifest.scope -eq './') -Message 'The manifest must keep navigation inside the deployed PWA directory.'
 Assert-Condition -Condition ($html.Contains('href="manifest.webmanifest"') -and $appScript.Contains('service-worker.js')) -Message 'The install manifest or service-worker registration is missing.'
 Assert-Condition -Condition ($html.Contains('href="styles.css?v=36"') -and $html.Contains('src="app.js?v=38"') -and $serviceWorker.Contains("'./styles.css?v=36'") -and $serviceWorker.Contains("'./app.js?v=38'") -and $serviceWorker.Contains("'./level-progression.json'") -and $serviceWorker.Contains("'./magic-items.json'")) -Message 'The PWA shell must use cache-busting assets and preload the progression and magic-item data.'
+Assert-Condition -Condition ($serviceWorker.Contains("'./party-funds.json'")) -Message 'The PWA shell must preload party-funds data.'
 $apacheConfig = Get-Content -Raw -LiteralPath (Join-Path $PwaRoot '.htaccess')
 Assert-Condition -Condition ($apacheConfig.Contains('AddType image/webp .webp')) -Message 'Apache must serve WebP hero tokens with the correct MIME type.'
 Assert-Condition -Condition ($apacheConfig.Contains('level-progression\.json')) -Message 'Apache must require fresh level-progression data.'
 Assert-Condition -Condition ($apacheConfig.Contains('img-src ''self'' data: https://*.obsidian.md')) -Message 'The content security policy must allow preferred wiki hero images.'
 Assert-Condition -Condition ($apacheConfig.Contains('connect-src ''self'' https://publish-01.obsidian.md')) -Message 'The content security policy must allow the preferred magic-item wiki source.'
-Assert-Condition -Condition ($apacheConfig.Contains('magic-items\.json|quests\.json')) -Message 'Apache must require revalidation for public quest and magic-item data.'
+Assert-Condition -Condition ($apacheConfig.Contains('magic-items\.json|party-funds\.json|quests\.json')) -Message 'Apache must require revalidation for public quest, party funds, and magic-item data.'
 Assert-Condition -Condition ($apacheConfig.Contains('data/heroes\.json|data/hero-tokens/[^/]+')) -Message 'Apache must require revalidation for hero-token metadata and images.'
 
 Write-Output "PWA verified: $($lexiconCounts.orcish) Orcish terms, $($lexiconCounts.elvish) Elvish terms, $(@($heroData.heroes).Count) player tokens and the Dungeon Master token, $($campaignSearch.pageCount) full-text campaign pages, install manifest and offline shell valid."
