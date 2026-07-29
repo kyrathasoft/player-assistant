@@ -27,6 +27,7 @@ $requiredFiles = @(
     'data\orcish.json',
     'data\elvish.json',
     'data\heroes.json',
+    'level-progression.json',
     'magic-items.json',
     'quests.json',
     'campaign-search.json'
@@ -111,6 +112,44 @@ foreach ($magicItem in @($magicItems.items)) {
     Assert-Condition -Condition ($magicItemViewers.Count -gt 0) -Message "Magic-item fallback entry has no valid 'viewable-by' values."
 }
 Assert-Condition -Condition (@($magicItems.items | Where-Object { $_.name -eq "Armstrong's Chamois" -and $_.'viewable-by' -eq 'all' }).Count -eq 1) -Message "Armstrong's Chamois must be viewable by all."
+
+$levelProgression = Get-Content -Raw -LiteralPath (Join-Path $PwaRoot 'level-progression.json') | ConvertFrom-Json
+$expectedClassProgression = [ordered]@{
+    'feycaster' = @(0, 1500, 3000, 6000, 12000, 24000, 48000, 120000, 240000, 360000, 480000, 600000, 720000, 840000, 960000, 1080000, 1200000, 1320000, 1440000, 1560000, 1680000, 1800000, 1920000, 2040000, 2160000, 2280000, 2400000, 2520000, 2640000, 2760000, 2880000, 3000000, 3120000, 3240000, 3360000, 3480000)
+    'fighter' = @(0, 2000, 4000, 8000, 16000, 32000, 64000, 120000, 240000, 360000, 480000, 600000, 720000, 840000, 960000, 1080000, 1200000, 1320000, 1440000, 1560000, 1680000, 1800000, 1920000, 2040000, 2160000, 2280000, 2400000, 2520000, 2640000, 2760000, 2880000, 3000000, 3120000, 3240000, 3360000, 3480000)
+    'illusionist' = @(0, 2500, 5000, 10000, 20000, 40000, 80000, 150000, 300000, 450000, 600000, 750000, 900000, 1050000, 1200000, 1350000, 1500000, 1650000, 1800000, 1950000, 2100000, 2250000, 2400000, 2550000, 2700000, 2850000, 3000000, 3150000, 3300000, 3450000, 3600000, 3750000, 3900000, 4050000, 4200000, 4350000)
+    'mystic-theurge' = @(0, 2750, 5500, 11000, 22000, 44000, 88000, 165000, 330000, 495000, 660000, 825000, 990000, 1155000, 1320000, 1485000, 1650000, 1815000, 1980000, 2145000, 2145000, 2475000, 2640000, 2805000, 2970000, 3135000, 3300000, 3465000, 3630000, 3795000, 3960000, 4125000, 4290000, 4455000, 4620000, 4785000)
+    'paladin' = @(0, 2750, 5500, 12000, 24000, 45000, 95000, 175000, 350000, 500000, 650000, 800000, 950000, 1100000, 1250000, 1400000, 1550000, 1700000, 1850000, 2000000, 2150000, 2300000, 2450000, 2600000, 2750000, 2900000, 3050000, 3200000, 3350000, 3500000, 3650000, 3800000, 3950000, 4100000, 4250000, 4400000)
+    'ranger' = @(0, 2250, 4500, 10000, 20000, 40000, 90000, 150000, 300000, 425000, 550000, 675000, 800000, 925000, 1050000, 1175000, 1300000, 1425000, 1550000, 1675000, 1800000, 1925000, 2050000, 2175000, 2300000, 2425000, 2550000, 2675000, 2800000, 2925000, 3050000, 3175000, 3300000, 3425000, 3550000, 3675000)
+}
+$expectedClassNames = [ordered]@{
+    'feycaster' = 'Feycaster'
+    'fighter' = 'Fighter'
+    'illusionist' = 'Illusionist'
+    'mystic-theurge' = 'Mystic Theurge'
+    'paladin' = 'Paladin'
+    'ranger' = 'Ranger'
+}
+Assert-Condition -Condition ([int]$levelProgression.schema_version -eq 1) -Message 'Level-progression data must use schema version 1.'
+Assert-Condition -Condition ($levelProgression.source -eq 'https://publish.obsidian.md/scarlethorizons/Classes/Class+Level+Progression') -Message 'Level-progression data has an unexpected index source.'
+Assert-Condition -Condition ((@($levelProgression.PSObject.Properties.Name | Sort-Object) -join ',') -eq 'classes,progression_semantics,schema_version,source') -Message 'Level-progression data has unexpected root fields.'
+$classProperties = @($levelProgression.classes.PSObject.Properties)
+Assert-Condition -Condition ($classProperties.Count -eq 6) -Message 'Level-progression data must contain exactly six classes.'
+Assert-Condition -Condition ((@($classProperties.Name | Sort-Object) -join ',') -eq (@($expectedClassProgression.Keys | Sort-Object) -join ',')) -Message 'Level-progression data contains an unexpected class set.'
+foreach ($classProperty in $classProperties) {
+    $classId = $classProperty.Name
+    $classData = $classProperty.Value
+    $expectedFields = @('level_progression', 'name', 'notes', 'published_maximum_level', 'source')
+    Assert-Condition -Condition ((@($classData.PSObject.Properties.Name | Sort-Object) -join ',') -eq ($expectedFields -join ',')) -Message "Level-progression class '$classId' does not match the required schema."
+    Assert-Condition -Condition ($classData.name -eq $expectedClassNames[$classId]) -Message "Level-progression class '$classId' has the wrong name."
+    Assert-Condition -Condition ($classData.source -eq "https://publish.obsidian.md/scarlethorizons/Classes/$([uri]::EscapeDataString($expectedClassNames[$classId]).Replace('%20', '+'))") -Message "Level-progression class '$classId' has the wrong source."
+    Assert-Condition -Condition ([int]$classData.published_maximum_level -eq $(if ($classId -eq 'feycaster') { 12 } else { 36 })) -Message "Level-progression class '$classId' has the wrong published maximum level."
+    $entries = @($classData.level_progression)
+    Assert-Condition -Condition ($entries.Count -eq 36) -Message "Level-progression class '$classId' must contain levels 1 through 36."
+    Assert-Condition -Condition ((@($entries.level) -join ',') -eq ((1..36) -join ',')) -Message "Level-progression class '$classId' has missing, duplicate, or unordered levels."
+    Assert-Condition -Condition (@($entries | Where-Object { $_.minimum_xp -isnot [int] -and $_.minimum_xp -isnot [long] }).Count -eq 0) -Message "Level-progression class '$classId' has a non-integer XP threshold."
+    Assert-Condition -Condition ((@($entries.minimum_xp) -join ',') -eq ($expectedClassProgression[$classId] -join ',')) -Message "Level-progression class '$classId' does not match the published XP thresholds."
+}
 
 $questData = Get-Content -Raw -LiteralPath (Join-Path $PwaRoot 'quests.json') | ConvertFrom-Json
 $questRequiredFields = @('title', 'summary', 'giver', 'visibility', 'state', 'objectives', 'reward', 'dates', 'gated-by', 'wiki-url')
@@ -205,9 +244,10 @@ Assert-Condition -Condition ($serviceWorker.Contains('networkFirstData') -and $s
 Assert-Condition -Condition ($appScript.Contains("updateViaCache: 'none'") -and $appScript.Contains('await registration.update()')) -Message 'The PWA must explicitly check for uncached service-worker updates.'
 Assert-Condition -Condition ($manifest.start_url -eq './#dashboard' -and $manifest.scope -eq './') -Message 'The manifest must keep navigation inside the deployed PWA directory.'
 Assert-Condition -Condition ($html.Contains('href="manifest.webmanifest"') -and $appScript.Contains('service-worker.js')) -Message 'The install manifest or service-worker registration is missing.'
-Assert-Condition -Condition ($html.Contains('href="styles.css?v=36"') -and $html.Contains('src="app.js?v=38"') -and $serviceWorker.Contains("'./styles.css?v=36'") -and $serviceWorker.Contains("'./app.js?v=38'") -and $serviceWorker.Contains("'./magic-items.json'")) -Message 'The PWA shell must use cache-busting assets and preload the magic-item fallback.'
+Assert-Condition -Condition ($html.Contains('href="styles.css?v=36"') -and $html.Contains('src="app.js?v=38"') -and $serviceWorker.Contains("'./styles.css?v=36'") -and $serviceWorker.Contains("'./app.js?v=38'") -and $serviceWorker.Contains("'./level-progression.json'") -and $serviceWorker.Contains("'./magic-items.json'")) -Message 'The PWA shell must use cache-busting assets and preload the progression and magic-item data.'
 $apacheConfig = Get-Content -Raw -LiteralPath (Join-Path $PwaRoot '.htaccess')
 Assert-Condition -Condition ($apacheConfig.Contains('AddType image/webp .webp')) -Message 'Apache must serve WebP hero tokens with the correct MIME type.'
+Assert-Condition -Condition ($apacheConfig.Contains('level-progression\.json')) -Message 'Apache must require fresh level-progression data.'
 Assert-Condition -Condition ($apacheConfig.Contains('img-src ''self'' data: https://*.obsidian.md')) -Message 'The content security policy must allow preferred wiki hero images.'
 Assert-Condition -Condition ($apacheConfig.Contains('connect-src ''self'' https://publish-01.obsidian.md')) -Message 'The content security policy must allow the preferred magic-item wiki source.'
 Assert-Condition -Condition ($apacheConfig.Contains('magic-items\.json|quests\.json')) -Message 'Apache must require revalidation for public quest and magic-item data.'

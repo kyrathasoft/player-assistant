@@ -97,6 +97,11 @@ control PWA display but do not make the source data confidential.
 The `available (abandoned)` state means that a quest has been abandoned at
 least once and is currently available.
 
+Class XP thresholds are defined in root-level `level-progression.json`, beside
+`magic-items.json` and `quests.json`. It contains the six classes linked from
+the published Class Level Progression index, with level and minimum-XP entries
+from levels 1 through 36.
+
 The included `.htaccess` supplies the important Apache MIME and cache headers when overrides are enabled. The PWA also works on another HTTPS static host with equivalent server configuration.
 
 After loading the secure URL, supported browsers expose an install prompt. The always-visible **Install app** button invokes the browser prompt when available and otherwise shows platform-appropriate installation instructions.

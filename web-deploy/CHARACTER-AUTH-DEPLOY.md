@@ -64,6 +64,7 @@ Upload the complete `pwa/` directory, or at minimum:
 .htaccess
 app.js
 index.html
+level-progression.json
 service-worker.js
 styles.css
 quests.json

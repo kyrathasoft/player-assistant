@@ -1,6 +1,6 @@
 'use strict';
 
-const CACHE_VERSION = 'player-assistant-pwa-0.9.8-v39';
+const CACHE_VERSION = 'player-assistant-pwa-0.9.8-v40';
 const SHELL_CACHE = `${CACHE_VERSION}-shell`;
 const DATA_CACHE = `${CACHE_VERSION}-data`;
 const SHELL_ASSETS = [
@@ -14,7 +14,8 @@ const SHELL_ASSETS = [
     './icons/icon-192.png',
     './icons/icon-512.png',
     './icons/dragon-mark.png',
-    './magic-items.json'
+    './magic-items.json',
+    './level-progression.json'
 ];
 
 self.addEventListener('install', (event) => {

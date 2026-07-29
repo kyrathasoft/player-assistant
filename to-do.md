@@ -323,6 +323,7 @@
   - Added server-validated PWA character login through the existing PHP/SQLite broker, including legacy XP-hash import and automatic rehashing, strict HTTP-only sessions, CSRF-protected logout, account/IP throttling, authorization from server session state, administrator account management, protected-response cache exclusion, and focused security tests.
   - Added the protected PWA current-XP dashboard: fixed server-side Obsidian source, validated latest-table parsing, one-character player filtering, DM-only party totals, bounded last-known-good caching, and fail-closed authorization.
   - Added same-line TNL display after current XP totals for both player character views and Dungeon Master party rows, using each character's class progression and showing `Max level` when no higher level exists.
+  - Added `pwa/level-progression.json` beside the quest and magic-item data, covering Feycaster, Fighter, Illusionist, Mystic Theurge, Paladin, and Ranger minimum-XP progression from levels 1 through 36.
   - Added visible magic-item totals grouped by one-shot, limited-use, and permanent longevity for the items authorized to the logged-in account.
   - Replaced the embedded quest catalog with the canonical `pwa/quests.json` source, including validated authenticated broker delivery and the `active`, `available`, `available (abandoned)`, `completed`, and `withdrawn` lifecycle states.
   - Ordered PWA quests by lifecycle state and added the indented sidebar state-cycle control when the authorized quest list spans multiple states.
