@@ -28,6 +28,7 @@ $requiredFiles = @(
     'data\elvish.json',
     'data\heroes.json',
     'magic-items.json',
+    'quests.json',
     'campaign-search.json'
 )
 foreach ($relativePath in $requiredFiles) {
@@ -111,6 +112,33 @@ foreach ($magicItem in @($magicItems.items)) {
 }
 Assert-Condition -Condition (@($magicItems.items | Where-Object { $_.name -eq "Armstrong's Chamois" -and $_.'viewable-by' -eq 'all' }).Count -eq 1) -Message "Armstrong's Chamois must be viewable by all."
 
+$questData = Get-Content -Raw -LiteralPath (Join-Path $PwaRoot 'quests.json') | ConvertFrom-Json
+$questRequiredFields = @('title', 'summary', 'giver', 'visibility', 'state', 'objectives', 'reward', 'dates', 'gated-by', 'wiki-url')
+$questVisibilityValues = @('individual-only', 'party-only', 'individual-or-party')
+$questStateValues = @('available', 'active', 'available (abandoned)', 'completed', 'withdrawn')
+Assert-Condition -Condition ([int]$questData.schema_version -eq 1) -Message 'Quest data must use schema version 1.'
+Assert-Condition -Condition ((@($questData.PSObject.Properties.Name | Sort-Object) -join ',') -eq 'quests,schema_version') -Message 'Quest data has unexpected root fields.'
+$questProperties = @($questData.quests.PSObject.Properties)
+Assert-Condition -Condition ($questProperties.Count -gt 0 -and $questProperties.Count -le 100) -Message 'Quest data must contain between 1 and 100 quests.'
+foreach ($questProperty in $questProperties) {
+    Assert-Condition -Condition ($questProperty.Name -match '^[a-z0-9]+(?:-[a-z0-9]+)*$') -Message "Quest data has an invalid identifier '$($questProperty.Name)'."
+    $quest = $questProperty.Value
+    $actualFields = @($quest.PSObject.Properties.Name | Sort-Object)
+    $expectedFields = @($questRequiredFields | Sort-Object)
+    Assert-Condition -Condition (($actualFields -join "`n") -eq ($expectedFields -join "`n")) -Message "Quest '$($questProperty.Name)' does not match the required schema."
+    foreach ($fieldName in @('title', 'summary', 'giver', 'visibility', 'state', 'wiki-url')) {
+        Assert-Condition -Condition (![string]::IsNullOrWhiteSpace([string]$quest.$fieldName)) -Message "Quest '$($questProperty.Name)' has an empty '$fieldName'."
+    }
+    Assert-Condition -Condition ($questVisibilityValues -contains [string]$quest.visibility) -Message "Quest '$($questProperty.Name)' has invalid visibility."
+    Assert-Condition -Condition ($questStateValues -contains [string]$quest.state) -Message "Quest '$($questProperty.Name)' has invalid state."
+    Assert-Condition -Condition (@($quest.objectives).Count -gt 0 -and @($quest.objectives).Count -le 20) -Message "Quest '$($questProperty.Name)' has invalid objectives."
+    Assert-Condition -Condition (@($quest.objectives | Where-Object { [string]::IsNullOrWhiteSpace([string]$_) }).Count -eq 0) -Message "Quest '$($questProperty.Name)' has an empty objective."
+    $dateFields = @($quest.dates.PSObject.Properties.Name)
+    Assert-Condition -Condition ($dateFields.Count -eq 2 -and $dateFields -contains 'accepted' -and $dateFields -contains 'expires') -Message "Quest '$($questProperty.Name)' has invalid dates."
+    Assert-Condition -Condition (@($quest.'gated-by' | Where-Object { [string]$_ -notmatch '^[a-z0-9]+(?:-[a-z0-9]+)*$' }).Count -eq 0) -Message "Quest '$($questProperty.Name)' has an invalid gate."
+    Assert-Condition -Condition ([string]$quest.'wiki-url' -match '^https://publish\.obsidian\.md/scarlethorizons/(?:Quests|NPCs|Meta/IC|Writings)/[^?#]+$') -Message "Quest '$($questProperty.Name)' has an invalid wiki URL."
+}
+
 foreach ($script in @('app.js', 'translator-worker.js', 'service-worker.js')) {
     & node --check (Join-Path $PwaRoot $script)
     Assert-Condition -Condition ($LASTEXITCODE -eq 0) -Message "JavaScript syntax check failed: $script"
@@ -133,8 +161,8 @@ Assert-Condition -Condition ($html.Contains('id="online-users-summary"') -and $h
 Assert-Condition -Condition ($appScript.Contains('validatePresenceSnapshot') -and $appScript.Contains('updatePresencePolling') -and $appScript.Contains('}, 30000);')) -Message 'Authenticated presence polling is incomplete.'
 Assert-Condition -Condition ($appScript.Contains('payload.schema_version !== 2') -and $appScript.Contains('Last login ${new Intl.DateTimeFormat') -and $appScript.Contains('Never logged in')) -Message 'Inactive-user last-login rendering is incomplete.'
 Assert-Condition -Condition ($html.Contains('id="word-count-card"') -and $html.Contains('id="word-count-wiki"') -and $html.Contains('id="word-count-ic"') -and $html.Contains('id="word-count-ooc"') -and $html.Contains('id="word-count-date"')) -Message 'The protected word-count dashboard card is incomplete.'
-Assert-Condition -Condition ($html.Contains('data-view="quests"') -and $html.Contains('data-view-panel="quests"') -and $html.Contains('id="quests-status"') -and $html.Contains('id="quest-list"')) -Message 'The protected Quests dashboard is incomplete.'
-Assert-Condition -Condition ($appScript.Contains('const QUEST_STATUS_VALUES') -and $appScript.Contains("'individual-only'") -and $appScript.Contains("'party-only'") -and $appScript.Contains("'individual-or-party'") -and $appScript.Contains("'abandoned-so-open'") -and $appScript.Contains('validateQuestSnapshot') -and $appScript.Contains('renderQuestUi')) -Message 'The Quests dashboard does not support the complete status vocabulary.'
+Assert-Condition -Condition ($html.Contains('data-view="quests"') -and $html.Contains('data-view-panel="quests"') -and $html.Contains('id="quests-status"') -and $html.Contains('id="quest-list"') -and $html.Contains('id="quest-state-cycle"') -and $html.Contains('id="quest-state-cycle-label"')) -Message 'The protected Quests dashboard is incomplete.'
+Assert-Condition -Condition ($appScript.Contains('const QUEST_STATUS_VALUES') -and $appScript -match "(?s)const QUEST_STATE_DISPLAY_ORDER = Object\.freeze\(\[\s*'active',\s*'available',\s*'available \(abandoned\)',\s*'completed',\s*'withdrawn'\s*\]\)" -and $appScript.Contains("'individual-only'") -and $appScript.Contains("'party-only'") -and $appScript.Contains("'individual-or-party'") -and $appScript.Contains("if (viewName === 'quests') questStateFilter = '';") -and $appScript.Contains('QUEST_STATE_DISPLAY_ORDER.indexOf(left.quest.state)') -and $appScript.Contains("const cycleValues = ['', ...availableStates]") -and $appScript.Contains("orderedQuests.filter((quest) => quest.state === questStateFilter)") -and $appScript.Contains('renderQuestUi')) -Message 'The Quests dashboard does not support ordered and filterable lifecycle states.'
 Assert-Condition -Condition ($appScript.Contains("await requestAuthenticationApi('/quests')") -and $appScript.Contains('authenticatedAccount === null')) -Message 'Quest records must load only through the authenticated broker session.'
 Assert-Condition -Condition ($html.Contains('data-view="magic-items"') -and $html.Contains('data-view-panel="magic-items"') -and $html.Contains('id="magic-items-status"') -and $html.Contains('id="magic-item-list"')) -Message 'The Magic Items page is incomplete.'
 Assert-Condition -Condition ($appScript.Contains('fetchWikiMagicItems') -and $appScript.Contains('fetchFallbackMagicItems') -and $appScript.Contains("fetch('magic-items.json'") -and $appScript.Contains('data_source: ''fallback''')) -Message 'Magic-item wiki-first fallback loading is incomplete.'
@@ -169,11 +197,12 @@ Assert-Condition -Condition ($serviceWorker.Contains('networkFirstData') -and $s
 Assert-Condition -Condition ($appScript.Contains("updateViaCache: 'none'") -and $appScript.Contains('await registration.update()')) -Message 'The PWA must explicitly check for uncached service-worker updates.'
 Assert-Condition -Condition ($manifest.start_url -eq './#dashboard' -and $manifest.scope -eq './') -Message 'The manifest must keep navigation inside the deployed PWA directory.'
 Assert-Condition -Condition ($html.Contains('href="manifest.webmanifest"') -and $appScript.Contains('service-worker.js')) -Message 'The install manifest or service-worker registration is missing.'
-Assert-Condition -Condition ($html.Contains('href="styles.css?v=32"') -and $html.Contains('src="app.js?v=32"') -and $serviceWorker.Contains("'./styles.css?v=32'") -and $serviceWorker.Contains("'./app.js?v=32'") -and $serviceWorker.Contains("'./magic-items.json'")) -Message 'The PWA shell must use cache-busting assets and preload the magic-item fallback.'
+Assert-Condition -Condition ($html.Contains('href="styles.css?v=34"') -and $html.Contains('src="app.js?v=34"') -and $serviceWorker.Contains("'./styles.css?v=34'") -and $serviceWorker.Contains("'./app.js?v=34'") -and $serviceWorker.Contains("'./magic-items.json'")) -Message 'The PWA shell must use cache-busting assets and preload the magic-item fallback.'
 $apacheConfig = Get-Content -Raw -LiteralPath (Join-Path $PwaRoot '.htaccess')
 Assert-Condition -Condition ($apacheConfig.Contains('AddType image/webp .webp')) -Message 'Apache must serve WebP hero tokens with the correct MIME type.'
 Assert-Condition -Condition ($apacheConfig.Contains('img-src ''self'' data: https://*.obsidian.md')) -Message 'The content security policy must allow preferred wiki hero images.'
 Assert-Condition -Condition ($apacheConfig.Contains('connect-src ''self'' https://publish-01.obsidian.md')) -Message 'The content security policy must allow the preferred magic-item wiki source.'
+Assert-Condition -Condition ($apacheConfig.Contains('magic-items\.json|quests\.json')) -Message 'Apache must require revalidation for public quest and magic-item data.'
 Assert-Condition -Condition ($apacheConfig.Contains('data/heroes\.json|data/hero-tokens/[^/]+')) -Message 'Apache must require revalidation for hero-token metadata and images.'
 
 Write-Output "PWA verified: $($lexiconCounts.orcish) Orcish terms, $($lexiconCounts.elvish) Elvish terms, $(@($heroData.heroes).Count) player tokens and the Dungeon Master token, $($campaignSearch.pageCount) full-text campaign pages, install manifest and offline shell valid."

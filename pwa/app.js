@@ -16,23 +16,33 @@
         token: 'data/hero-tokens/dungeon-master-914c56786be2.webp',
         preferLocal: true
     });
+    const QUEST_STATE_VALUES = Object.freeze([
+        'available',
+        'active',
+        'available (abandoned)',
+        'completed',
+        'withdrawn'
+    ]);
+    const QUEST_STATE_DISPLAY_ORDER = Object.freeze([
+        'active',
+        'available',
+        'available (abandoned)',
+        'completed',
+        'withdrawn'
+    ]);
     const QUEST_STATUS_VALUES = Object.freeze([
         'individual-only',
         'party-only',
         'individual-or-party',
-        'open',
-        'active',
-        'abandoned-so-open',
-        'completed',
-        'withdrawn'
+        ...QUEST_STATE_VALUES
     ]);
     const QUEST_STATUS_LABELS = Object.freeze({
         'individual-only': 'Individual-Only',
         'party-only': 'Party-Only',
         'individual-or-party': 'Individual-Or-Party',
-        open: 'Open',
+        available: 'Available',
         active: 'Active',
-        'abandoned-so-open': 'Abandoned—Open',
+        'available (abandoned)': 'Available (Abandoned)',
         completed: 'Completed',
         withdrawn: 'Withdrawn'
     });
@@ -59,6 +69,7 @@
     let presencePollTimer = 0;
     let authenticatedQuestSnapshot = null;
     let questRequestId = 0;
+    let questStateFilter = '';
     let magicItemSnapshot = null;
     let magicItemLoading = null;
     let magicItemError = '';
@@ -111,7 +122,12 @@
     };
 
     navButtons.forEach((button) => {
-        button.addEventListener('click', () => setView(button.dataset.view || 'dashboard'));
+        button.addEventListener('click', () => {
+            const viewName = button.dataset.view || 'dashboard';
+            if (viewName === 'quests') questStateFilter = '';
+            setView(viewName);
+            if (viewName === 'quests') renderQuestUi();
+        });
     });
 
     document.querySelectorAll('[data-open-view]').forEach((button) => {
@@ -390,7 +406,7 @@
             && validRequiredText(quest.summary, 1000)
             && validRequiredText(quest.quest_giver, 200)
             && ['individual-only', 'party-only', 'individual-or-party'].includes(quest.visibility)
-            && ['open', 'active', 'abandoned-so-open', 'completed', 'withdrawn'].includes(quest.state)
+            && ['available', 'active', 'available (abandoned)', 'completed', 'withdrawn'].includes(quest.state)
             && Array.isArray(quest.objectives)
             && quest.objectives.length > 0
             && quest.objectives.length <= 20
@@ -426,10 +442,14 @@
     const renderQuestUi = () => {
         const status = byId('quests-status');
         const list = byId('quest-list');
+        const stateCycle = byId('quest-state-cycle');
+        const stateCycleLabel = byId('quest-state-cycle-label');
         list?.replaceChildren();
         if (list) list.hidden = true;
+        if (stateCycle) stateCycle.hidden = true;
 
         if (authenticatedAccount === null) {
+            questStateFilter = '';
             if (status) status.textContent = 'Log in as your character to view available quests.';
             return;
         }
@@ -442,10 +462,40 @@
             return;
         }
 
-        if (status) status.textContent = '';
+        const availableStates = QUEST_STATE_DISPLAY_ORDER.filter((state) =>
+            authenticatedQuestSnapshot.quests.some((quest) => quest.state === state));
+        if (!availableStates.includes(questStateFilter)) questStateFilter = '';
+        if (stateCycle && stateCycleLabel && availableStates.length > 1) {
+            const filterLabel = questStateFilter === ''
+                ? 'All states'
+                : QUEST_STATUS_LABELS[questStateFilter];
+            stateCycleLabel.textContent = filterLabel;
+            stateCycle.setAttribute(
+                'aria-label',
+                `Cycle quest state filter. Currently showing ${filterLabel}.`);
+            stateCycle.title = `Currently showing ${filterLabel}`;
+            stateCycle.hidden = false;
+        }
+
+        const orderedQuests = authenticatedQuestSnapshot.quests
+            .map((quest, sourceIndex) => ({ quest, sourceIndex }))
+            .sort((left, right) =>
+                QUEST_STATE_DISPLAY_ORDER.indexOf(left.quest.state)
+                    - QUEST_STATE_DISPLAY_ORDER.indexOf(right.quest.state)
+                || left.sourceIndex - right.sourceIndex)
+            .map(({ quest }) => quest);
+        const visibleQuests = questStateFilter === ''
+            ? orderedQuests
+            : orderedQuests.filter((quest) => quest.state === questStateFilter);
+
+        if (status) {
+            status.textContent = questStateFilter === ''
+                ? ''
+                : `Showing ${visibleQuests.length} ${QUEST_STATUS_LABELS[questStateFilter]} quest${visibleQuests.length === 1 ? '' : 's'}.`;
+        }
         if (!list) return;
         const fragment = document.createDocumentFragment();
-        authenticatedQuestSnapshot.quests.forEach((quest) => {
+        visibleQuests.forEach((quest) => {
             const card = document.createElement('article');
             card.className = 'quest-card';
 
@@ -457,7 +507,8 @@
             tags.className = 'quest-tags';
             for (const tagValue of [quest.state, quest.visibility]) {
                 const tag = document.createElement('span');
-                tag.className = `quest-tag quest-tag-${tagValue}`;
+                const tagClass = tagValue.replace(/[^a-z0-9]+/gu, '-').replace(/^-|-$/gu, '');
+                tag.className = `quest-tag quest-tag-${tagClass}`;
                 tag.textContent = QUEST_STATUS_LABELS[tagValue];
                 tags.append(tag);
             }
@@ -698,6 +749,18 @@
         list.append(fragment);
         list.hidden = false;
     };
+
+    byId('quest-state-cycle')?.addEventListener('click', () => {
+        if (authenticatedQuestSnapshot === null) return;
+        const availableStates = QUEST_STATE_DISPLAY_ORDER.filter((state) =>
+            authenticatedQuestSnapshot.quests.some((quest) => quest.state === state));
+        if (availableStates.length < 2) return;
+        const cycleValues = ['', ...availableStates];
+        const currentIndex = cycleValues.indexOf(questStateFilter);
+        questStateFilter = cycleValues[(currentIndex + 1) % cycleValues.length];
+        setView('quests');
+        renderQuestUi();
+    });
 
     const loadMagicItems = async (force = false) => {
         if (magicItemLoading && !force) return magicItemLoading;
@@ -1063,6 +1126,7 @@
         authenticatedWordCountSnapshot = null;
         authenticatedPresenceSnapshot = null;
         authenticatedQuestSnapshot = null;
+        questStateFilter = '';
         updateAuthenticationUi();
         if (authenticatedAccount !== null) {
             await Promise.all([loadXpSummary(), loadWordCountSummary(), loadQuests()]);
@@ -1111,6 +1175,7 @@
             authenticatedXpSnapshot = null;
             authenticatedWordCountSnapshot = null;
             authenticatedQuestSnapshot = null;
+            questStateFilter = '';
             try {
                 const identity = await requestAuthenticationApi('/me');
                 authenticatedAccount = identity.account || authenticatedAccount;
@@ -1128,6 +1193,7 @@
             authenticatedXpSnapshot = null;
             authenticatedWordCountSnapshot = null;
             authenticatedQuestSnapshot = null;
+            questStateFilter = '';
             setAuthenticationMessage(error.message, true);
             updateAuthenticationUi();
         } finally {
@@ -1151,6 +1217,7 @@
             wordCountRequestId++;
             authenticatedQuestSnapshot = null;
             questRequestId++;
+            questStateFilter = '';
             updateAuthenticationUi();
             if (authDialog instanceof HTMLDialogElement) authDialog.close();
         } catch (error) {

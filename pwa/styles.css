@@ -265,6 +265,17 @@ a {
     font-size: 1.15rem;
 }
 
+.quest-state-cycle {
+    min-height: 2.35rem;
+    border: 1px solid var(--line);
+    color: var(--quiet);
+    font-size: 0.78rem;
+}
+
+.quest-state-cycle[hidden] {
+    display: none;
+}
+
 main {
     width: 100%;
     min-width: 0;
@@ -1487,6 +1498,12 @@ button:disabled {
         justify-content: flex-start;
         width: 100%;
         padding-inline: 1rem;
+    }
+
+    .quest-state-cycle {
+        width: calc(100% - 1.5rem);
+        margin-left: 1.5rem;
+        padding-inline: 0.8rem;
     }
 
     main {

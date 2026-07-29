@@ -8,5 +8,5 @@ AddType image/webp .webp
     Header always set Permissions-Policy "camera=(), microphone=(), geolocation=()"
     Header always set Content-Security-Policy "default-src 'self'; base-uri 'none'; connect-src 'self' https://publish-01.obsidian.md; form-action 'self'; frame-ancestors 'none'; img-src 'self' data: https://*.obsidian.md; manifest-src 'self'; script-src 'self'; style-src 'self'; worker-src 'self'"
     Header always set Strict-Transport-Security "max-age=31536000"
-    Header set Cache-Control "no-cache" "expr=%{REQUEST_URI} =~ m#/(service-worker\.js|manifest\.webmanifest|magic-items\.json|data/heroes\.json|data/hero-tokens/[^/]+)$#"
+    Header set Cache-Control "no-cache" "expr=%{REQUEST_URI} =~ m#/(service-worker\.js|manifest\.webmanifest|magic-items\.json|quests\.json|data/heroes\.json|data/hero-tokens/[^/]+)$#"
 </IfModule>

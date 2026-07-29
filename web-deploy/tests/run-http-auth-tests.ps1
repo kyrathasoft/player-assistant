@@ -34,9 +34,11 @@ $baseUrl = "http://127.0.0.1:$port/scarlethorizons/api"
 $previousConfig = $env:PLAYER_ASSISTANT_BROKER_CONFIG
 $previousDatabase = $env:PLAYER_ASSISTANT_TEST_DATABASE
 $previousSnapshots = $env:PLAYER_ASSISTANT_TEST_SNAPSHOTS
+$previousQuests = $env:PLAYER_ASSISTANT_QUESTS_PATH
 $env:PLAYER_ASSISTANT_BROKER_CONFIG = $configPath
 $env:PLAYER_ASSISTANT_TEST_DATABASE = $databasePath
 $env:PLAYER_ASSISTANT_TEST_SNAPSHOTS = $snapshotPath
+$env:PLAYER_ASSISTANT_QUESTS_PATH = Join-Path $repositoryRoot 'pwa\quests.json'
 
 $process = $null
 try {
@@ -183,6 +185,16 @@ try {
     Assert-Condition -Condition ($presenceBody.scope -eq 'self' -and @($presenceBody.users).Count -eq 0) -Message 'A player presence response exposed other users.'
     Assert-Condition -Condition ([string]$presenceResponse.Headers['Cache-Control'] -match '(?i)(^|,\s*)no-store($|,)') -Message 'Presence responses must use Cache-Control: no-store.'
 
+    $questResponse = Invoke-WebRequest `
+        -UseBasicParsing `
+        -Uri "$baseUrl/v1/quests" `
+        -Headers @{ Cookie = $cookieHeader }
+    $questBody = $questResponse.Content | ConvertFrom-Json
+    Assert-Condition -Condition ($questResponse.StatusCode -eq 200) -Message 'The HTTP quest route failed.'
+    Assert-Condition -Condition ([int]$questBody.schema_version -eq 1 -and @($questBody.quests).Count -eq 9) -Message 'The HTTP quest route returned invalid JSON-backed data.'
+    Assert-Condition -Condition (@($questBody.quests | Where-Object { $_.PSObject.Properties.Name -contains 'gated-by' -or $_.PSObject.Properties.Name -contains 'gated_by' }).Count -eq 0) -Message 'The HTTP quest route exposed gating metadata.'
+    Assert-Condition -Condition ([string]$questResponse.Headers['Cache-Control'] -match '(?i)(^|,\s*)no-store($|,)') -Message 'Quest responses must use Cache-Control: no-store.'
+
     $logoutResponse = Invoke-WebRequest `
         -UseBasicParsing `
         -Method Post `
@@ -206,6 +218,7 @@ finally {
     $env:PLAYER_ASSISTANT_BROKER_CONFIG = $previousConfig
     $env:PLAYER_ASSISTANT_TEST_DATABASE = $previousDatabase
     $env:PLAYER_ASSISTANT_TEST_SNAPSHOTS = $previousSnapshots
+    $env:PLAYER_ASSISTANT_QUESTS_PATH = $previousQuests
     $resolvedTemporaryRoot = [IO.Path]::GetFullPath($temporaryRoot)
     $resolvedSystemTemp = [IO.Path]::GetFullPath($env:TEMP).TrimEnd('\') + '\'
     if ($resolvedTemporaryRoot.StartsWith($resolvedSystemTemp, [StringComparison]::OrdinalIgnoreCase) -and

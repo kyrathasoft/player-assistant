@@ -103,7 +103,8 @@ try {
                 '| Routing Hero | Ranger | 4 | 12,345 |',
                 '| Another Hero | Fighter | 5 | 98,765 |',
             ]);
-        });
+        },
+        __DIR__ . '/../../pwa/quests.json');
     $session = [];
     $adminHeaders = ['admin-key' => $config['api']['admin_key']];
     if (!mkdir($snapshotDirectory, 0700, true) && !is_dir($snapshotDirectory)) {
@@ -343,12 +344,12 @@ try {
         'find-jelenneth' => ['active', 'individual-or-party'],
         'three-items-for-nuanda' => ['active', 'individual-or-party'],
         'k-r-k-caravan-run' => ['completed', 'party-only'],
-        'plumb-lost-caverns' => ['open', 'party-only'],
-        'reclaim-keep-on-borderlands' => ['open', 'party-only'],
-        'construct-darkforest-fort' => ['open', 'individual-or-party'],
+        'plumb-lost-caverns' => ['available', 'party-only'],
+        'reclaim-keep-on-borderlands' => ['available', 'party-only'],
+        'construct-darkforest-fort' => ['available', 'individual-or-party'],
         'find-urvan-and-narinza' => ['active', 'individual-or-party'],
         'free-slaytonthorpe' => ['active', 'individual-or-party'],
-        'investigate-cold-mouth' => ['open', 'party-only'],
+        'investigate-cold-mouth' => ['available', 'party-only'],
     ];
     routingAssert(
         $quests['body']['schema_version'] === 1
@@ -365,7 +366,8 @@ try {
                 && $quest['visibility'] === $expectedStatus[1],
             'A configured quest returned the wrong status tags.');
         routingAssert(
-            !array_key_exists('character_keys', $quest),
+            !array_key_exists('gated-by', $quest)
+                && !array_key_exists('gated_by', $quest),
             'The quest route exposed its authorization metadata.');
     }
     routingAssert(
@@ -373,9 +375,9 @@ try {
             'individual-only',
             'party-only',
             'individual-or-party',
-            'open',
+            'available',
             'active',
-            'abandoned-so-open',
+            'available (abandoned)',
             'completed',
             'withdrawn',
         ],

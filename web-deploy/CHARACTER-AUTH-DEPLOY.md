@@ -66,6 +66,7 @@ app.js
 index.html
 service-worker.js
 styles.css
+quests.json
 ```
 
 ## API routes
@@ -79,6 +80,7 @@ GET  /scarlethorizons/api/v1/me
 GET  /scarlethorizons/api/v1/xp
 GET  /scarlethorizons/api/v1/word-counts
 GET  /scarlethorizons/api/v1/presence
+GET  /scarlethorizons/api/v1/quests
 POST /scarlethorizons/api/v1/logout
 ```
 
@@ -104,6 +106,7 @@ broker returns the exact uploaded totals and observation time.
 - `GET /v1/xp` returns one matching character's XP, class, attained level, and hit points for a player account and never includes the party array.
 - A Dungeon Master session receives the validated current party XP table.
 - Authenticated clients heartbeat through `/v1/presence`; players receive no other-user data, while the Dungeon Master receives every other enabled account with active-within-two-minutes state and the last login time for inactive users.
+- `GET /v1/quests` reads `/scarlethorizons/pwa/quests.json`, validates its schema, and removes `gated-by` metadata before returning quests authorized for the current account.
 - A missing or ambiguous character-key mapping fails with `xp_not_authorized`.
 - XP responses omit the configured source URL and include `Cache-Control: no-store`.
 - Anonymous word-count reads fail with HTTP 401; a logged-in session receives the latest validated wiki, IC, and OOC totals.

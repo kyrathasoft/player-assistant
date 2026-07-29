@@ -32,6 +32,10 @@ try {
         throw new RuntimeException('The private broker configuration is unavailable.');
     }
     $config = require $configPath;
+    $questDataPathOverride = getenv('PLAYER_ASSISTANT_QUESTS_PATH');
+    $questDataPath = is_string($questDataPathOverride) && $questDataPathOverride !== ''
+        ? $questDataPathOverride
+        : dirname(__DIR__) . '/pwa/quests.json';
 
     $method = strtoupper($_SERVER['REQUEST_METHOD'] ?? 'GET');
     $route = getRoutePath((string)($config['api']['base_path'] ?? ''));
@@ -53,7 +57,11 @@ try {
         };
     }
 
-    $service = new BrokerService($config, new RpolClient($config['rpol']));
+    $service = new BrokerService(
+        $config,
+        new RpolClient($config['rpol']),
+        null,
+        $questDataPath);
     $response = $service->dispatch(
         $method,
         $route,

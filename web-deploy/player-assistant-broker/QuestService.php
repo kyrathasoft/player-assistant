@@ -11,199 +11,184 @@ final class QuestService
     ];
 
     private const STATE_VALUES = [
-        'open',
+        'available',
         'active',
-        'abandoned-so-open',
+        'available (abandoned)',
         'completed',
         'withdrawn',
     ];
 
-    private const QUESTS = [
-        [
-            'id' => 'find-jelenneth',
-            'title' => 'Find Jelenneth or Learn Her Fate',
-            'summary' => 'Search for Jelenneth, the missing daughter of Parker and Heldrith Laneworth. Rescue her, or learn her fate so her family can have closure.',
-            'quest_giver' => 'Parker and Heldrith Laneworth',
-            'visibility' => 'individual-or-party',
-            'state' => 'active',
-            'objectives' => [
-                'Find and rescue Jelenneth, or learn what happened to her.',
-                'Return reliable news to her family.',
-            ],
-            'reward' => '',
-            'accepted_on' => 'May 6, 406 PR',
-            'expires_on' => '',
-            'wiki_url' => 'https://publish.obsidian.md/scarlethorizons/Quests/Find+Jelenneth+or+Learn+Her+Fate',
-            'character_keys' => [],
-        ],
-        [
-            'id' => 'three-items-for-nuanda',
-            'title' => 'Three Items for Nuanda Nemere',
-            'summary' => 'Retrieve the three ritual ingredients Nuanda Nemere requested and bring them to her before she no longer needs them.',
-            'quest_giver' => 'Nuanda Nemere',
-            'visibility' => 'individual-or-party',
-            'state' => 'active',
-            'objectives' => [
-                'Obtain an amethyst worth at least 50 gp.',
-                'Obtain hair from a deceased orc.',
-                'Obtain Hwyanthemon.',
-            ],
-            'reward' => '800 XP each for up to four eligible PCs',
-            'accepted_on' => '',
-            'expires_on' => 'October 7, 406 PR',
-            'wiki_url' => 'https://publish.obsidian.md/scarlethorizons/Quests/Quest+3+Items+for+Nuanda+Nemere',
-            'character_keys' => [],
-        ],
-        [
-            'id' => 'k-r-k-caravan-run',
-            'title' => 'The K-R-K Caravan Run',
-            'summary' => 'Guard Billworth Turgen\'s caravan from Kirkilston to Raven\'s Pass and see its cargo safely delivered.',
-            'quest_giver' => 'Billworth Turgen',
-            'visibility' => 'party-only',
-            'state' => 'completed',
-            'objectives' => [
-                'Protect the caravan and its travelers.',
-                'Deliver the surviving wagons to Raven\'s Pass.',
-            ],
-            'reward' => '15 gp each, a meal, and Billworth\'s offer of future work',
-            'accepted_on' => '',
-            'expires_on' => '',
-            'wiki_url' => 'https://publish.obsidian.md/scarlethorizons/Quests/Quest+Caravan+Kirkilston+to+Raven\'s+Pass',
-            'character_keys' => [],
-        ],
-        [
-            'id' => 'plumb-lost-caverns',
-            'title' => 'Plumb the Depths of the Lost Caverns',
-            'summary' => 'Explore the rediscovered Lost Caverns of Achaia on behalf of the mage Delk Whitewand.',
-            'quest_giver' => 'Delk Whitewand',
-            'visibility' => 'party-only',
-            'state' => 'open',
-            'objectives' => [
-                'Confirm and enter the Lost Caverns of Achaia.',
-                'Explore the caverns and recover their lost secrets.',
-                'Give any recovered scrolls and tomes to Delk.',
-            ],
-            'reward' => '100 gp up front, 10 gp daily, useful potions, and other recovered treasure',
-            'accepted_on' => '',
-            'expires_on' => '',
-            'wiki_url' => 'https://publish.obsidian.md/scarlethorizons/Quests/Quest+Plumb+the+Lost+Caverns+of+Achaia',
-            'character_keys' => [],
-        ],
-        [
-            'id' => 'reclaim-keep-on-borderlands',
-            'title' => 'Reclaim the Keep on the Borderlands',
-            'summary' => 'Clear the goblins and bugbears from the abandoned keep that may stand over the ancient dwarf-hold Kharaz-Ankor.',
-            'quest_giver' => 'Nolo Silvershaper',
-            'visibility' => 'party-only',
-            'state' => 'open',
-            'objectives' => [
-                'Clear the keep of its goblin and bugbear occupants.',
-                'Investigate the possible entrance to the ancient dwarf-hold.',
-            ],
-            'reward' => '25 gp daily for the party for up to 14 days, plus 5 gp per goblin tongue',
-            'accepted_on' => '',
-            'expires_on' => '',
-            'wiki_url' => 'https://publish.obsidian.md/scarlethorizons/Quests/Quest+Reclaim+the+Keep+on+the+Borderlands',
-            'character_keys' => [],
-        ],
-        [
-            'id' => 'construct-darkforest-fort',
-            'title' => 'Help Reglar Ashbow Construct a Fort in the Darkforest',
-            'summary' => 'Help Reglar Ashbow construct a fort on the eastern shore of Donally Lake in the Darkforest.',
-            'quest_giver' => 'Reglar Ashbow',
-            'visibility' => 'individual-or-party',
-            'state' => 'open',
-            'objectives' => [
-                'Meet Reglar Ashbow and agree upon the work.',
-                'Travel to the eastern shore of Donally Lake.',
-                'Help construct and secure the fort.',
-            ],
-            'reward' => '',
-            'accepted_on' => '',
-            'expires_on' => '',
-            'wiki_url' => 'https://publish.obsidian.md/scarlethorizons/NPCs/Reglar+Ashbow',
-            'character_keys' => [],
-        ],
-        [
-            'id' => 'find-urvan-and-narinza',
-            'title' => 'Find Urvan and Narinza',
-            'summary' => 'Determine what happened to Urvan and Narinza after they were separated from the party during the flight from Blightstone Pit.',
-            'quest_giver' => 'Shade and the party',
-            'visibility' => 'individual-or-party',
-            'state' => 'active',
-            'objectives' => [
-                'Follow signs of the missing companions from Blightstone Pit.',
-                'Find Urvan and Narinza, or learn their fates.',
-            ],
-            'reward' => '',
-            'accepted_on' => '',
-            'expires_on' => '',
-            'wiki_url' => 'https://publish.obsidian.md/scarlethorizons/Meta/IC/Chapter+5+-+A+Betentacled+Escape',
-            'character_keys' => [],
-        ],
-        [
-            'id' => 'free-slaytonthorpe',
-            'title' => 'Free Slaytonthorpe from the Terror of Red Tusk',
-            'summary' => 'Fulfill Cromm\'s command to Neria by discovering the nature of Red Tusk and ending the terror afflicting Slaytonthorpe.',
-            'quest_giver' => 'Cromm, through Neria Silverdale',
-            'visibility' => 'individual-or-party',
-            'state' => 'active',
-            'objectives' => [
-                'Learn who or what Red Tusk is.',
-                'Travel to Slaytonthorpe.',
-                'Free Slaytonthorpe from Red Tusk\'s terror.',
-            ],
-            'reward' => '',
-            'accepted_on' => '',
-            'expires_on' => '',
-            'wiki_url' => 'https://publish.obsidian.md/scarlethorizons/Meta/IC/Chapter+6+-+At+the+Mason\'s+Apron',
-            'character_keys' => [],
-        ],
-        [
-            'id' => 'investigate-cold-mouth',
-            'title' => 'Investigate the Cold Mouth and the Deep Friends',
-            'summary' => 'Investigate the Cold Mouth named in the recovered Toothbreaker orders and identify the Deep Friends collecting captives there.',
-            'quest_giver' => 'Recovered Toothbreaker orders',
-            'visibility' => 'party-only',
-            'state' => 'open',
-            'objectives' => [
-                'Locate the Cold Mouth north of Slaytonthorpe.',
-                'Identify Red Tusk and the Deep Friends.',
-                'Discover what happened to the captives taken there.',
-            ],
-            'reward' => '',
-            'accepted_on' => '',
-            'expires_on' => '',
-            'wiki_url' => 'https://publish.obsidian.md/scarlethorizons/Writings/Scroll+Recovered+From+An+Orc+Near+Rimbling+Brook',
-            'character_keys' => [],
-        ],
+    private const QUEST_FIELDS = [
+        'title',
+        'summary',
+        'giver',
+        'visibility',
+        'state',
+        'objectives',
+        'reward',
+        'dates',
+        'gated-by',
+        'wiki-url',
     ];
+
+    public function __construct(private readonly string $dataPath)
+    {
+        if (trim($dataPath) === '') {
+            throw new RuntimeException('The quest data path is not configured.');
+        }
+    }
 
     public function forAccount(array $account): array
     {
         $characterKey = strtolower(trim((string)($account['character_key'] ?? '')));
         $isDungeonMaster = (string)($account['role'] ?? '') === 'dm';
         $visible = array_values(array_filter(
-            self::QUESTS,
-            static function (array $quest) use ($characterKey, $isDungeonMaster): bool {
-                if (!in_array($quest['visibility'], self::VISIBILITY_VALUES, true)
-                    || !in_array($quest['state'], self::STATE_VALUES, true)) {
-                    throw new RuntimeException('The configured quest has an invalid status.');
-                }
-                return $isDungeonMaster
-                    || $quest['visibility'] !== 'individual-only'
-                    || in_array($characterKey, $quest['character_keys'], true);
-            }));
+            $this->loadQuests(),
+            static fn(array $quest): bool =>
+                $isDungeonMaster
+                || $quest['visibility'] !== 'individual-only'
+                || in_array($characterKey, $quest['gated_by'], true)));
 
         return [
             'schema_version' => 1,
             'status_values' => array_merge(self::VISIBILITY_VALUES, self::STATE_VALUES),
             'quests' => array_map(
                 static function (array $quest): array {
-                    unset($quest['character_keys']);
+                    unset($quest['gated_by']);
                     return $quest;
                 },
                 $visible),
         ];
+    }
+
+    private function loadQuests(): array
+    {
+        if (!is_file($this->dataPath) || !is_readable($this->dataPath)) {
+            throw new RuntimeException('The quest data file is unavailable.');
+        }
+        $size = filesize($this->dataPath);
+        if ($size === false || $size < 2 || $size > 262144) {
+            throw new RuntimeException('The quest data file has an invalid size.');
+        }
+        $json = file_get_contents($this->dataPath);
+        if ($json === false) {
+            throw new RuntimeException('The quest data file could not be read.');
+        }
+        try {
+            $payload = json_decode($json, true, 64, JSON_THROW_ON_ERROR);
+        } catch (JsonException $exception) {
+            throw new RuntimeException('The quest data file is not valid JSON.', 0, $exception);
+        }
+        $rootFields = is_array($payload) ? array_keys($payload) : [];
+        sort($rootFields);
+        if (!is_array($payload)
+            || $rootFields !== ['quests', 'schema_version']
+            || ($payload['schema_version'] ?? null) !== 1
+            || !is_array($payload['quests'] ?? null)
+            || array_is_list($payload['quests'])
+            || count($payload['quests']) < 1
+            || count($payload['quests']) > 100) {
+            throw new RuntimeException('The quest data file has an invalid root schema.');
+        }
+
+        $quests = [];
+        foreach ($payload['quests'] as $id => $quest) {
+            $quests[] = $this->validateQuest($id, $quest);
+        }
+        return $quests;
+    }
+
+    private function validateQuest(mixed $id, mixed $quest): array
+    {
+        if (!is_string($id)
+            || preg_match('/^[a-z0-9]+(?:-[a-z0-9]+)*$/D', $id) !== 1
+            || !is_array($quest)) {
+            throw new RuntimeException('A quest entry has an invalid identifier or shape.');
+        }
+        $actualFields = array_keys($quest);
+        $expectedFields = self::QUEST_FIELDS;
+        sort($actualFields);
+        sort($expectedFields);
+        if ($actualFields !== $expectedFields) {
+            throw new RuntimeException("Quest '$id' does not match the required schema.");
+        }
+
+        $this->requireText($quest['title'], 200, "Quest '$id' title");
+        $this->requireText($quest['summary'], 1000, "Quest '$id' summary");
+        $this->requireText($quest['giver'], 200, "Quest '$id' giver");
+        $this->requireText($quest['reward'], 500, "Quest '$id' reward", true);
+        if (!in_array($quest['visibility'], self::VISIBILITY_VALUES, true)
+            || !in_array($quest['state'], self::STATE_VALUES, true)) {
+            throw new RuntimeException("Quest '$id' has an invalid visibility or state.");
+        }
+        if (!is_array($quest['objectives'])
+            || !array_is_list($quest['objectives'])
+            || count($quest['objectives']) < 1
+            || count($quest['objectives']) > 20) {
+            throw new RuntimeException("Quest '$id' has invalid objectives.");
+        }
+        foreach ($quest['objectives'] as $objective) {
+            $this->requireText($objective, 500, "Quest '$id' objective");
+        }
+
+        $dates = $quest['dates'];
+        if (!is_array($dates)
+            || array_keys($dates) !== ['accepted', 'expires']) {
+            throw new RuntimeException("Quest '$id' has invalid dates.");
+        }
+        $this->requireText($dates['accepted'], 100, "Quest '$id' accepted date", true);
+        $this->requireText($dates['expires'], 100, "Quest '$id' expiration date", true);
+
+        $gatedBy = $quest['gated-by'];
+        if (!is_array($gatedBy)
+            || !array_is_list($gatedBy)
+            || count($gatedBy) > 100) {
+            throw new RuntimeException("Quest '$id' has invalid gates.");
+        }
+        $normalizedGates = [];
+        foreach ($gatedBy as $characterKey) {
+            if (!is_string($characterKey)
+                || preg_match('/^[a-z0-9]+(?:-[a-z0-9]+)*$/D', $characterKey) !== 1
+                || in_array($characterKey, $normalizedGates, true)) {
+                throw new RuntimeException("Quest '$id' has an invalid gated-by value.");
+            }
+            $normalizedGates[] = $characterKey;
+        }
+
+        $wikiUrl = $quest['wiki-url'];
+        $this->requireText($wikiUrl, 500, "Quest '$id' wiki URL");
+        if (preg_match(
+            '~^https://publish\.obsidian\.md/scarlethorizons/(?:Quests|NPCs|Meta/IC|Writings)/[^?#]+$~D',
+            $wikiUrl) !== 1) {
+            throw new RuntimeException("Quest '$id' has an invalid wiki URL.");
+        }
+
+        return [
+            'id' => $id,
+            'title' => $quest['title'],
+            'summary' => $quest['summary'],
+            'quest_giver' => $quest['giver'],
+            'visibility' => $quest['visibility'],
+            'state' => $quest['state'],
+            'objectives' => $quest['objectives'],
+            'reward' => $quest['reward'],
+            'accepted_on' => $dates['accepted'],
+            'expires_on' => $dates['expires'],
+            'wiki_url' => $wikiUrl,
+            'gated_by' => $normalizedGates,
+        ];
+    }
+
+    private function requireText(
+        mixed $value,
+        int $maximumLength,
+        string $label,
+        bool $allowEmpty = false): void
+    {
+        if (!is_string($value)
+            || strlen($value) > $maximumLength
+            || (!$allowEmpty && trim($value) === '')) {
+            throw new RuntimeException("$label is invalid.");
+        }
     }
 }

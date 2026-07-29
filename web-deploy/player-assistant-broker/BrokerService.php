@@ -14,7 +14,8 @@ final class BrokerService
     public function __construct(
         private readonly array $config,
         private readonly RpolClient $rpolClient,
-        ?callable $xpMarkdownFetcher = null)
+        ?callable $xpMarkdownFetcher = null,
+        ?string $questDataPath = null)
     {
         if (!extension_loaded('pdo_sqlite')) {
             throw new RuntimeException('The PHP PDO SQLite extension is required.');
@@ -38,7 +39,7 @@ final class BrokerService
             is_array($config['xp'] ?? null) ? $config['xp'] : [],
             $xpMarkdownFetcher);
         $this->wordCounts = new WordCountService($this->database);
-        $this->quests = new QuestService();
+        $this->quests = new QuestService((string)$questDataPath);
     }
 
     public function dispatch(

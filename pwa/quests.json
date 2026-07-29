@@ -1,0 +1,172 @@
+{
+  "schema_version": 1,
+  "quests": {
+    "find-jelenneth": {
+      "title": "Find Jelenneth or Learn Her Fate",
+      "summary": "Search for Jelenneth, the missing daughter of Parker and Heldrith Laneworth. Rescue her, or learn her fate so her family can have closure.",
+      "giver": "Parker and Heldrith Laneworth",
+      "visibility": "individual-or-party",
+      "state": "active",
+      "objectives": [
+        "Find and rescue Jelenneth, or learn what happened to her.",
+        "Return reliable news to her family."
+      ],
+      "reward": "",
+      "dates": {
+        "accepted": "May 6, 406 PR",
+        "expires": ""
+      },
+      "gated-by": [],
+      "wiki-url": "https://publish.obsidian.md/scarlethorizons/Quests/Find+Jelenneth+or+Learn+Her+Fate"
+    },
+    "three-items-for-nuanda": {
+      "title": "Three Items for Nuanda Nemere",
+      "summary": "Retrieve the three ritual ingredients Nuanda Nemere requested and bring them to her before she no longer needs them.",
+      "giver": "Nuanda Nemere",
+      "visibility": "individual-or-party",
+      "state": "active",
+      "objectives": [
+        "Obtain an amethyst worth at least 50 gp.",
+        "Obtain hair from a deceased orc.",
+        "Obtain Hwyanthemon."
+      ],
+      "reward": "800 XP each for up to four eligible PCs",
+      "dates": {
+        "accepted": "",
+        "expires": "October 7, 406 PR"
+      },
+      "gated-by": [],
+      "wiki-url": "https://publish.obsidian.md/scarlethorizons/Quests/Quest+3+Items+for+Nuanda+Nemere"
+    },
+    "k-r-k-caravan-run": {
+      "title": "The K-R-K Caravan Run",
+      "summary": "Guard Billworth Turgen's caravan from Kirkilston to Raven's Pass and see its cargo safely delivered.",
+      "giver": "Billworth Turgen",
+      "visibility": "party-only",
+      "state": "completed",
+      "objectives": [
+        "Protect the caravan and its travelers.",
+        "Deliver the surviving wagons to Raven's Pass."
+      ],
+      "reward": "15 gp each, a meal, and Billworth's offer of future work",
+      "dates": {
+        "accepted": "",
+        "expires": ""
+      },
+      "gated-by": [],
+      "wiki-url": "https://publish.obsidian.md/scarlethorizons/Quests/Quest+Caravan+Kirkilston+to+Raven's+Pass"
+    },
+    "plumb-lost-caverns": {
+      "title": "Plumb the Depths of the Lost Caverns",
+      "summary": "Explore the rediscovered Lost Caverns of Achaia on behalf of the mage Delk Whitewand.",
+      "giver": "Delk Whitewand",
+      "visibility": "party-only",
+      "state": "available",
+      "objectives": [
+        "Confirm and enter the Lost Caverns of Achaia.",
+        "Explore the caverns and recover their lost secrets.",
+        "Give any recovered scrolls and tomes to Delk."
+      ],
+      "reward": "100 gp up front, 10 gp daily, useful potions, and other recovered treasure",
+      "dates": {
+        "accepted": "",
+        "expires": ""
+      },
+      "gated-by": [],
+      "wiki-url": "https://publish.obsidian.md/scarlethorizons/Quests/Quest+Plumb+the+Lost+Caverns+of+Achaia"
+    },
+    "reclaim-keep-on-borderlands": {
+      "title": "Reclaim the Keep on the Borderlands",
+      "summary": "Clear the goblins and bugbears from the abandoned keep that may stand over the ancient dwarf-hold Kharaz-Ankor.",
+      "giver": "Nolo Silvershaper",
+      "visibility": "party-only",
+      "state": "available",
+      "objectives": [
+        "Clear the keep of its goblin and bugbear occupants.",
+        "Investigate the possible entrance to the ancient dwarf-hold."
+      ],
+      "reward": "25 gp daily for the party for up to 14 days, plus 5 gp per goblin tongue",
+      "dates": {
+        "accepted": "",
+        "expires": ""
+      },
+      "gated-by": [],
+      "wiki-url": "https://publish.obsidian.md/scarlethorizons/Quests/Quest+Reclaim+the+Keep+on+the+Borderlands"
+    },
+    "construct-darkforest-fort": {
+      "title": "Help Reglar Ashbow Construct a Fort in the Darkforest",
+      "summary": "Help Reglar Ashbow construct a fort on the eastern shore of Donally Lake in the Darkforest.",
+      "giver": "Reglar Ashbow",
+      "visibility": "individual-or-party",
+      "state": "available",
+      "objectives": [
+        "Meet Reglar Ashbow and agree upon the work.",
+        "Travel to the eastern shore of Donally Lake.",
+        "Help construct and secure the fort."
+      ],
+      "reward": "",
+      "dates": {
+        "accepted": "",
+        "expires": ""
+      },
+      "gated-by": [],
+      "wiki-url": "https://publish.obsidian.md/scarlethorizons/NPCs/Reglar+Ashbow"
+    },
+    "find-urvan-and-narinza": {
+      "title": "Find Urvan and Narinza",
+      "summary": "Determine what happened to Urvan and Narinza after they were separated from the party during the flight from Blightstone Pit.",
+      "giver": "Shade and the party",
+      "visibility": "individual-or-party",
+      "state": "active",
+      "objectives": [
+        "Follow signs of the missing companions from Blightstone Pit.",
+        "Find Urvan and Narinza, or learn their fates."
+      ],
+      "reward": "",
+      "dates": {
+        "accepted": "",
+        "expires": ""
+      },
+      "gated-by": [],
+      "wiki-url": "https://publish.obsidian.md/scarlethorizons/Meta/IC/Chapter+5+-+A+Betentacled+Escape"
+    },
+    "free-slaytonthorpe": {
+      "title": "Free Slaytonthorpe from the Terror of Red Tusk",
+      "summary": "Fulfill Cromm's command to Neria by discovering the nature of Red Tusk and ending the terror afflicting Slaytonthorpe.",
+      "giver": "Cromm, through Neria Silverdale",
+      "visibility": "individual-or-party",
+      "state": "active",
+      "objectives": [
+        "Learn who or what Red Tusk is.",
+        "Travel to Slaytonthorpe.",
+        "Free Slaytonthorpe from Red Tusk's terror."
+      ],
+      "reward": "",
+      "dates": {
+        "accepted": "",
+        "expires": ""
+      },
+      "gated-by": [],
+      "wiki-url": "https://publish.obsidian.md/scarlethorizons/Meta/IC/Chapter+6+-+At+the+Mason's+Apron"
+    },
+    "investigate-cold-mouth": {
+      "title": "Investigate the Cold Mouth and the Deep Friends",
+      "summary": "Investigate the Cold Mouth named in the recovered Toothbreaker orders and identify the Deep Friends collecting captives there.",
+      "giver": "Recovered Toothbreaker orders",
+      "visibility": "party-only",
+      "state": "available",
+      "objectives": [
+        "Locate the Cold Mouth north of Slaytonthorpe.",
+        "Identify Red Tusk and the Deep Friends.",
+        "Discover what happened to the captives taken there."
+      ],
+      "reward": "",
+      "dates": {
+        "accepted": "",
+        "expires": ""
+      },
+      "gated-by": [],
+      "wiki-url": "https://publish.obsidian.md/scarlethorizons/Writings/Scroll+Recovered+From+An+Orc+Near+Rimbling+Brook"
+    }
+  }
+}
