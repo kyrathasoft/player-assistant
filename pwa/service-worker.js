@@ -1,13 +1,13 @@
 'use strict';
 
-const CACHE_VERSION = 'player-assistant-pwa-0.9.8-v40';
+const CACHE_VERSION = 'player-assistant-pwa-0.9.8-v42';
 const SHELL_CACHE = `${CACHE_VERSION}-shell`;
 const DATA_CACHE = `${CACHE_VERSION}-data`;
 const SHELL_ASSETS = [
     './',
     './index.html',
     './styles.css?v=36',
-    './app.js?v=38',
+    './app.js?v=39',
     './translator-worker.js',
     './offline.html',
     './manifest.webmanifest',
@@ -15,6 +15,7 @@ const SHELL_ASSETS = [
     './icons/icon-512.png',
     './icons/dragon-mark.png',
     './magic-items.json',
+    './party-funds.json',
     './level-progression.json'
 ];
 
@@ -88,7 +89,13 @@ self.addEventListener('fetch', (event) => {
         return;
     }
 
-    if (url.pathname.includes('/data/') || url.pathname.endsWith('/campaign-search.json')) {
+    if (url.pathname.endsWith('/party-funds.json')) {
+        event.respondWith(networkFirstData(request));
+        return;
+    }
+
+    if (url.pathname.includes('/data/')
+        || url.pathname.endsWith('/campaign-search.json')) {
         event.respondWith(cacheFirst(request, DATA_CACHE));
         return;
     }

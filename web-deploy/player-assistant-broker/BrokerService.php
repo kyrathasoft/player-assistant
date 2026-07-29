@@ -10,6 +10,7 @@ final class BrokerService
     private XpTrackingService $xpTracking;
     private WordCountService $wordCounts;
     private QuestService $quests;
+    private MessageService $messages;
 
     public function __construct(
         private readonly array $config,
@@ -40,6 +41,7 @@ final class BrokerService
             $xpMarkdownFetcher);
         $this->wordCounts = new WordCountService($this->database);
         $this->quests = new QuestService($this->database, (string)$questDataPath);
+        $this->messages = new MessageService($this->database);
     }
 
     public function dispatch(
@@ -135,6 +137,18 @@ final class BrokerService
             return $this->response(
                 200,
                 $this->quests->acknowledge($current['account'], $matches[1]));
+        }
+
+        if ($method === 'GET' && $route === '/v1/messages') {
+            $current = $this->characterAuth->requireCurrentAccount($session);
+            return $this->response(200, $this->messages->forAccount($current['account']));
+        }
+
+        if ($method === 'POST' && $route === '/v1/messages') {
+            $current = $this->characterAuth->requireMutationAccount($headers, $session);
+            return $this->response(
+                201,
+                $this->messages->sendForAccount($current['account'], $body));
         }
 
         if ($method === 'POST' && $route === '/v1/logout') {

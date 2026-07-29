@@ -1,4 +1,4 @@
-<!doctype html>
+﻿<!doctype html>
 <html lang="en">
 <head>
     <meta charset="utf-8">
@@ -14,7 +14,7 @@
     <link rel="icon" href="icons/icon-192.png" sizes="192x192" type="image/png">
     <link rel="apple-touch-icon" href="icons/icon-192.png">
     <link rel="stylesheet" href="styles.css?v=36">
-    <script src="app.js?v=38" defer></script>
+    <script src="app.js?v=39" defer></script>
 </head>
 <body>
     <a class="skip-link" href="#main-content">Skip to content</a>
@@ -35,11 +35,10 @@
                     <span id="connection-label">Online</span>
                 </span>
                 <button class="account-button" id="auth-button" type="button">
-                    <span aria-hidden="true">♙</span>
                     <span id="auth-button-label">Log in</span>
                 </button>
                 <button class="install-button" id="install-app" type="button">
-                    <span aria-hidden="true">⬇</span>
+                    <span aria-hidden="true">&#8595;</span>
                     Install app
                 </button>
             </div>
@@ -47,29 +46,38 @@
 
         <nav class="primary-nav" aria-label="Primary navigation">
             <button class="nav-item is-active" type="button" data-view="dashboard" aria-current="page">
-                <span aria-hidden="true">⌂</span><span>Home</span>
+                <span>Home</span>
             </button>
             <button class="nav-item" type="button" data-view="quests">
-                <span aria-hidden="true">⚑</span><span>Quests</span>
+                <span>Quests</span>
             </button>
             <button class="nav-item quest-state-cycle" id="quest-state-cycle" type="button"
                     aria-label="Cycle quest state filter" hidden>
-                <span aria-hidden="true">↻</span><span id="quest-state-cycle-label">All states</span>
+                <span id="quest-state-cycle-label">All states</span>
             </button>
             <button class="nav-item" type="button" data-view="magic-items">
-                <span aria-hidden="true">✦</span><span>Magic Items</span>
+                <span>Magic Items</span>
+            </button>
+            <button class="nav-item" type="button" data-view="party-funds">
+                <span>Party Funds</span>
+            </button>
+            <button class="nav-item" type="button" data-view="message-dm" id="message-dm-nav" hidden>
+                <span>Message the DM</span>
+            </button>
+            <button class="nav-item" type="button" data-view="message-player" id="message-player-nav" hidden>
+                <span>Message a Player</span>
             </button>
             <button class="nav-item" type="button" data-view="translator">
-                <span aria-hidden="true">ᚱ</span><span>Translator</span>
+                <span>Translator</span>
             </button>
             <button class="nav-item" type="button" data-view="search">
-                <span aria-hidden="true">⌕</span><span>Search</span>
+                <span>Search</span>
             </button>
             <button class="nav-item" type="button" data-view="dice">
-                <span aria-hidden="true">⚄</span><span>Dice</span>
+                <span>Dice</span>
             </button>
             <button class="nav-item" type="button" data-view="campaign">
-                <span aria-hidden="true">⌘</span><span>Campaign</span>
+                <span>Campaign</span>
             </button>
         </nav>
 
@@ -79,7 +87,7 @@
                     <div>
                         <p class="eyebrow">Scarlet Horizons campaign</p>
                         <h1 id="dashboard-title">Your table, close at hand.</h1>
-                        <p>Translate campaign speech, search the public lore library, roll dice, and reach the campaign’s player resources from one installable app.</p>
+                        <p>Translate campaign speech, search the public lore library, roll dice, and reach the campaignâ€™s player resources from one installable app.</p>
                         <div class="hero-actions">
                             <button class="primary-button" type="button" data-open-view="translator">Open translator</button>
                             <button class="secondary-button" type="button" data-open-view="search">Search campaign lore</button>
@@ -98,22 +106,22 @@
 
                 <div class="card-grid">
                     <button class="feature-card" type="button" data-open-view="translator">
-                        <span class="feature-icon" aria-hidden="true">ᚱ</span>
+                        <span class="feature-icon" aria-hidden="true">áš±</span>
                         <strong>Orcish &amp; Elvish</strong>
                         <span>Translate in either direction and export the result.</span>
                     </button>
                     <button class="feature-card" type="button" data-open-view="search">
-                        <span class="feature-icon" aria-hidden="true">⌕</span>
+                        <span class="feature-icon" aria-hidden="true">âŒ•</span>
                         <strong>Campaign search</strong>
                         <span>Find people, places, rules, quests, and lore.</span>
                     </button>
                     <button class="feature-card" type="button" data-open-view="dice">
-                        <span class="feature-icon" aria-hidden="true">⚄</span>
+                        <span class="feature-icon" aria-hidden="true">âš„</span>
                         <strong>Dice roller</strong>
                         <span>Roll standard dice expressions and retain recent results.</span>
                     </button>
                     <button class="feature-card" type="button" data-open-view="campaign">
-                        <span class="feature-icon" aria-hidden="true">⌘</span>
+                        <span class="feature-icon" aria-hidden="true">âŒ˜</span>
                         <strong>Campaign portals</strong>
                         <span>Open the game forum, cast, map, and public vault.</span>
                     </button>
@@ -240,6 +248,65 @@
                 </div>
             </section>
 
+
+            <section class="view" id="view-party-funds" data-view-panel="party-funds" aria-labelledby="party-funds-title" hidden>
+                <div class="page-heading">
+                    <div>
+                        <p class="eyebrow">Party finance</p>
+                        <h1 id="party-funds-title">Party Funds</h1>
+                    </div>
+                </div>
+
+                <div class="magic-items-dashboard">
+                    <div class="magic-items-source-row">
+                        <p class="magic-items-status" id="party-funds-status" role="status" aria-live="polite">Party funds load when this view is opened.</p>
+                        <button class="secondary-button" id="party-funds-refresh" type="button">Refresh</button>
+                    </div>
+                    <p class="party-funds-total" id="party-funds-total" aria-live="polite">â€”</p>
+                    <p id="party-funds-note" class="party-funds-note" hidden></p>
+                </div>
+            </section>
+
+            <section class="view" id="view-message-dm" data-view-panel="message-dm" aria-labelledby="message-dm-title" hidden>
+                <div class="page-heading">
+                    <div>
+                        <p class="eyebrow">Player messages</p>
+                        <h1 id="message-dm-title">Message the DM</h1>
+                    </div>
+                </div>
+
+                <div class="magic-items-dashboard">
+                    <label for="message-dm-text">Message</label>
+                    <textarea id="message-dm-text" rows="5" maxlength="5000" placeholder="Type your message for the Dungeon Master..."></textarea>
+                    <div class="magic-items-source-row">
+                        <button class="primary-button" id="message-dm-submit" type="button" disabled>Submit</button>
+                        <p id="message-dm-status" class="magic-items-status" role="status" aria-live="polite" hidden></p>
+                    </div>
+                </div>
+            </section>
+
+            <section class="view" id="view-message-player" data-view-panel="message-player" aria-labelledby="message-player-title" hidden>
+                <div class="page-heading">
+                    <div>
+                        <p class="eyebrow">Player messages</p>
+                        <h1 id="message-player-title">Message a Player</h1>
+                    </div>
+                </div>
+
+                <div class="magic-items-dashboard">
+                    <label for="message-player-recipient">Player</label>
+                    <select id="message-player-recipient" disabled>
+                        <option value="" disabled selected>Select a player</option>
+                    </select>
+                    <label for="message-player-text">Message</label>
+                    <textarea id="message-player-text" rows="5" maxlength="5000" placeholder="Type your message for the selected player..."></textarea>
+                    <div class="magic-items-source-row">
+                        <button class="primary-button" id="message-player-submit" type="button" disabled>Submit</button>
+                        <p id="message-player-status" class="magic-items-status" role="status" aria-live="polite" hidden></p>
+                    </div>
+                </div>
+            </section>
+
             <section class="view" id="view-translator" data-view-panel="translator" aria-labelledby="translator-title" hidden>
                 <div class="page-heading">
                     <div>
@@ -274,10 +341,10 @@
                                 <strong id="translator-input-label">English text</strong>
                                 <span id="translator-input-count">0 words</span>
                             </span>
-                            <textarea id="translator-input" rows="10" maxlength="100000" placeholder="Begin typing or paste text here…" spellcheck="true"></textarea>
+                            <textarea id="translator-input" rows="10" maxlength="100000" placeholder="Begin typing or paste text hereâ€¦" spellcheck="true"></textarea>
                         </label>
 
-                        <div class="translation-direction" aria-hidden="true">→</div>
+                        <div class="translation-direction" aria-hidden="true">â†’</div>
 
                         <label class="text-panel" for="translator-output">
                             <span class="text-panel-heading">
@@ -286,7 +353,7 @@
                             </span>
                             <span class="translation-loading" id="translation-loading" hidden>
                                 <span class="spinner" aria-hidden="true"></span>
-                                <span id="translation-loading-label">Preparing translation…</span>
+                                <span id="translation-loading-label">Preparing translationâ€¦</span>
                             </span>
                             <textarea id="translator-output" rows="10" readonly placeholder="Translation appears here as you type."></textarea>
                         </label>
@@ -309,8 +376,8 @@
 
                 <div class="search-card">
                     <label class="search-box" for="campaign-search">
-                        <span aria-hidden="true">⌕</span>
-                        <input id="campaign-search" type="search" autocomplete="off" placeholder="Search people, places, quests, rules…">
+                        <span aria-hidden="true">âŒ•</span>
+                        <input id="campaign-search" type="search" autocomplete="off" placeholder="Search people, places, quests, rulesâ€¦">
                     </label>
                     <p class="search-guidance" id="search-guidance">Whole words are matched by default. Use wildcards for partial words: *king, king*, or *king*. Search covers titles and public page text.</p>
                     <div class="search-results" id="search-results" aria-live="polite"></div>
@@ -346,7 +413,7 @@
                         </div>
                         <div class="dice-result" id="dice-result" role="status" aria-live="polite">
                             <span>Ready</span>
-                            <strong>—</strong>
+                            <strong>â€”</strong>
                             <small>Choose dice and roll.</small>
                         </div>
                     </div>
@@ -371,16 +438,16 @@
 
                 <div class="portal-grid">
                     <a class="portal-card" href="https://rpol.net/game.php?gi=80170" target="_blank" rel="noopener noreferrer">
-                        <span aria-hidden="true">✦</span><strong>Game forum</strong><small>Open Scarlet Horizons on RPOL</small>
+                        <span aria-hidden="true">âœ¦</span><strong>Game forum</strong><small>Open Scarlet Horizons on RPOL</small>
                     </a>
                     <a class="portal-card" href="https://rpol.net/gameinfo.php?action=cast&amp;gi=80170" target="_blank" rel="noopener noreferrer">
-                        <span aria-hidden="true">♙</span><strong>The Cast</strong><small>Characters and campaign participants</small>
+                        <span aria-hidden="true">â™™</span><strong>The Cast</strong><small>Characters and campaign participants</small>
                     </a>
                     <a class="portal-card" href="https://publish.obsidian.md/scarlethorizons" target="_blank" rel="noopener noreferrer">
-                        <span aria-hidden="true">◇</span><strong>Campaign vault</strong><small>Public lore, rules, maps, and indexes</small>
+                        <span aria-hidden="true">â—‡</span><strong>Campaign vault</strong><small>Public lore, rules, maps, and indexes</small>
                     </a>
                     <a class="portal-card" href="https://publish.obsidian.md/scarlethorizons/Locations/Northern+Reaches" target="_blank" rel="noopener noreferrer">
-                        <span aria-hidden="true">⌖</span><strong>Northern Reaches</strong><small>Open the regional map and location notes</small>
+                        <span aria-hidden="true">âŒ–</span><strong>Northern Reaches</strong><small>Open the regional map and location notes</small>
                     </a>
                 </div>
 
@@ -391,7 +458,7 @@
 
                 <div class="credits-card">
                     <h2>Language data</h2>
-                    <p>Elvish source vocabulary is derived in part from <a href="https://eldamo.org/" target="_blank" rel="noopener noreferrer">Eldamo 0.8.13</a>, licensed under CC BY 4.0. Generated Sindarin-first forms and neologisms are identified by the project’s lexicon policy.</p>
+                    <p>Elvish source vocabulary is derived in part from <a href="https://eldamo.org/" target="_blank" rel="noopener noreferrer">Eldamo 0.8.13</a>, licensed under CC BY 4.0. Generated Sindarin-first forms and neologisms are identified by the projectâ€™s lexicon policy.</p>
                 </div>
             </section>
         </main>
@@ -404,7 +471,7 @@
 
     <dialog id="auth-dialog">
         <div class="auth-dialog-surface">
-            <button class="dialog-close" id="auth-dialog-close" type="button" aria-label="Close character login">×</button>
+            <button class="dialog-close" id="auth-dialog-close" type="button" aria-label="Close character login">&#10005;</button>
             <p class="eyebrow">Protected player access</p>
 
             <form class="auth-login-form" id="auth-login-form">
@@ -438,7 +505,7 @@
 
     <dialog id="quest-alert-dialog" aria-labelledby="quest-alert-title">
         <div class="quest-alert-dialog-surface">
-            <button class="dialog-close" id="quest-alert-close" type="button" aria-label="Close quest alerts">×</button>
+                    <button class="dialog-close" id="quest-alert-close" type="button" aria-label="Close quest alerts">&#10005;</button>
             <p class="eyebrow">Quest requests</p>
             <h2 id="quest-alert-title">Quest alerts</h2>
             <p id="quest-alert-summary"></p>
@@ -448,7 +515,7 @@
 
     <dialog id="install-help">
         <form method="dialog">
-            <button class="dialog-close" value="close" aria-label="Close install instructions">×</button>
+            <button class="dialog-close" value="close" aria-label="Close install instructions">&#10005;</button>
             <p class="eyebrow">Install Player Assistant</p>
             <h2>Keep it with your apps</h2>
             <div id="install-help-content"></div>

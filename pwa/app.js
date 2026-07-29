@@ -7,6 +7,7 @@
     const MAGIC_ITEMS_WIKI_URL = 'https://publish.obsidian.md/scarlethorizons/Magic+Items/Kirkilston+Crew+Magic+Items';
     const MAGIC_ITEMS_MARKDOWN_ROOT = 'https://publish-01.obsidian.md/access/1113217a28a5bfdcc9fbe8e6d82b27ac/Magic%20Items/';
     const MAGIC_ITEM_LONGEVITY_VALUES = Object.freeze(['one-shot', 'limited-use', 'permanent']);
+    const PARTY_FUNDS_GEMSTONE_VALUE_PATTERN = /^\s*(\d+(?:\.\d+)?)\s+gp$/i;
     const MAX_SEARCH_RESULTS = 40;
     const MAX_TRANSLATOR_WORDS = 5000;
     const textEncoder = new TextEncoder();
@@ -79,15 +80,31 @@
     let magicItemSnapshot = null;
     let magicItemLoading = null;
     let magicItemError = '';
+    let partyFundsSnapshot = null;
+    let partyFundsLoading = null;
+    let partyFundsError = '';
     let heroTokenData = null;
     let heroTokenDataLoading = null;
+    let activeView = 'dashboard';
 
     const worker = typeof Worker !== 'undefined'
         ? new Worker('translator-worker.js')
         : null;
 
     const setView = (viewName, updateHistory = true) => {
-        const resolvedView = views.has(viewName) ? viewName : 'dashboard';
+        const requestedView = views.has(viewName) ? viewName : 'dashboard';
+        const isAuthenticated = authenticatedAccount !== null;
+        const isDungeonMaster = isAuthenticated && authenticatedAccount.role === 'dm';
+        const resolvedView = !isAuthenticated
+            ? (requestedView === 'message-dm' || requestedView === 'message-player')
+                ? 'dashboard'
+                : requestedView
+            : (requestedView === 'message-dm' && isDungeonMaster)
+                ? 'dashboard'
+                : (requestedView === 'message-player' && !isDungeonMaster)
+                    ? 'dashboard'
+                    : requestedView;
+        activeView = resolvedView;
         views.forEach((panel, name) => {
             const active = name === resolvedView;
             panel.hidden = !active;
@@ -118,6 +135,15 @@
         }
         if (resolvedView === 'magic-items' && magicItemSnapshot === null) {
             void loadMagicItems();
+        }
+        if (resolvedView === 'party-funds' && partyFundsSnapshot === null) {
+            void loadPartyFunds();
+        }
+        if (resolvedView === 'message-dm') {
+            renderMessageDmUi();
+        }
+        if (resolvedView === 'message-player') {
+            renderMessagePlayerUi();
         }
 
         byId('main-content')?.focus({ preventScroll: true });
@@ -975,6 +1001,364 @@
         list.hidden = false;
     };
 
+    const validPartyFundsText = (value, minimum = 1, maximum = 5000) => {
+        const text = String(value || '').trim();
+        return text.length >= minimum && text.length <= maximum;
+    };
+
+    const parsePartyFundsGemstoneValue = (value) => {
+        const match = PARTY_FUNDS_GEMSTONE_VALUE_PATTERN.exec(String(value || ''));
+        return match ? Number(match[1]) : NaN;
+    };
+
+    const validatePartyFunds = (payload) => {
+        const validCoins = (coins) => coins
+            && Number.isSafeInteger(coins.copper)
+            && coins.copper >= 0
+            && Number.isSafeInteger(coins.silver)
+            && coins.silver >= 0
+            && Number.isSafeInteger(coins.gold)
+            && coins.gold >= 0;
+        const validGemstone = (gemstone) => gemstone
+            && validPartyFundsText(gemstone.type, 2, 40)
+            && validPartyFundsText(gemstone.size, 2, 40)
+            && validPartyFundsText(gemstone.quality, 2, 40)
+            && PARTY_FUNDS_GEMSTONE_VALUE_PATTERN.test(String(gemstone.value || ''))
+            && Number.isFinite(parsePartyFundsGemstoneValue(gemstone.value));
+        if (!payload
+            || payload.schema_version !== 2
+            || !validPartyFundsText(payload['meta-date'], 1, 40)
+            || !validPartyFundsText(payload['fiction-date'], 1, 60)
+            || !validPartyFundsText(payload.text, 1, 5000)
+            || !validCoins(payload.coins)
+            || !Array.isArray(payload.gemstones)
+            || payload.gemstones.length > 100
+            || !payload.gemstones.every(validGemstone)) {
+            throw new Error('Party-funds data is invalid.');
+        }
+        return payload;
+    };
+
+    const getPartyFundsGpValue = (coins) => Number(coins.gold)
+        + (Number(coins.silver) / 10)
+        + (Number(coins.copper) / 100);
+
+    const getPartyFundsTotal = (funds) => getPartyFundsGpValue(funds.coins)
+        + funds.gemstones
+            .map((gemstone) => parsePartyFundsGemstoneValue(gemstone.value))
+            .reduce((sum, value) => sum + value, 0);
+
+    const formatPartyFundsTotal = (value) => {
+        const rounded = Math.round(value * 100) / 100;
+        return Number.isInteger(rounded)
+            ? `${rounded.toLocaleString('en-US')} gp`
+            : `${rounded.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} gp`;
+    };
+
+    const fetchPartyFunds = async () => {
+        const response = await fetch('party-funds.json', { cache: 'no-cache' });
+        if (!response.ok) {
+            throw new Error('The bundled party-funds file is unavailable.');
+        }
+        return validatePartyFunds(await response.json());
+    };
+
+    const renderPartyFunds = () => {
+        const status = byId('party-funds-status');
+        const total = byId('party-funds-total');
+        const note = byId('party-funds-note');
+        if (status) {
+            status.textContent = partyFundsSnapshot === null
+                ? (partyFundsLoading ? 'Loading party fundsâ€¦' : (partyFundsError || 'Party funds load when this view is opened.'))
+                : 'Current party funds loaded from the bundled file.';
+        }
+        if (total) {
+            total.textContent = partyFundsSnapshot === null ? 'â€”' : formatPartyFundsTotal(getPartyFundsTotal(partyFundsSnapshot));
+        }
+        if (!note) return;
+        if (partyFundsSnapshot === null) {
+            note.hidden = true;
+            note.replaceChildren();
+            return;
+        }
+        const noteText = String(partyFundsSnapshot?.text || '').trim();
+        if (noteText.length === 0) {
+            note.hidden = true;
+            note.textContent = '';
+            return;
+        }
+        note.hidden = false;
+        note.replaceChildren();
+        const noteTemplate = noteText;
+        const italic = document.createElement('em');
+        italic.textContent = noteTemplate;
+        note.append(italic);
+    };
+
+    const isMessageTextReady = (value) => String(value || '').trim().length >= 3;
+
+    const updateMessageDmSubmitState = () => {
+        const messageInput = byId('message-dm-text');
+        const submitButton = byId('message-dm-submit');
+        if (!(messageInput instanceof HTMLTextAreaElement) || !(submitButton instanceof HTMLButtonElement)) return;
+        submitButton.disabled = !isMessageTextReady(messageInput.value);
+    };
+
+    const updateMessagePlayerSubmitState = () => {
+        const messageInput = byId('message-player-text');
+        const submitButton = byId('message-player-submit');
+        const recipientSelect = byId('message-player-recipient');
+        if (
+            !(messageInput instanceof HTMLTextAreaElement)
+            || !(submitButton instanceof HTMLButtonElement)
+            || !(recipientSelect instanceof HTMLSelectElement)
+        ) return;
+        const recipient = recipientSelect.value;
+        submitButton.disabled = !(
+            isMessageTextReady(messageInput.value)
+            && /^[a-f0-9]{32}$/u.test(recipient)
+        );
+    };
+
+    const renderMessageDmUi = () => {
+        updateMessageDmSubmitState();
+        const status = byId('message-dm-status');
+        if (status) status.hidden = true;
+    };
+
+    const renderMessagePlayerRecipients = () => {
+        const isDungeonMaster = authenticatedAccount?.role === 'dm';
+        const recipientSelect = byId('message-player-recipient');
+        const submitButton = byId('message-player-submit');
+        const status = byId('message-player-status');
+        if (!(recipientSelect instanceof HTMLSelectElement)) return;
+        recipientSelect.replaceChildren();
+
+        if (!isDungeonMaster) {
+            const disabledOption = document.createElement('option');
+            disabledOption.value = '';
+            disabledOption.textContent = 'Dungeon Master only';
+            disabledOption.disabled = true;
+            disabledOption.selected = true;
+            recipientSelect.append(disabledOption);
+            recipientSelect.disabled = true;
+            if (submitButton instanceof HTMLButtonElement) submitButton.disabled = true;
+            if (status) {
+                status.hidden = true;
+            }
+            return;
+        }
+
+        if (authenticatedPresenceSnapshot === null || authenticatedPresenceSnapshot.scope !== 'party') {
+            const loadingOption = document.createElement('option');
+            loadingOption.value = '';
+            loadingOption.textContent = 'Loading players…';
+            loadingOption.disabled = true;
+            loadingOption.selected = true;
+            recipientSelect.append(loadingOption);
+            recipientSelect.disabled = true;
+            if (submitButton instanceof HTMLButtonElement) submitButton.disabled = true;
+            if (status) {
+                status.hidden = true;
+            }
+            return;
+        }
+
+        const players = authenticatedPresenceSnapshot.users
+            .filter((user) => user.role === 'player');
+        if (players.length === 0) {
+            const noneOption = document.createElement('option');
+            noneOption.value = '';
+            noneOption.textContent = 'No available players';
+            noneOption.disabled = true;
+            noneOption.selected = true;
+            recipientSelect.append(noneOption);
+            recipientSelect.disabled = true;
+            if (submitButton instanceof HTMLButtonElement) submitButton.disabled = true;
+            if (status) {
+                status.hidden = false;
+                status.textContent = 'No online user list is available.';
+            }
+            return;
+        }
+
+        const defaultOption = document.createElement('option');
+        defaultOption.value = '';
+        defaultOption.textContent = 'Select a player';
+        defaultOption.selected = true;
+        defaultOption.disabled = true;
+        recipientSelect.append(defaultOption);
+
+        players.forEach((user) => {
+            const option = document.createElement('option');
+            option.value = user.account_id;
+            option.textContent = user.character_name;
+            if (user.active) {
+                option.textContent += ' (active now)';
+            }
+            recipientSelect.append(option);
+        });
+        recipientSelect.disabled = false;
+        if (submitButton instanceof HTMLButtonElement) submitButton.disabled = true;
+        if (status) status.hidden = true;
+    };
+
+    const renderMessagePlayerUi = () => {
+        renderMessagePlayerRecipients();
+        updateMessagePlayerSubmitState();
+        const status = byId('message-player-status');
+        if (!status) return;
+        const isDm = authenticatedAccount?.role === 'dm';
+        const usersAvailable = isDm
+            && authenticatedPresenceSnapshot !== null
+            && authenticatedPresenceSnapshot.scope === 'party'
+            && authenticatedPresenceSnapshot.users.some((user) => user.role === 'player');
+        if (usersAvailable) {
+            status.hidden = true;
+            status.textContent = '';
+        }
+    };
+
+    const loadPartyFunds = async (force = false) => {
+        if (partyFundsLoading && !force) return partyFundsLoading;
+        partyFundsSnapshot = null;
+        partyFundsError = '';
+        renderPartyFunds();
+        const refreshButton = byId('party-funds-refresh');
+        if (refreshButton instanceof HTMLButtonElement) refreshButton.disabled = true;
+        partyFundsLoading = (async () => {
+            try {
+                partyFundsSnapshot = await fetchPartyFunds();
+            } catch {
+                partyFundsError = 'Party-funds information is unavailable from the bundled file.';
+            } finally {
+                partyFundsLoading = null;
+                if (refreshButton instanceof HTMLButtonElement) refreshButton.disabled = false;
+                renderPartyFunds();
+            }
+        })();
+        renderPartyFunds();
+        if (partyFundsLoading) {
+            void partyFundsLoading.finally(() => renderPartyFunds());
+        }
+        return partyFundsLoading;
+    };
+
+    byId('party-funds-refresh')?.addEventListener('click', () => {
+        void loadPartyFunds(true);
+    });
+
+    byId('message-dm-text')?.addEventListener('input', () => {
+        updateMessageDmSubmitState();
+    });
+    byId('message-dm-text')?.addEventListener('change', () => {
+        updateMessageDmSubmitState();
+    });
+    byId('message-dm-submit')?.addEventListener('click', async () => {
+        const messageInput = byId('message-dm-text');
+        const submitButton = byId('message-dm-submit');
+        const status = byId('message-dm-status');
+        if (!(messageInput instanceof HTMLTextAreaElement)
+            || !(submitButton instanceof HTMLButtonElement)) {
+            return;
+        }
+        const message = messageInput.value;
+        if (!isMessageTextReady(message)) {
+            submitButton.disabled = true;
+            return;
+        }
+        submitButton.disabled = true;
+        if (status) {
+            status.hidden = false;
+            status.textContent = 'Sending message to the Dungeon Master...';
+        }
+        try {
+            await requestAuthenticationApi('/messages', {
+                method: 'POST',
+                body: {
+                    recipient_role: 'dm',
+                    message
+                },
+                csrf: true
+            });
+            if (status) {
+                status.textContent = 'Your message was sent to the Dungeon Master.';
+            }
+            messageInput.value = '';
+            setTimeout(() => {
+                if (status) status.hidden = true;
+            }, 2500);
+        } catch (error) {
+            if (status) {
+                status.textContent = error.message;
+            }
+        } finally {
+            updateMessageDmSubmitState();
+        }
+    });
+
+    byId('message-player-recipient')?.addEventListener('change', () => {
+        updateMessagePlayerSubmitState();
+    });
+    byId('message-player-text')?.addEventListener('input', () => {
+        updateMessagePlayerSubmitState();
+    });
+    byId('message-player-text')?.addEventListener('change', () => {
+        updateMessagePlayerSubmitState();
+    });
+    byId('message-player-submit')?.addEventListener('click', async () => {
+        const messageInput = byId('message-player-text');
+        const recipientSelect = byId('message-player-recipient');
+        const submitButton = byId('message-player-submit');
+        const status = byId('message-player-status');
+        if (!(messageInput instanceof HTMLTextAreaElement)
+            || !(recipientSelect instanceof HTMLSelectElement)
+            || !(submitButton instanceof HTMLButtonElement)) {
+            return;
+        }
+        const message = messageInput.value;
+        const recipient = recipientSelect.value;
+        if (!isMessageTextReady(message) || !/^[a-f0-9]{32}$/u.test(recipient)) {
+            submitButton.disabled = true;
+            return;
+        }
+        submitButton.disabled = true;
+        if (status) {
+            const recipientLabel = (recipientSelect.selectedOptions[0] instanceof HTMLOptionElement)
+                ? recipientSelect.selectedOptions[0].textContent
+                : 'selected player';
+            status.hidden = false;
+            status.textContent = `Sending message to ${recipientLabel}...`;
+        }
+        try {
+            await requestAuthenticationApi('/messages', {
+                method: 'POST',
+                body: {
+                    recipient_account_id: recipient,
+                    message
+                },
+                csrf: true
+            });
+            if (status) {
+                const recipientLabel = (recipientSelect.selectedOptions[0] instanceof HTMLOptionElement)
+                    ? recipientSelect.selectedOptions[0].textContent
+                    : 'the selected player';
+                status.textContent = `Your message was sent to ${recipientLabel}.`;
+            }
+            messageInput.value = '';
+            recipientSelect.value = '';
+            updateMessagePlayerSubmitState();
+            setTimeout(() => {
+                if (status) status.hidden = true;
+            }, 2500);
+        } catch (error) {
+            if (status) {
+                status.textContent = error.message;
+            }
+            updateMessagePlayerSubmitState();
+        }
+    });
+
     byId('quest-state-cycle')?.addEventListener('click', () => {
         if (authenticatedQuestSnapshot === null) return;
         const availableStates = QUEST_STATE_DISPLAY_ORDER.filter((state) =>
@@ -1025,6 +1409,7 @@
 
     const updateAuthenticationUi = () => {
         const authenticated = authenticatedAccount !== null;
+        const isDungeonMaster = authenticatedAccount?.role === 'dm';
         const buttonLabel = byId('auth-button-label');
         if (buttonLabel) {
             buttonLabel.textContent = authenticated
@@ -1042,6 +1427,20 @@
                 ? 'Dungeon Master'
                 : 'Player';
         }
+        const messageDmNavButton = byId('message-dm-nav');
+        if (messageDmNavButton) {
+            messageDmNavButton.hidden = !authenticated || isDungeonMaster;
+        }
+        const messagePlayerNavButton = byId('message-player-nav');
+        if (messagePlayerNavButton) {
+            messagePlayerNavButton.hidden = !authenticated || !isDungeonMaster;
+        }
+        if (isDungeonMaster && activeView === 'message-dm') {
+            setView('dashboard', false);
+        }
+        if (!isDungeonMaster && activeView === 'message-player') {
+            setView('dashboard', false);
+        }
         const protectedStatus = byId('protected-player-status');
         if (protectedStatus) {
             protectedStatus.textContent = authenticated
@@ -1053,6 +1452,9 @@
         renderWordCountUi();
         renderQuestUi();
         renderMagicItems();
+        renderPartyFunds();
+        renderMessageDmUi();
+        renderMessagePlayerUi();
         updatePresencePolling();
     };
 
@@ -1298,6 +1700,7 @@
             });
             list.append(fragment);
         }
+        renderMessagePlayerRecipients();
     };
 
     const loadPresence = async () => {

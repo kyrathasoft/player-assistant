@@ -23,6 +23,7 @@ try {
     require_once $privateDirectory . '/XpTrackingService.php';
     require_once $privateDirectory . '/WordCountService.php';
     require_once $privateDirectory . '/QuestService.php';
+    require_once $privateDirectory . '/MessageService.php';
     require_once $privateDirectory . '/BrokerService.php';
     $configPathOverride = getenv('PLAYER_ASSISTANT_BROKER_CONFIG');
     $configPath = is_string($configPathOverride) && $configPathOverride !== ''
@@ -192,6 +193,7 @@ function isCharacterSessionRoute(string $route): bool
             '/v1/presence',
             '/v1/quests',
             '/v1/quest-requests',
+            '/v1/messages',
             '/v1/logout',
         ],
         true)
