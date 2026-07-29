@@ -13,8 +13,8 @@
     <link rel="manifest" href="manifest.webmanifest">
     <link rel="icon" href="icons/icon-192.png" sizes="192x192" type="image/png">
     <link rel="apple-touch-icon" href="icons/icon-192.png">
-    <link rel="stylesheet" href="styles.css?v=36">
-    <script src="app.js?v=39" defer></script>
+    <link rel="stylesheet" href="styles.css?v=37">
+    <script src="app.js?v=40" defer></script>
 </head>
 <body>
     <a class="skip-link" href="#main-content">Skip to content</a>
@@ -87,7 +87,7 @@
                     <div>
                         <p class="eyebrow">Scarlet Horizons campaign</p>
                         <h1 id="dashboard-title">Your table, close at hand.</h1>
-                        <p>Translate campaign speech, search the public lore library, roll dice, and reach the campaignâ€™s player resources from one installable app.</p>
+                        <p>Translate campaign speech, search the public lore library, roll dice, and reach the campaign&rsquo;s player resources from one installable app.</p>
                         <div class="hero-actions">
                             <button class="primary-button" type="button" data-open-view="translator">Open translator</button>
                             <button class="secondary-button" type="button" data-open-view="search">Search campaign lore</button>
@@ -106,22 +106,22 @@
 
                 <div class="card-grid">
                     <button class="feature-card" type="button" data-open-view="translator">
-                        <span class="feature-icon" aria-hidden="true">áš±</span>
+                        <span class="feature-icon" aria-hidden="true">&#x16B1;</span>
                         <strong>Orcish &amp; Elvish</strong>
                         <span>Translate in either direction and export the result.</span>
                     </button>
                     <button class="feature-card" type="button" data-open-view="search">
-                        <span class="feature-icon" aria-hidden="true">âŒ•</span>
+                        <span class="feature-icon" aria-hidden="true">&#x2315;</span>
                         <strong>Campaign search</strong>
                         <span>Find people, places, rules, quests, and lore.</span>
                     </button>
                     <button class="feature-card" type="button" data-open-view="dice">
-                        <span class="feature-icon" aria-hidden="true">âš„</span>
+                        <span class="feature-icon" aria-hidden="true">&#x2684;</span>
                         <strong>Dice roller</strong>
                         <span>Roll standard dice expressions and retain recent results.</span>
                     </button>
                     <button class="feature-card" type="button" data-open-view="campaign">
-                        <span class="feature-icon" aria-hidden="true">âŒ˜</span>
+                        <span class="feature-icon" aria-hidden="true">&#x2318;</span>
                         <strong>Campaign portals</strong>
                         <span>Open the game forum, cast, map, and public vault.</span>
                     </button>
@@ -262,7 +262,7 @@
                         <p class="magic-items-status" id="party-funds-status" role="status" aria-live="polite">Party funds load when this view is opened.</p>
                         <button class="secondary-button" id="party-funds-refresh" type="button">Refresh</button>
                     </div>
-                    <p class="party-funds-total" id="party-funds-total" aria-live="polite">â€”</p>
+                    <p class="party-funds-total" id="party-funds-total" aria-live="polite">&mdash;</p>
                     <p id="party-funds-note" class="party-funds-note" hidden></p>
                 </div>
             </section>
@@ -341,10 +341,10 @@
                                 <strong id="translator-input-label">English text</strong>
                                 <span id="translator-input-count">0 words</span>
                             </span>
-                            <textarea id="translator-input" rows="10" maxlength="100000" placeholder="Begin typing or paste text hereâ€¦" spellcheck="true"></textarea>
+                            <textarea id="translator-input" rows="10" maxlength="100000" placeholder="Begin typing or paste text here&hellip;" spellcheck="true"></textarea>
                         </label>
 
-                        <div class="translation-direction" aria-hidden="true">â†’</div>
+                        <div class="translation-direction" aria-hidden="true">&rarr;</div>
 
                         <label class="text-panel" for="translator-output">
                             <span class="text-panel-heading">
@@ -353,7 +353,7 @@
                             </span>
                             <span class="translation-loading" id="translation-loading" hidden>
                                 <span class="spinner" aria-hidden="true"></span>
-                                <span id="translation-loading-label">Preparing translationâ€¦</span>
+                                <span id="translation-loading-label">Preparing translation&hellip;</span>
                             </span>
                             <textarea id="translator-output" rows="10" readonly placeholder="Translation appears here as you type."></textarea>
                         </label>
@@ -376,8 +376,8 @@
 
                 <div class="search-card">
                     <label class="search-box" for="campaign-search">
-                        <span aria-hidden="true">âŒ•</span>
-                        <input id="campaign-search" type="search" autocomplete="off" placeholder="Search people, places, quests, rulesâ€¦">
+                        <span aria-hidden="true">&#x2315;</span>
+                        <input id="campaign-search" type="search" autocomplete="off" placeholder="Search people, places, quests, rules&hellip;">
                     </label>
                     <p class="search-guidance" id="search-guidance">Whole words are matched by default. Use wildcards for partial words: *king, king*, or *king*. Search covers titles and public page text.</p>
                     <div class="search-results" id="search-results" aria-live="polite"></div>
@@ -413,7 +413,7 @@
                         </div>
                         <div class="dice-result" id="dice-result" role="status" aria-live="polite">
                             <span>Ready</span>
-                            <strong>â€”</strong>
+                            <strong>&mdash;</strong>
                             <small>Choose dice and roll.</small>
                         </div>
                     </div>
@@ -438,16 +438,16 @@
 
                 <div class="portal-grid">
                     <a class="portal-card" href="https://rpol.net/game.php?gi=80170" target="_blank" rel="noopener noreferrer">
-                        <span aria-hidden="true">âœ¦</span><strong>Game forum</strong><small>Open Scarlet Horizons on RPOL</small>
+                        <span aria-hidden="true">&#x2726;</span><strong>Game forum</strong><small>Open Scarlet Horizons on RPOL</small>
                     </a>
                     <a class="portal-card" href="https://rpol.net/gameinfo.php?action=cast&amp;gi=80170" target="_blank" rel="noopener noreferrer">
-                        <span aria-hidden="true">â™™</span><strong>The Cast</strong><small>Characters and campaign participants</small>
+                        <span aria-hidden="true">&#x2659;</span><strong>The Cast</strong><small>Characters and campaign participants</small>
                     </a>
                     <a class="portal-card" href="https://publish.obsidian.md/scarlethorizons" target="_blank" rel="noopener noreferrer">
-                        <span aria-hidden="true">â—‡</span><strong>Campaign vault</strong><small>Public lore, rules, maps, and indexes</small>
+                        <span aria-hidden="true">&#x25C7;</span><strong>Campaign vault</strong><small>Public lore, rules, maps, and indexes</small>
                     </a>
                     <a class="portal-card" href="https://publish.obsidian.md/scarlethorizons/Locations/Northern+Reaches" target="_blank" rel="noopener noreferrer">
-                        <span aria-hidden="true">âŒ–</span><strong>Northern Reaches</strong><small>Open the regional map and location notes</small>
+                        <span aria-hidden="true">&#x2316;</span><strong>Northern Reaches</strong><small>Open the regional map and location notes</small>
                     </a>
                 </div>
 
@@ -458,7 +458,7 @@
 
                 <div class="credits-card">
                     <h2>Language data</h2>
-                    <p>Elvish source vocabulary is derived in part from <a href="https://eldamo.org/" target="_blank" rel="noopener noreferrer">Eldamo 0.8.13</a>, licensed under CC BY 4.0. Generated Sindarin-first forms and neologisms are identified by the projectâ€™s lexicon policy.</p>
+                    <p>Elvish source vocabulary is derived in part from <a href="https://eldamo.org/" target="_blank" rel="noopener noreferrer">Eldamo 0.8.13</a>, licensed under CC BY 4.0. Generated Sindarin-first forms and neologisms are identified by the project&rsquo;s lexicon policy.</p>
                 </div>
             </section>
         </main>

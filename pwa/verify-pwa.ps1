@@ -116,17 +116,18 @@ Assert-Condition -Condition (@($magicItems.items | Where-Object { $_.name -eq "A
 
 $partyFunds = Get-Content -Raw -LiteralPath (Join-Path $PwaRoot 'party-funds.json') | ConvertFrom-Json
 $partyFundsGemstoneValuePattern = '^\s*(\d+(?:\.\d+)?)\s+gp$'
-$validCoins = ($partyFunds.coins
-    -and $partyFunds.coins.PSObject.Properties.Name -contains 'copper'
-    -and $partyFunds.coins.PSObject.Properties.Name -contains 'silver'
-    -and $partyFunds.coins.PSObject.Properties.Name -contains 'gold'
-    -and [int]$partyFunds.coins.copper -ge 0
-    -and [int]$partyFunds.coins.silver -ge 0
-    -and [int]$partyFunds.coins.gold -ge 0)
-Assert-Condition -Condition ([int]$partyFunds.schema_version -eq 1) -Message 'Party-funds fallback data must use schema version 1.'
+$validCoins = ($partyFunds.coins -and
+    $partyFunds.coins.PSObject.Properties.Name -contains 'copper' -and
+    $partyFunds.coins.PSObject.Properties.Name -contains 'silver' -and
+    $partyFunds.coins.PSObject.Properties.Name -contains 'gold' -and
+    [int]$partyFunds.coins.copper -ge 0 -and
+    [int]$partyFunds.coins.silver -ge 0 -and
+    [int]$partyFunds.coins.gold -ge 0)
+Assert-Condition -Condition ([int]$partyFunds.schema_version -eq 2) -Message 'Party-funds fallback data must use schema version 2.'
+Assert-Condition -Condition (![string]::IsNullOrWhiteSpace([string]$partyFunds.'meta-date') -and ![string]::IsNullOrWhiteSpace([string]$partyFunds.'fiction-date') -and ![string]::IsNullOrWhiteSpace([string]$partyFunds.text)) -Message 'Party-funds fallback metadata is incomplete.'
 Assert-Condition -Condition ($partyFunds.coins -ne $null) -Message 'Party-funds fallback data is missing coins.'
 Assert-Condition -Condition ($validCoins) -Message 'Party-funds fallback coin totals are invalid.'
-Assert-Condition -Condition ([array]$partyFunds.gemstones -ne $null) -Message 'Party-funds fallback gemstone entries are missing.'
+Assert-Condition -Condition ($partyFunds.PSObject.Properties.Name -contains 'gemstones') -Message 'Party-funds fallback gemstone entries are missing.'
 foreach ($gemstone in @($partyFunds.gemstones)) {
     foreach ($fieldName in @('type', 'size', 'quality', 'value')) {
         Assert-Condition -Condition ($gemstone.PSObject.Properties.Name -contains $fieldName) -Message "Party-funds fallback entry is missing '$fieldName'."
@@ -216,6 +217,7 @@ foreach ($id in $referencedIds) {
 Assert-Condition -Condition ($appScript.Contains("credentials: 'same-origin'")) -Message 'Character authentication must use same-origin cookies.'
 Assert-Condition -Condition ($appScript.Contains("cache: 'no-store'")) -Message 'Character authentication requests must bypass browser caching.'
 Assert-Condition -Condition ($appScript.Contains("'/login'") -and $appScript.Contains("'/session'") -and $appScript.Contains("'/xp'") -and $appScript.Contains("'/word-counts'") -and $appScript.Contains("'/presence'") -and $appScript.Contains("'/quests'") -and $appScript.Contains("'/quest-requests'") -and $appScript.Contains("'/logout'")) -Message 'Character authentication and protected player-data routes are incomplete.'
+Assert-Condition -Condition ($html.Contains('id="message-dm-nav" hidden') -and $html.Contains('id="message-player-nav" hidden') -and $styles.Contains('.nav-item[hidden]') -and $appScript.Contains('messageDmNavButton.hidden = !authenticated || isDungeonMaster;') -and $appScript.Contains('messagePlayerNavButton.hidden = !authenticated || !isDungeonMaster;')) -Message 'Messaging navigation must remain hidden until the matching authenticated role is active.'
 Assert-Condition -Condition ($html.Contains('autocomplete="current-password"')) -Message 'The character password field is not configured safely.'
 Assert-Condition -Condition ($html.Contains('id="xp-card"') -and $html.Contains('id="xp-total"') -and $html.Contains('id="xp-class-level"') -and $html.Contains('id="xp-hit-points"') -and $html.Contains('id="xp-tnl"') -and $html.Contains('id="xp-party-rows"')) -Message 'The protected XP dashboard card is incomplete.'
 Assert-Condition -Condition ($appScript.Contains('xpTotal.textContent = `${Number(character.xp_total).toLocaleString(''en-US'')} (TNL: ${tnlLabel})`;') -and $appScript.Contains('if (tnl) tnl.textContent = tnlLabel;')) -Message 'A player''s current XP total must show TNL on the same line.'
@@ -266,7 +268,7 @@ Assert-Condition -Condition ($serviceWorker.Contains('networkFirstData') -and $s
 Assert-Condition -Condition ($appScript.Contains("updateViaCache: 'none'") -and $appScript.Contains('await registration.update()')) -Message 'The PWA must explicitly check for uncached service-worker updates.'
 Assert-Condition -Condition ($manifest.start_url -eq './#dashboard' -and $manifest.scope -eq './') -Message 'The manifest must keep navigation inside the deployed PWA directory.'
 Assert-Condition -Condition ($html.Contains('href="manifest.webmanifest"') -and $appScript.Contains('service-worker.js')) -Message 'The install manifest or service-worker registration is missing.'
-Assert-Condition -Condition ($html.Contains('href="styles.css?v=36"') -and $html.Contains('src="app.js?v=38"') -and $serviceWorker.Contains("'./styles.css?v=36'") -and $serviceWorker.Contains("'./app.js?v=38'") -and $serviceWorker.Contains("'./level-progression.json'") -and $serviceWorker.Contains("'./magic-items.json'")) -Message 'The PWA shell must use cache-busting assets and preload the progression and magic-item data.'
+Assert-Condition -Condition ($html.Contains('href="styles.css?v=37"') -and $html.Contains('src="app.js?v=40"') -and $serviceWorker.Contains("'./styles.css?v=37'") -and $serviceWorker.Contains("'./app.js?v=40'") -and $serviceWorker.Contains("'./level-progression.json'") -and $serviceWorker.Contains("'./magic-items.json'")) -Message 'The PWA shell must use cache-busting assets and preload the progression and magic-item data.'
 Assert-Condition -Condition ($serviceWorker.Contains("'./party-funds.json'")) -Message 'The PWA shell must preload party-funds data.'
 $apacheConfig = Get-Content -Raw -LiteralPath (Join-Path $PwaRoot '.htaccess')
 Assert-Condition -Condition ($apacheConfig.Contains('AddType image/webp .webp')) -Message 'Apache must serve WebP hero tokens with the correct MIME type.'

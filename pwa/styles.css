@@ -255,6 +255,10 @@ a {
     cursor: pointer;
 }
 
+.nav-item[hidden] {
+    display: none;
+}
+
 .nav-item:hover,
 .nav-item.is-active {
     background: rgba(213, 177, 115, 0.11);

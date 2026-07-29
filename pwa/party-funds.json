@@ -1,0 +1,12 @@
+{
+  "schema_version": 2,
+  "meta-date": "7/29/2026",
+  "fiction-date": "May 9, 406 PR",
+  "text": "915 gp (Nimba gifted the PCs with a 2,500 gp-value letter of credit on May 8, 406 PR; the party has already spent 1585 gp of this line of credit)",
+  "coins": {
+    "copper": 0,
+    "silver": 0,
+    "gold": 915
+  },
+  "gemstones": []
+}

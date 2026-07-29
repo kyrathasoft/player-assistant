@@ -1069,11 +1069,11 @@
         const note = byId('party-funds-note');
         if (status) {
             status.textContent = partyFundsSnapshot === null
-                ? (partyFundsLoading ? 'Loading party fundsâ€¦' : (partyFundsError || 'Party funds load when this view is opened.'))
+                ? (partyFundsLoading ? 'Loading party funds\u2026' : (partyFundsError || 'Party funds load when this view is opened.'))
                 : 'Current party funds loaded from the bundled file.';
         }
         if (total) {
-            total.textContent = partyFundsSnapshot === null ? 'â€”' : formatPartyFundsTotal(getPartyFundsTotal(partyFundsSnapshot));
+            total.textContent = partyFundsSnapshot === null ? '\u2014' : formatPartyFundsTotal(getPartyFundsTotal(partyFundsSnapshot));
         }
         if (!note) return;
         if (partyFundsSnapshot === null) {

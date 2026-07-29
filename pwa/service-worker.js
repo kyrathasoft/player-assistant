@@ -1,13 +1,13 @@
 'use strict';
 
-const CACHE_VERSION = 'player-assistant-pwa-0.9.8-v42';
+const CACHE_VERSION = 'player-assistant-pwa-0.9.8-v44';
 const SHELL_CACHE = `${CACHE_VERSION}-shell`;
 const DATA_CACHE = `${CACHE_VERSION}-data`;
 const SHELL_ASSETS = [
     './',
     './index.html',
-    './styles.css?v=36',
-    './app.js?v=39',
+    './styles.css?v=37',
+    './app.js?v=40',
     './translator-worker.js',
     './offline.html',
     './manifest.webmanifest',
