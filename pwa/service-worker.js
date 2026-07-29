@@ -1,6 +1,6 @@
 'use strict';
 
-const CACHE_VERSION = 'player-assistant-pwa-0.9.8-v49';
+const CACHE_VERSION = 'player-assistant-pwa-0.9.8-v50';
 const SHELL_CACHE = `${CACHE_VERSION}-shell`;
 const DATA_CACHE = `${CACHE_VERSION}-data`;
 const SHELL_ASSETS = [
