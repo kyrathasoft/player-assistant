@@ -36,6 +36,7 @@ QuestService.php
 RpolClient.php
 WordCountService.php
 XpTrackingService.php
+refresh-word-counts.php
 ```
 
 Destination:
@@ -70,6 +71,28 @@ Automatic refresh is request-triggered, not cron-triggered. An authenticated
 is older than `maximum_stale_seconds`, attempts to replace it from `source_url`.
 If `source_url` is empty, the broker retains manual administrator uploads and
 does not attempt automatic refresh.
+
+The production source is a public, data-only JSON file outside the PWA:
+
+```text
+https://bryanmiller.us/scarlethorizons/data/word-counts.json
+```
+
+`publish-word-counts.ps1` stages this source through the dedicated DreamHost SSH
+key, verifies the administrator upload, atomically publishes the source, and
+reads it back over HTTPS. Use `-SkipSourceUpload` only when intentionally
+retaining the existing source file.
+
+Install the private refresh runner beside `config.php`, then schedule it with
+the DreamHost account crontab:
+
+```cron
+17 */6 * * * /usr/bin/php /home/DREAMHOST_USER/player-assistant-broker/refresh-word-counts.php >/dev/null 2>&1
+```
+
+The runner and authenticated reads use the same stale threshold. The cron entry
+does not expose an administrator credential and does not refresh a snapshot
+that is still current.
 
 ## Account import
 

@@ -4,7 +4,7 @@
 - [x] Complete: documented the new broker word-count configuration fields for deployment validation in `CHARACTER-AUTH-DEPLOY.md`.
 - [x] Complete: configured the standalone PHP CLI environment and verified `curl`, `pdo_sqlite`, `sqlite3`, and `openssl` remain loaded after repeated idempotent setup runs.
 - [x] Complete: locally verified `web-deploy/tests/broker-auth-routing-tests.php` with the durable CLI configuration.
-- [ ] Pending: choose and deploy a canonical HTTPS JSON source before enabling production word-count auto-refresh. Production validation found no relevant cron entry and an empty `word_counts.source_url`; the current snapshot remains fresh under the seven-day threshold.
+- [x] Complete: deployed the canonical non-PWA HTTPS word-count source while retaining administrator publishing, installed the private DreamHost refresh runner, configured the six-hour cron trigger, and validated a real source-backed production refresh.
 
 - [x] Review potentially anachronistic English terms in the Orcish lexicon.
   - Approval only: do not purge an existing entry until the user selects it.

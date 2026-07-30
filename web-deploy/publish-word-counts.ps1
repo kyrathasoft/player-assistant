@@ -8,6 +8,12 @@ param(
     [DateTimeOffset]$ObservedAt = [DateTimeOffset]::UtcNow,
     [ValidateLength(1, 100)][string]$CountingRuleVersion = 'obsidian-publish-word-count-v1',
     [uri]$ApiUrl = 'https://bryanmiller.us/scarlethorizons/api/v1/admin/word-counts',
+    [uri]$SourceUrl = 'https://bryanmiller.us/scarlethorizons/data/word-counts.json',
+    [string]$SourceSshTarget = 'dh_4gg2za@pdx1-shared-a1-13.dreamhost.com',
+    [string]$SourceSshKeyPath = (Join-Path $env:USERPROFILE '.ssh\dreamhost_player_assistant'),
+    [ValidatePattern('^/home/dh_4gg2za/bryanmiller\.us/scarlethorizons/data/word-counts\.json$')]
+    [string]$SourceRemotePath = '/home/dh_4gg2za/bryanmiller.us/scarlethorizons/data/word-counts.json',
+    [switch]$SkipSourceUpload,
     [Security.SecureString]$AdminKey
 )
 
@@ -17,6 +23,21 @@ if ($ApiUrl.Scheme -ne [Uri]::UriSchemeHttps -or
     !$ApiUrl.IsDefaultPort -or
     ![string]::IsNullOrEmpty($ApiUrl.UserInfo)) {
     throw 'The word-count API URL must be a default-port HTTPS URL without embedded credentials.'
+}
+if ($SourceUrl.Scheme -ne [Uri]::UriSchemeHttps -or
+    !$SourceUrl.IsDefaultPort -or
+    ![string]::IsNullOrEmpty($SourceUrl.UserInfo)) {
+    throw 'The word-count source URL must be a default-port HTTPS URL without embedded credentials.'
+}
+if (!$SkipSourceUpload) {
+    if (-not (Test-Path -LiteralPath $SourceSshKeyPath -PathType Leaf)) {
+        throw "The DreamHost SSH key was not found at '$SourceSshKeyPath'."
+    }
+    foreach ($commandName in @('ssh', 'scp')) {
+        if ($null -eq (Get-Command $commandName -ErrorAction SilentlyContinue)) {
+            throw "Required OpenSSH command not found: $commandName"
+        }
+    }
 }
 
 $snapshot = [ordered]@{
@@ -36,7 +57,33 @@ if ($null -eq $AdminKey) {
 
 $keyPointer = [IntPtr]::Zero
 $plainAdminKey = $null
+$localSourceTemp = $null
+$remoteSourceTemp = $null
+$sourceStaged = $false
+$sourcePublished = $false
 try {
+    if (!$SkipSourceUpload) {
+        $localSourceTemp = [IO.Path]::GetTempFileName()
+        [IO.File]::WriteAllText(
+            $localSourceTemp,
+            ($snapshot | ConvertTo-Json -Depth 4 -Compress),
+            [Text.UTF8Encoding]::new($false))
+
+        $remoteSourceTemp = "$SourceRemotePath.tmp-$([Guid]::NewGuid().ToString('N'))"
+        & scp `
+            -i $SourceSshKeyPath `
+            -o BatchMode=yes `
+            -o IdentitiesOnly=yes `
+            -o ConnectTimeout=15 `
+            -- `
+            $localSourceTemp `
+            "${SourceSshTarget}:$remoteSourceTemp"
+        if ($LASTEXITCODE -ne 0) {
+            throw 'The canonical word-count source could not be staged on DreamHost.'
+        }
+        $sourceStaged = $true
+    }
+
     $keyPointer = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($AdminKey)
     $plainAdminKey = [Runtime.InteropServices.Marshal]::PtrToStringBSTR($keyPointer)
     if ([string]::IsNullOrWhiteSpace($plainAdminKey)) {
@@ -59,15 +106,58 @@ try {
         throw 'The broker did not return the exact uploaded word-count snapshot.'
     }
 
+    if ($sourceStaged) {
+        $publishCommand = "chmod 0644 '$remoteSourceTemp' && mv -f '$remoteSourceTemp' '$SourceRemotePath'"
+        & ssh `
+            -i $SourceSshKeyPath `
+            -o BatchMode=yes `
+            -o IdentitiesOnly=yes `
+            -o ConnectTimeout=15 `
+            $SourceSshTarget `
+            $publishCommand
+        if ($LASTEXITCODE -ne 0) {
+            throw 'The canonical word-count source could not be published atomically.'
+        }
+        $sourcePublished = $true
+
+        $verificationUri = [UriBuilder]::new($SourceUrl)
+        $verificationUri.Query = "v=$([Guid]::NewGuid().ToString('N'))"
+        $sourceResponse = Invoke-RestMethod `
+            -Method Get `
+            -Uri $verificationUri.Uri `
+            -Headers @{ 'Cache-Control' = 'no-cache' } `
+            -MaximumRedirection 0
+        if ([int]$sourceResponse.schema_version -ne 1 -or
+            [DateTimeOffset]$sourceResponse.observed_at -ne [DateTimeOffset]$snapshot.observed_at -or
+            [long]$sourceResponse.wiki.words -ne $WikiWords -or
+            [long]$sourceResponse.ic.words -ne $IcWords -or
+            [long]$sourceResponse.ooc.words -ne $OocWords) {
+            throw 'The canonical word-count source did not return the exact published snapshot.'
+        }
+    }
+
     [pscustomobject]@{
-        Published = $true
-        ObservedAt = ([DateTimeOffset]$response.observed_at).ToString('o')
-        WikiWords = [long]$response.wiki.words
-        IcWords = [long]$response.ic.words
-        OocWords = [long]$response.ooc.words
+        Published       = $true
+        SourcePublished = $sourcePublished
+        ObservedAt      = ([DateTimeOffset]$response.observed_at).ToString('o')
+        WikiWords       = [long]$response.wiki.words
+        IcWords         = [long]$response.ic.words
+        OocWords        = [long]$response.ooc.words
     }
 }
 finally {
+    if ($sourceStaged -and !$sourcePublished) {
+        & ssh `
+            -i $SourceSshKeyPath `
+            -o BatchMode=yes `
+            -o IdentitiesOnly=yes `
+            -o ConnectTimeout=15 `
+            $SourceSshTarget `
+            "rm -f -- '$remoteSourceTemp'" 2>$null
+    }
+    if ($null -ne $localSourceTemp -and (Test-Path -LiteralPath $localSourceTemp)) {
+        Remove-Item -LiteralPath $localSourceTemp -Force
+    }
     if ($keyPointer -ne [IntPtr]::Zero) {
         [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($keyPointer)
     }
