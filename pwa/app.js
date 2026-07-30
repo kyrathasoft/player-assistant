@@ -1070,6 +1070,25 @@
         return validatePartyFunds(await response.json());
     };
 
+    const parsePartyFundsEntries = (value) => String(value || '')
+        .split(/\n\s*---\s*\n/u)
+        .map((entry, index) => {
+            const lines = entry.trim().split(/\r?\n/u);
+            const date = String(lines.shift() || '').trim();
+            const match = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/u.exec(date);
+            const timestamp = match
+                ? Date.UTC(Number(match[3]), Number(match[1]) - 1, Number(match[2]))
+                : Number.NEGATIVE_INFINITY;
+            return {
+                date,
+                text: lines.join('\n').trim(),
+                timestamp,
+                index
+            };
+        })
+        .filter((entry) => entry.date.length > 0 && entry.text.length > 0)
+        .sort((left, right) => right.timestamp - left.timestamp || left.index - right.index);
+
     const renderPartyFunds = () => {
         const status = byId('party-funds-status');
         const total = byId('party-funds-total');
@@ -1096,10 +1115,18 @@
         }
         note.hidden = false;
         note.replaceChildren();
-        const noteTemplate = noteText;
-        const italic = document.createElement('em');
-        italic.textContent = noteTemplate;
-        note.append(italic);
+        parsePartyFundsEntries(noteText).forEach((entry) => {
+            const item = document.createElement('li');
+            item.className = 'party-funds-entry';
+            const date = document.createElement('strong');
+            date.className = 'party-funds-entry-date';
+            date.textContent = entry.date;
+            const detail = document.createElement('span');
+            detail.className = 'party-funds-entry-detail';
+            detail.textContent = entry.text;
+            item.append(date, detail);
+            note.append(item);
+        });
     };
 
     const validateMessageSnapshot = (payload) => {

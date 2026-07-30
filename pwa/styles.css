@@ -1812,6 +1812,34 @@ button:disabled {
     }
 }
 
+.party-funds-note {
+    margin: 1.25rem 0 0;
+    padding-left: 1.5rem;
+}
+
+.party-funds-entry {
+    margin: 0 0 1rem;
+    padding-left: 0.35rem;
+}
+
+.party-funds-entry:last-child {
+    margin-bottom: 0;
+}
+
+.party-funds-entry-date,
+.party-funds-entry-detail {
+    display: block;
+}
+
+.party-funds-entry-date {
+    margin-bottom: 0.2rem;
+}
+
+.party-funds-entry-detail {
+    font-style: italic;
+    white-space: pre-line;
+}
+
 @media (prefers-reduced-motion: reduce) {
     *,
     *::before,
