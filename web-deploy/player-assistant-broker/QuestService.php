@@ -39,6 +39,7 @@ final class QuestService
         'reward',
         'dates',
         'gated-by',
+        'unlocked-by',
         'wiki-url',
     ];
 
@@ -70,8 +71,11 @@ final class QuestService
             $allQuests,
             static fn(array $quest): bool =>
                 $isDungeonMaster
-                || $quest['visibility'] !== 'individual-only'
-                || in_array($characterKey, $quest['gated_by'], true)));
+                || (
+                    ($quest['visibility'] !== 'individual-only'
+                        || in_array($characterKey, $quest['gated_by'], true))
+                    && self::isUnlocked($quest, $questsById)
+                )));
 
         return [
             'schema_version' => 2,
@@ -82,7 +86,7 @@ final class QuestService
                     $quest['request_status'] = isset($latestRequests[$quest['id']])
                         ? (string)$latestRequests[$quest['id']]['status']
                         : null;
-                    unset($quest['gated_by'], $quest['base_state']);
+                    unset($quest['gated_by'], $quest['unlocked_by'], $quest['base_state']);
                     return $quest;
                 },
                 $visible),
@@ -311,12 +315,20 @@ final class QuestService
     private function questForAccount(string $questId, array $account): array
     {
         $characterKey = strtolower(trim((string)($account['character_key'] ?? '')));
-        foreach ($this->loadQuests() as $quest) {
+        $quests = $this->loadQuests();
+        $questsById = [];
+        foreach ($quests as $quest) {
+            $questsById[$quest['id']] = $quest;
+        }
+        foreach ($quests as $quest) {
             if ($quest['id'] !== $questId) {
                 continue;
             }
             if ($quest['visibility'] === 'individual-only'
                 && !in_array($characterKey, $quest['gated_by'], true)) {
+                break;
+            }
+            if (!self::isUnlocked($quest, $questsById)) {
                 break;
             }
             return $quest;
@@ -454,7 +466,26 @@ final class QuestService
             }
             $quests[] = $validated;
         }
+        $questIds = array_fill_keys(array_column($quests, 'id'), true);
+        foreach ($quests as $quest) {
+            foreach ($quest['unlocked_by'] as $requiredQuestId) {
+                if ($requiredQuestId === $quest['id'] || !isset($questIds[$requiredQuestId])) {
+                    throw new RuntimeException("Quest '{$quest['id']}' has an invalid unlocked-by value.");
+                }
+            }
+        }
         return $quests;
+    }
+
+    private static function isUnlocked(array $quest, array $questsById): bool
+    {
+        foreach ($quest['unlocked_by'] as $requiredQuestId) {
+            $requiredQuest = $questsById[$requiredQuestId] ?? null;
+            if (!is_array($requiredQuest) || $requiredQuest['state'] !== 'completed') {
+                return false;
+            }
+        }
+        return true;
     }
 
     private function validateQuest(mixed $id, mixed $quest): array
@@ -514,6 +545,22 @@ final class QuestService
             $normalizedGates[] = $characterKey;
         }
 
+        $unlockedBy = $quest['unlocked-by'];
+        if (!is_array($unlockedBy)
+            || !array_is_list($unlockedBy)
+            || count($unlockedBy) > 100) {
+            throw new RuntimeException("Quest '$id' has invalid prerequisites.");
+        }
+        $normalizedUnlocks = [];
+        foreach ($unlockedBy as $requiredQuestId) {
+            if (!is_string($requiredQuestId)
+                || preg_match('/^[a-z0-9]+(?:-[a-z0-9]+)*$/D', $requiredQuestId) !== 1
+                || in_array($requiredQuestId, $normalizedUnlocks, true)) {
+                throw new RuntimeException("Quest '$id' has an invalid unlocked-by value.");
+            }
+            $normalizedUnlocks[] = $requiredQuestId;
+        }
+
         $wikiUrl = $quest['wiki-url'];
         $this->requireText($wikiUrl, 500, "Quest '$id' wiki URL");
         if (preg_match(
@@ -536,6 +583,7 @@ final class QuestService
             'expires_on' => $dates['expires'],
             'wiki_url' => $wikiUrl,
             'gated_by' => $normalizedGates,
+            'unlocked_by' => $normalizedUnlocks,
         ];
     }
 

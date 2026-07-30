@@ -360,11 +360,14 @@ try {
         'find-urvan-and-narinza' => ['active', 'individual-or-party'],
         'free-slaytonthorpe' => ['active', 'individual-or-party'],
         'investigate-cold-mouth' => ['available', 'party-only'],
+        'unmask-surface-hand' => ['available', 'individual-or-party'],
+        'cleanse-blightstone-pit' => ['available', 'party-only'],
+        'trace-vanished-elven-holds' => ['available', 'individual-or-party'],
     ];
     routingAssert(
         $quests['body']['schema_version'] === 2
             && count($quests['body']['quests']) === count($expectedQuestStatuses),
-        'The quest route did not return all configured quests.');
+        'The quest route did not return the expected unlocked quests.');
     routingAssert(
         array_column($quests['body']['quests'], 'id') === array_keys($expectedQuestStatuses),
         'The quest route returned quests in the wrong display order.');
@@ -378,7 +381,9 @@ try {
             'A configured quest returned the wrong status tags.');
         routingAssert(
             !array_key_exists('gated-by', $quest)
-                && !array_key_exists('gated_by', $quest),
+                && !array_key_exists('gated_by', $quest)
+                && !array_key_exists('unlocked-by', $quest)
+                && !array_key_exists('unlocked_by', $quest),
             'The quest route exposed its authorization metadata.');
     }
     routingAssert(
@@ -421,6 +426,22 @@ try {
         is_string($questRequestId)
             && preg_match('/^[a-f0-9]{32}$/D', $questRequestId) === 1,
         'The quest request identifier was invalid.');
+
+    try {
+        $broker->dispatch(
+            'POST',
+            '/v1/quest-requests',
+            [],
+            ['quest_id' => 'map-kharaz-ankor-entrance'],
+            $playerMutationHeaders,
+            '192.0.2.30',
+            $session);
+        throw new RuntimeException('A player requested a prerequisite-locked quest.');
+    } catch (BrokerHttpException $exception) {
+        routingAssert(
+            $exception->status === 404 && $exception->errorName === 'quest_not_found',
+            'A locked quest request failed with the wrong response.');
+    }
 
     try {
         $broker->dispatch(
@@ -733,11 +754,14 @@ try {
         '192.0.2.31',
         $dungeonMasterSession);
     routingAssert(
-        count($dungeonMasterQuests['body']['pending_requests']) === 1
+        count($dungeonMasterQuests['body']['quests']) === 14
+            && in_array('map-kharaz-ankor-entrance', array_column($dungeonMasterQuests['body']['quests'], 'id'), true)
+            && in_array('keep-cult-from-valashinaz', array_column($dungeonMasterQuests['body']['quests'], 'id'), true)
+            && count($dungeonMasterQuests['body']['pending_requests']) === 1
             && $dungeonMasterQuests['body']['pending_requests'][0]['id'] === $questRequestId
             && $dungeonMasterQuests['body']['pending_requests'][0]['requester_character_name']
                 === 'Routing Hero',
-        'The Dungeon Master did not receive the pending quest alert.');
+        'The Dungeon Master did not receive the full quest list and pending quest alert.');
 
     try {
         $broker->dispatch(

@@ -92,9 +92,10 @@ Current XP is loaded through the protected same-origin `GET /scarlethorizons/api
 Quest records are defined in root-level `quests.json`, beside
 `magic-items.json`. The protected same-origin
 `GET /scarlethorizons/api/v1/quests` route reads and validates that file,
-applies `gated-by` visibility for the authenticated account, and returns only
-authorized records. Because `quests.json` is publicly deployed, its gates
-control PWA display but do not make the source data confidential.
+applies `gated-by` character visibility and `unlocked-by` quest prerequisites
+for the authenticated account, and returns only authorized records. Because
+`quests.json` is publicly deployed, its gates control PWA display but do not
+make the source data confidential.
 The `available (abandoned)` state means that a quest has been abandoned at
 least once and is currently available.
 

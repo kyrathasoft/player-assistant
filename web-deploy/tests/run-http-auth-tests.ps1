@@ -193,8 +193,8 @@ try {
         -Headers @{ Cookie = $cookieHeader }
     $questBody = $questResponse.Content | ConvertFrom-Json
     Assert-Condition -Condition ($questResponse.StatusCode -eq 200) -Message 'The HTTP quest route failed.'
-    Assert-Condition -Condition ([int]$questBody.schema_version -eq 2 -and @($questBody.quests).Count -eq 9) -Message 'The HTTP quest route returned invalid JSON-backed data.'
-    Assert-Condition -Condition (@($questBody.quests | Where-Object { $_.PSObject.Properties.Name -contains 'gated-by' -or $_.PSObject.Properties.Name -contains 'gated_by' }).Count -eq 0) -Message 'The HTTP quest route exposed gating metadata.'
+    Assert-Condition -Condition ([int]$questBody.schema_version -eq 2 -and @($questBody.quests).Count -eq 12) -Message 'The HTTP quest route returned invalid JSON-backed data.'
+    Assert-Condition -Condition (@($questBody.quests | Where-Object { $_.PSObject.Properties.Name -contains 'gated-by' -or $_.PSObject.Properties.Name -contains 'gated_by' -or $_.PSObject.Properties.Name -contains 'unlocked-by' -or $_.PSObject.Properties.Name -contains 'unlocked_by' }).Count -eq 0) -Message 'The HTTP quest route exposed gating metadata.'
     Assert-Condition -Condition ([string]$questResponse.Headers['Cache-Control'] -match '(?i)(^|,\s*)no-store($|,)') -Message 'Quest responses must use Cache-Control: no-store.'
 
     $questRequestResponse = Invoke-WebRequest `

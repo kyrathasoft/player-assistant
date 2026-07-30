@@ -175,13 +175,14 @@ foreach ($classProperty in $classProperties) {
 }
 
 $questData = Get-Content -Raw -LiteralPath (Join-Path $PwaRoot 'quests.json') | ConvertFrom-Json
-$questRequiredFields = @('title', 'summary', 'giver', 'visibility', 'state', 'objectives', 'reward', 'dates', 'gated-by', 'wiki-url')
+$questRequiredFields = @('title', 'summary', 'giver', 'visibility', 'state', 'objectives', 'reward', 'dates', 'gated-by', 'unlocked-by', 'wiki-url')
 $questVisibilityValues = @('individual-only', 'party-only', 'individual-or-party')
 $questStateValues = @('available', 'active', 'available (abandoned)', 'completed', 'withdrawn')
 Assert-Condition -Condition ([int]$questData.schema_version -eq 1) -Message 'Quest data must use schema version 1.'
 Assert-Condition -Condition ((@($questData.PSObject.Properties.Name | Sort-Object) -join ',') -eq 'quests,schema_version') -Message 'Quest data has unexpected root fields.'
 $questProperties = @($questData.quests.PSObject.Properties)
 Assert-Condition -Condition ($questProperties.Count -gt 0 -and $questProperties.Count -le 100) -Message 'Quest data must contain between 1 and 100 quests.'
+$questIds = @($questProperties.Name)
 foreach ($questProperty in $questProperties) {
     Assert-Condition -Condition ($questProperty.Name -match '^[a-z0-9]+(?:-[a-z0-9]+)*$') -Message "Quest data has an invalid identifier '$($questProperty.Name)'."
     $quest = $questProperty.Value
@@ -198,6 +199,8 @@ foreach ($questProperty in $questProperties) {
     $dateFields = @($quest.dates.PSObject.Properties.Name)
     Assert-Condition -Condition ($dateFields.Count -eq 2 -and $dateFields -contains 'accepted' -and $dateFields -contains 'expires') -Message "Quest '$($questProperty.Name)' has invalid dates."
     Assert-Condition -Condition (@($quest.'gated-by' | Where-Object { [string]$_ -notmatch '^[a-z0-9]+(?:-[a-z0-9]+)*$' }).Count -eq 0) -Message "Quest '$($questProperty.Name)' has an invalid gate."
+    Assert-Condition -Condition (@($quest.'unlocked-by' | Where-Object { [string]$_ -notmatch '^[a-z0-9]+(?:-[a-z0-9]+)*$' }).Count -eq 0) -Message "Quest '$($questProperty.Name)' has an invalid prerequisite."
+    Assert-Condition -Condition (@($quest.'unlocked-by' | Where-Object { [string]$_ -eq $questProperty.Name -or $questIds -notcontains ([string]$_) }).Count -eq 0) -Message "Quest '$($questProperty.Name)' references an unknown or self prerequisite."
     Assert-Condition -Condition ([string]$quest.'wiki-url' -match '^https://publish\.obsidian\.md/scarlethorizons/(?:Quests|NPCs|Meta/IC|Writings)/[^?#]+$') -Message "Quest '$($questProperty.Name)' has an invalid wiki URL."
 }
 

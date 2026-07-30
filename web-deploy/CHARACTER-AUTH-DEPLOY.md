@@ -123,7 +123,7 @@ broker returns the exact uploaded totals and observation time.
 - `GET /v1/xp` returns one matching character's XP, class, attained level, and hit points for a player account and never includes the party array.
 - A Dungeon Master session receives the validated current party XP table.
 - Authenticated clients heartbeat through `/v1/presence`; players receive no other-user data, while the Dungeon Master receives every other enabled account with active-within-two-minutes state and the last login time for inactive users.
-- `GET /v1/quests` reads `/scarlethorizons/pwa/quests.json`, validates its schema, and removes `gated-by` metadata before returning quests authorized for the current account.
+- `GET /v1/quests` reads `/scarlethorizons/pwa/quests.json`, validates its schema, and removes `gated-by` and `unlocked-by` metadata before returning quests authorized for the current account.
 - Player accounts may request only quests whose current state is `available` or `available (abandoned)`; Dungeon Master accounts cannot request quests.
 - The Dungeon Master may approve or deny pending PC requests. Approval atomically records the decision and overlays that quest's global runtime state as `active` in `broker.sqlite`.
 - Pending requests and unread decisions persist across sessions. Players may acknowledge their own decisions; only the Dungeon Master may decide requests.

@@ -17,6 +17,7 @@
         "expires": ""
       },
       "gated-by": [],
+      "unlocked-by": [],
       "wiki-url": "https://publish.obsidian.md/scarlethorizons/Quests/Find+Jelenneth+or+Learn+Her+Fate"
     },
     "three-items-for-nuanda": {
@@ -36,6 +37,7 @@
         "expires": "October 7, 406 PR"
       },
       "gated-by": [],
+      "unlocked-by": [],
       "wiki-url": "https://publish.obsidian.md/scarlethorizons/Quests/Quest+3+Items+for+Nuanda+Nemere"
     },
     "k-r-k-caravan-run": {
@@ -54,6 +56,7 @@
         "expires": ""
       },
       "gated-by": [],
+      "unlocked-by": [],
       "wiki-url": "https://publish.obsidian.md/scarlethorizons/Quests/Quest+Caravan+Kirkilston+to+Raven's+Pass"
     },
     "plumb-lost-caverns": {
@@ -73,6 +76,7 @@
         "expires": ""
       },
       "gated-by": [],
+      "unlocked-by": [],
       "wiki-url": "https://publish.obsidian.md/scarlethorizons/Quests/Quest+Plumb+the+Lost+Caverns+of+Achaia"
     },
     "reclaim-keep-on-borderlands": {
@@ -91,6 +95,7 @@
         "expires": ""
       },
       "gated-by": [],
+      "unlocked-by": [],
       "wiki-url": "https://publish.obsidian.md/scarlethorizons/Quests/Quest+Reclaim+the+Keep+on+the+Borderlands"
     },
     "construct-darkforest-fort": {
@@ -110,6 +115,7 @@
         "expires": ""
       },
       "gated-by": [],
+      "unlocked-by": [],
       "wiki-url": "https://publish.obsidian.md/scarlethorizons/NPCs/Reglar+Ashbow"
     },
     "find-urvan-and-narinza": {
@@ -128,6 +134,7 @@
         "expires": ""
       },
       "gated-by": [],
+      "unlocked-by": [],
       "wiki-url": "https://publish.obsidian.md/scarlethorizons/Meta/IC/Chapter+5+-+A+Betentacled+Escape"
     },
     "free-slaytonthorpe": {
@@ -147,6 +154,7 @@
         "expires": ""
       },
       "gated-by": [],
+      "unlocked-by": [],
       "wiki-url": "https://publish.obsidian.md/scarlethorizons/Meta/IC/Chapter+6+-+At+the+Mason's+Apron"
     },
     "investigate-cold-mouth": {
@@ -166,7 +174,112 @@
         "expires": ""
       },
       "gated-by": [],
+      "unlocked-by": [],
       "wiki-url": "https://publish.obsidian.md/scarlethorizons/Writings/Scroll+Recovered+From+An+Orc+Near+Rimbling+Brook"
+    },
+    "unmask-surface-hand": {
+      "title": "Unmask the Surface Hand Behind the Toothbreakers",
+      "summary": "Use Algorn Druff's read of the recovered orders to learn whether a surface faction is directing the Toothbreakers, Red Tusk, and the Deep Friends.",
+      "giver": "Algorn Druff",
+      "visibility": "individual-or-party",
+      "state": "available",
+      "objectives": [
+        "Compare the two writing styles in the recovered orders.",
+        "Look for signs of the Basilisk's Claw, Cult of the Dragon, Zhentarim, or a witch-coven connection.",
+        "Identify the faction or agent using the Toothbreakers as muscle."
+      ],
+      "reward": "",
+      "dates": {
+        "accepted": "",
+        "expires": ""
+      },
+      "gated-by": [],
+      "unlocked-by": [],
+      "wiki-url": "https://publish.obsidian.md/scarlethorizons/Meta/IC/Chapter+5+-+A+Betentacled+Escape"
+    },
+    "cleanse-blightstone-pit": {
+      "title": "Make Blightstone Pit Safe Again",
+      "summary": "Investigate the creature lairing beneath Blightstone Pit so the old quarry can stop threatening travelers and become useful again.",
+      "giver": "Algorn Druff",
+      "visibility": "party-only",
+      "state": "available",
+      "objectives": [
+        "Locate the pit and confirm the creature's lair.",
+        "Learn whether the creature is connected to the orc attacks or only feeding on the chaos.",
+        "Drive off or destroy the creature and verify the quarry is safe."
+      ],
+      "reward": "Possible quarry rights, salvage, or treasure from prior victims",
+      "dates": {
+        "accepted": "",
+        "expires": ""
+      },
+      "gated-by": [],
+      "unlocked-by": [],
+      "wiki-url": "https://publish.obsidian.md/scarlethorizons/Meta/IC/Chapter+5+-+A+Betentacled+Escape"
+    },
+    "trace-vanished-elven-holds": {
+      "title": "Trace the Vanished Elven Holds",
+      "summary": "Follow Thurgan Newl's rumor that the drow may have been involved in the abandonment of the Glittering Canopy and Aelith-Calaer.",
+      "giver": "Thurgan Newl",
+      "visibility": "individual-or-party",
+      "state": "available",
+      "objectives": [
+        "Gather testimony about the empty elven sites.",
+        "Determine whether drow activity around Narinza or Shade points to the vanished holds.",
+        "Find out whether the abandonment still threatens surface settlements."
+      ],
+      "reward": "",
+      "dates": {
+        "accepted": "",
+        "expires": ""
+      },
+      "gated-by": [],
+      "unlocked-by": [],
+      "wiki-url": "https://publish.obsidian.md/scarlethorizons/Meta/IC/Chapter+5+-+A+Betentacled+Escape"
+    },
+    "map-kharaz-ankor-entrance": {
+      "title": "Map the Entrance to Kharaz-Ankor",
+      "summary": "After the Keep on the Borderlands is retaken, survey the passages beneath it and determine whether they truly lead to Kharaz-Ankor.",
+      "giver": "Nolo Silvershaper",
+      "visibility": "party-only",
+      "state": "available",
+      "objectives": [
+        "Secure the below-ground access after the keep is cleared.",
+        "Map the first safe route beneath the keep.",
+        "Bring Nolo Silvershaper proof of whether the passage leads to Kharaz-Ankor."
+      ],
+      "reward": "",
+      "dates": {
+        "accepted": "",
+        "expires": ""
+      },
+      "gated-by": [],
+      "unlocked-by": [
+        "reclaim-keep-on-borderlands"
+      ],
+      "wiki-url": "https://publish.obsidian.md/scarlethorizons/Quests/Quest+Reclaim+the+Keep+on+the+Borderlands"
+    },
+    "keep-cult-from-valashinaz": {
+      "title": "Keep the Cult from Valashinaz",
+      "summary": "After the Lost Caverns of Achaia are opened, prevent dragon-cult interests from learning whether Valashinaz still waits beneath ruined Achaia.",
+      "giver": "Delk Whitewand",
+      "visibility": "party-only",
+      "state": "available",
+      "objectives": [
+        "Search recovered Achaian maps and tomes for references to Valashinaz.",
+        "Watch for Cult of the Dragon agents pursuing the same knowledge.",
+        "Secure or destroy the clues before they draw dangerous attention to Achaia."
+      ],
+      "reward": "",
+      "dates": {
+        "accepted": "",
+        "expires": ""
+      },
+      "gated-by": [],
+      "unlocked-by": [
+        "plumb-lost-caverns"
+      ],
+      "wiki-url": "https://publish.obsidian.md/scarlethorizons/NPCs/Valashinaz"
     }
   }
 }
