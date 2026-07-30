@@ -56,55 +56,80 @@ try {
             'cache_ttl_seconds' => 60,
             'maximum_stale_seconds' => 600,
         ],
+        'word_counts' => [
+            'source_url' => 'https://publish.obsidian.md/example/word-counts-latest.json',
+            'connect_timeout_seconds' => 1,
+            'timeout_seconds' => 2,
+            'maximum_response_bytes' => 65536,
+            'maximum_stale_seconds' => 60,
+        ],
         'rpol' => [
             'username' => 'unused',
             'password' => 'unused',
             'game_id' => '80170',
         ],
     ];
-    $broker = new BrokerService(
-        $config,
-        new RpolClient($config['rpol']),
-        static function (string $url): string {
-            if (str_contains($url, 'Player+Characters+Listing')) {
-                return implode("\n", [
+    $wordCountRefreshCount = 0;
+    $currentWordCountSnapshot = [
+        'schema_version' => 1,
+        'observed_at' => gmdate(DATE_ATOM),
+        'counting_rule_version' => 'obsidian-publish-word-count-v1',
+        'wiki' => ['pages' => 990, 'words' => 233048],
+        'ic' => ['files' => 8, 'words' => 15099],
+        'ooc' => ['files' => 6, 'words' => 18753],
+    ];
+    $wordCountFetcher = static function (string $url) use (
+        &$wordCountRefreshCount,
+        $currentWordCountSnapshot): string {
+        if (str_contains($url, 'word-counts-latest.json')) {
+            ++$wordCountRefreshCount;
+            return json_encode($currentWordCountSnapshot, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+        }
+
+        if (str_contains($url, 'Player+Characters+Listing')) {
+            return implode("\n", [
                 '| Name | Class | Level | HP |',
                 '| --- | --- | ---: | ---: |',
                 '| Routing Hero | Ranger | 4 | 17 |',
                 '| Another Hero | Fighter | 5 | 29 |',
-                ]);
-            }
-            if (str_contains($url, 'Class+Level+Progression')) {
-                return "- [[Fighter]]\n- [[Ranger]]";
-            }
-            if (str_contains($url, '/Classes/Ranger')) {
-                return implode("\n", [
-                    '| 1 | 0 |',
-                    '| 2 | 2,250 |',
-                    '| 3 | 4,500 |',
-                    '| 4 | 10,000 |',
-                    '| 5 | 20,000 |',
-                ]);
-            }
-            if (str_contains($url, '/Classes/Fighter')) {
-                return implode("\n", [
-                    '| 1 | 0 |',
-                    '| 2 | 2,000 |',
-                    '| 3 | 4,000 |',
-                    '| 4 | 8,000 |',
-                    '| 5 | 16,000 |',
-                    '| 6 | 32,000 |',
-                ]);
-            }
-            return implode("\n", [
-                'As of 7.23.2026',
-                '',
-                '| Name | Class | Level | XP Total |',
-                '| --- | --- | ---: | ---: |',
-                '| Routing Hero | Ranger | 4 | 12,345 |',
-                '| Another Hero | Fighter | 5 | 98,765 |',
             ]);
-        },
+        }
+        if (str_contains($url, 'Class+Level+Progression')) {
+            return "- [[Fighter]]\n- [[Ranger]]";
+        }
+        if (str_contains($url, '/Classes/Ranger')) {
+            return implode("\n", [
+                '| 1 | 0 |',
+                '| 2 | 2,250 |',
+                '| 3 | 4,500 |',
+                '| 4 | 10,000 |',
+                '| 5 | 20,000 |',
+            ]);
+        }
+        if (str_contains($url, '/Classes/Fighter')) {
+            return implode("\n", [
+                '| 1 | 0 |',
+                '| 2 | 2,000 |',
+                '| 3 | 4,000 |',
+                '| 4 | 8,000 |',
+                '| 5 | 16,000 |',
+                '| 6 | 32,000 |',
+            ]);
+        }
+        return implode("\n", [
+            'As of 7.23.2026',
+            '',
+            '| Name | Class | Level | XP Total |',
+            '| --- | --- | ---: | ---: |',
+            '| Routing Hero | Ranger | 4 | 12,345 |',
+            '| Another Hero | Fighter | 5 | 98,765 |',
+        ]);
+    };
+    $broker = new BrokerService(
+        $config,
+        new RpolClient($config['rpol']),
+        $wordCountFetcher,
+        $wordCountFetcher,
         __DIR__ . '/../../pwa/quests.json');
     $session = [];
     $adminHeaders = ['admin-key' => $config['api']['admin_key']];
@@ -206,7 +231,7 @@ try {
 
     $wordCountSnapshot = [
         'schema_version' => 1,
-        'observed_at' => '2026-07-26T18:30:00Z',
+        'observed_at' => gmdate(DATE_ATOM, time() - 120),
         'counting_rule_version' => 'obsidian-publish-word-count-v1',
         'wiki' => ['pages' => 985, 'words' => 232048],
         'ic' => ['files' => 8, 'words' => 14998],
@@ -320,12 +345,13 @@ try {
         '192.0.2.30',
         $session);
     routingAssert($wordCounts['status'] === 200, 'The protected word-count route failed.');
-    routingAssert($wordCounts['body']['wiki']['words'] === 232048, 'The wiki word count was incorrect.');
-    routingAssert($wordCounts['body']['ic']['words'] === 14998, 'The IC word count was incorrect.');
-    routingAssert($wordCounts['body']['ooc']['words'] === 18652, 'The OOC word count was incorrect.');
+    routingAssert($wordCountRefreshCount === 1, 'The word-count route did not refresh stale word-count data from source.');
+    routingAssert($wordCounts['body']['wiki']['words'] === $currentWordCountSnapshot['wiki']['words'], 'The refreshed wiki word count was incorrect.');
+    routingAssert($wordCounts['body']['ic']['words'] === $currentWordCountSnapshot['ic']['words'], 'The refreshed IC word count was incorrect.');
+    routingAssert($wordCounts['body']['ooc']['words'] === $currentWordCountSnapshot['ooc']['words'], 'The refreshed OOC word count was incorrect.');
     routingAssert(
-        $wordCounts['body']['observed_at'] === $wordCountSnapshot['observed_at'],
-        'The word-count observation time changed during storage.');
+        $wordCounts['body']['observed_at'] === $currentWordCountSnapshot['observed_at'],
+        'The refreshed word-count observation time was not applied from source.');
 
     $presence = $broker->dispatch(
         'GET',

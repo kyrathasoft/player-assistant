@@ -56,6 +56,15 @@ https://bryanmiller.us
 
 Merge the `xp` section from `player-assistant-broker/config.xp.example.php` into the same private `config.php`. Keep the XP and active-character source URLs in this private configuration; never place them in PWA JavaScript or accept them from a browser request. When `character_source_url` is omitted, the broker derives the `PCs/Player Characters Listing` page from the fixed XP source's Obsidian vault.
 
+Set the optional `word_counts` section to enable automatic word-count refresh when stored counts become stale. For example, set `source_url` to a public JSON word-count endpoint and keep `maximum_stale_seconds` at seven days or longer:
+
+```php
+'word_counts' => [
+    'source_url' => 'https://.../word-counts.json',
+    'maximum_stale_seconds' => 604800,
+],
+```
+
 ## Account import
 
 After the updated API and private broker files are deployed, import the existing character password hashes from the repository root:

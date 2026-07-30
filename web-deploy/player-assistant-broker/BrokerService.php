@@ -16,6 +16,7 @@ final class BrokerService
         private readonly array $config,
         private readonly RpolClient $rpolClient,
         ?callable $xpMarkdownFetcher = null,
+        ?callable $wordCountFetcher = null,
         ?string $questDataPath = null)
     {
         if (!extension_loaded('pdo_sqlite')) {
@@ -39,7 +40,10 @@ final class BrokerService
             $this->database,
             is_array($config['xp'] ?? null) ? $config['xp'] : [],
             $xpMarkdownFetcher);
-        $this->wordCounts = new WordCountService($this->database);
+        $this->wordCounts = new WordCountService(
+            $this->database,
+            is_array($config['word_counts'] ?? null) ? $config['word_counts'] : [],
+            $wordCountFetcher);
         $this->quests = new QuestService($this->database, (string)$questDataPath);
         $this->messages = new MessageService($this->database);
     }

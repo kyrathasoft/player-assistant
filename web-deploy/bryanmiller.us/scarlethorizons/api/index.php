@@ -62,6 +62,7 @@ try {
         $config,
         new RpolClient($config['rpol']),
         null,
+        null,
         $questDataPath);
     $response = $service->dispatch(
         $method,
