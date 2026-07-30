@@ -58,6 +58,7 @@
         [...document.querySelectorAll('[data-view-panel]')]
             .map((element) => [element.dataset.viewPanel, element]));
     const navButtons = [...document.querySelectorAll('[data-view]')];
+    const protectedNavViews = new Set(['quests', 'magic-items', 'party-funds']);
 
     let deferredInstallPrompt = null;
     let translatorRequestId = 0;
@@ -105,7 +106,9 @@
         const resolvedView = !isAuthenticated
             ? (requestedView === 'message-dm' || requestedView === 'message-player')
                 ? 'dashboard'
-                : requestedView
+                : protectedNavViews.has(requestedView)
+                    ? 'dashboard'
+                    : requestedView
             : (requestedView === 'message-dm' && isDungeonMaster)
                 ? 'dashboard'
                 : (requestedView === 'message-player' && !canMessagePlayer)
@@ -1606,10 +1609,18 @@
         if (messagePlayerNavButton) {
             messagePlayerNavButton.hidden = !canMessagePlayer;
         }
+        for (const button of navButtons) {
+            const targetView = button.dataset.view;
+            if (!protectedNavViews.has(targetView)) continue;
+            button.hidden = !authenticated;
+        }
         if (isDungeonMaster && activeView === 'message-dm') {
             setView('dashboard', false);
         }
         if (!canMessagePlayer && activeView === 'message-player') {
+            setView('dashboard', false);
+        }
+        if (!authenticated && protectedNavViews.has(activeView)) {
             setView('dashboard', false);
         }
         const protectedStatus = byId('protected-player-status');
