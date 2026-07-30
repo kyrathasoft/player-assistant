@@ -36,14 +36,26 @@ try {
     $service = new WordCountService(
         $database,
         is_array($config['word_counts'] ?? null) ? $config['word_counts'] : []);
-    $snapshot = $service->latest();
+    $snapshot = $service->refreshNow();
+    $refreshStatus = $service->refreshStatus();
+    if ($refreshStatus['healthy'] === false) {
+        $service->recordSchedulerRun(false, (string)$refreshStatus['last_error_code']);
+        throw new RuntimeException(
+            'The latest source-backed refresh attempt failed: '
+            . (string)$refreshStatus['last_error_code']);
+    }
+    $service->recordSchedulerRun(true);
 
     echo json_encode([
         'status' => 'ok',
         'observed_at' => $snapshot['observed_at'],
         'uploaded_at' => $snapshot['uploaded_at'],
+        'refresh' => $service->refreshStatus(),
     ], JSON_UNESCAPED_SLASHES) . PHP_EOL;
 } catch (Throwable $error) {
+    if (isset($service) && $service instanceof WordCountService) {
+        $service->recordSchedulerRun(false, 'scheduler_failed');
+    }
     fwrite(STDERR, 'Word-count refresh failed: ' . $error->getMessage() . PHP_EOL);
     exit(1);
 }

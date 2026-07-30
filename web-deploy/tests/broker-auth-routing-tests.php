@@ -21,9 +21,17 @@ function routingAssert(bool $condition, string $message): void
 $databasePath = tempnam(sys_get_temp_dir(), 'pa-broker-route-');
 $snapshotDirectory = sys_get_temp_dir() . '/pa-broker-snapshots-' . bin2hex(random_bytes(6));
 $snapshotSigningKey = random_bytes(32);
+$wordCountStatusPath = tempnam(sys_get_temp_dir(), 'pa-word-count-status-');
+$wordCountSigningKeypair = sodium_crypto_sign_keypair();
+$wordCountSigningSecretKey = sodium_crypto_sign_secretkey($wordCountSigningKeypair);
+$wordCountSigningPublicKey = sodium_crypto_sign_publickey($wordCountSigningKeypair);
 if ($databasePath === false) {
     throw new RuntimeException('Unable to create the broker routing test database.');
 }
+if ($wordCountStatusPath === false) {
+    throw new RuntimeException('Unable to create the word-count status test path.');
+}
+@unlink($wordCountStatusPath);
 
 try {
     $config = [
@@ -62,6 +70,9 @@ try {
             'timeout_seconds' => 2,
             'maximum_response_bytes' => 65536,
             'maximum_stale_seconds' => 60,
+            'status_path' => $wordCountStatusPath,
+            'signature_key_id' => 'test-word-count-key',
+            'signature_public_key' => base64_encode($wordCountSigningPublicKey),
         ],
         'rpol' => [
             'username' => 'unused',
@@ -80,10 +91,21 @@ try {
     ];
     $wordCountFetcher = static function (string $url) use (
         &$wordCountRefreshCount,
-        $currentWordCountSnapshot): string {
+        $currentWordCountSnapshot,
+        $wordCountSigningSecretKey): string {
         if (str_contains($url, 'word-counts-latest.json')) {
             ++$wordCountRefreshCount;
-            return json_encode($currentWordCountSnapshot, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+            $payloadJson = json_encode(
+                $currentWordCountSnapshot,
+                JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR);
+            return json_encode([
+                'payload' => $currentWordCountSnapshot,
+                'signature' => [
+                    'algorithm' => 'Ed25519',
+                    'key_id' => 'test-word-count-key',
+                    'value' => base64_encode(sodium_crypto_sign_detached($payloadJson, $wordCountSigningSecretKey)),
+                ],
+            ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR);
         }
 
         if (str_contains($url, 'Player+Characters+Listing')) {
@@ -947,12 +969,22 @@ try {
         $health['body']['word_count_snapshot_available'] === true,
         'The health route word-count snapshot state was incorrect.');
     routingAssert(
+        $health['body']['word_count_refresh']['configured'] === true
+            && $health['body']['word_count_refresh']['signing_configured'] === true
+            && $health['body']['word_count_refresh']['healthy'] === true
+            && $health['body']['word_count_refresh']['last_success_at'] !== null,
+        'The health route word-count refresh state was incorrect.');
+    routingAssert(
         $health['body']['quest_request_workflow_configured'] === true,
         'The health route quest-request workflow state was incorrect.');
 
     fwrite(STDOUT, "Broker authentication routing tests passed.\n");
 } finally {
     @unlink($databasePath);
+    @unlink($wordCountStatusPath);
+    foreach (glob($wordCountStatusPath . '.tmp-*') ?: [] as $statusTemporaryFile) {
+        @unlink($statusTemporaryFile);
+    }
     if (is_dir($snapshotDirectory)) {
         foreach (glob($snapshotDirectory . '/*') ?: [] as $snapshotFile) {
             @unlink($snapshotFile);

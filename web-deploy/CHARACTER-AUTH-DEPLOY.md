@@ -57,16 +57,19 @@ https://bryanmiller.us
 
 Merge the `xp` section from `player-assistant-broker/config.xp.example.php` into the same private `config.php`. Keep the XP and active-character source URLs in this private configuration; never place them in PWA JavaScript or accept them from a browser request. When `character_source_url` is omitted, the broker derives the `PCs/Player Characters Listing` page from the fixed XP source's Obsidian vault.
 
-Set the optional `word_counts` section to enable automatic word-count refresh when stored counts become stale. For example, set `source_url` to a public JSON word-count endpoint and keep `maximum_stale_seconds` at seven days or longer:
+Set the optional `word_counts` section to enable signed automatic word-count refresh:
 
 ```php
 'word_counts' => [
     'source_url' => 'https://.../word-counts.json',
     'maximum_stale_seconds' => 604800,
+    'status_path' => '/home/DREAMHOST_USER/player-assistant-broker/word-count-refresh-status.json',
+    'signature_key_id' => 'word-counts-...',
+    'signature_public_key' => 'BASE64_ED25519_PUBLIC_KEY',
 ],
 ```
 
-Automatic refresh is request-triggered, not cron-triggered. An authenticated
+An authenticated
 `GET /v1/word-counts` returns the cached snapshot and, when its observation time
 is older than `maximum_stale_seconds`, attempts to replace it from `source_url`.
 If `source_url` is empty, the broker retains manual administrator uploads and
@@ -78,21 +81,28 @@ The production source is a public, data-only JSON file outside the PWA:
 https://bryanmiller.us/scarlethorizons/data/word-counts.json
 ```
 
-`publish-word-counts.ps1` stages this source through the dedicated DreamHost SSH
-key, verifies the administrator upload, atomically publishes the source, and
-reads it back over HTTPS. Use `-SkipSourceUpload` only when intentionally
-retaining the existing source file.
+Run `setup-word-count-signing-key.ps1` once to store the Ed25519 private key in
+Windows Credential Manager and create `word-count-signing-public.json`.
+`publish-word-counts.ps1` signs the source, stages it through the dedicated
+DreamHost SSH key, verifies the public copy, then publishes the matching
+administrator snapshot. Any source verification or broker failure restores the
+previous public source. Use `-SkipSourceUpload` only when intentionally retaining
+the existing source file.
 
-Install the private refresh runner beside `config.php`, then schedule it with
-the DreamHost account crontab:
+Run `deploy-word-count-refresh.ps1` to atomically install the private services,
+merge public signing metadata into `config.php`, install the cron entry, prune
+only the approved backup patterns to five copies each, force one signed refresh,
+and run production drift verification:
 
 ```cron
-17 */6 * * * /usr/bin/php /home/DREAMHOST_USER/player-assistant-broker/refresh-word-counts.php >/dev/null 2>&1
+17 */6 * * * /usr/bin/php /home/DREAMHOST_USER/player-assistant-broker/refresh-word-counts.php >> /home/DREAMHOST_USER/player-assistant-broker/word-count-refresh-cron.log 2>&1
 ```
 
-The runner and authenticated reads use the same stale threshold. The cron entry
-does not expose an administrator credential and does not refresh a snapshot
-that is still current.
+The runner forces signature verification on every scheduled execution and writes
+atomic private status. Public health exposes only safe readiness, success time,
+scheduler time/status, and fixed error codes. Run
+`test-word-count-refresh-deployment.ps1` independently to check hashes,
+permissions, signing metadata, source signature, cron, health, and retention.
 
 ## Account import
 

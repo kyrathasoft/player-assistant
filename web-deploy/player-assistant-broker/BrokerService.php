@@ -16,9 +16,14 @@ final class BrokerService
         private readonly array $config,
         private readonly RpolClient $rpolClient,
         ?callable $xpMarkdownFetcher = null,
-        ?callable $wordCountFetcher = null,
+        callable|string|null $wordCountFetcher = null,
         ?string $questDataPath = null)
     {
+        if (is_string($wordCountFetcher) && $questDataPath === null) {
+            $questDataPath = $wordCountFetcher;
+            $wordCountFetcher = null;
+        }
+
         if (!extension_loaded('pdo_sqlite')) {
             throw new RuntimeException('The PHP PDO SQLite extension is required.');
         }
@@ -70,6 +75,7 @@ final class BrokerService
                 'character_account_count' => $this->characterAuth->accountCount(),
                 'xp_tracking_configured' => $this->xpTracking->isConfigured(),
                 'word_count_snapshot_available' => $this->wordCounts->hasSnapshot(),
+                'word_count_refresh' => $this->wordCounts->refreshStatus(),
                 'quest_request_workflow_configured' => true,
             ]);
         }

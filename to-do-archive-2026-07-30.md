@@ -1,0 +1,362 @@
+# Completed Work Archive
+
+Archived from `to-do.md` on 7/30/2026 after all checklist items were completed.
+
+- [x] Complete: added periodic word-count refresh in the PHP broker when cached snapshots are older than 7 days, with configurable stale window, optional remote source URL, and fetcher injection for testability.
+- [x] Complete: updated broker service wiring and deployment configuration to support the new word-count refresh path (`word_counts` config, DI-safe `WordCountService`, and API index bootstrap).
+- [x] Complete: expanded broker auth-routing tests to cover stale snapshot refresh, source-fallback behavior, and config defaults.
+- [x] Complete: documented the new broker word-count configuration fields for deployment validation in `CHARACTER-AUTH-DEPLOY.md`.
+- [x] Complete: configured the standalone PHP CLI environment and verified `curl`, `pdo_sqlite`, `sqlite3`, and `openssl` remain loaded after repeated idempotent setup runs.
+- [x] Complete: locally verified `web-deploy/tests/broker-auth-routing-tests.php` with the durable CLI configuration.
+- [x] Complete: deployed the canonical non-PWA HTTPS word-count source while retaining administrator publishing, installed the private DreamHost refresh runner, configured the six-hour cron trigger, and validated a real source-backed production refresh.
+
+- [x] Review potentially anachronistic English terms in the Orcish lexicon.
+  - Approval only: do not purge an existing entry until the user selects it.
+  - Approved retention applied: `battery` remains as a verb.
+  - Approved removal applied: the noun sense of `battery`, `battery's`, `college`, `college's`, and `colleges`.
+  - Approved removal applied: `academic`, `academic's`, and `academics`.
+  - Approved retention applied: `biological`, `biology`, and `biology's`.
+  - Approved removal applied: `chemical`, `chemical's`, `chemically`, `chemicals`, `chemistry`, and `chemistry's`; Orcish culture uses magic or alchemy instead.
+  - Approved removal applied: dictionary, editor, engine, evolution, footnote, geological, gravity-based science-fiction, hypothesis, motor, oxygen, photograph, plastic, psychology, radiation, radio, railroad, railway, science, statistics, telegraph, telephone, and telescope families (`86` exact English forms including dependent derivatives).
+  - Approved retention applied: essay, frequency, journal, laboratory, lecture, professor, publication, and research remain available; `film`, `film's`, and `films` remain only as nouns meaning a smear or layer, while `filmed` and `filming` were removed.
+  - Current focused shortlist: `codex-scratch\lexicon-anachronism-purge-candidates.txt` (`0` families, `0` exact English entries).
+  - Broad audit with categories, triggers, Orcish forms, and tags: `codex-scratch\lexicon-anachronism-review.tsv` (`65` exact English entries, including medieval-compatible terms intentionally excluded from the focused shortlist).
+  - After approved removals, update family batch counts and the unique-English count regression, rebuild the app and `to-orcish` in Release, run focused absence and quality tests, refresh both audit files, and update graphify.
+
+- [x] Resume Orcish invalid retranslation review.
+  - Completed scratch audit files were removed after closeout; the review history remains available in Git.
+  - Lexicon source: `OrcishTranslatorUtility.cs`
+  - Count test: `PlayerAssistant.Tests\Program.cs`
+  - Current review TSV start: none
+  - Current remaining review count: `0`
+  - Current next 10 for review: none
+  - Process: show next 10 rows, apply user approvals/drops, collision-check approved Orcish forms, patch lexicon entries, remove all reviewed rows from TSV, update summary, adjust count test only if entries are dropped, run Release builds and focused `to-orcish` verification, then refresh graphify.
+  - Completed closeout: active review TSV is exhausted and its scratch audit artifacts were removed.
+- [x] Run Orcish weak-signal core audit.
+  - Completed audit data was removed with the closed scratch workspace and remains available in Git history.
+  - Scope: review remaining core non-generated lexicon entries before later generated/promoted derived families.
+  - Target weak mechanically disambiguated compounds such as `men`, `weak humans`, `superior children of Gruumsh`, `free human`, `thinker`, `traveller`, `wizard`, `warrior`, `cleric`, `days`, `day’s`, `family`, `authority`, `expression`, `home`, `folly`, `tavern`, `sight`, `guard duty`, and `economy`.
+  - Target direct proper-name/exonym entries and decide whether each should remain as intentional lore/name pass-through vocabulary or be culled as noise.
+  - Classify each candidate as `repair-root`, `drop`, `keep-exonym`, or `keep-lore-term`.
+  - For repairs, prefer meaning-bearing root compounds; collision-check before patching; update dependent derived forms; verify representative terms with Release `to-orcish`; refresh graphify after source changes.
+  - Completed audit decisions: 68 root repairs, 18 kept exonyms, 2 kept lore terms.
+- [x] Propagate repaired Orcish roots through derived families.
+  - After weak-signal repairs, update dependent plural, possessive, progressive, past, present, and related derived entries so no stale weak root remains beside a repaired base term.
+  - Completed propagation for `allies`, `day's march`, `families`, `paling`, `retake`, `secretly`, and station possessive/plural/past derivatives.
+- [x] Audit generated and review-promoted derived Orcish entries.
+  - Review `review-promoted` families for over-literal or mechanically formed `s-form`, `past`, `progressive`, and `possessive` entries; repair, cull, or keep with explicit rationale.
+  - Completed representative derived-family audit for malformed base tags and stale mechanical roots in `bag's`, `eye's`, `hushed`, `lets`, `man’s`, `seeing`, `tether's`, `trio's`, and `watching`.
+- [x] Cull low-value direct Orcish exonym pass-throughs.
+  - Keep intentional lore terms and campaign names, but remove proper-name pass-through entries that add noise and do not improve translation behavior.
+  - Removed 26 generated proper-name pass-throughs while preserving tested campaign/lore exonyms such as `Kirkilston`, `Xavin`, and `Kelpie`.
+- [x] Normalize predictable Orcish morphology into reusable rules.
+  - Identify entries that are only predictable `-i`, `-uk`, `-ash`, `-in`, or `-ur` forms and decide whether explicit entries are still needed or should be generated by morphology.
+  - Completed first shortening batch for mechanically lengthened `area`, `areas`, `aimed`, `aiming`, `smelled`, and `stylus`; removed generated duplicate `hunt`.
+  - Added opt-in derived morphology rules for predictable plural, present, past, and progressive forms; retired explicit rows for `areas`, `carries`, `carried`, `carrying`, `acknowledges`, `acknowledged`, `smelled`, `aimed`, and `aiming`.
+  - Added a generated-entry duplicate guard and regression coverage for rule-derived forms.
+- [x] Add Orcish lexicon quality regression checks.
+  - Cover exact Orcish collisions, single-word English entries with Orcish spaces, digits in Orcish forms, known placeholder segments, and unapproved direct exonym pass-throughs.
+  - Added invariant tests over the built lexicon; removed a duplicate `Well met` entry and eight low-value generated pass-throughs surfaced by the new checks.
+  - Moved retained pass-through approvals out of the test allowlist and into explicit `proper-noun`/`exonym`/`keep-exonym` lexicon tags.
+- [x] code app feature to search online vault by using the JSON library file 'sitemap-keyword-urls.json'
+- [x] add menu item to display the regional map
+- [x] build method GetSearchTerms() to extract search terms when btnSearch is clicked
+- [x] string[] SearchTerms should accept the output of method GetSearchTerms()
+- [x] code a method that, given a search term, will return a list of URLs from the JSON library file 'sitemap-keyword-urls.json' that match the search term
+- [x] add terms from Locations index (on obisidian wiki) to game-posts-key-terms.md
+- [x] Store the XP Tracking URL in encrypted local settings and add a parser/fetch helper for current PC XP totals.
+- [x] Add `Show > XP` with encrypted per-PC password sidecar validation before displaying a character's XP date and total.
+- [x] Allow the Dungeon Master XP credential to display dates and XP totals for all PCs.
+- [x] Show player-safe XP Tracking failure messages that hide the unlisted URL and direct users to contact the DM.
+- [x] Add a polished installer package workflow for `0.9.1-hardening.1` targeting `C:\Program Files\kyrathasoft\player-assistant`.
+- [x] Add an Inno Setup installer that installs to Program Files and guides users to the .NET Desktop Runtime 10 x64 download when the required runtime is missing.
+- [x] Switch publish output to framework-dependent multi-file now that the Inno installer checks for the .NET Desktop Runtime.
+
+## Player-facing features completed in this session
+
+- [x] Added `Show > Adventure Outline` to render generated adventure-outline summaries inside the app.
+- [x] Added `TransformTaggedText()` to encrypt and decrypt visible tag-enclosed markdown text while leaving access tags readable.
+- [x] Added support for complex tag expressions such as grouped `&&` requirements and either-or alternatives.
+- [x] Added encrypted markdown block validation so mismatched opening and closing tags return a clear unable-to-decrypt message.
+- [x] Added `EncryptedTextReport()` to fetch Obsidian markdown from a URL and count valid encrypted blocks and mismatched encrypted blocks.
+- [x] Added encrypted-text indexing for Obsidian sitemap URLs, including encrypted block counts and YAML frontmatter tags.
+- [x] Updated search results so URLs known to contain encrypted text display in all caps while still opening the original URL.
+- [x] Updated online Obsidian fallback search results so URLs found only by live wiki search display in all caps.
+- [x] Added keyword-index backfill so live wiki search hits for previously missing search terms are written to `keyword-index.json`.
+- [x] Allowed the Northern Reaches regional map image URL and narrowed certificate pinning so non-update `bryanmiller.us` content is not treated as update-channel traffic.
+- [x] Added a status-bar activity animation that appears while tracked asynchronous app tasks are running.
+
+## Hardening completed in this session (verified)
+
+- [x] [v] Replaced reversible XP password storage with unique-salt PBKDF2-HMAC-SHA256 hashes and strict runtime, publish, and installer validation.
+- [x] [v] Added centralized startup exception/log wrappers around required and optional startup phases.
+- [x] [v] Converted settings load, player-character refresh, regional-map preload, configuration validation, and runtime housekeeping into logged startup phases.
+- [x] [v] Added background-task supervision for startup work so duplicate phases are suppressed, cancellation is coordinated, and failures are logged.
+- [x] [v] Added retry/timeout handling for network requests and preserved caller cancellation behavior.
+- [x] [v] Added atomic file writes and replacement retry handling for runtime artifacts such as keyword indexes and generated sidecars.
+- [x] [v] Added malformed runtime-artifact quarantine handling for JSON/text loads, including keyword index, login info, and asset manifest paths.
+- [x] [v] Added startup configuration validation for required settings, optional RPOL credentials, and runtime sidecar warnings.
+- [x] [v] Hardened UI operation failures with centralized status/log/dialog reporting.
+- [x] [v] Hardened RPOL authentication failure caching and logging to avoid repeated noisy failures.
+- [x] [v] Hardened publish verification to reject diagnostic/runtime leak artifacts such as stale startup logs, temp folders, debug symbols, plaintext credentials, and browser auth state.
+- [x] [v] Added runtime housekeeping to remove stale temp files, orphaned atomic temp files, and old quarantined JSON files while rotating oversized startup logs.
+- [x] [v] Added focused regression tests for the above hardening paths in the Release test harness.
+- [x] [v] Added startup dependency failure-matrix coverage for bad config, missing/empty sidecars, corrupt optional local settings, locked runtime artifacts, keyword-index recovery, and terminal network failures.
+- [x] [v] Hardened RPOL authenticated-fetch failure classification for missing credentials, rejected login, expired auth state, RPOL blocking/rate limits, Playwright unavailability, and transient remote outages.
+- [x] [v] Added startup exception redaction for user-facing startup failure dialogs so raw exception strings are masked before display.
+- [x] [v] Updated `UiOperationFailureReporter` status and dialog formatting to consistently redact sensitive operation messages.
+- [x] [v] Switched HTML/network fetch completion to `HttpCompletionOption.ResponseHeadersRead` to avoid eager response buffering in RPOL/authenticated and generic fetch codepaths.
+- [x] [v] Hardened keyword-index crawler persistence by writing `keyword-index.json` and `keyword-index.json.source-integrity.json` atomically with temp-file rollback on write failures.
+- [x] [v] Added `startup-health.json` to record structured startup phase status, elapsed time, download counts, failure counts, and last exception summaries while keeping the diagnostic artifact out of publish output.
+- [x] [v] Expanded publish verification to parse and validate published `settings.json`, encrypted `settings.local.json`, keyword-index sidecars, keyword terms, `sitemap.xml`, and required Playwright runtime internals.
+- [x] [v] Added and ran a controlled Release startup smoke verification script that backs up selected runtime artifacts, launches `Release\player-assistant.exe --suppress-hero-images`, validates fresh `startup-health.json` phases, and restores prior artifacts.
+- [x] [v] Added release identity hardening with `0.9.1-hardening.1` project metadata, a `/version`/`--version` command path, executable version verification during publish checks, and regression coverage for version metadata.
+- [x] [v] Ran the full release rehearsal: Release build, publish, publish verification tests, Release startup smoke, published-folder startup smoke, and executable version checks for both output folders.
+- [x] [v] Hardened keyword terms startup handling so running from `Release\publish` no longer deletes the parent `Release\game-posts-key-terms.md` runtime artifact.
+- [x] [v] Added release-hardening evidence index and monthly hardening refresh checkpoint script.
+
+## Next hardening tasks (reported, not yet re-run locally in this cycle)
+
+- [x] [v] Add transactional RPOL thread export that writes to a temporary sibling folder, validates the manifest, and swaps into place without deleting the last good export first.
+- [x] [v] Add a shared diagnostic redaction utility used consistently by crash diagnostics, startup health, startup logs, and diagnostic bundle verification paths.
+- [x] [v] Add an RC commit/tag checklist script that verifies clean intended diffs, runs the focused hardening tests, confirms both executable versions, and prints the exact `v0.9.1-hardening.1-rc1` tagging commands without mutating Git state.
+- [x] [v] Add a published-folder runtime integrity check that verifies no startup run from `Release\publish` modifies or deletes parent `Release` artifacts, using before/after file manifests for tracked runtime files.
+- [x] [v] Add a diagnostic bundle script that collects `startup-health.json`, `startup-errors.log`, version metadata, publish verification output, and smoke verification output into a redacted timestamped zip for troubleshooting.
+- [x] [v] Add focused regression coverage for diagnostic bundle redaction, encrypted local-settings summarization, expected zip contents, and forbidden auth-state rejection.
+- [x] [v] Add `collect-diagnostics.ps1 -VerifyOnly` to inspect an existing diagnostics zip for forbidden auth-state files and unredacted credential markers.
+- [x] [r] Broaden diagnostics redaction for bearer tokens, cookie headers, credentialed URLs, and password/token/secret query values.
+- [x] [r] Add diagnostics bundle generation and verification to the RC checklist.
+- [x] [r] Add process-lock diagnostics for build/publish troubleshooting so running `player-assistant.exe` process paths and PIDs are reported after publish failure.
+- [x] [r] Validate `rpol-storage-state.json` before Playwright uses it, deleting stale, malformed, or non-RPOL auth state so authenticated fetches start from a clean login path.
+- [x] [r] Add retention limits for diagnostics, quarantines, and old scratch folders.
+- [x] [r] Add `startup-health.json` schema/versioning.
+- [x] [r] Add crash-path diagnostic capture like `last-crash.json`.
+- [x] [r] Add Release/publish parity checks.
+- [x] [r] Add config repair guidance for startup validation failures.
+- [x] [r] Add a network/auth circuit breaker for repeated terminal failures.
+- [x] [r] Add a release integrity hash manifest.
+
+## Follow-up hardening backlog
+
+- [x] [v] Add secret scanning to the RC checklist for tracked files and reachable history.
+- [x] [v] Add a dependency/runtime version inventory to publish output and diagnostics.
+- [x] [v] Strengthen `settings.local.json` key separation with a per-machine or per-install derivation path.
+- [x] [v] Address Luna finding: migrate portable `settings.local.json` encryption from fixed `app-protected-v2` keys to per-scope `app-protected-v3` and migrate legacy `app-protected-v2` files.
+- [x] [v] Add network allowlist validation for configured and fetched RPOL/Obsidian URLs.
+- [x] [v] Add RC checklist self-tests for secret scan, health failure, manifest mismatch, and expected-path handling.
+
+## Additional hardening backlog
+
+- [x] Add signed release provenance with commit, tag, manifest, runtime inventory, script hash, and executable signature metadata.
+- [x] Add config/schema versioning for `settings.json` and `settings.local.json`.
+  - [x] Add `schema_version: 1` metadata to checked-in `settings.json`.
+  - [x] Treat missing schema versions as legacy-compatible version `0`.
+  - [x] Reject invalid or future schema versions in app startup settings load.
+  - [x] Emit `schema_version: 1` for encrypted `settings.local.json` envelopes.
+  - [x] Migrate legacy/plaintext local settings to the current encrypted schema envelope.
+  - [x] Validate config schema versions during publish verification.
+  - [x] Include local-settings schema metadata in diagnostic bundle shape output.
+  - [x] Add focused regression tests for current/future settings schemas, local settings schemas, publish verification, and diagnostics.
+
+## Future hardening implementation tasks
+
+- [x] Add network response content limits for HTML, markdown, JSON cache, and image downloads.
+  - [x] Define per-content-type maximum byte limits and sensible defaults.
+  - [x] Enforce limits while streaming HTTP responses instead of after full buffering.
+  - [x] Apply limits to RPOL HTML fetches, Obsidian markdown fetches, keyword/sitemap JSON cache downloads, and hero/image downloads.
+  - [x] Preserve last known good files by failing bounded downloads before atomic promotion.
+  - [x] Add tests for oversized HTML, markdown, JSON, and image responses.
+- [x] Validate sitemap and keyword-index URL entries against the network allowlist before storing them.
+  - [x] Validate every sitemap URL before writing `sitemap.xml`.
+  - [x] Validate keyword-index URL lists before writing `sitemap-keyword-urls.json` or `keyword-index.json`.
+  - [x] Reject credentialed URLs, non-HTTP(S) schemes, escaped hosts, and non-allowlisted RPOL/Obsidian hosts.
+  - [x] Preserve the previous good index when fetched data contains rejected URLs.
+  - [x] Add regression coverage for poisoned sitemap and keyword-index entries.
+- [x] Add a full RC dry-run mode that writes a structured JSON summary and exits nonzero on any failure.
+  - [x] Add a `-DryRunJson` or equivalent mode to the RC checklist script.
+  - [x] Capture each checklist step with status, elapsed time, command, artifact paths, and failure summary.
+  - [x] Exit nonzero when any required check fails while still writing the summary file.
+  - [x] Add tests for passing and failing dry-run summaries.
+- [x] Add dependency freshness and vulnerability checks to the RC checklist.
+  - [x] Inventory NuGet package versions, .NET SDK/runtime version, Playwright package/browser versions, and bundled Node runtime versions.
+  - [x] Run `dotnet list package --vulnerable` or equivalent vulnerability checks during RC verification.
+  - [x] Record dependency check results in diagnostics and RC dry-run JSON output.
+  - [x] Add self-tests or fixture tests that prove stale/vulnerable dependency output fails the RC checklist.
+
+## Remaining hardening backlog
+
+- [x] Add release code-signing enforcement and Authenticode verification to publish verification, installer builds, and the RC checklist.
+  - [x] Fail RC verification when the release executable or installer is unsigned or signed with an unexpected certificate subject/thumbprint.
+  - [x] Record signature metadata in release provenance and diagnostics.
+- [x] Add installer/runtime sidecar ACL validation.
+  - [x] Verify encrypted runtime sidecars are installed read-only for normal users where appropriate.
+  - [x] Verify writable runtime directories live under the approved per-user or ProgramData fallback locations.
+  - [x] Add installer verification that rejects missing encrypted XP/settings sidecars.
+- [x] Add automated dependency freshness policy checks beyond vulnerability scanning.
+  - [x] Compare NuGet and Playwright versions against the latest available package metadata.
+  - [x] Warn or fail RC verification when dependencies exceed an approved age threshold.
+  - [x] Record stale dependency findings in dependency inventory JSON.
+- [x] Add authenticated-source tamper detection for fetched Obsidian/RPOL content.
+  - [x] Persist source hashes for last-known-good downloaded markdown, sitemap, keyword, and RPOL export inputs.
+  - [x] Detect unexpected structural changes and show player-safe recovery guidance.
+  - [x] Keep previous good content available when newly fetched content fails integrity or shape checks.
+- [x] Add backup/restore hardening for user-writable runtime data.
+  - [x] Create bounded rotating backups before modifying user settings, indexes, exports, and encrypted sidecars.
+  - [x] Add startup recovery that can restore the newest valid backup after corruption or interrupted writes.
+  - [x] Add focused tests for backup selection, rollback, and retention limits.
+- [x] Add CI/release pipeline enforcement for the local hardening scripts.
+  - [x] Run publish verification, RC self-tests, secret scan, dependency checks, and diagnostics verification in CI.
+  - [x] Upload redacted verification artifacts for failed CI runs.
+  - [x] Block release tags unless the RC checklist passes.
+- [x] Harden the update channel with a signed JSON manifest, pinned public-key verification, update SHA256 metadata, and tests that reject tampered manifests before offering downloads.
+
+## Post-backlog hardening candidates
+
+- [x] Add a verified in-app updater that downloads the installer to a controlled temp location, verifies its SHA256 against the signed update manifest, verifies its Authenticode signer against the current release certificate policy, and only then offers execution.
+- [x] Add certificate pinning or equivalent transport trust hardening for the update host beyond the current allowlist and HTTPS validation.
+- [x] Move update and RPOL-sensitive runtime secrets out of app-adjacent sidecars into a Windows-backed secret store such as Credential Manager.
+- [x] Add anti-downgrade tracking so the updater refuses older-but-valid signed releases after a newer trusted version has been observed.
+- [x] Add revocation and rotation handling for update trust material.
+  - [x] Support pinned-certificate rotation windows.
+  - [x] Support update-signing key rotation and explicit revocation.
+  - [x] Fail closed if a manifest is signed by a retired key.
+- [x] Protect the anti-downgrade trusted-version floor and related updater state against tampering, not just corruption.
+- [x] Re-verify the installer immediately before execution and refuse launch if path, signer, or elevation context changes after initial verification.
+- [x] Produce and verify release installer artifacts in CI, including filename/version/signature/hash checks against the signed manifest.
+- [x] Further minimize outbound network trust by centralizing per-purpose host/path allowlists and auditing every allowed endpoint.
+- [x] Add end-to-end CI verification that exercises the hosted settings.local.json fetch/decrypt path against a controlled fixture server.
+
+## New backlog
+
+- [x] Add negative-path CI coverage for hosted settings fetch/decrypt failures, including tampered envelopes, plaintext JSON, oversized payloads, and unreachable fixture-server responses.
+- [x] Add signed metadata for hosted settings so the app verifies content identity and version, not just transport and URL allowlist membership.
+- [x] Reduce plaintext secret lifetime in memory for decrypted hosted settings and RPOL credentials where practical.
+- [x] Add runtime diagnostics for outbound allowlisted requests, recording per-purpose endpoint usage and failure counts without logging secret-bearing values.
+- [x] Add a clean-machine installer smoke path in CI that verifies first launch, hosted settings download, credential migration, and updater preflight behavior after install.
+
+## Fresh backlog
+
+- [x] Implement PC login dashboard on programmer's website.
+  - Permanent design and security notes: [implement-pc-log-in-dashboard-on-programmers-website.md](implement-pc-log-in-dashboard-on-programmers-website.md)
+- [x] Complete signed RPOL snapshot coverage beyond the verified root page.
+  - [x] Deploy the private DreamHost broker configuration with restricted permissions and required PHP extensions.
+  - [x] Add signed, sanitized snapshot upload and bearer-token retrieval endpoints.
+  - [x] Add the Windows Playwright publisher, daily scheduled task, exact broker allowlist, Credential Manager secrets, and desktop snapshot retrieval.
+  - [x] Verify live health, publish the approved game root, and retrieve it with a one-day test token before revoking that token.
+  - [x] Persist the approved page queue and advance one target per publisher execution so subsequent runs do not restart at the root.
+  - [x] Confirm all remaining pages accumulate through repeated publisher executions.
+    - Live verification: all 15 approved targets are stored, including the newly approved Game Links page; the cursor advanced to the first thread after publishing Game Links.
+- [x] Run a clean-client test with no RPOL administrator credentials before removing or rotating distributed credentials.
+  - [x] Verify `Adventure Outline`, `My Hero Briefing`, and `Party` work with only a short-lived `PlayerAssistant/Broker/Token`.
+  - [x] Confirm the clean client does not create `PlayerAssistant/RPOL/UserName`, `PlayerAssistant/RPOL/Password`, or `PlayerAssistant/RPOL/StorageState`, including after opening the menu.
+  - [x] Add and deploy signed snapshot coverage for `/usermodules/diceroller.cgi?gi=80170`, including exact broker/client allowlists, existing publisher-queue migration, RPOL referrer handling, and identifier-free live roll parsing.
+  - [x] Re-test the bearer-only Dice Rolls pipeline: the live snapshot produced 174 unique entries and satisfied the menu-enablement condition.
+  - [x] Revoke the short-lived clean-client test token.
+  - [x] Complete the clean-machine diagnostic inspection: verify no credential, token, cookie, or browser-state leakage.
+- [x] Run a full release verification/rehearsal now that project files and sidecars are tracked.
+  - Status: completed after restoring `settings.local.json` from the local installer payload.
+- [x] Continue refining `Show > Adventure Outline` summary quality so generated bullets are consistently specific, player-facing scene updates rather than generic fallback phrases.
+  - Status: completed a fallback-summary refinement pass that keeps unknown posts tied to concrete campaign details such as Red Tusk, the Deep Friends, Raven's Pass, caravan cargo, Jelenneth, Nuanda, or Blightstone Pit instead of generic conversation/location summaries.
+  - Status: completed contiguous Chapter 1-through-latest generation; missing chapter sources receive a pending bullet and are replaced by full post summaries after their RPOL snapshots download.
+  - Rehearsal findings: clean Release rebuild passes and refreshes executable metadata to 0.9.5; publish verification passes; Release startup smoke passes; Release/publish parity passes; published health passes; published-folder runtime integrity passes.
+  - RC checklist passes with code-signing skipped; signing remains a separate release-material prerequisite.
+- [x] Audit tracked generated artifacts, especially `keyword-index.json`, and define the update policy.
+  - Status: completed.
+  - Findings: root `keyword-index.json` and `sitemap-keyword-urls.json` are the tracked generated search snapshots; Release/publish copies, diagnostics, installer payloads, and credential sidecars are generated runtime/distribution output.
+  - Policy: documented in `AGENTS.md`; refreshed the root tracked snapshots from the current validated `Release` copies.
+- [x] Implement `Show > My Hero Briefing`.
+  - [x] Define the `MyHeroBriefing` data model and utility boundary.
+    - Inputs: active party rows, authenticated hero identity if available, RPOL thread/post cache, XP totals, encrypted note/search metadata, and app settings.
+    - Output: one player-safe briefing object containing current hero summary, recent activity, likely open response items, relevant unlocked notes, and quick links.
+  - [x] Add hero identity resolution for briefing.
+    - Prefer the authenticated RPOL/XP hero identity when available.
+    - Fall back to a hero picker when identity cannot be inferred.
+    - Keep Dungeon Master behavior explicit instead of silently choosing the wrong hero.
+  - [x] Build the current hero card.
+    - Reuse Party data for name, class, level, HP, token, and sheet text.
+    - Reuse XP visibility rules so a player sees only their allowed XP total.
+    - Add quick links to full sheet, XP, Party, Adventure Outline, and relevant RPOL thread URLs.
+  - [x] Build recent hero activity.
+    - Find recent RPOL posts that mention the hero's first name, full name, or known aliases.
+    - Show the latest 5-10 matching posts with thread, author, timestamp/order, and a short player-safe excerpt.
+  - [x] Build likely open response items.
+    - Identify posts after the hero's last known post in active RPOL threads.
+    - Group them by thread and rank direct mentions or question-like posts first.
+    - Avoid implying obligation when the evidence is only a weak mention.
+  - [x] Surface relevant unlocked notes.
+    - Reuse tagged/encrypted-note access rules with the hero's class, level, name, and tags.
+    - Show only note titles/excerpts the current hero is allowed to read.
+    - Keep locked or mismatched encrypted content hidden.
+  - [x] Add the WinForms UI entry point.
+    - Add `Show > My Hero Briefing`.
+    - Render the briefing in the existing display surface with refresh, hero selector when needed, and empty/error states.
+    - Preserve existing status-bar activity and operation-failure reporting patterns.
+  - [x] Add focused regression tests.
+    - Cover identity resolution, current hero card fields, XP visibility, recent activity filtering, open response ranking, encrypted-note filtering, and menu wiring.
+  - [x] Run Release verification for the feature.
+    - Build the Release app and Release test harness.
+    - Run focused My Hero Briefing tests plus affected RPOL/Party/XP/encrypted-note tests.
+    - Run `graphify update . --no-cluster`.
+- [x] Continue Orcish work with a new quality pass outside the completed backlog.
+  - Added a reusable proposed-entry admission guard for exact and reverse collisions, close-form conflicts, declared root fidelity, standard morphology, and compound provenance.
+  - Added explicit review tags for intentional exceptions and focused regression coverage for accepted and rejected additions.
+  - Added and verified all 230 untranslated candidates from a random ten-page Obsidian Publish Markdown sample; every proposal passed lexicon and affix review before adoption, and `codex-scratch\candidates.txt` was cleared only after Release CLI verification.
+  - Added 302 translated forms across 139 near-kin families from that sample, preserving each source word's Orcish root while applying reusable plural, possessive, tense, agent, adverb, adjective, and nominal morphology; every generated proposal passed lexicon review before adoption.
+  - Added and reviewed all 932 candidates from a separate random fifteen-page sample expansion: 329 scraped source words plus 603 near-kin forms across 308 reconstructed families, including 66 families extended from established Orcish roots.
+  - Added and reviewed all 505 candidates from the random twenty-page sample expansion: 200 scraped source words plus 305 near-kin forms across the curated 149-family derivation set; synchronized the candidate backlog after Release verification.
+  - Added and reviewed all 1,593 candidates from the random thirty-page sample expansion: 701 scraped source words plus 892 near-kin forms; recorded all sampled URLs in `dont-scrape-again.md` and synchronized the backlog after Release verification.
+  - Added and reviewed all 862 candidates from the follow-up random thirty-page sample: 253 scraped source words plus 609 dictionary-backed near-kin forms; excluded all prior URLs and existing lexicon terms, recorded the new URLs in `dont-scrape-again.md`, and synchronized the candidate backlog after Release verification.
+  - Added and reviewed all 2,260 candidates from a random sixty-seven-page sample: 761 scraped source words plus 1,499 dictionary-backed near-kin forms; excluded all prior URLs and existing lexicon terms, recorded the new URLs in `dont-scrape-again.md`, and synchronized the candidate backlog after Release verification.
+  - Added and reviewed all 2,672 candidates from a second random thirty-page sample: 875 scraped source words plus 1,797 dictionary-backed near-kin forms; excluded all prior URLs and existing lexicon terms, recorded the new URLs in `dont-scrape-again.md`, and synchronized the candidate backlog after Release verification.
+  - Added and reviewed all 1,718 candidates from a random fifty-page sample: 601 scraped source words plus 1,117 dictionary-backed near-kin forms; excluded all prior URLs and existing lexicon terms, honored established culls for `radiation`, `nuclear`, `science`, and the `archontos` exonym, recorded the new URLs in `dont-scrape-again.md`, and synchronized the candidate backlog after Release verification.
+  - Added and reviewed all 1,756 candidates from a second random fifty-page sample: 613 scraped source words plus 1,143 dictionary-backed near-kin forms; excluded all prior URLs and existing lexicon terms, culled web/code scaffolding and proper-name noise, recorded the new URLs in `dont-scrape-again.md`, and synchronized the candidate backlog after Release verification.
+  - Added and reviewed all 551 candidates from a third random fifty-page sample: 219 scraped source words plus 332 dictionary-backed near-kin forms; excluded all prior URLs and existing lexicon terms, culled code scaffolding, malformed tokens, and proper-name noise, recorded the new URLs in `dont-scrape-again.md`, and synchronized the candidate backlog after Release verification.
+  - Added and reviewed all 7,690 candidates from every currently usable remaining sitemap page: 2,833 scraped source words plus 4,857 dictionary-backed near-kin forms from 584 non-empty pages; attempted all 620 previously unused URLs, left 36 persistently empty Markdown endpoints unrecorded, excluded prior URLs and current Release lexicon terms, culled web/code scaffolding, metadata, malformed tokens, proper names, modern implementation vocabulary, and established exclusions, recorded every successful URL in `dont-scrape-again.md`, and synchronized the candidate backlog after Release verification.
+  - Added reviewed software-artifact compounds for `release` (`dakur-nar-grod-vrak`) and `assembly` (`mokh-zorn-grod-vrak`), with focused regression coverage and Release CLI verification.
+  - Added and reviewed all 1,009 candidates from the Bryan Miller blog Shadowdim batch: 397 scraped source words plus 612 dictionary-backed near-kin forms; preserved source-family roots, admitted every entry through the lexicon validator, recorded the four source URLs in `dont-scrape-again.md`, and synchronized the candidate backlog after Release verification.
+  - Added and reviewed all 1,133 candidates from the Bryan Miller blog follow-up batch: 440 scraped source words plus 693 reviewed near-kin forms; preserved source-family roots, admitted every entry through the lexicon validator, retained the 12 source URLs in `dont-scrape-again.md`, and synchronized the candidate backlog after Release verification. The requested 1,333 count was reconciled against the authoritative 1,133 unique entries in `codex-scratch\candidates.txt`.
+  - Added and reviewed all 1,778 candidates from a new Bryan Miller blog high-yield batch: 795 scraped source words plus 983 reviewed near-kin forms; culled proper names, page residue, chatter, malformed forms, and false dictionary families, preserved source-family roots, admitted every entry through the lexicon validator, recorded the 12 source URLs in `dont-scrape-again.md`, and synchronized the candidate backlog after Release verification.
+  - Added and reviewed all 787 candidates from a 24-page Bryan Miller blog mixed high-yield batch: 374 scraped source words plus 413 reviewed near-kin forms; culled 337 names, abbreviations, malformed tokens, software/page residue, and meta vocabulary, preserved source-family roots, admitted every entry through the lexicon validator, recorded the source URLs in `dont-scrape-again.md`, and synchronized the candidate backlog after Release verification. Confirmed `aac` and `atk` have no lexicon entries and added regression coverage to keep both untranslated.
+  - Added and reviewed all 310 candidates from a reproducibly random 100-page Bryan Miller blog batch: 142 scraped source words plus 168 reviewed near-kin forms; used random seed `20260718` plus seed `20260719` for one duplicate-sample replacement, fetched all 100 unique selected pages, culled 334 names, products, malformed tokens, software/web residue, and metadata, preserved source-family roots, admitted every entry through the lexicon validator, recorded all selected URLs in `dont-scrape-again.md`, and synchronized the candidate backlog after Release verification.
+  - Added and reviewed all 45 candidates from the final 11 never-used Bryan Miller blog sitemap URLs: 22 scraped source words plus 23 reviewed near-kin forms; fetched all 11 pages, culled 34 names, campaign exonyms, systems, platform residue, and conversational noise, corrected the malformed prior `the-thothians` ledger bullet, preserved source-family roots, admitted every entry through the lexicon validator, recorded the final URLs in `dont-scrape-again.md`, and synchronized the candidate backlog after Release verification.
+  - Added and reviewed all 2,481 candidates from a reproducibly random 200-book Project Gutenberg corpus: 893 high-frequency source words plus 1,588 reviewed near-kin forms; selected English fantasy, adventure, mythology, historical, supernatural, and warfare texts with seed `20260720`, downloaded from an official listed mirror, required every source candidate to appear in at least 30 books and 100 times overall, culled recurrent names, exonyms, scaffolding, notation, and unsuitable residue, preserved source-family roots, admitted every entry through the lexicon validator, recorded all books in `dont-scrape-gutenberg-again.md`, and synchronized the candidate backlog after Release verification.
+  - Added and reviewed all 477 candidates from a second reproducibly random 200-book Project Gutenberg corpus: 157 high-frequency source words plus 320 reviewed near-kin forms; excluded the first corpus ledger, selected English fantasy, adventure, mythology, historical, supernatural, and warfare texts with seed `20260721`, downloaded from an official listed mirror, required every source candidate to appear in at least 30 books and 100 times overall, culled recurrent names, exonyms, scaffolding, notation, and unsuitable residue, preserved source-family roots, admitted every entry through the lexicon validator, recorded all books in `dont-scrape-gutenberg-again.md`, and synchronized the candidate backlog after Release verification.
+  - Added and reviewed all 73 candidates from a third reproducibly random 200-book Project Gutenberg corpus: 25 high-frequency source words plus 48 reviewed near-kin forms; excluded the first 400-book ledger, selected English fantasy, adventure, mythology, historical, supernatural, and warfare texts with seed `20260722`, downloaded from an official listed mirror, required every source candidate to appear in at least 30 books and 100 times overall, culled recurrent names, exonyms, scaffolding, notation, ambiguous archaic residue, and unsuitable derived families, preserved source-family roots, admitted every entry through the lexicon validator, recorded all books in `dont-scrape-gutenberg-again.md`, and synchronized the candidate backlog after Release verification.
+  - Added and reviewed all 3,511 candidates from a fourth reproducibly random 500-book Project Gutenberg corpus: 1,292 high-frequency source words plus 2,219 reviewed near-kin forms; excluded the first 600-book ledger, used seed `20260723`, required every source candidate to appear in at least 30 books and 100 times overall, added systematic capitalized-only dictionary culling plus reviewed exonym, slur, abbreviation, scaffolding, and regression-protected exclusions, preserved source-family roots, admitted every entry through the lexicon validator, and recorded all books in `dont-scrape-gutenberg-again.md`.
+  - Added and reviewed all 13 candidates uniquely contributed by a reproducibly selected 100-book Standard Ebooks corpus: five source words plus eight reviewed near-kin forms after title-level exclusion against all Gutenberg manifests and candidate-level exclusion against the fourth Gutenberg batch; used seed `20260724`, retained the title/URL manifest, admitted every entry through the lexicon validator, and recorded all editions in `dont-scrape-standard-ebooks-again.md`.
+  - Expanded the Orcish lexicon to 60,017 unique English terms with 12,453 reviewed additions from 5,100 new Project Gutenberg books: 6,257 high-frequency source words plus 6,196 dictionary-backed near-kin forms; used reproducible seeds `2026071809` and `2026071810`, excluded all prior manifests and the existing lexicon, required at least 27 books and 100 total occurrences, strengthened possessive-name and medieval-setting anachronism culling, extended the generator for collision-free batches larger than 4,096 roots, retained title/URL manifests without raw ebook files, and recorded all 5,100 URLs in `dont-scrape-gutenberg-again.md`.
+  - Expanded the Orcish lexicon to 71,306 unique English terms with 11,290 reviewed additions from 5,000 new Project Gutenberg books: 7,941 source words appearing in at least 10 books and 35 times overall plus 3,349 mechanically clear dictionary-backed near-kin forms; used reproducible seed `2026071911`, excluded all 8,627 previously ledgered books and the current lexicon, rejected 1,579 ambiguous short-root or homograph near-kin relationships, retired the earlier `program|programs` near-kin mapping that violated a regression-protected cull, recorded all 5,000 new URLs for a 13,627-book unique ledger, admitted every addition through the lexicon validator, passed the complete Orcish translator regression suite, and synchronized the candidate backlog after final Release verification.
+  - Expanded the Orcish lexicon to 80,399 unique English terms with 9,093 reviewed additions from 5,500 new Project Gutenberg books: 7,083 source words appearing in at least seven books and 21 times overall plus 2,010 mechanically clear dictionary-backed near-kin forms; used reproducible seed `2026071912`, excluded all 13,627 previously ledgered books and the current lexicon, strengthened family-based proper-name, stop-word possessive, acronym, morphology, and anachronism culling, rejected 1,131 ambiguous near-kin relationships, recorded all 5,500 new URLs for a 19,127-book unique ledger, admitted every addition through the lexicon validator, passed the complete Orcish translator regression suite, and synchronized the candidate backlog after final Release verification.
+  - Scraped the 12 local Markdown files in `SoloPlay\The Earth It Cares Not`, curated 57 source-backed English and campaign-lore entries, reused established Orcish roots for compounds and possessives, and used morphology rules for 17 predictable source-family forms.
+  - Scraped the 17 local Markdown files in `SoloPlay\Shadowdim`, curated 23 source-backed English and campaign-lore entries, dropped the requested `clink-clink-clink` sound effect, reused established roots for compounds and inflections, and generated nine predictable plural or possessive family forms through morphology rules.
+  - Scraped the proofread draft `Something Found II A Toll {Proofread Draft_Bryan Miller}.docx`, curated 107 source-backed candidates after dropping `zaffre`, `white-purple`, and `youth-spirited`, reused established components for resolvable compounds, and generated 40 predictable plural, possessive, and verb-family entries through morphology rules, bringing the lexicon to 80,645 unique English terms before the repeated-character approval rule removed three unapproved legacy terms.
+  - Added a mandatory user-approval gate for English candidates containing a run of three or more identical characters; the validator accepts such a term only with `repeated-character-user-approved`, and the unapproved legacy terms `III`, `iii's`, and `viii's` were removed.
+  - Scraped 29 PDFs across 7,244 pages from the local `megadungeons` corpus, reduced 719 dictionary-backed candidates to 332 after collision, repeated-character, proper-name, OCR, rulebook-residue, anachronism, unsuitable-content, and ambiguity review, produced 408 assembled source and morphology entries, reused established roots where admissible, retained the already-translated `adaptability`, `alpha`, and `werewolf` bases, explicitly dropped `co-adaptability`, `no-face`, and the pornography family, and expanded the lexicon to 80,974 unique English terms.
+  - Added a native `Show > Translator` WinForms view with Orcish and Elven targets, reverse-direction toggles, multiline input and read-only output, unknown-word preservation, background translation work, and file export for English-to-Orcish and English-to-Elvish output.
+  - Expanded the finalized English-to-Elven dictionary from 9,177 to 10,448 terms with a reproducible first pass over the 75,354-term Orcish/Elven gap: added 858 regular noun plurals, 254 simple-present active verbs, and 159 present active participles through conservative Sindarin and Quenya morphology; embedded the 1,271 validated additions for fast local lookup and retained a report for 238 withheld collision or unsupported-morphology candidates.
+  - Expanded the English-to-Elven dictionary from 10,448 to 15,448 terms with a deterministic second morphology pass over the remaining gap: admitted 5,000 validator-gated possessive, gerund, passive-participle, adverb, abstract-noun, agent-noun, comparative, superlative, able-adjective, and guarded same-root family translations; 4,972 came from explicit reviewed Orcish family links and 28 from unambiguous spelling-derived relationships.
+  - Completed Elven coverage for every English term in the Orcish lexicon by adding the final 69,083 entries: retained 31,064 remaining family-linked forms, generated 38,019 independent Sindarin-first roots, marked the entire fallback tier as pure neologism rather than attested Tolkien vocabulary, recorded zero unreviewed exact/close-form conflicts or malformed phonotactics, embedded the compact coverage artifact for local lookup, and raised total English-to-Elven coverage to 84,531 terms with zero Orcish/Elvish gap.
+  - Added a static, installable progressive web app under `pwa/` with responsive navigation, live background Orcish and Elvish translation, translation export, public campaign-vault search, dice rolling, campaign portals, offline shell/runtime caching, and an always-visible `Install app` action; protected RPOL, XP, and private-note data remains excluded pending a secured server API.
+  - Expanded PWA campaign search from title-only matching to a reproducible full-text index of all sitemap-listed public Obsidian Publish Markdown pages, with whole-word matching by default, explicit prefix/suffix/contains wildcards, body-text ranking, result snippets, cache-version rollover, and deployable-data verification.
+  - Added server-validated PWA character login through the existing PHP/SQLite broker, including legacy XP-hash import and automatic rehashing, strict HTTP-only sessions, CSRF-protected logout, account/IP throttling, authorization from server session state, administrator account management, protected-response cache exclusion, and focused security tests.
+  - Added the protected PWA current-XP dashboard: fixed server-side Obsidian source, validated latest-table parsing, one-character player filtering, DM-only party totals, bounded last-known-good caching, and fail-closed authorization.
+  - Added same-line TNL display after current XP totals for both player character views and Dungeon Master party rows, using each character's class progression and showing `Max level` when no higher level exists.
+  - Added `pwa/level-progression.json` beside the quest and magic-item data, covering Feycaster, Fighter, Illusionist, Mystic Theurge, Paladin, and Ranger minimum-XP progression from levels 1 through 36.
+  - Added visible magic-item totals grouped by one-shot, limited-use, and permanent longevity for the items authorized to the logged-in account.
+  - Added a PWA `Party Funds` menu item and view that loads `party-funds.json`, shows the current total in gold pieces, and appends an italicized note about the Nimba letter-of-credit date sourced from `magic-items.json`.
+  - Enforced `party-funds.json` in PWA verification and deployment checks (`pwa\verify-pwa.ps1` and `pwa\test-deployment.ps1`) with required-file, schema, SW-preload, MIME, cache-control, and revalidation assertions.
+  - Replaced the embedded quest catalog with the canonical `pwa/quests.json` source, including validated authenticated broker delivery and the `active`, `available`, `available (abandoned)`, `completed`, and `withdrawn` lifecycle states.
+  - Ordered PWA quests by lifecycle state and added the indented sidebar state-cycle control when the authorized quest list spans multiple states.
+  - Added the persistent player quest-request workflow: only PCs may request available quests, the Dungeon Master receives approval/denial alerts and cannot take quests, approval changes the quest to active, and the requesting PC receives the decision at next login.
+  - Added authenticated PWA messaging notifications: players can message the Dungeon Master or another PC when at least two PCs exist, the Dungeon Master can message individual players or every player, role-appropriate sidebar actions are enforced, and recipients receive a login-time unread badge with message retrieval and read acknowledgement.
+  - Converted the PWA feature backlog from `potential-pwa-features.txt` to Markdown as `potential-pwa-features.md`.
+  - Deployed the validated 14-file PWA runtime to `https://bryanmiller.us/scarlethorizons/pwa/`; verified SHA-256 parity, successful HTTPS responses, required MIME types, security headers, service-worker cache policy, and anonymous session handling.
+  - Added repeatable local and live PWA verification for manifest scope, install wiring, complete runtime-file parity, MIME/security/cache headers, anonymous sessions, and optional current-XP broker readiness.
+  - Excluded the protected XP Tracking source from the public campaign-search index, added regression checks in refresh/build/deployment verification, and rolled the service-worker cache so existing clients retire the exposed search snapshot.
+  - Added case-insensitive Dungeon Master login aliases for `dungeon master`, `dungeon`, `master`, and `DM`, with a shared throttling identity and regression coverage preventing non-DM passwords from authenticating through an alias.
+  - Added case-insensitive Maximilian login aliases for `max`, `maximilian`, `Maximilian Yragerne`, `Max Yragerne`, and `Yragerne`, with a shared throttling identity and regression coverage.
+  - Added case-insensitive Neria login aliases for `Neria`, `Neria Silverdale`, and `Silverdale`, with a shared throttling identity and regression coverage.
+  - Consolidated the retired Kelpie identity into the enabled `kelpie` account with case-insensitive `Kelpie`, `Kelpie Lawfuller`, and `Lawfuller` login aliases and shared throttling coverage; the disabled duplicate production account was removed.
+  - [x] Deploy and configure the current-XP PHP broker update, then pass `pwa\test-deployment.ps1 -RequireCurrentXpApi`.
+    - Live verification: production health reports XP tracking configured, anonymous `/v1/xp` fails closed with HTTP 401 and `Cache-Control: no-store`, the broker fetched and parsed the fresh six-character `As of 7.24.2026` snapshot, and all 13 public PWA runtime files match.
+  - Expanded `web-translator/` into a two-language landing page with separate Orcish and Elven translators, a consolidated 84,531-term Sindarin-first Elvish web lexicon, reverse Elvish lookup, downloads, and a parallel Elvish JSON API.

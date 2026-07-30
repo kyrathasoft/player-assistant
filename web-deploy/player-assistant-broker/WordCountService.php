@@ -18,6 +18,9 @@ final class WordCountService
             'connect_timeout_seconds' => 3,
             'timeout_seconds' => 8,
             'maximum_response_bytes' => 524288,
+            'status_path' => '',
+            'signature_key_id' => '',
+            'signature_public_key' => '',
         ], $wordCountConfig);
         $this->wordCountFetcher = $wordCountFetcher;
 
@@ -100,11 +103,61 @@ final class WordCountService
         return $snapshot;
     }
 
+    public function refreshNow(): array
+    {
+        return $this->refreshFromSource();
+    }
+
     public function hasSnapshot(): bool
     {
         return (int)$this->database
             ->query('SELECT COUNT(*) FROM word_count_snapshots WHERE id = 1')
             ->fetchColumn() === 1;
+    }
+
+    public function refreshStatus(): array
+    {
+        $status = [
+            'configured' => $this->canRefreshFromSource(),
+            'signing_configured' => $this->signingConfigured(),
+            'healthy' => null,
+            'last_attempt_at' => null,
+            'last_success_at' => null,
+            'last_error_code' => null,
+            'last_scheduler_run_at' => null,
+            'last_scheduler_status' => null,
+            'last_scheduler_error_code' => null,
+        ];
+        $path = (string)$this->wordCountConfig['status_path'];
+        if ($path === '' || !is_file($path) || filesize($path) > 8192) {
+            return $status;
+        }
+
+        try {
+            $decoded = json_decode((string)file_get_contents($path), true, 16, JSON_THROW_ON_ERROR);
+            if (!is_array($decoded)) {
+                return $status;
+            }
+            foreach (array_keys($status) as $key) {
+                if (array_key_exists($key, $decoded)
+                    && $key !== 'configured'
+                    && $key !== 'signing_configured') {
+                    $status[$key] = $decoded[$key];
+                }
+            }
+        } catch (Throwable) {
+        }
+
+        return $status;
+    }
+
+    public function recordSchedulerRun(bool $success, ?string $errorCode = null): void
+    {
+        $this->writeRefreshStatus([
+            'last_scheduler_run_at' => gmdate(DATE_ATOM),
+            'last_scheduler_status' => $success ? 'success' : 'failed',
+            'last_scheduler_error_code' => $success ? null : $this->sanitizeErrorCode($errorCode),
+        ]);
     }
 
     private function validate(array $body): array
@@ -176,8 +229,25 @@ final class WordCountService
                 'No validated campaign word-count snapshot is available.');
         }
 
-        $payload = $this->loadSourcePayload($sourceUrl);
-        return $this->store($payload);
+        $attemptAt = gmdate(DATE_ATOM);
+        try {
+            $payload = $this->loadSourcePayload($sourceUrl);
+            $stored = $this->store($payload);
+            $this->writeRefreshStatus([
+                'healthy' => true,
+                'last_attempt_at' => $attemptAt,
+                'last_success_at' => gmdate(DATE_ATOM),
+                'last_error_code' => null,
+            ]);
+            return $stored;
+        } catch (Throwable $error) {
+            $this->writeRefreshStatus([
+                'healthy' => false,
+                'last_attempt_at' => $attemptAt,
+                'last_error_code' => $this->classifyRefreshError($error),
+            ]);
+            throw $error;
+        }
     }
 
     private function loadSourcePayload(string $sourceUrl): array
@@ -190,12 +260,53 @@ final class WordCountService
             throw new RuntimeException('The word-count source did not return an object.');
         }
 
+        if ($this->signingConfigured()) {
+            $decoded = $this->verifySignedEnvelope($decoded);
+        }
+
         return $this->validate($decoded);
     }
 
     private function canRefreshFromSource(): bool
     {
         return (string)$this->wordCountConfig['source_url'] !== '';
+    }
+
+    private function signingConfigured(): bool
+    {
+        return (string)$this->wordCountConfig['signature_key_id'] !== ''
+            && (string)$this->wordCountConfig['signature_public_key'] !== '';
+    }
+
+    private function verifySignedEnvelope(array $envelope): array
+    {
+        $payload = $envelope['payload'] ?? null;
+        $signature = $envelope['signature'] ?? null;
+        if (!is_array($payload)
+            || !is_array($signature)
+            || ($signature['algorithm'] ?? null) !== 'Ed25519'
+            || ($signature['key_id'] ?? null) !== $this->wordCountConfig['signature_key_id']
+            || !is_string($signature['value'] ?? null)) {
+            throw new RuntimeException('The word-count source signature envelope is invalid.');
+        }
+
+        $signatureBytes = base64_decode($signature['value'], true);
+        $publicKey = base64_decode((string)$this->wordCountConfig['signature_public_key'], true);
+        if (!is_string($signatureBytes)
+            || strlen($signatureBytes) !== SODIUM_CRYPTO_SIGN_BYTES
+            || !is_string($publicKey)
+            || strlen($publicKey) !== SODIUM_CRYPTO_SIGN_PUBLICKEYBYTES) {
+            throw new RuntimeException('The word-count source signature is invalid.');
+        }
+
+        $canonicalPayload = json_encode(
+            $payload,
+            JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR);
+        if (!sodium_crypto_sign_verify_detached($signatureBytes, $canonicalPayload, $publicKey)) {
+            throw new RuntimeException('The word-count source signature verification failed.');
+        }
+
+        return $payload;
     }
 
     private function isStale(string $observedAt): bool
@@ -307,6 +418,91 @@ final class WordCountService
                 throw new RuntimeException('The word-count timeout settings are invalid.');
             }
         }
+
+        foreach (['status_path', 'signature_key_id', 'signature_public_key'] as $key) {
+            if (!is_string($this->wordCountConfig[$key] ?? null)
+                || strlen((string)$this->wordCountConfig[$key]) > 4096) {
+                throw new RuntimeException("Word-count setting '$key' is invalid.");
+            }
+        }
+        $hasKeyId = (string)$this->wordCountConfig['signature_key_id'] !== '';
+        $hasPublicKey = (string)$this->wordCountConfig['signature_public_key'] !== '';
+        if ($hasKeyId !== $hasPublicKey) {
+            throw new RuntimeException('Word-count signature settings must be configured together.');
+        }
+        if ($hasPublicKey) {
+            if (!extension_loaded('sodium')) {
+                throw new RuntimeException('The PHP Sodium extension is required for signed word-count refresh.');
+            }
+            $publicKey = base64_decode((string)$this->wordCountConfig['signature_public_key'], true);
+            if (!is_string($publicKey) || strlen($publicKey) !== SODIUM_CRYPTO_SIGN_PUBLICKEYBYTES) {
+                throw new RuntimeException('The word-count signature public key is invalid.');
+            }
+            if (preg_match('/^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/D', (string)$this->wordCountConfig['signature_key_id']) !== 1) {
+                throw new RuntimeException('The word-count signature key identifier is invalid.');
+            }
+        }
+    }
+
+    private function writeRefreshStatus(array $updates): void
+    {
+        $path = (string)$this->wordCountConfig['status_path'];
+        if ($path === '') {
+            return;
+        }
+
+        try {
+            $status = $this->refreshStatus();
+            foreach ($updates as $key => $value) {
+                if (array_key_exists($key, $status)) {
+                    $status[$key] = $value;
+                }
+            }
+            $directory = dirname($path);
+            if (!is_dir($directory)) {
+                return;
+            }
+            $temporaryPath = $path . '.tmp-' . bin2hex(random_bytes(8));
+            $json = json_encode(
+                $status,
+                JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR);
+            if (file_put_contents($temporaryPath, $json, LOCK_EX) === false) {
+                return;
+            }
+            @chmod($temporaryPath, 0600);
+            if (!@rename($temporaryPath, $path)) {
+                @unlink($temporaryPath);
+            }
+        } catch (Throwable) {
+        }
+    }
+
+    private function classifyRefreshError(Throwable $error): string
+    {
+        $message = strtolower($error->getMessage());
+        if (str_contains($message, 'signature')) {
+            return 'signature_invalid';
+        }
+        if ($error instanceof JsonException || str_contains($message, 'invalid')) {
+            return 'source_invalid';
+        }
+        if (str_contains($message, 'curl')
+            || str_contains($message, 'response')
+            || str_contains($message, 'request')) {
+            return 'source_unavailable';
+        }
+        return 'refresh_failed';
+    }
+
+    private function sanitizeErrorCode(?string $errorCode): string
+    {
+        return in_array($errorCode, [
+            'signature_invalid',
+            'source_invalid',
+            'source_unavailable',
+            'refresh_failed',
+            'scheduler_failed',
+        ], true) ? (string)$errorCode : 'scheduler_failed';
     }
 
     private function validateSourceUrl(string $sourceUrl): void

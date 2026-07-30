@@ -13,11 +13,16 @@ param(
     [string]$SourceSshKeyPath = (Join-Path $env:USERPROFILE '.ssh\dreamhost_player_assistant'),
     [ValidatePattern('^/home/dh_4gg2za/bryanmiller\.us/scarlethorizons/data/word-counts\.json$')]
     [string]$SourceRemotePath = '/home/dh_4gg2za/bryanmiller.us/scarlethorizons/data/word-counts.json',
+    [string]$PhpPath = 'C:\php-8.4.23-Win32-vs17-x64\php.exe',
+    [string]$SigningCredentialTarget = 'PlayerAssistant/WordCounts/SigningPrivateKey',
+    [string]$SigningMetadataPath = (Join-Path $PSScriptRoot 'word-count-signing-public.json'),
+    [string]$AdminCredentialTarget = 'PlayerAssistant/Broker/AdminKey',
     [switch]$SkipSourceUpload,
     [Security.SecureString]$AdminKey
 )
 
 $ErrorActionPreference = 'Stop'
+. (Join-Path $PSScriptRoot 'word-count-publishing.ps1')
 
 if ($ApiUrl.Scheme -ne [Uri]::UriSchemeHttps -or
     !$ApiUrl.IsDefaultPort -or
@@ -38,6 +43,12 @@ if (!$SkipSourceUpload) {
             throw "Required OpenSSH command not found: $commandName"
         }
     }
+    if (-not (Test-Path -LiteralPath $SigningMetadataPath -PathType Leaf)) {
+        throw "The word-count signing metadata was not found at '$SigningMetadataPath'."
+    }
+    if (-not (Test-Path -LiteralPath $PhpPath -PathType Leaf)) {
+        throw "The PHP signing runtime was not found at '$PhpPath'."
+    }
 }
 
 $snapshot = [ordered]@{
@@ -51,89 +62,128 @@ $snapshot = [ordered]@{
     ooc = [ordered]@{ files = $OocFiles; words = $OocWords }
 }
 
-if ($null -eq $AdminKey) {
-    $AdminKey = Read-Host 'Broker administrator key' -AsSecureString
-}
-
 $keyPointer = [IntPtr]::Zero
 $plainAdminKey = $null
 $localSourceTemp = $null
 $remoteSourceTemp = $null
-$sourceStaged = $false
-$sourcePublished = $false
+$remoteSourceBackup = $null
 try {
-    if (!$SkipSourceUpload) {
-        $localSourceTemp = [IO.Path]::GetTempFileName()
-        [IO.File]::WriteAllText(
-            $localSourceTemp,
-            ($snapshot | ConvertTo-Json -Depth 4 -Compress),
-            [Text.UTF8Encoding]::new($false))
-
-        $remoteSourceTemp = "$SourceRemotePath.tmp-$([Guid]::NewGuid().ToString('N'))"
-        & scp `
-            -i $SourceSshKeyPath `
-            -o BatchMode=yes `
-            -o IdentitiesOnly=yes `
-            -o ConnectTimeout=15 `
-            -- `
-            $localSourceTemp `
-            "${SourceSshTarget}:$remoteSourceTemp"
-        if ($LASTEXITCODE -ne 0) {
-            throw 'The canonical word-count source could not be staged on DreamHost.'
+    if ($null -eq $AdminKey) {
+        try {
+            $plainAdminKey = Get-WordCountCredentialSecret -TargetName $AdminCredentialTarget
         }
-        $sourceStaged = $true
+        catch {
+            $AdminKey = Read-Host 'Broker administrator key' -AsSecureString
+        }
     }
-
-    $keyPointer = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($AdminKey)
-    $plainAdminKey = [Runtime.InteropServices.Marshal]::PtrToStringBSTR($keyPointer)
+    if ($null -ne $AdminKey) {
+        $keyPointer = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($AdminKey)
+        $plainAdminKey = [Runtime.InteropServices.Marshal]::PtrToStringBSTR($keyPointer)
+    }
     if ([string]::IsNullOrWhiteSpace($plainAdminKey)) {
         throw 'The broker administrator key is required.'
     }
 
-    $response = Invoke-RestMethod `
-        -Method Put `
-        -Uri $ApiUrl `
-        -ContentType 'application/json' `
-        -Headers @{ 'X-Broker-Admin-Key' = $plainAdminKey } `
-        -MaximumRedirection 0 `
-        -Body ($snapshot | ConvertTo-Json -Depth 4 -Compress)
-
-    if ([int]$response.schema_version -ne 1 -or
-        [DateTimeOffset]$response.observed_at -ne [DateTimeOffset]$snapshot.observed_at -or
-        [long]$response.wiki.words -ne $WikiWords -or
-        [long]$response.ic.words -ne $IcWords -or
-        [long]$response.ooc.words -ne $OocWords) {
-        throw 'The broker did not return the exact uploaded word-count snapshot.'
+    $snapshotJson = $snapshot | ConvertTo-Json -Depth 4 -Compress
+    $publishBroker = {
+        $brokerResponse = Invoke-RestMethod `
+            -Method Put `
+            -Uri $ApiUrl `
+            -ContentType 'application/json' `
+            -Headers @{ 'X-Broker-Admin-Key' = $plainAdminKey } `
+            -MaximumRedirection 0 `
+            -TimeoutSec 30 `
+            -Body $snapshotJson
+        if ([int]$brokerResponse.schema_version -ne 1 -or
+            [DateTimeOffset]$brokerResponse.observed_at -ne [DateTimeOffset]$snapshot.observed_at -or
+            [long]$brokerResponse.wiki.words -ne $WikiWords -or
+            [long]$brokerResponse.ic.words -ne $IcWords -or
+            [long]$brokerResponse.ooc.words -ne $OocWords) {
+            throw 'The broker did not return the exact uploaded word-count snapshot.'
+        }
+        return $brokerResponse
     }
 
-    if ($sourceStaged) {
-        $publishCommand = "chmod 0644 '$remoteSourceTemp' && mv -f '$remoteSourceTemp' '$SourceRemotePath'"
-        & ssh `
-            -i $SourceSshKeyPath `
-            -o BatchMode=yes `
-            -o IdentitiesOnly=yes `
-            -o ConnectTimeout=15 `
-            $SourceSshTarget `
-            $publishCommand
-        if ($LASTEXITCODE -ne 0) {
-            throw 'The canonical word-count source could not be published atomically.'
+    $sourcePublished = $false
+    if ($SkipSourceUpload) {
+        $response = & $publishBroker
+    }
+    else {
+        $metadata = Get-Content -Raw -LiteralPath $SigningMetadataPath | ConvertFrom-Json
+        if ([string]$metadata.algorithm -ne 'Ed25519') {
+            throw 'The word-count signing metadata algorithm is invalid.'
         }
-        $sourcePublished = $true
+        $privateKey = Get-WordCountCredentialSecret -TargetName $SigningCredentialTarget
+        try {
+            $sourceDocumentJson = New-WordCountSignedEnvelope `
+                -SnapshotJson $snapshotJson `
+                -PrivateKeyBase64 $privateKey `
+                -PublicKeyBase64 ([string]$metadata.public_key) `
+                -KeyId ([string]$metadata.key_id) `
+                -PhpPath $PhpPath
+        }
+        finally {
+            $privateKey = $null
+        }
 
-        $verificationUri = [UriBuilder]::new($SourceUrl)
-        $verificationUri.Query = "v=$([Guid]::NewGuid().ToString('N'))"
-        $sourceResponse = Invoke-RestMethod `
-            -Method Get `
-            -Uri $verificationUri.Uri `
-            -Headers @{ 'Cache-Control' = 'no-cache' } `
-            -MaximumRedirection 0
-        if ([int]$sourceResponse.schema_version -ne 1 -or
-            [DateTimeOffset]$sourceResponse.observed_at -ne [DateTimeOffset]$snapshot.observed_at -or
-            [long]$sourceResponse.wiki.words -ne $WikiWords -or
-            [long]$sourceResponse.ic.words -ne $IcWords -or
-            [long]$sourceResponse.ooc.words -ne $OocWords) {
-            throw 'The canonical word-count source did not return the exact published snapshot.'
+        $localSourceTemp = [IO.Path]::GetTempFileName()
+        [IO.File]::WriteAllText(
+            $localSourceTemp,
+            $sourceDocumentJson,
+            [Text.UTF8Encoding]::new($false))
+        $transactionId = [Guid]::NewGuid().ToString('N')
+        $remoteSourceTemp = "$SourceRemotePath.tmp-$transactionId"
+        $remoteSourceBackup = "$SourceRemotePath.rollback-$transactionId"
+
+        $stageSource = {
+            & scp -i $SourceSshKeyPath -o BatchMode=yes -o IdentitiesOnly=yes -o ConnectTimeout=15 -- `
+                $localSourceTemp "${SourceSshTarget}:$remoteSourceTemp" | Out-Null
+            if ($LASTEXITCODE -ne 0) {
+                throw 'The canonical word-count source could not be staged on DreamHost.'
+            }
         }
+        $publishSource = {
+            $command = "if [ -f '$SourceRemotePath' ]; then cp '$SourceRemotePath' '$remoteSourceBackup'; else rm -f -- '$remoteSourceBackup'; fi && chmod 0644 '$remoteSourceTemp' && mv -f '$remoteSourceTemp' '$SourceRemotePath'"
+            & ssh -i $SourceSshKeyPath -o BatchMode=yes -o IdentitiesOnly=yes -o ConnectTimeout=15 `
+                $SourceSshTarget $command | Out-Null
+            if ($LASTEXITCODE -ne 0) {
+                throw 'The canonical word-count source could not be published atomically.'
+            }
+        }
+        $verifySource = {
+            $verificationUri = [UriBuilder]::new($SourceUrl)
+            $verificationUri.Query = "v=$transactionId"
+            $sourceHttpResponse = Invoke-WebRequest -Method Get -Uri $verificationUri.Uri `
+                -Headers @{ 'Cache-Control' = 'no-cache' } -MaximumRedirection 0 -TimeoutSec 30
+            $sourcePayload = Test-WordCountSignedEnvelope `
+                -EnvelopeJson ([string]$sourceHttpResponse.Content) `
+                -PublicKeyBase64 ([string]$metadata.public_key) `
+                -KeyId ([string]$metadata.key_id) `
+                -PhpPath $PhpPath
+            if ([DateTimeOffset]$sourcePayload.observed_at -ne [DateTimeOffset]$snapshot.observed_at -or
+                [long]$sourcePayload.wiki.words -ne $WikiWords -or
+                [long]$sourcePayload.ic.words -ne $IcWords -or
+                [long]$sourcePayload.ooc.words -ne $OocWords) {
+                throw 'The canonical word-count source did not return the exact published snapshot.'
+            }
+        }
+        $rollbackSource = {
+            $command = "if [ -f '$remoteSourceBackup' ]; then mv -f '$remoteSourceBackup' '$SourceRemotePath'; else rm -f -- '$SourceRemotePath'; fi; rm -f -- '$remoteSourceTemp'"
+            & ssh -i $SourceSshKeyPath -o BatchMode=yes -o IdentitiesOnly=yes -o ConnectTimeout=15 `
+                $SourceSshTarget $command | Out-Null
+        }
+        $cleanupSource = {
+            & ssh -i $SourceSshKeyPath -o BatchMode=yes -o IdentitiesOnly=yes -o ConnectTimeout=15 `
+                $SourceSshTarget "rm -f -- '$remoteSourceTemp' '$remoteSourceBackup'" | Out-Null
+        }
+        $response = Invoke-WordCountPublishTransaction `
+            -StageSource $stageSource `
+            -PublishSource $publishSource `
+            -VerifySource $verifySource `
+            -PublishBroker $publishBroker `
+            -RollbackSource $rollbackSource `
+            -CleanupSource $cleanupSource
+        $sourcePublished = $true
     }
 
     [pscustomobject]@{
@@ -146,15 +196,6 @@ try {
     }
 }
 finally {
-    if ($sourceStaged -and !$sourcePublished) {
-        & ssh `
-            -i $SourceSshKeyPath `
-            -o BatchMode=yes `
-            -o IdentitiesOnly=yes `
-            -o ConnectTimeout=15 `
-            $SourceSshTarget `
-            "rm -f -- '$remoteSourceTemp'" 2>$null
-    }
     if ($null -ne $localSourceTemp -and (Test-Path -LiteralPath $localSourceTemp)) {
         Remove-Item -LiteralPath $localSourceTemp -Force
     }
