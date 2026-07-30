@@ -92,7 +92,6 @@ $requiredSet = [System.Collections.Generic.HashSet[string]]::new([StringComparer
 $normalizedExtensions | ForEach-Object { [void]$requiredSet.Add($_) }
 
 $filteredLines = @()
-$seenExtensions = [System.Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
 $seenExtensionDir = $false
 $extensionDirLineUpdated = $false
 
@@ -113,16 +112,10 @@ foreach ($line in $lines) {
         }
         $token = $token.ToLowerInvariant() -replace '^php_', '' -replace '\.dll$', ''
         if ($requiredSet.Contains($token)) {
-            if (-not $seenExtensions.Contains($token)) {
-                $seenExtensions.Add($token) | Out-Null
-            }
             continue
         }
         $normalizedToken = $token -replace '\.so$', ''
         if ($requiredSet.Contains($normalizedToken)) {
-            if (-not $seenExtensions.Contains($normalizedToken)) {
-                $seenExtensions.Add($normalizedToken) | Out-Null
-            }
             continue
         }
     }
@@ -146,10 +139,7 @@ foreach ($extension in $normalizedExtensions) {
         throw "Missing extension binary '$dllName' in '$extDir'."
     }
 
-    if (-not $seenExtensions.Contains($extension)) {
-        $filteredLines += "extension=$extension"
-        $seenExtensions.Add($extension) | Out-Null
-    }
+    $filteredLines += "extension=$extension"
 }
 
 if ($extensionDirLineUpdated) {

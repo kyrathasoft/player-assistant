@@ -65,6 +65,12 @@ Set the optional `word_counts` section to enable automatic word-count refresh wh
 ],
 ```
 
+Automatic refresh is request-triggered, not cron-triggered. An authenticated
+`GET /v1/word-counts` returns the cached snapshot and, when its observation time
+is older than `maximum_stale_seconds`, attempts to replace it from `source_url`.
+If `source_url` is empty, the broker retains manual administrator uploads and
+does not attempt automatic refresh.
+
 ## Account import
 
 After the updated API and private broker files are deployed, import the existing character password hashes from the repository root:

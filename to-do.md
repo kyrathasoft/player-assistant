@@ -2,9 +2,9 @@
 - [x] Complete: updated broker service wiring and deployment configuration to support the new word-count refresh path (`word_counts` config, DI-safe `WordCountService`, and API index bootstrap).
 - [x] Complete: expanded broker auth-routing tests to cover stale snapshot refresh, source-fallback behavior, and config defaults.
 - [x] Complete: documented the new broker word-count configuration fields for deployment validation in `CHARACTER-AUTH-DEPLOY.md`.
-- [ ] Pending: install/enable PHP cURL extension in the local CLI environment and verify `curl` + `pdo_sqlite` extensions are loaded for end-to-end broker tests.
-- [ ] Pending: run/confirm local verification of `web-deploy/tests/broker-auth-routing-tests.php` after cURL extension is available.
-- [ ] Pending: complete the planned XAMPP-to-CLI `php.ini` migration command set and validate Broker cron/refresh scheduling behavior in production.
+- [x] Complete: configured the standalone PHP CLI environment and verified `curl`, `pdo_sqlite`, `sqlite3`, and `openssl` remain loaded after repeated idempotent setup runs.
+- [x] Complete: locally verified `web-deploy/tests/broker-auth-routing-tests.php` with the durable CLI configuration.
+- [ ] Pending: choose and deploy a canonical HTTPS JSON source before enabling production word-count auto-refresh. Production validation found no relevant cron entry and an empty `word_counts.source_url`; the current snapshot remains fresh under the seven-day threshold.
 
 - [x] Review potentially anachronistic English terms in the Orcish lexicon.
   - Approval only: do not purge an existing entry until the user selects it.
