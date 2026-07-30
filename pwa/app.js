@@ -717,14 +717,14 @@
         }
         if (!list) return;
         const fragment = document.createDocumentFragment();
-        visibleQuests.forEach((quest) => {
+        visibleQuests.forEach((quest, questIndex) => {
             const card = document.createElement('article');
             card.className = 'quest-card';
 
             const heading = document.createElement('header');
             heading.className = 'quest-card-heading';
             const title = document.createElement('h2');
-            title.textContent = quest.title;
+            title.textContent = `${questIndex + 1}. ${quest.title}`;
             const tags = document.createElement('div');
             tags.className = 'quest-tags';
             for (const tagValue of [quest.state, quest.visibility]) {
