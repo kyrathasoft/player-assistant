@@ -602,8 +602,7 @@
       "gated-by": [],
       "unlocked-by": [],
       "wiki-url": "https://publish.obsidian.md/scarlethorizons/Locations/Shrieken+Mire"
-    }
-  ,
+    },
     "silence-ford-isenduin": {
       "title": "Silence at Ford-at-Isenduin",
       "summary": "Billworth's promised follow-up work concerns caravans disappearing near Ford-at-Isenduin. Wagons have been found abandoned, but neither cargo nor travelers remain.",
@@ -624,8 +623,7 @@
       "gated-by": [],
       "unlocked-by": [],
       "wiki-url": "https://publish.obsidian.md/scarlethorizons/Locations/Ford-at-Isenduin"
-    }
-  ,
+    },
     "failing-mythalvane": {
       "title": "The Failing Mythalvane",
       "summary": "The Mythalvane's magical protection has begun failing unpredictably. Rafell Riverwarden's surviving research points to a buried relay chamber outside Helix.",
@@ -646,8 +644,7 @@
       "gated-by": [],
       "unlocked-by": [],
       "wiki-url": "https://publish.obsidian.md/scarlethorizons/NPCs/Rafell+Riverwarden+d'Helix"
-    }
-  ,
+    },
     "sabotage-guardians-rest": {
       "title": "Sabotage at Guardians' Rest",
       "summary": "Supplies have been poisoned and gate mechanisms damaged at Guardians' Rest shortly before caravan season. Evidence implicates Mordicar Justhand's household, but appears suspiciously convenient.",
@@ -668,8 +665,7 @@
       "gated-by": [],
       "unlocked-by": [],
       "wiki-url": "https://publish.obsidian.md/scarlethorizons/Locations/Guardians'+Rest"
-    }
-  ,
+    },
     "thirsting-pool": {
       "title": "The Thirsting Pool",
       "summary": "Phultarr's Pool, an inexplicable freshwater lake beyond living memory, is shrinking rapidly. Its retreating shoreline has exposed ancient stone steps descending beneath the water.",
@@ -690,8 +686,7 @@
       "gated-by": [],
       "unlocked-by": [],
       "wiki-url": "https://publish.obsidian.md/scarlethorizons/Locations/Phultarr's+Pool"
-    }
-  ,
+    },
     "shrine-fire-burns-hot": {
       "title": "When the Shrine Fire Burns Hot",
       "summary": "The eternal flame at Sir Ardan Hearthward's shrine has begun burning unnaturally hot, an omen of danger emerging from deeper in the Blanryde Hills. Follow the warning, rescue those endangered by it, and confront the wilderness threat.",
@@ -712,6 +707,425 @@
       "gated-by": [],
       "unlocked-by": [],
       "wiki-url": "https://publish.obsidian.md/scarlethorizons/NPCs/Ardan+Hearthward%2C+Sir"
+    },
+    "investigate-barrowmaze-undead": {
+      "title": "Stem the Dead from Barrowmaze",
+      "summary": "Undead are emerging from the Cumerian barrows beneath the marsh and reaching the outskirts of Helix and Bogtown. Find the source of the outbreak and reduce the threat before more dead reach settled streets.",
+      "giver": "The authorities or temples of Helix and Bogtown",
+      "visibility": "party-only",
+      "state": "available",
+      "objectives": [
+        "Travel to Barrowmaze and identify the routes by which undead are leaving the tombs.",
+        "Determine what has caused the recent increase in undead activity.",
+        "Destroy or seal the immediate source of the outbreak.",
+        "Report which surrounding settlements remain at risk."
+      ],
+      "reward": "A negotiated civic or temple payment, plus salvage from cleared tombs",
+      "dates": {
+        "accepted": "",
+        "expires": ""
+      },
+      "gated-by": [],
+      "unlocked-by": [],
+      "wiki-url": "https://publish.obsidian.md/scarlethorizons/Locations/Barrowmaze"
+    },
+    "recover-barrowmaze-runic-tablets": {
+      "title": "Recover the Runic Tablets",
+      "summary": "Runic Tablets buried with the Cumerian dead were meant to ward off tomb-robbers, but folk tales claim that reading them brings a curse. Recover one or more tablets for a scholar while surviving whatever safeguards remain in the barrows.",
+      "giver": "A scholar or antiquarian in Helix",
+      "visibility": "individual-or-party",
+      "state": "available",
+      "objectives": [
+        "Locate an intact Cumerian burial containing a Runic Tablet.",
+        "Recover the tablet without destroying its inscriptions.",
+        "Determine whether the tablet curse is real and how it can be contained.",
+        "Deliver the tablet to the patron without attracting tomb-robbers or undead."
+      ],
+      "reward": "Payment for an intact tablet and expert help with any resulting curse",
+      "dates": {
+        "accepted": "",
+        "expires": ""
+      },
+      "gated-by": [
+        "investigate-barrowmaze-undead"
+      ],
+      "unlocked-by": [],
+      "wiki-url": "https://publish.obsidian.md/scarlethorizons/Meta/Runic+Tablets"
+    },
+    "hunt-darkforest-troll": {
+      "title": "Hunt the Trolls of the Darkforest",
+      "summary": "Travelers claim that trolls roam the Darkforest, threatening villages and charcoal camps that depend on its timber and game. Find out whether the rumor describes one predator or a larger danger and stop the attacks if possible.",
+      "giver": "The Hamlet Watch of Kirkilston or nearby forest villages",
+      "visibility": "party-only",
+      "state": "available",
+      "objectives": [
+        "Collect reliable accounts of recent troll sightings or attacks.",
+        "Track the troll threat through the forest bogs and rough terrain.",
+        "Determine how many trolls are active and where they lair.",
+        "Drive off or destroy the threat and warn the forest settlements."
+      ],
+      "reward": "A community payment, salvage from abandoned camps, and local goodwill",
+      "dates": {
+        "accepted": "",
+        "expires": ""
+      },
+      "gated-by": [],
+      "unlocked-by": [],
+      "wiki-url": "https://publish.obsidian.md/scarlethorizons/Locations/Darkforest"
+    },
+    "map-horgrim-tunnel-routes": {
+      "title": "Map the Horgrim Tunnels",
+      "summary": "Ancient tunnels beneath the Darkforest may connect the surface to the Underdark, the Forbidden Zone, and lands beneath Slaytonthorpe. Chart a safe initial route before someone else uses the forgotten passages for an attack or kidnapping.",
+      "giver": "A ranger, caravan master, or settlement threatened by the tunnels",
+      "visibility": "party-only",
+      "state": "available",
+      "objectives": [
+        "Locate a surviving entrance to the Horgrim Tunnels.",
+        "Survey the first section and record landmarks, hazards, and branching passages.",
+        "Determine whether the old underground river is truly dry or has been diverted.",
+        "Return with a usable map and warning about any active occupants."
+      ],
+      "reward": "Payment for the map and ordinary salvage recovered during the survey",
+      "dates": {
+        "accepted": "",
+        "expires": ""
+      },
+      "gated-by": [],
+      "unlocked-by": [],
+      "wiki-url": "https://publish.obsidian.md/scarlethorizons/Locations/Horgrim+Tunnels"
+    },
+    "uncover-gosterwick-logothete": {
+      "title": "Uncover the Green Lady’s Secret Logothete",
+      "summary": "Whispers in Gosterwick describe an unlisted fourth Logothete who hires adventurers to retrieve private acquisitions from Arden Vul. Find the hidden employer, learn what is being sought, and decide whether the arrangement should remain secret.",
+      "giver": "A discreet informant at the Yellow Cloak",
+      "visibility": "individual-or-party",
+      "state": "available",
+      "objectives": [
+        "Identify the unlisted Logothete and establish who currently works for them.",
+        "Learn what item or information Lady Alexia wants recovered from Arden Vul.",
+        "Determine whether the acquisition is legal, dangerous, or connected to a rival faction.",
+        "Choose whether to expose the scheme, accept the work, or prevent the acquisition."
+      ],
+      "reward": "A confidential payment, access to Gosterwick contacts, or leverage over Lady Alexia",
+      "dates": {
+        "accepted": "",
+        "expires": ""
+      },
+      "gated-by": [],
+      "unlocked-by": [],
+      "wiki-url": "https://publish.obsidian.md/scarlethorizons/Locations/Gosterwick"
+    },
+    "investigate-red-thicket-ambushes": {
+      "title": "Break the Red Thicket Ambushes",
+      "summary": "Gnolls and orcs use the Red Thicket Pass and the Ford-at-the-River-Isenduin to waylay merchants. Find the force coordinating the ambushes and make the trade route safer without simply moving the danger to another crossing.",
+      "giver": "Merchants and caravan leaders using the Northern Reaches trade route",
+      "visibility": "party-only",
+      "state": "available",
+      "objectives": [
+        "Examine recent ambush sites for a common pattern or command structure.",
+        "Protect or bait a caravan to identify the attackers’ staging area.",
+        "Locate the gnoll or orc leader directing the attacks.",
+        "Break the ambush network or negotiate a safer arrangement for travelers."
+      ],
+      "reward": "Caravan payments, recovered cargo, and a reputation with Northern Reaches merchants",
+      "dates": {
+        "accepted": "",
+        "expires": ""
+      },
+      "gated-by": [],
+      "unlocked-by": [],
+      "wiki-url": "https://publish.obsidian.md/scarlethorizons/Locations/Red+Thicket"
+    },
+    "seek-the-deep-chaymyn-gate": {
+      "title": "Seek the Sealed Gates of Deep Chaymyn",
+      "summary": "Deep Chaymyn is said to be sealed behind massive dwarven bulkheads and powerful wards, yet its inhabitants supposedly have not needed the surface for centuries. Find evidence of the hold’s condition and learn why its gates remain closed.",
+      "giver": "A historian of the Northern Reaches or a dwarf seeking news of Deep Chaymyn",
+      "visibility": "party-only",
+      "state": "available",
+      "objectives": [
+        "Gather surviving records or testimony about the hold’s entrances.",
+        "Reach a sealed gate without provoking the wards or the hold’s defenders.",
+        "Determine whether Deep Chaymyn is thriving, abandoned, or under an internal threat.",
+        "Return with proof of the hold’s condition or a message from its inhabitants."
+      ],
+      "reward": "Dwarven patronage, historical payment, or a negotiated trade with Deep Chaymyn",
+      "dates": {
+        "accepted": "",
+        "expires": ""
+      },
+      "gated-by": [],
+      "unlocked-by": [],
+      "wiki-url": "https://publish.obsidian.md/scarlethorizons/Locations/Deep+Chaymyn"
+    },
+    "recover-achaian-inscriptions": {
+      "title": "Recover the Achaian Inscriptions",
+      "summary": "Muirron the Magician collects Archaians, Archomancy, spellbooks, scrolls, and ancient lore. Bring him a safe, legible inscription from a ruin or dungeon without allowing its magic or custodians to follow the party home.",
+      "giver": "Muirron the Magician",
+      "visibility": "individual-or-party",
+      "state": "available",
+      "objectives": [
+        "Learn which Achaian inscription or subject Muirron considers valuable.",
+        "Locate a suitable inscription in a ruin or dungeon.",
+        "Copy or recover the writing without damaging its context or triggering a magical defense.",
+        "Deliver the result to Muirron in Eastdale, Ironguard Motte, or on the road."
+      ],
+      "reward": "A negotiated payment, translation, or useful magical lore from Muirron’s collection",
+      "dates": {
+        "accepted": "",
+        "expires": ""
+      },
+      "gated-by": [],
+      "unlocked-by": [],
+      "wiki-url": "https://publish.obsidian.md/scarlethorizons/NPCs/Muirron+the+Magician"
+    },
+    "protect-glickstonehome-patrols": {
+      "title": "Protect the Glickstonehome Patrols",
+      "summary": "The Flickerdiggles clan patrols the warrens, fields, and pastures around Glickstonehome against brigands and beasts. Join a patrol, identify the source of a growing threat, and keep the surface village safe long enough for the clan to respond.",
+      "giver": "Jelbys Flickerdiggles",
+      "visibility": "individual-or-party",
+      "state": "available",
+      "objectives": [
+        "Learn the patrol routes and recent signs of brigands or dangerous beasts.",
+        "Escort a patrol through the exposed fields and nearby hills.",
+        "Track the threat to its camp, lair, or source of supplies.",
+        "Protect the warrens and report whether the danger is likely to return."
+      ],
+      "reward": "Gnome hospitality, a negotiated payment, and future access to Glickstonehome’s patrol network",
+      "dates": {
+        "accepted": "",
+        "expires": ""
+      },
+      "gated-by": [],
+      "unlocked-by": [],
+      "wiki-url": "https://publish.obsidian.md/scarlethorizons/Locations/Glickstonehome"
+    },
+    "investigate-guardian-shrine-fire": {
+      "title": "Test the Guardian Shrine’s Fire",
+      "summary": "Sir Ardan Hearthward tends a lonely Demetran shrine in the hills, where travelers say the eternal fire burns hotter when danger is near. Visit the shrine, learn what has disturbed its flame, and help Ardan protect those who rely on its shelter.",
+      "giver": "Sir Ardan Hearthward",
+      "visibility": "individual-or-party",
+      "state": "available",
+      "objectives": [
+        "Travel to the shrine and observe the fire’s unusual behavior.",
+        "Investigate nearby cairns, paths, and signs of orcspawn or other threats.",
+        "Determine whether the danger is approaching the shrine or only passing through the hills.",
+        "Help Sir Ardan keep the shrine safe and the eternal flame burning."
+      ],
+      "reward": "Sir Ardan’s steadfast aid, shelter on future journeys, and a negotiated shrine blessing",
+      "dates": {
+        "accepted": "",
+        "expires": ""
+      },
+      "gated-by": [],
+      "unlocked-by": [],
+      "wiki-url": "https://publish.obsidian.md/scarlethorizons/NPCs/Ardan+Hearthward%2C+Sir"
+    },
+    "descend-beneath-undalan": {
+      "title": "Search for Benediction Beneath Undalan",
+      "summary": "Investigate the tradition that Benediction, an ancient city older than Undalan, lies in ruins beneath the settlement below Phandalin.",
+      "giver": "A historian or treasure-seeker in Phandalin",
+      "visibility": "party-only",
+      "state": "available",
+      "objectives": [
+        "Find reliable evidence for the ruins of Benediction beneath Undalan.",
+        "Locate a safe route into the buried city.",
+        "Return with a map, inscription, or other proof of what lies below."
+      ],
+      "reward": "Payment for verified discoveries and any safely recovered antiquities",
+      "dates": {
+        "accepted": "",
+        "expires": ""
+      },
+      "gated-by": [],
+      "unlocked-by": [],
+      "wiki-url": "https://publish.obsidian.md/scarlethorizons/Locations/Benediction"
+    },
+    "scout-thundertree-netherese-ruins": {
+      "title": "Scout the Ruins of Thundertree",
+      "summary": "Survey the ruins of Thundertree, destroyed by the green dragon Inzeldrin, and determine whether the deeper Netherese ruins beneath the village can be reached safely.",
+      "giver": "A scholar of Netherese ruins",
+      "visibility": "party-only",
+      "state": "available",
+      "objectives": [
+        "Reach the ruins northeast of Slaytonthorpe.",
+        "Determine whether Inzeldrin or other threats still occupy the site.",
+        "Locate an accessible entrance to the deeper Netherese ruins.",
+        "Return with a report and any non-dangerous evidence of the older settlement."
+      ],
+      "reward": "A research fee and payment for recoverable Netherese records",
+      "dates": {
+        "accepted": "",
+        "expires": ""
+      },
+      "gated-by": [],
+      "unlocked-by": [],
+      "wiki-url": "https://publish.obsidian.md/scarlethorizons/Locations/Thundertree"
+    },
+    "reopen-gauntwood-way": {
+      "title": "Reopen the Way to the Gauntwood Galleries",
+      "summary": "Use the newly surveyed passages beneath the Keep on the Borderlands to identify whether a route can be reopened toward the dwarven Gauntwood Galleries.",
+      "giver": "Citadel Silver's regent",
+      "visibility": "party-only",
+      "state": "available",
+      "objectives": [
+        "Compare the Keep's underground map with dwarven records of the Gauntwood Galleries.",
+        "Find and clear the first blocked section of the old route.",
+        "Mark hazards and usable camps for a future dwarven expedition."
+      ],
+      "reward": "Dwarven coin, supplies, and a negotiated share of recovered materials",
+      "dates": {
+        "accepted": "",
+        "expires": ""
+      },
+      "gated-by": [],
+      "unlocked-by": [
+        "map-kharaz-ankor-entrance"
+      ],
+      "wiki-url": "https://publish.obsidian.md/scarlethorizons/Locations/Gauntwood+Galleries"
+    },
+    "guard-citadel-silver-caravan": {
+      "title": "Guard the Citadel Silver Caravan",
+      "summary": "Protect a dwarven caravan traveling between Citadel Silver and the Northern Reaches along the route where earlier Crumwich caravans suffered a deadly gnoll ambush.",
+      "giver": "Regent Baraguld Crumwich",
+      "visibility": "party-only",
+      "state": "available",
+      "objectives": [
+        "Join the caravan and learn its planned route and cargo.",
+        "Identify signs of flind-led gnoll activity before the ambush point.",
+        "Deliver the caravan safely to its destination."
+      ],
+      "reward": "Dwarven pay, trade goods, and future contracts from Citadel Silver",
+      "dates": {
+        "accepted": "",
+        "expires": ""
+      },
+      "gated-by": [],
+      "unlocked-by": [
+        "k-r-k-caravan-run"
+      ],
+      "wiki-url": "https://publish.obsidian.md/scarlethorizons/Locations/Citadel+Silver"
+    },
+    "recover-silent-diamond-record": {
+      "title": "Recover the Secret of Silent Diamond",
+      "summary": "Investigate the western Middenmark village of Silent Diamond and learn whether Thoras Goldpanner's legendary fist-sized diamond left a surviving trail or hidden claim.",
+      "giver": "A collector of dwarven mining history",
+      "visibility": "individual-or-party",
+      "state": "available",
+      "objectives": [
+        "Establish what records remain of Thoras Goldpanner's discovery.",
+        "Determine who knew the diamond's location before Thoras died.",
+        "Recover the missing record, map, or other proof without provoking a local feud."
+      ],
+      "reward": "A negotiated fee for the recovered history, with a finder’s share if the diamond is located",
+      "dates": {
+        "accepted": "",
+        "expires": ""
+      },
+      "gated-by": [],
+      "unlocked-by": [],
+      "wiki-url": "https://publish.obsidian.md/scarlethorizons/Locations/Silent+Diamond"
+    },
+    "defend-westkeep-watchtower": {
+      "title": "Defend the Watchtower of Westkeep",
+      "summary": "Help the fortified monastery at Westkeep prepare for threats against its apprentice clerics, guards, and religious studies.",
+      "giver": "The abbot of the Watchtower",
+      "visibility": "party-only",
+      "state": "available",
+      "objectives": [
+        "Assess the monastery's defenses and the vulnerable wooden staircase.",
+        "Identify who or what is threatening the Watchtower.",
+        "Help secure the apprentices and hold the monastery through the danger."
+      ],
+      "reward": "Temple support, healing, and a formal favor from the Watchtower",
+      "dates": {
+        "accepted": "",
+        "expires": ""
+      },
+      "gated-by": [],
+      "unlocked-by": [],
+      "wiki-url": "https://publish.obsidian.md/scarlethorizons/Locations/Watchtower"
+    },
+    "restore-hoskighee-trade-road": {
+      "title": "Restore the Hoskighee Trade Road",
+      "summary": "Help Hoskighee maintain its coal and limestone trade with Helix, Bogtown, Wyrdwood, and Ironguard Motte despite dangers in the Moon Peaks foothills.",
+      "giver": "The merchants of Hoskighee",
+      "visibility": "party-only",
+      "state": "available",
+      "objectives": [
+        "Learn which section of the trade road has become unsafe.",
+        "Escort a shipment or repair the route through the foothills.",
+        "Identify and resolve the threat disrupting trade."
+      ],
+      "reward": "A merchant's payment and a discount on Hoskighee coal or limestone",
+      "dates": {
+        "accepted": "",
+        "expires": ""
+      },
+      "gated-by": [],
+      "unlocked-by": [],
+      "wiki-url": "https://publish.obsidian.md/scarlethorizons/Locations/Hoskighee"
+    },
+    "map-bauthwaf-border-tunnels": {
+      "title": "Map the Edge of the Bauthwaf",
+      "summary": "Chart a route along the edge of the Bauthwaf, the network of tunnels around Menzoberranzan patrolled by elite drow riding driders.",
+      "giver": "A surface guide seeking a safer Underdark route",
+      "visibility": "party-only",
+      "state": "available",
+      "objectives": [
+        "Find a defensible approach to the Bauthwaf.",
+        "Map landmarks and crossings without drawing the patrols' attention.",
+        "Return with a route that distinguishes safe passages from drow-controlled ground."
+      ],
+      "reward": "Payment for the map and a share of any safely recovered Underdark salvage",
+      "dates": {
+        "accepted": "",
+        "expires": ""
+      },
+      "gated-by": [],
+      "unlocked-by": [],
+      "wiki-url": "https://publish.obsidian.md/scarlethorizons/Locations/The+Bauthwaf"
+    },
+    "find-shallows-surface-route": {
+      "title": "Find a Route into the Shallows",
+      "summary": "Locate a usable entrance to the Shallows, the upper portion of the Underdark, and document the first stretch well enough for a cautious expedition.",
+      "giver": "A scholar of the Underdark",
+      "visibility": "party-only",
+      "state": "available",
+      "objectives": [
+        "Identify a surface entrance leading into the Shallows.",
+        "Survey the first safe landmarks and hazards below ground.",
+        "Return with a route description and evidence that the passage reaches the Upperdark."
+      ],
+      "reward": "A research fee, mapping supplies, and an expeditionary share of recovered treasure",
+      "dates": {
+        "accepted": "",
+        "expires": ""
+      },
+      "gated-by": [],
+      "unlocked-by": [
+        "find-doors-of-galduhr"
+      ],
+      "wiki-url": "https://publish.obsidian.md/scarlethorizons/Locations/Shallows"
+    },
+    "seek-tien-lung-contact": {
+      "title": "Find a Contact in Tien Lung",
+      "summary": "Establish a trustworthy trade or information contact in Tien Lung, the distant city known for commerce, political intrigue, and indulgence.",
+      "giver": "A Northern Reaches trader with distant interests",
+      "visibility": "individual-or-party",
+      "state": "available",
+      "objectives": [
+        "Learn which Tien Lung merchant, envoy, or household can be trusted.",
+        "Carry a sealed introduction or trade proposal to the city.",
+        "Return with a reliable contact and the terms of future dealings."
+      ],
+      "reward": "A commission on future trade and payment for a successful introduction",
+      "dates": {
+        "accepted": "",
+        "expires": ""
+      },
+      "gated-by": [],
+      "unlocked-by": [],
+      "wiki-url": "https://publish.obsidian.md/scarlethorizons/Locations/Tien+Lung"
     }
   }
 }
