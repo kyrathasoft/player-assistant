@@ -291,6 +291,10 @@
     };
 
     const validateXpSnapshot = (payload) => {
+        const validXpAwardDate = (value) => typeof value === 'string'
+            && value.length > 0
+            && value.length <= 200
+            && !/[\x00-\x1F\x7F]/u.test(value);
         if (!payload
             || payload.schema_version !== 1
             || typeof payload.date_label !== 'string'
@@ -306,6 +310,15 @@
             && typeof character.character_class === 'string'
             && character.character_class.length > 0
             && character.character_class.length <= 100
+            && Number.isSafeInteger(character.level_before_award)
+            && character.level_before_award >= 0
+            && character.level_before_award <= 1000
+            && Number.isSafeInteger(character.xp_award)
+            && character.xp_award >= 0
+            && validXpAwardDate(character.xp_award_date)
+            && Number.isSafeInteger(character.level_after_award)
+            && character.level_after_award >= 0
+            && character.level_after_award <= 1000
             && Number.isSafeInteger(character.level)
             && character.level >= 0
             && character.level <= 1000

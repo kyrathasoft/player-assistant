@@ -278,7 +278,7 @@ final class XpTrackingService
             }
             return [
                 'date_label' => $dateLabel,
-                'characters' => $this->parseTable($lines, $headerIndex),
+                'characters' => $this->parseTable($lines, $headerIndex, $dateLabel),
             ];
         }
 
@@ -303,7 +303,7 @@ final class XpTrackingService
         return -1;
     }
 
-    private function parseTable(array $lines, int $headerIndex): array
+    private function parseTable(array $lines, int $headerIndex, string $asOfDateLabel): array
     {
         $headers = $this->splitTableRow((string)$lines[$headerIndex]);
         $nameIndex = $this->findCellIndex($headers, 'Name');
@@ -360,11 +360,17 @@ final class XpTrackingService
                 throw new RuntimeException('The XP table contained a duplicate character.');
             }
             $seenNames[$normalizedName] = true;
+            $level = (int)$levelDigits;
+            $xpAward = (int)$xpDigits;
             $characters[] = [
                 'character_name' => $name,
                 'character_class' => $characterClass,
-                'level' => (int)$levelDigits,
-                'xp_total' => (int)$xpDigits,
+                'level' => $level,
+                'xp_total' => $xpAward,
+                'level_before_award' => $level,
+                'xp_award' => $xpAward,
+                'xp_award_date' => $asOfDateLabel,
+                'level_after_award' => $level,
             ];
             if ($hitPointsIndex >= 0) {
                 if (count($cells) <= $hitPointsIndex) {
