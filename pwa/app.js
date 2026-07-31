@@ -516,6 +516,17 @@
         return payload;
     };
 
+    const updateQuestNavCount = (count = 0) => {
+        const label = Number.isFinite(count) && count >= 0
+            ? `Quests (${count})`
+            : 'Quests';
+        navButtons
+            .filter((button) => button.dataset.view === 'quests')
+            .forEach((button) => {
+                button.textContent = label;
+            });
+    };
+
     const appendQuestDetail = (list, label, value) => {
         if (!(list instanceof HTMLDListElement) || value === '') return;
         const wrapper = document.createElement('div');
@@ -678,6 +689,7 @@
         list?.replaceChildren();
         if (list) list.hidden = true;
         if (stateCycle) stateCycle.hidden = true;
+        updateQuestNavCount(0);
 
         if (authenticatedAccount === null) {
             questStateFilter = '';
@@ -719,6 +731,7 @@
         const visibleQuests = questStateFilter === ''
             ? orderedQuests
             : orderedQuests.filter((quest) => quest.state === questStateFilter);
+        updateQuestNavCount(visibleQuests.length);
 
         if (status) {
             status.textContent = questStateFilter === ''
