@@ -12,7 +12,7 @@ param(
     })]
     [string[]]$Files,
 
-    [string]$DreamHostTarget = 'dh_4gg2za@pdx1-shared-a1-13.dreamhost.com',
+    [string]$DreamHostTarget = 'player-assistant-dreamhost',
     [string]$SshKeyPath = (Join-Path $HOME '.ssh\dreamhost_player_assistant'),
     [string]$RemoteDirectory = '/home/dh_4gg2za/bryanmiller.us/scarlethorizons/pwa'
 )

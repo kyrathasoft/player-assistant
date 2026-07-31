@@ -9,7 +9,7 @@ param(
     [ValidateLength(1, 100)][string]$CountingRuleVersion = 'obsidian-publish-word-count-v1',
     [uri]$ApiUrl = 'https://bryanmiller.us/scarlethorizons/api/v1/admin/word-counts',
     [uri]$SourceUrl = 'https://bryanmiller.us/scarlethorizons/data/word-counts.json',
-    [string]$SourceSshTarget = 'dh_4gg2za@pdx1-shared-a1-13.dreamhost.com',
+    [string]$SourceSshTarget = 'player-assistant-dreamhost',
     [string]$SourceSshKeyPath = (Join-Path $env:USERPROFILE '.ssh\dreamhost_player_assistant'),
     [ValidatePattern('^/home/dh_4gg2za/bryanmiller\.us/scarlethorizons/data/word-counts\.json$')]
     [string]$SourceRemotePath = '/home/dh_4gg2za/bryanmiller.us/scarlethorizons/data/word-counts.json',

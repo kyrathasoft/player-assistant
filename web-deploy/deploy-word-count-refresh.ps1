@@ -1,6 +1,6 @@
 [CmdletBinding()]
 param(
-    [string]$DreamHostTarget = 'dh_4gg2za@pdx1-shared-a1-13.dreamhost.com',
+    [string]$DreamHostTarget = 'player-assistant-dreamhost',
     [string]$SshKeyPath = (Join-Path $HOME '.ssh\dreamhost_player_assistant'),
     [string]$PrivateDirectory = '/home/dh_4gg2za/player-assistant-broker',
     [uri]$SourceUrl = 'https://bryanmiller.us/scarlethorizons/data/word-counts.json',
