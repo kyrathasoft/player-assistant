@@ -564,7 +564,7 @@ final class QuestService
         $wikiUrl = $quest['wiki-url'];
         $this->requireText($wikiUrl, 500, "Quest '$id' wiki URL");
         if (preg_match(
-            '~^https://publish\.obsidian\.md/scarlethorizons/(?:Quests|NPCs|Meta/IC|Writings)/[^?#]+$~D',
+            '~^https://publish\.obsidian\.md/scarlethorizons/(?:Locations|Meta|NPCs|Player-Contributed|Powers|Quests|Writings)/[^?#]+$~D',
             $wikiUrl) !== 1) {
             throw new RuntimeException("Quest '$id' has an invalid wiki URL.");
         }

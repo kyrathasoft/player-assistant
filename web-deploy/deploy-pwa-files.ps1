@@ -1,7 +1,15 @@
 [CmdletBinding()]
 param(
     [Parameter(Mandatory = $true)]
-    [ValidateSet('app.js', 'styles.css', 'service-worker.js', 'index.html', 'party-funds.json')]
+    [ValidateScript({
+        $valid = ($_ -match '^[A-Za-z0-9][A-Za-z0-9._/-]*$') `
+            -and ($_ -notmatch '(^|/)\.\.($|/)') `
+            -and (-not [IO.Path]::IsPathRooted($_))
+        if (-not $valid) {
+            throw "Unsafe PWA deployment path: $_"
+        }
+        return $true
+    })]
     [string[]]$Files,
 
     [string]$DreamHostTarget = 'dh_4gg2za@pdx1-shared-a1-13.dreamhost.com',
@@ -22,7 +30,12 @@ try {
     $hashes = @{}
     foreach ($file in $Files) {
         $source = Join-Path $pwaDirectory $file
-        Copy-Item -LiteralPath $source -Destination (Join-Path $localStage $file)
+        $destination = Join-Path $localStage $file
+        $destinationDirectory = Split-Path -Parent $destination
+        if (-not (Test-Path -LiteralPath $destinationDirectory -PathType Container)) {
+            New-Item -ItemType Directory -Path $destinationDirectory | Out-Null
+        }
+        Copy-Item -LiteralPath $source -Destination $destination
         $hashes[$file] = (Get-FileHash -Algorithm SHA256 -LiteralPath $source).Hash.ToLowerInvariant()
     }
 

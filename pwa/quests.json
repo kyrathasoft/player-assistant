@@ -280,6 +280,328 @@
         "plumb-lost-caverns"
       ],
       "wiki-url": "https://publish.obsidian.md/scarlethorizons/NPCs/Valashinaz"
+    },
+    "explore-malviks-tower": {
+      "title": "Explore Malvik's Tower",
+      "summary": "Locate the long-lost tower of Malvik the Mad in the forest north of Raven's Pass and investigate the extensive dungeons beneath it. Determine whether Malvik still survives as a lich and recover what can safely be taken from his trove.",
+      "giver": "Rumors among travelers at Raven's Pass",
+      "visibility": "party-only",
+      "state": "available",
+      "objectives": [
+        "Search east of the trail north of Raven's Pass for Malvik's lost tower.",
+        "Enter and explore the dungeons beneath the tower.",
+        "Determine whether Malvik became a lich and still inhabits the complex.",
+        "Return with proof of the tower's location and any safely recovered lore or treasure."
+      ],
+      "reward": "Any gold and magic recovered from Malvik's unclaimed trove",
+      "dates": {
+        "accepted": "",
+        "expires": ""
+      },
+      "gated-by": [],
+      "unlocked-by": [],
+      "wiki-url": "https://publish.obsidian.md/scarlethorizons/NPCs/Malvik+the+Mad"
+    },
+    "trace-murfex-last-journey": {
+      "title": "Trace Murfex's Last Journey",
+      "summary": "Retrace master glassworker Murfex Garrick's final journey toward Threshold. Discover where and how he died, recover his missing work, and determine whether his death was an accident or connected to his experimental glassware.",
+      "giver": "Jelb Garrick and the Garrick family",
+      "visibility": "individual-or-party",
+      "state": "available",
+      "objectives": [
+        "Establish Murfex's intended route and reason for traveling to Threshold.",
+        "Find witnesses or physical traces from his final journey.",
+        "Determine the circumstances of Murfex's death.",
+        "Recover his experimental glassware, notes, or unfinished masterpiece for the Garrick family."
+      ],
+      "reward": "To be arranged with the Garrick family",
+      "dates": {
+        "accepted": "",
+        "expires": ""
+      },
+      "gated-by": [],
+      "unlocked-by": [],
+      "wiki-url": "https://publish.obsidian.md/scarlethorizons/Player-Contributed/Jelb's+Family+Genealogy"
+    },
+    "investigate-impurax-resurgence": {
+      "title": "Investigate the Rot in the Forbidden Zone",
+      "summary": "Enter the Forbidden Zone and investigate reports that the worship of Impurax, the Rotten God, has reappeared there. Identify the resurgent cult's leaders, learn what they are cultivating or corrupting, and prevent the blight from spreading beyond the ruined region.",
+      "giver": "A Scyntarn witch-hunter",
+      "visibility": "party-only",
+      "state": "available",
+      "objectives": [
+        "Find evidence of Impurax's renewed worship in the Forbidden Zone.",
+        "Identify any Putrescalate cleric-druids or warriors of the Fanged Legion.",
+        "Discover the cult's source of pestilence, rot, or corrupted fungal life.",
+        "Destroy or contain the immediate threat and report what remains."
+      ],
+      "reward": "",
+      "dates": {
+        "accepted": "",
+        "expires": ""
+      },
+      "gated-by": [],
+      "unlocked-by": [],
+      "wiki-url": "https://publish.obsidian.md/scarlethorizons/Powers/Gods/Impurax"
+    },
+    "recover-calico-five-remains": {
+      "title": "Recover the Calico Five",
+      "summary": "Slengar Skullcrusher, sole survivor of the Calico Five, seeks closure for the companions lost during their incursion into Gundgathol. Retrace their expedition, find the site where a deep dragon destroyed the company, and recover the fallen clerics' remains and sacred possessions.",
+      "giver": "Slengar Skullcrusher",
+      "visibility": "party-only",
+      "state": "available",
+      "objectives": [
+        "Find Slengar in Khalidheroneth and record his account of the expedition.",
+        "Retrace the Calico Five's route into Gundgathol.",
+        "Locate the place where the company encountered the deep dragon.",
+        "Recover Cheluthim's remains and the sacred possessions of the fallen clerics.",
+        "Determine whether the deep dragon still threatens the route."
+      ],
+      "reward": "To be arranged with Slengar Skullcrusher",
+      "dates": {
+        "accepted": "",
+        "expires": ""
+      },
+      "gated-by": [],
+      "unlocked-by": [],
+      "wiki-url": "https://publish.obsidian.md/scarlethorizons/Powers/Factions/Calico+Five"
+    },
+    "harvest-xanderpetals": {
+      "title": "Harvest Xanderpetals",
+      "summary": "Gosterwick's supply of Xanderpetals is running dangerously low. Travel to the cold, barren lands where the plant grows, gather enough of its vivid red flowers to replenish the town's stores, and return before the remaining sedative tonic is exhausted.",
+      "giver": "A healer of Gosterwick",
+      "visibility": "individual-or-party",
+      "state": "available",
+      "objectives": [
+        "Learn how to identify and safely harvest Xanderpetals.",
+        "Travel to the cold, barren lands where the plant grows.",
+        "Gather enough intact flowers to replenish Gosterwick's medicinal stores.",
+        "Return the Xanderpetals to Gosterwick before its remaining tonic is exhausted."
+      ],
+      "reward": "To be arranged with Gosterwick's healers",
+      "dates": {
+        "accepted": "",
+        "expires": ""
+      },
+      "gated-by": [],
+      "unlocked-by": [],
+      "wiki-url": "https://publish.obsidian.md/scarlethorizons/Meta/Xanderpetals"
+    },
+    "find-darkforest-giants-grave": {
+      "title": "Find the Giant's Grave",
+      "summary": "Search the heart of the Darkforest for the legendary grave of a giant slain by a red-scaled, horned dragon. Verify the old tale, discover what became of the dragon, and recover any relics buried with the giant.",
+      "giver": "Rumors among travelers at Raven's Pass",
+      "visibility": "party-only",
+      "state": "available",
+      "objectives": [
+        "Gather accounts describing the giant, the horned dragon, and possible landmarks.",
+        "Travel into the heart of the Darkforest.",
+        "Locate and enter the giant's grave.",
+        "Determine whether the dragon survived or left descendants behind.",
+        "Recover proof of the grave's discovery and any safely transportable relics."
+      ],
+      "reward": "Any unclaimed treasure recovered from the grave",
+      "dates": {
+        "accepted": "",
+        "expires": ""
+      },
+      "gated-by": [],
+      "unlocked-by": [],
+      "wiki-url": "https://publish.obsidian.md/scarlethorizons/Locations/Darkforest"
+    },
+    "find-the-cold-mouth": {
+      "title": "Find the Cold Mouth",
+      "summary": "Follow the route recorded in the recovered Tooth-Breaker orders to locate the Cold Mouth, where Red-Tusk's orcs deliver kidnapped scholars, priests, craftspeople, and laborers to mysterious Deep Friends. Rescue any surviving captives and uncover who or what is collecting them.",
+      "giver": "The recovered Tooth-Breaker orders",
+      "visibility": "party-only",
+      "state": "available",
+      "objectives": [
+        "Decode the crude route beginning near Slaytonthorpe.",
+        "Follow the dead stream and broken stones beyond the thorn hills.",
+        "Locate the watcher-mark and the entrance called the Cold Mouth.",
+        "Rescue captives awaiting collection by the Deep Friends.",
+        "Identify the Deep Friends and learn why they seek maps, sealed doors, old tunnels, and knowledge of the deep places."
+      ],
+      "reward": "Any supplies or treasure seized from the kidnappers, plus gratitude from rescued captives",
+      "dates": {
+        "accepted": "",
+        "expires": ""
+      },
+      "gated-by": [],
+      "unlocked-by": [],
+      "wiki-url": "https://publish.obsidian.md/scarlethorizons/Writings/Scroll+Recovered+From+An+Orc+Near+Rimbling+Brook"
+    },
+    "find-doors-of-galduhr": {
+      "title": "Find the Doors of Galduhr",
+      "summary": "Continue Bran Hammerspike's decades-long search for the fabled Doors of Galduhr, the lost entrance to the dwarven kingdom of Gundgathol. Retrace the expedition he undertook with Crynwyth Ironfist in the Moon Peaks, survive the elemental dangers they encountered, and find evidence that reveals the Doors' location.",
+      "giver": "A dwarven historian seeking Gundgathol",
+      "visibility": "party-only",
+      "state": "available",
+      "objectives": [
+        "Research Bran Hammerspike's expeditions in search of the Doors of Galduhr.",
+        "Retrace Bran and Crynwyth Ironfist's route through the Moon Peaks.",
+        "Find evidence of their encounter with a fire elemental.",
+        "Recover maps, markers, or records left during Bran's search.",
+        "Locate the Doors of Galduhr or establish the strongest surviving lead to them."
+      ],
+      "reward": "Dwarven treasure or historical artifacts recovered during the expedition",
+      "dates": {
+        "accepted": "",
+        "expires": ""
+      },
+      "gated-by": [],
+      "unlocked-by": [],
+      "wiki-url": "https://publish.obsidian.md/scarlethorizons/NPCs/Bran+Hammerspike"
+    },
+    "establish-darkforest-fort": {
+      "title": "Establish the Darkforest Fort",
+      "summary": "Reglar 'The Ashbow' Lightstep is hiring able-bodied adventurers to help construct a fort in the Darkforest. Escort workers and supplies to the eastern shore of Donally Lake, secure the building site, and defend the expedition until the fort is usable.",
+      "giver": "Reglar 'The Ashbow' Lightstep",
+      "visibility": "individual-or-party",
+      "state": "available",
+      "objectives": [
+        "Meet Reglar Lightstep and agree upon wages and responsibilities.",
+        "Assemble the workers, tools, and supplies needed for construction.",
+        "Travel approximately twelve miles southwest of Kirkilston to Donally Lake.",
+        "Survey and secure a defensible site on the lake's eastern shore.",
+        "Protect the workers until they complete a usable fortification."
+      ],
+      "reward": "Wages to be negotiated with Reglar Lightstep",
+      "dates": {
+        "accepted": "",
+        "expires": ""
+      },
+      "gated-by": [],
+      "unlocked-by": [],
+      "wiki-url": "https://publish.obsidian.md/scarlethorizons/NPCs/Reglar+Ashbow"
+    },
+    "gather-secrets-for-nimba": {
+      "title": "Gather Secrets for Nimba",
+      "summary": "Help Nimba Armstrong gather intelligence from the miners, guards, and travelers frequenting the Mason's Apron without exposing her life as a deep-cover spy. Identify information that could threaten the Nemere family's interests and report it to Nimba discreetly.",
+      "giver": "Nimba Armstrong",
+      "visibility": "individual-or-party",
+      "state": "available",
+      "objectives": [
+        "Meet Nimba discreetly at the Mason's Apron.",
+        "Observe conversations among the tavern's miners, guards, and travelers.",
+        "Identify secrets or developing events relevant to Nimba's interests.",
+        "Investigate the most credible lead without exposing Nimba's involvement.",
+        "Deliver the intelligence privately to Nimba while preserving her cover."
+      ],
+      "reward": "Nimba Armstrong's favor and access to selected intelligence from her network",
+      "dates": {
+        "accepted": "",
+        "expires": ""
+      },
+      "gated-by": [],
+      "unlocked-by": [],
+      "wiki-url": "https://publish.obsidian.md/scarlethorizons/NPCs/Nimba+Armstrong"
+    },
+    "find-missing-fevered": {
+      "title": "Find the Missing Fevered",
+      "summary": "Three of five Raven's Pass townsfolk afflicted by Dream Fever vanished during the previous week instead of being found in the surrounding fields and hills. Investigate Harl's suspicion that the disappearances are connected to Xanderpetals, recover any survivors, and discover what is taking the Fevered.",
+      "giver": "Harl of Raven's Pass",
+      "visibility": "party-only",
+      "state": "available",
+      "objectives": [
+        "Question Harl and the families of the three missing townsfolk.",
+        "Search the fields and hills between the town and Raven's Pass.",
+        "Determine how Xanderpetals or Dream Fever relate to the disappearances.",
+        "Recover any survivors and stop whatever is taking the Fevered."
+      ],
+      "reward": "75 gp pooled by the affected families, plus salvage rights",
+      "dates": {
+        "accepted": "",
+        "expires": ""
+      },
+      "gated-by": [],
+      "unlocked-by": [],
+      "wiki-url": "https://publish.obsidian.md/scarlethorizons/Meta/IC/Chapter+5+-+A+Betentacled+Escape"
+    },
+    "contain-soul-fungus-mordoom": {
+      "title": "Contain the Soul Fungus at Mordoom Keep",
+      "summary": "The Sporebane Brotherhood needs an expedition to the epicenter of Mordoom Keep's Soul Fungus outbreak. Assess whether the infection is spreading, trace Elowen Starshadow's missing mentor, and recover research or samples that may help contain the plague.",
+      "giver": "Elowen Starshadow and Eldreth Moss-Walker",
+      "visibility": "party-only",
+      "state": "available",
+      "objectives": [
+        "Survey Mordoom Keep for new fungal growth and infected wildlife.",
+        "Trace Elowen's mentor's final expedition into the keep.",
+        "Recover the mentor's research, remains, or both.",
+        "Secure a contained sample without looking directly at active fungal growths.",
+        "Return to the Sporebane Brotherhood before any infection can incubate."
+      ],
+      "reward": "Sporebane protective magic, treatment during incubation, and salvage rights",
+      "dates": {
+        "accepted": "",
+        "expires": ""
+      },
+      "gated-by": [],
+      "unlocked-by": [],
+      "wiki-url": "https://publish.obsidian.md/scarlethorizons/Locations/Mordoom+Keep"
+    },
+    "demon-beyond-east-tower": {
+      "title": "The Demon Beyond the East Tower",
+      "summary": "Sixteen years ago, Kelda Rue's failed summoning dragged her master, Thelgarr Blackstaff, into another plane. Search his abandoned laboratory, determine whether he still lives, and prevent the summoned demon from finding a path back into Issenda.",
+      "giver": "Kelda Rue",
+      "visibility": "party-only",
+      "state": "available",
+      "objectives": [
+        "Search Thelgarr Blackstaff's abandoned laboratory.",
+        "Reconstruct the summoning ritual that opened the planar passage.",
+        "Locate or safely reopen the passage to the plane that claimed Thelgarr.",
+        "Rescue Thelgarr, recover proof of his death, or permanently seal the breach."
+      ],
+      "reward": "Kelda Rue's magical guidance and access to temple resources",
+      "dates": {
+        "accepted": "",
+        "expires": ""
+      },
+      "gated-by": [],
+      "unlocked-by": [],
+      "wiki-url": "https://publish.obsidian.md/scarlethorizons/NPCs/Kelda+Rue"
+    },
+    "rot-grey-company": {
+      "title": "Rot in the Grey Company",
+      "summary": "Radloc Hudson suspects Darkeyes agents are bribing Grey Company guards and compromising Eastdale's caravans and warehouses. Investigate from outside the company, expose the corruption, and identify the Darkeyes mastermind without alerting potentially compromised personnel.",
+      "giver": "Radloc Hudson",
+      "visibility": "party-only",
+      "state": "available",
+      "objectives": [
+        "Identify compromised Grey Company guards.",
+        "Protect a vulnerable shipment or operate a decoy caravan.",
+        "Trace stolen goods through Eastdale's underground routes.",
+        "Identify the Darkeyes mastermind without exposing the investigation prematurely."
+      ],
+      "reward": "To be negotiated with Radloc Hudson",
+      "dates": {
+        "accepted": "",
+        "expires": ""
+      },
+      "gated-by": [],
+      "unlocked-by": [],
+      "wiki-url": "https://publish.obsidian.md/scarlethorizons/NPCs/Radloc+Hudson"
+    },
+    "shrine-fire-burns-hot": {
+      "title": "When the Shrine Fire Burns Hot",
+      "summary": "The eternal flame at Sir Ardan Hearthward's shrine has begun burning unnaturally hot, an omen of danger emerging from deeper in the Blanryde Hills. Follow the warning, rescue those endangered by it, and confront the wilderness threat.",
+      "giver": "Sir Ardan Hearthward",
+      "visibility": "party-only",
+      "state": "available",
+      "objectives": [
+        "Gather reports of missing travelers and unusual activity.",
+        "Follow forgotten cairns and old sheep paths into the Blanryde Hills.",
+        "Find and rescue the missing.",
+        "Eliminate the wilderness threat or clearly mark its lair."
+      ],
+      "reward": "Sir Ardan's aid, friendship, and knowledge of forgotten paths",
+      "dates": {
+        "accepted": "",
+        "expires": ""
+      },
+      "gated-by": [],
+      "unlocked-by": [],
+      "wiki-url": "https://publish.obsidian.md/scarlethorizons/NPCs/Ardan+Hearthward%2C+Sir"
     }
   }
 }

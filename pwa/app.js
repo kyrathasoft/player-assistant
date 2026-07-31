@@ -140,10 +140,14 @@
             && authenticatedQuestSnapshot === null) {
             void loadQuests();
         }
-        if (resolvedView === 'magic-items' && magicItemSnapshot === null) {
+        if (resolvedView === 'magic-items'
+            && authenticatedAccount !== null
+            && magicItemSnapshot === null) {
             void loadMagicItems();
         }
-        if (resolvedView === 'party-funds' && partyFundsSnapshot === null) {
+        if (resolvedView === 'party-funds'
+            && authenticatedAccount !== null
+            && partyFundsSnapshot === null) {
             void loadPartyFunds();
         }
         if (resolvedView === 'message-dm') {
@@ -477,7 +481,7 @@
             && validShortText(quest.expires_on, 100)
             && (quest.request_status === null
                 || QUEST_REQUEST_STATUS_VALUES.includes(quest.request_status))
-            && /^https:\/\/publish\.obsidian\.md\/scarlethorizons\/(?:Quests|NPCs|Meta\/IC|Writings)\/[^?#]+$/u.test(quest.wiki_url);
+            && /^https:\/\/publish\.obsidian\.md\/scarlethorizons\/(?:Locations|Meta|NPCs|Player-Contributed|Powers|Quests|Writings)\/[^?#]+$/u.test(quest.wiki_url);
         if (!payload
             || payload.schema_version !== 2
             || !Array.isArray(payload.status_values)
@@ -955,7 +959,9 @@
             if (status) {
                 status.textContent = magicItemLoading
                     ? 'Loading magic items…'
-                    : (magicItemError || 'Magic items load when this page is opened.');
+                    : (magicItemError || (authenticatedAccount === null
+                        ? 'Log in as your character to view magic items.'
+                        : 'Magic items load when this page is opened.'));
             }
             return;
         }
@@ -1095,11 +1101,17 @@
         const note = byId('party-funds-note');
         if (status) {
             status.textContent = partyFundsSnapshot === null
-                ? (partyFundsLoading ? 'Loading party funds\u2026' : (partyFundsError || 'Party funds load when this view is opened.'))
+                ? (partyFundsLoading
+                    ? 'Loading party funds\u2026'
+                    : (partyFundsError || (authenticatedAccount === null
+                        ? 'Log in as your character to view party funds.'
+                        : 'Party funds load when this view is opened.')))
                 : 'Current party funds loaded from the bundled file.';
         }
         if (total) {
-            total.textContent = partyFundsSnapshot === null ? '\u2014' : formatPartyFundsTotal(getPartyFundsTotal(partyFundsSnapshot));
+            total.textContent = partyFundsSnapshot === null
+                ? (authenticatedAccount === null ? '' : '\u2014')
+                : formatPartyFundsTotal(getPartyFundsTotal(partyFundsSnapshot));
         }
         if (!note) return;
         if (partyFundsSnapshot === null) {
@@ -1628,6 +1640,10 @@
         renderMessagePlayerUi();
         renderMessageNotifications();
         updatePresencePolling();
+        if (authenticated) {
+            if (activeView === 'magic-items' && magicItemSnapshot === null) void loadMagicItems();
+            if (activeView === 'party-funds' && partyFundsSnapshot === null) void loadPartyFunds();
+        }
     };
 
     const normalizeHeroName = (value) => String(value || '')

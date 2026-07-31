@@ -47,7 +47,7 @@ if ([string]::IsNullOrWhiteSpace([string]$metadata.key_id) -or [string]::IsNullO
 }
 
 $deployId = [DateTime]::UtcNow.ToString('yyyyMMddTHHmmssfffZ')
-$deployFiles = @('BrokerService.php', 'WordCountService.php', 'refresh-word-counts.php')
+$deployFiles = @('BrokerService.php', 'QuestService.php', 'WordCountService.php', 'refresh-word-counts.php')
 $remoteStage = "$PrivateDirectory/.word-count-deploy-$deployId"
 $remoteArchive = "$PrivateDirectory/.word-count-deploy-$deployId.tar"
 $localArchive = Join-Path ([IO.Path]::GetTempPath()) "player-assistant-word-count-$deployId.tar"
@@ -151,6 +151,7 @@ $patterns = [
     'config.php.bak-deploy-*',
     'config.php.bak-word-count-refresh-*',
     'BrokerService.php.bak-deploy-*',
+    'QuestService.php.bak-deploy-*',
     'WordCountService.php.bak-deploy-*',
     'WordCountService.php.bak-source-refresh-*',
     'refresh-word-counts.php.bak-deploy-*',
@@ -165,7 +166,7 @@ foreach ($patterns as $pattern) {
         }
     }
 }
-foreach (['.BrokerService.php.deploy-*', '.WordCountService.php.deploy-*', '.refresh-word-counts.php.deploy-*'] as $pattern) {
+foreach (['.BrokerService.php.deploy-*', '.QuestService.php.deploy-*', '.WordCountService.php.deploy-*', '.refresh-word-counts.php.deploy-*'] as $pattern) {
     foreach (glob($directory . '/' . $pattern) ?: [] as $abandonedTemporaryFile) {
         if (is_file($abandonedTemporaryFile)) {
             unlink($abandonedTemporaryFile);

@@ -44,7 +44,7 @@ $metadata = Get-Content -Raw -LiteralPath $SigningMetadataPath | ConvertFrom-Jso
 if (-not (Test-Path -LiteralPath $PhpPath -PathType Leaf)) {
     throw "PHP signing runtime not found: $PhpPath"
 }
-$deployFiles = @('BrokerService.php', 'WordCountService.php', 'refresh-word-counts.php')
+$deployFiles = @('BrokerService.php', 'QuestService.php', 'WordCountService.php', 'refresh-word-counts.php')
 $localHashes = @{}
 foreach ($file in $deployFiles) {
     $localHashes[$file] = (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $PSScriptRoot "player-assistant-broker\$file")).Hash.ToLowerInvariant()
@@ -52,7 +52,7 @@ foreach ($file in $deployFiles) {
 
 $remoteCode = @'
 $directory = '__PRIVATE_DIRECTORY__';
-$files = ['BrokerService.php', 'WordCountService.php', 'refresh-word-counts.php'];
+$files = ['BrokerService.php', 'QuestService.php', 'WordCountService.php', 'refresh-word-counts.php'];
 $result = ['files' => [], 'config' => [], 'backups' => [], 'cron' => ''];
 foreach ($files as $file) {
     $path = $directory . '/' . $file;
@@ -80,6 +80,7 @@ $patterns = [
     'config.php.bak-deploy-*',
     'config.php.bak-word-count-refresh-*',
     'BrokerService.php.bak-deploy-*',
+    'QuestService.php.bak-deploy-*',
     'WordCountService.php.bak-deploy-*',
     'WordCountService.php.bak-source-refresh-*',
     'refresh-word-counts.php.bak-deploy-*',
