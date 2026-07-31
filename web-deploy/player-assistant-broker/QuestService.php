@@ -11,6 +11,7 @@ final class QuestService
     ];
 
     private const STATE_VALUES = [
+        'gated',
         'available',
         'active',
         'available (abandoned)',
@@ -74,7 +75,6 @@ final class QuestService
                 || (
                     ($quest['visibility'] !== 'individual-only'
                         || in_array($characterKey, $quest['gated_by'], true))
-                    && self::isUnlocked($quest, $questsById)
                 )));
 
         return [
@@ -82,7 +82,10 @@ final class QuestService
             'status_values' => array_merge(self::VISIBILITY_VALUES, self::STATE_VALUES),
             'request_status_values' => self::REQUEST_STATUS_VALUES,
             'quests' => array_map(
-                static function (array $quest) use ($latestRequests): array {
+                static function (array $quest) use ($latestRequests, $questsById): array {
+                    if (self::isGated($quest, $questsById)) {
+                        $quest['state'] = 'gated';
+                    }
                     $quest['request_status'] = isset($latestRequests[$quest['id']])
                         ? (string)$latestRequests[$quest['id']]['status']
                         : null;
@@ -486,6 +489,17 @@ final class QuestService
             }
         }
         return true;
+    }
+
+    private static function isGated(array $quest, array $questsById): bool
+    {
+        foreach ($quest['unlocked_by'] as $requiredQuestId) {
+            $requiredQuest = $questsById[$requiredQuestId] ?? null;
+            if (!is_array($requiredQuest) || $requiredQuest['state'] !== 'completed') {
+                return true;
+            }
+        }
+        return false;
     }
 
     private function validateQuest(mixed $id, mixed $quest): array

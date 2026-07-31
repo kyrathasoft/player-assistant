@@ -18,6 +18,7 @@
         preferLocal: true
     });
     const QUEST_STATE_VALUES = Object.freeze([
+        'gated',
         'available',
         'active',
         'available (abandoned)',
@@ -28,6 +29,7 @@
         'active',
         'available',
         'available (abandoned)',
+        'gated',
         'completed',
         'withdrawn'
     ]);
@@ -49,6 +51,7 @@
         available: 'Available',
         active: 'Active',
         'available (abandoned)': 'Available (Abandoned)',
+        gated: 'Gated',
         completed: 'Completed',
         withdrawn: 'Withdrawn'
     });
@@ -474,7 +477,7 @@
             && validRequiredText(quest.summary, 1000)
             && validRequiredText(quest.quest_giver, 200)
             && ['individual-only', 'party-only', 'individual-or-party'].includes(quest.visibility)
-            && ['available', 'active', 'available (abandoned)', 'completed', 'withdrawn'].includes(quest.state)
+            && ['gated', 'available', 'active', 'available (abandoned)', 'completed', 'withdrawn'].includes(quest.state)
             && Array.isArray(quest.objectives)
             && quest.objectives.length > 0
             && quest.objectives.length <= 20
