@@ -582,6 +582,116 @@
       "unlocked-by": [],
       "wiki-url": "https://publish.obsidian.md/scarlethorizons/NPCs/Radloc+Hudson"
     },
+    "captives-shrieken-mire": {
+      "title": "Captives of Shrieken Mire",
+      "summary": "Blue goblins have carried several townsfolk into Shrieken Mire, territory protected by lizardfolk who worship the ancient green dragon Inzeldrin.",
+      "giver": "Survivors of Slaytonthorpe",
+      "visibility": "party-only",
+      "state": "available",
+      "objectives": [
+        "Track the captives into the mire.",
+        "Learn why the goblins took them.",
+        "Rescue any survivors.",
+        "Avoid provoking Inzeldrin or turning the lizardfolk against Slaytonthorpe."
+      ],
+      "reward": "To be arranged with the rescued families; possible goblin salvage",
+      "dates": {
+        "accepted": "",
+        "expires": ""
+      },
+      "gated-by": [],
+      "unlocked-by": [],
+      "wiki-url": "https://publish.obsidian.md/scarlethorizons/Locations/Shrieken+Mire"
+    }
+  ,
+    "silence-ford-isenduin": {
+      "title": "Silence at Ford-at-Isenduin",
+      "summary": "Billworth's promised follow-up work concerns caravans disappearing near Ford-at-Isenduin. Wagons have been found abandoned, but neither cargo nor travelers remain.",
+      "giver": "Billworth Turgen",
+      "visibility": "party-only",
+      "state": "available",
+      "objectives": [
+        "Investigate the abandoned wagons.",
+        "Identify who is controlling the ford.",
+        "Recover survivors and stolen cargo.",
+        "Make the crossing safe for future caravans."
+      ],
+      "reward": "Negotiable payment from Billworth, plus authorized salvage",
+      "dates": {
+        "accepted": "",
+        "expires": ""
+      },
+      "gated-by": [],
+      "unlocked-by": [],
+      "wiki-url": "https://publish.obsidian.md/scarlethorizons/Locations/Ford-at-Isenduin"
+    }
+  ,
+    "failing-mythalvane": {
+      "title": "The Failing Mythalvane",
+      "summary": "The Mythalvane's magical protection has begun failing unpredictably. Rafell Riverwarden's surviving research points to a buried relay chamber outside Helix.",
+      "giver": "The Seekers' Chapterhouse in Helix",
+      "visibility": "party-only",
+      "state": "available",
+      "objectives": [
+        "Locate the relay chamber.",
+        "Determine whether the failures result from decay or sabotage.",
+        "Recover or repair the damaged component.",
+        "Keep the failing defenses secret from Helix's enemies."
+      ],
+      "reward": "Seeker favor and restricted access to their historical records",
+      "dates": {
+        "accepted": "",
+        "expires": ""
+      },
+      "gated-by": [],
+      "unlocked-by": [],
+      "wiki-url": "https://publish.obsidian.md/scarlethorizons/NPCs/Rafell+Riverwarden+d'Helix"
+    }
+  ,
+    "sabotage-guardians-rest": {
+      "title": "Sabotage at Guardians' Rest",
+      "summary": "Supplies have been poisoned and gate mechanisms damaged at Guardians' Rest shortly before caravan season. Evidence implicates Mordicar Justhand's household, but appears suspiciously convenient.",
+      "giver": "Father Zistrus",
+      "visibility": "party-only",
+      "state": "available",
+      "objectives": [
+        "Secure the caravan station against further attacks.",
+        "Identify how the saboteur gained access.",
+        "Determine who benefits from discrediting Father Zistrus.",
+        "Prevent the dispute from disrupting trade between Kirkilston and Eastdale."
+      ],
+      "reward": "Payment, free resupply, and future lodging at Guardians' Rest",
+      "dates": {
+        "accepted": "",
+        "expires": ""
+      },
+      "gated-by": [],
+      "unlocked-by": [],
+      "wiki-url": "https://publish.obsidian.md/scarlethorizons/Locations/Guardians'+Rest"
+    }
+  ,
+    "thirsting-pool": {
+      "title": "The Thirsting Pool",
+      "summary": "Phultarr's Pool, an inexplicable freshwater lake beyond living memory, is shrinking rapidly. Its retreating shoreline has exposed ancient stone steps descending beneath the water.",
+      "giver": "Caravan masters crossing the Rauth Desert",
+      "visibility": "party-only",
+      "state": "available",
+      "objectives": [
+        "Determine what is draining the lake.",
+        "Explore the newly exposed structure.",
+        "Restore the desert's freshwater supply.",
+        "Discover whether the pool is Demetra's Tears, Oaxus' Blood, or something older."
+      ],
+      "reward": "Recovered relics and the gratitude of desert travelers",
+      "dates": {
+        "accepted": "",
+        "expires": ""
+      },
+      "gated-by": [],
+      "unlocked-by": [],
+      "wiki-url": "https://publish.obsidian.md/scarlethorizons/Locations/Phultarr's+Pool"
+    }
+  ,
     "shrine-fire-burns-hot": {
       "title": "When the Shrine Fire Burns Hot",
       "summary": "The eternal flame at Sir Ardan Hearthward's shrine has begun burning unnaturally hot, an omen of danger emerging from deeper in the Blanryde Hills. Follow the warning, rescue those endangered by it, and confront the wilderness threat.",
