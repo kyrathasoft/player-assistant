@@ -25,6 +25,7 @@ obj-verify/
 # User/project-local files
 *.csproj.user
 settings.local.json
+tmp/
 xp-passwords*.json
 web-deploy/player-assistant-broker/config.php
 web-deploy/player-assistant-broker/broker.sqlite

@@ -6,7 +6,6 @@
 - Framework: .NET
 - Shell: PowerShell
 - Prefer PowerShell commands and PowerShell-safe quoting.
-- Always use safe quoting when invoking PowerShell.
 - Use single quotes for literal arguments (e.g. git commit messages).
 - Do not assume macOS, Linux, Swift, Xcode, or iOS.
 - Inspect `.sln`, `.csproj`, `.props`, `.targets`, and `.cs` files before making framework assumptions.
