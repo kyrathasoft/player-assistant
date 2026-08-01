@@ -1,13 +1,13 @@
 'use strict';
 
-const CACHE_VERSION = 'player-assistant-pwa-0.9.8-v59';
+const CACHE_VERSION = 'player-assistant-pwa-0.9.8-v65';
 const SHELL_CACHE = `${CACHE_VERSION}-shell`;
 const DATA_CACHE = `${CACHE_VERSION}-data`;
 const SHELL_ASSETS = [
     './',
     './index.html',
-    './styles.css?v=41',
-    './app.js?v=50',
+    './styles.css?v=42',
+    './app.js?v=56',
     './translator-worker.js',
     './offline.html',
     './manifest.webmanifest',
@@ -90,6 +90,11 @@ self.addEventListener('fetch', (event) => {
     }
 
     if (url.pathname.endsWith('/party-funds.json')) {
+        event.respondWith(networkFirstData(request));
+        return;
+    }
+
+    if (url.pathname.includes('/XP/')) {
         event.respondWith(networkFirstData(request));
         return;
     }

@@ -55,13 +55,27 @@
         completed: 'Completed',
         withdrawn: 'Withdrawn'
     });
+    const XP_AWARDS_PLAYER_GROUPS = Object.freeze({
+        kelpie: Object.freeze(['kelpie-xp.json', 'borca-xp.json']),
+        maximilian: Object.freeze(['maximilian-xp.json', 'corba-xp.json']),
+        jelb: Object.freeze(['jelb-xp.json', 'arilia-xp.json']),
+        geoffroy: Object.freeze(['geoffroy-xp.json']),
+        narinza: Object.freeze(['narinza-xp.json']),
+        neria: Object.freeze(['neria-xp.json']),
+        shade: Object.freeze(['shade-xp.json']),
+        urvan: Object.freeze(['urvan-xp.json'])
+    });
+    const canViewXpAwards = (account) => account !== null
+        && (account.role === 'dm'
+            || Object.hasOwn(XP_AWARDS_PLAYER_GROUPS,
+                String(account.character_name || '').trim().toLocaleLowerCase('en-US')));
 
     const byId = (id) => document.getElementById(id);
     const views = new Map(
         [...document.querySelectorAll('[data-view-panel]')]
             .map((element) => [element.dataset.viewPanel, element]));
     const navButtons = [...document.querySelectorAll('[data-view]')];
-    const protectedNavViews = new Set(['quests', 'magic-items', 'party-funds']);
+    const protectedNavViews = new Set(['quests', 'magic-items', 'party-funds', 'xp-awards']);
 
     let deferredInstallPrompt = null;
     let translatorRequestId = 0;
@@ -72,6 +86,10 @@
     let authenticationCsrfToken = '';
     let authenticatedXpSnapshot = null;
     let xpRequestId = 0;
+    let authenticatedXpAwardsSnapshot = null;
+    let xpAwardsLoading = null;
+    let xpAwardsRequestId = 0;
+    let xpAwardsError = '';
     let authenticatedWordCountSnapshot = null;
     let wordCountRequestId = 0;
     let authenticatedPresenceSnapshot = null;
@@ -116,6 +134,8 @@
                 ? 'dashboard'
                 : (requestedView === 'message-player' && !canMessagePlayer)
                     ? 'dashboard'
+                    : (requestedView === 'xp-awards' && !canViewXpAwards(authenticatedAccount))
+                        ? 'dashboard'
                     : requestedView;
         activeView = resolvedView;
         views.forEach((panel, name) => {
@@ -155,6 +175,12 @@
             && authenticatedAccount !== null
             && partyFundsSnapshot === null) {
             void loadPartyFunds();
+        }
+        if (resolvedView === 'xp-awards'
+            && authenticatedAccount !== null
+            && authenticatedXpAwardsSnapshot === null
+            && xpAwardsError === '') {
+            void loadXpAwards();
         }
         if (resolvedView === 'message-dm') {
             renderMessageDmUi();
@@ -369,6 +395,147 @@
                 refreshButton.disabled = false;
             }
         }
+    };
+
+    const renderXpAwardsUi = () => {
+        const status = byId('xp-awards-status');
+        const list = byId('xp-awards-list');
+        if (!(status instanceof HTMLElement) || !(list instanceof HTMLElement)) return;
+        list.hidden = true;
+        list.replaceChildren();
+        if (authenticatedAccount === null) {
+            status.textContent = 'Log in to view XP progressions.';
+            return;
+        }
+        if (xpAwardsLoading !== null) {
+            status.textContent = 'Loading XP progressions…';
+            return;
+        }
+        if (xpAwardsError !== '') {
+            status.textContent = xpAwardsError;
+            return;
+        }
+        if (authenticatedXpAwardsSnapshot === null) {
+            status.textContent = 'XP progressions load when this view is opened.';
+            return;
+        }
+        status.textContent = '';
+        const fragment = document.createDocumentFragment();
+        authenticatedXpAwardsSnapshot.forEach(({ entries }) => {
+            const character = entries[0];
+            const card = document.createElement('article');
+            card.className = 'xp-award-character';
+            const heading = document.createElement('div');
+            heading.className = 'xp-award-character-heading';
+            const name = document.createElement('h2');
+            name.textContent = character.character_name;
+            const characterClass = document.createElement('span');
+            characterClass.textContent = character.character_class;
+            heading.append(name, characterClass);
+            const table = document.createElement('table');
+            const thead = document.createElement('thead');
+            const headerRow = document.createElement('tr');
+            ['Date', 'XP award', 'Level'].forEach((label) => {
+                const cell = document.createElement('th');
+                cell.scope = 'col';
+                cell.textContent = label;
+                headerRow.append(cell);
+            });
+            thead.append(headerRow);
+            const tbody = document.createElement('tbody');
+            entries.forEach((entry) => {
+                const row = document.createElement('tr');
+                const date = document.createElement('td');
+                const award = document.createElement('td');
+                const level = document.createElement('td');
+                date.textContent = entry.xp_award_date;
+                award.textContent = Number(entry.xp_award).toLocaleString('en-US');
+                level.textContent = `${entry.level_before_award} → ${entry.level_after_award}`;
+                row.append(date, award, level);
+                tbody.append(row);
+            });
+            table.append(thead, tbody);
+            card.append(heading, table);
+            fragment.append(card);
+        });
+        list.append(fragment);
+        list.hidden = false;
+    };
+
+    const validateXpAwardsEntries = (payload) => {
+        if (!Array.isArray(payload) || payload.length === 0 || payload.length > 200) {
+            throw new Error('An XP progression file was invalid.');
+        }
+        const validEntry = (entry) => entry
+            && typeof entry.character_name === 'string'
+            && entry.character_name.length > 0
+            && entry.character_name.length <= 100
+            && typeof entry.character_class === 'string'
+            && entry.character_class.length > 0
+            && entry.character_class.length <= 100
+            && Number.isSafeInteger(entry.level_before_award)
+            && entry.level_before_award >= 0
+            && Number.isSafeInteger(entry.xp_award)
+            && entry.xp_award >= 0
+            && typeof entry.xp_award_date === 'string'
+            && entry.xp_award_date.length > 0
+            && entry.xp_award_date.length <= 200
+            && Number.isSafeInteger(entry.level_after_award)
+            && entry.level_after_award >= 0;
+        if (!payload.every(validEntry)) throw new Error('An XP progression file was invalid.');
+        const characterName = payload[0].character_name;
+        if (!payload.every((entry) => entry.character_name === characterName)) {
+            throw new Error('An XP progression file contained multiple characters.');
+        }
+        return payload;
+    };
+
+    const loadXpAwards = async (force = false) => {
+        if (xpAwardsLoading !== null && !force) return xpAwardsLoading;
+        const requestId = ++xpAwardsRequestId;
+        authenticatedXpAwardsSnapshot = null;
+        xpAwardsError = '';
+        renderXpAwardsUi();
+        const account = authenticatedAccount;
+        if (account === null) return;
+        const accountName = String(account.character_name || '').trim().toLocaleLowerCase('en-US');
+        xpAwardsLoading = (async () => {
+            try {
+                let fileNames = XP_AWARDS_PLAYER_GROUPS[accountName];
+                if (account.role === 'dm') {
+                    const manifestResponse = await fetch('XP/index.json', { cache: 'no-store' });
+                    if (!manifestResponse.ok) throw new Error('The XP progression manifest is unavailable.');
+                    const manifest = await manifestResponse.json();
+                    if (!Array.isArray(manifest)
+                        || !manifest.every((fileName) => typeof fileName === 'string'
+                            && /^[a-z0-9-]+-xp\.json$/u.test(fileName))) {
+                        throw new Error('The XP progression manifest was invalid.');
+                    }
+                    fileNames = manifest;
+                }
+                if (!Array.isArray(fileNames) || fileNames.length === 0) {
+                    throw new Error('XP Awards are not configured for this account.');
+                }
+                const progressions = await Promise.all(fileNames.map(async (fileName) => {
+                    const response = await fetch(`XP/${fileName}`, { cache: 'no-store' });
+                    if (!response.ok) throw new Error(`Unable to load ${fileName}.`);
+                    return { fileName, entries: validateXpAwardsEntries(await response.json()) };
+                }));
+                if (requestId !== xpAwardsRequestId || authenticatedAccount?.id !== account.id) return;
+                authenticatedXpAwardsSnapshot = progressions;
+            } catch (error) {
+                if (requestId === xpAwardsRequestId && authenticatedAccount?.id === account.id) {
+                    xpAwardsError = error instanceof Error ? error.message : 'XP progressions are unavailable.';
+                }
+            } finally {
+                if (requestId === xpAwardsRequestId) {
+                    xpAwardsLoading = null;
+                    renderXpAwardsUi();
+                }
+            }
+        })();
+        renderXpAwardsUi();
+        return xpAwardsLoading;
     };
 
     const renderWordCountUi = () => {
@@ -1653,7 +1820,9 @@
         for (const button of navButtons) {
             const targetView = button.dataset.view;
             if (!protectedNavViews.has(targetView)) continue;
-            button.hidden = !authenticated;
+            button.hidden = targetView === 'xp-awards'
+                ? !canViewXpAwards(authenticatedAccount)
+                : !authenticated;
         }
         if (isDungeonMaster && activeView === 'message-dm') {
             setView('dashboard', false);
@@ -1664,6 +1833,9 @@
         if (!authenticated && protectedNavViews.has(activeView)) {
             setView('dashboard', false);
         }
+        if (!canViewXpAwards(authenticatedAccount) && activeView === 'xp-awards') {
+            setView('dashboard', false);
+        }
         const protectedStatus = byId('protected-player-status');
         if (protectedStatus) {
             protectedStatus.textContent = authenticated
@@ -1672,6 +1844,7 @@
         }
         renderAuthenticatedHeroToken();
         renderXpUi();
+        renderXpAwardsUi();
         renderWordCountUi();
         renderQuestUi();
         renderMagicItems();
@@ -1979,6 +2152,10 @@
             authenticationCsrfToken = '';
         }
         authenticatedXpSnapshot = null;
+        authenticatedXpAwardsSnapshot = null;
+        xpAwardsLoading = null;
+        xpAwardsError = '';
+        xpAwardsRequestId++;
         authenticatedWordCountSnapshot = null;
         authenticatedPresenceSnapshot = null;
         authenticatedQuestSnapshot = null;
@@ -2051,6 +2228,10 @@
             authenticationCsrfToken = String(session.csrf_token || '');
             authenticatedAccount = session.account;
             authenticatedXpSnapshot = null;
+            authenticatedXpAwardsSnapshot = null;
+            xpAwardsLoading = null;
+            xpAwardsError = '';
+            xpAwardsRequestId++;
             authenticatedWordCountSnapshot = null;
             authenticatedQuestSnapshot = null;
             authenticatedMessageSnapshot = null;
@@ -2074,6 +2255,10 @@
             authenticatedAccount = null;
             authenticationCsrfToken = '';
             authenticatedXpSnapshot = null;
+            authenticatedXpAwardsSnapshot = null;
+            xpAwardsLoading = null;
+            xpAwardsError = '';
+            xpAwardsRequestId++;
             authenticatedWordCountSnapshot = null;
             authenticatedQuestSnapshot = null;
             authenticatedMessageSnapshot = null;
@@ -2101,6 +2286,10 @@
             authenticationCsrfToken = '';
             authenticatedXpSnapshot = null;
             xpRequestId++;
+            authenticatedXpAwardsSnapshot = null;
+            xpAwardsLoading = null;
+            xpAwardsError = '';
+            xpAwardsRequestId++;
             authenticatedWordCountSnapshot = null;
             wordCountRequestId++;
             authenticatedQuestSnapshot = null;

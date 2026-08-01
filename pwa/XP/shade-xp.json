@@ -1,0 +1,42 @@
+[
+  {
+    "character_name": "Shade",
+    "character_class": "ranger",
+    "level_before_award": 1,
+    "xp_award": 300,
+    "xp_award_date": "7.14.2026",
+    "level_after_award": 1
+  },
+  {
+    "character_name": "Shade",
+    "character_class": "ranger",
+    "level_before_award": 1,
+    "xp_award": 500,
+    "xp_award_date": "7.17.2026",
+    "level_after_award": 1
+  },
+  {
+    "character_name": "Shade",
+    "character_class": "ranger",
+    "level_before_award": 1,
+    "xp_award": 600,
+    "xp_award_date": "7.24.2026",
+    "level_after_award": 1
+  },
+  {
+    "character_name": "Shade",
+    "character_class": "ranger",
+    "level_before_award": 1,
+    "xp_award": 400,
+    "xp_award_date": "7.27.2026",
+    "level_after_award": 1
+  },
+  {
+    "character_name": "Shade",
+    "character_class": "ranger",
+    "level_before_award": 1,
+    "xp_award": 500,
+    "xp_award_date": "7.31.2026",
+    "level_after_award": 2
+  }
+]

@@ -13,8 +13,8 @@
     <link rel="manifest" href="manifest.webmanifest">
     <link rel="icon" href="icons/icon-192.png" sizes="192x192" type="image/png">
     <link rel="apple-touch-icon" href="icons/icon-192.png">
-    <link rel="stylesheet" href="styles.css?v=41">
-    <script src="app.js?v=50" defer></script>
+    <link rel="stylesheet" href="styles.css?v=42">
+    <script src="app.js?v=56" defer></script>
 </head>
 <body>
     <a class="skip-link" href="#main-content">Skip to content</a>
@@ -65,6 +65,9 @@
             </button>
             <button class="nav-item" type="button" data-view="party-funds">
                 <span>Party Funds</span>
+            </button>
+            <button class="nav-item" type="button" data-view="xp-awards" hidden>
+                <span>XP Awards</span>
             </button>
             <button class="nav-item" type="button" data-view="message-dm" id="message-dm-nav" hidden>
                 <span>Message the DM</span>
@@ -269,6 +272,19 @@
                     </div>
                     <p class="party-funds-total" id="party-funds-total" aria-live="polite">&mdash;</p>
                     <ul id="party-funds-note" class="party-funds-note" hidden></ul>
+                </div>
+            </section>
+
+            <section class="view" id="view-xp-awards" data-view-panel="xp-awards" aria-labelledby="xp-awards-title" hidden>
+                <div class="page-heading">
+                    <div>
+                        <p class="eyebrow">Character history</p>
+                        <h1 id="xp-awards-title">XP Awards</h1>
+                    </div>
+                </div>
+                <div class="xp-awards-dashboard">
+                    <p class="xp-awards-status" id="xp-awards-status" role="status" aria-live="polite">XP progressions load when this view is opened.</p>
+                    <div class="xp-awards-list" id="xp-awards-list" hidden></div>
                 </div>
             </section>
 

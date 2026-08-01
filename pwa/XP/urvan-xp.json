@@ -1,0 +1,18 @@
+[
+  {
+    "character_name": "Urvan",
+    "character_class": "paladin",
+    "level_before_award": 1,
+    "xp_award": 1190,
+    "xp_award_date": "6.02.2026",
+    "level_after_award": 2
+  },
+  {
+    "character_name": "Urvan",
+    "character_class": "paladin",
+    "level_before_award": 2,
+    "xp_award": 690,
+    "xp_award_date": "6.12.2026",
+    "level_after_award": 2
+  }
+]

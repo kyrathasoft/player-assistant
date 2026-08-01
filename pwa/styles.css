@@ -1382,6 +1382,67 @@ textarea[readonly] {
     text-align: right;
 }
 
+.xp-awards-dashboard {
+    display: grid;
+    gap: 1rem;
+    margin-top: 1rem;
+}
+
+.xp-awards-status {
+    margin: 0;
+    color: var(--muted);
+}
+
+.xp-awards-list {
+    display: grid;
+    gap: 1rem;
+}
+
+.xp-award-character {
+    overflow-x: auto;
+    border: 1px solid var(--line-strong);
+    border-radius: 1rem;
+    padding: 1rem;
+    background: rgba(255, 255, 255, 0.025);
+}
+
+.xp-award-character-heading {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 1rem;
+    margin-bottom: 0.75rem;
+}
+
+.xp-award-character-heading h2 {
+    margin: 0;
+}
+
+.xp-award-character-heading span {
+    color: var(--muted);
+    text-transform: capitalize;
+}
+
+.xp-award-character table {
+    width: 100%;
+    min-width: 32rem;
+    border-collapse: collapse;
+}
+
+.xp-award-character th,
+.xp-award-character td {
+    border-bottom: 1px solid var(--line);
+    padding: 0.6rem 0.5rem;
+    text-align: left;
+}
+
+.xp-award-character td:nth-child(2),
+.xp-award-character th:nth-child(2),
+.xp-award-character td:nth-child(3),
+.xp-award-character th:nth-child(3) {
+    text-align: right;
+}
+
 .online-users-summary {
     margin-top: 1rem;
     border-top: 1px solid var(--line);
