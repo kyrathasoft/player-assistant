@@ -1126,6 +1126,216 @@
       "gated-by": [],
       "unlocked-by": [],
       "wiki-url": "https://publish.obsidian.md/scarlethorizons/Locations/Tien+Lung"
+    },
+    "investigate-donelduns-den": {
+      "title": "Investigate Doneldun's Den",
+      "summary": "Learn why the dragon turtle Doneldun has remained silent since the last verified conversation with Halathra Moonbeam, and determine whether a new danger is disturbing Lake Donally.",
+      "giver": "A Demetran druid or lakeside community",
+      "visibility": "party-only",
+      "state": "available",
+      "objectives": [
+        "Find the site where Halathra Moonbeam reportedly held palaver with Doneldun.",
+        "Determine whether the dragon turtle is still present and why it has withdrawn.",
+        "Investigate threats affecting Lake Donally or the ruins around Aelith-Calaer.",
+        "Return with an account that can guide future contact or prevent a lake disaster."
+      ],
+      "reward": "A favor from the Demetran faithful, safe passage on Lake Donally, and any recovered lake treasure",
+      "dates": {
+        "accepted": "",
+        "expires": ""
+      },
+      "gated-by": [],
+      "unlocked-by": [],
+      "wiki-url": "https://publish.obsidian.md/scarlethorizons/Locations/Lake+Donally"
+    },
+    "reclaim-golbrandur-outer-gate": {
+      "title": "Reclaim Golbrandur’s Outer Gate",
+      "summary": "Aid Elbramoth Battlebeard in opening a defensible approach to Golbrandur while the dracolich and dragon cultists remain entrenched in the ancient dwarven city-fortress.",
+      "giver": "Elbramoth Battlebeard",
+      "visibility": "party-only",
+      "state": "available",
+      "objectives": [
+        "Reach the outer approach to Golbrandur without drawing the full attention of the entrenched cult.",
+        "Locate a defensible gate, breach, or forgotten service entrance.",
+        "Disrupt the defenders long enough for Elbramoth’s forces to establish a foothold.",
+        "Report what the expedition learned about the dracolich’s defenses."
+      ],
+      "reward": "Dwarven payment, military favor, and a share of any treasure recovered from the secured approach",
+      "dates": {
+        "accepted": "",
+        "expires": ""
+      },
+      "gated-by": [],
+      "unlocked-by": [],
+      "wiki-url": "https://publish.obsidian.md/scarlethorizons/Locations/Golbrandur"
+    },
+    "chart-barakuir-iron-road": {
+      "title": "Chart the Iron Road to Barakuir",
+      "summary": "Trace the ancient tunnel connection between Altgrimmr and the duergar stronghold of Barakuir, documenting what remains passable and what dangers now occupy the route.",
+      "giver": "A historian or tunnel-master of Altgrimmr",
+      "visibility": "party-only",
+      "state": "available",
+      "objectives": [
+        "Locate the surviving entrance to the old Altgrimmr–Barakuir tunnel route.",
+        "Map a safe section and identify collapses, sealed gates, or hostile outposts.",
+        "Recover a surviving marker or record proving how the route was used.",
+        "Return with a map that can support future dwarven expeditions."
+      ],
+      "reward": "Dwarven coin, mapping privileges, and access to an old route through the mountains",
+      "dates": {
+        "accepted": "",
+        "expires": ""
+      },
+      "gated-by": [],
+      "unlocked-by": [],
+      "wiki-url": "https://publish.obsidian.md/scarlethorizons/Locations/Altgrimmr"
+    },
+    "solve-phultarrs-pool": {
+      "title": "Solve the Mystery of Phultarr's Pool",
+      "summary": "Investigate the inexplicable freshwater lake in the Rauth Desert, called both Demetra’s Tears and Oaxus’ Blood, and learn why it has never run dry.",
+      "giver": "A desert caravan master or rival priesthood",
+      "visibility": "individual-or-party",
+      "state": "available",
+      "objectives": [
+        "Reach Phultarr’s Pool and document its water, shores, and nearby ruins or signs.",
+        "Identify whether the lake is natural, magical, or maintained by a hidden power.",
+        "Determine what the names Demetra’s Tears and Oaxus’ Blood mean to local travelers.",
+        "Return with a safe-water route or warning about a danger connected to the pool."
+      ],
+      "reward": "Desert guides’ gratitude, a reliable oasis route, and any relic revealed by the investigation",
+      "dates": {
+        "accepted": "",
+        "expires": ""
+      },
+      "gated-by": [],
+      "unlocked-by": [],
+      "wiki-url": "https://publish.obsidian.md/scarlethorizons/Locations/Phultarr%27s+Pool"
+    },
+    "protect-thicket-wood": {
+      "title": "Protect the Thicket Wood",
+      "summary": "Find out whether the legendary treants or wood elves of the Red Thicket are reacting to illegal logging, and prevent a conflict from closing the road through Raven’s Pass.",
+      "giver": "Raven’s Pass woodcutters or a St. Ygg road official",
+      "visibility": "individual-or-party",
+      "state": "available",
+      "objectives": [
+        "Identify who is cutting in the Thicket Wood and why.",
+        "Locate signs of treant or wood-elf intervention without provoking it.",
+        "Negotiate terms that protect the oldest trees while keeping the road supplied.",
+        "Stop any immediate threat before the forest retaliates against Raven’s Pass."
+      ],
+      "reward": "Safe passage through the Red Thicket, timber rights or supplies, and a forest faction’s cautious goodwill",
+      "dates": {
+        "accepted": "",
+        "expires": ""
+      },
+      "gated-by": [],
+      "unlocked-by": [],
+      "wiki-url": "https://publish.obsidian.md/scarlethorizons/Locations/Red+Thicket"
+    },
+    "secure-coalscuttle-supply": {
+      "title": "Secure the Coal Hills Supply Line",
+      "summary": "Keep the miners of Coalscuttle supplied and their coal shipment moving after a threat interrupts the route from the Coal Hills.",
+      "giver": "The miners of Coalscuttle",
+      "visibility": "individual-or-party",
+      "state": "available",
+      "objectives": [
+        "Learn what has interrupted the road between Coalscuttle and its buyers.",
+        "Escort tools, food, or a coal shipment through the threatened stretch.",
+        "Discover whether the danger is banditry, a monster, or a rival mining interest.",
+        "Restore a dependable route without collapsing the camp’s fragile economy."
+      ],
+      "reward": "Coal, miners’ pay, and a continuing discount on fuel or metalwork",
+      "dates": {
+        "accepted": "",
+        "expires": ""
+      },
+      "gated-by": [],
+      "unlocked-by": [],
+      "wiki-url": "https://publish.obsidian.md/scarlethorizons/Locations/Coalscuttle"
+    },
+    "free-the-branderscar-prisoner": {
+      "title": "Free the Prisoner of Branderscar",
+      "summary": "Determine why a prisoner in Branderscar claims to possess evidence about a hidden threat in the Fangorran Range, then decide whether the prisoner deserves rescue.",
+      "giver": "A worried relative or an intermediary in Rosen",
+      "visibility": "individual-or-party",
+      "state": "available",
+      "objectives": [
+        "Identify the prisoner and learn the charge that placed them in Branderscar.",
+        "Verify the prisoner’s claim without exposing an innocent accomplice.",
+        "Reach the mountain prison or arrange a lawful extraction.",
+        "Decide whether to free the prisoner, expose a greater crime, or leave them confined."
+      ],
+      "reward": "A useful contact in Rosen, legal favor, and whatever evidence the prisoner can safely surrender",
+      "dates": {
+        "accepted": "",
+        "expires": ""
+      },
+      "gated-by": [],
+      "unlocked-by": [],
+      "wiki-url": "https://publish.obsidian.md/scarlethorizons/Locations/Branderscar+Prison"
+    },
+    "escort-forgehome-ore-train": {
+      "title": "Escort the Forgehome Ore Train",
+      "summary": "Protect a shipment of smelted ore traveling from Forgehome toward Citadel Silver and learn who is testing the friendly trade route between the two dwarven communities.",
+      "giver": "Forgehome mine factors or Citadel Silver merchants",
+      "visibility": "party-only",
+      "state": "available",
+      "objectives": [
+        "Join the ore shipment at Forgehome and establish the route’s weak points.",
+        "Protect the miners, wagons, and ore through the Shallows.",
+        "Identify whether attacks are opportunistic, duergar-directed, or politically motivated.",
+        "Deliver the shipment and report any evidence of a wider threat."
+      ],
+      "reward": "Dwarven wages, masterwork goods at a discount, and trust from both communities",
+      "dates": {
+        "accepted": "",
+        "expires": ""
+      },
+      "gated-by": [],
+      "unlocked-by": [],
+      "wiki-url": "https://publish.obsidian.md/scarlethorizons/Locations/Forgehome"
+    },
+    "expose-darkeyes-sewer-route": {
+      "title": "Expose the Darkeyes’ Sewer Route",
+      "summary": "Help uncover how Retep Garnetstone’s Darkeyes move contraband and people through the sewers beneath Eastdale and the Middenmark while avoiding a war with the city’s spies.",
+      "giver": "A threatened merchant, rival guild, or lawkeeper",
+      "visibility": "individual-or-party",
+      "state": "available",
+      "objectives": [
+        "Confirm that Retep’s relic shop is a cover for a wider smuggling network.",
+        "Trace one discreet passage through the Eastdale or Middenmark sewers.",
+        "Determine which goods or people are being moved and who benefits.",
+        "Choose whether to expose the route, exploit it, or use it to protect someone endangered by the Red Laws."
+      ],
+      "reward": "Information, black-market access, or a bounty from the party that commissioned the investigation",
+      "dates": {
+        "accepted": "",
+        "expires": ""
+      },
+      "gated-by": [],
+      "unlocked-by": [],
+      "wiki-url": "https://publish.obsidian.md/scarlethorizons/NPCs/Retep+Garnetstone"
+    },
+    "recover-men-of-the-motte-journal": {
+      "title": "Recover the Men of the Motte Journal",
+      "summary": "Find the missing field journal from Muirron Artelba’s adventuring days with the Men of the Motte before its account of a forgotten site is sold, altered, or destroyed.",
+      "giver": "Muirron the Magician",
+      "visibility": "individual-or-party",
+      "state": "available",
+      "objectives": [
+        "Learn where Muirron last saw the Men of the Motte journal.",
+        "Track the journal through collectors, caravaners, or an abandoned cache.",
+        "Recover the pages without allowing a dangerous site description to circulate.",
+        "Return the journal to Muirron and determine whether its location is worth investigating."
+      ],
+      "reward": "Muirron’s research aid, a spell or antiquarian service, and a share of any safe discovery named in the journal",
+      "dates": {
+        "accepted": "",
+        "expires": ""
+      },
+      "gated-by": [],
+      "unlocked-by": [],
+      "wiki-url": "https://publish.obsidian.md/scarlethorizons/NPCs/Muirron+the+Magician"
     }
   }
 }
