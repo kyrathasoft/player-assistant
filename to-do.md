@@ -28,7 +28,7 @@
 ## Architecture and maintainability
 
 - [x] Decompose `Form1` by extracting an injected translator presenter, controller, and backend.
-- [ ] Split the custom 405-test harness into discoverable domain-focused test classes.
+- [x] Split the custom 405-test harness into discoverable domain-focused test classes.
 - [ ] Modularize `pwa/app.js` by feature without introducing an unnecessary framework.
 - [ ] Make schema-rich lexicon data the canonical source for desktop, PWA, and web-translator artifacts.
 - [ ] Centralize desktop, installer, PWA, and cache version metadata.
