@@ -34,8 +34,8 @@
 - [ ] Modularize `pwa/app.js` by feature without introducing an unnecessary framework.
 - [ ] Make schema-rich lexicon data the canonical source for desktop, PWA, and web-translator artifacts.
 - [ ] Centralize desktop, installer, PWA, and cache version metadata.
-- [ ] Add formatting verification to CI and fix the existing `RpolAuthUtility.cs` formatting violation.
-- [ ] Formalize repository hygiene for local corpus directories and `.hermes-tmp*` files.
+- [x] Add formatting verification to CI and fix existing .NET formatting violations.
+- [x] Formalize repository hygiene for local corpus directories and `.hermes-tmp*` files.
 
 ## Completed
 

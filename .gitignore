@@ -16,6 +16,10 @@ temp.md
 .agents/
 .codex/
 .vs/
+.hermes-tmp*
+
+# Name root-level reproducible corpus workspaces local-corpus*.
+/local-corpus*/
 
 # Graphify generated output/cache
 graphify-out/

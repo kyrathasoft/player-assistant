@@ -28,6 +28,7 @@ $directoryBuildPropsPath = Join-Path $RepoRoot 'Directory.Build.props'
 $dotnetDependencyVerifierPath = Join-Path $RepoRoot 'verify-dotnet-dependencies.ps1'
 $dependencyReviewWorkflowPath = Join-Path $RepoRoot '.github\workflows\dependency-review.yml'
 $dependabotPath = Join-Path $RepoRoot '.github\dependabot.yml'
+$hygieneVerifierPath = Join-Path $RepoRoot 'verify-repository-hygiene.ps1'
 $requiredLockFiles = @(
     'packages.lock.json',
     'ToOrcish\packages.lock.json',
@@ -41,6 +42,9 @@ $workflow = Get-Content -Raw -LiteralPath $workflowPath
 Assert-Condition -Condition ($workflow.Contains('name: Full regression')) -Message 'The workflow must expose the stable Full regression check name.'
 Assert-Condition -Condition ($workflow.Contains('  full-regression:') -and $workflow.Contains('    name: Required full regression')) -Message 'The workflow must define the required full-regression job.'
 Assert-Condition -Condition ($workflow.Contains('dotnet build .\ToOrcish\to-orcish.csproj --configuration Release --nologo')) -Message 'The required job must build the standalone ToOrcish executable used by the complete harness.'
+Assert-Condition -Condition ($workflow.Contains('dotnet format .\player-assistant.slnx --verify-no-changes')) -Message 'The required job must reject unformatted .NET source files.'
+Assert-Condition -Condition ($workflow.Contains('.\verify-repository-hygiene.ps1')) -Message 'The required job must verify local corpus and Hermes scratch-file hygiene.'
+Assert-Condition -Condition (Test-Path -LiteralPath $hygieneVerifierPath -PathType Leaf) -Message 'The repository hygiene verifier is missing.'
 Assert-Condition -Condition ($workflow.Contains('.\PlayerAssistant.Tests\bin\Release\net10.0-windows\PlayerAssistant.Tests.exe')) -Message 'The required job must run the complete desktop harness without a filter.'
 Assert-Condition -Condition (!$workflow.Contains('Verify hosted settings fetch and decrypt path') -and !$workflow.Contains('Verify hosted settings negative paths')) -Message 'Focused desktop filters must not substitute for the complete harness.'
 Assert-Condition -Condition ($workflow.Contains('.\pwa\verify-pwa.ps1')) -Message 'The required job must run the PWA verifier.'

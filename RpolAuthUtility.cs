@@ -242,7 +242,7 @@ namespace PlayerAssistant
                     $"RPOL browser authentication is unavailable while starting Playwright: {ex.Message}",
                     ex);
             }
- 
+
             try
             {
                 var preparedStorageStatePath = TryCreatePreparedStorageStateFile();
