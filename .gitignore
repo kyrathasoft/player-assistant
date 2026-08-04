@@ -28,6 +28,7 @@ obj-verify/
 settings.local.json
 tmp/
 xp-passwords*.json
+player-assistant-web-recovery-*.zip
 web-deploy/player-assistant-broker/config.php
 web-deploy/player-assistant-broker/broker.sqlite
 web-deploy/player-assistant-broker/snapshots/
