@@ -116,7 +116,37 @@ The script prompts securely for the broker administrator key and sends only the 
 
 ## PWA files
 
-Upload the complete `pwa/` directory, or at minimum:
+Deploy changed public runtime files through the transactional deployment script:
+
+```powershell
+.\web-deploy\deploy-pwa-files.ps1 -Files @(
+    '.htaccess',
+    'app.js',
+    'index.html',
+    'level-progression.json',
+    'magic-items.json',
+    'service-worker.js',
+    'styles.css'
+)
+```
+
+Include every changed runtime file in one invocation. The script verifies staged
+SHA-256 hashes, clones the complete live release under the private
+`~/.player-assistant-pwa-releases` directory, and activates the selected release
+with one symlink rename. The first run migrates the
+existing PWA directory into the managed-release layout; later activations and
+rollbacks switch the public symlink atomically, so clients never observe a mixed
+release. The prior release remains available until verification completes.
+
+The script commits only after HTTPS hashes, security/cache headers, and current
+broker API behavior pass `pwa/test-deployment.ps1`. If verification fails, it
+atomically restores the previous release; newly introduced files disappear with
+the rejected release directory. `.htaccess` is verified through its observable
+HTTPS headers because the file itself is not publicly retrievable. Interrupted
+install commands are retried idempotently, and a persistent transaction marker
+prevents a later deployment from silently replacing an unresolved release.
+
+The complete PWA runtime includes at minimum:
 
 ```text
 .htaccess
@@ -126,6 +156,7 @@ level-progression.json
 service-worker.js
 styles.css
 quests.json
+magic-items.json
 ```
 
 ## API routes

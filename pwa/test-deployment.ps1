@@ -1,11 +1,22 @@
 param(
     [uri]$BaseUri = 'https://bryanmiller.us/scarlethorizons/pwa/',
     [string]$PwaRoot = $PSScriptRoot,
+    [ValidateScript({
+        $valid = (($_ -eq '.htaccess') -or ($_ -match '^[A-Za-z0-9][A-Za-z0-9._/-]*$')) `
+            -and ($_ -notmatch '(^|/)\.\.($|/)') `
+            -and (-not [IO.Path]::IsPathRooted($_))
+        if (-not $valid) {
+            throw "Unsafe PWA deployment path: $_"
+        }
+        return $true
+    })]
+    [string[]]$Files = @(),
     [switch]$RequireCurrentXpApi,
     [switch]$ExcludeQuests
 )
 
 $ErrorActionPreference = 'Stop'
+Add-Type -AssemblyName System.Net.Http
 
 function Assert-Condition {
     param(
@@ -35,8 +46,13 @@ function Get-HeaderValue {
 
 function Get-Sha256 {
     param([Parameter(Mandatory = $true)][byte[]]$Bytes)
-    return [Convert]::ToHexString(
-        [System.Security.Cryptography.SHA256]::HashData($Bytes))
+    $sha256 = [System.Security.Cryptography.SHA256]::Create()
+    try {
+        return [BitConverter]::ToString($sha256.ComputeHash($Bytes)).Replace('-', '')
+    }
+    finally {
+        $sha256.Dispose()
+    }
 }
 
 Assert-Condition -Condition ($BaseUri.Scheme -eq 'https') -Message 'The deployed PWA must use HTTPS.'
@@ -84,14 +100,26 @@ foreach ($hero in @($heroData.heroes) + @($heroData.dungeonMaster)) {
     $runtimeFiles[$relativePath] = $heroContentTypes[$extension]
 }
 
+$verificationFiles = $runtimeFiles
+if ($Files.Count -gt 0) {
+    $verificationFiles = [ordered]@{}
+    foreach ($file in $Files) {
+        if ($file -eq '.htaccess') {
+            continue
+        }
+        Assert-Condition -Condition ($runtimeFiles.Contains($file)) -Message "Unsupported PWA deployment file: $file"
+        $verificationFiles[$file] = $runtimeFiles[$file]
+    }
+}
+
 $handler = [System.Net.Http.HttpClientHandler]::new()
-$handler.AutomaticDecompression = [System.Net.DecompressionMethods]::All
+$handler.AutomaticDecompression = [System.Net.DecompressionMethods]::GZip -bor [System.Net.DecompressionMethods]::Deflate
 $client = [System.Net.Http.HttpClient]::new($handler)
 $client.Timeout = [TimeSpan]::FromSeconds(90)
 
 try {
     $responses = @{}
-    foreach ($entry in $runtimeFiles.GetEnumerator()) {
+    foreach ($entry in $verificationFiles.GetEnumerator()) {
         $relativePath = $entry.Key
         $localPath = Join-Path $PwaRoot ($relativePath -replace '/', '\')
         Assert-Condition -Condition (Test-Path -LiteralPath $localPath -PathType Leaf) -Message "Missing local deployment file: $relativePath"
@@ -111,14 +139,27 @@ try {
         Assert-Condition -Condition ((Get-Sha256 $remoteBytes) -eq (Get-Sha256 $localBytes)) -Message "$relativePath does not match the local deployment file."
     }
 
+    if (!$responses.ContainsKey('index.html')) {
+        $indexUri = [uri]::new(
+            $BaseUri,
+            "index.html?deployment-test=$([DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds())")
+        $indexResponse = $client.GetAsync($indexUri).GetAwaiter().GetResult()
+        $responses['index.html'] = $indexResponse
+        Assert-Condition -Condition $indexResponse.IsSuccessStatusCode -Message "index.html returned HTTP $([int]$indexResponse.StatusCode)."
+        Assert-Condition -Condition (@('text/html') -contains [string]$indexResponse.Content.Headers.ContentType.MediaType) -Message 'index.html returned an unexpected content type.'
+    }
+
     $indexResponse = $responses['index.html']
     Assert-Condition -Condition ((Get-HeaderValue $indexResponse 'X-Content-Type-Options') -eq 'nosniff') -Message 'The PWA is missing X-Content-Type-Options: nosniff.'
     Assert-Condition -Condition ((Get-HeaderValue $indexResponse 'Strict-Transport-Security') -match 'max-age=') -Message 'The PWA is missing HSTS.'
     $contentSecurityPolicy = Get-HeaderValue $indexResponse 'Content-Security-Policy'
     Assert-Condition -Condition ($contentSecurityPolicy.Contains("default-src 'self'") -and $contentSecurityPolicy.Contains("frame-ancestors 'none'") -and $contentSecurityPolicy.Contains("connect-src 'self' https://publish-01.obsidian.md")) -Message 'The PWA Content-Security-Policy is incomplete.'
 
-    foreach ($uncachedFile in @('service-worker.js', 'manifest.webmanifest', 'level-progression.json', 'magic-items.json', 'party-funds.json', 'quests.json')
-        | Where-Object { $responses.ContainsKey($_) }) {
+    $uncachedFiles = @(
+        @('service-worker.js', 'manifest.webmanifest', 'level-progression.json', 'magic-items.json', 'party-funds.json', 'quests.json') |
+            Where-Object { $responses.ContainsKey($_) }
+    )
+    foreach ($uncachedFile in $uncachedFiles) {
         $cacheControl = Get-HeaderValue $responses[$uncachedFile] 'Cache-Control'
         Assert-Condition -Condition ($cacheControl -match 'no-cache') -Message "$uncachedFile must be served with Cache-Control: no-cache."
     }
@@ -181,7 +222,7 @@ try {
         Assert-Condition -Condition ((Get-HeaderValue $questsResponse 'Cache-Control') -match 'no-store') -Message 'Quest responses must use Cache-Control: no-store.'
     }
 
-    Write-Output "PWA deployment verified: $($runtimeFiles.Count) public runtime files match, security/cache headers are valid, and anonymous session handling is safe."
+    Write-Output "PWA deployment verified: $($verificationFiles.Count) public runtime files match, security/cache headers are valid, and anonymous session handling is safe."
     if (!$RequireCurrentXpApi) {
         Write-Output 'Current-XP API readiness was not required. Add -RequireCurrentXpApi after deploying the broker update.'
     }

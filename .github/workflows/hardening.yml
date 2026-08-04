@@ -31,12 +31,37 @@ env:
   DEPENDENCY_INVENTORY_JSON: ${{ github.workspace }}\codex-scratch\rc-dependency-inventory.json
 
 jobs:
+  pwa-deployment-linux:
+    name: PWA atomic deployment on Linux
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup PHP 8.4
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+
+      - name: Test atomic PWA release activation
+        shell: pwsh
+        run: .\web-deploy\tests\deploy-pwa-files-tests.ps1
+
   full-regression:
     name: Required full regression
+    needs: pwa-deployment-linux
+    if: ${{ always() }}
     runs-on: windows-latest
     timeout-minutes: 90
 
     steps:
+      - name: Enforce Linux PWA deployment prerequisite
+        if: ${{ needs.pwa-deployment-linux.result != 'success' }}
+        shell: pwsh
+        run: throw 'Atomic PWA deployment tests did not pass on Linux.'
+
       - name: Checkout
         uses: actions/checkout@v4
         with:
@@ -73,6 +98,10 @@ jobs:
       - name: Verify PWA
         shell: pwsh
         run: .\pwa\verify-pwa.ps1
+
+      - name: Test PWA deployment transactions
+        shell: pwsh
+        run: .\web-deploy\tests\deploy-pwa-files-tests.ps1
 
       - name: Run PHP broker suites
         shell: pwsh
