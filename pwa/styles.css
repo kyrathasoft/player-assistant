@@ -1015,6 +1015,10 @@ textarea[readonly] {
     font-size: 0.76rem;
 }
 
+.translation-loading[hidden] {
+    display: none !important;
+}
+
 .spinner {
     width: 0.85rem;
     height: 0.85rem;
