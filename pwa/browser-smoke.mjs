@@ -149,6 +149,20 @@ try {
     await page.locator('#translator-output').waitFor({ state: 'visible' });
     await page.waitForFunction(() => document.querySelector('#translator-output')?.value === 'zug');
 
+    await page.locator('[data-view="search"]').click();
+    await page.locator('#campaign-search').fill('Kirkilston');
+    await page.locator('#search-results .search-result').first().waitFor({ state: 'visible' });
+
+    await page.locator('[data-view="dice"]').click();
+    await page.locator('[data-die="1d20"]').click();
+    const diceTotal = Number.parseInt(await page.locator('#dice-result strong').textContent() || '', 10);
+    if (!Number.isInteger(diceTotal) || diceTotal < 1 || diceTotal > 20) {
+        throw new Error(`Dice smoke failed: unexpected d20 total ${diceTotal}.`);
+    }
+    await page.locator('#dice-history li').first().getByText('1d20', { exact: true }).waitFor();
+
+    await page.locator('[data-view="translator"]').click();
+
     await page.waitForFunction(() => navigator.serviceWorker?.controller !== null);
     await context.setOffline(true);
     await page.reload({ waitUntil: 'domcontentloaded' });
@@ -163,7 +177,7 @@ try {
         throw new Error(`PWA page error: ${pageErrors[0].stack || pageErrors[0].message}`);
     }
 
-    console.log('PWA browser smoke passed: authentication, translation, navigation, and offline startup.');
+    console.log('PWA browser smoke passed: authentication, translation, search, dice, navigation, and offline startup.');
     await context.close();
 } finally {
     if (browser) await browser.close();

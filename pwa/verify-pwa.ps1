@@ -230,13 +230,22 @@ foreach ($questProperty in $questProperties) {
     Assert-Condition -Condition $questWikiUrlAllowed -Message "Quest '$($questProperty.Name)' has an invalid wiki URL."
 }
 
-foreach ($script in @('app.js', 'translator-worker.js', 'service-worker.js')) {
+$featureModulePaths = @(
+    'modules/translator.js',
+    'modules/search.js',
+    'modules/dice.js'
+)
+foreach ($script in @('app.js', 'translator-worker.js', 'service-worker.js') + $featureModulePaths) {
     & node --check (Join-Path $PwaRoot $script)
     Assert-Condition -Condition ($LASTEXITCODE -eq 0) -Message "JavaScript syntax check failed: $script"
 }
 
 $html = Get-Content -Raw -LiteralPath (Join-Path $PwaRoot 'index.html')
-$appScript = Get-Content -Raw -LiteralPath (Join-Path $PwaRoot 'app.js')
+$appScriptEntry = Get-Content -Raw -LiteralPath (Join-Path $PwaRoot 'app.js')
+$featureModuleScripts = @($featureModulePaths | ForEach-Object {
+    Get-Content -Raw -LiteralPath (Join-Path $PwaRoot $_)
+})
+$appScript = @($appScriptEntry) + $featureModuleScripts -join [Environment]::NewLine
 $translatorWorker = Get-Content -Raw -LiteralPath (Join-Path $PwaRoot 'translator-worker.js')
 $requestTranslationFunction = [regex]::Match(
     $appScript,
@@ -244,6 +253,7 @@ $requestTranslationFunction = [regex]::Match(
     [System.Text.RegularExpressions.RegexOptions]::Singleline).Value
 $styles = Get-Content -Raw -LiteralPath (Join-Path $PwaRoot 'styles.css')
 $serviceWorker = Get-Content -Raw -LiteralPath (Join-Path $PwaRoot 'service-worker.js')
+$deploymentTest = Get-Content -Raw -LiteralPath (Join-Path $PwaRoot 'test-deployment.ps1')
 $referencedIds = [regex]::Matches($appScript, "byId\('([^']+)'\)") | ForEach-Object { $_.Groups[1].Value } | Sort-Object -Unique
 foreach ($id in $referencedIds) {
     Assert-Condition -Condition ($html.Contains("id=`"$id`"")) -Message "app.js references a missing HTML element: $id"
@@ -309,7 +319,9 @@ Assert-Condition -Condition ($serviceWorker.Contains('networkFirstData') -and $s
 Assert-Condition -Condition ($appScript.Contains("updateViaCache: 'none'") -and $appScript.Contains('await registration.update()')) -Message 'The PWA must explicitly check for uncached service-worker updates.'
 Assert-Condition -Condition ($manifest.start_url -eq './#dashboard' -and $manifest.scope -eq './') -Message 'The manifest must keep navigation inside the deployed PWA directory.'
 Assert-Condition -Condition ($html.Contains('href="manifest.webmanifest"') -and $appScript.Contains('service-worker.js')) -Message 'The install manifest or service-worker registration is missing.'
-Assert-Condition -Condition ($html.Contains('styles.css?v=43') -and $html.Contains('src="app.js?v=59"') -and $serviceWorker.Contains("player-assistant-pwa-0.9.8-v70") -and $serviceWorker.Contains("'./styles.css?v=43'") -and $serviceWorker.Contains("'./app.js?v=59'") -and $serviceWorker.Contains("'./level-progression.json'") -and $serviceWorker.Contains("'./magic-items.json'")) -Message 'The PWA shell must use cache-busting assets and preload the progression and magic-item data.'
+Assert-Condition -Condition ($html.Contains('<script type="module" src="app.js?v=60"></script>') -and $appScriptEntry.Contains("from './modules/translator.js'") -and $appScriptEntry.Contains("from './modules/search.js'") -and $appScriptEntry.Contains("from './modules/dice.js'")) -Message 'The PWA entry point must load the translator, search, and dice feature modules.'
+Assert-Condition -Condition ($featureModulePaths.Count -eq @($featureModulePaths | Where-Object { $deploymentTest.Contains("'$_' = @('application/javascript', 'text/javascript')") }).Count) -Message 'Public deployment verification must allow every PWA feature module.'
+Assert-Condition -Condition ($html.Contains('styles.css?v=43') -and $serviceWorker.Contains("player-assistant-pwa-0.9.8-v71") -and $serviceWorker.Contains("'./styles.css?v=43'") -and $serviceWorker.Contains("'./app.js?v=60'") -and $featureModulePaths.Count -eq @($featureModulePaths | Where-Object { $serviceWorker.Contains("'./$_'") }).Count -and $serviceWorker.Contains("'./level-progression.json'") -and $serviceWorker.Contains("'./magic-items.json'")) -Message 'The PWA shell must use cache-busting assets, preload every feature module, and preload the progression and magic-item data.'
 Assert-Condition -Condition ($html.Contains('value="ghukliak"') -and $html.Contains('Goblin') -and $appScript.Contains("languageSelect?.value === 'ghukliak'") -and $translatorWorker.Contains("message.language === 'ghukliak'")) -Message 'The PWA translator must expose the Goblin/Ghukliak language in its UI and worker.'
 Assert-Condition -Condition ([System.Text.RegularExpressions.Regex]::IsMatch($styles, '\.translation-loading\[hidden\]\s*\{\s*display:\s*none\s*!important;\s*\}', [System.Text.RegularExpressions.RegexOptions]::Singleline)) -Message 'The translator loading indicator must remain hidden whenever its hidden attribute is set.'
 Assert-Condition -Condition (!$translatorWorker.Contains(".replaceAll('’', `"'`")")) -Message 'Translator normalization must preserve distinct straight- and curly-apostrophe lexicon terms.'

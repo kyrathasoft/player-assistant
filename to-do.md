@@ -31,7 +31,7 @@
 - [x] **Split the custom regression harness into discoverable domain-focused test classes.**
   - The 407-test catalog now delegates to partial application, campaign, release, shared, and translator test classes while preserving name-based filtering and failure aggregation.
   - `verify-test-harness-structure.ps1` enforces catalog uniqueness, domain file presence, and the runner/catalog boundary in PR smoke and full regression CI.
-- [ ] Modularize `pwa/app.js` by feature without introducing an unnecessary framework.
+- [x] Modularize `pwa/app.js` by feature without introducing an unnecessary framework.
 - [ ] Make schema-rich lexicon data the canonical source for desktop, PWA, and web-translator artifacts.
 - [ ] Centralize desktop, installer, PWA, and cache version metadata.
 - [x] Add formatting verification to CI and fix existing .NET formatting violations.
