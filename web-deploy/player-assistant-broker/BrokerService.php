@@ -106,6 +106,13 @@ final class BrokerService
                 $this->xpTracking->getForAccount($current['account']));
         }
 
+        if ($method === 'GET' && $route === '/v1/xp-awards') {
+            $current = $this->characterAuth->requireCurrentAccount($session);
+            return $this->response(
+                200,
+                $this->xpTracking->getAwardsForAccount($current['account']));
+        }
+
         if ($method === 'GET' && $route === '/v1/word-counts') {
             $this->characterAuth->requireCurrentAccount($session);
             return $this->response(200, $this->wordCounts->latest());

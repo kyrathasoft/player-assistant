@@ -2,15 +2,16 @@
 
 ## Security and delivery
 
-- [ ] Remove legacy XP histories from the public PWA.
-  - Delete the production `pwa/XP/` tree and stop deploying it.
-  - Remove the `/XP/` service-worker caching rule and bump the PWA cache version.
-  - Require anonymous requests for legacy XP files to return `403` or `404`.
+- [ ] Fully remove legacy XP histories from public access.
+  - [x] Production `pwa/XP/` was removed; XP histories now live outside the web root.
+  - [x] The PWA loads authorized histories through authenticated `GET /v1/xp-awards` requests.
+  - [x] Anonymous legacy XP requests return `404`, and the service worker no longer caches `/XP/` paths.
+  - [ ] Commit and push the tracked deletions, then decide whether to purge the files from the public repository's Git history.
 - [ ] Make the full regression suite a required CI gate.
   - Run all 405 desktop tests instead of only focused filters.
   - Run `pwa/verify-pwa.ps1` and the PHP broker suites.
   - Add browser-level PWA smoke tests for authentication, translation, navigation, and offline startup.
-- [ ] Replace stale hard-coded quest-count expectations in PHP broker and HTTP tests with fixture-derived expectations.
+- [x] Replace stale hard-coded quest-count expectations in PHP broker and HTTP tests with fixture-derived expectations.
 - [ ] Make PWA deployment release-atomic and self-verifying.
   - Remove newly introduced files during rollback when a later deployment step fails.
   - Verify public HTTPS hashes, headers, and API behavior before declaring deployment success.

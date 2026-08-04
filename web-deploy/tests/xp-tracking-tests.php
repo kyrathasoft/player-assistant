@@ -47,10 +47,38 @@ function xpConfiguration(): array
     ];
 }
 
+$xpTrackingReflection = new ReflectionClass(XpTrackingService::class);
+$serverProgressionEntryLimit = $xpTrackingReflection->getConstant(
+    'MAXIMUM_AWARD_PROGRESSION_ENTRIES');
+$pwaScript = file_get_contents(__DIR__ . '/../../pwa/app.js');
+xpAssert(
+    is_int($serverProgressionEntryLimit),
+    'The server XP award progression limit contract is missing.');
+xpAssert(is_string($pwaScript), 'The PWA script could not be read.');
+xpAssert(
+    preg_match(
+        '/const MAXIMUM_XP_AWARD_PROGRESSION_ENTRIES = (?<limit>\d+);/',
+        $pwaScript,
+        $pwaLimitMatch) === 1,
+    'The PWA XP award progression limit contract is missing.');
+xpAssert(
+    (int)$pwaLimitMatch['limit'] === $serverProgressionEntryLimit,
+    'The server and PWA XP award progression limits differ.');
+xpAssert(
+    str_contains(
+        $pwaScript,
+        'payload.length > MAXIMUM_XP_AWARD_PROGRESSION_ENTRIES'),
+    'The PWA does not enforce the shared XP award progression limit.');
+
 $databasePath = tempnam(sys_get_temp_dir(), 'pa-xp-test-');
 $invalidDatabasePath = tempnam(sys_get_temp_dir(), 'pa-xp-invalid-');
+$awardsRoot = sys_get_temp_dir() . '/pa-xp-private-root-' . bin2hex(random_bytes(6));
+$awardsDirectory = $awardsRoot . '/xp-awards';
 if ($databasePath === false || $invalidDatabasePath === false) {
     throw new RuntimeException('Unable to create the XP test databases.');
+}
+if (!mkdir($awardsDirectory, 0700, true) && !is_dir($awardsDirectory)) {
+    throw new RuntimeException('Unable to create the XP award limit fixture directory.');
 }
 
 try {
@@ -141,6 +169,62 @@ try {
             }
             return $progressionFixture($url) ?? $markdown;
         });
+
+    $awardEntry = [
+        'character_name' => 'Limit Hero',
+        'character_class' => 'Fighter',
+        'level_before_award' => 1,
+        'xp_award' => 1,
+        'xp_award_date' => '8.4.2026',
+        'level_after_award' => 1,
+    ];
+    $awardPath = $awardsDirectory . '/limit-xp.json';
+    file_put_contents(
+        $awardPath,
+        json_encode(
+            array_fill(0, $serverProgressionEntryLimit, $awardEntry),
+            JSON_THROW_ON_ERROR));
+    $awardService = new XpTrackingService(
+        xpDatabase(':memory:'),
+        array_replace(xpConfiguration(), [
+            'awards_directory' => $awardsDirectory,
+            'awards_root' => $awardsRoot,
+            'award_groups' => ['limit' => ['limit-xp']],
+        ]));
+    $maximumAwards = $awardService->getAwardsForAccount([
+        'role' => 'player',
+        'character_key' => 'limit',
+    ]);
+    xpAssert(
+        count($maximumAwards['progressions'][0]['entries']) === $serverProgressionEntryLimit,
+        'The server rejected the shared XP award progression entry limit.');
+    file_put_contents(
+        $awardPath,
+        json_encode(
+            array_fill(0, $serverProgressionEntryLimit + 1, $awardEntry),
+            JSON_THROW_ON_ERROR));
+    expectXpError(
+        fn() => $awardService->getAwardsForAccount([
+            'role' => 'player',
+            'character_key' => 'limit',
+        ]),
+        503,
+        'xp_awards_unavailable');
+
+    $publicRootService = new XpTrackingService(
+        xpDatabase(':memory:'),
+        array_replace(xpConfiguration(), [
+            'awards_directory' => $awardsDirectory,
+            'awards_root' => $awardsDirectory,
+            'award_groups' => ['limit' => ['limit-xp']],
+        ]));
+    expectXpError(
+        fn() => $publicRootService->getAwardsForAccount([
+            'role' => 'player',
+            'character_key' => 'limit',
+        ]),
+        503,
+        'xp_awards_unavailable');
 
     $player = $service->getForAccount([
         'role' => 'player',
@@ -271,4 +355,11 @@ try {
 } finally {
     @unlink($databasePath);
     @unlink($invalidDatabasePath);
+    if (is_dir($awardsDirectory)) {
+        foreach (glob($awardsDirectory . '/*') ?: [] as $awardFile) {
+            @unlink($awardFile);
+        }
+        @rmdir($awardsDirectory);
+    }
+    @rmdir($awardsRoot);
 }

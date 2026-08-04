@@ -33,6 +33,8 @@ try {
         throw new RuntimeException('The private broker configuration is unavailable.');
     }
     $config = require $configPath;
+    $config['xp'] = is_array($config['xp'] ?? null) ? $config['xp'] : [];
+    $config['xp']['awards_root'] = $privateDirectory;
     $questDataPathOverride = getenv('PLAYER_ASSISTANT_QUESTS_PATH');
     $questDataPath = is_string($questDataPathOverride) && $questDataPathOverride !== ''
         ? $questDataPathOverride
@@ -190,6 +192,7 @@ function isCharacterSessionRoute(string $route): bool
             '/v1/session',
             '/v1/me',
             '/v1/xp',
+            '/v1/xp-awards',
             '/v1/word-counts',
             '/v1/presence',
             '/v1/quests',

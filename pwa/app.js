@@ -10,6 +10,7 @@
     const PARTY_FUNDS_GEMSTONE_VALUE_PATTERN = /^\s*(\d+(?:\.\d+)?)\s+gp$/i;
     const MAX_SEARCH_RESULTS = 40;
     const MAX_TRANSLATOR_WORDS = 5000;
+    const MAXIMUM_XP_AWARD_PROGRESSION_ENTRIES = 1000;
     const textEncoder = new TextEncoder();
     const DUNGEON_MASTER_HERO = Object.freeze({
         name: 'Dungeon Master',
@@ -55,20 +56,7 @@
         completed: 'Completed',
         withdrawn: 'Withdrawn'
     });
-    const XP_AWARDS_PLAYER_GROUPS = Object.freeze({
-        kelpie: Object.freeze(['kelpie-xp.json', 'borca-xp.json']),
-        maximilian: Object.freeze(['maximilian-xp.json', 'corba-xp.json']),
-        jelb: Object.freeze(['jelb-xp.json', 'arilia-xp.json']),
-        geoffroy: Object.freeze(['geoffroy-xp.json']),
-        narinza: Object.freeze(['narinza-xp.json']),
-        neria: Object.freeze(['neria-xp.json']),
-        shade: Object.freeze(['shade-xp.json']),
-        urvan: Object.freeze(['urvan-xp.json'])
-    });
-    const canViewXpAwards = (account) => account !== null
-        && (account.role === 'dm'
-            || Object.hasOwn(XP_AWARDS_PLAYER_GROUPS,
-                String(account.character_name || '').trim().toLocaleLowerCase('en-US')));
+    const canViewXpAwards = (account) => account !== null;
 
     const byId = (id) => document.getElementById(id);
     const views = new Map(
@@ -463,7 +451,9 @@
     };
 
     const validateXpAwardsEntries = (payload) => {
-        if (!Array.isArray(payload) || payload.length === 0 || payload.length > 200) {
+        if (!Array.isArray(payload)
+            || payload.length === 0
+            || payload.length > MAXIMUM_XP_AWARD_PROGRESSION_ENTRIES) {
             throw new Error('An XP progression file was invalid.');
         }
         const validEntry = (entry) => entry
@@ -490,6 +480,28 @@
         return payload;
     };
 
+    const validateXpAwardsSnapshot = (payload) => {
+        if (!payload
+            || payload.schema_version !== 1
+            || !['character', 'party'].includes(payload.scope)
+            || !Array.isArray(payload.progressions)
+            || payload.progressions.length === 0
+            || payload.progressions.length > 200) {
+            throw new Error('The XP Awards response was invalid.');
+        }
+        return payload.progressions.map((progression) => {
+            if (!progression
+                || typeof progression.character_key !== 'string'
+                || !/^[a-z0-9]+(?:-[a-z0-9]+)*$/u.test(progression.character_key)) {
+                throw new Error('The XP Awards response was invalid.');
+            }
+            return {
+                characterKey: progression.character_key,
+                entries: validateXpAwardsEntries(progression.entries)
+            };
+        });
+    };
+
     const loadXpAwards = async (force = false) => {
         if (xpAwardsLoading !== null && !force) return xpAwardsLoading;
         const requestId = ++xpAwardsRequestId;
@@ -498,29 +510,10 @@
         renderXpAwardsUi();
         const account = authenticatedAccount;
         if (account === null) return;
-        const accountName = String(account.character_name || '').trim().toLocaleLowerCase('en-US');
         xpAwardsLoading = (async () => {
             try {
-                let fileNames = XP_AWARDS_PLAYER_GROUPS[accountName];
-                if (account.role === 'dm') {
-                    const manifestResponse = await fetch('XP/index.json', { cache: 'no-store' });
-                    if (!manifestResponse.ok) throw new Error('The XP progression manifest is unavailable.');
-                    const manifest = await manifestResponse.json();
-                    if (!Array.isArray(manifest)
-                        || !manifest.every((fileName) => typeof fileName === 'string'
-                            && /^[a-z0-9-]+-xp\.json$/u.test(fileName))) {
-                        throw new Error('The XP progression manifest was invalid.');
-                    }
-                    fileNames = manifest;
-                }
-                if (!Array.isArray(fileNames) || fileNames.length === 0) {
-                    throw new Error('XP Awards are not configured for this account.');
-                }
-                const progressions = await Promise.all(fileNames.map(async (fileName) => {
-                    const response = await fetch(`XP/${fileName}`, { cache: 'no-store' });
-                    if (!response.ok) throw new Error(`Unable to load ${fileName}.`);
-                    return { fileName, entries: validateXpAwardsEntries(await response.json()) };
-                }));
+                const progressions = validateXpAwardsSnapshot(
+                    await requestAuthenticationApi('/xp-awards'));
                 if (requestId !== xpAwardsRequestId || authenticatedAccount?.id !== account.id) return;
                 authenticatedXpAwardsSnapshot = progressions;
             } catch (error) {

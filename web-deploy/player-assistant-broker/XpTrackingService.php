@@ -6,6 +6,7 @@ final class XpTrackingService
 {
     private const CACHE_KEY = 'current';
     private const MAXIMUM_CHARACTERS = 200;
+    private const MAXIMUM_AWARD_PROGRESSION_ENTRIES = 1000;
     private const CHARACTER_KEY_ALIASES = [
         'max' => 'maximilian',
     ];
@@ -27,6 +28,9 @@ final class XpTrackingService
             'maximum_response_bytes' => 524288,
             'cache_ttl_seconds' => 300,
             'maximum_stale_seconds' => 86400,
+            'awards_directory' => '',
+            'awards_root' => '',
+            'award_groups' => [],
         ], $xpConfig);
         if ((string)$this->xpConfig['character_source_url'] === ''
             && (string)$this->xpConfig['source_url'] !== '') {
@@ -91,6 +95,189 @@ final class XpTrackingService
     public function isConfigured(): bool
     {
         return (string)$this->xpConfig['source_url'] !== '';
+    }
+
+    public function getAwardsForAccount(array $account): array
+    {
+        $role = (string)($account['role'] ?? '');
+        $characterKey = (string)($account['character_key'] ?? '');
+        if (!in_array($role, ['player', 'dm'], true)
+            || preg_match('/^[a-z0-9][a-z0-9._:-]{0,99}$/', $characterKey) !== 1) {
+            throw new BrokerHttpException(
+                403,
+                'xp_awards_not_authorized',
+                'XP award access is not authorized for this account.');
+        }
+
+        $groups = $this->validatedAwardGroups();
+        if ($role === 'dm') {
+            $progressionKeys = array_values(array_unique(array_merge(...array_values($groups))));
+            $scope = 'party';
+        } else {
+            $progressionKeys = $groups[$characterKey] ?? [];
+            $scope = 'character';
+        }
+        if ($progressionKeys === []) {
+            throw new BrokerHttpException(
+                403,
+                'xp_awards_not_authorized',
+                'No XP award progression is authorized for this account.');
+        }
+
+        return [
+            'schema_version' => 1,
+            'scope' => $scope,
+            'progressions' => array_map(
+                fn(string $progressionKey): array => [
+                    'character_key' => $progressionKey,
+                    'entries' => $this->loadAwardProgression($progressionKey),
+                ],
+                $progressionKeys),
+        ];
+    }
+
+    private function validatedAwardGroups(): array
+    {
+        $groups = $this->xpConfig['award_groups'];
+        if (!is_array($groups) || $groups === []) {
+            throw new BrokerHttpException(
+                503,
+                'xp_awards_unavailable',
+                'XP award progressions are not configured on the server.');
+        }
+
+        $validated = [];
+        foreach ($groups as $characterKey => $progressionKeys) {
+            if (!is_string($characterKey)
+                || preg_match('/^[a-z0-9][a-z0-9._:-]{0,99}$/', $characterKey) !== 1
+                || !is_array($progressionKeys)
+                || $progressionKeys === []) {
+                throw new BrokerHttpException(
+                    503,
+                    'xp_awards_unavailable',
+                    'The XP award authorization configuration is invalid.');
+            }
+            $keys = [];
+            foreach ($progressionKeys as $progressionKey) {
+                if (!is_string($progressionKey)
+                    || preg_match('/^[a-z0-9]+(?:-[a-z0-9]+)*$/', $progressionKey) !== 1
+                    || in_array($progressionKey, $keys, true)) {
+                    throw new BrokerHttpException(
+                        503,
+                        'xp_awards_unavailable',
+                        'The XP award authorization configuration is invalid.');
+                }
+                $keys[] = $progressionKey;
+            }
+            $validated[$characterKey] = $keys;
+        }
+        return $validated;
+    }
+
+    private function loadAwardProgression(string $progressionKey): array
+    {
+        $directory = realpath((string)$this->xpConfig['awards_directory']);
+        $root = realpath((string)$this->xpConfig['awards_root']);
+        if ($directory === false
+            || $root === false
+            || !is_dir($directory)
+            || !is_dir($root)
+            || $directory === rtrim($root, '/\\')
+            || !str_starts_with(
+                $directory . DIRECTORY_SEPARATOR,
+                rtrim($root, '/\\') . DIRECTORY_SEPARATOR)) {
+            throw new BrokerHttpException(
+                503,
+                'xp_awards_unavailable',
+                'XP award progressions are unavailable.');
+        }
+        $path = rtrim($directory, '/\\') . DIRECTORY_SEPARATOR . $progressionKey . '.json';
+        $resolvedPath = realpath($path);
+        if ($resolvedPath === false
+            || !is_file($resolvedPath)
+            || !str_starts_with(
+                $resolvedPath,
+                rtrim($directory, '/\\') . DIRECTORY_SEPARATOR)) {
+            throw new BrokerHttpException(
+                503,
+                'xp_awards_unavailable',
+                'An XP award progression is unavailable.');
+        }
+        $size = filesize($resolvedPath);
+        if (!is_int($size) || $size < 2 || $size > 1048576) {
+            throw new BrokerHttpException(
+                503,
+                'xp_awards_unavailable',
+                'An XP award progression is invalid.');
+        }
+        $contents = file_get_contents($resolvedPath);
+        if (!is_string($contents)) {
+            throw new BrokerHttpException(
+                503,
+                'xp_awards_unavailable',
+                'An XP award progression could not be read.');
+        }
+        try {
+            $entries = json_decode($contents, true, 16, JSON_THROW_ON_ERROR);
+        } catch (JsonException $exception) {
+            throw new BrokerHttpException(
+                503,
+                'xp_awards_unavailable',
+                'An XP award progression is invalid.',
+                $exception);
+        }
+        if (!is_array($entries)
+            || $entries === []
+            || count($entries) > self::MAXIMUM_AWARD_PROGRESSION_ENTRIES) {
+            throw new BrokerHttpException(
+                503,
+                'xp_awards_unavailable',
+                'An XP award progression is invalid.');
+        }
+
+        $expectedCharacter = null;
+        foreach ($entries as $entry) {
+            if (!is_array($entry)
+                || array_keys($entry) !== [
+                    'character_name',
+                    'character_class',
+                    'level_before_award',
+                    'xp_award',
+                    'xp_award_date',
+                    'level_after_award',
+                ]
+                || !$this->validAwardText($entry['character_name'], 100)
+                || !$this->validAwardText($entry['character_class'], 100)
+                || !$this->validAwardText($entry['xp_award_date'], 200)
+                || !is_int($entry['level_before_award'])
+                || $entry['level_before_award'] < 0
+                || !is_int($entry['level_after_award'])
+                || $entry['level_after_award'] < 0
+                || !is_int($entry['xp_award'])
+                || $entry['xp_award'] < 0) {
+                throw new BrokerHttpException(
+                    503,
+                    'xp_awards_unavailable',
+                    'An XP award progression is invalid.');
+            }
+            $expectedCharacter ??= $entry['character_name'];
+            if (!hash_equals($expectedCharacter, $entry['character_name'])) {
+                throw new BrokerHttpException(
+                    503,
+                    'xp_awards_unavailable',
+                    'An XP award progression contains multiple characters.');
+            }
+        }
+        return $entries;
+    }
+
+    private function validAwardText(mixed $value, int $maximumLength): bool
+    {
+        return is_string($value)
+            && $value !== ''
+            && strlen($value) <= $maximumLength
+            && preg_match('//u', $value) === 1
+            && preg_match('/[\x00-\x1F\x7F]/u', $value) !== 1;
     }
 
     private function loadCurrentSnapshot(): array

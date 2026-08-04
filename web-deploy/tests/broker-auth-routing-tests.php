@@ -25,6 +25,7 @@ $wordCountStatusPath = tempnam(sys_get_temp_dir(), 'pa-word-count-status-');
 $wordCountSigningKeypair = sodium_crypto_sign_keypair();
 $wordCountSigningSecretKey = sodium_crypto_sign_secretkey($wordCountSigningKeypair);
 $wordCountSigningPublicKey = sodium_crypto_sign_publickey($wordCountSigningKeypair);
+$xpAwardsDirectory = sys_get_temp_dir() . '/pa-xp-awards-' . bin2hex(random_bytes(6));
 if ($databasePath === false) {
     throw new RuntimeException('Unable to create the broker routing test database.');
 }
@@ -34,6 +35,39 @@ if ($wordCountStatusPath === false) {
 @unlink($wordCountStatusPath);
 
 try {
+    if (!mkdir($xpAwardsDirectory, 0700, true) && !is_dir($xpAwardsDirectory)) {
+        throw new RuntimeException('Unable to create the XP awards fixture directory.');
+    }
+    file_put_contents(
+        $xpAwardsDirectory . '/routing-xp.json',
+        json_encode([[
+            'character_name' => 'Routing Hero',
+            'character_class' => 'Ranger',
+            'level_before_award' => 3,
+            'xp_award' => 500,
+            'xp_award_date' => '7.30.2026',
+            'level_after_award' => 4,
+        ]], JSON_THROW_ON_ERROR));
+    file_put_contents(
+        $xpAwardsDirectory . '/companion-xp.json',
+        json_encode([[
+            'character_name' => 'Companion Hero',
+            'character_class' => 'Cleric',
+            'level_before_award' => 2,
+            'xp_award' => 250,
+            'xp_award_date' => '7.30.2026',
+            'level_after_award' => 2,
+        ]], JSON_THROW_ON_ERROR));
+    $questDataPath = __DIR__ . '/../../pwa/quests.json';
+    $questFixture = json_decode(
+        (string)file_get_contents($questDataPath),
+        true,
+        32,
+        JSON_THROW_ON_ERROR);
+    $questFixtureCount = count($questFixture['quests'] ?? []);
+    if ($questFixtureCount === 0) {
+        throw new RuntimeException('The quest routing fixture is empty.');
+    }
     $config = [
         'api' => [
             'database_path' => $databasePath,
@@ -63,6 +97,11 @@ try {
             'maximum_response_bytes' => 65536,
             'cache_ttl_seconds' => 60,
             'maximum_stale_seconds' => 600,
+            'awards_directory' => $xpAwardsDirectory,
+            'awards_root' => dirname($xpAwardsDirectory),
+            'award_groups' => [
+                'routing' => ['routing-xp', 'companion-xp'],
+            ],
         ],
         'word_counts' => [
             'source_url' => 'https://publish.obsidian.md/example/word-counts-latest.json',
@@ -152,7 +191,7 @@ try {
         new RpolClient($config['rpol']),
         $wordCountFetcher,
         $wordCountFetcher,
-        __DIR__ . '/../../pwa/quests.json');
+        $questDataPath);
     $session = [];
     $adminHeaders = ['admin-key' => $config['api']['admin_key']];
     if (!mkdir($snapshotDirectory, 0700, true) && !is_dir($snapshotDirectory)) {
@@ -213,6 +252,15 @@ try {
         routingAssert(
             $exception->status === 401 && $exception->errorName === 'authentication_required',
             'The protected XP route failed with the wrong unauthenticated response.');
+    }
+
+    try {
+        $broker->dispatch('GET', '/v1/xp-awards', [], [], [], '192.0.2.30', $session);
+        throw new RuntimeException('The protected XP awards route accepted an unauthenticated request.');
+    } catch (BrokerHttpException $exception) {
+        routingAssert(
+            $exception->status === 401 && $exception->errorName === 'authentication_required',
+            'The protected XP awards route failed with the wrong unauthenticated response.');
     }
 
     try {
@@ -358,6 +406,30 @@ try {
     routingAssert(!isset($xp['body']['characters']), 'The player XP response exposed party totals.');
     routingAssert(!isset($xp['body']['source_url']), 'The player XP response exposed the configured source URL.');
 
+    $xpAwards = $broker->dispatch(
+        'GET',
+        '/v1/xp-awards',
+        [],
+        [],
+        [],
+        '192.0.2.30',
+        $session);
+    routingAssert($xpAwards['status'] === 200, 'The protected XP awards route failed.');
+    routingAssert(
+        $xpAwards['body']['scope'] === 'character'
+            && count($xpAwards['body']['progressions']) === 2,
+        'The player XP awards response did not return the authorized progression group.');
+    routingAssert(
+        array_column($xpAwards['body']['progressions'], 'character_key') === [
+            'routing-xp',
+            'companion-xp',
+        ],
+        'The player XP awards response returned unauthorized progression data.');
+    routingAssert(
+        !isset($xpAwards['body']['awards_directory'])
+            && !isset($xpAwards['body']['file_name']),
+        'The player XP awards response exposed private storage details.');
+
     $wordCounts = $broker->dispatch(
         'GET',
         '/v1/word-counts',
@@ -412,21 +484,26 @@ try {
         'cleanse-blightstone-pit' => ['available', 'party-only'],
         'trace-vanished-elven-holds' => ['available', 'individual-or-party'],
     ];
+    $questsById = [];
+    foreach ($quests['body']['quests'] as $quest) {
+        $questsById[$quest['id']] = $quest;
+    }
     routingAssert(
         $quests['body']['schema_version'] === 2
-            && count($quests['body']['quests']) === count($expectedQuestStatuses),
+            && count($questsById) >= count($expectedQuestStatuses),
         'The quest route did not return the expected unlocked quests.');
     routingAssert(
-        array_column($quests['body']['quests'], 'id') === array_keys($expectedQuestStatuses),
-        'The quest route returned quests in the wrong display order.');
-    foreach ($quests['body']['quests'] as $quest) {
-        $expectedStatus = $expectedQuestStatuses[$quest['id']] ?? null;
+        array_diff(array_keys($expectedQuestStatuses), array_keys($questsById)) === [],
+        'The quest route omitted a required workflow fixture.');
+    foreach ($expectedQuestStatuses as $questId => $expectedStatus) {
+        $quest = $questsById[$questId];
         routingAssert(
-            is_array($expectedStatus)
-                && $quest['state'] === $expectedStatus[0]
+            $quest['state'] === $expectedStatus[0]
                 && $quest['visibility'] === $expectedStatus[1]
                 && $quest['request_status'] === null,
             'A configured quest returned the wrong status tags.');
+    }
+    foreach ($quests['body']['quests'] as $quest) {
         routingAssert(
             !array_key_exists('gated-by', $quest)
                 && !array_key_exists('gated_by', $quest)
@@ -439,6 +516,7 @@ try {
             'individual-only',
             'party-only',
             'individual-or-party',
+            'gated',
             'available',
             'active',
             'available (abandoned)',
@@ -558,6 +636,18 @@ try {
         'origin' => 'https://example.test',
         'csrf-token' => $dungeonMasterLogin['body']['csrf_token'],
     ];
+    $dungeonMasterXpAwards = $broker->dispatch(
+        'GET',
+        '/v1/xp-awards',
+        [],
+        [],
+        [],
+        '192.0.2.31',
+        $dungeonMasterSession);
+    routingAssert(
+        $dungeonMasterXpAwards['body']['scope'] === 'party'
+            && count($dungeonMasterXpAwards['body']['progressions']) === 2,
+        'The Dungeon Master did not receive every configured XP award progression.');
     $secondPlayerSession = [];
     $secondPlayerLogin = $broker->dispatch(
         'POST',
@@ -574,6 +664,21 @@ try {
         'origin' => 'https://example.test',
         'csrf-token' => $secondPlayerLogin['body']['csrf_token'],
     ];
+    try {
+        $broker->dispatch(
+            'GET',
+            '/v1/xp-awards',
+            [],
+            [],
+            [],
+            '192.0.2.32',
+            $secondPlayerSession);
+        throw new RuntimeException('An unconfigured player received XP award data.');
+    } catch (BrokerHttpException $exception) {
+        routingAssert(
+            $exception->status === 403 && $exception->errorName === 'xp_awards_not_authorized',
+            'An unconfigured player received the wrong XP award denial response.');
+    }
 
     $messageForDungeonMaster = $broker->dispatch(
         'POST',
@@ -802,7 +907,7 @@ try {
         '192.0.2.31',
         $dungeonMasterSession);
     routingAssert(
-        count($dungeonMasterQuests['body']['quests']) === 14
+        count($dungeonMasterQuests['body']['quests']) === $questFixtureCount
             && in_array('map-kharaz-ankor-entrance', array_column($dungeonMasterQuests['body']['quests'], 'id'), true)
             && in_array('keep-cult-from-valashinaz', array_column($dungeonMasterQuests['body']['quests'], 'id'), true)
             && count($dungeonMasterQuests['body']['pending_requests']) === 1
@@ -990,5 +1095,11 @@ try {
             @unlink($snapshotFile);
         }
         @rmdir($snapshotDirectory);
+    }
+    if (is_dir($xpAwardsDirectory)) {
+        foreach (glob($xpAwardsDirectory . '/*') ?: [] as $xpAwardsFile) {
+            @unlink($xpAwardsFile);
+        }
+        @rmdir($xpAwardsDirectory);
     }
 }
