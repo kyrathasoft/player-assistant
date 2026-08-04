@@ -288,6 +288,8 @@ var tests = new (string Name, Action Test)[]
     ("elven lexicon validator accepts reviewed rooted additions", ElvenLexiconValidatorAcceptsReviewedRootedAdditions),
     ("elven lexicon validator rejects unsupported additions", ElvenLexiconValidatorRejectsUnsupportedAdditions),
     ("elven lexicon validator preserves Sindarin preference", ElvenLexiconValidatorPreservesSindarinPreference),
+    ("translator controller uses injected backend", TranslatorControllerUsesInjectedBackend),
+    ("translator view delegates selection to injected controller", TranslatorViewDelegatesSelectionToInjectedController),
     ("translator view toggles direction without web links", TranslatorViewTogglesDirectionWithoutWebLinks),
     ("translator view supports Elven mode", TranslatorViewSupportsElvenMode),
     ("translator view supports Ghukliak mode", TranslatorViewSupportsGhukliakMode),
@@ -6690,6 +6692,49 @@ static void TranslatorViewSupportsGhukliakMode()
     }
 }
 
+static void TranslatorControllerUsesInjectedBackend()
+{
+    var backend = new TestTranslatorBackend();
+    var controller = new TranslatorController(backend);
+
+    controller.SelectTarget(TranslatorTargetLanguage.Elven);
+
+    AssertEqual(TranslatorTargetLanguage.Elven, controller.TargetLanguage, "controller should retain the selected target language");
+    AssertEqual("Elven", controller.TargetName, "controller should expose the selected target name");
+    AssertEqual("elvish", controller.ExportLanguageToken, "controller should expose the selected export token");
+    AssertTrue(controller.IsReady, "controller should obtain readiness from the injected backend");
+    AssertEqual(
+        "translated:Elven:True:hello",
+        controller.Translate("hello", targetToEnglish: true),
+        "controller should route translation through the injected backend");
+    AssertEqual(
+        37,
+        controller.StartPreloadingAsync().GetAwaiter().GetResult(),
+        "controller should route preload requests through the injected backend");
+    AssertEqual(
+        42,
+        controller.WaitUntilReadyAsync(CancellationToken.None).GetAwaiter().GetResult().EnglishTermCount,
+        "controller should route readiness waits through the injected backend");
+}
+
+static void TranslatorViewDelegatesSelectionToInjectedController()
+{
+    RunOnStaThread(() =>
+    {
+        var controller = new TranslatorController(new TestTranslatorBackend());
+        using var form = new Form1(suppressHeroImagesForThisRun: true, controller);
+        var menuItem = (ToolStripMenuItem)(GetPrivateField(form, "ghukliakTranslatorToolStripMenuItem")
+            ?? throw new InvalidOperationException("ghukliakTranslatorToolStripMenuItem was null."));
+
+        menuItem.PerformClick();
+
+        AssertEqual(
+            TranslatorTargetLanguage.Ghukliak,
+            controller.TargetLanguage,
+            "Form1 should delegate translator selection to its injected controller");
+    });
+}
+
 static void ElvenTranslatorFinalizesEveryEnglishTerm()
 {
     var terms = ElvenTranslatorUtility.GetEnglishTerms();
@@ -11727,12 +11772,18 @@ static void SetPrivateField(object instance, string fieldName, object? value)
 static object? GetPrivateField(object instance, string fieldName)
 {
     var field = instance.GetType().GetField(fieldName, BindingFlags.Instance | BindingFlags.NonPublic);
-    if (field is null)
+    if (field is not null)
     {
-        throw new InvalidOperationException($"Unable to find field '{fieldName}'.");
+        return field.GetValue(instance);
     }
 
-    return field.GetValue(instance);
+    var property = instance.GetType().GetProperty(fieldName, BindingFlags.Instance | BindingFlags.NonPublic);
+    if (property is not null)
+    {
+        return property.GetValue(instance);
+    }
+
+    throw new InvalidOperationException($"Unable to find field or property '{fieldName}'.");
 }
 
 static void SetStaticField(Type type, string fieldName, object? value)
@@ -12983,6 +13034,33 @@ internal sealed class LoopbackHttpServer : IDisposable
     }
 
     internal sealed record RequestObservation(int RequestCount, string LastRequestPath);
+}
+
+internal sealed class TestTranslatorBackend : ITranslatorBackend
+{
+    public bool IsReady(TranslatorTargetLanguage targetLanguage) =>
+        targetLanguage == TranslatorTargetLanguage.Elven;
+
+    public Task<OrcishTranslatorWarmupResult> WaitUntilReadyAsync(
+        TranslatorTargetLanguage targetLanguage,
+        CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        return Task.FromResult(new OrcishTranslatorWarmupResult(42, TimeSpan.Zero));
+    }
+
+    public Task<int> StartPreloadingAsync(TranslatorTargetLanguage targetLanguage)
+    {
+        return Task.FromResult(37);
+    }
+
+    public string Translate(
+        string input,
+        TranslatorTargetLanguage targetLanguage,
+        bool targetToEnglish)
+    {
+        return $"translated:{targetLanguage}:{targetToEnglish}:{input}";
+    }
 }
 
 internal sealed class InMemoryWindowsCredentialStoreBackend : IWindowsCredentialStoreBackend
