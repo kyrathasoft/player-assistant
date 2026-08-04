@@ -8228,7 +8228,7 @@ static void KeywordSearchUppercasesEncryptedIndexResultsWithoutChangingLaunchUrl
                         "https://publish.obsidian.md/scarlethorizons/NPCs/Nimba+Armstrong",
                         launchUrl?.ToString() ?? string.Empty,
                         "uppercase display item should retain the original launch URL");
-            }));
+                }));
     });
 }
 

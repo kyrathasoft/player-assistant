@@ -67,6 +67,10 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Verify repository hygiene
+        shell: pwsh
+        run: .\verify-repository-hygiene.ps1
+
       - name: Setup .NET 10 SDK
         uses: actions/setup-dotnet@v4
         with:
@@ -129,6 +133,10 @@ jobs:
       - name: Build Release test harness
         shell: pwsh
         run: dotnet build .\PlayerAssistant.Tests\PlayerAssistant.Tests.csproj --configuration Release --nologo -p:UseSharedCompilation=false
+
+      - name: Verify .NET formatting
+        shell: pwsh
+        run: dotnet format .\player-assistant.slnx --verify-no-changes
 
 
       - name: Seed CI local sidecars
