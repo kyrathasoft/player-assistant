@@ -12,9 +12,9 @@
   - [x] Run `pwa/verify-pwa.ps1` and the PHP broker suites.
   - [x] Add browser-level PWA smoke tests for authentication, translation, navigation, and offline startup.
 - [x] Replace stale hard-coded quest-count expectations in PHP broker and HTTP tests with fixture-derived expectations.
-- [ ] Make PWA deployment release-atomic and self-verifying.
-  - Remove newly introduced files during rollback when a later deployment step fails.
-  - Verify public HTTPS hashes, headers, and API behavior before declaring deployment success.
+- [x] Make PWA deployment release-atomic and self-verifying.
+  - [x] Remove newly introduced files during rollback when a later deployment step fails.
+  - [x] Verify public HTTPS hashes, headers, and API behavior before declaring deployment success.
 - [ ] Add broker database recovery and observability operations.
   - Schedule consistent `broker.sqlite` backups and off-host retention.
   - Run regular `PRAGMA integrity_check` checks and test restoration.
@@ -23,7 +23,7 @@
 - [ ] Harden the release supply chain.
   - Pin GitHub Actions and installer dependencies to immutable versions or hashes.
   - Enable NuGet locked restore and dependency scanning.
-  - Move generated recovery archives out of the tracked source tree.
+  - [x] Move generated recovery archives out of the tracked source tree.
 
 ## Architecture and maintainability
 

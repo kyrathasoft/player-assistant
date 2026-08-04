@@ -141,6 +141,9 @@ try {
     Assert-Condition -Condition ($sessionPayload.authenticated -eq $false) -Message 'An anonymous deployment test unexpectedly received an authenticated session.'
     Assert-Condition -Condition ((Get-HeaderValue $sessionResponse 'Cache-Control') -match 'no-store') -Message 'Session-status responses must use Cache-Control: no-store.'
 
+    $legacyXpResponse = $client.GetAsync([uri]::new($BaseUri, 'XP/index.json')).GetAwaiter().GetResult()
+    Assert-Condition -Condition (([int]$legacyXpResponse.StatusCode -eq 403) -or ([int]$legacyXpResponse.StatusCode -eq 404)) -Message 'Legacy public XP paths must return HTTP 403 or 404.'
+
     if ($RequireCurrentXpApi) {
         $healthResponse = $client.GetAsync([uri]::new($apiBaseUri, 'health')).GetAwaiter().GetResult()
         $healthPayload = $healthResponse.Content.ReadAsStringAsync().GetAwaiter().GetResult() | ConvertFrom-Json
