@@ -2441,7 +2441,9 @@
     };
 
     const updateTranslatorLabels = () => {
-        const language = languageSelect?.value === 'elvish' ? 'Elvish' : 'Orcish';
+        const language = languageSelect?.value === 'elvish'
+            ? 'Elvish'
+            : languageSelect?.value === 'ghukliak' ? 'Goblin (Ghukliak)' : 'Orcish';
         const reverse = reverseToggle?.checked === true;
         const reverseLabel = byId('reverse-label');
         const inputLabel = byId('translator-input-label');
@@ -2480,6 +2482,7 @@
         }
 
         window.clearTimeout(translatorDebounce);
+        const id = ++translatorRequestId;
         const source = input.value;
         updateTranslationCounts();
         if (source.trim().length === 0) {
@@ -2493,6 +2496,7 @@
         const sourceWordCount = countWords(source);
         if (sourceWordCount > MAX_TRANSLATOR_WORDS) {
             output.value = `Please limit translation input to ${MAX_TRANSLATOR_WORDS.toLocaleString()} words.`;
+            setTranslationLoading(false);
             updateExportState();
             updateTranslationCounts();
             return;
@@ -2500,13 +2504,14 @@
 
         const delay = event?.inputType === 'insertFromPaste' || source.length > 1200 ? 0 : 25;
         translatorDebounce = window.setTimeout(() => {
-            const id = ++translatorRequestId;
             setTranslationLoading(true);
             if (worker) {
                 worker.postMessage({
                     type: 'translate',
                     id,
-                    language: languageSelect?.value === 'elvish' ? 'elvish' : 'orcish',
+                    language: languageSelect?.value === 'elvish'
+                        ? 'elvish'
+                        : languageSelect?.value === 'ghukliak' ? 'ghukliak' : 'orcish',
                     reverse: reverseToggle?.checked === true,
                     text: source
                 });
@@ -2524,9 +2529,6 @@
             const status = byId('lexicon-status');
             if (status) {
                 status.lastElementChild.textContent = message.message;
-            }
-            if (message.loading) {
-                setTranslationLoading(true, message.message);
             }
             return;
         }
@@ -2568,7 +2570,9 @@
         if (!(input instanceof HTMLTextAreaElement) || !(output instanceof HTMLTextAreaElement)) {
             return;
         }
-        const languageToken = languageSelect?.value === 'elvish' ? 'elvish' : 'orcish';
+        const languageToken = languageSelect?.value === 'elvish'
+            ? 'elvish'
+            : languageSelect?.value === 'ghukliak' ? 'ghukliak' : 'orcish';
         const sourceBytes = textEncoder.encode(input.value).length;
         const outputBytes = textEncoder.encode(output.value).length;
         const filename = `english-${sourceBytes}-bytes-to-${languageToken}-${outputBytes}-bytes.txt`;

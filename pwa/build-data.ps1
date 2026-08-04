@@ -28,8 +28,9 @@ function Write-CompactJson {
 function Get-MaxPhraseWords {
     param([Parameter(Mandatory = $true)][System.Collections.Generic.Dictionary[string,string]]$Terms)
     $maximum = 1
-    foreach ($term in $Terms.Keys) {
-        $count = @($term -split '\s+' | Where-Object { $_.Length -gt 0 }).Count
+    foreach ($term in $Terms.get_Keys()) {
+        $words = ($term -split '\s+') | Where-Object { $_.Length -gt 0 }
+        $count = @($words).Count
         if ($count -gt $maximum) {
             $maximum = $count
         }
@@ -147,6 +148,33 @@ $elvishPayload = [ordered]@{
 }
 Write-CompactJson -Value $elvishPayload -Path (Join-Path $dataDirectory 'elvish.json')
 
+$ghukliakSource = Read-Json -Path (Join-Path $RepositoryRoot 'web-translator\ghukliak-lexicon.json')
+$ghukliakCoverage = Read-Json -Path (Join-Path $RepositoryRoot 'web-translator\ghukliak-complete-coverage.json')
+$ghukliakTerms = [System.Collections.Generic.Dictionary[string,string]]::new([System.StringComparer]::OrdinalIgnoreCase)
+foreach ($property in $ghukliakSource.terms.PSObject.Properties) {
+    $candidates = @($property.Value)
+    if ($candidates.Count -gt 0 -and @($candidates[0]).Count -gt 0) {
+        Add-TermIfMissing -Dictionary $ghukliakTerms -English $property.Name -Translation ([string]$candidates[0][0])
+    }
+}
+
+foreach ($entry in @($ghukliakCoverage.entries)) {
+    if (@($entry).Count -lt 2) {
+        throw 'A complete-coverage Ghukliak entry is malformed.'
+    }
+    Add-TermIfMissing -Dictionary $ghukliakTerms -English ([string]$entry[0]) -Translation ([string]$entry[1])
+}
+
+$ghukliakPayload = [ordered]@{
+    schemaVersion = 1
+    language = 'Ghukliak'
+    source = 'IssendaCampaign Meta/Ghukliak (Goblin Tongue).md + deterministic complete coverage'
+    entryCount = $ghukliakTerms.get_Count()
+    maxPhraseWords = Get-MaxPhraseWords -Terms $ghukliakTerms
+    terms = $ghukliakTerms
+}
+Write-CompactJson -Value $ghukliakPayload -Path (Join-Path $dataDirectory 'ghukliak.json')
+
 $campaignSearchDestination = Join-Path $PSScriptRoot 'campaign-search.json'
 if ($RefreshCampaignSearch) {
     & (Join-Path $PSScriptRoot 'refresh-campaign-search.ps1') -OutputPath $campaignSearchDestination
@@ -181,4 +209,4 @@ finally {
 }
 Copy-Item -LiteralPath $dragonPath -Destination (Join-Path $iconDirectory 'dragon-mark.png') -Force
 
-Write-Output "PWA data generated: $($orcishTerms.get_Count()) Orcish terms, $($elvishTerms.get_Count()) Elvish terms, $(@($heroData.heroes).Count) player tokens and the Dungeon Master token."
+Write-Output "PWA data generated: $($orcishTerms.get_Count()) Orcish terms, $($elvishTerms.get_Count()) Elvish terms, $($ghukliakTerms.get_Count()) Ghukliak terms, $(@($heroData.heroes).Count) player tokens and the Dungeon Master token."

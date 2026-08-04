@@ -44,6 +44,7 @@ namespace PlayerAssistant
             translatorToolStripMenuItem = new ToolStripMenuItem();
             orcishTranslatorToolStripMenuItem = new ToolStripMenuItem();
             elvenTranslatorToolStripMenuItem = new ToolStripMenuItem();
+            ghukliakTranslatorToolStripMenuItem = new ToolStripMenuItem();
             searchToolStripMenuItem = new ToolStripMenuItem();
             settingsToolStripMenuItem = new ToolStripMenuItem();
             skipHeroImageParadeAtStartupToolStripMenuItem = new ToolStripMenuItem();
@@ -170,7 +171,7 @@ namespace PlayerAssistant
             //
             // translatorToolStripMenuItem
             //
-            translatorToolStripMenuItem.DropDownItems.AddRange(new ToolStripItem[] { orcishTranslatorToolStripMenuItem, elvenTranslatorToolStripMenuItem });
+            translatorToolStripMenuItem.DropDownItems.AddRange(new ToolStripItem[] { orcishTranslatorToolStripMenuItem, elvenTranslatorToolStripMenuItem, ghukliakTranslatorToolStripMenuItem });
             translatorToolStripMenuItem.Name = "translatorToolStripMenuItem";
             translatorToolStripMenuItem.Size = new Size(163, 22);
             translatorToolStripMenuItem.Text = "Translate";
@@ -188,6 +189,13 @@ namespace PlayerAssistant
             elvenTranslatorToolStripMenuItem.Size = new Size(180, 22);
             elvenTranslatorToolStripMenuItem.Text = "Elven";
             elvenTranslatorToolStripMenuItem.Click += ElvenTranslatorToolStripMenuItem_Click;
+            //
+            // ghukliakTranslatorToolStripMenuItem
+            //
+            ghukliakTranslatorToolStripMenuItem.Name = "ghukliakTranslatorToolStripMenuItem";
+            ghukliakTranslatorToolStripMenuItem.Size = new Size(180, 22);
+            ghukliakTranslatorToolStripMenuItem.Text = "Goblin (Ghukliak)";
+            ghukliakTranslatorToolStripMenuItem.Click += GhukliakTranslatorToolStripMenuItem_Click;
             //
             // searchToolStripMenuItem
             // 
@@ -454,6 +462,7 @@ namespace PlayerAssistant
         private ToolStripMenuItem translatorToolStripMenuItem;
         private ToolStripMenuItem orcishTranslatorToolStripMenuItem;
         private ToolStripMenuItem elvenTranslatorToolStripMenuItem;
+        private ToolStripMenuItem ghukliakTranslatorToolStripMenuItem;
         private ToolStripMenuItem exitToolStripMenuItem;
         private ToolStripMenuItem settingsToolStripMenuItem;
         private ToolStripMenuItem skipHeroImageParadeAtStartupToolStripMenuItem;

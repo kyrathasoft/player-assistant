@@ -26,6 +26,7 @@ $requiredFiles = @(
     'icons\icon-512.png',
     'data\orcish.json',
     'data\elvish.json',
+    'data\ghukliak.json',
     'data\heroes.json',
     'level-progression.json',
     'magic-items.json',
@@ -57,13 +58,24 @@ foreach ($size in @(192, 512)) {
 }
 
 $lexiconCounts = [ordered]@{}
-foreach ($language in @('orcish', 'elvish')) {
+foreach ($language in @('orcish', 'elvish', 'ghukliak')) {
     $payload = Get-Content -Raw -LiteralPath (Join-Path $PwaRoot "data\$language.json") | ConvertFrom-Json
-    $actualCount = @($payload.terms.PSObject.Properties).Count
+    $termProperties = @($payload.terms.PSObject.Properties)
+    $actualCount = $termProperties.Count
     Assert-Condition -Condition ($actualCount -gt 0) -Message "$language lexicon is empty."
     Assert-Condition -Condition ([int]$payload.entryCount -eq $actualCount) -Message "$language lexicon entryCount does not match its terms."
+    $actualMaxPhraseWords = 1
+    $normalizedTerms = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::Ordinal)
+    foreach ($property in $termProperties) {
+        $phraseWords = @(($property.Name -split '\s+') | Where-Object { $_.Length -gt 0 }).Count
+        $actualMaxPhraseWords = [Math]::Max($actualMaxPhraseWords, $phraseWords)
+        $normalizedTerm = $property.Name.Normalize([System.Text.NormalizationForm]::FormKC).Trim().ToLowerInvariant()
+        Assert-Condition -Condition ($normalizedTerms.Add($normalizedTerm)) -Message "$language contains duplicate terms under translator-worker normalization: $normalizedTerm"
+    }
+    Assert-Condition -Condition ([int]$payload.maxPhraseWords -eq $actualMaxPhraseWords) -Message "$language maxPhraseWords does not match its terms."
     $lexiconCounts[$language] = $actualCount
 }
+Assert-Condition -Condition ([int]$lexiconCounts.ghukliak -eq 81204) -Message 'The Ghukliak lexicon must cover every Orcish English term plus its source-only terms.'
 
 $campaignSearch = Get-Content -Raw -LiteralPath (Join-Path $PwaRoot 'campaign-search.json') | ConvertFrom-Json
 Assert-Condition -Condition ([int]$campaignSearch.schemaVersion -eq 2) -Message 'Campaign search data must use the full-text schema.'
@@ -114,6 +126,19 @@ Assert-Condition -Condition (@($magicItems.items | Where-Object { $_.name -eq "A
 
 $partyFunds = Get-Content -Raw -LiteralPath (Join-Path $PwaRoot 'party-funds.json') | ConvertFrom-Json
 $partyFundsGemstoneValuePattern = '^\s*(\d+(?:\.\d+)?)\s+gp$'
+$partyFundsExpectedFields = @('coins', 'fiction-date', 'gemstones', 'meta-date', 'schema_version', 'text')
+$partyFundsNormalizedText = ([string]$partyFunds.text).Replace("`r`n", "`n").Replace("`r", "`n")
+$partyFundsRecords = @($partyFundsNormalizedText -split "`n`n---`n`n")
+$partyFundsRecordDates = @()
+foreach ($record in $partyFundsRecords) {
+    $dateText = @($record -split "`n", 2)[0].Trim()
+    $parsedDate = [DateTime]::MinValue
+    Assert-Condition -Condition ([DateTime]::TryParseExact($dateText, 'M/d/yyyy', [System.Globalization.CultureInfo]::InvariantCulture, [System.Globalization.DateTimeStyles]::None, [ref]$parsedDate)) -Message "Party-funds record has an invalid meta date: $dateText"
+    $partyFundsRecordDates += $parsedDate
+}
+for ($index = 1; $index -lt $partyFundsRecordDates.Count; $index++) {
+    Assert-Condition -Condition ($partyFundsRecordDates[$index - 1] -ge $partyFundsRecordDates[$index]) -Message 'Party-funds records must be ordered newest-first.'
+}
 $validCoins = ($partyFunds.coins -and
     $partyFunds.coins.PSObject.Properties.Name -contains 'copper' -and
     $partyFunds.coins.PSObject.Properties.Name -contains 'silver' -and
@@ -122,7 +147,9 @@ $validCoins = ($partyFunds.coins -and
     [int]$partyFunds.coins.silver -ge 0 -and
     [int]$partyFunds.coins.gold -ge 0)
 Assert-Condition -Condition ([int]$partyFunds.schema_version -eq 2) -Message 'Party-funds fallback data must use schema version 2.'
+Assert-Condition -Condition ((@($partyFunds.PSObject.Properties.Name | Sort-Object) -join ',') -eq ($partyFundsExpectedFields -join ',')) -Message 'Party-funds fallback data has unexpected root fields.'
 Assert-Condition -Condition (![string]::IsNullOrWhiteSpace([string]$partyFunds.'meta-date') -and ![string]::IsNullOrWhiteSpace([string]$partyFunds.'fiction-date') -and ![string]::IsNullOrWhiteSpace([string]$partyFunds.text)) -Message 'Party-funds fallback metadata is incomplete.'
+Assert-Condition -Condition ($partyFundsRecords.Count -gt 0 -and @($partyFundsRecords[0] -split "`n", 2)[0].Trim() -eq [string]$partyFunds.'meta-date') -Message 'The newest party-funds record must appear first and match meta-date.'
 Assert-Condition -Condition ($partyFunds.coins -ne $null) -Message 'Party-funds fallback data is missing coins.'
 Assert-Condition -Condition ($validCoins) -Message 'Party-funds fallback coin totals are invalid.'
 Assert-Condition -Condition ($partyFunds.PSObject.Properties.Name -contains 'gemstones') -Message 'Party-funds fallback gemstone entries are missing.'
@@ -210,6 +237,11 @@ foreach ($script in @('app.js', 'translator-worker.js', 'service-worker.js')) {
 
 $html = Get-Content -Raw -LiteralPath (Join-Path $PwaRoot 'index.html')
 $appScript = Get-Content -Raw -LiteralPath (Join-Path $PwaRoot 'app.js')
+$translatorWorker = Get-Content -Raw -LiteralPath (Join-Path $PwaRoot 'translator-worker.js')
+$requestTranslationFunction = [regex]::Match(
+    $appScript,
+    'const requestTranslation = \(event\) => \{.*?worker\?\.addEventListener',
+    [System.Text.RegularExpressions.RegexOptions]::Singleline).Value
 $styles = Get-Content -Raw -LiteralPath (Join-Path $PwaRoot 'styles.css')
 $serviceWorker = Get-Content -Raw -LiteralPath (Join-Path $PwaRoot 'service-worker.js')
 $referencedIds = [regex]::Matches($appScript, "byId\('([^']+)'\)") | ForEach-Object { $_.Groups[1].Value } | Sort-Object -Unique
@@ -277,7 +309,10 @@ Assert-Condition -Condition ($serviceWorker.Contains('networkFirstData') -and $s
 Assert-Condition -Condition ($appScript.Contains("updateViaCache: 'none'") -and $appScript.Contains('await registration.update()')) -Message 'The PWA must explicitly check for uncached service-worker updates.'
 Assert-Condition -Condition ($manifest.start_url -eq './#dashboard' -and $manifest.scope -eq './') -Message 'The manifest must keep navigation inside the deployed PWA directory.'
 Assert-Condition -Condition ($html.Contains('href="manifest.webmanifest"') -and $appScript.Contains('service-worker.js')) -Message 'The install manifest or service-worker registration is missing.'
-Assert-Condition -Condition ($html.Contains('styles.css?v=42') -and $html.Contains('src="app.js?v=56"') -and $serviceWorker.Contains("player-assistant-pwa-0.9.8-v65") -and $serviceWorker.Contains("'./styles.css?v=42'") -and $serviceWorker.Contains("'./app.js?v=56'") -and $serviceWorker.Contains("'./level-progression.json'") -and $serviceWorker.Contains("'./magic-items.json'")) -Message 'The PWA shell must use cache-busting assets and preload the progression and magic-item data.'
+Assert-Condition -Condition ($html.Contains('styles.css?v=42') -and $html.Contains('src="app.js?v=58"') -and $serviceWorker.Contains("player-assistant-pwa-0.9.8-v68") -and $serviceWorker.Contains("'./styles.css?v=42'") -and $serviceWorker.Contains("'./app.js?v=58'") -and $serviceWorker.Contains("'./level-progression.json'") -and $serviceWorker.Contains("'./magic-items.json'")) -Message 'The PWA shell must use cache-busting assets and preload the progression and magic-item data.'
+Assert-Condition -Condition ($html.Contains('value="ghukliak"') -and $html.Contains('Goblin') -and $appScript.Contains("languageSelect?.value === 'ghukliak'") -and $translatorWorker.Contains("message.language === 'ghukliak'")) -Message 'The PWA translator must expose the Goblin/Ghukliak language in its UI and worker.'
+Assert-Condition -Condition (!$translatorWorker.Contains(".replaceAll('’', `"'`")")) -Message 'Translator normalization must preserve distinct straight- and curly-apostrophe lexicon terms.'
+Assert-Condition -Condition ($requestTranslationFunction.IndexOf('const id = ++translatorRequestId;', [System.StringComparison]::Ordinal) -ge 0 -and $requestTranslationFunction.IndexOf('const id = ++translatorRequestId;', [System.StringComparison]::Ordinal) -lt $requestTranslationFunction.IndexOf('if (source.trim().length === 0)', [System.StringComparison]::Ordinal) -and !$appScript.Contains('if (message.loading)')) -Message 'Every translator input state must invalidate prior worker responses before early-return validation.'
 Assert-Condition -Condition ($serviceWorker.Contains("url.pathname.includes('/XP/')") -and $serviceWorker.Contains('networkFirstData')) -Message 'XP progression data must refresh from the network before using cached copies.'
 Assert-Condition -Condition ($html.Contains('class="magic-items-dashboard message-player-form"') -and $styles.Contains('.message-player-form > #message-player-recipient') -and $styles.Contains('margin-block: 5px;') -and $styles.Contains('.message-player-form > #message-player-text') -and $styles.Contains('margin-top: 5px;') -and $styles.Contains('.message-player-form > .magic-items-source-row') -and $styles.Contains('margin-top: 10px;')) -Message 'The Message a Player form must preserve the requested spacing between its labels, fields, and submit row.'
 Assert-Condition -Condition ($serviceWorker.Contains("'./party-funds.json'")) -Message 'The PWA shell must preload party-funds data.'
@@ -289,4 +324,4 @@ Assert-Condition -Condition ($apacheConfig.Contains('connect-src ''self'' https:
 Assert-Condition -Condition ($apacheConfig.Contains('magic-items\.json|party-funds\.json|quests\.json')) -Message 'Apache must require revalidation for public quest, party funds, and magic-item data.'
 Assert-Condition -Condition ($apacheConfig.Contains('data/heroes\.json|data/hero-tokens/[^/]+')) -Message 'Apache must require revalidation for hero-token metadata and images.'
 
-Write-Output "PWA verified: $($lexiconCounts.orcish) Orcish terms, $($lexiconCounts.elvish) Elvish terms, $(@($heroData.heroes).Count) player tokens and the Dungeon Master token, $($campaignSearch.pageCount) full-text campaign pages, install manifest and offline shell valid."
+Write-Output "PWA verified: $($lexiconCounts.orcish) Orcish terms, $($lexiconCounts.elvish) Elvish terms, $($lexiconCounts.ghukliak) Ghukliak terms, $(@($heroData.heroes).Count) player tokens and the Dungeon Master token, $($campaignSearch.pageCount) full-text campaign pages, install manifest and offline shell valid."

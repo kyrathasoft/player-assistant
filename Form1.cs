@@ -39,7 +39,8 @@ namespace PlayerAssistant
         private enum TranslatorTargetLanguage
         {
             Orcish,
-            Elven
+            Elven,
+            Ghukliak
         }
 
         private static readonly string[] MyHeroBriefingLikelyResponseKeyLines =
@@ -900,6 +901,11 @@ namespace PlayerAssistant
         private void ElvenTranslatorToolStripMenuItem_Click(object? sender, EventArgs e)
         {
             ShowTranslator(TranslatorTargetLanguage.Elven);
+        }
+
+        private void GhukliakTranslatorToolStripMenuItem_Click(object? sender, EventArgs e)
+        {
+            ShowTranslator(TranslatorTargetLanguage.Ghukliak);
         }
 
         private void ShowTranslator(TranslatorTargetLanguage targetLanguage)
@@ -4744,6 +4750,8 @@ namespace PlayerAssistant
                 (_translatorPanel is null || _translatorTargetLanguage != TranslatorTargetLanguage.Orcish);
             elvenTranslatorToolStripMenuItem.Enabled = showMenuItemsEnabled &&
                 (_translatorPanel is null || _translatorTargetLanguage != TranslatorTargetLanguage.Elven);
+            ghukliakTranslatorToolStripMenuItem.Enabled = showMenuItemsEnabled &&
+                (_translatorPanel is null || _translatorTargetLanguage != TranslatorTargetLanguage.Ghukliak);
             UpdateRegionalMapMenuItem();
         }
 
@@ -4840,6 +4848,7 @@ namespace PlayerAssistant
             statusStrip.BringToFront();
             orcishTranslatorToolStripMenuItem.Enabled = targetLanguage != TranslatorTargetLanguage.Orcish;
             elvenTranslatorToolStripMenuItem.Enabled = targetLanguage != TranslatorTargetLanguage.Elven;
+            ghukliakTranslatorToolStripMenuItem.Enabled = targetLanguage != TranslatorTargetLanguage.Ghukliak;
             FocusTranslatorInput();
             _ = UpdateTranslatorWarmupStatusAsync();
         }
@@ -4944,7 +4953,12 @@ namespace PlayerAssistant
         }
 
         private string GetTranslatorExportLanguageToken() =>
-            _translatorTargetLanguage == TranslatorTargetLanguage.Orcish ? "orcish" : "elvish";
+            _translatorTargetLanguage switch
+            {
+                TranslatorTargetLanguage.Orcish => "orcish",
+                TranslatorTargetLanguage.Elven => "elvish",
+                _ => "ghukliak"
+            };
 
         private void TranslatorDirectionCheckBox_CheckedChanged(object? sender, EventArgs e)
         {
@@ -5010,9 +5024,12 @@ namespace PlayerAssistant
                 var waitCursorDelay = Task.Delay(TimeSpan.FromMilliseconds(250), cancellationSource.Token);
                 if (translatorOverride is null)
                 {
-                    var warmupTask = targetLanguage == TranslatorTargetLanguage.Orcish
-                        ? OrcishTranslatorWarmupUtility.WaitUntilReadyAsync(cancellationSource.Token)
-                        : WaitForElvenTranslatorAsync(cancellationSource.Token);
+                    var warmupTask = targetLanguage switch
+                    {
+                        TranslatorTargetLanguage.Orcish => OrcishTranslatorWarmupUtility.WaitUntilReadyAsync(cancellationSource.Token),
+                        TranslatorTargetLanguage.Elven => WaitForElvenTranslatorAsync(cancellationSource.Token),
+                        _ => WaitForGhukliakTranslatorAsync(cancellationSource.Token)
+                    };
                     if (await Task.WhenAny(warmupTask, waitCursorDelay) == waitCursorDelay &&
                         !cancellationSource.IsCancellationRequested &&
                         generation == _translatorTranslationGeneration)
@@ -5088,9 +5105,12 @@ namespace PlayerAssistant
                 return;
             }
 
-            var isReady = targetLanguage == TranslatorTargetLanguage.Orcish
-                ? OrcishTranslatorWarmupUtility.IsReady
-                : ElvenTranslatorWarmupUtility.IsReady;
+            var isReady = targetLanguage switch
+            {
+                TranslatorTargetLanguage.Orcish => OrcishTranslatorWarmupUtility.IsReady,
+                TranslatorTargetLanguage.Elven => ElvenTranslatorWarmupUtility.IsReady,
+                _ => GhukliakTranslatorWarmupUtility.IsReady
+            };
             if (isReady)
             {
                 SetStatusBarMessage("Translator ready.");
@@ -5100,9 +5120,12 @@ namespace PlayerAssistant
             SetStatusBarMessage($"Preparing {GetTranslatorTargetName(targetLanguage)} translator...");
             try
             {
-                var englishTermCount = targetLanguage == TranslatorTargetLanguage.Orcish
-                    ? (await OrcishTranslatorWarmupUtility.StartPreloading()).EnglishTermCount
-                    : (await ElvenTranslatorWarmupUtility.StartPreloading()).EnglishTermCount;
+                var englishTermCount = targetLanguage switch
+                {
+                    TranslatorTargetLanguage.Orcish => (await OrcishTranslatorWarmupUtility.StartPreloading()).EnglishTermCount,
+                    TranslatorTargetLanguage.Elven => (await ElvenTranslatorWarmupUtility.StartPreloading()).EnglishTermCount,
+                    _ => (await GhukliakTranslatorWarmupUtility.StartPreloading()).EnglishTermCount
+                };
                 if (_translatorTargetLanguage == targetLanguage &&
                     _translatorPanel is not null && !_translatorPanel.IsDisposed)
                 {
@@ -5139,6 +5162,13 @@ namespace PlayerAssistant
             return new OrcishTranslatorWarmupResult(result.EnglishTermCount, result.Duration);
         }
 
+        private static async Task<OrcishTranslatorWarmupResult> WaitForGhukliakTranslatorAsync(
+            CancellationToken cancellationToken)
+        {
+            var result = await GhukliakTranslatorWarmupUtility.WaitUntilReadyAsync(cancellationToken);
+            return new OrcishTranslatorWarmupResult(result.EnglishTermCount, result.Duration);
+        }
+
         private static string TranslateText(
             string input,
             TranslatorTargetLanguage targetLanguage,
@@ -5152,14 +5182,23 @@ namespace PlayerAssistant
                     OrcishTranslatorUtility.TranslateEnglishTextToOrcish(input),
                 TranslatorTargetLanguage.Elven when targetToEnglish =>
                     ElvenTranslatorUtility.TranslateElvenTextToEnglish(input),
-                _ => ElvenTranslatorUtility.TranslateEnglishTextToElven(input)
+                TranslatorTargetLanguage.Elven =>
+                    ElvenTranslatorUtility.TranslateEnglishTextToElven(input),
+                TranslatorTargetLanguage.Ghukliak when targetToEnglish =>
+                    GhukliakTranslatorUtility.TranslateGhukliakTextToEnglish(input),
+                _ => GhukliakTranslatorUtility.TranslateEnglishTextToGhukliak(input)
             };
         }
 
         private string GetTranslatorTargetName() => GetTranslatorTargetName(_translatorTargetLanguage);
 
         private static string GetTranslatorTargetName(TranslatorTargetLanguage targetLanguage) =>
-            targetLanguage == TranslatorTargetLanguage.Orcish ? "Orcish" : "Elven";
+            targetLanguage switch
+            {
+                TranslatorTargetLanguage.Orcish => "Orcish",
+                TranslatorTargetLanguage.Elven => "Elven",
+                _ => "Goblin (Ghukliak)"
+            };
 
         private void SetTranslatorWaitCursor(bool active)
         {
@@ -5260,6 +5299,7 @@ namespace PlayerAssistant
             translatorToolStripMenuItem.Enabled = translatorMenuEnabled;
             orcishTranslatorToolStripMenuItem.Enabled = translatorMenuEnabled;
             elvenTranslatorToolStripMenuItem.Enabled = translatorMenuEnabled;
+            ghukliakTranslatorToolStripMenuItem.Enabled = translatorMenuEnabled;
         }
 
         private void EnableLoginInfoMenuItem()

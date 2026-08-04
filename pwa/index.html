@@ -4,7 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
     <meta name="theme-color" content="#241813">
-    <meta name="description" content="Scarlet Horizons campaign tools, Orcish and Elvish translation, search, and dice for players.">
+    <meta name="description" content="Scarlet Horizons campaign tools, Orcish, Elvish, and Goblin translation, search, and dice for players.">
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -14,7 +14,7 @@
     <link rel="icon" href="icons/icon-192.png" sizes="192x192" type="image/png">
     <link rel="apple-touch-icon" href="icons/icon-192.png">
     <link rel="stylesheet" href="styles.css?v=42">
-    <script src="app.js?v=56" defer></script>
+    <script src="app.js?v=58" defer></script>
 </head>
 <body>
     <a class="skip-link" href="#main-content">Skip to content</a>
@@ -115,7 +115,7 @@
                 <div class="card-grid">
                     <button class="feature-card" type="button" data-open-view="translator">
                         <span class="feature-icon" aria-hidden="true">&#x16B1;</span>
-                        <strong>Orcish &amp; Elvish</strong>
+                        <strong>Orcish, Elvish &amp; Goblin</strong>
                         <span>Translate in either direction and export the result.</span>
                     </button>
                     <button class="feature-card" type="button" data-open-view="search">
@@ -347,6 +347,7 @@
                             <select id="translator-language">
                                 <option value="orcish">Orcish</option>
                                 <option value="elvish">Elvish</option>
+                                <option value="ghukliak">Goblin (Ghukliak)</option>
                             </select>
                         </label>
                         <label class="switch-label">
@@ -381,7 +382,7 @@
                     </div>
 
                     <div class="translator-footer">
-                        <p id="translation-note">Unknown words remain unchanged. The first Orcish translation may take a moment while the lexicon is cached.</p>
+                        <p id="translation-note">Unknown words remain unchanged. The first translation for each language may take a moment while the lexicon is cached.</p>
                         <button class="primary-button" id="export-translation" type="button" hidden disabled>Export Translation</button>
                     </div>
                 </div>

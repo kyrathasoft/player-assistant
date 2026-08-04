@@ -74,12 +74,16 @@
     <EmbeddedResource Include="Assets\white-marble.png" />
     <EmbeddedResource Include="web-translator\orcish-lexicon.json" LogicalName="PlayerAssistant.OrcishLexiconSnapshot.json" />
     <EmbeddedResource Include="web-translator\elven-lexicon.json" LogicalName="PlayerAssistant.ElvenLexiconSnapshot.json" />
+    <EmbeddedResource Include="web-translator\ghukliak-lexicon.json" LogicalName="PlayerAssistant.GhukliakLexicon.json" />
+    <EmbeddedResource Include="web-translator\ghukliak-complete-coverage.json" LogicalName="PlayerAssistant.GhukliakCompleteCoverage.json" />
     <EmbeddedResource Include="web-translator\elven-translations.json" LogicalName="PlayerAssistant.ElvenTranslationDictionary.json" />
     <EmbeddedResource Include="web-translator\elven-first-iteration.json" LogicalName="PlayerAssistant.ElvenFirstIteration.json" />
     <EmbeddedResource Include="web-translator\elven-second-iteration.json" LogicalName="PlayerAssistant.ElvenSecondIteration.json" />
     <EmbeddedResource Include="web-translator\elven-complete-coverage.json" LogicalName="PlayerAssistant.ElvenCompleteCoverage.json" />
     <None Remove="web-translator\orcish-lexicon.json" />
     <None Remove="web-translator\elven-lexicon.json" />
+    <None Remove="web-translator\ghukliak-lexicon.json" />
+    <None Remove="web-translator\ghukliak-complete-coverage.json" />
     <None Remove="web-translator\elven-translations.json" />
     <None Remove="web-translator\elven-first-iteration.json" />
     <None Remove="web-translator\elven-second-iteration.json" />

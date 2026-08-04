@@ -6,7 +6,6 @@ const wordPattern = /[\p{L}\p{N}&]+(?:['’\-][\p{L}\p{N}]+)*/gu;
 
 const normalize = (value) => value
     .normalize('NFKC')
-    .replaceAll('’', "'")
     .trim()
     .toLocaleLowerCase('en-US');
 
@@ -22,12 +21,16 @@ const applySourceCapitalization = (source, translation) => {
     return translation;
 };
 
+const languageName = (language) => language === 'elvish'
+    ? 'Elvish'
+    : language === 'ghukliak' ? 'Goblin (Ghukliak)' : 'Orcish';
+
 const loadLexicon = async (language) => {
     if (lexicons.has(language)) return lexicons.get(language);
     if (pendingLexicons.has(language)) return pendingLexicons.get(language);
 
     const request = (async () => {
-        self.postMessage({ type: 'status', loading: true, message: `Loading ${language === 'elvish' ? 'Elvish' : 'Orcish'} lexicon…` });
+        self.postMessage({ type: 'status', loading: true, message: `Loading ${languageName(language)} lexicon…` });
         const response = await fetch(`data/${language}.json`);
         if (!response.ok) throw new Error(`${language} lexicon returned ${response.status}`);
         const payload = await response.json();
@@ -51,7 +54,7 @@ const loadLexicon = async (language) => {
         self.postMessage({
             type: 'status',
             loading: false,
-            message: `${language === 'elvish' ? 'Elvish' : 'Orcish'} lexicon ready · ${lexicon.entryCount.toLocaleString()} terms`
+            message: `${languageName(language)} lexicon ready · ${lexicon.entryCount.toLocaleString()} terms`
         });
         return lexicon;
     })().finally(() => pendingLexicons.delete(language));
@@ -130,12 +133,14 @@ const getMaxPhraseWords = (dictionary) => {
 
 self.addEventListener('message', async (event) => {
     const message = event.data || {};
-    const language = message.language === 'elvish' ? 'elvish' : 'orcish';
+    const language = message.language === 'elvish'
+        ? 'elvish'
+        : message.language === 'ghukliak' ? 'ghukliak' : 'orcish';
     if (message.type === 'preload') {
         try {
             await loadLexicon(language);
         } catch (error) {
-            self.postMessage({ type: 'status', loading: false, message: `${language} lexicon unavailable: ${error.message}` });
+            self.postMessage({ type: 'status', loading: false, message: `${languageName(language)} lexicon unavailable: ${error.message}` });
         }
         return;
     }

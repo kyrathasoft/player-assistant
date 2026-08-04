@@ -278,6 +278,9 @@ var tests = new (string Name, Action Test)[]
     ("elven translator prefers Sindarin and falls back to Quenya", ElvenTranslatorPrefersSindarinAndFallsBackToQuenya),
     ("elven translator preserves text and punctuation", ElvenTranslatorPreservesTextAndPunctuation),
     ("elven translator finalizes every English term", ElvenTranslatorFinalizesEveryEnglishTerm),
+    ("ghukliak translator loads source and complete coverage", GhukliakTranslatorLoadsSourceAndCompleteCoverage),
+    ("ghukliak translator preserves text and punctuation", GhukliakTranslatorPreservesTextAndPunctuation),
+    ("ghukliak complete coverage translates every Orcish English term", GhukliakCompleteCoverageTranslatesEveryOrcishTerm),
     ("elven morphology derives conservative noun and active verb forms", ElvenMorphologyDerivesConservativeForms),
     ("elven first iteration loads generated translations", ElvenFirstIterationLoadsGeneratedTranslations),
     ("elven second iteration loads five thousand generated translations", ElvenSecondIterationLoadsGeneratedTranslations),
@@ -287,6 +290,7 @@ var tests = new (string Name, Action Test)[]
     ("elven lexicon validator preserves Sindarin preference", ElvenLexiconValidatorPreservesSindarinPreference),
     ("translator view toggles direction without web links", TranslatorViewTogglesDirectionWithoutWebLinks),
     ("translator view supports Elven mode", TranslatorViewSupportsElvenMode),
+    ("translator view supports Ghukliak mode", TranslatorViewSupportsGhukliakMode),
     ("translator view translates while input changes", TranslatorViewTranslatesWhileInputChanges),
     ("translator view exports english to orcish translation", TranslatorViewExportsEnglishToOrcishTranslation),
     ("translator view exports english to elvish translation", TranslatorViewExportsEnglishToElvishTranslation),
@@ -6610,6 +6614,80 @@ static void ElvenTranslatorPreservesTextAndPunctuation()
         "Friend.",
         ElvenTranslatorUtility.TranslateElvenTextToEnglish("mellon."),
         "Elven reverse translation should preserve punctuation");
+}
+
+static void GhukliakTranslatorLoadsSourceAndCompleteCoverage()
+{
+    AssertEqual(81204, GhukliakTranslatorUtility.GetEnglishTermCount(), "unexpected complete Ghukliak English term count");
+    AssertEqual("bikhouihg", GhukliakTranslatorUtility.TranslateEnglishToGhukliak("language")[0].Translation, "unexpected language translation");
+    AssertTrue(
+        GhukliakTranslatorUtility.TranslateGhukliakToEnglish("bikhouihg")
+            .Any(candidate => candidate.English == "language"),
+        "Ghukliak reverse lookup should include language");
+}
+
+static void GhukliakTranslatorPreservesTextAndPunctuation()
+{
+    AssertEqual(
+        "Bikhouihg unknownword.",
+        GhukliakTranslatorUtility.TranslateEnglishTextToGhukliak("language unknownword."),
+        "Ghukliak text translation should preserve unknown words");
+    AssertEqual(
+        "Tongue.",
+        GhukliakTranslatorUtility.TranslateGhukliakTextToEnglish("bikhouihg."),
+        "Ghukliak reverse translation should preserve punctuation");
+    AssertTrue(
+        GhukliakTranslatorUtility.TranslateEnglishTextToGhukliak("a single, gold coin.").Contains(','),
+        "Ghukliak longest-phrase matching should not consume punctuation between source words");
+}
+
+static void GhukliakCompleteCoverageTranslatesEveryOrcishTerm()
+{
+    AssertEqual(81204, GhukliakTranslatorUtility.GetEnglishTermCount(), "unexpected complete Ghukliak English term count");
+
+    var missing = OrcishTranslatorUtility.GetEnglishTerms()
+        .Where(term => GhukliakTranslatorUtility.TranslateEnglishToGhukliak(term).Count == 0)
+        .Take(10)
+        .ToArray();
+    AssertEqual(0, missing.Length, $"Orcish English terms remain untranslated: {string.Join(", ", missing)}");
+
+    var abacus = GhukliakTranslatorUtility.TranslateEnglishToGhukliak("abacus").Single();
+    AssertFalse(
+        string.Equals(abacus.English, abacus.Translation, StringComparison.OrdinalIgnoreCase),
+        "generated Ghukliak forms should not pass English through unchanged");
+    AssertTrue(
+        GhukliakTranslatorUtility.TranslateGhukliakToEnglish(abacus.Translation)
+            .Any(entry => entry.English == "abacus"),
+        "complete-coverage forms should remain available to reverse translation");
+    AssertTrue(
+        GhukliakTranslatorUtility.TranslateEnglishToGhukliak("a single gold coin").Count == 1,
+        "complete coverage should include remaining multiword English terms");
+}
+
+static void TranslatorViewSupportsGhukliakMode()
+{
+    Form1.TranslatorTextOverrideForTests = static (_, _) => string.Empty;
+    try
+    {
+        RunOnStaThread(() =>
+        {
+            using var form = new Form1(suppressHeroImagesForThisRun: true);
+            var menuItem = (ToolStripMenuItem)(GetPrivateField(form, "ghukliakTranslatorToolStripMenuItem")
+                ?? throw new InvalidOperationException("ghukliakTranslatorToolStripMenuItem was null."));
+            menuItem.PerformClick();
+
+            var heading = (Label)(GetPrivateField(form, "_translatorHeadingLabel")
+                ?? throw new InvalidOperationException("_translatorHeadingLabel was null."));
+            var direction = (CheckBox)(GetPrivateField(form, "_translatorDirectionCheckBox")
+                ?? throw new InvalidOperationException("_translatorDirectionCheckBox was null."));
+            AssertEqual("English to Goblin (Ghukliak)", heading.Text, "Ghukliak menu should open English-to-Goblin mode");
+            AssertEqual("Goblin (Ghukliak) to English", direction.Text, "Ghukliak direction toggle should identify its source language");
+        });
+    }
+    finally
+    {
+        Form1.TranslatorTextOverrideForTests = null;
+    }
 }
 
 static void ElvenTranslatorFinalizesEveryEnglishTerm()

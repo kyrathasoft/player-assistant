@@ -56,6 +56,7 @@ $runtimeFiles = [ordered]@{
     'icons/dragon-mark.png' = @('image/png')
     'data/orcish.json' = @('application/json', 'text/json')
     'data/elvish.json' = @('application/json', 'text/json')
+    'data/ghukliak.json' = @('application/json', 'text/json')
     'data/heroes.json' = @('application/json', 'text/json')
     'level-progression.json' = @('application/json', 'text/json')
     'magic-items.json' = @('application/json', 'text/json')
