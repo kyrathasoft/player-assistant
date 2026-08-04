@@ -125,6 +125,9 @@ Deploy changed public runtime files through the transactional deployment script:
     'index.html',
     'level-progression.json',
     'magic-items.json',
+    'modules/dice.js',
+    'modules/search.js',
+    'modules/translator.js',
     'service-worker.js',
     'styles.css'
 )
@@ -153,6 +156,9 @@ The complete PWA runtime includes at minimum:
 app.js
 index.html
 level-progression.json
+modules/dice.js
+modules/search.js
+modules/translator.js
 service-worker.js
 styles.css
 quests.json
