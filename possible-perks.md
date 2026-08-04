@@ -319,3 +319,30 @@ One natural animal encountered per day begins neutral rather than hostile.
 
 These perks are valuable because they expand a character's sphere of competence rather than increase raw numbers. In my experience, that keeps OSE's class balance intact while still giving players the thrill of discovering secret techniques, lost traditions, and hidden knowledge.
 
+Possibility for basic mechanics:
+
+-Perk trees cost 3 Perk Points (PP from now on) per level as a base but must be acquired sequentially, individual perks cost 5 PP as a base number that may be raised or lowered based on actual power.  A given character can only have one started but incomplete perk tree, though they may obtain individual perks while still working on a tree.
+
+-Perks can be taken when granted or bought with PP.  Individual perks (though not those in a tree) can be declined when obtained.  If an perk is declined, the player receives half (round up) of the value of the perk.
+
+-Perk points are accrued weekly (1 per week) and additional perk points are gained when a character engages in thematically appropriate activities in character or in OOC contributions.
+
+
+For some starter perk ideas: mostly thinking story related, character related, or quality of life stuff.
+
+Gripper of the Grody (Individual Perk): Geoffrey has touched (and eaten!) things that would kill a lesser man.  He has obtained a permanent +1 on saves against Death/Disease/Poison.
+
+Spell Secrets of [Deity] (Devotion Tree): [Cleric] has learned another of the ancient secrets and rites of [deity].  One thematic spell of a level equal to the level of this Devotion is added from another spellcasting list to the cleric spell list for this character only.
+->So at first devotion level a level 1 spell, at second level a level 2 spell is added as well, etc.
+
+The Three Stances of General Vask (Technique Tree): [Fighter] has discovered the [first/second/third] stance of the Mad General Vask, whose strategies were always made up on the spot, and were almost always more effective than would have been expected.
+Level One: Charge of the Mad - [Fighter] has gained a new option for combat movement: they may leave melee range of an opponent and attack in the same turn, but in doing so allow the opponent to make one free attack on them.
+Level Two: Ranged attack in melee with a penalty?
+Level Three: Throwing melee weapon?
+
+[Ancient/Famous Mage or Cleric Name]'s Mastery of Minor Magic (Individual Arcana or Devotion): [Character] has discovered a minor and effortless trick of magic.  They learn a 1st level spell from their list and once per day may cast that specific without preparing it or using a spell slot.  To qualify as a minor and effortless, the spell must have no direct combat applications.  So Detect Magic, Detect Good/Evil, Light, and Purify Food & Drink could be chosen, but Cure Light Wounds, Protection from Evil, and Remove Fear could not.
+
+Nildor's Nudge (Individual Knack): [Thief] has picked up one of the tricks of Nildor, a proverbial halfling rogue who is storied for succeeding at the improbable, if only just.  Once per day, they may re-roll a failed Thief Skill Check.  (With our rate of play, it seems like thieves will go a very long time without being likely to actually succeed at a skill check - and I was hoping to let this patch that.  If this is too strong, it could be put on a specific Thief Skill.)
+
+A Very Particular Set of Skills (Individual Fieldcraft): [Ranger]'s work thus far in his career, as well as the effort he has put in on the side, has enabled him to begin to develop A Very Particular Set of Skills.  He gains one Rogue Skill of his choice as if he were a level one Rogue.
+
