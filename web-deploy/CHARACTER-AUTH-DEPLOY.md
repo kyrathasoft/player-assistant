@@ -37,6 +37,7 @@ RpolClient.php
 WordCountService.php
 XpTrackingService.php
 refresh-word-counts.php
+broker-recovery.php
 ```
 
 Destination:
@@ -103,6 +104,42 @@ atomic private status. Public health exposes only safe readiness, success time,
 scheduler time/status, and fixed error codes. Run
 `test-word-count-refresh-deployment.ps1` independently to check hashes,
 permissions, signing metadata, source signature, cron, health, and retention.
+
+## Broker database recovery and observability
+
+Deploy `player-assistant-broker/broker-recovery.php` beside `broker.sqlite`, then
+schedule it on DreamHost:
+
+```cron
+23 */6 * * * /usr/bin/php /home/DREAMHOST_USER/player-assistant-broker/broker-recovery.php >> /home/DREAMHOST_USER/player-assistant-broker/broker-recovery.log 2>&1
+```
+
+Each run performs a live `PRAGMA integrity_check`, creates a consistent SQLite
+copy with `VACUUM INTO`, opens the copy and repeats the integrity check, retains
+the newest configured number of backups, checks the public broker health endpoint,
+and atomically writes `broker-recovery-status.json`. Configure an optional
+`database_recovery` section from `player-assistant-broker/config.recovery.example.php` into the private `config.php` to override the backup folder, retention count, health URL, status path, or alert email. Failures and
+unhealthy word-count refresh status are reported through the configured email
+alert when DreamHost mail is available.
+
+Run `backup-broker-database.ps1` from a trusted Windows machine after the remote
+run. It downloads the newest backup and status file, verifies the SHA-256 hash,
+and applies local retention. Use multiple `-BackupRoots` values to place the
+same verified backup in more than one destination.
+
+Recommended locations:
+
+- Primary off-host copy: a synchronized OneDrive folder such as
+  `onedrive:/backups of sites or directories/player-assistant-broker/`.
+- Independent second copy: the NAS backup share, such as
+  `/homes/kyrathasoft/Backup/player-assistant-broker/`.
+- Same-host staging only: DreamHost
+  `/home/DREAMHOST_USER/deploy-backups/player-assistant-broker/`; useful for
+  quick recovery but not sufficient as the only backup.
+
+Keep at least 14 daily copies on each off-host target. Test restoration monthly
+by opening the newest copy with SQLite and running `PRAGMA integrity_check`;
+never overwrite the live database during a restore test.
 
 ## Account import
 
