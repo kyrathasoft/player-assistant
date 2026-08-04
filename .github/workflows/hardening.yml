@@ -1,4 +1,4 @@
-name: Hardening
+name: Full regression
 
 on:
   pull_request:
@@ -31,9 +31,10 @@ env:
   DEPENDENCY_INVENTORY_JSON: ${{ github.workspace }}\codex-scratch\rc-dependency-inventory.json
 
 jobs:
-  hardening:
+  full-regression:
+    name: Required full regression
     runs-on: windows-latest
-    timeout-minutes: 60
+    timeout-minutes: 90
 
     steps:
       - name: Checkout
@@ -46,6 +47,44 @@ jobs:
         with:
           dotnet-version: 10.0.x
 
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24.x
+          cache: npm
+          cache-dependency-path: pwa/package-lock.json
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: curl, pdo_sqlite, sodium, sqlite3
+
+      - name: Verify required CI policy
+        shell: pwsh
+        run: .\verify-full-regression-ci.ps1
+
+      - name: Install PWA browser test dependencies
+        shell: pwsh
+        run: |
+          npm ci --prefix .\pwa
+          npx --prefix .\pwa playwright install chromium
+
+      - name: Verify PWA
+        shell: pwsh
+        run: .\pwa\verify-pwa.ps1
+
+      - name: Run PHP broker suites
+        shell: pwsh
+        run: |
+          php web-deploy/tests/character-auth-tests.php
+          php web-deploy/tests/xp-tracking-tests.php
+          php web-deploy/tests/broker-auth-routing-tests.php
+
+      - name: Run browser-level PWA smoke tests
+        shell: pwsh
+        run: npm --prefix .\pwa test
+
       - name: Install Inno Setup
         shell: pwsh
         run: choco install innosetup --no-progress --yes
@@ -54,17 +93,14 @@ jobs:
         shell: pwsh
         run: dotnet build .\player-assistant.csproj --configuration Release --nologo
 
+      - name: Build Release ToOrcish
+        shell: pwsh
+        run: dotnet build .\ToOrcish\to-orcish.csproj --configuration Release --nologo
+
       - name: Build Release test harness
         shell: pwsh
         run: dotnet build .\PlayerAssistant.Tests\PlayerAssistant.Tests.csproj --configuration Release --nologo -p:UseSharedCompilation=false
 
-      - name: Verify hosted settings fetch and decrypt path
-        shell: pwsh
-        run: .\PlayerAssistant.Tests\bin\Release\net10.0-windows\PlayerAssistant.Tests.exe "app settings loads hosted encrypted xp tracking url from fixture server"
-
-      - name: Verify hosted settings negative paths
-        shell: pwsh
-        run: .\PlayerAssistant.Tests\bin\Release\net10.0-windows\PlayerAssistant.Tests.exe "hosted settings failure"
 
       - name: Seed CI local sidecars
         shell: pwsh
@@ -234,6 +270,10 @@ jobs:
       - name: Publish and verify
         shell: pwsh
         run: .\publish-player-assistant.ps1 -OutputDir $env:PUBLISH_DIR
+
+      - name: Run complete desktop regression harness
+        shell: pwsh
+        run: .\PlayerAssistant.Tests\bin\Release\net10.0-windows\PlayerAssistant.Tests.exe
 
       - name: Build installer package
         shell: pwsh

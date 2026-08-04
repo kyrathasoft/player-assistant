@@ -10638,10 +10638,12 @@ static void HardeningWorkflowBuildsAndUploadsSignedReleaseUpdateArtifacts()
     AssertContains(workflow, "p-assist-0.9.5.zip");
     AssertContains(workflow, "p-assist-0.9.5.exe");
     AssertContains(workflow, "Build Release test harness");
-    AssertContains(workflow, "Verify hosted settings fetch and decrypt path");
-    AssertContains(workflow, "app settings loads hosted encrypted xp tracking url from fixture server");
-    AssertContains(workflow, "Verify hosted settings negative paths");
-    AssertContains(workflow, "hosted settings failure");
+    AssertContains(workflow, "Build Release ToOrcish");
+    AssertContains(workflow, "dotnet build .\\ToOrcish\\to-orcish.csproj --configuration Release --nologo");
+    AssertContains(workflow, "Run complete desktop regression harness");
+    AssertContains(workflow, ".\\PlayerAssistant.Tests\\bin\\Release\\net10.0-windows\\PlayerAssistant.Tests.exe");
+    AssertContains(workflow, "Run PHP broker suites");
+    AssertContains(workflow, "Run browser-level PWA smoke tests");
 
     var builder = File.ReadAllText(builderPath);
     AssertContains(builder, "p-assist-$installerVersion.zip");
