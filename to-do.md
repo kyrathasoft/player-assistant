@@ -16,9 +16,9 @@
   - [x] Remove newly introduced files during rollback when a later deployment step fails.
   - [x] Verify public HTTPS hashes, headers, and API behavior before declaring deployment success.
 - [ ] Add broker database recovery and observability operations.
-  - Schedule consistent `broker.sqlite` backups and off-host retention.
-  - Run regular `PRAGMA integrity_check` checks and test restoration.
-  - Alert on broker health failures, refresh failures, and repeated server errors.
+  - [x] Schedule consistent `broker.sqlite` backups and configure off-host retention tooling.
+  - [x] Run regular `PRAGMA integrity_check` checks and test restoration.
+  - [ ] Configure alerts for broker health failures, refresh failures, and repeated server errors.
 - [ ] Add ordered SQLite migrations using `PRAGMA user_version`, transactions, pre-migration backups, and upgrade fixtures.
 - [ ] Harden the release supply chain.
   - Pin GitHub Actions and installer dependencies to immutable versions or hashes.
