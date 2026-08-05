@@ -117,8 +117,9 @@ try {
     $contentSecurityPolicy = Get-HeaderValue $indexResponse 'Content-Security-Policy'
     Assert-Condition -Condition ($contentSecurityPolicy.Contains("default-src 'self'") -and $contentSecurityPolicy.Contains("frame-ancestors 'none'") -and $contentSecurityPolicy.Contains("connect-src 'self' https://publish-01.obsidian.md")) -Message 'The PWA Content-Security-Policy is incomplete.'
 
-    foreach ($uncachedFile in @('service-worker.js', 'manifest.webmanifest', 'level-progression.json', 'magic-items.json', 'party-funds.json', 'quests.json')
-        | Where-Object { $responses.ContainsKey($_) }) {
+    $uncachedFiles = @('service-worker.js', 'manifest.webmanifest', 'level-progression.json', 'magic-items.json', 'party-funds.json', 'quests.json') |
+        Where-Object { $responses.ContainsKey($_) }
+    foreach ($uncachedFile in $uncachedFiles) {
         $cacheControl = Get-HeaderValue $responses[$uncachedFile] 'Cache-Control'
         Assert-Condition -Condition ($cacheControl -match 'no-cache') -Message "$uncachedFile must be served with Cache-Control: no-cache."
     }
@@ -148,7 +149,7 @@ try {
         $healthResponse = $client.GetAsync([uri]::new($apiBaseUri, 'health')).GetAwaiter().GetResult()
         $healthPayload = $healthResponse.Content.ReadAsStringAsync().GetAwaiter().GetResult() | ConvertFrom-Json
         Assert-Condition -Condition $healthResponse.IsSuccessStatusCode -Message 'The broker health endpoint is unavailable.'
-        Assert-Condition -Condition ([int]$healthPayload.schema_version -eq 5) -Message 'The broker health schema is not version 5.'
+        Assert-Condition -Condition ([int]$healthPayload.schema_version -eq 6) -Message 'The broker health schema is not version 6.'
         Assert-Condition -Condition ($healthPayload.PSObject.Properties.Name -contains 'xp_tracking_configured') -Message 'The live broker does not expose XP tracking readiness.'
         Assert-Condition -Condition ($healthPayload.xp_tracking_configured -eq $true) -Message 'XP tracking is not configured on the live broker.'
         Assert-Condition -Condition ($healthPayload.PSObject.Properties.Name -contains 'word_count_snapshot_available') -Message 'The live broker does not expose word-count snapshot readiness.'

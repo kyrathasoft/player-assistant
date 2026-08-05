@@ -6,7 +6,8 @@ param(
     [uri]$SourceUrl = 'https://bryanmiller.us/scarlethorizons/data/word-counts.json',
     [string]$SigningMetadataPath = (Join-Path $PSScriptRoot 'word-count-signing-public.json'),
     [int]$KeepBackups = 5,
-    [string]$CronSchedule = '17 */6 * * *'
+    [string]$CronSchedule = '17 */6 * * *',
+    [string]$MaintenanceCronSchedule = '47 3 * * *'
 )
 
 $ErrorActionPreference = 'Stop'
@@ -47,7 +48,7 @@ if ([string]::IsNullOrWhiteSpace([string]$metadata.key_id) -or [string]::IsNullO
 }
 
 $deployId = [DateTime]::UtcNow.ToString('yyyyMMddTHHmmssfffZ')
-$deployFiles = @('BrokerService.php', 'BrokerAlertService.php', 'DatabaseMigrationService.php', 'QuestService.php', 'WordCountService.php', 'refresh-word-counts.php')
+$deployFiles = @('BrokerService.php', 'BrokerAlertService.php', 'BrokerOperations.php', 'DatabaseMigrationService.php', 'QuestService.php', 'WordCountService.php', 'refresh-word-counts.php', 'broker-maintenance.php')
 $remoteStage = "$PrivateDirectory/.word-count-deploy-$deployId"
 $remoteArchive = "$PrivateDirectory/.word-count-deploy-$deployId.tar"
 $localArchive = Join-Path ([IO.Path]::GetTempPath()) "player-assistant-word-count-$deployId.tar"
@@ -131,13 +132,30 @@ $config['word_counts'] = array_merge(
         'signature_public_key' => $data['public_key'],
     ]
 );
+$config['operations'] = array_merge(
+    is_array($config['operations'] ?? null) ? $config['operations'] : [],
+    [
+        'backup_directory' => $directory . '/broker-backups',
+        'restore_test_directory' => $directory . '/broker-restore-tests',
+        'status_path' => $directory . '/broker-operations-status.json',
+        'retention_count' => 14,
+        'server_error_threshold' => 5,
+        'server_error_window_seconds' => 900,
+        'alert_cooldown_seconds' => 3600,
+    ]
+);
+$offsite = is_array($config['operations']['offsite'] ?? null)
+    ? $config['operations']['offsite']
+    : [];
+if (strtolower((string)($offsite['transport'] ?? '')) === 'ftps') {
+    $config['operations']['offsite'] = [
+        'transport' => 'ftps',
+        'port' => (int)($offsite['port'] ?? 21),
+    ];
+}
 $newConfig = "<?php\nreturn " . var_export($config, true) . ";\n";
 $oldConfig = is_file($configPath) ? file_get_contents($configPath) : '';
 if ($oldConfig !== $newConfig) {
-    if (is_file($configPath)) {
-        copy($configPath, $configPath . '.bak-deploy-' . $data['deploy_id']);
-        chmod($configPath . '.bak-deploy-' . $data['deploy_id'], 0600);
-    }
     $temporaryConfig = $configPath . '.tmp-' . $data['deploy_id'];
     file_put_contents($temporaryConfig, $newConfig, LOCK_EX);
     chmod($temporaryConfig, 0600);
@@ -147,9 +165,19 @@ if ($oldConfig !== $newConfig) {
 }
 chmod($configPath, 0600);
 
-$patterns = [
+$configBackupPatterns = [
     'config.php.bak-deploy-*',
     'config.php.bak-word-count-refresh-*',
+];
+foreach ($configBackupPatterns as $pattern) {
+    foreach (glob($directory . '/' . $pattern) ?: [] as $obsolete) {
+        $resolved = realpath($obsolete);
+        if ($resolved !== false && dirname($resolved) === realpath($directory) && is_file($resolved)) {
+            unlink($resolved);
+        }
+    }
+}
+$patterns = [
     'BrokerService.php.bak-deploy-*',
     'BrokerAlertService.php.bak-deploy-*',
     'DatabaseMigrationService.php.bak-deploy-*',
@@ -157,6 +185,8 @@ $patterns = [
     'WordCountService.php.bak-deploy-*',
     'WordCountService.php.bak-source-refresh-*',
     'refresh-word-counts.php.bak-deploy-*',
+    'BrokerOperations.php.bak-deploy-*',
+    'broker-maintenance.php.bak-deploy-*',
 ];
 foreach ($patterns as $pattern) {
     $matches = glob($directory . '/' . $pattern) ?: [];
@@ -168,7 +198,7 @@ foreach ($patterns as $pattern) {
         }
     }
 }
-foreach (['.BrokerService.php.deploy-*', '.BrokerAlertService.php.deploy-*', '.DatabaseMigrationService.php.deploy-*', '.QuestService.php.deploy-*', '.WordCountService.php.deploy-*', '.refresh-word-counts.php.deploy-*'] as $pattern) {
+foreach (['.BrokerService.php.deploy-*', '.BrokerAlertService.php.deploy-*', '.BrokerOperations.php.deploy-*', '.DatabaseMigrationService.php.deploy-*', '.QuestService.php.deploy-*', '.WordCountService.php.deploy-*', '.refresh-word-counts.php.deploy-*', '.broker-maintenance.php.deploy-*'] as $pattern) {
     foreach (glob($directory . '/' . $pattern) ?: [] as $abandonedTemporaryFile) {
         if (is_file($abandonedTemporaryFile)) {
             unlink($abandonedTemporaryFile);
@@ -180,10 +210,13 @@ foreach (['.BrokerService.php.deploy-*', '.BrokerAlertService.php.deploy-*', '.D
 
 Invoke-RemotePhp $installCode | Out-Null
 
-$cronLine = "$CronSchedule /usr/bin/php $PrivateDirectory/refresh-word-counts.php >> $PrivateDirectory/word-count-refresh-cron.log 2>&1"
-$cronData = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($cronLine))
+$cronLines = @(
+    "$CronSchedule /usr/bin/php $PrivateDirectory/refresh-word-counts.php >> $PrivateDirectory/word-count-refresh-cron.log 2>&1",
+    "$MaintenanceCronSchedule /usr/bin/php $PrivateDirectory/broker-maintenance.php >> $PrivateDirectory/broker-maintenance-cron.log 2>&1"
+)
+$cronData = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes(($cronLines -join "`n")))
 $cronCode = @'
-$line = base64_decode('__CRON_LINE__');
+$newLines = preg_split('/\R/', base64_decode('__CRON_LINE__'));
 $output = [];
 $listExit = 0;
 exec('timeout 10 /usr/bin/crontab -l 2>/dev/null', $output, $listExit);
@@ -193,9 +226,11 @@ if ($listExit !== 0 && $listExit !== 1) {
 $existing = implode("\n", $output);
 $lines = preg_split('/\R/', trim($existing));
 $lines = array_values(array_filter($lines, static function ($candidate): bool {
-    return $candidate !== '' && !str_contains($candidate, '/player-assistant-broker/refresh-word-counts.php');
+    return $candidate !== ''
+        && !str_contains($candidate, '/player-assistant-broker/refresh-word-counts.php')
+        && !str_contains($candidate, '/player-assistant-broker/broker-maintenance.php');
 }));
-$lines[] = $line;
+$lines = array_merge($lines, array_values(array_filter($newLines, static fn($line): bool => is_string($line) && $line !== '')));
 $temporary = tempnam(sys_get_temp_dir(), 'pa-cron-');
 file_put_contents($temporary, implode("\n", $lines) . "\n");
 $output = [];
@@ -212,6 +247,11 @@ $runnerCommand = "/usr/bin/php $PrivateDirectory/refresh-word-counts.php"
 Invoke-CheckedNative {
     & ssh -i $SshKeyPath -o BatchMode=yes -o IdentitiesOnly=yes -o ConnectTimeout=15 `
         $DreamHostTarget $runnerCommand
+} | Out-Null
+$maintenanceCommand = "/usr/bin/php $PrivateDirectory/broker-maintenance.php"
+Invoke-CheckedNative {
+    & ssh -i $SshKeyPath -o BatchMode=yes -o IdentitiesOnly=yes -o ConnectTimeout=15 `
+        $DreamHostTarget $maintenanceCommand
 } | Out-Null
 
 & (Join-Path $PSScriptRoot 'test-word-count-refresh-deployment.ps1') `

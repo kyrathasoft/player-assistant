@@ -16,7 +16,7 @@
   - [x] Remove newly introduced files during rollback when a later deployment step fails.
   - [x] Verify public HTTPS hashes, headers, and API behavior before declaring deployment success.
 - [ ] Add broker database recovery and observability operations.
-  - [x] Schedule consistent `broker.sqlite` backups and configure off-host retention tooling.
+  - [x] Schedule consistent `broker.sqlite` backups and configure verified FTPS off-host retention.
   - [x] Run regular `PRAGMA integrity_check` checks and test restoration.
   - [x] Implement health, word-count refresh, and repeated-server-error alerting with cooldowns; production `alert_email` still requires a configured recipient.
 - [x] Add ordered SQLite migrations using `PRAGMA user_version`, transactions, pre-migration backups, and upgrade fixtures.

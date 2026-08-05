@@ -10,6 +10,7 @@ if (PHP_SAPI !== 'cli') {
 require_once __DIR__ . '/BrokerHttpException.php';
 require_once __DIR__ . '/WordCountService.php';
 require_once __DIR__ . '/BrokerAlertService.php';
+require_once __DIR__ . '/BrokerOperations.php';
 
 try {
     $configPath = $argv[1] ?? (__DIR__ . '/config.php');
@@ -26,6 +27,8 @@ try {
     if ($databasePath === '') {
         throw new RuntimeException('The broker database path is not configured.');
     }
+
+    $operations = new BrokerOperations($config);
 
     $database = new PDO('sqlite:' . $databasePath, null, null, [
         PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
@@ -52,6 +55,7 @@ try {
             . (string)$refreshStatus['last_error_code']);
     }
     $service->recordSchedulerRun(true);
+    $operations->recordRefreshSuccess();
 
     echo json_encode([
         'status' => 'ok',
@@ -65,6 +69,12 @@ try {
     }
     if (isset($service) && $service instanceof WordCountService) {
         $service->recordSchedulerRun(false, 'scheduler_failed');
+    }
+    if (isset($operations) && $operations instanceof BrokerOperations) {
+        $operations->recordRefreshFailure(
+            isset($refreshStatus) && is_array($refreshStatus)
+                ? (string)($refreshStatus['last_error_code'] ?? 'scheduler_failed')
+                : 'scheduler_failed');
     }
     fwrite(STDERR, 'Word-count refresh failed: ' . $error->getMessage() . PHP_EOL);
     exit(1);

@@ -7,6 +7,7 @@ require_once __DIR__ . '/../player-assistant-broker/RpolClient.php';
 require_once __DIR__ . '/../player-assistant-broker/CharacterAuthService.php';
 require_once __DIR__ . '/../player-assistant-broker/XpTrackingService.php';
 require_once __DIR__ . '/../player-assistant-broker/WordCountService.php';
+require_once __DIR__ . '/../player-assistant-broker/BrokerOperations.php';
 require_once __DIR__ . '/../player-assistant-broker/QuestService.php';
 require_once __DIR__ . '/../player-assistant-broker/MessageService.php';
 require_once __DIR__ . '/../player-assistant-broker/BrokerService.php';
@@ -1067,7 +1068,7 @@ try {
         [],
         '192.0.2.30',
         $session);
-    routingAssert($health['body']['schema_version'] === 5, 'The broker schema version was not advanced.');
+    routingAssert($health['body']['schema_version'] === 6, 'The broker schema version was not advanced.');
     routingAssert($health['body']['character_account_count'] === 3, 'The health route account count was incorrect.');
     routingAssert($health['body']['xp_tracking_configured'] === true, 'The health route XP configuration state was incorrect.');
     routingAssert(

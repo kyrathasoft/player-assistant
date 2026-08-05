@@ -23,6 +23,7 @@ try {
     require_once $privateDirectory . '/CharacterAuthService.php';
     require_once $privateDirectory . '/XpTrackingService.php';
     require_once $privateDirectory . '/WordCountService.php';
+    require_once $privateDirectory . '/BrokerOperations.php';
     require_once $privateDirectory . '/QuestService.php';
     require_once $privateDirectory . '/MessageService.php';
     require_once $privateDirectory . '/BrokerService.php';
@@ -35,6 +36,7 @@ try {
         throw new RuntimeException('The private broker configuration is unavailable.');
     }
     $config = require $configPath;
+    $operations = new BrokerOperations(is_array($config) ? $config : []);
     $config['xp'] = is_array($config['xp'] ?? null) ? $config['xp'] : [];
     $config['xp']['awards_root'] = $privateDirectory;
     $questDataPathOverride = getenv('PLAYER_ASSISTANT_QUESTS_PATH');
@@ -93,6 +95,9 @@ try {
         'request_id' => $requestId,
     ]);
 } catch (Throwable $exception) {
+    if (isset($operations) && $operations instanceof BrokerOperations) {
+        $operations->recordServerError($requestId, 'internal_error');
+    }
     error_log(sprintf(
         '[player-assistant-broker:%s] %s in %s:%d',
         $requestId,

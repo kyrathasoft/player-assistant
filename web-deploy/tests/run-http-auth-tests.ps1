@@ -69,7 +69,7 @@ try {
     Assert-Condition -Condition ($health.Headers['Cache-Control'] -contains 'no-store') -Message 'The API response was cacheable.'
     Assert-Condition -Condition ($health.Headers['Strict-Transport-Security'] -contains 'max-age=31536000') -Message 'The HSTS header was missing.'
     $healthBody = $health.Content | ConvertFrom-Json
-    Assert-Condition -Condition ([int]$healthBody.schema_version -eq 5 -and $healthBody.quest_request_workflow_configured -eq $true) -Message 'The HTTP broker does not expose quest-request readiness.'
+    Assert-Condition -Condition ([int]$healthBody.schema_version -eq 6 -and $healthBody.quest_request_workflow_configured -eq $true) -Message 'The HTTP broker does not expose quest-request readiness.'
 
     $unauthenticatedXp = Invoke-WebRequest `
         -UseBasicParsing `
