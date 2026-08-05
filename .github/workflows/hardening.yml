@@ -31,10 +31,90 @@ env:
   DEPENDENCY_INVENTORY_JSON: ${{ github.workspace }}\codex-scratch\rc-dependency-inventory.json
 
 jobs:
+  parallel-test-groups:
+    name: Parallel test group (${{ matrix.group }})
+    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        group:
+          - pwa
+          - php
+          - browser
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        if: matrix.group == 'pwa' || matrix.group == 'browser'
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24.x
+          cache: npm
+          cache-dependency-path: pwa/package-lock.json
+
+      - name: Setup PHP
+        if: matrix.group == 'php'
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: curl, pdo_sqlite, sodium, sqlite3
+
+      - name: Prepare PHP dependency cache
+        if: matrix.group == 'php'
+        shell: pwsh
+        run: New-Item -ItemType Directory -Force -Path "$HOME\.composer\cache" | Out-Null
+
+      - name: Cache PHP dependencies
+        if: matrix.group == 'php'
+        uses: actions/cache@v4
+        with:
+          path: ~\.composer\cache
+          key: php-composer-${{ runner.os }}-${{ hashFiles('**/composer.lock') }}
+          restore-keys: |
+            php-composer-${{ runner.os }}-
+
+      - name: Cache Playwright browsers
+        if: matrix.group == 'pwa' || matrix.group == 'browser'
+        uses: actions/cache@v4
+        with:
+          path: ~\AppData\Local\ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('pwa/package-lock.json') }}
+          restore-keys: |
+            playwright-${{ runner.os }}-
+
+      - name: Install PWA browser test dependencies
+        if: matrix.group == 'pwa' || matrix.group == 'browser'
+        shell: pwsh
+        run: |
+          npm ci --prefix .\pwa
+          npx --prefix .\pwa playwright install chromium
+
+      - name: Run PWA verification
+        if: matrix.group == 'pwa'
+        shell: pwsh
+        run: .\pwa\verify-pwa.ps1
+
+      - name: Run PHP broker suites
+        if: matrix.group == 'php'
+        shell: pwsh
+        run: |
+          Get-ChildItem -LiteralPath .\web-deploy\tests -Filter '*-tests.php' -File |
+            Sort-Object Name |
+            ForEach-Object { php $_.FullName }
+
+      - name: Run browser-level PWA smoke tests
+        if: matrix.group == 'browser'
+        shell: pwsh
+        run: npm --prefix .\pwa test
+
   full-regression:
     name: Required full regression
     runs-on: windows-latest
     timeout-minutes: 90
+    needs: parallel-test-groups
+    if: always()
 
     steps:
       - name: Checkout
@@ -47,43 +127,25 @@ jobs:
         with:
           dotnet-version: 10.0.x
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+      - name: Cache .NET dependencies
+        uses: actions/cache@v4
         with:
-          node-version: 24.x
-          cache: npm
-          cache-dependency-path: pwa/package-lock.json
+          path: ~\.nuget\packages
+          key: dotnet-${{ runner.os }}-${{ hashFiles('**/*.csproj', '**/*.props', '**/*.targets') }}
+          restore-keys: |
+            dotnet-${{ runner.os }}-
 
-      - name: Setup PHP
-        uses: shivammathur/setup-php@v2
-        with:
-          php-version: '8.4'
-          extensions: curl, pdo_sqlite, sodium, sqlite3
+      - name: Verify parallel test groups
+        shell: pwsh
+        run: |
+          if ('${{ needs.parallel-test-groups.result }}' -ne 'success') {
+            throw "One or more parallel test groups failed."
+          }
 
       - name: Verify required CI policy
         shell: pwsh
         run: .\verify-full-regression-ci.ps1
 
-      - name: Install PWA browser test dependencies
-        shell: pwsh
-        run: |
-          npm ci --prefix .\pwa
-          npx --prefix .\pwa playwright install chromium
-
-      - name: Verify PWA
-        shell: pwsh
-        run: .\pwa\verify-pwa.ps1
-
-      - name: Run PHP broker suites
-        shell: pwsh
-        run: |
-          php web-deploy/tests/character-auth-tests.php
-          php web-deploy/tests/xp-tracking-tests.php
-          php web-deploy/tests/broker-auth-routing-tests.php
-
-      - name: Run browser-level PWA smoke tests
-        shell: pwsh
-        run: npm --prefix .\pwa test
 
       - name: Install Inno Setup
         shell: pwsh
