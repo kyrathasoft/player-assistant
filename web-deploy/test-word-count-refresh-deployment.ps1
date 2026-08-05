@@ -44,7 +44,7 @@ $metadata = Get-Content -Raw -LiteralPath $SigningMetadataPath | ConvertFrom-Jso
 if (-not (Test-Path -LiteralPath $PhpPath -PathType Leaf)) {
     throw "PHP signing runtime not found: $PhpPath"
 }
-$deployFiles = @('BrokerService.php', 'BrokerAlertService.php', 'DatabaseMigrationService.php', 'QuestService.php', 'WordCountService.php', 'refresh-word-counts.php')
+$deployFiles = @('BrokerService.php', 'BrokerAlertService.php', 'BrokerOperations.php', 'DatabaseMigrationService.php', 'QuestService.php', 'WordCountService.php', 'refresh-word-counts.php', 'broker-maintenance.php')
 $localHashes = @{}
 foreach ($file in $deployFiles) {
     $localHashes[$file] = (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $PSScriptRoot "player-assistant-broker\$file")).Hash.ToLowerInvariant()
@@ -52,7 +52,7 @@ foreach ($file in $deployFiles) {
 
 $remoteCode = @'
 $directory = '__PRIVATE_DIRECTORY__';
-$files = ['BrokerService.php', 'QuestService.php', 'WordCountService.php', 'refresh-word-counts.php'];
+$files = ['BrokerService.php', 'BrokerAlertService.php', 'BrokerOperations.php', 'DatabaseMigrationService.php', 'QuestService.php', 'WordCountService.php', 'refresh-word-counts.php', 'broker-maintenance.php'];
 $result = ['files' => [], 'config' => [], 'backups' => [], 'cron' => ''];
 foreach ($files as $file) {
     $path = $directory . '/' . $file;
@@ -71,6 +71,26 @@ $result['config'] = [
     'signature_public_key' => $wordCounts['signature_public_key'] ?? null,
     'mode' => is_file($configPath) ? substr(sprintf('%o', fileperms($configPath)), -4) : null,
 ];
+$operations = is_array($config['operations'] ?? null) ? $config['operations'] : [];
+$offsite = is_array($operations['offsite'] ?? null) ? $operations['offsite'] : [];
+$offsiteTransport = strtolower((string)($offsite['transport'] ?? 'ssh'));
+$ftpsPort = (int)(getenv('BACKUP_FTPS_PORT') ?: ($offsite['port'] ?? 21));
+$offsiteConfigured = $offsiteTransport === 'ftps'
+    ? trim((string)getenv('BACKUP_FTPS_HOST')) !== ''
+        && $ftpsPort > 0
+        && $ftpsPort <= 65535
+        && trim((string)getenv('BACKUP_FTPS_USERNAME')) !== ''
+        && (string)getenv('BACKUP_FTPS_PASSWORD') !== ''
+        && trim((string)getenv('BACKUP_FTPS_REMOTE_PATH')) !== ''
+    : !empty($offsite['ssh_target']) && !empty($offsite['directory']);
+$result['operations'] = [
+    'backup_directory' => $operations['backup_directory'] ?? null,
+    'restore_test_directory' => $operations['restore_test_directory'] ?? null,
+    'status_path' => $operations['status_path'] ?? null,
+    'offsite_transport' => $offsiteTransport,
+    'offsite_configured' => $offsiteConfigured,
+    'curl_loaded' => extension_loaded('curl'),
+];
 $statusPath = $directory . '/word-count-refresh-status.json';
 $result['status'] = [
     'exists' => is_file($statusPath),
@@ -86,6 +106,8 @@ $patterns = [
     'WordCountService.php.bak-deploy-*',
     'WordCountService.php.bak-source-refresh-*',
     'refresh-word-counts.php.bak-deploy-*',
+    'BrokerOperations.php.bak-deploy-*',
+    'broker-maintenance.php.bak-deploy-*',
 ];
 foreach ($patterns as $pattern) {
     $matches = glob($directory . '/' . $pattern) ?: [];
@@ -119,12 +141,30 @@ if ($remote.config.signature_key_id -ne $metadata.key_id -or $remote.config.sign
 if ($remote.config.mode -ne '0600' -or -not $remote.status.exists -or $remote.status.mode -ne '0600') {
     throw 'Production config or refresh status permissions are incorrect.'
 }
+$expectedOperationsDirectory = "$PrivateDirectory/broker-backups"
+$expectedRestoreDirectory = "$PrivateDirectory/broker-restore-tests"
+$expectedOperationsStatusPath = "$PrivateDirectory/broker-operations-status.json"
+if ($remote.operations.backup_directory -ne $expectedOperationsDirectory -or
+    $remote.operations.restore_test_directory -ne $expectedRestoreDirectory -or
+    $remote.operations.status_path -ne $expectedOperationsStatusPath) {
+    throw 'Production broker operations paths do not match.'
+}
+if ($remote.operations.offsite_transport -eq 'ftps' -and -not $remote.operations.curl_loaded) {
+    throw 'Production PHP does not provide the cURL extension required for FTPS backups.'
+}
 
 $cronNeedle = "/usr/bin/php $PrivateDirectory/refresh-word-counts.php"
 if ($remote.cron -notmatch [regex]::Escape($cronNeedle)) {
     throw 'Production refresh cron entry is missing.'
 }
+$maintenanceCronNeedle = "/usr/bin/php $PrivateDirectory/broker-maintenance.php"
+if ($remote.cron -notmatch [regex]::Escape($maintenanceCronNeedle)) {
+    throw 'Production broker maintenance cron entry is missing.'
+}
 foreach ($property in $remote.backups.PSObject.Properties) {
+    if ($property.Name -like 'config.php.bak-*' -and [int]$property.Value -ne 0) {
+        throw "Credential-bearing config backup remains for $($property.Name)."
+    }
     if ([int]$property.Value -gt $KeepBackups) {
         throw "Backup retention exceeded for $($property.Name)."
     }
@@ -136,6 +176,9 @@ $null = Test-WordCountSignedEnvelope -EnvelopeJson $sourceResponse.Content -Publ
 $health = Invoke-RestMethod -Uri $HealthUrl -TimeoutSec 30
 if (-not $health.word_count_refresh.configured -or -not $health.word_count_refresh.signing_configured) {
     throw 'Public health does not report configured signed refreshes.'
+}
+if (-not $health.operations.configured -or -not $health.operations.offsite_backup_configured) {
+    throw 'Public health does not report configured broker operations.'
 }
 if ($health.word_count_refresh.healthy -ne $true) {
     throw "Public health reports an unhealthy refresh: $($health.word_count_refresh.last_error_code)"

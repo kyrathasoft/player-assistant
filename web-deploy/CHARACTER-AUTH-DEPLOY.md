@@ -202,7 +202,20 @@ broker returns the exact uploaded totals and observation time.
 
 ## Verification
 
-- Health response reports schema version `5`, a nonzero `character_account_count`, `xp_tracking_configured: true`, the word-count snapshot availability state, and `quest_request_workflow_configured: true`.
+- Health response reports schema version `6`, a nonzero `character_account_count`, `xp_tracking_configured: true`, the word-count snapshot availability state, `quest_request_workflow_configured: true`, and configured broker operations.
+
+## Broker database recovery and observability
+
+Merge `config.operations.example.php` into the private production `config.php`, configure the private FTPS environment and alert address, and ensure PHP cURL is available. The maintenance job:
+
+- Runs `PRAGMA integrity_check` against the live database.
+- Creates a consistent SQLite backup with `VACUUM INTO` under `broker-backups/`.
+- Uploads the backup and its SHA-256 manifest over explicit FTPS, downloads each uploaded file, and verifies its SHA-256 before applying off-host retention.
+- Do not configure an `htdocs` FTPS destination for plaintext broker backups; add client-side encryption before using a publicly served remote directory.
+- Restores the newest backup into a private temporary database and runs another integrity check.
+- Retains the configured number of local backup copies and removes restore-test copies after validation.
+
+The six-hour word-count cron records refresh failures. The daily maintenance cron records backup/restore failures, and the API records repeated HTTP 500 failures. Configured email alerts are rate-limited by `alert_cooldown_seconds`.
 - Successful login sets `pa_character_session` with `Secure`, `HttpOnly`, `SameSite=Strict`, and path `/scarlethorizons/api/`.
 - `GET /v1/me` returns the logged-in account's server-stored character key.
 - `GET /v1/xp` returns one matching character's XP, class, attained level, and hit points for a player account and never includes the party array.

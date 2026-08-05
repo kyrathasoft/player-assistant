@@ -15,6 +15,7 @@ final class BrokerService
     private QuestService $quests;
     private MessageService $messages;
     private BrokerAlertService $alerts;
+    private BrokerOperations $operations;
 
     public function __construct(
         private readonly array $config,
@@ -47,6 +48,7 @@ final class BrokerService
         $this->alerts = new BrokerAlertService(
             $this->database,
             is_array($config['observability'] ?? null) ? $config['observability'] : []);
+        $this->operations = new BrokerOperations($config);
         $this->ensureSchema();
         $this->characterAuth = new CharacterAuthService(
             $this->database,
@@ -83,7 +85,7 @@ final class BrokerService
             }
             return $this->response(200, [
                 'service' => 'player-assistant-broker',
-                'schema_version' => 5,
+                'schema_version' => 6,
                 'database_schema_version' => (int)$this->database->query('PRAGMA user_version')->fetchColumn(),
                 'status' => 'ok',
                 'rpol_credentials_configured' => $this->rpolCredentialsConfigured(),
@@ -93,6 +95,7 @@ final class BrokerService
                 'xp_tracking_configured' => $this->xpTracking->isConfigured(),
                 'word_count_snapshot_available' => $this->wordCounts->hasSnapshot(),
                 'word_count_refresh' => $wordCountRefresh,
+                'operations' => $this->operations->healthStatus(),
                 'quest_request_workflow_configured' => true,
             ]);
         }

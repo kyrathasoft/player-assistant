@@ -25,6 +25,20 @@
 - If a user question includes the word `Jelenneth`, read `jelenneth.md` before answering.
 - Read `magic-item-tracking.md` before changing magic-item data or packaging. `pwa\magic-items.json` is the canonical offline fallback and must be copied beside the executable in `Release\` and included with other critical installer files.
 
+## Memory Restore
+- The following Hermes and DreamHost SSH paths apply only when the live computer name begins with `Ryzen7`; do not use or assume these paths on other computers.
+- On a `Ryzen7*` computer, Hermes local data is stored under `C:\Users\Administrator\AppData\Local\hermes\`.
+- On a `Ryzen7*` computer, DreamHost SSH keys are stored under `C:\Users\Administrator\.ssh\`; use private key `dreamhost_player_assistant` and matching public key `dreamhost_player_assistant.pub`.
+- On the Ryzen7 computer, after executing the `update memory` (`memory update`) skill, report a list of every local file that was updated or overwritten under `C:\Users\Administrator\AppData\Local\hermes\`.
+
+## Broker SQLite Operations
+- Production broker database: `/home/dh_4gg2za/player-assistant-broker/broker.sqlite`.
+- Scheduled local SQLite backups: `/home/dh_4gg2za/player-assistant-broker/broker-backups/`.
+- Restore-test staging: `/home/dh_4gg2za/player-assistant-broker/broker-restore-tests/`; validated restore files are removed after each test.
+- Operations status: `/home/dh_4gg2za/player-assistant-broker/broker-operations-status.json`.
+- Off-host broker copies are sent over explicit FTPS to the destination configured privately under `operations.offsite`; never store its credentials or alert address in the repository.
+- Never upload unencrypted broker SQLite backups beneath a public web root; an `htdocs` destination requires client-side encryption before production use.
+
 ## Commits
 - Never commit installer files unless explicitly requested.
 - Never commit incidental generated artifacts.
