@@ -47,7 +47,7 @@ if ([string]::IsNullOrWhiteSpace([string]$metadata.key_id) -or [string]::IsNullO
 }
 
 $deployId = [DateTime]::UtcNow.ToString('yyyyMMddTHHmmssfffZ')
-$deployFiles = @('BrokerService.php', 'QuestService.php', 'WordCountService.php', 'refresh-word-counts.php')
+$deployFiles = @('BrokerService.php', 'BrokerAlertService.php', 'DatabaseMigrationService.php', 'QuestService.php', 'WordCountService.php', 'refresh-word-counts.php')
 $remoteStage = "$PrivateDirectory/.word-count-deploy-$deployId"
 $remoteArchive = "$PrivateDirectory/.word-count-deploy-$deployId.tar"
 $localArchive = Join-Path ([IO.Path]::GetTempPath()) "player-assistant-word-count-$deployId.tar"
@@ -151,6 +151,8 @@ $patterns = [
     'config.php.bak-deploy-*',
     'config.php.bak-word-count-refresh-*',
     'BrokerService.php.bak-deploy-*',
+    'BrokerAlertService.php.bak-deploy-*',
+    'DatabaseMigrationService.php.bak-deploy-*',
     'QuestService.php.bak-deploy-*',
     'WordCountService.php.bak-deploy-*',
     'WordCountService.php.bak-source-refresh-*',
@@ -166,7 +168,7 @@ foreach ($patterns as $pattern) {
         }
     }
 }
-foreach (['.BrokerService.php.deploy-*', '.QuestService.php.deploy-*', '.WordCountService.php.deploy-*', '.refresh-word-counts.php.deploy-*'] as $pattern) {
+foreach (['.BrokerService.php.deploy-*', '.BrokerAlertService.php.deploy-*', '.DatabaseMigrationService.php.deploy-*', '.QuestService.php.deploy-*', '.WordCountService.php.deploy-*', '.refresh-word-counts.php.deploy-*'] as $pattern) {
     foreach (glob($directory . '/' . $pattern) ?: [] as $abandonedTemporaryFile) {
         if (is_file($abandonedTemporaryFile)) {
             unlink($abandonedTemporaryFile);
@@ -182,8 +184,14 @@ $cronLine = "$CronSchedule /usr/bin/php $PrivateDirectory/refresh-word-counts.ph
 $cronData = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($cronLine))
 $cronCode = @'
 $line = base64_decode('__CRON_LINE__');
-$existing = shell_exec('crontab -l 2>/dev/null');
-$lines = preg_split('/\R/', is_string($existing) ? trim($existing) : '');
+$output = [];
+$listExit = 0;
+exec('timeout 10 /usr/bin/crontab -l 2>/dev/null', $output, $listExit);
+if ($listExit !== 0 && $listExit !== 1) {
+    throw new RuntimeException('Unable to read existing cron within the timeout.');
+}
+$existing = implode("\n", $output);
+$lines = preg_split('/\R/', trim($existing));
 $lines = array_values(array_filter($lines, static function ($candidate): bool {
     return $candidate !== '' && !str_contains($candidate, '/player-assistant-broker/refresh-word-counts.php');
 }));
@@ -192,10 +200,10 @@ $temporary = tempnam(sys_get_temp_dir(), 'pa-cron-');
 file_put_contents($temporary, implode("\n", $lines) . "\n");
 $output = [];
 $exit = 0;
-exec('crontab ' . escapeshellarg($temporary) . ' 2>&1', $output, $exit);
+exec('timeout 10 /usr/bin/crontab ' . escapeshellarg($temporary) . ' 2>&1', $output, $exit);
 unlink($temporary);
 if ($exit !== 0) {
-    throw new RuntimeException('Unable to install cron: ' . implode("\n", $output));
+    throw new RuntimeException('Unable to install cron within the timeout: ' . implode("\n", $output));
 }
 '@.Replace('__CRON_LINE__', $cronData)
 Invoke-RemotePhp $cronCode | Out-Null

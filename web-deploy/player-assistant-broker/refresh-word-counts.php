@@ -9,6 +9,7 @@ if (PHP_SAPI !== 'cli') {
 
 require_once __DIR__ . '/BrokerHttpException.php';
 require_once __DIR__ . '/WordCountService.php';
+require_once __DIR__ . '/BrokerAlertService.php';
 
 try {
     $configPath = $argv[1] ?? (__DIR__ . '/config.php');
@@ -32,6 +33,9 @@ try {
         PDO::ATTR_EMULATE_PREPARES => false,
     ]);
     $database->exec('PRAGMA busy_timeout = 5000');
+    $alerts = new BrokerAlertService(
+        $database,
+        is_array($config['observability'] ?? null) ? $config['observability'] : []);
 
     $service = new WordCountService(
         $database,
@@ -39,6 +43,9 @@ try {
     $snapshot = $service->refreshNow();
     $refreshStatus = $service->refreshStatus();
     if ($refreshStatus['healthy'] === false) {
+        $alerts->recordRefreshFailure(
+            (string)$refreshStatus['last_error_code'],
+            'The scheduled word-count refresh reported a failure.');
         $service->recordSchedulerRun(false, (string)$refreshStatus['last_error_code']);
         throw new RuntimeException(
             'The latest source-backed refresh attempt failed: '
@@ -53,6 +60,9 @@ try {
         'refresh' => $service->refreshStatus(),
     ], JSON_UNESCAPED_SLASHES) . PHP_EOL;
 } catch (Throwable $error) {
+    if (isset($alerts) && $alerts instanceof BrokerAlertService) {
+        $alerts->recordRefreshFailure('scheduler_failed', $error->getMessage());
+    }
     if (isset($service) && $service instanceof WordCountService) {
         $service->recordSchedulerRun(false, 'scheduler_failed');
     }

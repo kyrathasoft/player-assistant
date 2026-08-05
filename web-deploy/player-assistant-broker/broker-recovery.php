@@ -2,6 +2,8 @@
 
 declare(strict_types=1);
 
+require_once __DIR__ . '/BrokerAlertService.php';
+
 $options = getopt('', [
     'config::',
     'backup-dir::',
@@ -22,6 +24,7 @@ $statusPath = (string)($options['status-path'] ?? $recovery['status_path'] ?? __
 $keep = max(1, (int)($options['keep'] ?? $recovery['retention_count'] ?? 14));
 $healthUrl = (string)($options['health-url'] ?? $recovery['health_url'] ?? 'https://bryanmiller.us/scarlethorizons/api/v1/health');
 $alertEmail = trim((string)($options['alert-email'] ?? $recovery['alert_email'] ?? ''));
+$observability = is_array($config['observability'] ?? null) ? $config['observability'] : [];
 $startedAt = microtime(true);
 $status = [
     'schema_version' => 1,
@@ -68,6 +71,16 @@ try {
 
     $database = new PDO('sqlite:' . $databasePath, null, null, [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]);
     $database->exec('PRAGMA busy_timeout = 5000');
+    $database->exec(
+        'CREATE TABLE IF NOT EXISTS broker_alert_events (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            alert_type TEXT NOT NULL,
+            occurred_at INTEGER NOT NULL,
+            error_code TEXT NOT NULL,
+            message TEXT NOT NULL,
+            alert_sent_at INTEGER NULL
+        )');
+    $alerts = new BrokerAlertService($database, array_replace($observability, ['alert_email' => $observability['alert_email'] ?? $alertEmail]));
     $integrity = (string)$database->query('PRAGMA integrity_check')->fetchColumn();
     $status['integrity_check'] = $integrity;
     if ($integrity !== 'ok') {
@@ -107,6 +120,7 @@ try {
             && ($health['status'] ?? null) === 'ok'
             && $refreshHealthy) ? 'ok' : 'failed';
         if ($status['health_check'] !== 'ok') {
+            $alerts->recordHealthFailure('health_endpoint_failed', 'Broker health endpoint reported a failure.');
             throw new RuntimeException('Broker health endpoint reported a failure.');
         }
     }
@@ -122,6 +136,9 @@ try {
     $status['status'] = 'ok';
 } catch (Throwable $exception) {
     $status['error_code'] = preg_replace('/[^a-z0-9_]+/i', '_', strtolower($exception->getMessage())) ?: 'recovery_failed';
+    if (isset($alerts) && $alerts instanceof BrokerAlertService) {
+        $alerts->recordHealthFailure('recovery_failed', $exception->getMessage());
+    }
     sendRecoveryAlert($alertEmail, $status);
     writeRecoveryStatus($statusPath, $status);
     fwrite(STDERR, "Broker recovery failed.\n");

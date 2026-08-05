@@ -18,8 +18,8 @@
 - [ ] Add broker database recovery and observability operations.
   - [x] Schedule consistent `broker.sqlite` backups and configure off-host retention tooling.
   - [x] Run regular `PRAGMA integrity_check` checks and test restoration.
-  - [ ] Configure alerts for broker health failures, refresh failures, and repeated server errors.
-- [ ] Add ordered SQLite migrations using `PRAGMA user_version`, transactions, pre-migration backups, and upgrade fixtures.
+  - [x] Implement health, word-count refresh, and repeated-server-error alerting with cooldowns; production `alert_email` still requires a configured recipient.
+- [x] Add ordered SQLite migrations using `PRAGMA user_version`, transactions, pre-migration backups, and upgrade fixtures.
 - [ ] Harden the release supply chain.
   - Pin GitHub Actions and installer dependencies to immutable versions or hashes.
   - Enable NuGet locked restore and dependency scanning.

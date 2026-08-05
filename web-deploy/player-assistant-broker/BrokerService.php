@@ -2,6 +2,9 @@
 
 declare(strict_types=1);
 
+require_once __DIR__ . '/DatabaseMigrationService.php';
+require_once __DIR__ . '/BrokerAlertService.php';
+
 final class BrokerService
 {
     private PDO $database;
@@ -11,6 +14,7 @@ final class BrokerService
     private WordCountService $wordCounts;
     private QuestService $quests;
     private MessageService $messages;
+    private BrokerAlertService $alerts;
 
     public function __construct(
         private readonly array $config,
@@ -37,6 +41,12 @@ final class BrokerService
         ]);
         $this->database->exec('PRAGMA foreign_keys = ON');
         $this->database->exec('PRAGMA busy_timeout = 5000');
+        $migrationConfig = is_array($config['migrations'] ?? null) ? $config['migrations'] : [];
+        $migrationBackupDirectory = (string)($migrationConfig['backup_directory'] ?? dirname($databasePath) . '/migration-backups');
+        (new DatabaseMigrationService($this->database, $migrationBackupDirectory))->migrate();
+        $this->alerts = new BrokerAlertService(
+            $this->database,
+            is_array($config['observability'] ?? null) ? $config['observability'] : []);
         $this->ensureSchema();
         $this->characterAuth = new CharacterAuthService(
             $this->database,
@@ -65,9 +75,16 @@ final class BrokerService
         ?callable $destroySession = null): array
     {
         if ($method === 'GET' && $route === '/v1/health') {
+            $wordCountRefresh = $this->wordCounts->refreshStatus();
+            if (($wordCountRefresh['healthy'] ?? null) === false) {
+                $this->alerts->recordHealthFailure(
+                    (string)($wordCountRefresh['last_error_code'] ?? 'word_count_refresh_failed'),
+                    'The word-count refresh health check is failing.');
+            }
             return $this->response(200, [
                 'service' => 'player-assistant-broker',
                 'schema_version' => 5,
+                'database_schema_version' => (int)$this->database->query('PRAGMA user_version')->fetchColumn(),
                 'status' => 'ok',
                 'rpol_credentials_configured' => $this->rpolCredentialsConfigured(),
                 'snapshot_signing_configured' => $this->snapshotSigningConfigured(),
@@ -75,7 +92,7 @@ final class BrokerService
                 'character_account_count' => $this->characterAuth->accountCount(),
                 'xp_tracking_configured' => $this->xpTracking->isConfigured(),
                 'word_count_snapshot_available' => $this->wordCounts->hasSnapshot(),
-                'word_count_refresh' => $this->wordCounts->refreshStatus(),
+                'word_count_refresh' => $wordCountRefresh,
                 'quest_request_workflow_configured' => true,
             ]);
         }

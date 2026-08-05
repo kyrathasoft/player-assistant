@@ -12,6 +12,7 @@ header('Strict-Transport-Security: max-age=31536000');
 
 $requestId = bin2hex(random_bytes(8));
 header('X-Request-Id: ' . $requestId);
+$config = null;
 
 try {
     requireHttps();
@@ -25,6 +26,7 @@ try {
     require_once $privateDirectory . '/QuestService.php';
     require_once $privateDirectory . '/MessageService.php';
     require_once $privateDirectory . '/BrokerService.php';
+    require_once $privateDirectory . '/BrokerAlertService.php';
     $configPathOverride = getenv('PLAYER_ASSISTANT_BROKER_CONFIG');
     $configPath = is_string($configPathOverride) && $configPathOverride !== ''
         ? $configPathOverride
@@ -97,11 +99,41 @@ try {
         $exception->getMessage(),
         $exception->getFile(),
         $exception->getLine()));
+    if (is_array($config)) {
+        recordBrokerServerError($config, $exception);
+    }
     sendJson(500, [
         'error' => 'internal_error',
         'message' => 'The broker could not complete the request.',
         'request_id' => $requestId,
     ]);
+}
+
+function recordBrokerServerError(array $config, Throwable $exception): void
+{
+    try {
+        $databasePath = (string)($config['api']['database_path'] ?? '');
+        if ($databasePath === '') {
+            return;
+        }
+        $database = new PDO('sqlite:' . $databasePath, null, null, [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]);
+        $database->exec('PRAGMA busy_timeout = 5000');
+        $database->exec(
+            'CREATE TABLE IF NOT EXISTS broker_alert_events (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                alert_type TEXT NOT NULL,
+                occurred_at INTEGER NOT NULL,
+                error_code TEXT NOT NULL,
+                message TEXT NOT NULL,
+                alert_sent_at INTEGER NULL
+            )');
+        (new BrokerAlertService(
+            $database,
+            is_array($config['observability'] ?? null) ? $config['observability'] : []))
+            ->recordServerError('internal_error', $exception->getMessage());
+    } catch (Throwable $alertError) {
+        error_log('[player-assistant-broker-alert] ' . $alertError->getMessage());
+    }
 }
 
 function requireHttps(): void
