@@ -4645,7 +4645,7 @@ namespace PlayerAssistant
             {
                 cancellationToken.ThrowIfCancellationRequested();
                 var sitemapPath = Path.Combine(AppContext.BaseDirectory, SitemapFileName);
-                var tempDirectory = Path.Combine(AppContext.BaseDirectory, TempDirectoryName);
+                var tempDirectory = RuntimePathUtility.GetUserDataPath(TempDirectoryName);
                 var tempSitemapPath = Path.Combine(tempDirectory, SitemapFileName);
                 var keywordUrlsPath = Path.Combine(AppContext.BaseDirectory, SitemapKeywordUrlsFileName);
 
