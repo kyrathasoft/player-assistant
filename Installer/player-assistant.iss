@@ -7,7 +7,7 @@
 #endif
 
 #ifndef Version
-#define Version "0.9.5"
+#error Version must be supplied from version.props by build-installer.ps1
 #endif
 
 #ifndef InstallerVersion

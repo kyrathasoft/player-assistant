@@ -4,6 +4,10 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
+$repoRoot = Split-Path -Parent $PwaRoot
+. (Join-Path $repoRoot 'version-metadata.ps1')
+$versionMetadata = Get-PlayerAssistantVersionMetadata -RepoRoot $repoRoot
+
 function Assert-Condition {
     param(
         [Parameter(Mandatory = $true)][bool]$Condition,
@@ -17,6 +21,7 @@ function Assert-Condition {
 $requiredFiles = @(
     'index.html',
     'styles.css',
+    'version.js',
     'app.js',
     'translator-worker.js',
     'service-worker.js',
@@ -235,12 +240,13 @@ $featureModulePaths = @(
     'modules/search.js',
     'modules/dice.js'
 )
-foreach ($script in @('app.js', 'translator-worker.js', 'service-worker.js') + $featureModulePaths) {
+foreach ($script in @('version.js', 'app.js', 'translator-worker.js', 'service-worker.js') + $featureModulePaths) {
     & node --check (Join-Path $PwaRoot $script)
     Assert-Condition -Condition ($LASTEXITCODE -eq 0) -Message "JavaScript syntax check failed: $script"
 }
 
 $html = Get-Content -Raw -LiteralPath (Join-Path $PwaRoot 'index.html')
+$versionScript = Get-Content -Raw -LiteralPath (Join-Path $PwaRoot 'version.js')
 $appScriptEntry = Get-Content -Raw -LiteralPath (Join-Path $PwaRoot 'app.js')
 $featureModuleScripts = @($featureModulePaths | ForEach-Object {
     Get-Content -Raw -LiteralPath (Join-Path $PwaRoot $_)
@@ -319,9 +325,9 @@ Assert-Condition -Condition ($serviceWorker.Contains('networkFirstData') -and $s
 Assert-Condition -Condition ($appScript.Contains("updateViaCache: 'none'") -and $appScript.Contains('await registration.update()')) -Message 'The PWA must explicitly check for uncached service-worker updates.'
 Assert-Condition -Condition ($manifest.start_url -eq './#dashboard' -and $manifest.scope -eq './') -Message 'The manifest must keep navigation inside the deployed PWA directory.'
 Assert-Condition -Condition ($html.Contains('href="manifest.webmanifest"') -and $appScript.Contains('service-worker.js')) -Message 'The install manifest or service-worker registration is missing.'
-Assert-Condition -Condition ($html.Contains('<script type="module" src="app.js?v=60"></script>') -and $appScriptEntry.Contains("from './modules/translator.js'") -and $appScriptEntry.Contains("from './modules/search.js'") -and $appScriptEntry.Contains("from './modules/dice.js'")) -Message 'The PWA entry point must load the translator, search, and dice feature modules.'
+Assert-Condition -Condition ($html.Contains("<script src=`"version.js?v=$($versionMetadata.PwaMetadataRevision)`"></script>") -and $html.Contains("<script type=`"module`" src=`"app.js?v=$($versionMetadata.PwaAppRevision)`"></script>") -and $appScriptEntry.Contains("from './modules/translator.js'") -and $appScriptEntry.Contains("from './modules/search.js'") -and $appScriptEntry.Contains("from './modules/dice.js'")) -Message 'The PWA entry point must load version metadata and the translator, search, and dice feature modules.'
 Assert-Condition -Condition ($featureModulePaths.Count -eq @($featureModulePaths | Where-Object { $deploymentTest.Contains("'$_' = @('application/javascript', 'text/javascript')") }).Count) -Message 'Public deployment verification must allow every PWA feature module.'
-Assert-Condition -Condition ($html.Contains('styles.css?v=43') -and $serviceWorker.Contains("player-assistant-pwa-0.9.8-v71") -and $serviceWorker.Contains("'./styles.css?v=43'") -and $serviceWorker.Contains("'./app.js?v=60'") -and $featureModulePaths.Count -eq @($featureModulePaths | Where-Object { $serviceWorker.Contains("'./$_'") }).Count -and $serviceWorker.Contains("'./level-progression.json'") -and $serviceWorker.Contains("'./magic-items.json'")) -Message 'The PWA shell must use cache-busting assets, preload every feature module, and preload the progression and magic-item data.'
+Assert-Condition -Condition ($html.Contains("styles.css?v=$($versionMetadata.PwaStylesRevision)") -and $html.Contains("$($versionMetadata.PwaVersion) PWA") -and $versionScript.Contains("pwaVersion: '$($versionMetadata.PwaVersion)'") -and $versionScript.Contains("metadataRevision: $($versionMetadata.PwaMetadataRevision)") -and $versionScript.Contains("stylesRevision: $($versionMetadata.PwaStylesRevision)") -and $versionScript.Contains("appRevision: $($versionMetadata.PwaAppRevision)") -and $versionScript.Contains("cacheRevision: $($versionMetadata.PwaCacheRevision)") -and $serviceWorker.Contains("importScripts('./version.js?v=$($versionMetadata.PwaMetadataRevision)')") -and $serviceWorker.Contains('VERSION_METADATA.cacheRevision') -and $serviceWorker.Contains('VERSION_METADATA.stylesRevision') -and $serviceWorker.Contains('VERSION_METADATA.appRevision') -and $appScriptEntry.Contains('PLAYER_ASSISTANT_VERSION_METADATA?.pwaVersion') -and $deploymentTest.Contains("'version.js' = @('application/javascript', 'text/javascript')") -and $featureModulePaths.Count -eq @($featureModulePaths | Where-Object { $serviceWorker.Contains("'./$_'") }).Count -and $serviceWorker.Contains("'./level-progression.json'") -and $serviceWorker.Contains("'./magic-items.json'")) -Message 'The PWA shell must use centralized cache-busting metadata, preload every feature module, and preload the progression and magic-item data.'
 Assert-Condition -Condition ($html.Contains('value="ghukliak"') -and $html.Contains('Goblin') -and $appScript.Contains("languageSelect?.value === 'ghukliak'") -and $translatorWorker.Contains("message.language === 'ghukliak'")) -Message 'The PWA translator must expose the Goblin/Ghukliak language in its UI and worker.'
 Assert-Condition -Condition ([System.Text.RegularExpressions.Regex]::IsMatch($styles, '\.translation-loading\[hidden\]\s*\{\s*display:\s*none\s*!important;\s*\}', [System.Text.RegularExpressions.RegexOptions]::Singleline)) -Message 'The translator loading indicator must remain hidden whenever its hidden attribute is set.'
 Assert-Condition -Condition (!$translatorWorker.Contains(".replaceAll('’', `"'`")")) -Message 'Translator normalization must preserve distinct straight- and curly-apostrophe lexicon terms.'

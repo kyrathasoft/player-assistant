@@ -62,6 +62,7 @@ Assert-Condition -Condition (Test-Path -LiteralPath $PwaRoot -PathType Container
 $runtimeFiles = [ordered]@{
     'index.html' = @('text/html')
     'styles.css' = @('text/css')
+    'version.js' = @('application/javascript', 'text/javascript')
     'app.js' = @('application/javascript', 'text/javascript')
     'modules/translator.js' = @('application/javascript', 'text/javascript')
     'modules/search.js' = @('application/javascript', 'text/javascript')

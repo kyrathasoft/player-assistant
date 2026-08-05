@@ -21,8 +21,6 @@ env:
   RELEASE_DIR: ${{ github.workspace }}\Release
   PUBLISH_DIR: ${{ github.workspace }}\Release\publish
   INSTALLER_DIR: ${{ github.workspace }}\Release\installer
-  UPDATE_ARCHIVE_PATH: ${{ github.workspace }}\Release\installer\p-assist-0.9.5.zip
-  UPDATE_INSTALLER_PATH: ${{ github.workspace }}\Release\installer\p-assist-0.9.5.exe
   UPDATE_MANIFEST_PATH: ${{ github.workspace }}\Release\installer\p-assist-updates.json
   UPDATE_MANIFEST_SIGNATURE_PATH: ${{ github.workspace }}\Release\installer\p-assist-updates.json.sig
   UPDATE_MANIFEST_PUBLIC_KEY_PATH: ${{ github.workspace }}\Release\installer\p-assist-updates.public-key.xml
@@ -67,6 +65,16 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Load canonical version metadata
+        shell: pwsh
+        run: |
+          . .\version-metadata.ps1
+          $metadata = Get-PlayerAssistantVersionMetadata -RepoRoot $env:GITHUB_WORKSPACE
+          "PLAYER_ASSISTANT_VERSION=$($metadata.Version)" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          "INSTALLER_PACKAGE_PATH=$env:INSTALLER_DIR\player-assistant-$($metadata.Version)-installer.zip" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          "UPDATE_ARCHIVE_PATH=$env:INSTALLER_DIR\p-assist-$($metadata.InstallerVersion).zip" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          "UPDATE_INSTALLER_PATH=$env:INSTALLER_DIR\p-assist-$($metadata.InstallerVersion).exe" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+
       - name: Verify repository hygiene
         shell: pwsh
         run: .\verify-repository-hygiene.ps1
@@ -105,6 +113,9 @@ jobs:
 
       - name: Verify canonical lexicon artifacts
         run: python .\verify-lexicon-artifacts.py
+
+      - name: Verify canonical version metadata
+        run: python .\verify-version-metadata.py
 
       - name: Test PWA deployment transactions
         shell: pwsh
@@ -397,7 +408,7 @@ jobs:
           name: release-installer-artifacts
           if-no-files-found: error
           path: |
-            ${{ env.INSTALLER_DIR }}\player-assistant-0.9.5-installer.zip
+            ${{ env.INSTALLER_PACKAGE_PATH }}
             ${{ env.UPDATE_ARCHIVE_PATH }}
             ${{ env.UPDATE_INSTALLER_PATH }}
             ${{ env.UPDATE_MANIFEST_PATH }}

@@ -924,6 +924,6 @@ internal static class TranslatorUiTests
     {
         var versionText = (string)(InvokeStaticMethod(typeof(Form1), "GetAppVersionText")
             ?? throw new InvalidOperationException("GetAppVersionText returned null."));
-        AssertEqual("RPOL Scarlet Horizon Campaign Assistant 0.9.5", versionText, "unexpected About Version text");
+        AssertEqual($"RPOL Scarlet Horizon Campaign Assistant {GetCanonicalVersion()}", versionText, "unexpected About Version text");
     }
 }

@@ -129,7 +129,8 @@ Deploy changed public runtime files through the transactional deployment script:
     'modules/search.js',
     'modules/translator.js',
     'service-worker.js',
-    'styles.css'
+    'styles.css',
+    'version.js'
 )
 ```
 
@@ -161,6 +162,7 @@ modules/search.js
 modules/translator.js
 service-worker.js
 styles.css
+version.js
 quests.json
 magic-items.json
 ```

@@ -1,7 +1,7 @@
 param(
     [string]$OutputDir = (Join-Path $PSScriptRoot 'Release\installer'),
     [string]$PublishDir = (Join-Path $PSScriptRoot 'Release\publish'),
-    [string]$Version = '0.9.5',
+    [string]$Version,
     [string]$ManifestBaseUri = 'https://bryanmiller.us/scarlethorizons/',
     [string]$InstallerPath,
     [string]$ArchivePath,
@@ -13,6 +13,11 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
+
+. (Join-Path $PSScriptRoot 'version-metadata.ps1')
+if ([string]::IsNullOrWhiteSpace($Version)) {
+    $Version = (Get-PlayerAssistantVersionMetadata -RepoRoot $PSScriptRoot).Version
+}
 
 function Assert-RequiredFile {
     param(

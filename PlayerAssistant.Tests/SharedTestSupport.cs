@@ -810,6 +810,13 @@ internal static class TestSupport
         throw new InvalidOperationException("Unable to locate repository root.");
     }
 
+    internal static string GetCanonicalVersion(string propertyName = "PlayerAssistantVersion")
+    {
+        var metadataPath = Path.Combine(GetRepositoryRoot(), "version.props");
+        var document = System.Xml.Linq.XDocument.Load(metadataPath);
+        return document.Descendants(propertyName).Single().Value;
+    }
+
     internal static void CopyDirectory(string sourceDirectory, string destinationDirectory)
     {
         Directory.CreateDirectory(destinationDirectory);
@@ -1487,9 +1494,9 @@ internal static class TestSupport
             generated_at = DateTimeOffset.UtcNow.ToString("O"),
             app = new
             {
-                version = GetProjectProperty("Version"),
-                file_version = GetProjectProperty("FileVersion"),
-                product_version = GetProjectProperty("InformationalVersion")
+                version = GetCanonicalVersion(),
+                file_version = GetCanonicalVersion("PlayerAssistantAssemblyVersion"),
+                product_version = GetCanonicalVersion()
             },
             runtime = new
             {
@@ -1518,16 +1525,6 @@ internal static class TestSupport
     internal static void WriteReleaseManifest(string directoryPath)
     {
         var assembly = typeof(Program).Assembly;
-        var project = XDocument.Load(Path.Combine(GetRepositoryRoot(), "player-assistant.csproj"));
-        string GetProjectProperty(string name)
-        {
-            return project
-                .Descendants()
-                .FirstOrDefault(element => element.Name.LocalName == name)
-                ?.Value
-                ?? string.Empty;
-        }
-
         var fileVersion = assembly
             .GetCustomAttributes(typeof(AssemblyFileVersionAttribute), inherit: false)
             .OfType<AssemblyFileVersionAttribute>()
@@ -1548,7 +1545,7 @@ internal static class TestSupport
         {
             schema_version = 1,
             generated_at = DateTimeOffset.UtcNow.ToString("O"),
-            app_version = GetProjectProperty("Version"),
+            app_version = GetCanonicalVersion(),
             file_version = fileVersion,
             product_version = informationalVersion,
             hash_algorithm = "SHA256",
@@ -1564,16 +1561,6 @@ internal static class TestSupport
 
     internal static void WriteReleaseProvenance(string directoryPath)
     {
-        var project = XDocument.Load(Path.Combine(GetRepositoryRoot(), "player-assistant.csproj"));
-        string GetProjectProperty(string name)
-        {
-            return project
-                .Descendants()
-                .FirstOrDefault(element => element.Name.LocalName == name)
-                ?.Value
-                ?? string.Empty;
-        }
-
         var manifestEntry = GetReleaseManifestEntry(directoryPath, "release-manifest.json");
         var inventoryEntry = GetReleaseManifestEntry(directoryPath, "release-runtime-inventory.json");
         var provenance = new
@@ -1582,9 +1569,9 @@ internal static class TestSupport
             generated_at = DateTimeOffset.UtcNow.ToString("O"),
             app = new
             {
-                version = GetProjectProperty("Version"),
-                file_version = GetProjectProperty("FileVersion"),
-                product_version = GetProjectProperty("InformationalVersion")
+                version = GetCanonicalVersion(),
+                file_version = GetCanonicalVersion("PlayerAssistantAssemblyVersion"),
+                product_version = GetCanonicalVersion()
             },
             git = new
             {

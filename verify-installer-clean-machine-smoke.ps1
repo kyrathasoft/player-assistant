@@ -1,10 +1,18 @@
 param(
-    [string]$PackagePath = (Join-Path $PSScriptRoot 'Release\installer\player-assistant-0.9.5-installer.zip'),
-    [string]$UpdateVersion = '0.9.5',
+    [string]$PackagePath,
+    [string]$UpdateVersion,
     [int]$TimeoutSeconds = 60
 )
 
 $ErrorActionPreference = 'Stop'
+
+. (Join-Path $PSScriptRoot 'version-metadata.ps1')
+if ([string]::IsNullOrWhiteSpace($UpdateVersion)) {
+    $UpdateVersion = (Get-PlayerAssistantVersionMetadata -RepoRoot $PSScriptRoot).Version
+}
+if ([string]::IsNullOrWhiteSpace($PackagePath)) {
+    $PackagePath = Join-Path $PSScriptRoot "Release\installer\player-assistant-$UpdateVersion-installer.zip"
+}
 
 $HostedSettingsOverrideEnvironmentVariable = 'PLAYER_ASSISTANT_HOSTED_LOCAL_SETTINGS_URL_OVERRIDE'
 $HostedSettingsPublicKeyEnvironmentVariable = 'PLAYER_ASSISTANT_HOSTED_SETTINGS_PUBLIC_KEY_PEM'
@@ -13,8 +21,9 @@ $UpdatePublicKeyEnvironmentVariable = 'PLAYER_ASSISTANT_UPDATE_MANIFEST_PUBLIC_K
 $HostedSettingsRelativePath = 'scarlethorizons/settings.local.json'
 $UpdateManifestRelativePath = 'scarlethorizons/p-assist-updates.json'
 $UpdateSignatureRelativePath = 'scarlethorizons/p-assist-updates.json.sig'
-$UpdateArchiveFileName = "p-assist-$UpdateVersion.zip"
-$UpdateInstallerFileName = "p-assist-$UpdateVersion.exe"
+$installerVersion = ($UpdateVersion -split '[-+]')[0]
+$UpdateArchiveFileName = "p-assist-$installerVersion.zip"
+$UpdateInstallerFileName = "p-assist-$installerVersion.exe"
 $CredentialTargets = @(
     'PlayerAssistant/RPOL/UserName',
     'PlayerAssistant/RPOL/Password',

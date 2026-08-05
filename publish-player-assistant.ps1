@@ -8,6 +8,8 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
+. (Join-Path $PSScriptRoot 'version-metadata.ps1')
+
 $SettingsLocalFileName = 'settings.local.json'
 $ProjectFileName = 'player-assistant.csproj'
 $SettingsFormat = 'app-protected-v3'
@@ -30,6 +32,8 @@ $ReleaseManifestFileName = 'release-manifest.json'
 $RuntimeInventoryFileName = 'release-runtime-inventory.json'
 $ReleaseProvenanceFileName = 'release-provenance.json'
 $ReleaseScriptFileNames = @(
+    'version.props',
+    'version-metadata.ps1',
     'publish-player-assistant.ps1',
     'verify-rc-checklist.ps1',
     'verify-rc-self-tests.ps1',
@@ -253,29 +257,12 @@ function Invoke-RuntimeSidecarVerification {
 }
 
 function Get-ProjectVersionInfo {
-    $projectPath = Join-Path $PSScriptRoot $ProjectFileName
-    Assert-RequiredFile -Path $projectPath -Description $ProjectFileName
-
-    [xml]$project = Get-Content -Raw -LiteralPath $projectPath
-    $propertyGroup = @($project.Project.PropertyGroup | Where-Object { $_.Version -or $_.FileVersion -or $_.InformationalVersion } | Select-Object -First 1)
-    if ($propertyGroup.Count -eq 0) {
-        throw "$ProjectFileName does not define Version, FileVersion, or InformationalVersion."
-    }
-
-    $version = [string]$propertyGroup[0].Version
-    $fileVersion = [string]$propertyGroup[0].FileVersion
-    $informationalVersion = [string]$propertyGroup[0].InformationalVersion
-
-    if ([string]::IsNullOrWhiteSpace($version) -or
-        [string]::IsNullOrWhiteSpace($fileVersion) -or
-        [string]::IsNullOrWhiteSpace($informationalVersion)) {
-        throw "$ProjectFileName must define non-empty Version, FileVersion, and InformationalVersion."
-    }
+    $metadata = Get-PlayerAssistantVersionMetadata -RepoRoot $PSScriptRoot
 
     return [pscustomobject]@{
-        Version = $version
-        FileVersion = $fileVersion
-        InformationalVersion = $informationalVersion
+        Version = $metadata.Version
+        FileVersion = $metadata.AssemblyVersion
+        InformationalVersion = $metadata.Version
     }
 }
 

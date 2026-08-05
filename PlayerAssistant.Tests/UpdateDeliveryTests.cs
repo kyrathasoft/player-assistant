@@ -225,21 +225,23 @@ internal static class UpdateDeliveryTests
     internal static void UpdateCheckComparesAgainstCurrentAppVersion()
     {
         var currentVersion = PlayerAssistantUpdateUtility.GetCurrentAppVersion();
-        AssertEqual(new Version(0, 9, 5), currentVersion, "unexpected current app update-comparison version");
+        var expectedVersion = Version.Parse(GetCanonicalVersion().Split('-', '+')[0]);
+        AssertEqual(expectedVersion, currentVersion, "unexpected current app update-comparison version");
 
         var sameVersion = new PlayerAssistantUpdateInfo(
-            new Version(0, 9, 5),
-            "0.9.5",
-            new Uri("https://bryanmiller.us/scarlethorizons/p-assist-0.9.5.zip"),
+            expectedVersion,
+            expectedVersion.ToString(),
+            new Uri($"https://bryanmiller.us/scarlethorizons/p-assist-{expectedVersion}.zip"),
             new string('A', 64),
-            new Uri("https://bryanmiller.us/scarlethorizons/p-assist-0.9.5.exe"),
+            new Uri($"https://bryanmiller.us/scarlethorizons/p-assist-{expectedVersion}.exe"),
             new string('B', 64));
+        var nextVersion = new Version(expectedVersion.Major, expectedVersion.Minor, expectedVersion.Build + 1);
         var newerVersion = new PlayerAssistantUpdateInfo(
-            new Version(0, 9, 6),
-            "0.9.6",
-            new Uri("https://bryanmiller.us/scarlethorizons/p-assist-0.9.6.zip"),
+            nextVersion,
+            nextVersion.ToString(),
+            new Uri($"https://bryanmiller.us/scarlethorizons/p-assist-{nextVersion}.zip"),
             new string('C', 64),
-            new Uri("https://bryanmiller.us/scarlethorizons/p-assist-0.9.6.exe"),
+            new Uri($"https://bryanmiller.us/scarlethorizons/p-assist-{nextVersion}.exe"),
             new string('D', 64));
 
         AssertFalse(sameVersion.IsNewerThan(currentVersion), "same version should not be offered as an update");

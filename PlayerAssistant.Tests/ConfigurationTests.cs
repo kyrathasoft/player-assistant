@@ -873,9 +873,11 @@ internal static class ConfigurationTests
             .InformationalVersion;
         var fileVersion = FileVersionInfo.GetVersionInfo(assembly.Location).FileVersion;
 
-        AssertEqual(new Version(0, 9, 5, 0), name.Version!, "unexpected assembly version");
-        AssertEqual("0.9.5.0", fileVersion!, "unexpected file version");
-        AssertEqual("0.9.5", informationalVersion, "unexpected informational version");
+        var expectedVersion = GetCanonicalVersion();
+        var expectedAssemblyVersion = GetCanonicalVersion("PlayerAssistantAssemblyVersion");
+        AssertEqual(Version.Parse(expectedAssemblyVersion), name.Version!, "unexpected assembly version");
+        AssertEqual(expectedAssemblyVersion, fileVersion!, "unexpected file version");
+        AssertEqual(expectedVersion, informationalVersion, "unexpected informational version");
     }
 
     internal static void ApplicationVersionArgumentReturnsVersionText()
@@ -896,7 +898,7 @@ internal static class ConfigurationTests
         var versionText = (string?)InvokeStaticMethod(programType, "GetVersionText")
             ?? throw new InvalidOperationException("GetVersionText returned null.");
         AssertContains(versionText, "player-assistant");
-        AssertContains(versionText, "0.9.5");
+        AssertContains(versionText, GetCanonicalVersion());
     }
 
     internal static void StartupManifestStatusDistinguishesSkippedAndFailed()

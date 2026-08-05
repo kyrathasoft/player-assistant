@@ -1,12 +1,21 @@
 param(
-    [string]$PackagePath = (Join-Path $PSScriptRoot 'Release\installer\player-assistant-0.9.5-installer.zip'),
-    [string]$ExpectedVersion = '0.9.5',
+    [string]$PackagePath,
+    [string]$ExpectedVersion,
     [string]$ExpectedSignerSubject = $env:PLAYER_ASSISTANT_RELEASE_SIGNER_SUBJECT,
     [string]$ExpectedSignerThumbprint = $env:PLAYER_ASSISTANT_RELEASE_SIGNER_THUMBPRINT,
     [switch]$RequireCodeSigning
 )
 
 $ErrorActionPreference = 'Stop'
+
+. (Join-Path $PSScriptRoot 'version-metadata.ps1')
+$versionMetadata = Get-PlayerAssistantVersionMetadata -RepoRoot $PSScriptRoot
+if ([string]::IsNullOrWhiteSpace($ExpectedVersion)) {
+    $ExpectedVersion = $versionMetadata.Version
+}
+if ([string]::IsNullOrWhiteSpace($PackagePath)) {
+    $PackagePath = Join-Path $PSScriptRoot "Release\installer\player-assistant-$ExpectedVersion-installer.zip"
+}
 
 $RuntimeSidecarVerificationScriptPath = Join-Path $PSScriptRoot 'verify-runtime-sidecars.ps1'
 
