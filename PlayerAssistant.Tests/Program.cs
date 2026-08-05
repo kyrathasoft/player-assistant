@@ -153,6 +153,7 @@ var tests = new (string Name, Action Test)[]
     ("startup health writes schema version", StartupHealthWritesSchemaVersion),
     ("startup health records required phase failure", StartupHealthRecordsRequiredPhaseFailure),
     ("startup health records optional phase failure without throwing", StartupHealthRecordsOptionalPhaseFailureWithoutThrowing),
+    ("runtime path utility uses user data root for published runtime", RuntimePathUtilityUsesUserDataRootForPublishedRuntime),
     ("runtime housekeeping removes stale temp and atomic files", RuntimeHousekeepingRemovesStaleTempAndAtomicFiles),
     ("runtime housekeeping preserves fresh and unrelated tmp files", RuntimeHousekeepingPreservesFreshAndUnrelatedTmpFiles),
     ("runtime housekeeping removes old quarantined json only", RuntimeHousekeepingRemovesOldQuarantinedJsonOnly),
@@ -3541,6 +3542,21 @@ static void StartupHealthRecordsOptionalPhaseFailureWithoutThrowing()
             AssertFalse(File.ReadAllText(GetStartupLogPath()).Contains("Bearer abc123", StringComparison.Ordinal), "startup log should redact optional phase bearer tokens");
         });
     });
+}
+
+static void RuntimePathUtilityUsesUserDataRootForPublishedRuntime()
+{
+    var publishedDirectory = Path.Combine(Path.GetTempPath(), "player-assistant-test", "Release", "publish");
+    var userDataDirectory = Path.Combine(Path.GetTempPath(), "player-assistant-test", "LocalAppData");
+
+    var resolved = RuntimePathUtility.ResolveWritableRuntimeDirectory(
+        publishedDirectory,
+        userDataDirectory);
+
+    AssertEqual(
+        Path.GetFullPath(userDataDirectory),
+        resolved,
+        "published runtime writes must use the user data root instead of the application directory");
 }
 
 static void RuntimeHousekeepingRemovesStaleTempAndAtomicFiles()
