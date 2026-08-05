@@ -44,11 +44,11 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
       - name: Setup Node.js
         if: matrix.group == 'pwa' || matrix.group == 'browser'
-        uses: actions/setup-node@v7
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
         with:
           node-version: 24.x
           cache: npm
@@ -56,7 +56,7 @@ jobs:
 
       - name: Setup PHP
         if: matrix.group == 'php'
-        uses: shivammathur/setup-php@v2
+        uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240 # v2
         with:
           php-version: '8.4'
           extensions: curl, pdo_sqlite, sodium, sqlite3
@@ -68,7 +68,7 @@ jobs:
 
       - name: Cache PHP dependencies
         if: matrix.group == 'php'
-        uses: actions/cache@v6
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
         with:
           path: ~\.composer\cache
           key: php-composer-${{ runner.os }}-${{ hashFiles('**/composer.lock') }}
@@ -77,7 +77,7 @@ jobs:
 
       - name: Cache Playwright browsers
         if: matrix.group == 'pwa' || matrix.group == 'browser'
-        uses: actions/cache@v6
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
         with:
           path: ~\AppData\Local\ms-playwright
           key: playwright-${{ runner.os }}-${{ hashFiles('pwa/package-lock.json') }}
@@ -118,17 +118,17 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           fetch-depth: 0
 
       - name: Setup .NET 10 SDK
-        uses: actions/setup-dotnet@v6
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6
         with:
           dotnet-version: 10.0.x
 
       - name: Cache .NET dependencies
-        uses: actions/cache@v6
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
         with:
           path: ~\.nuget\packages
           key: dotnet-${{ runner.os }}-${{ hashFiles('**/*.csproj', '**/*.props', '**/*.targets') }}
@@ -414,7 +414,7 @@ jobs:
           -SkipCodeSigning
 
       - name: Upload release installer artifacts
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: release-installer-artifacts
           if-no-files-found: error
@@ -433,7 +433,7 @@ jobs:
 
       - name: Upload failed-run hardening artifacts
         if: failure()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: hardening-failure-artifacts
           if-no-files-found: warn
