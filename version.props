@@ -1,0 +1,11 @@
+<Project>
+  <PropertyGroup>
+    <PlayerAssistantVersion>0.9.5</PlayerAssistantVersion>
+    <PlayerAssistantAssemblyVersion>0.9.5.0</PlayerAssistantAssemblyVersion>
+    <PlayerAssistantPwaVersion>0.9.8</PlayerAssistantPwaVersion>
+    <PlayerAssistantPwaMetadataRevision>1</PlayerAssistantPwaMetadataRevision>
+    <PlayerAssistantPwaStylesRevision>43</PlayerAssistantPwaStylesRevision>
+    <PlayerAssistantPwaAppRevision>61</PlayerAssistantPwaAppRevision>
+    <PlayerAssistantPwaCacheRevision>72</PlayerAssistantPwaCacheRevision>
+  </PropertyGroup>
+</Project>

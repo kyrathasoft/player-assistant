@@ -167,7 +167,7 @@ internal static partial class TestCases
         var versionText = (string?)InvokeStaticMethod(programType, "GetVersionText")
             ?? throw new InvalidOperationException("GetVersionText returned null.");
         AssertContains(versionText, "player-assistant");
-        AssertContains(versionText, "0.9.5");
+        AssertContains(versionText, GetCanonicalVersion());
     }
 
     internal static void StatusBarActivityIndicatorTracksAsyncOperations()
@@ -320,7 +320,7 @@ internal static partial class TestCases
     {
         var versionText = (string)(InvokeStaticMethod(typeof(Form1), "GetAppVersionText")
             ?? throw new InvalidOperationException("GetAppVersionText returned null."));
-        AssertEqual("RPOL Scarlet Horizon Campaign Assistant 0.9.5", versionText, "unexpected About Version text");
+        AssertEqual($"RPOL Scarlet Horizon Campaign Assistant {GetCanonicalVersion()}", versionText, "unexpected About Version text");
     }
 
     internal static void LegacyTrustedUpdateStateMigratesToProtectedFormat()
@@ -1121,19 +1121,16 @@ internal static partial class TestCases
                 new System.Text.Json.JsonSerializerOptions { WriteIndented = true }));
     }
 
+    private static string GetCanonicalVersion(string propertyName = "PlayerAssistantVersion")
+    {
+        var metadataPath = Path.Combine(GetRepositoryRoot(), "version.props");
+        var document = XDocument.Load(metadataPath);
+        return document.Descendants(propertyName).Single().Value;
+    }
+
     private static void WriteReleaseManifest(string directoryPath)
     {
         var assembly = typeof(Program).Assembly;
-        var project = XDocument.Load(Path.Combine(GetRepositoryRoot(), "player-assistant.csproj"));
-        string GetProjectProperty(string name)
-        {
-            return project
-                .Descendants()
-                .FirstOrDefault(element => element.Name.LocalName == name)
-                ?.Value
-                ?? string.Empty;
-        }
-
         var fileVersion = assembly
             .GetCustomAttributes(typeof(AssemblyFileVersionAttribute), inherit: false)
             .OfType<AssemblyFileVersionAttribute>()
@@ -1154,7 +1151,7 @@ internal static partial class TestCases
         {
             schema_version = 1,
             generated_at = DateTimeOffset.UtcNow.ToString("O"),
-            app_version = GetProjectProperty("Version"),
+            app_version = GetCanonicalVersion(),
             file_version = fileVersion,
             product_version = informationalVersion,
             hash_algorithm = "SHA256",
@@ -1170,16 +1167,6 @@ internal static partial class TestCases
 
     private static void WriteReleaseProvenance(string directoryPath)
     {
-        var project = XDocument.Load(Path.Combine(GetRepositoryRoot(), "player-assistant.csproj"));
-        string GetProjectProperty(string name)
-        {
-            return project
-                .Descendants()
-                .FirstOrDefault(element => element.Name.LocalName == name)
-                ?.Value
-                ?? string.Empty;
-        }
-
         var manifestEntry = GetReleaseManifestEntry(directoryPath, "release-manifest.json");
         var inventoryEntry = GetReleaseManifestEntry(directoryPath, "release-runtime-inventory.json");
         var provenance = new
@@ -1188,9 +1175,9 @@ internal static partial class TestCases
             generated_at = DateTimeOffset.UtcNow.ToString("O"),
             app = new
             {
-                version = GetProjectProperty("Version"),
-                file_version = GetProjectProperty("FileVersion"),
-                product_version = GetProjectProperty("InformationalVersion")
+                version = GetCanonicalVersion(),
+                file_version = GetCanonicalVersion("PlayerAssistantAssemblyVersion"),
+                product_version = GetCanonicalVersion()
             },
             git = new
             {

@@ -33,7 +33,7 @@
   - `verify-test-harness-structure.ps1` enforces catalog uniqueness, domain file presence, and the runner/catalog boundary in PR smoke and full regression CI.
 - [x] Modularize `pwa/app.js` by feature without introducing an unnecessary framework.
 - [x] Make schema-rich lexicon data the canonical source for desktop, PWA, and web-translator artifacts.
-- [ ] Centralize desktop, installer, PWA, and cache version metadata.
+- [x] Centralize desktop, installer, PWA, and cache version metadata.
 - [x] Add formatting verification to CI and fix existing .NET formatting violations.
 - [x] Formalize repository hygiene for local corpus directories and `.hermes-tmp*` files.
 

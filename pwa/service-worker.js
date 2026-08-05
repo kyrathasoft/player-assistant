@@ -1,13 +1,20 @@
 'use strict';
 
-const CACHE_VERSION = 'player-assistant-pwa-0.9.8-v71';
+importScripts('./version.js?v=1');
+
+const VERSION_METADATA = globalThis.PLAYER_ASSISTANT_VERSION_METADATA;
+if (!VERSION_METADATA) {
+    throw new Error('Player Assistant version metadata is unavailable.');
+}
+const CACHE_VERSION = `player-assistant-pwa-${VERSION_METADATA.pwaVersion}-v${VERSION_METADATA.cacheRevision}`;
 const SHELL_CACHE = `${CACHE_VERSION}-shell`;
 const DATA_CACHE = `${CACHE_VERSION}-data`;
 const SHELL_ASSETS = [
     './',
     './index.html',
-    './styles.css?v=43',
-    './app.js?v=60',
+    `./version.js?v=${VERSION_METADATA.metadataRevision}`,
+    `./styles.css?v=${VERSION_METADATA.stylesRevision}`,
+    `./app.js?v=${VERSION_METADATA.appRevision}`,
     './modules/translator.js',
     './modules/search.js',
     './modules/dice.js',

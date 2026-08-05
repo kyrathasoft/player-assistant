@@ -6,7 +6,10 @@ import { initializeDice } from './modules/dice.js';
     'use strict';
 
     const APP_NAME = 'Player Assistant';
-    const APP_VERSION = '0.9.8';
+    const APP_VERSION = globalThis.PLAYER_ASSISTANT_VERSION_METADATA?.pwaVersion;
+    if (!APP_VERSION) {
+        throw new Error('Player Assistant version metadata is unavailable.');
+    }
     const AUTH_API_ROOT = '/scarlethorizons/api/v1';
     const MAGIC_ITEMS_WIKI_URL = 'https://publish.obsidian.md/scarlethorizons/Magic+Items/Kirkilston+Crew+Magic+Items';
     const MAGIC_ITEMS_MARKDOWN_ROOT = 'https://publish-01.obsidian.md/access/1113217a28a5bfdcc9fbe8e6d82b27ac/Magic%20Items/';

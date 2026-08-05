@@ -30,9 +30,11 @@ internal static partial class TestCases
             .InformationalVersion;
         var fileVersion = FileVersionInfo.GetVersionInfo(assembly.Location).FileVersion;
 
-        AssertEqual(new Version(0, 9, 5, 0), name.Version!, "unexpected assembly version");
-        AssertEqual("0.9.5.0", fileVersion!, "unexpected file version");
-        AssertEqual("0.9.5", informationalVersion, "unexpected informational version");
+        var expectedVersion = GetCanonicalVersion();
+        var expectedAssemblyVersion = GetCanonicalVersion("PlayerAssistantAssemblyVersion");
+        AssertEqual(Version.Parse(expectedAssemblyVersion), name.Version!, "unexpected assembly version");
+        AssertEqual(expectedAssemblyVersion, fileVersion!, "unexpected file version");
+        AssertEqual(expectedVersion, informationalVersion, "unexpected informational version");
     }
 
     internal static void LastCrashDiagnosticWritesRedactedExceptionDetails()
@@ -271,21 +273,23 @@ internal static partial class TestCases
     internal static void UpdateCheckComparesAgainstCurrentAppVersion()
     {
         var currentVersion = PlayerAssistantUpdateUtility.GetCurrentAppVersion();
-        AssertEqual(new Version(0, 9, 5), currentVersion, "unexpected current app update-comparison version");
+        var expectedVersion = Version.Parse(GetCanonicalVersion().Split('-', '+')[0]);
+        AssertEqual(expectedVersion, currentVersion, "unexpected current app update-comparison version");
 
         var sameVersion = new PlayerAssistantUpdateInfo(
-            new Version(0, 9, 5),
-            "0.9.5",
-            new Uri("https://bryanmiller.us/scarlethorizons/p-assist-0.9.5.zip"),
+            expectedVersion,
+            expectedVersion.ToString(),
+            new Uri($"https://bryanmiller.us/scarlethorizons/p-assist-{expectedVersion}.zip"),
             new string('A', 64),
-            new Uri("https://bryanmiller.us/scarlethorizons/p-assist-0.9.5.exe"),
+            new Uri($"https://bryanmiller.us/scarlethorizons/p-assist-{expectedVersion}.exe"),
             new string('B', 64));
+        var nextVersion = new Version(expectedVersion.Major, expectedVersion.Minor, expectedVersion.Build + 1);
         var newerVersion = new PlayerAssistantUpdateInfo(
-            new Version(0, 9, 6),
-            "0.9.6",
-            new Uri("https://bryanmiller.us/scarlethorizons/p-assist-0.9.6.zip"),
+            nextVersion,
+            nextVersion.ToString(),
+            new Uri($"https://bryanmiller.us/scarlethorizons/p-assist-{nextVersion}.zip"),
             new string('C', 64),
-            new Uri("https://bryanmiller.us/scarlethorizons/p-assist-0.9.6.exe"),
+            new Uri($"https://bryanmiller.us/scarlethorizons/p-assist-{nextVersion}.exe"),
             new string('D', 64));
 
         AssertFalse(sameVersion.IsNewerThan(currentVersion), "same version should not be offered as an update");
@@ -910,12 +914,16 @@ internal static partial class TestCases
         var innoScriptPath = Path.Combine(GetRepositoryRoot(), "Installer", "player-assistant.iss");
         var builderPath = Path.Combine(GetRepositoryRoot(), "build-installer.ps1");
         var verifierPath = Path.Combine(GetRepositoryRoot(), "verify-installer-package.ps1");
+        var versionMetadataPath = Path.Combine(GetRepositoryRoot(), "version.props");
+        var versionHelperPath = Path.Combine(GetRepositoryRoot(), "version-metadata.ps1");
 
         AssertTrue(File.Exists(installerPath), "installer script should exist");
         AssertTrue(File.Exists(launcherPath), "installer launcher should exist");
         AssertTrue(File.Exists(innoScriptPath), "Inno Setup script should exist");
         AssertTrue(File.Exists(builderPath), "installer package builder should exist");
         AssertTrue(File.Exists(verifierPath), "installer package verifier should exist");
+        AssertTrue(File.Exists(versionMetadataPath), "canonical version metadata should exist");
+        AssertTrue(File.Exists(versionHelperPath), "PowerShell version helper should exist");
 
         var installer = File.ReadAllText(installerPath);
         AssertContains(installer, "kyrathasoft\\player-assistant");
@@ -933,6 +941,8 @@ internal static partial class TestCases
         AssertContains(File.ReadAllText(builderPath), "ISCC.exe");
         AssertContains(File.ReadAllText(builderPath), "Get-InstallerVersion");
         AssertContains(File.ReadAllText(builderPath), "p-assist-$InstallerVersion.exe");
+        AssertContains(File.ReadAllText(builderPath), "Get-PlayerAssistantVersionMetadata");
+        AssertContains(File.ReadAllText(versionHelperPath), "PlayerAssistantVersion");
         AssertContains(File.ReadAllText(builderPath), "app-protected-v2");
         AssertContains(File.ReadAllText(verifierPath), "app-protected-v2");
     }
@@ -999,7 +1009,8 @@ internal static partial class TestCases
         WithCopiedPublishDirectory(publishDirectory =>
         {
             using var outputDirectory = TemporaryDirectory.Create();
-            var installerPath = Path.Combine(outputDirectory.Path, "p-assist-0.9.5.exe");
+            var installerVersion = GetCanonicalVersion().Split('-', '+')[0];
+            var installerPath = Path.Combine(outputDirectory.Path, $"p-assist-{installerVersion}.exe");
             File.Copy(Path.Combine(publishDirectory, "player-assistant.exe"), installerPath, overwrite: true);
 
             var buildOutput = RunPowerShell(
@@ -1029,7 +1040,7 @@ internal static partial class TestCases
                     "-File",
                     Path.Combine(GetRepositoryRoot(), "verify-release-update-artifacts.ps1"),
                     "-PublishArchivePath",
-                    Path.Combine(outputDirectory.Path, "p-assist-0.9.5.zip"),
+                    Path.Combine(outputDirectory.Path, $"p-assist-{installerVersion}.zip"),
                     "-InstallerPath",
                     installerPath,
                     "-ManifestPath",
@@ -1051,7 +1062,8 @@ internal static partial class TestCases
         WithCopiedPublishDirectory(publishDirectory =>
         {
             using var outputDirectory = TemporaryDirectory.Create();
-            var installerPath = Path.Combine(outputDirectory.Path, "p-assist-0.9.5.exe");
+            var installerVersion = GetCanonicalVersion().Split('-', '+')[0];
+            var installerPath = Path.Combine(outputDirectory.Path, $"p-assist-{installerVersion}.exe");
             File.Copy(Path.Combine(publishDirectory, "player-assistant.exe"), installerPath, overwrite: true);
 
             var buildOutput = RunPowerShell(
@@ -1097,7 +1109,7 @@ internal static partial class TestCases
                     "-File",
                     Path.Combine(GetRepositoryRoot(), "verify-release-update-artifacts.ps1"),
                     "-PublishArchivePath",
-                    Path.Combine(outputDirectory.Path, "p-assist-0.9.5.zip"),
+                    Path.Combine(outputDirectory.Path, $"p-assist-{installerVersion}.zip"),
                     "-InstallerPath",
                     installerPath,
                     "-ManifestPath",
@@ -1139,8 +1151,9 @@ internal static partial class TestCases
         AssertContains(workflow, "p-assist-updates.json");
         AssertContains(workflow, "p-assist-updates.json.sig");
         AssertContains(workflow, "p-assist-updates.public-key.xml");
-        AssertContains(workflow, "p-assist-0.9.5.zip");
-        AssertContains(workflow, "p-assist-0.9.5.exe");
+        AssertContains(workflow, "Load canonical version metadata");
+        AssertContains(workflow, "UPDATE_ARCHIVE_PATH");
+        AssertContains(workflow, "UPDATE_INSTALLER_PATH");
         AssertContains(workflow, "Build Release test harness");
         AssertContains(workflow, "Build Release ToOrcish");
         AssertContains(workflow, "dotnet build .\\ToOrcish\\to-orcish.csproj --configuration Release --nologo");

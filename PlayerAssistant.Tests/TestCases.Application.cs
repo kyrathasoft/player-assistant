@@ -3734,9 +3734,9 @@ internal static partial class TestCases
             generated_at = DateTimeOffset.UtcNow.ToString("O"),
             app = new
             {
-                version = GetProjectProperty("Version"),
-                file_version = GetProjectProperty("FileVersion"),
-                product_version = GetProjectProperty("InformationalVersion")
+                version = GetCanonicalVersion(),
+                file_version = GetCanonicalVersion("PlayerAssistantAssemblyVersion"),
+                product_version = GetCanonicalVersion()
             },
             runtime = new
             {

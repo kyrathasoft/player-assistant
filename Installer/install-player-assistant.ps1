@@ -10,8 +10,15 @@ $ErrorActionPreference = 'Stop'
 
 $AppName = 'Player Assistant'
 $Publisher = 'KyrathaSoft'
-$Version = '0.9.5'
 $ExecutableName = 'player-assistant.exe'
+$payloadExecutablePath = Join-Path $PayloadDir $ExecutableName
+if (!(Test-Path -LiteralPath $payloadExecutablePath -PathType Leaf)) {
+    throw "Required installer payload executable is missing: $payloadExecutablePath"
+}
+$Version = [System.Diagnostics.FileVersionInfo]::GetVersionInfo($payloadExecutablePath).ProductVersion
+if ([string]::IsNullOrWhiteSpace($Version)) {
+    throw "Installer payload executable does not declare a product version: $payloadExecutablePath"
+}
 $UninstallKeyPath = 'HKLM:\Software\Microsoft\Windows\CurrentVersion\Uninstall\KyrathaSoft Player Assistant'
 $EncryptedSidecarFileNames = @(
     'settings.local.json',
