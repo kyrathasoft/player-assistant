@@ -1,0 +1,140 @@
+{
+  "schemaVersion": 1,
+  "languages": {
+    "orcish": {
+      "displayName": "Orcish",
+      "aliases": [],
+      "sourceTier": "project-assembled",
+      "canonicalSources": [
+        {
+          "path": "web-translator/orcish-lexicon.json",
+          "role": "assembled-candidate-lexicon",
+          "schemaVersion": 1
+        }
+      ],
+      "desktopConsumer": "OrcishLexiconSnapshotUtility.cs",
+      "desktopResources": [
+        {
+          "path": "web-translator/orcish-lexicon.json",
+          "logicalName": "PlayerAssistant.OrcishLexiconSnapshot.json"
+        }
+      ],
+      "webRuntime": {
+        "path": "web-translator/orcish-lexicon.json",
+        "normalization": "trim-lower",
+        "expectedEffectiveTermCount": 80874
+      },
+      "pwaProjection": {
+        "path": "pwa/data/orcish.json",
+        "normalization": "nfkc-trim-lower",
+        "expectedEffectiveTermCount": 80874
+      }
+    },
+    "elvish": {
+      "displayName": "Elvish",
+      "aliases": [
+        "Elven"
+      ],
+      "sourceTier": "published-and-project-generated",
+      "canonicalSources": [
+        {
+          "path": "web-translator/elven-lexicon.json",
+          "role": "reviewed-candidate-catalog",
+          "schemaVersion": 1
+        },
+        {
+          "path": "web-translator/elven-translations.json",
+          "role": "finalized-reviewed-selection",
+          "schemaVersion": 1
+        },
+        {
+          "path": "web-translator/elven-first-iteration.json",
+          "role": "reviewed-morphology-layer",
+          "schemaVersion": 1
+        },
+        {
+          "path": "web-translator/elven-second-iteration.json",
+          "role": "reviewed-morphology-layer",
+          "schemaVersion": 1
+        },
+        {
+          "path": "web-translator/elven-complete-coverage.json",
+          "role": "audited-complete-coverage-layer",
+          "schemaVersion": 1
+        }
+      ],
+      "desktopConsumer": "ElvenTranslatorUtility.cs",
+      "desktopResources": [
+        {
+          "path": "web-translator/elven-lexicon.json",
+          "logicalName": "PlayerAssistant.ElvenLexiconSnapshot.json"
+        },
+        {
+          "path": "web-translator/elven-translations.json",
+          "logicalName": "PlayerAssistant.ElvenTranslationDictionary.json"
+        },
+        {
+          "path": "web-translator/elven-first-iteration.json",
+          "logicalName": "PlayerAssistant.ElvenFirstIteration.json"
+        },
+        {
+          "path": "web-translator/elven-second-iteration.json",
+          "logicalName": "PlayerAssistant.ElvenSecondIteration.json"
+        },
+        {
+          "path": "web-translator/elven-complete-coverage.json",
+          "logicalName": "PlayerAssistant.ElvenCompleteCoverage.json"
+        }
+      ],
+      "webRuntime": {
+        "path": "web-translator/elvish-lexicon.json",
+        "normalization": "apostrophe-fold-trim-lower",
+        "expectedEffectiveTermCount": 84448
+      },
+      "pwaProjection": {
+        "path": "pwa/data/elvish.json",
+        "normalization": "nfkc-trim-lower",
+        "expectedEffectiveTermCount": 84460
+      }
+    },
+    "ghukliak": {
+      "displayName": "Ghukliak",
+      "aliases": [
+        "Goblin (Ghukliak)"
+      ],
+      "distinctFrom": [
+        "orcish"
+      ],
+      "sourceTier": "campaign-source-and-project-generated",
+      "canonicalSources": [
+        {
+          "path": "web-translator/ghukliak-lexicon.json",
+          "role": "campaign-candidate-lexicon",
+          "schemaVersion": 1
+        },
+        {
+          "path": "web-translator/ghukliak-complete-coverage.json",
+          "role": "audited-complete-coverage-layer",
+          "schemaVersion": 1
+        }
+      ],
+      "desktopConsumer": "GhukliakTranslatorUtility.cs",
+      "desktopResources": [
+        {
+          "path": "web-translator/ghukliak-lexicon.json",
+          "logicalName": "PlayerAssistant.GhukliakLexicon.json"
+        },
+        {
+          "path": "web-translator/ghukliak-complete-coverage.json",
+          "logicalName": "PlayerAssistant.GhukliakCompleteCoverage.json"
+        }
+      ],
+      "webRuntime": null,
+      "pwaProjection": {
+        "path": "pwa/data/ghukliak.json",
+        "normalization": "nfkc-trim-lower",
+        "expectedEffectiveTermCount": 81204
+      }
+    }
+  }
+}

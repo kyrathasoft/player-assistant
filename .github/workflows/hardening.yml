@@ -103,6 +103,9 @@ jobs:
         shell: pwsh
         run: .\pwa\verify-pwa.ps1
 
+      - name: Verify canonical lexicon artifacts
+        run: python .\verify-lexicon-artifacts.py
+
       - name: Test PWA deployment transactions
         shell: pwsh
         run: .\web-deploy\tests\deploy-pwa-files-tests.ps1

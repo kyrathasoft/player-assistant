@@ -22,6 +22,7 @@ $workflowPath = Join-Path $RepoRoot '.github\workflows\hardening.yml'
 $browserPackagePath = Join-Path $RepoRoot 'pwa\package.json'
 $browserTestPath = Join-Path $RepoRoot 'pwa\browser-smoke.mjs'
 $hygieneVerifierPath = Join-Path $RepoRoot 'verify-repository-hygiene.ps1'
+$lexiconVerifierPath = Join-Path $RepoRoot 'verify-lexicon-artifacts.py'
 
 Assert-Condition -Condition (Test-Path -LiteralPath $workflowPath -PathType Leaf) -Message 'The full-regression workflow is missing.'
 
@@ -35,6 +36,8 @@ Assert-Condition -Condition (Test-Path -LiteralPath $hygieneVerifierPath -PathTy
 Assert-Condition -Condition ($workflow.Contains('.\PlayerAssistant.Tests\bin\Release\net10.0-windows\PlayerAssistant.Tests.exe')) -Message 'The required job must run the complete desktop harness without a filter.'
 Assert-Condition -Condition (!$workflow.Contains('Verify hosted settings fetch and decrypt path') -and !$workflow.Contains('Verify hosted settings negative paths')) -Message 'Focused desktop filters must not substitute for the complete harness.'
 Assert-Condition -Condition ($workflow.Contains('.\pwa\verify-pwa.ps1')) -Message 'The required job must run the PWA verifier.'
+Assert-Condition -Condition ($workflow.Contains('python .\verify-lexicon-artifacts.py')) -Message 'The required job must verify canonical lexicon projections.'
+Assert-Condition -Condition (Test-Path -LiteralPath $lexiconVerifierPath -PathType Leaf) -Message 'The canonical lexicon verifier is missing.'
 Assert-Condition -Condition ($workflow.Contains('.\web-deploy\tests\deploy-pwa-files-tests.ps1')) -Message 'The required job must run PWA deployment transaction tests.'
 Assert-Condition -Condition ($workflow.Contains('pwa-deployment-linux:')) -Message 'The workflow must exercise atomic PWA symlink activation on Linux.'
 Assert-Condition -Condition ($workflow.Contains('needs: pwa-deployment-linux')) -Message 'The required full regression job must depend on Linux PWA deployment tests.'
