@@ -3014,7 +3014,7 @@ namespace PlayerAssistant
 
         private async Task<string> RefreshLoginInfoJsonAsync(CancellationToken cancellationToken = default)
         {
-            var tempDirectory = Path.Combine(GetReleaseDirectory(), TempDirectoryName);
+            var tempDirectory = RuntimePathUtility.GetUserDataPath(TempDirectoryName);
             var loginInfoPath = GetLoginInfoPath();
             var theCastHtmlPath = GetTheCastHtmlPath();
             var tempLoginInfoPath = Path.Combine(tempDirectory, TheCastLoginInfoFileName);
