@@ -5,6 +5,17 @@
  * Keep the backup directory and status path outside the website document root.
  */
 return [
+    'migrations' => [
+        'backup_directory' => '/home/DREAMHOST_USER/player-assistant-broker/migration-backups',
+    ],
+    'observability' => [
+        'alert_email' => 'alerts@example.invalid',
+        'server_error_threshold' => 3,
+        'server_error_window_seconds' => 900,
+        'refresh_failure_threshold' => 1,
+        'health_failure_threshold' => 1,
+        'alert_cooldown_seconds' => 3600,
+    ],
     'database_recovery' => [
         'backup_directory' => '/home/DREAMHOST_USER/player-assistant-broker/backups',
         'status_path' => '/home/DREAMHOST_USER/player-assistant-broker/broker-recovery-status.json',

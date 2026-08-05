@@ -108,7 +108,23 @@ namespace PlayerAssistant
 
         private static string GetWritableRuntimeDirectory()
         {
-            var currentDirectory = new DirectoryInfo(ApplicationDirectory);
+            return ResolveWritableRuntimeDirectory(ApplicationDirectory, UserDataDirectory);
+        }
+
+        internal static string ResolveWritableRuntimeDirectory(
+            string applicationDirectory,
+            string userDataDirectory)
+        {
+            ArgumentException.ThrowIfNullOrWhiteSpace(applicationDirectory);
+            ArgumentException.ThrowIfNullOrWhiteSpace(userDataDirectory);
+
+            var applicationInfo = new DirectoryInfo(Path.GetFullPath(applicationDirectory));
+            if (string.Equals(applicationInfo.Name, "publish", StringComparison.OrdinalIgnoreCase))
+            {
+                return Path.GetFullPath(userDataDirectory);
+            }
+
+            var currentDirectory = applicationInfo;
             while (currentDirectory is not null)
             {
                 if (File.Exists(Path.Combine(currentDirectory.FullName, ProjectFileName)))
@@ -119,7 +135,7 @@ namespace PlayerAssistant
                 currentDirectory = currentDirectory.Parent;
             }
 
-            return UserDataDirectory;
+            return Path.GetFullPath(userDataDirectory);
         }
     }
 }

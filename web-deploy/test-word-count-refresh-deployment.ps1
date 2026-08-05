@@ -44,7 +44,7 @@ $metadata = Get-Content -Raw -LiteralPath $SigningMetadataPath | ConvertFrom-Jso
 if (-not (Test-Path -LiteralPath $PhpPath -PathType Leaf)) {
     throw "PHP signing runtime not found: $PhpPath"
 }
-$deployFiles = @('BrokerService.php', 'QuestService.php', 'WordCountService.php', 'refresh-word-counts.php')
+$deployFiles = @('BrokerService.php', 'BrokerAlertService.php', 'DatabaseMigrationService.php', 'QuestService.php', 'WordCountService.php', 'refresh-word-counts.php')
 $localHashes = @{}
 foreach ($file in $deployFiles) {
     $localHashes[$file] = (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $PSScriptRoot "player-assistant-broker\$file")).Hash.ToLowerInvariant()
@@ -80,6 +80,8 @@ $patterns = [
     'config.php.bak-deploy-*',
     'config.php.bak-word-count-refresh-*',
     'BrokerService.php.bak-deploy-*',
+    'BrokerAlertService.php.bak-deploy-*',
+    'DatabaseMigrationService.php.bak-deploy-*',
     'QuestService.php.bak-deploy-*',
     'WordCountService.php.bak-deploy-*',
     'WordCountService.php.bak-source-refresh-*',
