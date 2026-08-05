@@ -1,0 +1,41 @@
+name: PR smoke
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pr-smoke-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  smoke:
+    name: Fast PR smoke
+    runs-on: windows-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: curl, pdo_sqlite, sodium, sqlite3
+
+      - name: Verify full-regression policy wiring
+        shell: pwsh
+        run: .\verify-full-regression-ci.ps1
+
+      - name: Lint PHP test and broker files
+        shell: pwsh
+        run: |
+          Get-ChildItem -LiteralPath .\web-deploy -Recurse -Filter '*.php' -File |
+            ForEach-Object { php -l $_.FullName }
+
+      - name: Check browser smoke script syntax
+        shell: pwsh
+        run: node --check .\pwa\browser-smoke.mjs
