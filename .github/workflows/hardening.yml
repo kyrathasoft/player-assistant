@@ -159,6 +159,9 @@ jobs:
         shell: pwsh
         run: .\verify-test-harness-structure.ps1
 
+      - name: Verify canonical lexicon artifacts
+        run: python .\verify-lexicon-artifacts.py
+
       - name: Install Inno Setup
         shell: pwsh
         run: choco install innosetup --no-progress --yes

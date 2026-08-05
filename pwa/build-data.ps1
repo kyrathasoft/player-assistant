@@ -14,6 +14,23 @@ function Read-Json {
     return Get-Content -Raw -LiteralPath $Path | ConvertFrom-Json
 }
 
+$lexiconManifest = Read-Json -Path (Join-Path $RepositoryRoot 'lexicons\manifest.json')
+
+function Get-CanonicalLexiconSourcePath {
+    param(
+        [Parameter(Mandatory = $true)][string]$Language,
+        [Parameter(Mandatory = $true)][string]$Role,
+        [int]$Index = 0
+    )
+
+    $contract = $lexiconManifest.languages.PSObject.Properties[$Language].Value
+    $sources = @($contract.canonicalSources | Where-Object { $_.role -eq $Role })
+    if ($Index -lt 0 -or $Index -ge $sources.Count) {
+        throw "Canonical lexicon source is missing: $Language/$Role[$Index]"
+    }
+    return Join-Path $RepositoryRoot ([string]$sources[$Index].path).Replace('/', '\')
+}
+
 function Write-CompactJson {
     param(
         [Parameter(Mandatory = $true)][object]$Value,
@@ -97,7 +114,7 @@ $dataDirectory = Join-Path $PSScriptRoot 'data'
 $iconDirectory = Join-Path $PSScriptRoot 'icons'
 New-Item -ItemType Directory -Force -Path $dataDirectory, $iconDirectory | Out-Null
 
-$orcishSource = Read-Json -Path (Join-Path $RepositoryRoot 'web-translator\orcish-lexicon.json')
+$orcishSource = Read-Json -Path (Get-CanonicalLexiconSourcePath -Language 'orcish' -Role 'assembled-candidate-lexicon')
 $orcishTerms = [System.Collections.Generic.Dictionary[string,string]]::new([System.StringComparer]::OrdinalIgnoreCase)
 foreach ($property in $orcishSource.terms.PSObject.Properties) {
     $record = $property.Value
@@ -117,22 +134,22 @@ $orcishPayload = [ordered]@{
 Write-CompactJson -Value $orcishPayload -Path (Join-Path $dataDirectory 'orcish.json')
 
 $elvishTerms = [System.Collections.Generic.Dictionary[string,string]]::new([System.StringComparer]::OrdinalIgnoreCase)
-$elvishBase = Read-Json -Path (Join-Path $RepositoryRoot 'web-translator\elven-translations.json')
+$elvishBase = Read-Json -Path (Get-CanonicalLexiconSourcePath -Language 'elvish' -Role 'finalized-reviewed-selection')
 foreach ($property in $elvishBase.translations.PSObject.Properties) {
     Add-TermIfMissing -Dictionary $elvishTerms -English $property.Name -Translation ([string]$property.Value[0])
 }
 
-$elvishFirst = Read-Json -Path (Join-Path $RepositoryRoot 'web-translator\elven-first-iteration.json')
+$elvishFirst = Read-Json -Path (Get-CanonicalLexiconSourcePath -Language 'elvish' -Role 'reviewed-morphology-layer' -Index 0)
 foreach ($entry in $elvishFirst.entries) {
     Add-TermIfMissing -Dictionary $elvishTerms -English ([string]$entry.english) -Translation ([string]$entry.elvish)
 }
 
-$elvishSecond = Read-Json -Path (Join-Path $RepositoryRoot 'web-translator\elven-second-iteration.json')
+$elvishSecond = Read-Json -Path (Get-CanonicalLexiconSourcePath -Language 'elvish' -Role 'reviewed-morphology-layer' -Index 1)
 foreach ($entry in $elvishSecond.entries) {
     Add-TermIfMissing -Dictionary $elvishTerms -English ([string]$entry.english) -Translation ([string]$entry.elvish)
 }
 
-$elvishComplete = Read-Json -Path (Join-Path $RepositoryRoot 'web-translator\elven-complete-coverage.json')
+$elvishComplete = Read-Json -Path (Get-CanonicalLexiconSourcePath -Language 'elvish' -Role 'audited-complete-coverage-layer')
 foreach ($entry in $elvishComplete.entries) {
     Add-TermIfMissing -Dictionary $elvishTerms -English ([string]$entry[0]) -Translation ([string]$entry[1])
 }
@@ -148,8 +165,8 @@ $elvishPayload = [ordered]@{
 }
 Write-CompactJson -Value $elvishPayload -Path (Join-Path $dataDirectory 'elvish.json')
 
-$ghukliakSource = Read-Json -Path (Join-Path $RepositoryRoot 'web-translator\ghukliak-lexicon.json')
-$ghukliakCoverage = Read-Json -Path (Join-Path $RepositoryRoot 'web-translator\ghukliak-complete-coverage.json')
+$ghukliakSource = Read-Json -Path (Get-CanonicalLexiconSourcePath -Language 'ghukliak' -Role 'campaign-candidate-lexicon')
+$ghukliakCoverage = Read-Json -Path (Get-CanonicalLexiconSourcePath -Language 'ghukliak' -Role 'audited-complete-coverage-layer')
 $ghukliakTerms = [System.Collections.Generic.Dictionary[string,string]]::new([System.StringComparer]::OrdinalIgnoreCase)
 foreach ($property in $ghukliakSource.terms.PSObject.Properties) {
     $candidates = @($property.Value)
