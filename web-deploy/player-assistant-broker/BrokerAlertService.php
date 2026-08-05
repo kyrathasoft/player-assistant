@@ -12,6 +12,7 @@ final class BrokerAlertService
     {
         $this->config = array_replace([
             'alert_email' => '',
+            'from_email' => '',
             'server_error_threshold' => 3,
             'server_error_window_seconds' => 900,
             'refresh_failure_threshold' => 1,
@@ -95,7 +96,14 @@ final class BrokerAlertService
             $errorCode,
             $count,
             $message);
-        return @mail($email, $subject, $body);
+        $fromEmail = trim((string)$this->config['from_email']);
+        if ($fromEmail === '') {
+            return false;
+        }
+        $headers = "From: {$fromEmail}\r\n"
+            . "Reply-To: {$email}\r\n"
+            . "Content-Type: text/plain; charset=UTF-8\r\n";
+        return @mail($email, $subject, $body, $headers, '-f' . $fromEmail);
     }
 
     private function sanitize(string $value, int $maximumLength): string

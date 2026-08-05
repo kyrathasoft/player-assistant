@@ -10,6 +10,7 @@ return [
     ],
     'observability' => [
         'alert_email' => 'alerts@example.invalid',
+        'from_email' => 'player-assistant@example.invalid',
         'server_error_threshold' => 3,
         'server_error_window_seconds' => 900,
         'refresh_failure_threshold' => 1,
