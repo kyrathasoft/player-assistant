@@ -21,7 +21,7 @@
   - [x] Implement health, word-count refresh, and repeated-server-error alerting with cooldowns; production `alert_email` still requires a configured recipient.
 - [x] Add ordered SQLite migrations using `PRAGMA user_version`, transactions, pre-migration backups, and upgrade fixtures.
 - [ ] Harden the release supply chain.
-  - Pin GitHub Actions and installer dependencies to immutable versions or hashes.
+  - [x] Pin GitHub Actions to immutable versions or hashes.
   - Enable NuGet locked restore and dependency scanning.
   - [x] Move generated recovery archives out of the tracked source tree.
 
@@ -34,19 +34,6 @@
 - [ ] Centralize desktop, installer, PWA, and cache version metadata.
 - [ ] Add formatting verification to CI and fix the existing `RpolAuthUtility.cs` formatting violation.
 - [ ] Formalize repository hygiene for local corpus directories and `.hermes-tmp*` files.
-
-## Suggested features
-
-- [ ] Add a personalized **Next Session** action center with unread messages, quest decisions, XP/TNL, recent funds changes, and newly acquired items.
-- [ ] Add a full message center with inbox, sent history, threaded replies, archive, and optional push notifications.
-- [ ] Add a DM live-operations console for quest state, funds transactions, magic-item ownership, and announcements.
-- [ ] Add a collaborative quest-planning board for party interest, readiness, preferred quests, proposed dates, and DM activation.
-- [ ] Improve mobile navigation with primary-action tabs, a More sheet, pinned favorite tools, and recent destinations.
-- [ ] Add a stateful magic-item and consumable ledger with ownership, charges, attunement, use history, and DM confirmation.
-- [ ] Add a saved translator phrasebook with copy/share actions, pronunciation notes, and character-specific sayings.
-- [ ] Add custom dice macros with advantage/disadvantage and character-specific presets.
-- [ ] Add campaign bookmarks and an offline reading list.
-- [ ] Add a scene tracker and recap dashboard using the existing briefing and forum-processing infrastructure.
 
 ## Completed
 

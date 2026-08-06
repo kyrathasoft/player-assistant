@@ -230,7 +230,7 @@ namespace PlayerAssistant
                 NormalizeUrl(baseUri)
             };
 
-            var tempDirectory = Path.Combine(AppContext.BaseDirectory, TempDirectoryName);
+            var tempDirectory = RuntimePathUtility.GetUserDataPath(TempDirectoryName);
             Directory.CreateDirectory(tempDirectory);
             var tempSitemapPath = Path.Combine(tempDirectory, TempSitemapFileName);
             var sitemapUrl = $"{AppSettingsUtility.ObsidianGameVaultUrl.TrimEnd('/')}/sitemap.xml";
