@@ -15,19 +15,19 @@
 - [x] Make PWA deployment release-atomic and self-verifying.
   - [x] Remove newly introduced files during rollback when a later deployment step fails.
   - [x] Verify public HTTPS hashes, headers, and API behavior before declaring deployment success.
-- [ ] Add broker database recovery and observability operations.
+- [x] Add broker database recovery and observability operations.
   - [x] Schedule consistent `broker.sqlite` backups and configure verified FTPS off-host retention.
   - [x] Run regular `PRAGMA integrity_check` checks and test restoration.
-  - [x] Implement health, word-count refresh, and repeated-server-error alerting with cooldowns; production `alert_email` still requires a configured recipient.
+  - [x] Implement health, word-count refresh, and repeated-server-error alerting with cooldowns and a configured production recipient.
 - [x] Add ordered SQLite migrations using `PRAGMA user_version`, transactions, pre-migration backups, and upgrade fixtures.
-- [ ] Harden the release supply chain.
+- [x] Harden the release supply chain.
   - [x] Pin GitHub Actions to immutable versions or hashes.
-  - Enable NuGet locked restore and dependency scanning.
+  - [x] Enable NuGet locked restore and dependency scanning.
   - [x] Move generated recovery archives out of the tracked source tree.
 
 ## Architecture and maintainability
 
-- [ ] Decompose `Form1` into feature controllers or presenters with injected services.
+- [x] Decompose `Form1` into feature controllers or presenters with injected services.
 - [ ] Split the custom 405-test harness into discoverable domain-focused test classes.
 - [ ] Modularize `pwa/app.js` by feature without introducing an unnecessary framework.
 - [ ] Make schema-rich lexicon data the canonical source for desktop, PWA, and web-translator artifacts.

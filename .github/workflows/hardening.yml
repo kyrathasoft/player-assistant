@@ -131,7 +131,7 @@ jobs:
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
         with:
           path: ~\.nuget\packages
-          key: dotnet-${{ runner.os }}-${{ hashFiles('**/*.csproj', '**/*.props', '**/*.targets') }}
+          key: dotnet-${{ runner.os }}-${{ hashFiles('**/packages.lock.json') }}
           restore-keys: |
             dotnet-${{ runner.os }}-
 
@@ -146,6 +146,9 @@ jobs:
         shell: pwsh
         run: .\verify-full-regression-ci.ps1
 
+      - name: Verify locked .NET dependencies
+        shell: pwsh
+        run: .\verify-dotnet-dependencies.ps1
 
       - name: Install Inno Setup
         shell: pwsh
@@ -153,15 +156,15 @@ jobs:
 
       - name: Build Release app
         shell: pwsh
-        run: dotnet build .\player-assistant.csproj --configuration Release --nologo
+        run: dotnet build .\player-assistant.csproj --configuration Release --nologo --no-restore
 
       - name: Build Release ToOrcish
         shell: pwsh
-        run: dotnet build .\ToOrcish\to-orcish.csproj --configuration Release --nologo
+        run: dotnet build .\ToOrcish\to-orcish.csproj --configuration Release --nologo --no-restore
 
       - name: Build Release test harness
         shell: pwsh
-        run: dotnet build .\PlayerAssistant.Tests\PlayerAssistant.Tests.csproj --configuration Release --nologo -p:UseSharedCompilation=false
+        run: dotnet build .\PlayerAssistant.Tests\PlayerAssistant.Tests.csproj --configuration Release --nologo --no-restore -p:UseSharedCompilation=false
 
 
       - name: Seed CI local sidecars

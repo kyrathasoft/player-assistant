@@ -36,12 +36,6 @@ namespace PlayerAssistant
             Bullet
         }
 
-        private enum TranslatorTargetLanguage
-        {
-            Orcish,
-            Elven,
-            Ghukliak
-        }
 
         private static readonly string[] MyHeroBriefingLikelyResponseKeyLines =
         [
@@ -167,11 +161,8 @@ namespace PlayerAssistant
         private Label? _translatorOutputLabel;
         private TextBox? _translatorOutputTextBox;
         private Button? _translatorExportButton;
-        private CancellationTokenSource? _translatorTranslationCancellationSource;
-        private int _translatorTranslationGeneration;
         private int _translatorPreviousInputLength;
-        private bool _translatorWaitCursorActive;
-        private TranslatorTargetLanguage _translatorTargetLanguage = TranslatorTargetLanguage.Orcish;
+        private readonly TranslatorController _translatorController;
         internal static Func<string, bool, string>? TranslatorTextOverrideForTests { get; set; }
         internal static Func<string?>? TranslatorExportPathOverrideForTests { get; set; }
         private Image? _regionalMapImage;
@@ -212,6 +203,23 @@ namespace PlayerAssistant
         public Form1(bool suppressHeroImagesForThisRun = false)
         {
             _suppressHeroImagesForThisRun = suppressHeroImagesForThisRun;
+            _translatorController = new TranslatorController(
+                new TranslatorService(() => TranslatorTextOverrideForTests),
+                message => SetStatusBarMessage(message),
+                active => UseWaitCursor = active,
+                (operation, exception) => ReportOperationFailureAsync(
+                    operation,
+                    "Translation unavailable",
+                    "Translator Error",
+                    exception,
+                    showDialog: true),
+                translation =>
+                {
+                    if (_translatorOutputTextBox is not null && !_translatorOutputTextBox.IsDisposed)
+                    {
+                        _translatorOutputTextBox.Text = translation;
+                    }
+                });
             _showLocalIndexMissPrompt = ShowLocalIndexMissPrompt;
             _showOnlineSearchCompletedMessage = ShowOnlineSearchCompletedMessage;
             _showWarningDialog = ShowWarningDialog;
@@ -288,6 +296,7 @@ namespace PlayerAssistant
             _keywordIndexStatusTimer?.Dispose();
             _statusActivityTimer?.Dispose();
             _searchOperationCancellation?.Cancel();
+            _translatorController.Dispose();
             _backgroundTasks.Dispose();
             if (RpolAuthUtility.WebViewVerificationHandler == ShowRpolWebViewVerificationAsync)
             {
@@ -4747,11 +4756,11 @@ namespace PlayerAssistant
             adventureOutlineToolStripMenuItem.Enabled = showMenuItemsEnabled && _adventureOutlineTextBox is null;
             translatorToolStripMenuItem.Enabled = showMenuItemsEnabled;
             orcishTranslatorToolStripMenuItem.Enabled = showMenuItemsEnabled &&
-                (_translatorPanel is null || _translatorTargetLanguage != TranslatorTargetLanguage.Orcish);
+                (_translatorPanel is null || _translatorController.TargetLanguage != TranslatorTargetLanguage.Orcish);
             elvenTranslatorToolStripMenuItem.Enabled = showMenuItemsEnabled &&
-                (_translatorPanel is null || _translatorTargetLanguage != TranslatorTargetLanguage.Elven);
+                (_translatorPanel is null || _translatorController.TargetLanguage != TranslatorTargetLanguage.Elven);
             ghukliakTranslatorToolStripMenuItem.Enabled = showMenuItemsEnabled &&
-                (_translatorPanel is null || _translatorTargetLanguage != TranslatorTargetLanguage.Ghukliak);
+                (_translatorPanel is null || _translatorController.TargetLanguage != TranslatorTargetLanguage.Ghukliak);
             UpdateRegionalMapMenuItem();
         }
 
@@ -4763,7 +4772,7 @@ namespace PlayerAssistant
         private void ShowTranslatorPanel(TranslatorTargetLanguage targetLanguage)
         {
             DisposeTranslatorPanel();
-            _translatorTargetLanguage = targetLanguage;
+            _translatorController.Activate(targetLanguage);
             var targetName = GetTranslatorTargetName();
 
             _translatorHeadingLabel = new Label
@@ -4953,7 +4962,7 @@ namespace PlayerAssistant
         }
 
         private string GetTranslatorExportLanguageToken() =>
-            _translatorTargetLanguage switch
+            _translatorController.TargetLanguage switch
             {
                 TranslatorTargetLanguage.Orcish => "orcish",
                 TranslatorTargetLanguage.Elven => "elvish",
@@ -4973,7 +4982,7 @@ namespace PlayerAssistant
                 return;
             }
 
-            CancelPendingTranslatorTranslation();
+            _translatorController.CancelPendingTranslation();
             var targetToEnglish = _translatorDirectionCheckBox.Checked;
             var targetName = GetTranslatorTargetName();
             _translatorHeadingLabel.Text = targetToEnglish ? $"{targetName} to English" : $"English to {targetName}";
@@ -5000,216 +5009,23 @@ namespace PlayerAssistant
             var inputLengthChange = Math.Abs(input.Length - _translatorPreviousInputLength);
             _translatorPreviousInputLength = input.Length;
 
-            CancelPendingTranslatorTranslation();
             if (string.IsNullOrWhiteSpace(input))
             {
                 _translatorOutputTextBox.Clear();
-                SetStatusBarMessage("Translator ready.");
-                return;
             }
 
-            var targetToEnglish = _translatorDirectionCheckBox.Checked;
-            var targetLanguage = _translatorTargetLanguage;
-            var generation = _translatorTranslationGeneration;
-            var cancellationSource = new CancellationTokenSource();
-            _translatorTranslationCancellationSource = cancellationSource;
-            try
-            {
-                if (inputLengthChange <= 1)
-                {
-                    await Task.Delay(TimeSpan.FromMilliseconds(125), cancellationSource.Token);
-                }
-
-                var translatorOverride = TranslatorTextOverrideForTests;
-                var waitCursorDelay = Task.Delay(TimeSpan.FromMilliseconds(250), cancellationSource.Token);
-                if (translatorOverride is null)
-                {
-                    var warmupTask = targetLanguage switch
-                    {
-                        TranslatorTargetLanguage.Orcish => OrcishTranslatorWarmupUtility.WaitUntilReadyAsync(cancellationSource.Token),
-                        TranslatorTargetLanguage.Elven => WaitForElvenTranslatorAsync(cancellationSource.Token),
-                        _ => WaitForGhukliakTranslatorAsync(cancellationSource.Token)
-                    };
-                    if (await Task.WhenAny(warmupTask, waitCursorDelay) == waitCursorDelay &&
-                        !cancellationSource.IsCancellationRequested &&
-                        generation == _translatorTranslationGeneration)
-                    {
-                        SetTranslatorWaitCursor(true);
-                        SetStatusBarMessage($"Preparing {GetTranslatorTargetName(targetLanguage)} translator...");
-                    }
-
-                    await warmupTask;
-                }
-
-                var translationTask = Task.Run(
-                    () => translatorOverride is not null
-                        ? translatorOverride(input, targetToEnglish)
-                        : TranslateText(input, targetLanguage, targetToEnglish),
-                    cancellationSource.Token);
-                if (!_translatorWaitCursorActive &&
-                    await Task.WhenAny(translationTask, waitCursorDelay) == waitCursorDelay &&
-                    !cancellationSource.IsCancellationRequested &&
-                    generation == _translatorTranslationGeneration)
-                {
-                    SetTranslatorWaitCursor(true);
-                    SetStatusBarMessage("Translating...");
-                }
-
-                var translation = await translationTask;
-                cancellationSource.Token.ThrowIfCancellationRequested();
-                if (generation == _translatorTranslationGeneration &&
-                    _translatorOutputTextBox is not null &&
-                    !_translatorOutputTextBox.IsDisposed)
-                {
-                    _translatorOutputTextBox.Text = translation;
-                    SetStatusBarMessage("Translation complete.");
-                }
-            }
-            catch (OperationCanceledException) when (cancellationSource.IsCancellationRequested)
-            {
-            }
-            catch (Exception ex)
-            {
-                if (generation == _translatorTranslationGeneration)
-                {
-                    await ReportOperationFailureAsync(
-                        $"{GetTranslatorTargetName(targetLanguage)} translation",
-                        "Translation unavailable",
-                        "Translator Error",
-                        ex,
-                        showDialog: true);
-                }
-            }
-            finally
-            {
-                if (ReferenceEquals(_translatorTranslationCancellationSource, cancellationSource))
-                {
-                    _translatorTranslationCancellationSource = null;
-                }
-
-                if (generation == _translatorTranslationGeneration)
-                {
-                    SetTranslatorWaitCursor(false);
-                }
-
-                cancellationSource.Dispose();
-            }
+            await _translatorController.TranslateInputAsync(
+                input,
+                _translatorDirectionCheckBox.Checked,
+                inputLengthChange);
         }
 
-        private async Task UpdateTranslatorWarmupStatusAsync()
-        {
-            var targetLanguage = _translatorTargetLanguage;
-            if (TranslatorTextOverrideForTests is not null)
-            {
-                SetStatusBarMessage("Translator ready.");
-                return;
-            }
+        private Task UpdateTranslatorWarmupStatusAsync() => _translatorController.UpdateWarmupStatusAsync();
 
-            var isReady = targetLanguage switch
-            {
-                TranslatorTargetLanguage.Orcish => OrcishTranslatorWarmupUtility.IsReady,
-                TranslatorTargetLanguage.Elven => ElvenTranslatorWarmupUtility.IsReady,
-                _ => GhukliakTranslatorWarmupUtility.IsReady
-            };
-            if (isReady)
-            {
-                SetStatusBarMessage("Translator ready.");
-                return;
-            }
-
-            SetStatusBarMessage($"Preparing {GetTranslatorTargetName(targetLanguage)} translator...");
-            try
-            {
-                var englishTermCount = targetLanguage switch
-                {
-                    TranslatorTargetLanguage.Orcish => (await OrcishTranslatorWarmupUtility.StartPreloading()).EnglishTermCount,
-                    TranslatorTargetLanguage.Elven => (await ElvenTranslatorWarmupUtility.StartPreloading()).EnglishTermCount,
-                    _ => (await GhukliakTranslatorWarmupUtility.StartPreloading()).EnglishTermCount
-                };
-                if (_translatorTargetLanguage == targetLanguage &&
-                    _translatorPanel is not null && !_translatorPanel.IsDisposed)
-                {
-                    SetStatusBarMessage($"Translator ready: {englishTermCount:N0} English terms loaded.");
-                }
-            }
-            catch
-            {
-                if (_translatorTargetLanguage == targetLanguage &&
-                    _translatorPanel is not null && !_translatorPanel.IsDisposed)
-                {
-                    SetStatusBarMessage("Translator unavailable.");
-                }
-            }
-        }
-
-        private void CancelPendingTranslatorTranslation()
-        {
-            _translatorTranslationGeneration++;
-            var cancellationSource = _translatorTranslationCancellationSource;
-            _translatorTranslationCancellationSource = null;
-            if (cancellationSource is not null)
-            {
-                cancellationSource.Cancel();
-            }
-
-            SetTranslatorWaitCursor(false);
-        }
-
-        private static async Task<OrcishTranslatorWarmupResult> WaitForElvenTranslatorAsync(
-            CancellationToken cancellationToken)
-        {
-            var result = await ElvenTranslatorWarmupUtility.WaitUntilReadyAsync(cancellationToken);
-            return new OrcishTranslatorWarmupResult(result.EnglishTermCount, result.Duration);
-        }
-
-        private static async Task<OrcishTranslatorWarmupResult> WaitForGhukliakTranslatorAsync(
-            CancellationToken cancellationToken)
-        {
-            var result = await GhukliakTranslatorWarmupUtility.WaitUntilReadyAsync(cancellationToken);
-            return new OrcishTranslatorWarmupResult(result.EnglishTermCount, result.Duration);
-        }
-
-        private static string TranslateText(
-            string input,
-            TranslatorTargetLanguage targetLanguage,
-            bool targetToEnglish)
-        {
-            return targetLanguage switch
-            {
-                TranslatorTargetLanguage.Orcish when targetToEnglish =>
-                    OrcishTranslatorUtility.TranslateOrcishTextToEnglish(input),
-                TranslatorTargetLanguage.Orcish =>
-                    OrcishTranslatorUtility.TranslateEnglishTextToOrcish(input),
-                TranslatorTargetLanguage.Elven when targetToEnglish =>
-                    ElvenTranslatorUtility.TranslateElvenTextToEnglish(input),
-                TranslatorTargetLanguage.Elven =>
-                    ElvenTranslatorUtility.TranslateEnglishTextToElven(input),
-                TranslatorTargetLanguage.Ghukliak when targetToEnglish =>
-                    GhukliakTranslatorUtility.TranslateGhukliakTextToEnglish(input),
-                _ => GhukliakTranslatorUtility.TranslateEnglishTextToGhukliak(input)
-            };
-        }
-
-        private string GetTranslatorTargetName() => GetTranslatorTargetName(_translatorTargetLanguage);
+        private string GetTranslatorTargetName() => GetTranslatorTargetName(_translatorController.TargetLanguage);
 
         private static string GetTranslatorTargetName(TranslatorTargetLanguage targetLanguage) =>
-            targetLanguage switch
-            {
-                TranslatorTargetLanguage.Orcish => "Orcish",
-                TranslatorTargetLanguage.Elven => "Elven",
-                _ => "Goblin (Ghukliak)"
-            };
-
-        private void SetTranslatorWaitCursor(bool active)
-        {
-            if (_translatorWaitCursorActive == active)
-            {
-                return;
-            }
-
-            _translatorWaitCursorActive = active;
-            UseWaitCursor = active;
-        }
+            TranslatorController.GetTargetName(targetLanguage);
 
         private void FocusTranslatorInput()
         {
@@ -5278,7 +5094,7 @@ namespace PlayerAssistant
 
         private void DisposeTranslatorPanel()
         {
-            CancelPendingTranslatorTranslation();
+            _translatorController.Deactivate();
             if (_translatorPanel is null)
             {
                 return;
