@@ -24,6 +24,16 @@ $browserTestPath = Join-Path $RepoRoot 'pwa\browser-smoke.mjs'
 $brokerOperationsPath = Join-Path $RepoRoot 'web-deploy\player-assistant-broker\BrokerOperations.php'
 $operationsConfigExamplePath = Join-Path $RepoRoot 'web-deploy\player-assistant-broker\config.operations.example.php'
 $wordCountDeploymentPath = Join-Path $RepoRoot 'web-deploy\deploy-word-count-refresh.ps1'
+$directoryBuildPropsPath = Join-Path $RepoRoot 'Directory.Build.props'
+$dotnetDependencyVerifierPath = Join-Path $RepoRoot 'verify-dotnet-dependencies.ps1'
+$dependencyReviewWorkflowPath = Join-Path $RepoRoot '.github\workflows\dependency-review.yml'
+$dependabotPath = Join-Path $RepoRoot '.github\dependabot.yml'
+$requiredLockFiles = @(
+    'packages.lock.json',
+    'ToOrcish\packages.lock.json',
+    'PlayerAssistant.Launcher\packages.lock.json',
+    'PlayerAssistant.Tests\packages.lock.json'
+)
 
 Assert-Condition -Condition (Test-Path -LiteralPath $workflowPath -PathType Leaf) -Message 'The full-regression workflow is missing.'
 
@@ -49,5 +59,26 @@ Assert-Condition -Condition (Test-Path -LiteralPath $browserTestPath -PathType L
 $package = Get-Content -Raw -LiteralPath $browserPackagePath | ConvertFrom-Json
 Assert-Condition -Condition ([string]$package.scripts.test -eq 'node browser-smoke.mjs') -Message 'The PWA browser smoke test script is not pinned to browser-smoke.mjs.'
 Assert-Condition -Condition (![string]::IsNullOrWhiteSpace([string]$package.devDependencies.playwright)) -Message 'The browser smoke test must declare Playwright explicitly.'
+
+Assert-Condition -Condition (Test-Path -LiteralPath $directoryBuildPropsPath -PathType Leaf) -Message 'Directory.Build.props is missing.'
+$directoryBuildProps = Get-Content -Raw -LiteralPath $directoryBuildPropsPath
+Assert-Condition -Condition ($directoryBuildProps.Contains('<RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>')) -Message 'All .NET projects must generate NuGet lock files.'
+Assert-Condition -Condition (Test-Path -LiteralPath $dotnetDependencyVerifierPath -PathType Leaf) -Message 'The .NET locked-restore and vulnerability verifier is missing.'
+Assert-Condition -Condition ($workflow.Contains('.\verify-dotnet-dependencies.ps1')) -Message 'The required job must run locked restores and transitive vulnerability scans.'
+Assert-Condition -Condition ($workflow.Contains("hashFiles('**/packages.lock.json')")) -Message 'The NuGet cache must be keyed from lock files.'
+foreach ($relativeLockFile in $requiredLockFiles) {
+    Assert-Condition -Condition (Test-Path -LiteralPath (Join-Path $RepoRoot $relativeLockFile) -PathType Leaf) -Message "Required NuGet lock file is missing: $relativeLockFile"
+}
+
+Assert-Condition -Condition (Test-Path -LiteralPath $dependencyReviewWorkflowPath -PathType Leaf) -Message 'The dependency-review workflow is missing.'
+$dependencyReviewWorkflow = Get-Content -Raw -LiteralPath $dependencyReviewWorkflowPath
+Assert-Condition -Condition ($dependencyReviewWorkflow.Contains('actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294')) -Message 'Dependency review must use the pinned v5.0.0 commit.'
+Assert-Condition -Condition ($dependencyReviewWorkflow.Contains('fail-on-severity: moderate')) -Message 'Dependency review must reject moderate-or-higher vulnerabilities.'
+
+Assert-Condition -Condition (Test-Path -LiteralPath $dependabotPath -PathType Leaf) -Message 'Dependabot configuration is missing.'
+$dependabot = Get-Content -Raw -LiteralPath $dependabotPath
+foreach ($ecosystem in @('nuget', 'npm', 'github-actions')) {
+    Assert-Condition -Condition ($dependabot.Contains("package-ecosystem: '$ecosystem'")) -Message "Dependabot must monitor the $ecosystem ecosystem."
+}
 
 Write-Output 'Full regression CI policy verified.'
