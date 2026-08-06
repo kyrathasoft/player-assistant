@@ -1,6 +1,7 @@
 <Project>
   <PropertyGroup>
     <DefaultItemExcludes>$(DefaultItemExcludes);obj-*\**;Release-*\**;Debug-*\**</DefaultItemExcludes>
+    <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
   </PropertyGroup>
 
   <PropertyGroup Condition="'$(MSBuildProjectName)' == 'player-assistant'">

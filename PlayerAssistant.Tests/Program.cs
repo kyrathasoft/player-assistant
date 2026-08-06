@@ -289,6 +289,7 @@ var tests = new (string Name, Action Test)[]
     ("elven lexicon validator accepts reviewed rooted additions", ElvenLexiconValidatorAcceptsReviewedRootedAdditions),
     ("elven lexicon validator rejects unsupported additions", ElvenLexiconValidatorRejectsUnsupportedAdditions),
     ("elven lexicon validator preserves Sindarin preference", ElvenLexiconValidatorPreservesSindarinPreference),
+    ("translator controller cancels superseded injected service work", TranslatorControllerCancelsSupersededInjectedServiceWork),
     ("translator view toggles direction without web links", TranslatorViewTogglesDirectionWithoutWebLinks),
     ("translator view supports Elven mode", TranslatorViewSupportsElvenMode),
     ("translator view supports Ghukliak mode", TranslatorViewSupportsGhukliakMode),
@@ -6680,6 +6681,30 @@ static void GhukliakCompleteCoverageTranslatesEveryOrcishTerm()
         "complete coverage should include remaining multiword English terms");
 }
 
+static void TranslatorControllerCancelsSupersededInjectedServiceWork()
+{
+    using var service = new BlockingTranslatorService();
+    var completedTranslations = new List<string>();
+    using var controller = new TranslatorController(
+        service,
+        _ => { },
+        _ => { },
+        (_, _) => Task.CompletedTask,
+        completedTranslations.Add);
+
+    controller.Activate(TranslatorTargetLanguage.Orcish);
+    var firstTranslation = controller.TranslateInputAsync("hello", targetToEnglish: false, inputLengthChange: 5);
+    AssertTrue(service.FirstTranslationStarted.Wait(TimeSpan.FromSeconds(5)), "first injected translation did not start");
+
+    var secondTranslation = controller.TranslateInputAsync("world", targetToEnglish: false, inputLengthChange: 5);
+    Task.WhenAll(firstTranslation, secondTranslation).GetAwaiter().GetResult();
+
+    AssertTrue(service.FirstTranslationCanceled.IsSet, "superseded injected translation was not canceled");
+    AssertEqual(1, completedTranslations.Count, "only the latest translation should reach the view");
+    AssertEqual("translated:world", completedTranslations[0], "latest translation was not displayed");
+    AssertEqual(TranslatorTargetLanguage.Orcish, service.LastTargetLanguage, "controller did not pass its active language to the injected service");
+}
+
 static void TranslatorViewSupportsGhukliakMode()
 {
     Form1.TranslatorTextOverrideForTests = static (_, _) => string.Empty;
@@ -12999,6 +13024,50 @@ internal sealed class LoopbackHttpServer : IDisposable
     }
 
     internal sealed record RequestObservation(int RequestCount, string LastRequestPath);
+}
+
+internal sealed class BlockingTranslatorService : ITranslatorService, IDisposable
+{
+    public ManualResetEventSlim FirstTranslationStarted { get; } = new();
+
+    public ManualResetEventSlim FirstTranslationCanceled { get; } = new();
+
+    public TranslatorTargetLanguage LastTargetLanguage { get; private set; }
+
+    public bool IsReady(TranslatorTargetLanguage targetLanguage) => true;
+
+    public Task<int> WarmUpAsync(TranslatorTargetLanguage targetLanguage, CancellationToken cancellationToken) =>
+        Task.FromResult(1);
+
+    public async Task<string> TranslateAsync(
+        string input,
+        TranslatorTargetLanguage targetLanguage,
+        bool targetToEnglish,
+        CancellationToken cancellationToken)
+    {
+        LastTargetLanguage = targetLanguage;
+        if (input == "hello")
+        {
+            FirstTranslationStarted.Set();
+            try
+            {
+                await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                FirstTranslationCanceled.Set();
+                throw;
+            }
+        }
+
+        return "translated:" + input;
+    }
+
+    public void Dispose()
+    {
+        FirstTranslationStarted.Dispose();
+        FirstTranslationCanceled.Dispose();
+    }
 }
 
 internal sealed class InMemoryWindowsCredentialStoreBackend : IWindowsCredentialStoreBackend
