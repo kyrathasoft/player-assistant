@@ -18,8 +18,8 @@
       },
       "Microsoft.Web.WebView2": {
         "type": "Transitive",
-        "resolved": "1.0.4022.49",
-        "contentHash": "Dwewh8bbbXoFiF2y0jT3MBEV5ZXZVA7FDbMl6DixUCCLQAoymLMxMwqibdBaY/eWCG/BBSAILUOFDIzJZ9lfNQ=="
+        "resolved": "1.0.4129.50",
+        "contentHash": "BuJC70c7SCl8wlvojLZbc/E5ONmGyG3fhAMmpftCpKerxae//TxgKOTELRK2QRD7m7jigNFQRf6cfVT3ZiIQoQ=="
       },
       "SkiaSharp": {
         "type": "Transitive",
@@ -49,7 +49,7 @@
         "type": "Project",
         "dependencies": {
           "Microsoft.Playwright": "[1.60.0, )",
-          "Microsoft.Web.WebView2": "[1.0.4022.49, )",
+          "Microsoft.Web.WebView2": "[1.0.4129.50, )",
           "SkiaSharp": "[3.119.4, )"
         }
       }
