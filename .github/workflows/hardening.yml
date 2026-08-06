@@ -109,6 +109,7 @@ jobs:
         shell: pwsh
         run: npm --prefix .\pwa test
 
+  # Keep this job name aligned with the required GitHub Actions check on master.
   full-regression:
     name: Required full regression
     runs-on: windows-latest
