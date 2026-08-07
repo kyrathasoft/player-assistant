@@ -26,7 +26,6 @@ final class XpTrackingService
             'connect_timeout_seconds' => 3,
             'timeout_seconds' => 8,
             'maximum_response_bytes' => 524288,
-            'cache_ttl_seconds' => 300,
             'maximum_stale_seconds' => 86400,
             'awards_directory' => '',
             'awards_root' => '',
@@ -124,15 +123,61 @@ final class XpTrackingService
                 'No XP award progression is authorized for this account.');
         }
 
-        return [
-            'schema_version' => 1,
-            'scope' => $scope,
-            'progressions' => array_map(
+        $progressions = array_map(
+            fn(string $progressionKey): array => [
+                'character_key' => $progressionKey,
+                'entries' => $this->loadAwardProgression($progressionKey),
+            ],
+            $progressionKeys);
+        try {
+            $snapshots = $this->parseSnapshots($this->fetchMarkdown(
+                (string)$this->xpConfig['source_url']));
+            $lockPath = dirname($this->awardProgressionPath($progressionKeys[0]))
+                . DIRECTORY_SEPARATOR . '.xp-refresh.lock';
+            $lockHandle = fopen($lockPath, 'c');
+            if ($lockHandle === false) {
+                throw new RuntimeException('The XP award refresh lock could not be opened.');
+            }
+            @chmod($lockPath, 0600);
+            try {
+                if (!flock($lockHandle, LOCK_EX)) {
+                    throw new RuntimeException('The XP award refresh lock could not be acquired.');
+                }
+                $progressions = array_map(
+                    fn(string $progressionKey): array => [
+                        'character_key' => $progressionKey,
+                        'entries' => $this->loadAwardProgression($progressionKey),
+                    ],
+                    $progressionKeys);
+                foreach ($progressions as &$progression) {
+                    $progression['entries'] = $this->refreshAwardProgression(
+                        $progression['character_key'],
+                        $progression['entries'],
+                        $snapshots);
+                }
+                unset($progression);
+                foreach ($progressions as $progression) {
+                    $this->storeAwardProgression(
+                        $progression['character_key'],
+                        $progression['entries']);
+                }
+            } finally {
+                @flock($lockHandle, LOCK_UN);
+                fclose($lockHandle);
+            }
+        } catch (Throwable) {
+            $progressions = array_map(
                 fn(string $progressionKey): array => [
                     'character_key' => $progressionKey,
                     'entries' => $this->loadAwardProgression($progressionKey),
                 ],
-                $progressionKeys),
+                $progressionKeys);
+        }
+
+        return [
+            'schema_version' => 1,
+            'scope' => $scope,
+            'progressions' => $progressions,
         ];
     }
 
@@ -268,6 +313,16 @@ final class XpTrackingService
                     'An XP award progression contains multiple characters.');
             }
         }
+        $expectedProgressionCharacterKey = preg_replace('/-xp$/', '', $progressionKey);
+        if (!is_string($expectedProgressionCharacterKey)
+            || !hash_equals(
+                $expectedProgressionCharacterKey,
+                $this->characterKeyForName((string)$expectedCharacter))) {
+            throw new BrokerHttpException(
+                503,
+                'xp_awards_unavailable',
+                'An XP award progression does not match its configured character.');
+        }
         return $entries;
     }
 
@@ -278,6 +333,145 @@ final class XpTrackingService
             && strlen($value) <= $maximumLength
             && preg_match('//u', $value) === 1
             && preg_match('/[\x00-\x1F\x7F]/u', $value) !== 1;
+    }
+
+    private function refreshAwardProgression(
+        string $progressionKey,
+        array $entries,
+        array $snapshots): array
+    {
+        $lastEntry = $entries[array_key_last($entries)];
+        $characterKey = $this->characterKeyForName((string)$lastEntry['character_name']);
+        $lastAwardDate = $this->parseXpDate((string)$lastEntry['xp_award_date']);
+        $previousCharacter = null;
+        $baselineFound = false;
+
+        foreach ($snapshots as $snapshot) {
+            $currentCharacter = null;
+            foreach ($snapshot['characters'] as $character) {
+                if ($this->characterKeyForName((string)$character['character_name']) === $characterKey) {
+                    $currentCharacter = $character;
+                    break;
+                }
+            }
+            if ($snapshot['date'] < $lastAwardDate) {
+                continue;
+            }
+            if ($snapshot['date'] == $lastAwardDate) {
+                if ($currentCharacter === null) {
+                    throw new RuntimeException(
+                        "The cached XP progression '$progressionKey' has no live-source baseline.");
+                }
+                $previousCharacter = $currentCharacter;
+                $baselineFound = true;
+                continue;
+            }
+            if ($currentCharacter === null) {
+                continue;
+            }
+            if (!$baselineFound || $previousCharacter === null) {
+                throw new RuntimeException(
+                    "The cached XP progression '$progressionKey' has no live-source baseline.");
+            }
+            $award = (int)$currentCharacter['xp_total'] - (int)$previousCharacter['xp_total'];
+            if ($award < 0) {
+                throw new RuntimeException(
+                    "The live XP total decreased for progression '$progressionKey'.");
+            }
+            if ($award > 0) {
+                $entries[] = [
+                    'character_name' => (string)$lastEntry['character_name'],
+                    'character_class' => (string)$currentCharacter['character_class'],
+                    'level_before_award' => (int)$previousCharacter['level'],
+                    'xp_award' => $award,
+                    'xp_award_date' => (string)$snapshot['date_text'],
+                    'level_after_award' => (int)$currentCharacter['level'],
+                ];
+            }
+            $previousCharacter = $currentCharacter;
+        }
+        if (!$baselineFound) {
+            throw new RuntimeException(
+                "The cached XP progression '$progressionKey' has no live-source baseline.");
+        }
+        if (count($entries) > self::MAXIMUM_AWARD_PROGRESSION_ENTRIES) {
+            throw new RuntimeException(
+                "The refreshed XP progression '$progressionKey' contains too many entries.");
+        }
+        return $entries;
+    }
+
+    private function storeAwardProgression(string $progressionKey, array $entries): void
+    {
+        $path = $this->awardProgressionPath($progressionKey);
+        $contents = json_encode(
+            $entries,
+            JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE
+                | JSON_THROW_ON_ERROR) . "\n";
+        $temporaryPath = tempnam(dirname($path), '.xp-cache-');
+        if ($temporaryPath === false) {
+            throw new RuntimeException("The XP progression cache could not be staged.");
+        }
+        try {
+            $written = file_put_contents($temporaryPath, $contents, LOCK_EX);
+            if ($written !== strlen($contents)) {
+                throw new RuntimeException(
+                    "The refreshed XP progression '$progressionKey' could not be cached.");
+            }
+            @chmod($temporaryPath, 0600);
+            if (!rename($temporaryPath, $path)) {
+                throw new RuntimeException(
+                    "The refreshed XP progression '$progressionKey' could not be promoted.");
+            }
+        } finally {
+            if (is_file($temporaryPath)) {
+                @unlink($temporaryPath);
+            }
+        }
+    }
+
+    private function awardProgressionPath(string $progressionKey): string
+    {
+        $directory = realpath((string)$this->xpConfig['awards_directory']);
+        $root = realpath((string)$this->xpConfig['awards_root']);
+        if ($directory === false
+            || $root === false
+            || !is_dir($directory)
+            || !is_dir($root)
+            || $directory === rtrim($root, '/\\')
+            || !str_starts_with(
+                $directory . DIRECTORY_SEPARATOR,
+                rtrim($root, '/\\') . DIRECTORY_SEPARATOR)) {
+            throw new BrokerHttpException(
+                503,
+                'xp_awards_unavailable',
+                'XP award progressions are unavailable.');
+        }
+        $resolvedPath = realpath(
+            rtrim($directory, '/\\') . DIRECTORY_SEPARATOR . $progressionKey . '.json');
+        if ($resolvedPath === false
+            || !is_file($resolvedPath)
+            || !str_starts_with(
+                $resolvedPath,
+                rtrim($directory, '/\\') . DIRECTORY_SEPARATOR)) {
+            throw new BrokerHttpException(
+                503,
+                'xp_awards_unavailable',
+                'An XP award progression is unavailable.');
+        }
+        return $resolvedPath;
+    }
+
+    private function parseXpDate(string $dateText): DateTimeImmutable
+    {
+        $date = DateTimeImmutable::createFromFormat('!n.j.Y', trim($dateText));
+        $dateErrors = DateTimeImmutable::getLastErrors();
+        if ($date === false
+            || ($dateErrors !== false
+                && ($dateErrors['warning_count'] > 0 || $dateErrors['error_count'] > 0))) {
+            throw new RuntimeException('The XP date label was invalid.');
+        }
+        return $date;
     }
 
     private function loadCurrentSnapshot(): array
@@ -291,43 +485,47 @@ final class XpTrackingService
 
         $cached = $this->loadCachedSnapshot();
         $now = time();
-        if ($cached !== null
-            && $now - $cached['fetched_at'] <= (int)$this->xpConfig['cache_ttl_seconds']) {
-            return $cached + ['stale' => false];
-        }
-
         try {
             $parsed = $this->parseSnapshot($this->fetchMarkdown(
                 (string)$this->xpConfig['source_url']));
-            $hitPointsByCharacterKey = $this->parseCharacterHitPoints(
-                $this->fetchMarkdown((string)$this->xpConfig['character_source_url']));
-            $classLinks = $this->parseClassProgressionLinks(
-                $this->fetchMarkdown((string)$this->xpConfig['class_progression_index_url']));
+            try {
+                $hitPointsByCharacterKey = $this->parseCharacterHitPoints(
+                    $this->fetchMarkdown((string)$this->xpConfig['character_source_url']));
+            } catch (Throwable) {
+                $hitPointsByCharacterKey = [];
+            }
+            try {
+                $classLinks = $this->parseClassProgressionLinks(
+                    $this->fetchMarkdown((string)$this->xpConfig['class_progression_index_url']));
+            } catch (Throwable) {
+                $classLinks = [];
+            }
             $progressionByPage = [];
             foreach ($parsed['characters'] as &$character) {
                 $characterKey = $this->characterKeyForName(
                     (string)$character['character_name']);
-                if (!array_key_exists($characterKey, $hitPointsByCharacterKey)) {
-                    throw new RuntimeException(
-                        'The active character listing did not contain every current XP character.');
+                $character['hit_points'] = $hitPointsByCharacterKey[$characterKey] ?? 0;
+                $character['xp_to_next_level'] = null;
+                try {
+                    $classLink = $this->resolveClassProgressionLink(
+                        (string)$character['character_class'],
+                        $classLinks);
+                    $pageKey = $this->normalizeClassName($classLink);
+                    if (!array_key_exists($pageKey, $progressionByPage)) {
+                        $pageUrl = $this->deriveClassProgressionPageUrl(
+                            (string)$this->xpConfig['class_progression_index_url'],
+                            $classLink);
+                        $progressionByPage[$pageKey] = $this->parseClassProgression(
+                            $this->fetchMarkdown($pageUrl));
+                    }
+                    $nextLevel = (int)$character['level'] + 1;
+                    $nextLevelXp = $progressionByPage[$pageKey][$nextLevel] ?? null;
+                    $character['xp_to_next_level'] = is_int($nextLevelXp)
+                        ? max(0, $nextLevelXp - (int)$character['xp_total'])
+                        : null;
+                } catch (Throwable) {
+                    // XP totals remain authoritative when optional TNL enrichment is unavailable.
                 }
-                $character['hit_points'] = $hitPointsByCharacterKey[$characterKey];
-                $classLink = $this->resolveClassProgressionLink(
-                    (string)$character['character_class'],
-                    $classLinks);
-                $pageKey = $this->normalizeClassName($classLink);
-                if (!array_key_exists($pageKey, $progressionByPage)) {
-                    $pageUrl = $this->deriveClassProgressionPageUrl(
-                        (string)$this->xpConfig['class_progression_index_url'],
-                        $classLink);
-                    $progressionByPage[$pageKey] = $this->parseClassProgression(
-                        $this->fetchMarkdown($pageUrl));
-                }
-                $nextLevel = (int)$character['level'] + 1;
-                $nextLevelXp = $progressionByPage[$pageKey][$nextLevel] ?? null;
-                $character['xp_to_next_level'] = is_int($nextLevelXp)
-                    ? max(0, $nextLevelXp - (int)$character['xp_total'])
-                    : null;
             }
             unset($character);
             $snapshot = [
@@ -442,6 +640,16 @@ final class XpTrackingService
 
     private function parseSnapshot(string $markdown): array
     {
+        $candidates = $this->parseSnapshots($markdown);
+        $latest = $candidates[array_key_last($candidates)];
+        return [
+            'date_label' => $latest['date_label'],
+            'characters' => $latest['characters'],
+        ];
+    }
+
+    private function parseSnapshots(string $markdown): array
+    {
         $lines = preg_split('/\r\n|\r|\n/', $markdown);
         if (!is_array($lines)) {
             throw new RuntimeException('The XP markdown could not be read.');
@@ -460,14 +668,14 @@ final class XpTrackingService
                 throw new RuntimeException('The XP date label was invalid.');
             }
 
-            $dateText = trim(substr($dateLabel, strlen('As of ')));
-            $date = DateTimeImmutable::createFromFormat('!n.j.Y', $dateText);
-            $dateErrors = DateTimeImmutable::getLastErrors();
-            if ($date === false
-                || ($dateErrors !== false
-                    && ($dateErrors['warning_count'] > 0 || $dateErrors['error_count'] > 0))) {
+            if (preg_match(
+                '/^As of (?<date>\d{1,2}\.\d{1,2}\.\d{4})(?:\s|:|$)/i',
+                $dateLabel,
+                $dateMatch) !== 1) {
                 throw new RuntimeException('The XP date label was invalid.');
             }
+            $dateText = (string)$dateMatch['date'];
+            $date = $this->parseXpDate($dateText);
 
             $headerIndex = $this->findTableHeader($lines, $index + 1);
             if ($headerIndex < 0) {
@@ -475,6 +683,7 @@ final class XpTrackingService
             }
             $candidates[] = [
                 'date' => $date,
+                'date_text' => $dateText,
                 'date_label' => $dateLabel,
                 'characters' => $this->parseTable($lines, $headerIndex, $dateLabel),
             ];
@@ -483,11 +692,8 @@ final class XpTrackingService
         if ($candidates === []) {
             throw new RuntimeException('The XP markdown did not contain a valid As of section.');
         }
-        usort($candidates, static fn(array $left, array $right): int => $right['date'] <=> $left['date']);
-        return [
-            'date_label' => $candidates[0]['date_label'],
-            'characters' => $candidates[0]['characters'],
-        ];
+        usort($candidates, static fn(array $left, array $right): int => $left['date'] <=> $right['date']);
+        return $candidates;
     }
 
     private function findTableHeader(array $lines, int $startIndex): int
@@ -1027,7 +1233,6 @@ final class XpTrackingService
             'connect_timeout_seconds',
             'timeout_seconds',
             'maximum_response_bytes',
-            'cache_ttl_seconds',
             'maximum_stale_seconds',
         ] as $key) {
             if (!is_int($this->xpConfig[$key]) || $this->xpConfig[$key] <= 0) {
@@ -1035,8 +1240,7 @@ final class XpTrackingService
             }
         }
         if ($this->xpConfig['timeout_seconds'] < $this->xpConfig['connect_timeout_seconds']
-            || $this->xpConfig['maximum_response_bytes'] > 2 * 1024 * 1024
-            || $this->xpConfig['maximum_stale_seconds'] < $this->xpConfig['cache_ttl_seconds']) {
+            || $this->xpConfig['maximum_response_bytes'] > 2 * 1024 * 1024) {
             throw new RuntimeException('The XP tracking configuration limits are invalid.');
         }
     }

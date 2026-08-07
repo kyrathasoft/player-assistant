@@ -117,7 +117,6 @@ try {
             'connect_timeout_seconds' => 1,
             'timeout_seconds' => 2,
             'maximum_response_bytes' => 65536,
-            'cache_ttl_seconds' => 60,
             'maximum_stale_seconds' => 600,
             'awards_directory' => $xpAwardsDirectory,
             'awards_root' => dirname($xpAwardsDirectory),
