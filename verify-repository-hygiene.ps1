@@ -26,9 +26,20 @@ foreach ($requiredPattern in @('.hermes-tmp*', '/local-corpus*/')) {
     Assert-Condition -Condition ($ignoreLines -contains $requiredPattern) -Message ".gitignore must include '$requiredPattern'."
 }
 
-foreach ($samplePath in @('.hermes-tmp.verify/probe.txt', 'local-corpus/probe.txt')) {
+foreach ($samplePath in @(
+    '.hermes-tmp.verify/probe.txt',
+    '.hermes-tmpfoo/probe.txt',
+    'nested/.hermes-tmpfoo/probe.txt',
+    'local-corpus/probe.txt',
+    'local-corpus-experiment/probe.txt'
+)) {
     & git -C $RepoRoot check-ignore --quiet --no-index -- $samplePath
     Assert-Condition -Condition ($LASTEXITCODE -eq 0) -Message "Repository hygiene rules do not ignore '$samplePath'."
+}
+
+foreach ($samplePath in @('local-corpus.txt', 'src/local-corpus/probe.txt', 'docs/corpus-notes.md')) {
+    & git -C $RepoRoot check-ignore --quiet --no-index -- $samplePath
+    Assert-Condition -Condition ($LASTEXITCODE -eq 1) -Message "Repository hygiene rules are too broad and unexpectedly ignore '$samplePath'."
 }
 
 $trackedPaths = @(& git -C $RepoRoot ls-files)

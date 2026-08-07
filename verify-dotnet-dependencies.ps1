@@ -33,7 +33,7 @@ foreach ($project in $projects) {
         throw "Locked restore failed for $relativePath."
     }
 
-    $scanOutput = & dotnet list $project.FullName package --vulnerable --include-transitive --format json 2>&1
+    $scanOutput = & dotnet list $project.FullName package --vulnerable --include-transitive --format json --no-restore 2>&1
     if ($LASTEXITCODE -ne 0) {
         throw "NuGet vulnerability scan failed for $relativePath.`n$($scanOutput -join [Environment]::NewLine)"
     }

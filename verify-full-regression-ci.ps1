@@ -18,6 +18,22 @@ function Assert-Condition {
     }
 }
 
+function Assert-WorkflowRunCommand {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$WorkflowText,
+
+        [Parameter(Mandatory = $true)]
+        [string]$Command,
+
+        [Parameter(Mandatory = $true)]
+        [string]$Message
+    )
+
+    $pattern = '(?m)^\s+run:\s*' + [regex]::Escape($Command) + '\s*$'
+    Assert-Condition -Condition ([regex]::IsMatch($WorkflowText, $pattern)) -Message $Message
+}
+
 $workflowPath = Join-Path $RepoRoot '.github\workflows\hardening.yml'
 $browserPackagePath = Join-Path $RepoRoot 'pwa\package.json'
 $browserTestPath = Join-Path $RepoRoot 'pwa\browser-smoke.mjs'
@@ -43,9 +59,11 @@ Assert-Condition -Condition (Test-Path -LiteralPath $workflowPath -PathType Leaf
 $workflow = Get-Content -Raw -LiteralPath $workflowPath
 Assert-Condition -Condition ($workflow.Contains('name: Full regression')) -Message 'The workflow must expose the stable Full regression check name.'
 Assert-Condition -Condition ($workflow.Contains('  full-regression:') -and $workflow.Contains('    name: Required full regression')) -Message 'The workflow must define the required full-regression job.'
-Assert-Condition -Condition ($workflow.Contains('dotnet build .\ToOrcish\to-orcish.csproj --configuration Release --nologo')) -Message 'The required job must build the standalone ToOrcish executable used by the complete harness.'
-Assert-Condition -Condition ($workflow.Contains('dotnet format .\player-assistant.slnx --verify-no-changes')) -Message 'The required job must reject unformatted .NET source files.'
-Assert-Condition -Condition ($workflow.Contains('.\verify-repository-hygiene.ps1')) -Message 'The required job must verify local corpus and Hermes scratch-file hygiene.'
+Assert-WorkflowRunCommand -WorkflowText $workflow -Command 'dotnet build .\player-assistant.csproj --configuration Release --nologo --no-restore' -Message 'The required job must build the desktop application without an implicit restore.'
+Assert-WorkflowRunCommand -WorkflowText $workflow -Command 'dotnet build .\ToOrcish\to-orcish.csproj --configuration Release --nologo --no-restore' -Message 'The required job must build ToOrcish without an implicit restore.'
+Assert-WorkflowRunCommand -WorkflowText $workflow -Command 'dotnet build .\PlayerAssistant.Tests\PlayerAssistant.Tests.csproj --configuration Release --nologo --no-restore -p:UseSharedCompilation=false' -Message 'The required job must build the test harness without an implicit restore.'
+Assert-WorkflowRunCommand -WorkflowText $workflow -Command 'dotnet format .\player-assistant.slnx --verify-no-changes --no-restore' -Message 'The required job must reject unformatted .NET source without performing another restore.'
+Assert-WorkflowRunCommand -WorkflowText $workflow -Command '.\verify-repository-hygiene.ps1' -Message 'The required job must verify local corpus and Hermes scratch-file hygiene.'
 Assert-Condition -Condition (Test-Path -LiteralPath $hygieneVerifierPath -PathType Leaf) -Message 'The repository hygiene verifier is missing.'
 Assert-Condition -Condition ($workflow.Contains('.\PlayerAssistant.Tests\bin\Release\net10.0-windows\PlayerAssistant.Tests.exe')) -Message 'The required job must run the complete desktop harness without a filter.'
 Assert-Condition -Condition (!$workflow.Contains('Verify hosted settings fetch and decrypt path') -and !$workflow.Contains('Verify hosted settings negative paths')) -Message 'Focused desktop filters must not substitute for the complete harness.'
@@ -76,6 +94,8 @@ $directoryBuildProps = Get-Content -Raw -LiteralPath $directoryBuildPropsPath
 Assert-Condition -Condition ($directoryBuildProps.Contains('<RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>')) -Message 'All .NET projects must generate NuGet lock files.'
 Assert-Condition -Condition (Test-Path -LiteralPath $dotnetDependencyVerifierPath -PathType Leaf) -Message 'The .NET locked-restore and vulnerability verifier is missing.'
 Assert-Condition -Condition ($workflow.Contains('.\verify-dotnet-dependencies.ps1')) -Message 'The required job must run locked restores and transitive vulnerability scans.'
+$dotnetDependencyVerifier = Get-Content -Raw -LiteralPath $dotnetDependencyVerifierPath
+Assert-Condition -Condition ($dotnetDependencyVerifier.Contains('package --vulnerable --include-transitive --format json --no-restore')) -Message 'Vulnerability scans must not perform an unlocked implicit restore after locked restore verification.'
 Assert-Condition -Condition ($workflow.Contains("hashFiles('**/packages.lock.json')")) -Message 'The NuGet cache must be keyed from lock files.'
 foreach ($relativeLockFile in $requiredLockFiles) {
     Assert-Condition -Condition (Test-Path -LiteralPath (Join-Path $RepoRoot $relativeLockFile) -PathType Leaf) -Message "Required NuGet lock file is missing: $relativeLockFile"

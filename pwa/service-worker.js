@@ -15,9 +15,9 @@ const SHELL_ASSETS = [
     `./version.js?v=${VERSION_METADATA.metadataRevision}`,
     `./styles.css?v=${VERSION_METADATA.stylesRevision}`,
     `./app.js?v=${VERSION_METADATA.appRevision}`,
-    './modules/translator.js',
-    './modules/search.js',
-    './modules/dice.js',
+    `./modules/translator.js?v=${VERSION_METADATA.appRevision}`,
+    `./modules/search.js?v=${VERSION_METADATA.appRevision}`,
+    `./modules/dice.js?v=${VERSION_METADATA.appRevision}`,
     './translator-worker.js',
     './offline.html',
     './manifest.webmanifest',
@@ -28,12 +28,23 @@ const SHELL_ASSETS = [
     './party-funds.json',
     './level-progression.json'
 ];
+const OFFLINE_DATA_ASSETS = [
+    './data/orcish.json',
+    './data/elvish.json',
+    './data/ghukliak.json',
+    './campaign-search.json'
+];
 
 self.addEventListener('install', (event) => {
     event.waitUntil(
-        caches.open(SHELL_CACHE)
-            .then((cache) => cache.addAll(
-                SHELL_ASSETS.map((asset) => new Request(asset, { cache: 'reload' }))))
+        Promise.all([
+            caches.open(SHELL_CACHE)
+                .then((cache) => cache.addAll(
+                    SHELL_ASSETS.map((asset) => new Request(asset, { cache: 'reload' })))),
+            caches.open(DATA_CACHE)
+                .then((cache) => cache.addAll(
+                    OFFLINE_DATA_ASSETS.map((asset) => new Request(asset, { cache: 'reload' }))))
+        ])
             .then(() => self.skipWaiting())
     );
 });

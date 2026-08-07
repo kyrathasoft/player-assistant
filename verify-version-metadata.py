@@ -155,7 +155,19 @@ def write_pwa_projections(metadata: dict[str, Any]) -> None:
     for pattern, replacement in substitutions:
         html, count = re.subn(pattern, replacement, html, count=1)
         require(count == 1, f"Unable to update PWA projection matching {pattern}")
-    index_path.write_text(html, encoding="utf-8", newline="\r\n")
+    index_path.write_text(html, encoding="utf-8", newline=chr(13) + chr(10))
+
+    app_path = ROOT / "pwa/app.js"
+    app = app_path.read_text(encoding="utf-8-sig")
+    for module_name in ("translator", "search", "dice"):
+        app, count = re.subn(
+            rf"modules/{module_name}[.]js(?:[?]v=\d+)?",
+            f"modules/{module_name}.js?v={metadata['appRevision']}",
+            app,
+            count=1,
+        )
+        require(count == 1, f"Unable to update the {module_name} module revision")
+    app_path.write_text(app, encoding="utf-8", newline=chr(13) + chr(10))
 
     worker_path = ROOT / "pwa/service-worker.js"
     worker = worker_path.read_text(encoding="utf-8-sig")
@@ -184,12 +196,22 @@ def verify_pwa(metadata: dict[str, Any]) -> None:
     app = read("pwa/app.js")
     require("PLAYER_ASSISTANT_VERSION_METADATA?.pwaVersion" in app, "PWA app must consume canonical version metadata")
     require(f"const APP_VERSION = '{metadata['pwaVersion']}'" not in app, "PWA app duplicates its version literal")
+    for module_name in ("translator", "search", "dice"):
+        require(
+            f"from './modules/{module_name}.js?v={metadata['appRevision']}'" in app,
+            f"PWA {module_name} module revision has drifted",
+        )
 
     worker = read("pwa/service-worker.js")
     require(f"importScripts('./version.js?v={metadata['metadataRevision']}')" in worker,
             "Service worker metadata revision has drifted")
     for property_name in ("pwaVersion", "cacheRevision", "stylesRevision", "appRevision"):
         require(f"VERSION_METADATA.{property_name}" in worker, f"Service worker must consume {property_name}")
+    for module_name in ("translator", "search", "dice"):
+        require(
+            f"`./modules/{module_name}.js?v=${{VERSION_METADATA.appRevision}}`" in worker,
+            f"Service worker must version the {module_name} module",
+        )
     require(f"player-assistant-pwa-{metadata['pwaVersion']}-v{metadata['cacheRevision']}" not in worker,
             "Service worker duplicates the resolved cache version")
 

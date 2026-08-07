@@ -127,6 +127,7 @@ try {
 
     await page.goto(`${origin}${pwaPrefix}`, { waitUntil: 'domcontentloaded' });
     await page.locator('#dashboard-title').waitFor({ state: 'visible' });
+    await page.waitForFunction(() => navigator.serviceWorker?.controller !== null);
 
     await page.locator('#auth-button').click();
     await page.locator('#auth-character-name').fill('CI Hero');
@@ -163,7 +164,25 @@ try {
 
     await page.locator('[data-view="translator"]').click();
 
-    await page.waitForFunction(() => navigator.serviceWorker?.controller !== null);
+    const cachedUrls = await page.evaluate(async () => {
+        const urls = [];
+        for (const cacheName of await caches.keys()) {
+            const cache = await caches.open(cacheName);
+            urls.push(...(await cache.keys()).map((request) => request.url));
+        }
+        return urls;
+    });
+    for (const requiredPath of [
+        '/data/orcish.json',
+        '/data/elvish.json',
+        '/data/ghukliak.json',
+        '/campaign-search.json'
+    ]) {
+        if (!cachedUrls.some((url) => new URL(url).pathname.endsWith(requiredPath))) {
+            throw new Error(`Offline feature data was not cached: ${requiredPath}`);
+        }
+    }
+
     await context.setOffline(true);
     await page.reload({ waitUntil: 'domcontentloaded' });
     await page.locator('#view-translator').waitFor({ state: 'visible' });
@@ -171,13 +190,37 @@ try {
     if (!page.url().startsWith(`${origin}${pwaPrefix}`)) {
         throw new Error('Offline startup smoke loaded outside the PWA scope.');
     }
+
+    await page.locator('#translator-input').fill('');
+    await page.locator('#translator-input').fill('hello');
+    await page.waitForFunction(() => (document.querySelector('#translator-output')?.value || '').length > 0);
+    const offlineTranslation = await page.locator('#translator-output').inputValue();
+    if (offlineTranslation !== 'zug') {
+        throw new Error(`Offline translator smoke failed: ${offlineTranslation}`);
+    }
+
+    await page.locator('[data-view="search"]').click();
+    await page.locator('#campaign-search').fill('Kirkilston');
+    await page.locator('#search-results .search-result').first().waitFor({ state: 'visible' });
+
+    await page.locator('[data-view="dice"]').click();
+    const offlineDiceHistoryCount = await page.locator('#dice-history li').count();
+    await page.locator('[data-die="1d20"]').click();
+    await page.waitForFunction(
+        (previousCount) => document.querySelectorAll('#dice-history li').length > previousCount,
+        offlineDiceHistoryCount);
+    const offlineDiceTotal = Number.parseInt(await page.locator('#dice-result strong').textContent() || '', 10);
+    if (!Number.isInteger(offlineDiceTotal) || offlineDiceTotal < 1 || offlineDiceTotal > 20) {
+        throw new Error(`Offline dice smoke failed: unexpected d20 total ${offlineDiceTotal}.`);
+    }
+    await page.locator('#dice-history li').first().getByText('1d20', { exact: true }).waitFor();
     await context.setOffline(false);
 
     if (pageErrors.length > 0) {
         throw new Error(`PWA page error: ${pageErrors[0].stack || pageErrors[0].message}`);
     }
 
-    console.log('PWA browser smoke passed: authentication, translation, search, dice, navigation, and offline startup.');
+    console.log('PWA browser smoke passed: authentication, navigation, and online/offline translation, search, and dice.');
     await context.close();
 } finally {
     if (browser) await browser.close();
