@@ -46,6 +46,31 @@ function xpConfiguration(): array
     ];
 }
 
+if (($argv[1] ?? '') === 'lock-reader') {
+    $awardsRootArgument = (string)($argv[2] ?? '');
+    $awardsDirectoryArgument = (string)($argv[3] ?? '');
+    $lockReaderMarkdown = implode("\n", [
+        'As of 7.31.2026',
+        '| Name | Class | Level | XP Total |',
+        '| --- | --- | ---: | ---: |',
+        '| Alpha Hero | Fighter | 1 | 100 |',
+    ]);
+    $lockReaderService = new XpTrackingService(
+        xpDatabase(':memory:'),
+        array_replace(xpConfiguration(), [
+            'awards_root' => $awardsRootArgument,
+            'awards_directory' => $awardsDirectoryArgument,
+            'award_groups' => ['alpha-owner' => ['alpha-xp']],
+        ]),
+        static fn(string $url): string => $lockReaderMarkdown);
+    $lockReaderService->getAwardsForAccount([
+        'role' => 'player',
+        'character_key' => 'alpha-owner',
+    ]);
+    fwrite(STDOUT, "lock reader passed\n");
+    exit(0);
+}
+
 $xpTrackingReflection = new ReflectionClass(XpTrackingService::class);
 $serverProgressionEntryLimit = $xpTrackingReflection->getConstant(
     'MAXIMUM_AWARD_PROGRESSION_ENTRIES');
@@ -302,6 +327,179 @@ try {
         count($missingBaselineAwards['progressions'][0]['entries']) === 1,
         'A nonmatching historical snapshot was used as an award baseline.');
 
+    file_put_contents($dynamicAwardPath, json_encode([[
+        'character_name' => 'Dynamic Hero',
+        'character_class' => 'Fighter',
+        'level_before_award' => 1,
+        'xp_award' => 400,
+        'xp_award_date' => '7.31.2026',
+        'level_after_award' => 1,
+    ]], JSON_THROW_ON_ERROR));
+    $sameDateMarkdown = implode("\n", [
+        'As of 7.31.2026',
+        '| Name | Class | Level | XP Total |',
+        '| --- | --- | ---: | ---: |',
+        '| Dynamic Hero | Fighter | 1 | 450 |',
+    ]);
+    $sameDateService = new XpTrackingService(
+        xpDatabase(':memory:'),
+        $dynamicAwardConfiguration,
+        static fn(string $url): string => $sameDateMarkdown);
+    $sameDateAwards = $sameDateService->getAwardsForAccount([
+        'role' => 'player',
+        'character_key' => 'dynamic-hero',
+    ]);
+    $sameDateEntries = $sameDateAwards['progressions'][0]['entries'];
+    xpAssert(
+        count($sameDateEntries) === 2
+            && $sameDateEntries[1]['xp_award'] === 50
+            && $sameDateEntries[1]['xp_award_date'] === '7.31.2026',
+        'A later cumulative XP increase on the same date was not recorded.');
+
+    $baselineDynamicEntries = [[
+        'character_name' => 'Dynamic Hero',
+        'character_class' => 'Fighter',
+        'level_before_award' => 1,
+        'xp_award' => 400,
+        'xp_award_date' => '7.31.2026',
+        'level_after_award' => 1,
+    ]];
+    file_put_contents($dynamicAwardPath, json_encode($baselineDynamicEntries, JSON_THROW_ON_ERROR));
+    $duplicateDateMarkdown = $sameDateMarkdown . "\n\n" . str_replace('450', '460', $sameDateMarkdown);
+    $duplicatePromotionCount = 0;
+    $duplicateDateService = new XpTrackingService(
+        xpDatabase(':memory:'),
+        $dynamicAwardConfiguration,
+        static fn(string $url): string => $duplicateDateMarkdown,
+        static function (string $temporaryPath, string $targetPath) use (
+            &$duplicatePromotionCount): bool {
+            $duplicatePromotionCount++;
+            return rename($temporaryPath, $targetPath);
+        });
+    $duplicateDateAwards = $duplicateDateService->getAwardsForAccount([
+        'role' => 'player',
+        'character_key' => 'dynamic-hero',
+    ]);
+    xpAssert(
+        $duplicatePromotionCount === 0
+            && count($duplicateDateAwards['progressions'][0]['entries']) === 1,
+        'Duplicate same-date XP snapshots were accepted or promoted.');
+
+    $negativeMarkdown = str_replace('450', '350', $sameDateMarkdown)
+        . "\n\nAs of 7.30.2026\n"
+        . "| Name | Class | Level | XP Total |\n"
+        . "| --- | --- | ---: | ---: |\n"
+        . "| Dynamic Hero | Fighter | 1 | 300 |\n";
+    $negativePromotionCount = 0;
+    $negativeService = new XpTrackingService(
+        xpDatabase(':memory:'),
+        $dynamicAwardConfiguration,
+        static fn(string $url): string => $negativeMarkdown,
+        static function (string $temporaryPath, string $targetPath) use (
+            &$negativePromotionCount): bool {
+            $negativePromotionCount++;
+            return rename($temporaryPath, $targetPath);
+        });
+    $negativeAwards = $negativeService->getAwardsForAccount([
+        'role' => 'player',
+        'character_key' => 'dynamic-hero',
+    ]);
+    xpAssert(
+        $negativePromotionCount === 0
+            && count($negativeAwards['progressions'][0]['entries']) === 1,
+        'A negative or reset XP total was promoted into the award cache.');
+
+    $atomicMarkdown = implode("\n", [
+        'As of 8.01.2026',
+        '| Name | Class | Level | XP Total |',
+        '| --- | --- | ---: | ---: |',
+        '| Alpha Hero | Fighter | 1 | 150 |',
+        '| Beta Hero | Fighter | 1 | 150 |',
+        '',
+        'As of 7.31.2026',
+        '| Name | Class | Level | XP Total |',
+        '| --- | --- | ---: | ---: |',
+        '| Alpha Hero | Fighter | 1 | 100 |',
+        '| Beta Hero | Fighter | 1 | 100 |',
+    ]);
+    $atomicPaths = [
+        'alpha-xp' => $awardsDirectory . '/alpha-xp.json',
+        'beta-xp' => $awardsDirectory . '/beta-xp.json',
+    ];
+    foreach ($atomicPaths as $progressionKey => $atomicPath) {
+        $characterName = ucfirst(str_replace('-xp', '', $progressionKey)) . ' Hero';
+        file_put_contents($atomicPath, json_encode([[
+            'character_name' => $characterName,
+            'character_class' => 'Fighter',
+            'level_before_award' => 1,
+            'xp_award' => 100,
+            'xp_award_date' => '7.31.2026',
+            'level_after_award' => 1,
+        ]], JSON_THROW_ON_ERROR));
+    }
+    $atomicBefore = array_map(
+        static fn(string $path): string => (string)file_get_contents($path),
+        $atomicPaths);
+    $promotionCount = 0;
+    $atomicService = new XpTrackingService(
+        xpDatabase(':memory:'),
+        array_replace($dynamicAwardConfiguration, [
+            'award_groups' => ['atomic-owner' => array_keys($atomicPaths)],
+        ]),
+        static fn(string $url): string => $atomicMarkdown,
+        static function (string $temporaryPath, string $targetPath) use (&$promotionCount): bool {
+            $promotionCount++;
+            return $promotionCount === 2 ? false : rename($temporaryPath, $targetPath);
+        });
+    $atomicService->getAwardsForAccount([
+        'role' => 'player',
+        'character_key' => 'atomic-owner',
+    ]);
+    foreach ($atomicPaths as $progressionKey => $atomicPath) {
+        xpAssert(
+            file_get_contents($atomicPath) === $atomicBefore[$progressionKey],
+            'A failed multi-progression refresh exposed a mixed cache generation.');
+    }
+    xpAssert(
+        (glob($awardsDirectory . '/.xp-cache-*') ?: []) === []
+            && (glob($awardsDirectory . '/*.rollback-*') ?: []) === [],
+        'A failed multi-progression refresh left staging or rollback artifacts.');
+
+    $lockHandle = fopen($awardsDirectory . '/.xp-refresh.lock', 'c');
+    xpAssert(is_resource($lockHandle), 'The XP refresh lock fixture could not be opened.');
+    xpAssert(flock($lockHandle, LOCK_EX), 'The XP refresh lock fixture could not be acquired.');
+    $hiddenAlphaPath = $atomicPaths['alpha-xp'] . '.hidden';
+    xpAssert(
+        rename($atomicPaths['alpha-xp'], $hiddenAlphaPath),
+        'The XP progression could not be hidden during the lock contention test.');
+    $readerPipes = [];
+    $readerProcess = proc_open(
+        [PHP_BINARY, __FILE__, 'lock-reader', $awardsRoot, $awardsDirectory],
+        [1 => ['pipe', 'w'], 2 => ['pipe', 'w']],
+        $readerPipes,
+        __DIR__);
+    xpAssert(is_resource($readerProcess), 'The concurrent XP reader could not be started.');
+    try {
+        usleep(150000);
+        $readerStatus = proc_get_status($readerProcess);
+        xpAssert(
+            ($readerStatus['running'] ?? false) === true,
+            'A concurrent XP reader bypassed the collection lock while a file was hidden.');
+    } finally {
+        rename($hiddenAlphaPath, $atomicPaths['alpha-xp']);
+        flock($lockHandle, LOCK_UN);
+        fclose($lockHandle);
+    }
+    $readerOutput = stream_get_contents($readerPipes[1]);
+    $readerError = stream_get_contents($readerPipes[2]);
+    fclose($readerPipes[1]);
+    fclose($readerPipes[2]);
+    $readerExitCode = proc_close($readerProcess);
+    xpAssert(
+        $readerExitCode === 0 && str_contains((string)$readerOutput, 'lock reader passed'),
+        'The concurrent XP reader failed after the collection lock was released: '
+            . trim((string)$readerError));
+
     $mismatchPath = $awardsDirectory . '/mismatch-xp.json';
     file_put_contents($mismatchPath, json_encode([[
         'character_name' => 'Dynamic Hero',
@@ -387,6 +585,73 @@ try {
         'An unavailable class progression prevented the live XP snapshot from loading.');
     xpAssert($fetchCount === 18, 'Each XP request did not attempt the live source before using cached data.');
 
+    $olderMarkdown = implode("\n", [
+        'As of 7.20.2026',
+        '| Name | Class | Level | XP Total |',
+        '| --- | --- | ---: | ---: |',
+        '| Jelb | Illusionist | 3 | 1 |',
+    ]);
+    $olderLiveService = new XpTrackingService(
+        xpDatabase($databasePath),
+        xpConfiguration(),
+        static function (string $url) use (
+            $olderMarkdown,
+            $characterMarkdown,
+            $progressionFixture): string {
+            if (str_contains($url, 'Player+Characters+Listing')) {
+                return $characterMarkdown;
+            }
+            return $progressionFixture($url) ?? $olderMarkdown;
+        });
+    $olderLive = $olderLiveService->getForAccount([
+        'role' => 'player',
+        'character_key' => 'jelb',
+    ]);
+    xpAssert(
+        $olderLive['date_label'] === 'As of 7.23.2026'
+            && $olderLive['character']['xp_total'] === 12345
+            && $olderLive['stale'] === true,
+        'An older successful live snapshot replaced the newer cached XP snapshot.');
+
+    $sameDateRollbackMarkdown = str_replace('12,345', '12,000', $markdown);
+    $sameDateRollbackService = new XpTrackingService(
+        xpDatabase($databasePath),
+        xpConfiguration(),
+        static function (string $url) use (
+            $sameDateRollbackMarkdown,
+            $characterMarkdown,
+            $progressionFixture): string {
+            if (str_contains($url, 'Player+Characters+Listing')) {
+                return $characterMarkdown;
+            }
+            return $progressionFixture($url) ?? $sameDateRollbackMarkdown;
+        });
+    $sameDateRollback = $sameDateRollbackService->getForAccount([
+        'role' => 'player',
+        'character_key' => 'jelb',
+    ]);
+    xpAssert(
+        $sameDateRollback['character']['xp_total'] === 12345
+            && $sameDateRollback['stale'] === true,
+        'A lower same-date live XP total replaced the last-known-good total.');
+
+    $enrichmentFallbackService = new XpTrackingService(
+        xpDatabase($databasePath),
+        xpConfiguration(),
+        static fn(string $url): string => str_ends_with($url, '/XP')
+            ? $markdown
+            : throw new RuntimeException('simulated optional enrichment failure'));
+    $enrichmentFallback = $enrichmentFallbackService->getForAccount([
+        'role' => 'player',
+        'character_key' => 'jelb',
+    ]);
+    xpAssert(
+        $enrichmentFallback['stale'] === false
+            && $enrichmentFallback['character']['xp_total'] === 12345
+            && $enrichmentFallback['character']['hit_points'] === 13
+            && $enrichmentFallback['character']['xp_to_next_level'] === 7655,
+        'Optional enrichment failure discarded last-known-good HP or TNL values.');
+
     expectXpError(
         fn() => $service->getForAccount(['role' => 'player', 'character_key' => 'missing']),
         403,
@@ -403,6 +668,27 @@ try {
     xpAssert($stale['character']['xp_total'] === 12345, 'The stale fallback XP total changed.');
     xpAssert($stale['character']['hit_points'] === 13, 'The stale fallback hit-point total changed.');
     xpAssert($stale['character']['xp_to_next_level'] === 7655, 'The stale fallback TNL value changed.');
+
+    $newerXpMarkdown = str_replace(
+        ['As of 7.23.2026', '12,345'],
+        ['As of 7.24.2026', '13,000'],
+        $markdown);
+    $newerXpWithoutEnrichmentService = new XpTrackingService(
+        xpDatabase($databasePath),
+        xpConfiguration(),
+        static fn(string $url): string => str_ends_with($url, '/XP')
+            ? $newerXpMarkdown
+            : throw new RuntimeException('simulated optional enrichment failure'));
+    $newerXpWithoutEnrichment = $newerXpWithoutEnrichmentService->getForAccount([
+        'role' => 'player',
+        'character_key' => 'jelb',
+    ]);
+    xpAssert(
+        $newerXpWithoutEnrichment['stale'] === false
+            && $newerXpWithoutEnrichment['character']['xp_total'] === 13000
+            && $newerXpWithoutEnrichment['character']['hit_points'] === 13
+            && $newerXpWithoutEnrichment['character']['xp_to_next_level'] === null,
+        'A newer XP total with unavailable optional enrichment discarded cached HP.');
 
     $invalidService = new XpTrackingService(
         xpDatabase($invalidDatabasePath),
