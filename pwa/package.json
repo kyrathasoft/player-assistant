@@ -4,7 +4,7 @@
   "version": "1.0.0",
   "type": "module",
   "scripts": {
-    "test": "node browser-smoke.mjs"
+    "test": "node translator-worker-tests.mjs && node browser-smoke.mjs"
   },
   "devDependencies": {
     "playwright": "1.62.1"

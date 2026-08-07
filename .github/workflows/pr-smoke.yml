@@ -30,6 +30,10 @@ jobs:
         shell: pwsh
         run: .\verify-full-regression-ci.ps1
 
+      - name: Verify test harness structure
+        shell: pwsh
+        run: .\verify-test-harness-structure.ps1
+
       - name: Lint PHP test and broker files
         shell: pwsh
         run: |

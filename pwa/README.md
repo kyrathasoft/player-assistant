@@ -112,7 +112,7 @@ After loading the secure URL, supported browsers expose an install prompt. The a
 
 The service worker immediately caches only the app shell. Large translator dictionaries are fetched and cached the first time they are prepared. This keeps the initial install responsive while allowing previously loaded languages to work offline.
 
-When publishing a new PWA release, change `CACHE_VERSION` in `service-worker.js` so clients retire old cached files. Shell installation uses `cache: 'reload'` so a new service worker cannot accidentally repopulate its cache from long-lived stale browser responses.
+When publishing a new PWA release, increment `PlayerAssistantPwaCacheRevision` in the root `version.props`, then run `python verify-version-metadata.py --write`. Asset revisions and the visible PWA version are managed there as well. Shell installation uses `cache: 'reload'` so a new service worker cannot accidentally repopulate its cache from long-lived stale browser responses.
 
 ## Local smoke test
 

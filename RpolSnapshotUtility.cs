@@ -443,7 +443,20 @@ namespace PlayerAssistant
                 () =>
                 {
                     var request = CreateRequest(HttpMethod.Put, endpoint, null);
-                    request.Headers.Add("X-Broker-Admin-Key", adminKey);
+                    var timestamp = DateTimeOffset.UtcNow.ToUnixTimeSeconds().ToString();
+                    var nonce = Guid.NewGuid().ToString("N");
+                    var canonical = string.Join('\n',
+                        timestamp,
+                        nonce,
+                        "PUT",
+                        "/v1/snapshots/page",
+                        Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(json))));
+                    using var hmac = new HMACSHA256(Encoding.UTF8.GetBytes(adminKey));
+                    request.Headers.Add("X-Broker-Admin-Timestamp", timestamp);
+                    request.Headers.Add("X-Broker-Admin-Nonce", nonce);
+                    request.Headers.Add(
+                        "X-Broker-Admin-Signature",
+                        Convert.ToHexStringLower(hmac.ComputeHash(Encoding.UTF8.GetBytes(canonical))));
                     request.Content = new StringContent(json, Encoding.UTF8, "application/json");
                     return request;
                 },

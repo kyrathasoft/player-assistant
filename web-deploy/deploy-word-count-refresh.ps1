@@ -12,6 +12,13 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
+if ($DreamHostTarget -notmatch '^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$') {
+    throw 'The DreamHost target must be a simple SSH host alias or hostname.'
+}
+if ($PrivateDirectory -notmatch '^/home/[A-Za-z0-9._-]+(?:/[A-Za-z0-9._-]+)+$') {
+    throw 'The private directory must be an absolute path containing only safe path characters.'
+}
+
 function Invoke-CheckedNative {
     param(
         [Parameter(Mandatory = $true)][scriptblock]$Action,
@@ -32,10 +39,29 @@ function Invoke-CheckedNative {
 
 function Invoke-RemotePhp {
     param([Parameter(Mandatory = $true)][string]$Code)
-    $encoded = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($Code))
-    $command = "/usr/bin/php -r `"eval(base64_decode('$encoded'));`""
-    return Invoke-CheckedNative {
-        & ssh -i $SshKeyPath -o BatchMode=yes -o IdentitiesOnly=yes -o ConnectTimeout=15 $DreamHostTarget $command
+    $scriptId = [Guid]::NewGuid().ToString('N')
+    $localScript = Join-Path ([IO.Path]::GetTempPath()) "player-assistant-remote-$scriptId.php"
+    $remoteScript = "$PrivateDirectory/.player-assistant-remote-$scriptId.php"
+    [IO.File]::WriteAllText($localScript, $Code, [Text.UTF8Encoding]::new($false))
+    try {
+        Invoke-CheckedNative {
+            & scp -q -i $SshKeyPath -o BatchMode=yes -o IdentitiesOnly=yes -o ConnectTimeout=15 `
+                -- $localScript "${DreamHostTarget}:$remoteScript"
+        } | Out-Null
+        return Invoke-CheckedNative {
+            & ssh -i $SshKeyPath -o BatchMode=yes -o IdentitiesOnly=yes -o ConnectTimeout=15 `
+                $DreamHostTarget "/usr/bin/php '$remoteScript'"
+        }
+    }
+    finally {
+        Remove-Item -LiteralPath $localScript -Force -ErrorAction SilentlyContinue
+        try {
+            & ssh -i $SshKeyPath -o BatchMode=yes -o IdentitiesOnly=yes -o ConnectTimeout=15 `
+                $DreamHostTarget "rm -f -- '$remoteScript'" | Out-Null
+        }
+        catch {
+            Write-Warning "The temporary remote PHP script could not be removed: $remoteScript"
+        }
     }
 }
 

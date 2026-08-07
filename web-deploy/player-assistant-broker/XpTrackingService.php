@@ -447,6 +447,7 @@ final class XpTrackingService
             throw new RuntimeException('The XP markdown could not be read.');
         }
 
+        $candidates = [];
         foreach ($lines as $index => $line) {
             $dateLabel = trim(ltrim(trim((string)$line), '#'));
             if (!str_starts_with(strtolower($dateLabel), 'as of ')) {
@@ -459,17 +460,34 @@ final class XpTrackingService
                 throw new RuntimeException('The XP date label was invalid.');
             }
 
+            $dateText = trim(substr($dateLabel, strlen('As of ')));
+            $date = DateTimeImmutable::createFromFormat('!n.j.Y', $dateText);
+            $dateErrors = DateTimeImmutable::getLastErrors();
+            if ($date === false
+                || ($dateErrors !== false
+                    && ($dateErrors['warning_count'] > 0 || $dateErrors['error_count'] > 0))) {
+                throw new RuntimeException('The XP date label was invalid.');
+            }
+
             $headerIndex = $this->findTableHeader($lines, $index + 1);
             if ($headerIndex < 0) {
-                throw new RuntimeException('The latest XP date did not have a valid markdown table.');
+                continue;
             }
-            return [
+            $candidates[] = [
+                'date' => $date,
                 'date_label' => $dateLabel,
                 'characters' => $this->parseTable($lines, $headerIndex, $dateLabel),
             ];
         }
 
-        throw new RuntimeException('The XP markdown did not contain an As of section.');
+        if ($candidates === []) {
+            throw new RuntimeException('The XP markdown did not contain a valid As of section.');
+        }
+        usort($candidates, static fn(array $left, array $right): int => $right['date'] <=> $left['date']);
+        return [
+            'date_label' => $candidates[0]['date_label'],
+            'characters' => $candidates[0]['characters'],
+        ];
     }
 
     private function findTableHeader(array $lines, int $startIndex): int

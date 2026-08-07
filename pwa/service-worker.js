@@ -1,13 +1,23 @@
 'use strict';
 
-const CACHE_VERSION = 'player-assistant-pwa-0.9.8-v70';
+importScripts('./version.js?v=1');
+
+const VERSION_METADATA = globalThis.PLAYER_ASSISTANT_VERSION_METADATA;
+if (!VERSION_METADATA) {
+    throw new Error('Player Assistant version metadata is unavailable.');
+}
+const CACHE_VERSION = `player-assistant-pwa-${VERSION_METADATA.pwaVersion}-v${VERSION_METADATA.cacheRevision}`;
 const SHELL_CACHE = `${CACHE_VERSION}-shell`;
 const DATA_CACHE = `${CACHE_VERSION}-data`;
 const SHELL_ASSETS = [
     './',
     './index.html',
-    './styles.css?v=43',
-    './app.js?v=59',
+    `./version.js?v=${VERSION_METADATA.metadataRevision}`,
+    `./styles.css?v=${VERSION_METADATA.stylesRevision}`,
+    `./app.js?v=${VERSION_METADATA.appRevision}`,
+    `./modules/translator.js?v=${VERSION_METADATA.appRevision}`,
+    `./modules/search.js?v=${VERSION_METADATA.appRevision}`,
+    `./modules/dice.js?v=${VERSION_METADATA.appRevision}`,
     './translator-worker.js',
     './offline.html',
     './manifest.webmanifest',
@@ -18,12 +28,29 @@ const SHELL_ASSETS = [
     './party-funds.json',
     './level-progression.json'
 ];
+const OFFLINE_DATA_ASSETS = [
+    './data/orcish.json',
+    './data/elvish.json',
+    './data/ghukliak.json',
+    './campaign-search.json'
+];
+const canonicalRequestKey = (asset) => {
+    const url = new URL(asset, self.location.href);
+    return `${url.pathname}${url.search}`;
+};
+const SHELL_REQUEST_KEYS = new Set(SHELL_ASSETS.map(canonicalRequestKey));
+const OFFLINE_DATA_REQUEST_KEYS = new Set(OFFLINE_DATA_ASSETS.map(canonicalRequestKey));
 
 self.addEventListener('install', (event) => {
     event.waitUntil(
-        caches.open(SHELL_CACHE)
-            .then((cache) => cache.addAll(
-                SHELL_ASSETS.map((asset) => new Request(asset, { cache: 'reload' }))))
+        Promise.all([
+            caches.open(SHELL_CACHE)
+                .then((cache) => cache.addAll(
+                    SHELL_ASSETS.map((asset) => new Request(asset, { cache: 'reload' })))),
+            caches.open(DATA_CACHE)
+                .then((cache) => cache.addAll(
+                    OFFLINE_DATA_ASSETS.map((asset) => new Request(asset, { cache: 'reload' }))))
+        ])
             .then(() => self.skipWaiting())
     );
 });
@@ -95,11 +122,13 @@ self.addEventListener('fetch', (event) => {
     }
 
 
-    if (url.pathname.includes('/data/')
-        || url.pathname.endsWith('/campaign-search.json')) {
+    const requestKey = `${url.pathname}${url.search}`;
+    if (OFFLINE_DATA_REQUEST_KEYS.has(requestKey)) {
         event.respondWith(cacheFirst(request, DATA_CACHE));
         return;
     }
 
-    event.respondWith(cacheFirst(request, SHELL_CACHE));
+    if (SHELL_REQUEST_KEYS.has(requestKey)) {
+        event.respondWith(cacheFirst(request, SHELL_CACHE));
+    }
 });

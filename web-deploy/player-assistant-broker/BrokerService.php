@@ -77,6 +77,15 @@ final class BrokerService
         ?callable $destroySession = null): array
     {
         if ($method === 'GET' && $route === '/v1/health') {
+            return $this->response(200, [
+                'service' => 'player-assistant-broker',
+                'schema_version' => 7,
+                'status' => 'ok',
+            ]);
+        }
+
+        if ($method === 'GET' && $route === '/v1/admin/health') {
+            $this->requireAdminSignature($method, $route, $body, $headers);
             $wordCountRefresh = $this->wordCounts->refreshStatus();
             if (($wordCountRefresh['healthy'] ?? null) === false) {
                 $this->alerts->recordHealthFailure(
@@ -85,7 +94,7 @@ final class BrokerService
             }
             return $this->response(200, [
                 'service' => 'player-assistant-broker',
-                'schema_version' => 6,
+                'schema_version' => 7,
                 'database_schema_version' => (int)$this->database->query('PRAGMA user_version')->fetchColumn(),
                 'status' => 'ok',
                 'rpol_credentials_configured' => $this->rpolCredentialsConfigured(),
@@ -210,46 +219,46 @@ final class BrokerService
         }
 
         if ($route === '/v1/admin/character-accounts/import' && $method === 'POST') {
-            $this->requireAdminKey($headers);
+            $this->requireAdminSignature($method, $route, $body, $headers);
             return $this->response(200, $this->characterAuth->importLegacyAccounts($body));
         }
 
         if ($route === '/v1/admin/word-counts' && $method === 'PUT') {
-            $this->requireAdminKey($headers);
+            $this->requireAdminSignature($method, $route, $body, $headers);
             return $this->response(201, $this->wordCounts->store($body));
         }
 
         if ($route === '/v1/admin/character-accounts' && $method === 'GET') {
-            $this->requireAdminKey($headers);
+            $this->requireAdminSignature($method, $route, $body, $headers);
             return $this->response(200, ['accounts' => $this->characterAuth->listAccounts()]);
         }
 
         if ($route === '/v1/admin/character-accounts' && $method === 'POST') {
-            $this->requireAdminKey($headers);
+            $this->requireAdminSignature($method, $route, $body, $headers);
             return $this->response(201, $this->characterAuth->createAccount($body));
         }
 
         if ($method === 'PATCH'
             && preg_match('#^/v1/admin/character-accounts/([a-f0-9]{32})$#', $route, $matches) === 1) {
-            $this->requireAdminKey($headers);
+            $this->requireAdminSignature($method, $route, $body, $headers);
             return $this->response(
                 200,
                 $this->characterAuth->updateAccount($matches[1], $body));
         }
 
         if ($method === 'POST' && $route === '/v1/tokens') {
-            $this->requireAdminKey($headers);
+            $this->requireAdminSignature($method, $route, $body, $headers);
             return $this->response(201, $this->issueToken($body));
         }
 
         if ($method === 'DELETE' && preg_match('#^/v1/tokens/([a-f0-9]{32})$#', $route, $matches) === 1) {
-            $this->requireAdminKey($headers);
+            $this->requireAdminSignature($method, $route, $body, $headers);
             $this->revokeToken($matches[1]);
             return $this->response(200, ['revoked' => true, 'token_id' => $matches[1]]);
         }
 
         if ($method === 'PUT' && $route === '/v1/snapshots/page') {
-            $this->requireAdminKey($headers);
+            $this->requireAdminSignature($method, $route, $body, $headers);
             $snapshot = $this->validateSnapshot($body, false);
             $this->storeSnapshot($snapshot);
             return $this->response(201, [
@@ -566,15 +575,62 @@ final class BrokerService
             ->execute([time() - (30 * 86400)]);
     }
 
-    private function requireAdminKey(array $headers): void
+    private function requireAdminSignature(
+        string $method,
+        string $route,
+        array $body,
+        array $headers): void
     {
         $configuredKey = (string)($this->apiConfig['admin_key'] ?? '');
-        $providedKey = (string)($headers['admin-key'] ?? '');
-        if ($configuredKey === ''
-            || str_starts_with($configuredKey, 'CHANGE_ME')
-            || $providedKey === ''
-            || !hash_equals($configuredKey, $providedKey)) {
+        $timestamp = (string)($headers['admin-timestamp'] ?? '');
+        $nonce = strtolower((string)($headers['admin-nonce'] ?? ''));
+        $providedSignature = strtolower((string)($headers['admin-signature'] ?? ''));
+        if ($configuredKey === '' || str_starts_with($configuredKey, 'CHANGE_ME')
+            || !preg_match('/^[0-9]{10}$/', $timestamp)
+            || abs(time() - (int)$timestamp) > 120
+            || preg_match('/^[a-f0-9]{32}$/', $nonce) !== 1
+            || preg_match('/^[a-f0-9]{64}$/', $providedSignature) !== 1) {
             throw new BrokerHttpException(403, 'admin_forbidden', 'Broker administration is not authorized.');
+        }
+
+        $bodyJson = json_encode(
+            $body,
+            JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_PRESERVE_ZERO_FRACTION | JSON_THROW_ON_ERROR);
+        $canonical = implode("\n", [
+            $timestamp,
+            $nonce,
+            strtoupper($method),
+            $route,
+            hash('sha256', $bodyJson),
+        ]);
+        $expectedSignature = hash_hmac('sha256', $canonical, $configuredKey);
+        if (!hash_equals($expectedSignature, $providedSignature)) {
+            throw new BrokerHttpException(403, 'admin_forbidden', 'Broker administration is not authorized.');
+        }
+
+        $transactionStarted = false;
+        try {
+            $this->database->exec('BEGIN IMMEDIATE');
+            $transactionStarted = true;
+            $this->database->prepare('DELETE FROM admin_request_nonces WHERE used_at < ?')
+                ->execute([time() - 300]);
+            $insert = $this->database->prepare(
+                'INSERT INTO admin_request_nonces (nonce, used_at) VALUES (?, ?)');
+            $insert->execute([$nonce, time()]);
+            $this->database->exec('COMMIT');
+            $transactionStarted = false;
+        } catch (Throwable $exception) {
+            if ($transactionStarted) {
+                $this->database->exec('ROLLBACK');
+            }
+            if ($exception instanceof PDOException && str_contains($exception->getMessage(), 'UNIQUE')) {
+                throw new BrokerHttpException(
+                    403,
+                    'admin_replay',
+                    'The broker administration request was already used.',
+                    $exception);
+            }
+            throw $exception;
         }
     }
 
@@ -608,6 +664,10 @@ final class BrokerService
                 request_count INTEGER NOT NULL,
                 PRIMARY KEY (token_id, window_start),
                 FOREIGN KEY (token_id) REFERENCES api_tokens(id) ON DELETE CASCADE
+            );
+            CREATE TABLE IF NOT EXISTS admin_request_nonces (
+                nonce TEXT PRIMARY KEY,
+                used_at INTEGER NOT NULL
             );
             CREATE TABLE IF NOT EXISTS audit_events (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,

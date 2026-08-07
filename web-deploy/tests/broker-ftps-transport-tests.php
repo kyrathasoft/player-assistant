@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/../player-assistant-broker/BrokerOperations.php';
 
+putenv('BACKUP_ENCRYPTION_KEY=test-backup-encryption-key-with-sufficient-entropy');
+
 function ftpsAssert(bool $condition, string $message): void
 {
     if (!$condition) {
@@ -80,6 +82,7 @@ $environmentValues = [
     'BACKUP_FTPS_USERNAME' => 'environment-user',
     'BACKUP_FTPS_PASSWORD' => 'environment-password',
     'BACKUP_FTPS_REMOTE_PATH' => '/account-root/private-backups',
+    'BACKUP_ENCRYPTION_KEY' => 'environment-backup-encryption-key-with-sufficient-entropy',
 ];
 $originalEnvironment = [];
 foreach ($environmentValues as $name => $value) {
@@ -154,8 +157,8 @@ try {
     $remoteDirectory = 'htdocs/scarlet-horizons/pwa-backups';
     $client = new InMemoryBrokerFtpsClient();
     foreach (['20260803T150000Z-11111111', '20260804T150000Z-22222222'] as $old) {
-        $client->files[$remoteDirectory . '/broker-' . $old . '.sqlite'] = 'old backup';
-        $client->files[$remoteDirectory . '/broker-' . $old . '.sqlite.json'] = '{}';
+        $client->files[$remoteDirectory . '/broker-' . $old . '.sqlite.enc'] = 'old encrypted backup';
+        $client->files[$remoteDirectory . '/broker-' . $old . '.sqlite.enc.json'] = '{}';
     }
     $ftpsOperations = new BrokerOperations([
         'api' => ['database_path' => '/private/broker.sqlite'],
@@ -175,9 +178,10 @@ try {
     $copyOffsite = new ReflectionMethod($ftpsOperations, 'copyOffsite');
     $copyOffsite->invoke($ftpsOperations, $backupPath, $metadataPath);
 
-    $remoteBackup = $remoteDirectory . '/' . basename($backupPath);
-    $remoteMetadata = $remoteDirectory . '/' . basename($metadataPath);
-    ftpsAssert(isset($client->files[$remoteBackup]), 'The FTPS database backup was not promoted.');
+    $remoteBackup = $remoteDirectory . '/' . basename($backupPath) . '.enc';
+    $remoteMetadata = $remoteBackup . '.json';
+    ftpsAssert(isset($client->files[$remoteBackup]), 'The encrypted FTPS database backup was not promoted.');
+    ftpsAssert(!isset($client->files[$remoteDirectory . '/' . basename($backupPath)]), 'A plaintext FTPS database backup was promoted.');
     ftpsAssert(isset($client->files[$remoteMetadata]), 'The FTPS metadata was not promoted.');
     ftpsAssert(
         count(array_filter($client->downloads, static fn(string $path): bool => str_starts_with($path, $remoteBackup . '.part-'))) === 1,
@@ -186,7 +190,7 @@ try {
         count(array_filter($client->downloads, static fn(string $path): bool => str_starts_with($path, $remoteMetadata . '.part-'))) === 1,
         'The temporary metadata upload was not downloaded before promotion.');
     ftpsAssert(
-        count(array_filter(array_keys($client->files), static fn(string $path): bool => str_ends_with($path, '.sqlite'))) === 2,
+        count(array_filter(array_keys($client->files), static fn(string $path): bool => str_ends_with($path, '.sqlite.enc'))) === 2,
         'FTPS retention did not preserve exactly the configured number of database backups.');
     ftpsAssert(
         count(array_filter(array_keys($client->files), static fn(string $path): bool => str_contains($path, '.part-'))) === 0,
@@ -219,7 +223,7 @@ try {
         'The corrupted FTPS database backup was not removed.');
 
     $partialClient = new InMemoryBrokerFtpsClient();
-    $partialClient->failUploadsContaining = '.sqlite.json';
+    $partialClient->failUploadsContaining = '.sqlite.enc.json';
     $partialOperations = new BrokerOperations([
         'api' => ['database_path' => '/private/broker.sqlite'],
         'operations' => [

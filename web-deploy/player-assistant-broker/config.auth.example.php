@@ -16,5 +16,9 @@ return [
         'login_window_seconds' => 900,
         'login_max_failures' => 5,
         'login_lockout_seconds' => 900,
+        'audit_retention_seconds' => 7776000,
+        'audit_address_mode' => 'hash',
+        // Optional stable secret for audit-address pseudonymization.
+        'audit_address_hash_key' => 'CHANGE_ME_TO_A_RANDOM_SECRET',
     ],
 ];

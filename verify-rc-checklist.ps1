@@ -1,7 +1,7 @@
 param(
     [string]$ReleaseDir = (Join-Path $PSScriptRoot 'Release'),
     [string]$PublishDir = (Join-Path $PSScriptRoot 'Release\publish'),
-    [string]$RcTag = 'v0.9.5-rc1',
+    [string]$RcTag,
     [string[]]$ExpectedChangedPath = @(),
     [string[]]$TestFilter = @(
         'application version',
@@ -33,6 +33,11 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
+
+. (Join-Path $PSScriptRoot 'version-metadata.ps1')
+if ([string]::IsNullOrWhiteSpace($RcTag)) {
+    $RcTag = "v$((Get-PlayerAssistantVersionMetadata -RepoRoot $PSScriptRoot).Version)-rc1"
+}
 
 $ProjectFileName = 'player-assistant.csproj'
 $ExecutableFileName = 'player-assistant.exe'
@@ -114,32 +119,12 @@ function Assert-RequiredFile {
 }
 
 function Get-ProjectVersionInfo {
-    $projectPath = Join-Path $PSScriptRoot $ProjectFileName
-    Assert-RequiredFile -Path $projectPath -Description $ProjectFileName
-
-    [xml]$project = Get-Content -Raw -LiteralPath $projectPath
-    $propertyGroup = @($project.Project.PropertyGroup |
-        Where-Object { $_.Version -or $_.FileVersion -or $_.InformationalVersion } |
-        Select-Object -First 1)
-
-    if ($propertyGroup.Count -eq 0) {
-        throw "$ProjectFileName does not define Version, FileVersion, or InformationalVersion."
-    }
-
-    $version = [string]$propertyGroup[0].Version
-    $fileVersion = [string]$propertyGroup[0].FileVersion
-    $informationalVersion = [string]$propertyGroup[0].InformationalVersion
-
-    if ([string]::IsNullOrWhiteSpace($version) -or
-        [string]::IsNullOrWhiteSpace($fileVersion) -or
-        [string]::IsNullOrWhiteSpace($informationalVersion)) {
-        throw "$ProjectFileName must define non-empty Version, FileVersion, and InformationalVersion."
-    }
+    $metadata = Get-PlayerAssistantVersionMetadata -RepoRoot $PSScriptRoot
 
     return [pscustomobject]@{
-        Version = $version
-        FileVersion = $fileVersion
-        InformationalVersion = $informationalVersion
+        Version = $metadata.Version
+        FileVersion = $metadata.AssemblyVersion
+        InformationalVersion = $metadata.Version
     }
 }
 

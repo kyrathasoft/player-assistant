@@ -17,6 +17,8 @@ $backupDirectory = $root . '/backups';
 $restoreDirectory = $root . '/restore-tests';
 $offsiteDirectory = $root . '/offsite';
 $statusPath = $root . '/operations-status.json';
+$originalEncryptionKey = getenv('BACKUP_ENCRYPTION_KEY');
+putenv('BACKUP_ENCRYPTION_KEY=test-backup-encryption-key-with-sufficient-entropy');
 
 try {
     if (!mkdir($root, 0700, true) && !is_dir($root)) {
@@ -47,9 +49,16 @@ try {
     operationsAssert($maintenance['status'] === 'ok', 'Broker maintenance did not succeed.');
     operationsAssert($maintenance['integrity_check'] === 'ok', 'The live integrity check did not pass.');
     operationsAssert($maintenance['restore_test'] === 'ok', 'The restore test did not pass.');
-    operationsAssert($maintenance['backup']['offsite'] === false, 'The test offsite mode was misreported.');
+    operationsAssert($maintenance['backup']['offsite'] === true, 'The encrypted offsite mode was misreported.');
     operationsAssert(count(glob($backupDirectory . '/broker-*.sqlite') ?: []) === 1, 'The local backup was not created.');
-    operationsAssert(count(glob($offsiteDirectory . '/broker-*.sqlite') ?: []) === 1, 'The offsite backup was not created.');
+    $encryptedCopies = glob($offsiteDirectory . '/broker-*.sqlite.enc') ?: [];
+    operationsAssert(count($encryptedCopies) === 1, 'The encrypted offsite backup was not created.');
+    operationsAssert(count(glob($offsiteDirectory . '/broker-*.sqlite') ?: []) === 0, 'A plaintext offsite backup was created.');
+    $decryptedPath = $root . '/decrypted.sqlite';
+    BrokerBackupCipher::decryptFile($encryptedCopies[0], $decryptedPath, (string)getenv('BACKUP_ENCRYPTION_KEY'));
+    $restored = new PDO('sqlite:' . $decryptedPath, null, null, [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]);
+    operationsAssert((string)$restored->query('PRAGMA integrity_check')->fetchColumn() === 'ok', 'The encrypted offsite backup was not independently restorable.');
+    $restored = null;
     operationsAssert(count(glob($restoreDirectory . '/*.sqlite') ?: []) === 0, 'Restore test files were not cleaned up.');
 
     $operations->recordServerError('request-one');
@@ -64,6 +73,9 @@ try {
     operationsAssert($status['last_alert_event'] === 'repeated_server_errors', 'The repeated-error alert was not recorded.');
     echo "Broker operations tests passed.\n";
 } finally {
+    putenv($originalEncryptionKey === false
+        ? 'BACKUP_ENCRYPTION_KEY'
+        : 'BACKUP_ENCRYPTION_KEY=' . $originalEncryptionKey);
     if (is_dir($root)) {
         $iterator = new RecursiveIteratorIterator(
             new RecursiveDirectoryIterator($root, FilesystemIterator::SKIP_DOTS),

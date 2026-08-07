@@ -13,6 +13,13 @@ param(
 $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'word-count-publishing.ps1')
 
+if ($DreamHostTarget -notmatch '^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$') {
+    throw 'The DreamHost target must be a simple SSH host alias or hostname.'
+}
+if ($PrivateDirectory -notmatch '^/home/[A-Za-z0-9._-]+(?:/[A-Za-z0-9._-]+)+$') {
+    throw 'The private directory must be an absolute path containing only safe path characters.'
+}
+
 function Invoke-CheckedNative {
     param(
         [Parameter(Mandatory = $true)][scriptblock]$Action,
@@ -33,10 +40,29 @@ function Invoke-CheckedNative {
 
 function Invoke-RemotePhp {
     param([Parameter(Mandatory = $true)][string]$Code)
-    $encoded = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($Code))
-    $command = "/usr/bin/php -r `"eval(base64_decode('$encoded'));`""
-    return Invoke-CheckedNative {
-        & ssh -i $SshKeyPath -o BatchMode=yes -o IdentitiesOnly=yes -o ConnectTimeout=15 $DreamHostTarget $command
+    $scriptId = [Guid]::NewGuid().ToString('N')
+    $localScript = Join-Path ([IO.Path]::GetTempPath()) "player-assistant-verify-$scriptId.php"
+    $remoteScript = "$PrivateDirectory/.player-assistant-verify-$scriptId.php"
+    [IO.File]::WriteAllText($localScript, $Code, [Text.UTF8Encoding]::new($false))
+    try {
+        Invoke-CheckedNative {
+            & scp -q -i $SshKeyPath -o BatchMode=yes -o IdentitiesOnly=yes -o ConnectTimeout=15 `
+                -- $localScript "${DreamHostTarget}:$remoteScript"
+        } | Out-Null
+        return Invoke-CheckedNative {
+            & ssh -i $SshKeyPath -o BatchMode=yes -o IdentitiesOnly=yes -o ConnectTimeout=15 `
+                $DreamHostTarget "/usr/bin/php '$remoteScript'"
+        }
+    }
+    finally {
+        Remove-Item -LiteralPath $localScript -Force -ErrorAction SilentlyContinue
+        try {
+            & ssh -i $SshKeyPath -o BatchMode=yes -o IdentitiesOnly=yes -o ConnectTimeout=15 `
+                $DreamHostTarget "rm -f -- '$remoteScript'" | Out-Null
+        }
+        catch {
+            Write-Warning "The temporary remote PHP script could not be removed: $remoteScript"
+        }
     }
 }
 
@@ -82,7 +108,10 @@ $offsiteConfigured = $offsiteTransport === 'ftps'
         && trim((string)getenv('BACKUP_FTPS_USERNAME')) !== ''
         && (string)getenv('BACKUP_FTPS_PASSWORD') !== ''
         && trim((string)getenv('BACKUP_FTPS_REMOTE_PATH')) !== ''
-    : !empty($offsite['ssh_target']) && !empty($offsite['directory']);
+        && strlen((string)getenv('BACKUP_ENCRYPTION_KEY')) >= 32
+    : !empty($offsite['ssh_target'])
+        && !empty($offsite['directory'])
+        && strlen((string)getenv('BACKUP_ENCRYPTION_KEY')) >= 32;
 $result['operations'] = [
     'backup_directory' => $operations['backup_directory'] ?? null,
     'restore_test_directory' => $operations['restore_test_directory'] ?? null,
@@ -90,6 +119,7 @@ $result['operations'] = [
     'offsite_transport' => $offsiteTransport,
     'offsite_configured' => $offsiteConfigured,
     'curl_loaded' => extension_loaded('curl'),
+    'openssl_loaded' => extension_loaded('openssl'),
 ];
 $statusPath = $directory . '/word-count-refresh-status.json';
 $result['status'] = [
@@ -152,6 +182,9 @@ if ($remote.operations.backup_directory -ne $expectedOperationsDirectory -or
 if ($remote.operations.offsite_transport -eq 'ftps' -and -not $remote.operations.curl_loaded) {
     throw 'Production PHP does not provide the cURL extension required for FTPS backups.'
 }
+if (-not $remote.operations.openssl_loaded) {
+    throw 'Production PHP does not provide the OpenSSL extension required for encrypted backups.'
+}
 
 $cronNeedle = "/usr/bin/php $PrivateDirectory/refresh-word-counts.php"
 if ($remote.cron -notmatch [regex]::Escape($cronNeedle)) {
@@ -174,17 +207,11 @@ $sourceResponse = Invoke-WebRequest -Uri $SourceUrl -UseBasicParsing -TimeoutSec
 $null = Test-WordCountSignedEnvelope -EnvelopeJson $sourceResponse.Content -PublicKeyBase64 $metadata.public_key -KeyId $metadata.key_id -PhpPath $PhpPath
 
 $health = Invoke-RestMethod -Uri $HealthUrl -TimeoutSec 30
-if (-not $health.word_count_refresh.configured -or -not $health.word_count_refresh.signing_configured) {
-    throw 'Public health does not report configured signed refreshes.'
+if ([int]$health.schema_version -ne 7 -or $health.status -ne 'ok') {
+    throw 'The public broker liveness endpoint is unavailable or unhealthy.'
 }
-if (-not $health.operations.configured -or -not $health.operations.offsite_backup_configured) {
-    throw 'Public health does not report configured broker operations.'
-}
-if ($health.word_count_refresh.healthy -ne $true) {
-    throw "Public health reports an unhealthy refresh: $($health.word_count_refresh.last_error_code)"
-}
-if ([string]::IsNullOrWhiteSpace([string]$health.word_count_refresh.last_scheduler_run_at)) {
-    throw 'Public health does not report a scheduler run.'
+if ($null -ne $health.word_count_refresh -or $null -ne $health.operations) {
+    throw 'The public broker liveness endpoint disclosed operational details.'
 }
 
 Write-Output 'Word-count production drift check passed.'

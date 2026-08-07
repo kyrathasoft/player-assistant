@@ -4,6 +4,10 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
+$repoRoot = Split-Path -Parent $PwaRoot
+. (Join-Path $repoRoot 'version-metadata.ps1')
+$versionMetadata = Get-PlayerAssistantVersionMetadata -RepoRoot $repoRoot
+
 function Assert-Condition {
     param(
         [Parameter(Mandatory = $true)][bool]$Condition,
@@ -17,6 +21,7 @@ function Assert-Condition {
 $requiredFiles = @(
     'index.html',
     'styles.css',
+    'version.js',
     'app.js',
     'translator-worker.js',
     'service-worker.js',
@@ -69,7 +74,7 @@ foreach ($language in @('orcish', 'elvish', 'ghukliak')) {
     foreach ($property in $termProperties) {
         $phraseWords = @(($property.Name -split '\s+') | Where-Object { $_.Length -gt 0 }).Count
         $actualMaxPhraseWords = [Math]::Max($actualMaxPhraseWords, $phraseWords)
-        $normalizedTerm = $property.Name.Normalize([System.Text.NormalizationForm]::FormKC).Trim().ToLowerInvariant()
+        $normalizedTerm = (($property.Name.Normalize([System.Text.NormalizationForm]::FormKC).Trim() -split '\s+') -join ' ').ToLowerInvariant()
         Assert-Condition -Condition ($normalizedTerms.Add($normalizedTerm)) -Message "$language contains duplicate terms under translator-worker normalization: $normalizedTerm"
     }
     Assert-Condition -Condition ([int]$payload.maxPhraseWords -eq $actualMaxPhraseWords) -Message "$language maxPhraseWords does not match its terms."
@@ -230,13 +235,26 @@ foreach ($questProperty in $questProperties) {
     Assert-Condition -Condition $questWikiUrlAllowed -Message "Quest '$($questProperty.Name)' has an invalid wiki URL."
 }
 
-foreach ($script in @('app.js', 'translator-worker.js', 'service-worker.js')) {
+$featureModulePaths = @(
+    'modules/translator.js',
+    'modules/search.js',
+    'modules/dice.js'
+)
+$versionedFeatureModulePaths = @($featureModulePaths | ForEach-Object {
+    './{0}?v=${{VERSION_METADATA.appRevision}}' -f $_
+})
+foreach ($script in @('version.js', 'app.js', 'translator-worker.js', 'service-worker.js') + $featureModulePaths) {
     & node --check (Join-Path $PwaRoot $script)
     Assert-Condition -Condition ($LASTEXITCODE -eq 0) -Message "JavaScript syntax check failed: $script"
 }
 
 $html = Get-Content -Raw -LiteralPath (Join-Path $PwaRoot 'index.html')
-$appScript = Get-Content -Raw -LiteralPath (Join-Path $PwaRoot 'app.js')
+$versionScript = Get-Content -Raw -LiteralPath (Join-Path $PwaRoot 'version.js')
+$appScriptEntry = Get-Content -Raw -LiteralPath (Join-Path $PwaRoot 'app.js')
+$featureModuleScripts = @($featureModulePaths | ForEach-Object {
+    Get-Content -Raw -LiteralPath (Join-Path $PwaRoot $_)
+})
+$appScript = @($appScriptEntry) + $featureModuleScripts -join [Environment]::NewLine
 $translatorWorker = Get-Content -Raw -LiteralPath (Join-Path $PwaRoot 'translator-worker.js')
 $requestTranslationFunction = [regex]::Match(
     $appScript,
@@ -244,6 +262,7 @@ $requestTranslationFunction = [regex]::Match(
     [System.Text.RegularExpressions.RegexOptions]::Singleline).Value
 $styles = Get-Content -Raw -LiteralPath (Join-Path $PwaRoot 'styles.css')
 $serviceWorker = Get-Content -Raw -LiteralPath (Join-Path $PwaRoot 'service-worker.js')
+$deploymentTest = Get-Content -Raw -LiteralPath (Join-Path $PwaRoot 'test-deployment.ps1')
 $referencedIds = [regex]::Matches($appScript, "byId\('([^']+)'\)") | ForEach-Object { $_.Groups[1].Value } | Sort-Object -Unique
 foreach ($id in $referencedIds) {
     Assert-Condition -Condition ($html.Contains("id=`"$id`"")) -Message "app.js references a missing HTML element: $id"
@@ -305,11 +324,14 @@ Assert-Condition -Condition ($heroTokenStyle.Success -and $heroTokenStyle.Groups
 Assert-Condition -Condition (!$appScript.Contains('XP+Tracking') -and !$html.Contains('XP+Tracking')) -Message 'The XP source URL must remain outside the browser application.'
 Assert-Condition -Condition ($serviceWorker.Contains("url.pathname.startsWith('/scarlethorizons/api/')")) -Message 'The service worker must exclude protected API responses.'
 Assert-Condition -Condition ($serviceWorker.Contains("new Request(asset, { cache: 'reload' })")) -Message 'Service-worker upgrades must bypass stale browser shell caches.'
+Assert-Condition -Condition ($serviceWorker.Contains('OFFLINE_DATA_ASSETS') -and $serviceWorker.Contains("'./data/orcish.json'") -and $serviceWorker.Contains("'./data/elvish.json'") -and $serviceWorker.Contains("'./data/ghukliak.json'") -and $serviceWorker.Contains("'./campaign-search.json'")) -Message 'Offline translator and campaign-search data must be preloaded into the data cache.'
 Assert-Condition -Condition ($serviceWorker.Contains('networkFirstData') -and $serviceWorker.Contains("url.pathname.endsWith('/data/heroes.json')") -and $serviceWorker.Contains("url.pathname.includes('/data/hero-tokens/')")) -Message 'Hero-token manifests and images must refresh from the network before using cached copies.'
 Assert-Condition -Condition ($appScript.Contains("updateViaCache: 'none'") -and $appScript.Contains('await registration.update()')) -Message 'The PWA must explicitly check for uncached service-worker updates.'
 Assert-Condition -Condition ($manifest.start_url -eq './#dashboard' -and $manifest.scope -eq './') -Message 'The manifest must keep navigation inside the deployed PWA directory.'
 Assert-Condition -Condition ($html.Contains('href="manifest.webmanifest"') -and $appScript.Contains('service-worker.js')) -Message 'The install manifest or service-worker registration is missing.'
-Assert-Condition -Condition ($html.Contains('styles.css?v=43') -and $html.Contains('src="app.js?v=59"') -and $serviceWorker.Contains("player-assistant-pwa-0.9.8-v70") -and $serviceWorker.Contains("'./styles.css?v=43'") -and $serviceWorker.Contains("'./app.js?v=59'") -and $serviceWorker.Contains("'./level-progression.json'") -and $serviceWorker.Contains("'./magic-items.json'")) -Message 'The PWA shell must use cache-busting assets and preload the progression and magic-item data.'
+Assert-Condition -Condition ($html.Contains("<script src=`"version.js?v=$($versionMetadata.PwaMetadataRevision)`"></script>") -and $html.Contains("<script type=`"module`" src=`"app.js?v=$($versionMetadata.PwaAppRevision)`"></script>") -and $appScriptEntry.Contains("from './modules/translator.js?v=$($versionMetadata.PwaAppRevision)'") -and $appScriptEntry.Contains("from './modules/search.js?v=$($versionMetadata.PwaAppRevision)'") -and $appScriptEntry.Contains("from './modules/dice.js?v=$($versionMetadata.PwaAppRevision)'")) -Message 'The PWA entry point must load version metadata and cache-busted translator, search, and dice feature modules.'
+Assert-Condition -Condition ($featureModulePaths.Count -eq @($featureModulePaths | Where-Object { $deploymentTest.Contains("'$_' = @('application/javascript', 'text/javascript')") }).Count) -Message 'Public deployment verification must allow every PWA feature module.'
+Assert-Condition -Condition ($html.Contains("styles.css?v=$($versionMetadata.PwaStylesRevision)") -and $html.Contains("$($versionMetadata.PwaVersion) PWA") -and $versionScript.Contains("pwaVersion: '$($versionMetadata.PwaVersion)'") -and $versionScript.Contains("metadataRevision: $($versionMetadata.PwaMetadataRevision)") -and $versionScript.Contains("stylesRevision: $($versionMetadata.PwaStylesRevision)") -and $versionScript.Contains("appRevision: $($versionMetadata.PwaAppRevision)") -and $versionScript.Contains("cacheRevision: $($versionMetadata.PwaCacheRevision)") -and $serviceWorker.Contains("importScripts('./version.js?v=$($versionMetadata.PwaMetadataRevision)')") -and $serviceWorker.Contains('VERSION_METADATA.cacheRevision') -and $serviceWorker.Contains('VERSION_METADATA.stylesRevision') -and $serviceWorker.Contains('VERSION_METADATA.appRevision') -and $appScriptEntry.Contains('PLAYER_ASSISTANT_VERSION_METADATA?.pwaVersion') -and $deploymentTest.Contains("'version.js' = @('application/javascript', 'text/javascript')") -and $versionedFeatureModulePaths.Count -eq @($versionedFeatureModulePaths | Where-Object { $serviceWorker.Contains($_) }).Count -and $serviceWorker.Contains("'./level-progression.json'") -and $serviceWorker.Contains("'./magic-items.json'")) -Message 'The PWA shell must use centralized cache-busting metadata, preload every cache-busted feature module, and preload the progression and magic-item data.'
 Assert-Condition -Condition ($html.Contains('value="ghukliak"') -and $html.Contains('Goblin') -and $appScript.Contains("languageSelect?.value === 'ghukliak'") -and $translatorWorker.Contains("message.language === 'ghukliak'")) -Message 'The PWA translator must expose the Goblin/Ghukliak language in its UI and worker.'
 Assert-Condition -Condition ([System.Text.RegularExpressions.Regex]::IsMatch($styles, '\.translation-loading\[hidden\]\s*\{\s*display:\s*none\s*!important;\s*\}', [System.Text.RegularExpressions.RegexOptions]::Singleline)) -Message 'The translator loading indicator must remain hidden whenever its hidden attribute is set.'
 Assert-Condition -Condition (!$translatorWorker.Contains(".replaceAll('’', `"'`")")) -Message 'Translator normalization must preserve distinct straight- and curly-apostrophe lexicon terms.'

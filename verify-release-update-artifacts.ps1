@@ -1,7 +1,7 @@
 param(
-    [string]$PublishArchivePath = (Join-Path $PSScriptRoot 'Release\installer\p-assist-0.9.5.zip'),
-    [string]$InstallerPath = (Join-Path $PSScriptRoot 'Release\installer\p-assist-0.9.5.exe'),
-    [string]$Version = '0.9.5',
+    [string]$PublishArchivePath,
+    [string]$InstallerPath,
+    [string]$Version,
     [string]$ManifestPath = (Join-Path $PSScriptRoot 'Release\installer\p-assist-updates.json'),
     [string]$SignaturePath = (Join-Path $PSScriptRoot 'Release\installer\p-assist-updates.json.sig'),
     [string]$PublicKeyXmlPath = (Join-Path $PSScriptRoot 'Release\installer\p-assist-updates.public-key.xml'),
@@ -11,6 +11,18 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
+
+. (Join-Path $PSScriptRoot 'version-metadata.ps1')
+if ([string]::IsNullOrWhiteSpace($Version)) {
+    $Version = (Get-PlayerAssistantVersionMetadata -RepoRoot $PSScriptRoot).Version
+}
+$defaultInstallerVersion = ($Version -split '[-+]')[0]
+if ([string]::IsNullOrWhiteSpace($PublishArchivePath)) {
+    $PublishArchivePath = Join-Path $PSScriptRoot "Release\installer\p-assist-$defaultInstallerVersion.zip"
+}
+if ([string]::IsNullOrWhiteSpace($InstallerPath)) {
+    $InstallerPath = Join-Path $PSScriptRoot "Release\installer\p-assist-$defaultInstallerVersion.exe"
+}
 
 function Assert-RequiredFile {
     param(
