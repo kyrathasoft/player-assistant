@@ -114,7 +114,7 @@ jobs:
         run: |
           ./web-deploy/tests/backup-encryption-tests.ps1
           ./web-deploy/tests/publish-word-counts-tests.ps1
-          ./web-deploy/tests/run-http-auth-tests.ps1
+          ./web-deploy/tests/run-http-auth-tests.ps1 -PhpPath (Get-Command php).Source
 
   # Keep this job name aligned with the required GitHub Actions check on master.
   full-regression:
