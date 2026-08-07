@@ -1,0 +1,2970 @@
+using PlayerAssistant;
+using Microsoft.Playwright;
+using System.Diagnostics;
+using System.Drawing;
+using System.Drawing.Imaging;
+using System.IO.Compression;
+using System.Net;
+using System.Net.Sockets;
+using System.Reflection;
+using System.Security.Cryptography;
+using System.Security.Cryptography.X509Certificates;
+using System.Net.Security;
+using System.Diagnostics.CodeAnalysis;
+using System.Text.Json;
+using System.Windows.Forms;
+using System.Xml.Linq;
+
+namespace PlayerAssistant.Tests;
+
+internal static partial class TestCases
+{
+    internal static void RpolAuthDetectsLoginPageFallback()
+    {
+        var loginHtml =
+            """
+            <html>
+              <body>
+                <form action='/login.cgi'>
+                  <input name='username'>
+                  <input name='password' type='password'>
+                </form>
+              </body>
+            </html>
+            """;
+
+        AssertTrue(RpolAuthUtility.LooksLikeLoginPage(loginHtml), "expected RPOL login page markup to be detected");
+        AssertTrue(
+            RpolAuthUtility.LooksLikeLoginResponse("text/html; charset=utf-8", System.Text.Encoding.UTF8.GetBytes(loginHtml)),
+            "expected HTML login response to be detected");
+        AssertFalse(
+            RpolAuthUtility.LooksLikeLoginResponse("image/png", System.Text.Encoding.UTF8.GetBytes(loginHtml)),
+            "non-HTML responses should not be treated as expired auth pages");
+        AssertFalse(
+            RpolAuthUtility.LooksLikeLoginPage("<html><body>normal game page</body></html>"),
+            "ordinary RPOL pages should not be treated as login pages");
+    }
+
+    internal static void RpolAuthDistinguishesBlockedAndRemoteFailures()
+    {
+        var uri = new Uri("https://rpol.net/display.cgi?gi=80170");
+
+        var forbidden = RpolAuthUtility.CreateUnsuccessfulResponseException(uri, 403, "Forbidden");
+        var cloudflareChallenge = RpolAuthUtility.CreateUnsuccessfulResponseException(
+            uri,
+            403,
+            "Forbidden",
+            "https://rpol.net/display.cgi?gi=80170&__cf_chl_rt_tk=challenge-token");
+        var rateLimited = RpolAuthUtility.CreateUnsuccessfulResponseException(uri, 429, "Too Many Requests");
+        var unavailable = RpolAuthUtility.CreateUnsuccessfulResponseException(uri, 503, "Service Unavailable");
+
+        AssertEqual(RpolAuthFailureKind.RpolBlocked, forbidden.Kind, "403 should be classified as RPOL blocking");
+        AssertContains(forbidden.Message, "blocked authenticated access");
+        AssertEqual(RpolAuthFailureKind.CloudflareChallenge, cloudflareChallenge.Kind, "Cloudflare challenge 403 should trigger headed browser recovery");
+        AssertFalse(RpolAuthUtility.IsFatalAuthFailure(cloudflareChallenge), "Cloudflare challenges should be retryable instead of cached as fatal");
+        AssertEqual(RpolAuthFailureKind.RpolBlocked, rateLimited.Kind, "429 should be classified as RPOL blocking");
+        AssertEqual(RpolAuthFailureKind.RemoteUnavailable, unavailable.Kind, "503 should remain a transient remote failure");
+    }
+
+    internal static void RpolAuthPrefersInstalledBrowsersBeforePlaywrightChromium()
+    {
+        var normalOptions = (BrowserTypeLaunchOptions[])(InvokeStaticMethod(
+            typeof(RpolAuthUtility),
+            "CreateRpolBrowserLaunchOptions",
+            false) ?? throw new InvalidOperationException("CreateRpolBrowserLaunchOptions returned null."));
+        var verificationOptions = (BrowserTypeLaunchOptions[])(InvokeStaticMethod(
+            typeof(RpolAuthUtility),
+            "CreateRpolBrowserLaunchOptions",
+            true) ?? throw new InvalidOperationException("CreateRpolBrowserLaunchOptions returned null."));
+
+        AssertEqual(3, normalOptions.Length, "normal RPOL auth should try Edge, Chrome, then Playwright Chromium");
+        AssertEqual("msedge", normalOptions[0].Channel ?? string.Empty, "Edge should be tried before default Playwright Chromium");
+        AssertEqual("chrome", normalOptions[1].Channel ?? string.Empty, "Chrome should be tried before default Playwright Chromium");
+        AssertTrue(string.IsNullOrWhiteSpace(normalOptions[2].Channel), "default Playwright Chromium should remain the final fallback");
+        AssertTrue(normalOptions.All(option => option.Headless == true), "normal RPOL auth should launch browsers headless");
+        AssertTrue(verificationOptions.All(option => option.Headless == false), "manual RPOL browser verification should launch browsers headed");
+    }
+
+    internal static void RpolAuthEnforcesBrowserTlsValidation()
+    {
+        var contextOptions = (BrowserNewContextOptions)(InvokeStaticMethod(
+            typeof(RpolAuthUtility),
+            "CreateBrowserContextOptions",
+            null!,
+            true) ?? throw new InvalidOperationException("CreateBrowserContextOptions returned null."));
+
+        AssertFalse(contextOptions.IgnoreHTTPSErrors == true, "RPOL browser contexts must reject HTTPS certificate errors");
+    }
+
+    internal static void RpolAuthClassifiesTransportSecurityFailures()
+    {
+        AssertTrue(
+            RpolAuthUtility.IsTransportSecurityFailureMessage("net::ERR_CERT_AUTHORITY_INVALID at https://rpol.net/"),
+            "invalid certificate authorities should be classified as transport-security failures");
+        AssertTrue(
+            RpolAuthUtility.IsTransportSecurityFailureMessage("net::ERR_CERT_COMMON_NAME_INVALID at https://rpol.net/"),
+            "certificate hostname mismatches should be classified as transport-security failures");
+        AssertTrue(
+            RpolAuthUtility.IsTransportSecurityFailureMessage("net::ERR_SSL_VERSION_OR_CIPHER_MISMATCH"),
+            "TLS protocol failures should be classified as transport-security failures");
+        AssertFalse(
+            RpolAuthUtility.IsTransportSecurityFailureMessage("net::ERR_CONNECTION_RESET at https://rpol.net/"),
+            "ordinary network failures should not be classified as certificate failures");
+
+        var transportException = (RpolAuthException)(InvokeStaticMethod(
+            typeof(RpolAuthUtility),
+            "CreateTransportSecurityException",
+            new PlaywrightException("net::ERR_CERT_AUTHORITY_INVALID at https://rpol.net/game.php?gi=1"))
+            ?? throw new InvalidOperationException("CreateTransportSecurityException returned null."));
+        AssertEqual(
+            RpolAuthFailureKind.TransportSecurityFailure,
+            transportException.Kind,
+            "certificate errors should become transport-security failures");
+        AssertFalse(
+            transportException.Message.Contains("https://", StringComparison.OrdinalIgnoreCase),
+            "transport-security messages shown to users should not echo request URLs");
+        AssertTrue(
+            RpolAuthUtility.IsFatalAuthFailure(new RpolAuthException(
+                RpolAuthFailureKind.TransportSecurityFailure,
+                "TLS failure for test.")),
+            "transport-security failures should stop authentication retries for the current process");
+    }
+
+    internal static void RpolAuthCachedFailureShortCircuitsHtmlFetch()
+    {
+        ResetRpolAuthFailureCache();
+        var cachedFailure = new RpolAuthException(
+            RpolAuthFailureKind.MissingCredentials,
+            "Missing RPoL credentials for test.");
+
+        try
+        {
+            InvokeStaticMethod(typeof(RpolAuthUtility), "CacheFatalAuthFailure", cachedFailure);
+
+            var exception = AssertThrows<RpolAuthException>(() =>
+                RpolAuthUtility.GetHtmlFromUrlAsync(new Uri("https://rpol.net/display.cgi?gi=1")).GetAwaiter().GetResult());
+            AssertEqual(RpolAuthFailureKind.MissingCredentials, exception.Kind, "expected cached missing-credentials failure");
+            AssertEqual(cachedFailure.Message, exception.Message, "expected cached failure message to be reused");
+
+            exception = AssertThrows<RpolAuthException>(() =>
+                RpolAuthUtility.GetResponseAsync(new Uri("https://rpol.net/c-webp/example.webp")).GetAwaiter().GetResult());
+            AssertEqual(RpolAuthFailureKind.MissingCredentials, exception.Kind, "expected cached missing-credentials response failure");
+        }
+        finally
+        {
+            ResetRpolAuthFailureCache();
+        }
+    }
+
+    internal static void RpolAuthCachedFailureLogsOnce()
+    {
+        ResetRpolAuthFailureCache();
+        var startupLogPath = Path.Combine(AppContext.BaseDirectory, StartupLoggingUtility.LogFileName);
+        var hadStartupLog = File.Exists(startupLogPath);
+        var originalStartupLog = hadStartupLog ? File.ReadAllText(startupLogPath) : null;
+
+        try
+        {
+            if (File.Exists(startupLogPath))
+            {
+                File.Delete(startupLogPath);
+            }
+
+            var firstFailure = new RpolAuthException(
+                RpolAuthFailureKind.MissingCredentials,
+                "Missing RPoL credentials for test.");
+            var secondFailure = new RpolAuthException(
+                RpolAuthFailureKind.LoginRejected,
+                "RPoL login was rejected for test.");
+
+            InvokeStaticMethod(typeof(RpolAuthUtility), "CacheFatalAuthFailure", firstFailure);
+            InvokeStaticMethod(typeof(RpolAuthUtility), "CacheFatalAuthFailure", secondFailure);
+
+            var log = File.ReadAllText(startupLogPath);
+            AssertEqual(1, CountOccurrences(log, "RPOL authentication"), "expected one RPOL auth log entry");
+            AssertContains(log, "Missing RPoL credentials for test.");
+            AssertFalse(log.Contains("RPoL login was rejected for test.", StringComparison.Ordinal), "second fatal auth failure should reuse first cached entry");
+        }
+        finally
+        {
+            ResetRpolAuthFailureCache();
+            if (hadStartupLog)
+            {
+                File.WriteAllText(startupLogPath, originalStartupLog);
+            }
+            else if (File.Exists(startupLogPath))
+            {
+                File.Delete(startupLogPath);
+            }
+        }
+    }
+
+    internal static void RpolAuthCachesBlockedAndExpiredSessionFailures()
+    {
+        ResetRpolAuthFailureCache();
+
+        try
+        {
+            var blocked = new RpolAuthException(
+                RpolAuthFailureKind.RpolBlocked,
+                "RPoL blocked authenticated access for test.");
+            var cached = (RpolAuthException?)InvokeStaticMethod(typeof(RpolAuthUtility), "CacheFatalAuthFailure", blocked)
+                ?? throw new InvalidOperationException("CacheFatalAuthFailure returned null.");
+
+            AssertEqual(RpolAuthFailureKind.RpolBlocked, cached.Kind, "blocked RPOL access should be cacheable as a fatal auth failure");
+            AssertEqual(blocked.Message, cached.Message, "blocked RPOL failure should be cached as-is");
+            AssertTrue(RpolAuthUtility.IsFatalAuthFailure(blocked), "blocked RPOL access should be treated as fatal until settings or site state changes");
+
+            ResetRpolAuthFailureCache();
+
+            var expiredSession = new RpolAuthException(
+                RpolAuthFailureKind.AuthSessionExpired,
+                "RPoL returned a login page after authenticated navigation for test.");
+            cached = (RpolAuthException?)InvokeStaticMethod(typeof(RpolAuthUtility), "CacheFatalAuthFailure", expiredSession)
+                ?? throw new InvalidOperationException("CacheFatalAuthFailure returned null.");
+
+            AssertEqual(RpolAuthFailureKind.AuthSessionExpired, cached.Kind, "expired auth session should be cacheable as a fatal auth failure");
+            AssertTrue(RpolAuthUtility.IsFatalAuthFailure(expiredSession), "expired authenticated sessions should be treated as fatal after retry");
+            AssertFalse(
+                RpolAuthUtility.IsFatalAuthFailure(new RpolAuthException(RpolAuthFailureKind.RemoteUnavailable, "remote outage")),
+                "remote RPOL outages should remain transient and uncached");
+        }
+        finally
+        {
+            ResetRpolAuthFailureCache();
+        }
+    }
+
+    internal static void RpolStorageStateValidationAcceptsCurrentRpolCookies()
+    {
+        using var directory = TemporaryDirectory.Create();
+        var storageStatePath = Path.Combine(directory.Path, "rpol-storage-state.json");
+        WriteRpolStorageState(
+            storageStatePath,
+            """
+            {
+              "cookies": [
+                {
+                  "name": "rpol_session",
+                  "value": "cookie-value",
+                  "domain": ".rpol.net",
+                  "path": "/"
+                }
+              ],
+              "origins": []
+            }
+            """,
+            DateTimeOffset.UtcNow.AddDays(-1));
+
+        var valid = RpolAuthUtility.TryPrepareStorageStateFile(
+            storageStatePath,
+            DateTimeOffset.UtcNow);
+
+        AssertTrue(valid, "current RPOL storage state should be usable");
+        AssertTrue(File.Exists(storageStatePath), "valid RPOL storage state should be preserved");
+    }
+
+    internal static void RpolStorageStateValidationDeletesMalformedState()
+    {
+        WithPreservedStartupLog(() =>
+        {
+            using var directory = TemporaryDirectory.Create();
+            var storageStatePath = Path.Combine(directory.Path, "rpol-storage-state.json");
+            WriteRpolStorageState(storageStatePath, "{ not valid json", DateTimeOffset.UtcNow);
+
+            var valid = RpolAuthUtility.TryPrepareStorageStateFile(
+                storageStatePath,
+                DateTimeOffset.UtcNow);
+
+            AssertFalse(valid, "malformed RPOL storage state should not be usable");
+            AssertFalse(File.Exists(storageStatePath), "malformed RPOL storage state should be deleted");
+        });
+    }
+
+    internal static void RpolStorageStateValidationDeletesStaleState()
+    {
+        WithPreservedStartupLog(() =>
+        {
+            using var directory = TemporaryDirectory.Create();
+            var storageStatePath = Path.Combine(directory.Path, "rpol-storage-state.json");
+            WriteRpolStorageState(
+                storageStatePath,
+                """
+                {
+                  "cookies": [
+                    {
+                      "name": "rpol_session",
+                      "value": "cookie-value",
+                      "domain": "rpol.net",
+                      "path": "/"
+                    }
+                  ]
+                }
+                """,
+                DateTimeOffset.UtcNow.AddDays(-45));
+
+            var valid = RpolAuthUtility.TryPrepareStorageStateFile(
+                storageStatePath,
+                DateTimeOffset.UtcNow);
+
+            AssertFalse(valid, "stale RPOL storage state should not be usable");
+            AssertFalse(File.Exists(storageStatePath), "stale RPOL storage state should be deleted");
+        });
+    }
+
+    internal static void RpolStorageStateValidationDeletesNonRpolState()
+    {
+        WithPreservedStartupLog(() =>
+        {
+            using var directory = TemporaryDirectory.Create();
+            var storageStatePath = Path.Combine(directory.Path, "rpol-storage-state.json");
+            WriteRpolStorageState(
+                storageStatePath,
+                """
+                {
+                  "cookies": [
+                    {
+                      "name": "session",
+                      "value": "cookie-value",
+                      "domain": "example.test",
+                      "path": "/"
+                    }
+                  ]
+                }
+                """,
+                DateTimeOffset.UtcNow);
+
+            var valid = RpolAuthUtility.TryPrepareStorageStateFile(
+                storageStatePath,
+                DateTimeOffset.UtcNow);
+
+            AssertFalse(valid, "non-RPOL storage state should not be usable");
+            AssertFalse(File.Exists(storageStatePath), "non-RPOL storage state should be deleted");
+        });
+    }
+
+    internal static void ChapterDownloadsUseShowAllThreadUrls()
+    {
+        using var directory = TemporaryDirectory.Create();
+        var requestedUrls = new List<string>();
+        var downloads = GameForumUtility.DownloadChapterHtmlAsync(
+            [new Hyperlink("https://rpol.net/display.cgi?gi=80170&ti=7&date=1779581880&msgpage=2", "Ch 1 - Kirkilston")],
+            directory.Path,
+            (url, _) =>
+            {
+                requestedUrls.Add(url);
+                return Task.FromResult("<html><body>all chapter posts</body></html>");
+            }).GetAwaiter().GetResult();
+
+        AssertEqual(1, requestedUrls.Count, "chapter downloader should fetch one URL");
+        AssertEqual(
+            "https://rpol.net/display.cgi?gi=80170&ti=7&msgpage=&show=all",
+            requestedUrls[0],
+            "chapter downloader should request the complete thread");
+        AssertTrue(downloads[0].Downloaded, "missing chapter file should be downloaded");
+        AssertContains(File.ReadAllText(downloads[0].FilePath), "all chapter posts");
+    }
+
+    internal static void AsideDownloadsUseShowAllUrlsAndRefreshExistingFiles()
+    {
+        using var directory = TemporaryDirectory.Create();
+        const string linkText = "Aside - Searching the woods";
+        var existingPath = Path.Combine(directory.Path, $"{linkText}.html");
+        File.WriteAllText(existingPath, "<html><body>stale aside page</body></html>");
+        var requestedUrls = new List<string>();
+
+        var downloads = GameForumUtility.DownloadAsideHtmlAsync(
+            [new Hyperlink("https://rpol.net/display.cgi?gi=80170&ti=17&msgpage=1", linkText)],
+            directory.Path,
+            (url, _) =>
+            {
+                requestedUrls.Add(url);
+                return Task.FromResult("<html><body><img src='secret.png'>all aside posts</body></html>");
+            }).GetAwaiter().GetResult();
+
+        AssertEqual(1, requestedUrls.Count, "aside downloader should refresh an existing file");
+        AssertEqual(
+            "https://rpol.net/display.cgi?gi=80170&ti=17&msgpage=&show=all",
+            requestedUrls[0],
+            "aside downloader should request the complete thread");
+        AssertTrue(downloads[0].Downloaded, "changed existing aside should be refreshed");
+        AssertContains(File.ReadAllText(existingPath), "all aside posts");
+        AssertFalse(
+            File.ReadAllText(existingPath).Contains("<img", StringComparison.OrdinalIgnoreCase),
+            "aside refresh should continue removing images");
+    }
+
+    internal static void RpolThreadExportPreservesExistingOutputOnCancellation()
+    {
+        using var directory = TemporaryDirectory.Create();
+        var outputDirectory = Path.Combine(directory.Path, "thread-export");
+        Directory.CreateDirectory(outputDirectory);
+        var markerPath = Path.Combine(outputDirectory, "last-good.txt");
+        File.WriteAllText(markerPath, "keep me");
+        using var cancellation = new CancellationTokenSource();
+        cancellation.Cancel();
+
+        AssertThrows<OperationCanceledException>(() =>
+            RpolThreadPostUtility.WriteThreadPostsFromHtmlAsync(
+                CreateSampleRpolThreadHtml(),
+                "https://rpol.net/display.cgi?gi=80170&ti=17&show=all",
+                outputDirectory,
+                "Synthetic Thread",
+                cancellation.Token).GetAwaiter().GetResult());
+
+        AssertTrue(File.Exists(markerPath), "existing RPOL thread export should survive a cancelled replacement");
+        AssertEqual("keep me", File.ReadAllText(markerPath), "existing RPOL thread export marker should remain unchanged");
+        AssertEqual(0, Directory.GetDirectories(directory.Path, "thread-export.staging-*").Length, "cancelled export should clean staging directories");
+        AssertEqual(0, Directory.GetDirectories(directory.Path, "thread-export.backup-*").Length, "cancelled export should not leave backup directories");
+    }
+
+    internal static void RpolThreadExportCommitsStagedOutput()
+    {
+        using var directory = TemporaryDirectory.Create();
+        var outputDirectory = Path.Combine(directory.Path, "thread-export");
+        Directory.CreateDirectory(outputDirectory);
+        File.WriteAllText(Path.Combine(outputDirectory, "stale.txt"), "old");
+
+        var result = RpolThreadPostUtility.WriteThreadPostsFromHtmlAsync(
+            CreateSampleRpolThreadHtml(),
+            "https://rpol.net/display.cgi?gi=80170&ti=17&show=all",
+            outputDirectory,
+            "Synthetic Thread").GetAwaiter().GetResult();
+
+        AssertEqual(2, result.PostCount, "expected staged RPOL export to include both posts");
+        AssertFalse(File.Exists(Path.Combine(outputDirectory, "stale.txt")), "successful staged export should replace stale output");
+        AssertTrue(File.Exists(Path.Combine(outputDirectory, "_source-show-all.html")), "successful staged export should include source HTML");
+        AssertTrue(File.Exists(Path.Combine(outputDirectory, "index.html")), "successful staged export should include index.html");
+        AssertTrue(File.Exists(Path.Combine(outputDirectory, "manifest.json")), "successful staged export should include manifest.json");
+        AssertTrue(File.Exists(Path.Combine(outputDirectory, "001-alice.html")), "successful staged export should include the first post");
+        AssertTrue(File.Exists(Path.Combine(outputDirectory, "002-bob.html")), "successful staged export should include the second post");
+        AssertEqual(0, Directory.GetDirectories(directory.Path, "thread-export.staging-*").Length, "successful export should clean staging directories");
+        AssertEqual(0, Directory.GetDirectories(directory.Path, "thread-export.backup-*").Length, "successful export should clean backup directories");
+    }
+
+    internal static void RpolThreadExportRejectsCollapsedSourceAndPreservesExistingOutput()
+    {
+        using var directory = TemporaryDirectory.Create();
+        var outputDirectory = Path.Combine(directory.Path, "thread-export");
+        var sourceUrl = "https://rpol.net/display.cgi?gi=80170&ti=17&show=all";
+        var originalResult = RpolThreadPostUtility.WriteThreadPostsFromHtmlAsync(
+            CreateSampleRpolThreadHtml(),
+            sourceUrl,
+            outputDirectory,
+            "Synthetic Thread").GetAwaiter().GetResult();
+
+        AssertEqual(2, originalResult.PostCount, "expected baseline RPOL export to include both posts");
+        var originalSourceHtml = File.ReadAllText(Path.Combine(outputDirectory, "_source-show-all.html"));
+        var collapsedHtml = """
+            <html><body>
+            <div class='message'>
+                <ul><li>msg #1</li></ul>
+                <span class='messageauthor'>Alice</span>
+                <div class='messagebody' id='msg1'>Only one post survived.</div>
+            </div><!-- 1 -->
+            </div><!-- 2 -->
+            </body></html>
+            """;
+
+        var exception = AssertThrows<InvalidOperationException>(() =>
+            RpolThreadPostUtility.WriteThreadPostsFromHtmlAsync(
+                collapsedHtml,
+                sourceUrl,
+                outputDirectory,
+                "Synthetic Thread").GetAwaiter().GetResult());
+
+        AssertContains(exception.Message, "Authenticated source tamper detection rejected fetched content");
+        AssertEqual(originalSourceHtml, File.ReadAllText(Path.Combine(outputDirectory, "_source-show-all.html")), "collapsed RPOL source should not replace last known good export");
+        AssertTrue(File.Exists(Path.Combine(outputDirectory, "002-bob.html")), "last known good RPOL post files should remain available");
+        AssertEqual(0, Directory.GetDirectories(directory.Path, "thread-export.staging-*").Length, "rejected export should clean staging directories");
+    }
+
+    internal static void DieRollExtractionKeepsOnlySavedLogLines()
+    {
+        const string html = """
+            <html><body>
+            <div>18:37, Today: Dungeon Master rolled 4 using 1d6.  orcs' init for rnd 2 abandoned rock quarry. – [roll=1782257860.18744.396686]</div>
+            <div>18:05, Today: Jelb Garrick rolled 6 using 2d4.  Fire Damage. – [roll=1782255916.99298.396653]</div>
+            <div>15:41, Today: Kelpie Lawfuller rolled 17,8 using d20+2,d8+2.  Sword attack (held action). – [roll=1782247280.40694.396648]</div>
+            <div>18:44, Today: Maximilian Yragerne rolled 16 using 1d20. dex.</div>
+            <div>Dice are fun.</div>
+            </body></html>
+            """;
+
+        var entries = GameForumUtility.ExtractDieRollEntries(html);
+
+        AssertEqual(3, entries.Length, "unexpected die roll entry count");
+        AssertEqual("1782257860.18744.396686", entries[0].RollId, "unexpected first roll id");
+        AssertContains(entries[1].Line, "Jelb Garrick rolled 6 using 2d4.");
+        AssertContains(entries[2].Line, "[roll=1782247280.40694.396648]");
+    }
+
+    internal static void DieRollExtractionHandlesLiveRpolParagraphMarkup()
+    {
+        const string html = """
+            <div class="info_box">
+            <p style="margin-left: 2em; text-indent: -2em;">18:37, Today: Dungeon Master rolled 4 using 1d6.&nbsp; orcs' init for rnd 2 abandoned rock quarry.
+             –&nbsp;<span class="link-colour">[roll=1782257860.18744.396686]</span></p>
+            <p style="margin-left: 2em; text-indent: -2em;">18:05, Today: Jelb Garrick rolled 6 using 2d4.&nbsp; Fire Damage.
+             –&nbsp;<span class="link-colour">[roll=1782255916.99298.396653]</span></p>
+            <p style="margin-left: 2em; text-indent: -2em;">15:41, Today: Kelpie Lawfuller rolled 17,8 using d20+2,d8+2.&nbsp; Sword attack (held action).
+             –&nbsp;<span class="link-colour">[roll=1782247280.40694.396648]</span></p>
+            </div>
+            """;
+
+        var entries = GameForumUtility.ExtractDieRollEntries(html);
+
+        AssertEqual(3, entries.Length, "unexpected die roll entry count from paragraph markup");
+        AssertEqual("1782257860.18744.396686", entries[0].RollId, "unexpected first roll id from paragraph markup");
+        AssertContains(entries[0].Line, "abandoned rock quarry. – [roll=1782257860.18744.396686]");
+        AssertContains(entries[2].Line, "Kelpie Lawfuller rolled 17,8 using d20+2,d8+2.");
+    }
+
+    internal static void DieRollExtractionDerivesStableIdsWhenRpolOmitsRollIds()
+    {
+        const string html = """
+            <div class="info_box">
+            <p style="margin-left: 2em; text-indent: -2em;">04:24, Tue 21 July: Shade rolled 1 using 1d20.&nbsp; Recall.</p>
+            <p style="margin-left: 2em; text-indent: -2em;">05:33, Sun 19 July: Maximilian Yragerne rolled 13 using 1d20.&nbsp; charisma.</p>
+            <p style="margin-left: 2em; text-indent: -2em;">05:25, Sun 19 July: Maximilian Yragerne rolled 15 using 1d20.</p>
+            <p style="margin-left: 2em; text-indent: -2em;">04:24, Tue 21 July: Shade rolled 1 using 1d20.&nbsp; Recall.</p>
+            </div>
+            """;
+
+        var first = GameForumUtility.ExtractDieRollEntries(html);
+        var second = GameForumUtility.ExtractDieRollEntries(html);
+
+        AssertEqual(3, first.Length, "identifier-free duplicate rolls should be collapsed");
+        AssertEqual(first[0].RollId, second[0].RollId, "synthetic roll IDs should be stable");
+        AssertTrue(
+            System.Text.RegularExpressions.Regex.IsMatch(first[0].RollId, @"^\d+\.\d+\.\d+$"),
+            "synthetic roll IDs should preserve the saved roll ID shape");
+        AssertContains(first[0].Line, "Shade rolled 1 using 1d20.");
+
+        using var directory = TemporaryDirectory.Create();
+        var cachePath = Path.Combine(directory.Path, "dice-rolls.html");
+        var appended = GameForumUtility.AppendNewDieRollEntriesAsync(html, cachePath).GetAwaiter().GetResult();
+        var saved = GameForumUtility.ExtractDieRollEntries(File.ReadAllText(cachePath));
+        var normalizedSnapshot = GameForumUtility.NormalizeDieRollSnapshotHtml(html);
+        var normalizedSnapshotEntries = GameForumUtility.ExtractDieRollEntries(normalizedSnapshot);
+        AssertEqual(3, appended, "identifier-free live rolls should be saved");
+        AssertEqual(3, saved.Length, "saved synthetic roll IDs should remain parseable");
+        AssertEqual(first[0].RollId, saved[0].RollId, "saved synthetic roll IDs should remain stable");
+        AssertEqual(3, normalizedSnapshotEntries.Length, "normalized snapshots should retain every unique live roll");
+        AssertContains(normalizedSnapshot, $"[roll={first[0].RollId}]");
+    }
+
+    internal static void DieRollSyncAppendsOnlyUnsavedRolls()
+    {
+        using var directory = TemporaryDirectory.Create();
+        var filePath = Path.Combine(directory.Path, "Posts", "OOC", "dice-rolls.html");
+        const string initialHtml = """
+            <div>18:37, Today: Dungeon Master rolled 4 using 1d6.  orcs' init for rnd 2 abandoned rock quarry. – [roll=1782257860.18744.396686]</div>
+            <div>18:05, Today: Jelb Garrick rolled 6 using 2d4.  Fire Damage. – [roll=1782255916.99298.396653]</div>
+            """;
+        const string nextHtml = """
+            <div>18:05, Today: Jelb Garrick rolled 6 using 2d4.  Fire Damage. – [roll=1782255916.99298.396653]</div>
+            <div>15:41, Today: Kelpie Lawfuller rolled 17,8 using d20+2,d8+2.  Sword attack (held action). – [roll=1782247280.40694.396648]</div>
+            """;
+
+        var firstAppendCount = GameForumUtility.AppendNewDieRollEntriesAsync(initialHtml, filePath).GetAwaiter().GetResult();
+        var secondAppendCount = GameForumUtility.AppendNewDieRollEntriesAsync(nextHtml, filePath).GetAwaiter().GetResult();
+        var savedHtml = File.ReadAllText(filePath);
+        var savedEntries = GameForumUtility.ExtractDieRollEntries(savedHtml);
+
+        AssertEqual(2, firstAppendCount, "unexpected initial append count");
+        AssertEqual(1, secondAppendCount, "unexpected incremental append count");
+        AssertEqual(3, savedEntries.Length, "unexpected saved die roll count");
+        AssertEqual("1782257860.18744.396686", savedEntries[0].RollId, "unexpected first saved roll id");
+        AssertEqual("1782247280.40694.396648", savedEntries[2].RollId, "unexpected final saved roll id");
+    }
+
+    internal static void RegionalMapDownloadsWhenMissing()
+    {
+        var filePath = Path.Combine(Path.GetTempPath(), Path.GetRandomFileName(), "Images", "Maps", "northernreaches.png");
+
+        AssertTrue(GameForumUtility.ShouldDownloadRegionalMap(filePath), "missing regional map should be downloaded");
+    }
+
+    internal static void RegionalMapDownloadsWhenOlderThanOneHour()
+    {
+        using var directory = TemporaryDirectory.Create();
+        var filePath = Path.Combine(directory.Path, "Images", "Maps", "northernreaches.png");
+        Directory.CreateDirectory(Path.GetDirectoryName(filePath)!);
+        WriteVisiblePng(filePath);
+        File.SetLastWriteTimeUtc(filePath, DateTime.UtcNow - TimeSpan.FromMinutes(61));
+
+        AssertTrue(GameForumUtility.ShouldDownloadRegionalMap(filePath), "regional map older than one hour should be downloaded");
+    }
+
+    internal static void RegionalMapSkipsWhenNewerThanOneHour()
+    {
+        using var directory = TemporaryDirectory.Create();
+        var filePath = Path.Combine(directory.Path, "Images", "Maps", "northernreaches.png");
+        Directory.CreateDirectory(Path.GetDirectoryName(filePath)!);
+        WriteVisiblePng(filePath);
+        File.SetLastWriteTimeUtc(filePath, DateTime.UtcNow - TimeSpan.FromMinutes(59));
+
+        AssertFalse(GameForumUtility.ShouldDownloadRegionalMap(filePath), "regional map newer than one hour should not be downloaded");
+    }
+
+    internal static void RegionalMapDownloadsWhenNewerButTransparent()
+    {
+        using var directory = TemporaryDirectory.Create();
+        var filePath = Path.Combine(directory.Path, "Images", "Maps", "northernreaches.png");
+        Directory.CreateDirectory(Path.GetDirectoryName(filePath)!);
+        WriteTransparentPng(filePath);
+        File.SetLastWriteTimeUtc(filePath, DateTime.UtcNow - TimeSpan.FromMinutes(1));
+
+        AssertTrue(GameForumUtility.ShouldDownloadRegionalMap(filePath), "transparent regional map should be downloaded");
+    }
+
+    internal static void AdventureOutlineBuildsFromSavedIcHtml()
+    {
+        using var directory = TemporaryDirectory.Create();
+        var icDirectory = Path.Combine(directory.Path, "Posts", "IC");
+        Directory.CreateDirectory(icDirectory);
+
+        File.WriteAllText(
+            Path.Combine(icDirectory, "ch-10.html"),
+            """
+            <html><body>
+            <h1>Ch 10 - Later Trouble.</h1>
+            <span class="messageauthor">Kelpie Lawfuller</span>
+            <div class="messagebody" id="msg2">Kelpie keeps watch.<br>Then moves on.</div>
+            </body></html>
+            """);
+        File.WriteAllText(
+            Path.Combine(icDirectory, "ch-2.html"),
+            """
+            <html><body>
+            <h1>Ch 2 - Supper With Nuanda.</h1>
+            <span class="messageauthor you"><a href="/gm">Dungeon Master</a></span>
+            <div class="messagebody" id="msg1">Nuanda offers stew &amp; hard biscuits.</div>
+            </body></html>
+            """);
+        File.WriteAllText(
+            Path.Combine(icDirectory, "ch-2.bak-20260707.html"),
+            """
+            <html><body>
+            <h1>Ch 2 - Old Backup.</h1>
+            <span class="messageauthor">Backup</span>
+            <div class="messagebody" id="msg1">This should not appear.</div>
+            </body></html>
+            """);
+
+        var outline = AdventureOutlineUtility.BuildAdventureOutlineAsync(icDirectory)
+            .GetAwaiter()
+            .GetResult();
+
+        AssertContains(outline, "# Adventure Outline");
+        AssertContains(outline, "## Ch 2 - Supper With Nuanda");
+        AssertContains(outline, "- Dungeon Master introduces Nuanda's supper.");
+        AssertContains(outline, "## Ch 10 - Later Trouble");
+        AssertContains(outline, "- Kelpie keeps watch as the party moves on.");
+        AssertFalse(outline.Contains("Old Backup", StringComparison.Ordinal), "backup chapter files should be ignored");
+        AssertTrue(
+            outline.IndexOf("## Ch 2", StringComparison.Ordinal) < outline.IndexOf("## Ch 10", StringComparison.Ordinal),
+            "chapter files should sort by numeric chapter number");
+    }
+
+    internal static void AdventureOutlineParsesRpolLinkedAuthorExports()
+    {
+        using var directory = TemporaryDirectory.Create();
+        var icDirectory = Path.Combine(directory.Path, "Posts", "IC");
+        Directory.CreateDirectory(icDirectory);
+
+        File.WriteAllText(
+            Path.Combine(icDirectory, "ch-1.html"),
+            """
+            <html><body>
+            <div class="threadheader">
+                <h1>Ch 1 - Kirkilston.</h1>
+            </div>
+            <div class="message">
+                <span class="messageauthor you"><a href="/gameinfo.php?action=viewdescription&amp;ci=396686">Dungeon Master</a></span>
+                <div class="messagebody" id="msg37">Mapper: Slip?<br>Caller: Kelpie?</div>
+            </div>
+            <div class="message">
+                <span class="messageauthor"><a href="/gameinfo.php?action=viewdescription&amp;ci=396648">Kelpie Lawfuller</a></span>
+                <div class="messagebody" id="msg38">
+                Kelpie was already prepared.<br>
+                <span class="blue">I will take the fore</span>
+                </div>
+            </div>
+            </body></html>
+            """);
+
+        var outline = AdventureOutlineUtility.BuildAdventureOutlineAsync(icDirectory)
+            .GetAwaiter()
+            .GetResult();
+
+        AssertContains(outline, "## Ch 1 - Kirkilston");
+        AssertContains(outline, "- Dungeon Master asks a question that narrows the party's next choice.");
+        AssertContains(outline, "- Kelpie takes the lead as the party sets out toward Nuanda.");
+        AssertFalse(
+            outline.Contains("No in-character posts were found", StringComparison.Ordinal),
+            "linked author RPOL exports should produce post summaries");
+    }
+
+    internal static void AdventureOutlineSummarizesTableRolesConcisely()
+    {
+        using var directory = TemporaryDirectory.Create();
+        var icDirectory = Path.Combine(directory.Path, "Posts", "IC");
+        Directory.CreateDirectory(icDirectory);
+        File.WriteAllText(
+            Path.Combine(icDirectory, "ch-1.html"),
+            """
+            <html><body>
+            <h1>Ch 1 - Kirkilston.</h1>
+            <span class="messageauthor you"><a href="/gm">Dungeon Master</a></span>
+            <div class="messagebody" id="msg1">
+            • Mapper: Slip?<br>
+            • Caller: Kelpie?<br>
+            • Quartermaster: Urvan<br>
+            • Chronicler: Jelb?<br>
+            Whoever is acting as the Caller can let me know where the party heads off to.
+            </div>
+            </body></html>
+            """);
+
+        var outlinePath = Path.Combine(directory.Path, AdventureOutlineUtility.FileName);
+        File.WriteAllText(
+            outlinePath,
+            """
+            # Adventure Outline
+
+            ## Ch 1 - Kirkilston
+
+            - Dungeon Master: • Mapper: Slip? • Caller: Kelpie? • Quartermaster: Urvan • Chronicler: Jelb? Whoever is acting as the Caller can let me know where the party heads off to, any preparation they make, etc. If you are seeking Nuanda, you can get there in under an hour, and I just need a d6 roll from...
+            """);
+
+        var updated = AdventureOutlineUtility.UpdateAdventureOutlineAsync(icDirectory, outlinePath)
+            .GetAwaiter()
+            .GetResult();
+        var outline = File.ReadAllText(outlinePath);
+
+        AssertTrue(updated, "role-assignment outline should replace stale overlong bullets");
+        AssertContains(outline, "- Dungeon Master asked players to assume the roles of Caller, Quartermaster, Mapper, and Chronicler.");
+        AssertFalse(outline.Contains("Whoever is acting as the Caller", StringComparison.Ordinal), "role-assignment outline should not retain the long excerpt");
+    }
+
+    internal static void AdventureOutlineSkipsEmptyBulletMarkerPosts()
+    {
+        using var directory = TemporaryDirectory.Create();
+        var icDirectory = Path.Combine(directory.Path, "Posts", "IC");
+        Directory.CreateDirectory(icDirectory);
+        File.WriteAllText(
+            Path.Combine(icDirectory, "ch-1.html"),
+            """
+            <html><body>
+            <h1>Ch 1 - Kirkilston.</h1>
+            <span class="messageauthor">Kelpie Lawfuller</span>
+            <div class="messagebody" id="msg1">•<br>-<br></div>
+            <span class="messageauthor">Dungeon Master</span>
+            <div class="messagebody" id="msg2">The party leaves town.</div>
+            </body></html>
+            """);
+
+        var outline = AdventureOutlineUtility.BuildAdventureOutlineAsync(icDirectory)
+            .GetAwaiter()
+            .GetResult();
+
+        AssertContains(outline, "- Dungeon Master moves the party out of town.");
+        AssertFalse(outline.Contains("Kelpie", StringComparison.Ordinal), "empty bullet marker posts should not produce outline bullets");
+        AssertFalse(outline.Contains("advances the scene", StringComparison.OrdinalIgnoreCase), "outline summaries should explain how the scene advanced");
+    }
+
+    internal static void AdventureOutlineRejectsWeakGeneratedSummaries()
+    {
+        using var directory = TemporaryDirectory.Create();
+        var icDirectory = Path.Combine(directory.Path, "Posts", "IC");
+        Directory.CreateDirectory(icDirectory);
+        File.WriteAllText(
+            Path.Combine(icDirectory, "ch-2.html"),
+            """
+            <html><body>
+            <h1>Ch 2 - Supper With Nuanda.</h1>
+            <span class="messageauthor">Jelb Garrick</span>
+            <div class="messagebody" id="msg1">Jelb agreed to check on the bread, bringing it out to cool when it was ready. I do have something of hers. Her brooch.</div>
+            <span class="messageauthor">Nuanda</span>
+            <div class="messagebody" id="msg2">The girl, Jelenneth. She was picking berries when bandits abducted her.</div>
+            <span class="messageauthor">Urvan Hall</span>
+            <div class="messagebody" id="msg3">That is...remarkable. With this information we could look for her.</div>
+            </body></html>
+            """);
+
+        var outlinePath = Path.Combine(directory.Path, AdventureOutlineUtility.FileName);
+        File.WriteAllText(
+            outlinePath,
+            """
+            # Adventure Outline
+
+            ## Ch 2 - Supper With Nuanda
+
+            - Jelb advances the scene.
+            - Nuanda contributes a new development to the scene.
+            - Urvan presses for answers or a decision.
+            - Nuanda reassures Kelpie that Morrow and her own magic protect her.
+            """);
+
+        AdventureOutlineUtility.UpdateAdventureOutlineAsync(icDirectory, outlinePath)
+            .GetAwaiter()
+            .GetResult();
+        var outline = File.ReadAllText(outlinePath);
+
+        AssertContains(outline, "- Jelb helps with the bread and offers Jelenneth's brooch as a focus.");
+        AssertContains(outline, "- Nuanda recounts Jelenneth's abduction by bandits.");
+        AssertContains(outline, "- Urvan recognizes that Nuanda's divination gives the party a lead.");
+
+        foreach (var weakSummary in GetWeakAdventureOutlineSummaryPhrases())
+        {
+            AssertFalse(
+                outline.Contains(weakSummary, StringComparison.OrdinalIgnoreCase),
+                $"outline should not contain weak generated summary '{weakSummary}'");
+        }
+    }
+
+    private static string[] GetWeakAdventureOutlineSummaryPhrases()
+    {
+        return
+        [
+            "advances the scene",
+            "adds dialogue that clarifies the exchange",
+            "presses for answers or a decision",
+            "reveals a concern or reaction",
+            "contributes a new development to the scene",
+            "handles practical preparations for the party",
+            "reassures Kelpie that Morrow and her own magic protect her"
+        ];
+    }
+
+    internal static void AdventureOutlineFallbackSummariesPreserveSceneSpecifics()
+    {
+        using var directory = TemporaryDirectory.Create();
+        var icDirectory = Path.Combine(directory.Path, "Posts", "IC");
+        Directory.CreateDirectory(icDirectory);
+        File.WriteAllText(
+            Path.Combine(icDirectory, "ch-5.html"),
+            """
+            <html><body>
+            <h1>Ch 5 - A Betentacled Escape.</h1>
+            <span class="messageauthor">Maximilian</span>
+            <div class="messagebody" id="msg1">Maximilian studies the recovered scroll and says it names Red Tusk and the Deep Friends.</div>
+            <span class="messageauthor">Algorn Druff</span>
+            <div class="messagebody" id="msg2">Algorn says the Raven's Pass trail should lead them to Nimba at The Mason's Apron.</div>
+            <span class="messageauthor">Billworth Turgen</span>
+            <div class="messagebody" id="msg3">Billworth checks the caravan wagons, mules, and remaining cargo before they move again.</div>
+            </body></html>
+            """);
+
+        var outline = AdventureOutlineUtility.BuildAdventureOutlineAsync(icDirectory)
+            .GetAwaiter()
+            .GetResult();
+
+        AssertContains(outline, "- Maximilian connects the current threat to Red Tusk, the Deep Friends, or the Toothbreakers.");
+        AssertContains(outline, "- Algorn points the party toward Raven's Pass contacts and support.");
+        AssertContains(outline, "- Billworth focuses the scene on the caravan, its route, or its cargo.");
+
+        foreach (var weakSummary in GetWeakAdventureOutlineSummaryPhrases())
+        {
+            AssertFalse(
+                outline.Contains(weakSummary, StringComparison.OrdinalIgnoreCase),
+                $"fallback outline should not contain weak generated summary '{weakSummary}'");
+        }
+    }
+
+    internal static void AdventureOutlineMergesNewSavedIcBullets()
+    {
+        using var directory = TemporaryDirectory.Create();
+        var icDirectory = Path.Combine(directory.Path, "Posts", "IC");
+        Directory.CreateDirectory(icDirectory);
+        File.WriteAllText(
+            Path.Combine(icDirectory, "ch-1.html"),
+            """
+            <html><body>
+            <h1>Ch 1 - Kirkilston.</h1>
+            <span class="messageauthor">Dungeon Master</span>
+            <div class="messagebody" id="msg1">The party leaves town.</div>
+            <span class="messageauthor">Kelpie Lawfuller</span>
+            <div class="messagebody" id="msg2">Kelpie takes the lead.</div>
+            </body></html>
+            """);
+        File.WriteAllText(
+            Path.Combine(icDirectory, "ch-2.html"),
+            """
+            <html><body>
+            <h1>Ch 2 - Supper With Nuanda.</h1>
+            <span class="messageauthor">Nuanda</span>
+            <div class="messagebody" id="msg3">Nuanda shares what she learned.</div>
+            </body></html>
+            """);
+
+        var outlinePath = Path.Combine(directory.Path, AdventureOutlineUtility.FileName);
+        File.WriteAllText(
+            outlinePath,
+            """
+            # Adventure Outline
+
+            ## Ch 1 - Kirkilston
+
+            - Dungeon Master: The party leaves town.
+            """);
+
+        var updated = AdventureOutlineUtility.UpdateAdventureOutlineAsync(icDirectory, outlinePath)
+            .GetAwaiter()
+            .GetResult();
+        var outline = File.ReadAllText(outlinePath);
+
+        AssertTrue(updated, "existing adventure outline should be updated with missing material");
+        AssertContains(outline, "- Dungeon Master moves the party out of town.");
+        AssertFalse(outline.Contains("- Dungeon Master: The party leaves town.", StringComparison.Ordinal), "stale author-prefixed excerpts should be replaced");
+        AssertContains(outline, "- Kelpie takes the lead.");
+        AssertContains(outline, "## Ch 2 - Supper With Nuanda");
+        AssertContains(outline, "- Nuanda briefs the party.");
+        AssertTrue(
+            outline.IndexOf("- Kelpie takes the lead.", StringComparison.Ordinal)
+                < outline.IndexOf("## Ch 2 - Supper With Nuanda", StringComparison.Ordinal),
+            "missing chapter 1 bullet should remain before chapter 2");
+    }
+
+    internal static void AdventureOutlinePrefersSavedIcHtmlOverFallback()
+    {
+        using var directory = TemporaryDirectory.Create();
+        var icDirectory = Path.Combine(directory.Path, "Posts", "IC");
+        Directory.CreateDirectory(icDirectory);
+        File.WriteAllText(
+            Path.Combine(icDirectory, "ch-1.html"),
+            """
+            <html><body>
+            <h1>Ch 1 - Kirkilston.</h1>
+            <span class="messageauthor">Dungeon Master</span>
+            <div class="messagebody" id="msg1">Local chapter material.</div>
+            </body></html>
+            """);
+        var outlinePath = Path.Combine(directory.Path, AdventureOutlineUtility.FileName);
+        var fallbackFetchCount = 0;
+
+        AdventureOutlineUtility.UpdateAdventureOutlineAsync(
+            icDirectory,
+            outlinePath,
+            AdventureOutlineUtility.FallbackMarkdownUrl,
+            (_, _) =>
+            {
+                fallbackFetchCount++;
+                return Task.FromResult("# Adventure Outline\n\n- Fallback material.");
+            }).GetAwaiter().GetResult();
+
+        var outline = File.ReadAllText(outlinePath);
+        AssertEqual(0, fallbackFetchCount, "fallback markdown should not be fetched when saved IC HTML builds an outline");
+        AssertContains(outline, "- Dungeon Master adds a concrete detail that changes the party's situation.");
+        AssertFalse(outline.Contains("Fallback material", StringComparison.Ordinal), "fallback content should not replace local IC outline");
+    }
+
+    internal static void AdjustedPostTalliesAggregateSavedIcHtml()
+    {
+        using var directory = TemporaryDirectory.Create();
+        var postsDirectory = Path.Combine(directory.Path, "Posts", "IC");
+        var asideDirectory = Path.Combine(postsDirectory, "Aside");
+        var outOfCharacterDirectory = Path.Combine(directory.Path, "Posts", "OOC");
+        Directory.CreateDirectory(postsDirectory);
+        Directory.CreateDirectory(asideDirectory);
+        Directory.CreateDirectory(outOfCharacterDirectory);
+
+        File.WriteAllText(
+            Path.Combine(postsDirectory, "chapter.html"),
+            CreateRpolSourceHtml(
+                (1, RpolThreadPostUtility.DungeonMasterAuthor, "Mon 1 Jan 2026", "01:00", "The party arrives."),
+                (2, RpolThreadPostUtility.NuandaAuthor, "Mon 1 Jan 2026", "01:05", "Nuanda answers."),
+                (3, "Jelb Garrick", "Mon 1 Jan 2026", "01:10", "Jelb listens.")));
+        File.WriteAllText(
+            Path.Combine(asideDirectory, "aside.html"),
+            CreateRpolSourceHtml(
+                (4, RpolThreadPostUtility.NuandaNemereAuthor, "Mon 1 Jan 2026", "01:15", "Nemere answers."),
+                (5, RpolThreadPostUtility.BillworthTurgenAuthor, "Mon 1 Jan 2026", "01:20", "Billworth watches.")));
+        File.WriteAllText(
+            Path.Combine(outOfCharacterDirectory, "ooc.html"),
+            CreateRpolSourceHtml(
+                (6, RpolThreadPostUtility.ThurganNewlAuthor, "Mon 1 Jan 2026", "01:25", "Thurgan comments."),
+                (7, RpolThreadPostUtility.TheArchonAuthor, "Mon 1 Jan 2026", "01:30", "The Archon comments."),
+                (8, "Kelpie Lawfuller", "Mon 1 Jan 2026", "01:35", "Kelpie comments.")));
+
+        var counts = RpolThreadPostUtility.GetAdjustedPostTalliesFromSavedHtmlDirectories(
+            postsDirectory,
+            asideDirectory,
+            outOfCharacterDirectory);
+
+        AssertEqual(8, counts.Count, "expected adjusted author count");
+        AssertEqual(6, counts[RpolThreadPostUtility.DungeonMasterAuthor], "unexpected Dungeon Master count");
+        AssertEqual(1, counts[RpolThreadPostUtility.BillworthTurgenAuthor], "unexpected Billworth count");
+        AssertEqual(1, counts["Jelb Garrick"], "unexpected Jelb count");
+        AssertEqual(1, counts["Kelpie Lawfuller"], "unexpected Kelpie count");
+        AssertEqual(1, counts[RpolThreadPostUtility.NuandaAuthor], "unexpected Nuanda count");
+        AssertEqual(2, counts[RpolThreadPostUtility.NuandaNemereAuthor], "unexpected Nuanda Nemere count");
+        AssertEqual(1, counts[RpolThreadPostUtility.TheArchonAuthor], "unexpected The-Archon count");
+        AssertEqual(1, counts[RpolThreadPostUtility.ThurganNewlAuthor], "unexpected Thurgan count");
+    }
+
+    internal static void KeywordSearchFallsBackToThePrefixedTerm()
+    {
+        RunOnStaThread(() =>
+        {
+            WithTemporaryKeywordIndex(
+                """
+                {
+                  "index_metadata": {
+                    "total_words_indexed": 0
+                  },
+                  "words": {
+                    "The": {
+                      "total_occurrences": 1,
+                      "matches": [
+                        {
+                          "url": "https://example.test/the",
+                          "count": 1,
+                          "last_indexed": "2026-06-28T00:00:00.0000000+00:00"
+                        }
+                      ]
+                    },
+                    "The Coal": {
+                      "total_occurrences": 1,
+                      "matches": [
+                        {
+                          "url": "https://example.test/the-coal",
+                          "count": 1,
+                          "last_indexed": "2026-06-28T00:00:00.0000000+00:00"
+                        }
+                      ]
+                    },
+                    "The Hills": {
+                      "total_occurrences": 1,
+                      "matches": [
+                        {
+                          "url": "https://example.test/the-hills",
+                          "count": 1,
+                          "last_indexed": "2026-06-28T00:00:00.0000000+00:00"
+                        }
+                      ]
+                    }
+                  }
+                }
+                """,
+                () =>
+                {
+                    using var form = new Form1(suppressHeroImagesForThisRun: true);
+                    var txtSearch = GetControl<TextBox>(form, "txtSearch");
+                    var lstSearchResults = GetControl<ListBox>(form, "lstSearchResults");
+
+                    txtSearch.Text = "The Coal Hills";
+                    InvokePrivateAsync(form, "PerformSearchAsync").GetAwaiter().GetResult();
+
+                    var results = lstSearchResults.Items.Cast<object>().Select(item => item?.ToString()).ToArray();
+                    AssertEqual(3, results.Length, "expected three search results from the exact and fallback lookups");
+                    AssertContains(string.Join("\n", results), "https://example.test/the");
+                    AssertContains(string.Join("\n", results), "https://example.test/the-coal");
+                    AssertContains(string.Join("\n", results), "https://example.test/the-hills");
+                });
+        });
+    }
+
+    internal static void KeywordSearchKeepsQuotedPhrasesTogether()
+    {
+        RunOnStaThread(() =>
+        {
+            WithTemporaryKeywordIndex(
+                """
+                {
+                  "index_metadata": {
+                    "total_words_indexed": 0
+                  },
+                  "words": {
+                    "one": {
+                      "total_occurrences": 1,
+                      "matches": [
+                        {
+                          "url": "https://example.test/one",
+                          "count": 1,
+                          "last_indexed": "2026-06-29T00:00:00.0000000+00:00"
+                        }
+                      ]
+                    },
+                    "two": {
+                      "total_occurrences": 1,
+                      "matches": [
+                        {
+                          "url": "https://example.test/two",
+                          "count": 1,
+                          "last_indexed": "2026-06-29T00:00:00.0000000+00:00"
+                        }
+                      ]
+                    },
+                    "one two": {
+                      "total_occurrences": 1,
+                      "matches": [
+                        {
+                          "url": "https://example.test/one-two",
+                          "count": 1,
+                          "last_indexed": "2026-06-29T00:00:00.0000000+00:00"
+                        }
+                      ]
+                    },
+                    "three": {
+                      "total_occurrences": 1,
+                      "matches": [
+                        {
+                          "url": "https://example.test/three",
+                          "count": 1,
+                          "last_indexed": "2026-06-29T00:00:00.0000000+00:00"
+                        }
+                      ]
+                    }
+                  }
+                }
+                """,
+                () =>
+                {
+                    using var form = new Form1(suppressHeroImagesForThisRun: true);
+                    var txtSearch = GetControl<TextBox>(form, "txtSearch");
+                    var lstSearchResults = GetControl<ListBox>(form, "lstSearchResults");
+
+                    txtSearch.Text = "\"one two\" three";
+                    InvokePrivateAsync(form, "PerformSearchAsync").GetAwaiter().GetResult();
+
+                    var results = lstSearchResults.Items.Cast<object>().Select(item => item?.ToString()).ToArray();
+                    AssertEqual(2, results.Length, "expected one quoted-phrase result plus one standalone result");
+                    AssertContains(string.Join("\n", results), "https://example.test/one-two");
+                    AssertContains(string.Join("\n", results), "https://example.test/three");
+                    AssertFalse(results.Contains("https://example.test/one", StringComparer.Ordinal), "quoted phrase should not be split into a standalone 'one' lookup");
+                    AssertFalse(results.Contains("https://example.test/two", StringComparer.Ordinal), "quoted phrase should not be split into a standalone 'two' lookup");
+                });
+        });
+    }
+
+    internal static void KeywordSearchAcceptsUrlSourceMetadata()
+    {
+        RunOnStaThread(() =>
+        {
+            WithTemporaryKeywordIndex(
+                """
+                {
+                  "index_metadata": {
+                    "total_words_indexed": 0
+                  },
+                  "urls": {
+                    "https://example.test/rpol-entry": {
+                      "source": "RPOL"
+                    },
+                    "https://example.test/obsidian-entry": {
+                      "source": "Obsidian wiki"
+                    }
+                  },
+                  "words": {
+                    "entry": {
+                      "total_occurrences": 2,
+                      "matches": [
+                        {
+                          "url": "https://example.test/rpol-entry",
+                          "count": 1,
+                          "last_indexed": "2026-06-29T00:00:00.0000000+00:00"
+                        },
+                        {
+                          "url": "https://example.test/obsidian-entry",
+                          "count": 1,
+                          "last_indexed": "2026-06-29T00:00:00.0000000+00:00"
+                        }
+                      ]
+                    }
+                  }
+                }
+                """,
+                () =>
+                {
+                    using var form = new Form1(suppressHeroImagesForThisRun: true);
+                    var txtSearch = GetControl<TextBox>(form, "txtSearch");
+                    var lstSearchResults = GetControl<ListBox>(form, "lstSearchResults");
+
+                    txtSearch.Text = "entry";
+                    InvokePrivateAsync(form, "PerformSearchAsync").GetAwaiter().GetResult();
+
+                    var results = lstSearchResults.Items.Cast<object>().Select(item => item?.ToString()).ToArray();
+                    AssertEqual(2, results.Length, "expected both matches to be returned when url source metadata is present");
+                    AssertContains(string.Join("\n", results), "https://example.test/rpol-entry");
+                    AssertContains(string.Join("\n", results), "https://example.test/obsidian-entry");
+                });
+        });
+    }
+
+    internal static void KeywordSearchFiltersRpolHeroMetadataOnlyHits()
+    {
+        RunOnStaThread(() =>
+        {
+            WithTemporaryKeywordIndex(
+                """
+                {
+                  "index_metadata": {
+                    "total_words_indexed": 0
+                  },
+                  "words": {
+                    "Kelpie Lawfuller": {
+                      "total_occurrences": 3,
+                      "matches": [
+                        {
+                          "url": "https://rpol.net/display.cgi?gi=80170&ti=11",
+                          "count": 1,
+                          "last_indexed": "2026-06-30T00:00:00.0000000+00:00"
+                        },
+                        {
+                          "url": "https://rpol.net/display.cgi?gi=80170&ti=12",
+                          "count": 1,
+                          "last_indexed": "2026-06-30T00:00:00.0000000+00:00"
+                        },
+                        {
+                          "url": "https://publish.obsidian.md/scarlethorizons/PCs/Kelpie+Lawfuller",
+                          "count": 1,
+                          "last_indexed": "2026-06-30T00:00:00.0000000+00:00"
+                        }
+                      ]
+                    }
+                  }
+                }
+                """,
+                () =>
+                {
+                    using var form = new Form1(suppressHeroImagesForThisRun: true);
+                    var txtSearch = GetControl<TextBox>(form, "txtSearch");
+                    var lstSearchResults = GetControl<ListBox>(form, "lstSearchResults");
+                    var bodyCheckCount = 0;
+
+                    SetPrivateField(
+                        form,
+                        "_playerCharacterListingMarkdown",
+                        """
+                        | Name | Character | Notes | Hero |
+                        | --- | --- | --- | --- |
+                        | Kelpie Lawfuller | [[Kelpie Lawfuller]] | active | ![[kelpie-token.webp]] |
+                        """);
+                    SetPrivateField(
+                        form,
+                        "_rpolHeroNameBodyMatchProvider",
+                        (Func<string, string, CancellationToken, Task<bool>>)((url, term, _) =>
+                        {
+                            bodyCheckCount++;
+                            AssertEqual("Kelpie Lawfuller", term, "unexpected hero term passed to RPOL body filter");
+                            return Task.FromResult(url.Contains("ti=12", StringComparison.Ordinal));
+                        }));
+
+                    txtSearch.Text = "\"Kelpie Lawfuller\"";
+                    InvokePrivateAsync(form, "PerformSearchAsync").GetAwaiter().GetResult();
+
+                    var results = lstSearchResults.Items.Cast<object>().Select(item => item?.ToString()).ToArray();
+                    AssertEqual(2, results.Length, "expected one RPOL body hit and one Obsidian hit");
+                    AssertEqual(2, bodyCheckCount, "expected both RPOL matches to be checked against post bodies");
+                    AssertContains(string.Join("\n", results), "https://rpol.net/display.cgi?gi=80170&ti=12&msgpage=&show=all");
+                    AssertContains(string.Join("\n", results), "https://publish.obsidian.md/scarlethorizons/PCs/Kelpie+Lawfuller");
+                    AssertFalse(
+                        results.Contains("https://rpol.net/display.cgi?gi=80170&ti=11&msgpage=&show=all", StringComparer.Ordinal),
+                        "metadata-only RPOL hit should be excluded for hero-name searches");
+                });
+        });
+    }
+
+    internal static void ShowMenuContainsXpItem()
+    {
+        RunOnStaThread(() =>
+        {
+            using var form = new Form1(suppressHeroImagesForThisRun: true);
+            var showMenuItem = (ToolStripMenuItem)(GetPrivateField(form, "showToolStripMenuItem")
+                ?? throw new InvalidOperationException("showToolStripMenuItem was null."));
+            var xpMenuItem = (ToolStripMenuItem)(GetPrivateField(form, "xpToolStripMenuItem")
+                ?? throw new InvalidOperationException("xpToolStripMenuItem was null."));
+
+            AssertEqual("XP", xpMenuItem.Text ?? string.Empty, "unexpected XP menu item text");
+            AssertTrue(
+                showMenuItem.DropDownItems.Cast<ToolStripItem>().Contains(xpMenuItem),
+                "Show menu should contain the XP item");
+        });
+    }
+
+    internal static void ShowMenuContainsPartyItem()
+    {
+        RunOnStaThread(() =>
+        {
+            using var form = new Form1(suppressHeroImagesForThisRun: true);
+            var showMenuItem = (ToolStripMenuItem)(GetPrivateField(form, "showToolStripMenuItem")
+                ?? throw new InvalidOperationException("showToolStripMenuItem was null."));
+            var partyMenuItem = (ToolStripMenuItem)(GetPrivateField(form, "partyToolStripMenuItem")
+                ?? throw new InvalidOperationException("partyToolStripMenuItem was null."));
+
+            AssertEqual("Party", partyMenuItem.Text ?? string.Empty, "unexpected Party menu item text");
+            AssertTrue(
+                showMenuItem.DropDownItems.Cast<ToolStripItem>().Contains(partyMenuItem),
+                "Show menu should contain the Party item");
+        });
+    }
+
+    internal static void ShowMenuContainsMyHeroBriefingItem()
+    {
+        RunOnStaThread(() =>
+        {
+            using var form = new Form1(suppressHeroImagesForThisRun: true);
+            var showMenuItem = (ToolStripMenuItem)(GetPrivateField(form, "showToolStripMenuItem")
+                ?? throw new InvalidOperationException("showToolStripMenuItem was null."));
+            var myHeroBriefingMenuItem = (ToolStripMenuItem)(GetPrivateField(form, "myHeroBriefingToolStripMenuItem")
+                ?? throw new InvalidOperationException("myHeroBriefingToolStripMenuItem was null."));
+
+            AssertEqual("My Hero Briefing", myHeroBriefingMenuItem.Text ?? string.Empty, "unexpected My Hero Briefing menu item text");
+            AssertTrue(
+                showMenuItem.DropDownItems.Cast<ToolStripItem>().Contains(myHeroBriefingMenuItem),
+                "Show menu should contain the My Hero Briefing item");
+            AssertTrue(
+                showMenuItem.DropDownItems.IndexOf(myHeroBriefingMenuItem) > showMenuItem.DropDownItems.IndexOf((ToolStripItem)(GetPrivateField(form, "partyToolStripMenuItem")
+                    ?? throw new InvalidOperationException("partyToolStripMenuItem was null."))),
+                "My Hero Briefing should appear after Party");
+        });
+    }
+
+    internal static void ShowMenuContainsAdventureOutlineItem()
+    {
+        RunOnStaThread(() =>
+        {
+            using var form = new Form1(suppressHeroImagesForThisRun: true);
+            var showMenuItem = (ToolStripMenuItem)(GetPrivateField(form, "showToolStripMenuItem")
+                ?? throw new InvalidOperationException("showToolStripMenuItem was null."));
+            var adventureOutlineMenuItem = (ToolStripMenuItem)(GetPrivateField(form, "adventureOutlineToolStripMenuItem")
+                ?? throw new InvalidOperationException("adventureOutlineToolStripMenuItem was null."));
+
+            AssertEqual("Adventure Outline", adventureOutlineMenuItem.Text ?? string.Empty, "unexpected Adventure Outline menu item text");
+            AssertTrue(
+                showMenuItem.DropDownItems.Cast<ToolStripItem>().Contains(adventureOutlineMenuItem),
+                "Show menu should contain the Adventure Outline item");
+        });
+    }
+
+    internal static void SearchEnterTriggersClickWhenEnabled()
+    {
+        RunOnStaThread(() =>
+        {
+            WithTemporaryKeywordIndex(
+                """
+                {
+                  "index_metadata": {
+                    "total_words_indexed": 0
+                  },
+                  "words": {
+                    "entry": {
+                      "total_occurrences": 1,
+                      "matches": [
+                        {
+                          "url": "https://publish.obsidian.md/scarlethorizons/entry",
+                          "count": 1,
+                          "last_indexed": "2026-06-30T00:00:00.0000000+00:00"
+                        }
+                      ]
+                    }
+                  }
+                }
+                """,
+                () =>
+                {
+                    using var form = new Form1(suppressHeroImagesForThisRun: true);
+                    using var buttonHost = new Form();
+
+                    var txtSearch = GetControl<TextBox>(form, "txtSearch");
+                    var btnSearch = GetControl<Button>(form, "btnSearch");
+                    buttonHost.Controls.Add(btnSearch);
+                    buttonHost.Show();
+                    Application.DoEvents();
+
+                    var clickCount = 0;
+                    btnSearch.Click += (_, _) => clickCount++;
+
+                    txtSearch.Text = "entry";
+                    AssertTrue(btnSearch.Enabled, "expected search button to be enabled for a valid search term");
+
+                    InvokePrivateMethod(
+                        form,
+                        "TxtSearch_EnterPressed",
+                        txtSearch,
+                        EventArgs.Empty);
+
+                    AssertEqual(1, clickCount, "expected Enter to trigger the existing search click path");
+                    var completionTimeout = Stopwatch.StartNew();
+                    while (!btnSearch.Enabled && completionTimeout.Elapsed < TimeSpan.FromSeconds(5))
+                    {
+                        Application.DoEvents();
+                        Thread.Sleep(10);
+                    }
+
+                    AssertTrue(btnSearch.Enabled, "expected the Enter-triggered search to complete");
+                });
+        });
+    }
+
+    internal static void KeywordSearchUppercasesEncryptedIndexResultsWithoutChangingLaunchUrl()
+    {
+        RunOnStaThread(() =>
+        {
+            WithTemporaryKeywordIndex(
+                """
+                {
+                  "index_metadata": {
+                    "total_words_indexed": 0
+                  },
+                  "words": {
+                    "nimba": {
+                      "total_occurrences": 2,
+                      "matches": [
+                        {
+                          "url": "https://publish.obsidian.md/scarlethorizons/NPCs/Nimba+Armstrong",
+                          "count": 1,
+                          "last_indexed": "2026-07-07T00:00:00.0000000+00:00"
+                        },
+                        {
+                          "url": "https://publish.obsidian.md/scarlethorizons/NPCs/Nuanda+Armstrong",
+                          "count": 1,
+                          "last_indexed": "2026-07-07T00:00:00.0000000+00:00"
+                        }
+                      ]
+                    }
+                  }
+                }
+                """,
+                () => WithTemporaryEncryptedTextIndex(
+                    """
+                    [
+                      {
+                        "url": "https://publish.obsidian.md/scarlethorizons/NPCs/Nimba+Armstrong",
+                        "encrypted_sections": 2,
+                        "frontmatter_tags": ["npc", "spy"]
+                      }
+                    ]
+                    """,
+                    () =>
+                    {
+                        using var form = new Form1(suppressHeroImagesForThisRun: true);
+                        var txtSearch = GetControl<TextBox>(form, "txtSearch");
+                        var lstSearchResults = GetControl<ListBox>(form, "lstSearchResults");
+
+                        txtSearch.Text = "nimba";
+                        InvokePrivateAsync(form, "PerformSearchAsync").GetAwaiter().GetResult();
+
+                        var results = lstSearchResults.Items.Cast<object>().ToArray();
+                        AssertEqual(2, results.Length, "expected both keyword-index matches to be returned");
+                        AssertEqual(
+                            "HTTPS://PUBLISH.OBSIDIAN.MD/SCARLETHORIZONS/NPCS/NIMBA+ARMSTRONG",
+                            results[0]?.ToString() ?? string.Empty,
+                            "encrypted index result should display in uppercase");
+                        AssertEqual(
+                            "https://publish.obsidian.md/scarlethorizons/NPCs/Nuanda+Armstrong",
+                            results[1]?.ToString() ?? string.Empty,
+                            "non-encrypted index result should display normally");
+
+                        var launchUrl = InvokePrivateMethod(form, "GetSearchResultLaunchUrl", results[0]);
+                        AssertEqual(
+                            "https://publish.obsidian.md/scarlethorizons/NPCs/Nimba+Armstrong",
+                            launchUrl?.ToString() ?? string.Empty,
+                            "uppercase display item should retain the original launch URL");
+                    }));
+        });
+    }
+
+    internal static void KeywordSearchUppercasesOnlineObsidianFallbackResults()
+    {
+        RunOnStaThread(() =>
+        {
+            WithTemporaryKeywordIndex(
+                """
+                {
+                  "index_metadata": {
+                    "total_words_indexed": 0
+                  },
+                  "words": {}
+                }
+                """,
+                () =>
+                {
+                    using var form = new Form1(suppressHeroImagesForThisRun: true);
+                    var txtSearch = GetControl<TextBox>(form, "txtSearch");
+                    var lstSearchResults = GetControl<ListBox>(form, "lstSearchResults");
+
+                    SetPrivateField(
+                        form,
+                        "_showLocalIndexMissPrompt",
+                        (Func<string[], DialogResult>)(_ => DialogResult.Yes));
+                    SetPrivateField(
+                        form,
+                        "_showOnlineSearchCompletedMessage",
+                        (Action<string[], int>)((_, _) => { }));
+                    SetPrivateField(
+                        form,
+                        "_onlineSearchProvider",
+                        (Func<string[], CancellationToken, Task<string[]>>)((_, _) => Task.FromResult(new[]
+                        {
+                            "https://publish.obsidian.md/scarlethorizons/NPCs/Nimba+Armstrong",
+                            "https://rpol.net/display.cgi?gi=80170&ti=12&msgpage=&show=all"
+                        })));
+
+                    txtSearch.Text = "not indexed locally";
+                    InvokePrivateAsync(form, "PerformSearchAsync").GetAwaiter().GetResult();
+
+                    var results = lstSearchResults.Items.Cast<object>().ToArray();
+                    AssertEqual(2, results.Length, "expected online fallback to populate both provider results");
+                    AssertEqual(
+                        "HTTPS://PUBLISH.OBSIDIAN.MD/SCARLETHORIZONS/NPCS/NIMBA+ARMSTRONG",
+                        results[0]?.ToString() ?? string.Empty,
+                        "online Obsidian fallback result should display in uppercase");
+                    AssertEqual(
+                        "https://rpol.net/display.cgi?gi=80170&ti=12&msgpage=&show=all",
+                        results[1]?.ToString() ?? string.Empty,
+                        "non-Obsidian online fallback result should display normally");
+
+                    var launchUrl = InvokePrivateMethod(form, "GetSearchResultLaunchUrl", results[0]);
+                    AssertEqual(
+                        "https://publish.obsidian.md/scarlethorizons/NPCs/Nimba+Armstrong",
+                        launchUrl?.ToString() ?? string.Empty,
+                        "uppercase online Obsidian item should retain the original launch URL");
+                });
+        });
+    }
+
+    internal static void KeywordSearchOffersOnlineFallbackOnLocalMiss()
+    {
+        RunOnStaThread(() =>
+        {
+            WithTemporaryKeywordIndex(
+                """
+                {
+                  "index_metadata": {
+                    "total_words_indexed": 0
+                  },
+                  "words": {}
+                }
+                """,
+                () =>
+                {
+                    using var form = new Form1(suppressHeroImagesForThisRun: true);
+                    var txtSearch = GetControl<TextBox>(form, "txtSearch");
+                    var lstSearchResults = GetControl<ListBox>(form, "lstSearchResults");
+                    var promptCallCount = 0;
+                    var onlineSearchCallCount = 0;
+                    var onlineSearchCompletedCallCount = 0;
+
+                    SetPrivateField(
+                        form,
+                        "_showLocalIndexMissPrompt",
+                        (Func<string[], DialogResult>)(terms =>
+                        {
+                            promptCallCount++;
+                            AssertEqual("not indexed locally", terms[0], "unexpected prompt term");
+                            return DialogResult.Yes;
+                        }));
+                    SetPrivateField(
+                        form,
+                        "_onlineSearchProvider",
+                        (Func<string[], CancellationToken, Task<string[]>>)((terms, _) =>
+                        {
+                            onlineSearchCallCount++;
+                            AssertEqual("not indexed locally", terms[0], "unexpected online search term");
+                            return Task.FromResult(new[]
+                            {
+                                "https://example.test/online-result"
+                            });
+                        }));
+                    SetPrivateField(
+                        form,
+                        "_showOnlineSearchCompletedMessage",
+                        (Action<string[], int>)((terms, resultCount) =>
+                        {
+                            onlineSearchCompletedCallCount++;
+                            AssertEqual("not indexed locally", terms[0], "unexpected completed-message term");
+                            AssertEqual(1, resultCount, "unexpected completed-message result count");
+                        }));
+
+                    txtSearch.Text = "\"not indexed locally\"";
+                    InvokePrivateAsync(form, "PerformSearchAsync").GetAwaiter().GetResult();
+
+                    var results = lstSearchResults.Items.Cast<object>().Select(item => item?.ToString()).ToArray();
+                    AssertEqual(1, promptCallCount, "expected the local-index miss prompt to be shown once");
+                    AssertEqual(1, onlineSearchCallCount, "expected online search to run once");
+                    AssertEqual(1, onlineSearchCompletedCallCount, "expected the online-search completion message to be shown once");
+                    AssertEqual(1, results.Length, "expected online fallback to populate one result");
+                    AssertContains(string.Join("\n", results), "https://example.test/online-result");
+                });
+        });
+    }
+
+    internal static void KeywordSearchCancelsPreviousOnlineFallback()
+    {
+        RunOnStaThread(() =>
+        {
+            WithTemporaryKeywordIndex(
+                """
+                {
+                  "index_metadata": {
+                    "total_words_indexed": 0
+                  },
+                  "words": {}
+                }
+                """,
+                () =>
+                {
+                    using var form = new Form1(suppressHeroImagesForThisRun: true);
+                    var txtSearch = GetControl<TextBox>(form, "txtSearch");
+                    var btnSearch = GetControl<Button>(form, "btnSearch");
+                    var lstSearchResults = GetControl<ListBox>(form, "lstSearchResults");
+                    var firstSearchStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+                    var secondSearchStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+                    CancellationToken firstSearchToken = default;
+                    var onlineSearchCallCount = 0;
+
+                    SetPrivateField(
+                        form,
+                        "_showLocalIndexMissPrompt",
+                        (Func<string[], DialogResult>)(_ => DialogResult.Yes));
+                    SetPrivateField(
+                        form,
+                        "_showOnlineSearchCompletedMessage",
+                        (Action<string[], int>)((_, _) => { }));
+                    SetPrivateField(
+                        form,
+                        "_onlineSearchProvider",
+                        (Func<string[], CancellationToken, Task<string[]>>)(async (terms, cancellationToken) =>
+                        {
+                            onlineSearchCallCount++;
+                            if (onlineSearchCallCount == 1)
+                            {
+                                firstSearchToken = cancellationToken;
+                                firstSearchStarted.SetResult();
+                                await Task.Delay(TimeSpan.FromMinutes(1), cancellationToken);
+                            }
+
+                            secondSearchStarted.SetResult();
+                            cancellationToken.ThrowIfCancellationRequested();
+                            return ["https://example.test/current-search"];
+                        }));
+
+                    txtSearch.Text = "\"first missing\"";
+                    _ = InvokePrivateAsync(form, "PerformSearchAsync");
+                    AssertTrue(firstSearchStarted.Task.Wait(TimeSpan.FromSeconds(2)), "first search did not reach online fallback");
+
+                    txtSearch.Text = "\"second missing\"";
+                    var secondSearch = InvokePrivateAsync(form, "PerformSearchAsync");
+                    secondSearch.GetAwaiter().GetResult();
+
+                    var results = lstSearchResults.Items.Cast<object>().Select(item => item?.ToString()).ToArray();
+                    AssertTrue(firstSearchToken.IsCancellationRequested, "starting a second search should cancel the first search token");
+                    AssertTrue(secondSearchStarted.Task.IsCompleted, "second search did not reach online fallback");
+                    AssertEqual(2, onlineSearchCallCount, "expected both online search attempts to start");
+                    AssertTrue(btnSearch.Enabled, "search button should be re-enabled after current search completes");
+                    AssertEqual(1, results.Length, "only current search results should remain");
+                    AssertContains(string.Join("\n", results), "https://example.test/current-search");
+                });
+        });
+    }
+
+    internal static void KeywordSearchRpolScopeExcludesObsidianOnlyWhiteheart()
+    {
+        RunOnStaThread(() =>
+        {
+            using var form = new Form1(suppressHeroImagesForThisRun: true);
+            var txtSearch = GetControl<TextBox>(form, "txtSearch");
+            var rdoRPOL = GetControl<RadioButton>(form, "rdoRPOL");
+            var lstSearchResults = GetControl<ListBox>(form, "lstSearchResults");
+
+            rdoRPOL.Checked = true;
+            txtSearch.Text = "whiteheart";
+            InvokePrivateAsync(form, "PerformSearchAsync").GetAwaiter().GetResult();
+
+            var results = lstSearchResults.Items.Cast<object>().Select(item => item?.ToString()).ToArray();
+            AssertEqual(0, results.Length, "expected RPOL-only search to exclude the Obsidian-only whiteheart entry");
+        });
+    }
+
+    internal static void KeywordSearchRpolScopeExcludesObsidianOnlyWhiteheartStiffwhiskers()
+    {
+        RunOnStaThread(() =>
+        {
+            using var form = new Form1(suppressHeroImagesForThisRun: true);
+            var txtSearch = GetControl<TextBox>(form, "txtSearch");
+            var rdoRPOL = GetControl<RadioButton>(form, "rdoRPOL");
+            var lstSearchResults = GetControl<ListBox>(form, "lstSearchResults");
+
+            rdoRPOL.Checked = true;
+            txtSearch.Text = "whiteheart stiffwhiskers";
+            InvokePrivateAsync(form, "PerformSearchAsync").GetAwaiter().GetResult();
+
+            var results = lstSearchResults.Items.Cast<object>().Select(item => item?.ToString()).ToArray();
+            AssertEqual(0, results.Length, "expected RPOL-only search to exclude the Obsidian-only whiteheart stiffwhiskers entry");
+        });
+    }
+
+    internal static void KeywordSearchExpandsHeroFirstAndFullNames()
+    {
+        RunOnStaThread(() =>
+        {
+            using var form = new Form1(suppressHeroImagesForThisRun: true);
+            SetPrivateField(
+                form,
+                "_playerCharacterListingMarkdown",
+                """
+                | Name | Character | Notes | Hero |
+                | ---- | --------- | ----- | ---- |
+                | [[Kelpie Lawfuller]] | Fighter | active | ![[kelpie-token.webp]] |
+                | [[Jelb Garrick]] | Illusionist | active | ![[jelb-token.webp]] |
+                """);
+
+            var kelpieAliases = ((string[]?)InvokePrivateMethod(form, "GetHeroSearchTermAliases", "Kelpie")
+                ?? []).OrderBy(value => value, StringComparer.OrdinalIgnoreCase).ToArray();
+            var jelbAliases = ((string[]?)InvokePrivateMethod(form, "GetHeroSearchTermAliases", "Jelb Garrick")
+                ?? []).OrderBy(value => value, StringComparer.OrdinalIgnoreCase).ToArray();
+
+            AssertEqual(2, kelpieAliases.Length, "Kelpie first-name search should produce first and full-name aliases");
+            AssertEqual("Kelpie", kelpieAliases[0], "unexpected Kelpie first-name alias");
+            AssertEqual("Kelpie Lawfuller", kelpieAliases[1], "unexpected Kelpie full-name alias");
+            AssertEqual(2, jelbAliases.Length, "Jelb full-name search should produce first and full-name aliases");
+            AssertEqual("Jelb", jelbAliases[0], "unexpected Jelb first-name alias");
+            AssertEqual("Jelb Garrick", jelbAliases[1], "unexpected Jelb full-name alias");
+        });
+    }
+
+    internal static void PartyHeroSheetParserReadsSummaryAndHidesXpLines()
+    {
+        var hero = PartyHeroUtility.ParseHeroSheet(
+            """
+            ---
+            dg-publish: true
+            ---
+            ![[jelb-token.webp]]
+
+            Class: Illusionist
+            HP: 4
+            Level: 1
+            XP: 0
+            Intelligence 16 Language Native+2 Literacy Literate XP Bonus: 10%
+            Attained level 03 Illusionist after XP was awarded.
+
+            Name: Jelb Garrick
+            """,
+            "Jelb");
+
+        AssertEqual("Jelb Garrick", hero.Name, "unexpected parsed hero name");
+        AssertEqual("Illusionist", hero.CharacterClass, "unexpected parsed class");
+        AssertEqual("3", hero.Level, "unexpected parsed level");
+        AssertEqual("4", hero.HitPoints, "unexpected parsed hit points");
+        AssertFalse(hero.CharacterSheetText.Contains("XP: 0", StringComparison.Ordinal), "XP total lines should be hidden from party sheet text");
+        AssertContains(hero.CharacterSheetText, "XP Bonus: 10%");
+    }
+
+    internal static void MyHeroBriefingBuildsSelectedHeroSummaryBoundary()
+    {
+        var heroes = new PartyHeroSheet[]
+        {
+            new("Kelpie Lawfuller", "kelpie-token.webp", "3", "Fighter", "12", "Kelpie sheet"),
+            new("Jelb Garrick", "jelb-token.webp", "3", "Illusionist", "8", "Jelb sheet")
+        };
+        var request = new MyHeroBriefingRequest(
+            heroes,
+            SelectedHeroName: "Jelb Garrick",
+            AuthenticatedHeroName: "Jelb",
+            XpTotals: [new PcXpTotal("Jelb", 8575)],
+            ThreadPosts:
+            [
+                new MyHeroBriefingThreadPosts(
+                    "Chapter 1",
+                    "https://rpol.net/display.cgi?gi=80170&ti=7",
+                    [])
+            ],
+            EncryptedTextIndex:
+            [
+                new EncryptedTextIndexEntry(
+                    "https://publish.obsidian.md/scarlethorizons/Secrets",
+                    1,
+                    ["illusionist"])
+            ],
+            QuickLinks:
+            [
+                new MyHeroBriefingQuickLink("Party", "app://show/party")
+            ]);
+
+        var briefing = MyHeroBriefingUtility.Build(request);
+
+        AssertFalse(briefing.NeedsHeroSelection, "selected hero should not require a picker");
+        AssertTrue(briefing.Hero is not null, "selected hero should build a hero summary");
+        AssertEqual("Jelb Garrick", briefing.Hero!.Name, "unexpected briefing hero");
+        AssertEqual("Illusionist", briefing.Hero.CharacterClass, "unexpected briefing class");
+        AssertEqual("3", briefing.Hero.Level, "unexpected briefing level");
+        AssertEqual("8", briefing.Hero.HitPoints, "unexpected briefing hit points");
+        AssertEqual(8575, briefing.Hero.XpTotal ?? -1, "XP should match first-name alias");
+        AssertEqual("jelb-token.webp", briefing.Hero.TokenImagePath ?? string.Empty, "unexpected token path");
+        AssertEqual("Jelb Garrick", briefing.Hero.AccessContext.CharacterName ?? string.Empty, "unexpected access context character");
+        AssertTrue(briefing.HeroCard is not null, "selected hero should build a current hero card");
+        AssertEqual("Jelb Garrick", briefing.HeroCard!.Name, "unexpected card hero");
+        AssertEqual("Illusionist", briefing.HeroCard.CharacterClass, "unexpected card class");
+        AssertEqual("3", briefing.HeroCard.Level, "unexpected card level");
+        AssertEqual("8", briefing.HeroCard.HitPoints, "unexpected card hit points");
+        AssertEqual("XP Total: 8,575", briefing.HeroCard.XpTotalLabel, "unexpected card XP label");
+        AssertEqual("jelb-token.webp", briefing.HeroCard.TokenImagePath ?? string.Empty, "unexpected card token path");
+        AssertEqual("Jelb sheet", briefing.HeroCard.CharacterSheetText, "unexpected card sheet text");
+        AssertEqual(2, briefing.HeroChoices.Count, "unexpected hero choice count");
+        AssertEqual(MyHeroBriefingHeroIdentitySource.AuthenticatedHero, briefing.HeroIdentitySource, "authenticated identity should win before selected hero");
+        AssertTrue(briefing.QuickLinks.Any(link => link.Label == "Full Sheet" && link.Target == "app://show/party"), "briefing should include a full-sheet quick link");
+        AssertTrue(briefing.QuickLinks.Any(link => link.Label == "XP" && link.Target == "app://show/xp"), "briefing should include an XP quick link");
+        AssertTrue(briefing.QuickLinks.Any(link => link.Label == "Party" && link.Target == "app://show/party"), "briefing should include a Party quick link");
+        AssertTrue(briefing.QuickLinks.Any(link => link.Label == "Adventure Outline" && link.Target == "app://show/adventure-outline"), "briefing should include an Adventure Outline quick link");
+        AssertTrue(briefing.QuickLinks.Any(link => link.Label == "Chapter 1" && link.Target == "https://rpol.net/display.cgi?gi=80170&ti=7"), "briefing should include RPOL thread quick links");
+        AssertTrue(briefing.QuickLinks.Any(link => link.Label == "Party" && link.Target == "app://show/party"), "provided quick links should be retained");
+        AssertEqual(briefing.QuickLinks.Count, briefing.HeroCard.QuickLinks.Count, "card quick links should mirror briefing quick links");
+        AssertEqual(0, briefing.RecentActivity.Count, "activity should be left for the later backlog step");
+        AssertEqual(0, briefing.LikelyResponseItems.Count, "response items should be left for the later backlog step");
+        AssertEqual(1, briefing.UnlockedNotes.Count, "encrypted index input should surface unlocked notes");
+        AssertEqual("Secrets", briefing.UnlockedNotes[0].Title, "unexpected unlocked note title");
+    }
+
+    internal static void MyHeroBriefingPrefersAuthenticatedHeroIdentity()
+    {
+        var heroes = new PartyHeroSheet[]
+        {
+            new("Kelpie Lawfuller", null, "3", "Fighter", "12", "Kelpie sheet"),
+            new("Jelb Garrick", null, "3", "Illusionist", "8", "Jelb sheet")
+        };
+
+        var briefing = MyHeroBriefingUtility.Build(new MyHeroBriefingRequest(
+            heroes,
+            SelectedHeroName: "Kelpie Lawfuller",
+            AuthenticatedHeroName: "Jelb"));
+
+        AssertTrue(briefing.Hero is not null, "authenticated hero should resolve a briefing hero");
+        AssertEqual("Jelb Garrick", briefing.Hero!.Name, "authenticated first-name identity should select Jelb");
+        AssertEqual(MyHeroBriefingHeroIdentitySource.AuthenticatedHero, briefing.HeroIdentitySource, "unexpected identity source");
+        AssertFalse(briefing.NeedsHeroSelection, "resolved authenticated hero should not need a picker");
+    }
+
+    internal static void MyHeroBriefingRequiresExplicitDungeonMasterHeroSelection()
+    {
+        var heroes = new PartyHeroSheet[]
+        {
+            new("Kelpie Lawfuller", null, "3", "Fighter", "12", "Kelpie sheet"),
+            new("Jelb Garrick", null, "3", "Illusionist", "8", "Jelb sheet")
+        };
+        var unresolved = MyHeroBriefingUtility.Build(new MyHeroBriefingRequest(
+            heroes,
+            AuthenticatedHeroName: "Dungeon Master",
+            IsDungeonMaster: true));
+        var selected = MyHeroBriefingUtility.Build(new MyHeroBriefingRequest(
+            heroes,
+            SelectedHeroName: "Kelpie",
+            AuthenticatedHeroName: "Dungeon Master",
+            IsDungeonMaster: true));
+
+        AssertTrue(unresolved.Hero is null, "DM briefing should not infer a hero from Dungeon Master identity");
+        AssertTrue(unresolved.NeedsHeroSelection, "DM briefing should request explicit hero selection");
+        AssertEqual(MyHeroBriefingHeroIdentitySource.None, unresolved.HeroIdentitySource, "unexpected unresolved DM identity source");
+        AssertEqual("Choose a hero to build My Hero Briefing for Dungeon Master view.", unresolved.StatusMessage, "unexpected DM picker status");
+        AssertTrue(selected.Hero is not null, "explicit DM selection should resolve a hero");
+        AssertEqual("Kelpie Lawfuller", selected.Hero!.Name, "unexpected selected DM hero");
+        AssertEqual(MyHeroBriefingHeroIdentitySource.SelectedHero, selected.HeroIdentitySource, "unexpected selected DM identity source");
+    }
+
+    internal static void MyHeroBriefingLeavesAmbiguousFirstNameUnresolved()
+    {
+        var heroes = new PartyHeroSheet[]
+        {
+            new("Max North", null, "1", "Fighter", "5", "Max North sheet"),
+            new("Max Stone", null, "2", "Thief", "7", "Max Stone sheet")
+        };
+
+        var briefing = MyHeroBriefingUtility.Build(new MyHeroBriefingRequest(
+            heroes,
+            AuthenticatedHeroName: "Max"));
+
+        AssertTrue(briefing.Hero is null, "ambiguous first-name identity should remain unresolved");
+        AssertTrue(briefing.NeedsHeroSelection, "ambiguous identity should request explicit selection");
+        AssertEqual(MyHeroBriefingHeroIdentitySource.None, briefing.HeroIdentitySource, "unexpected ambiguous identity source");
+    }
+
+    internal static void MyHeroBriefingHidesXpForUnauthenticatedSelectedHeroCard()
+    {
+        var heroes = new PartyHeroSheet[]
+        {
+            new("Kelpie Lawfuller", null, "3", "Fighter", "12", "Kelpie sheet"),
+            new("Jelb Garrick", null, "3", "Illusionist", "8", "Jelb sheet")
+        };
+
+        var briefing = MyHeroBriefingUtility.Build(new MyHeroBriefingRequest(
+            heroes,
+            SelectedHeroName: "Kelpie Lawfuller",
+            XpTotals: [new PcXpTotal("Kelpie Lawfuller", 7062)]));
+
+        AssertTrue(briefing.HeroCard is not null, "selected hero should build a current hero card");
+        AssertTrue(briefing.HeroCard!.XpTotal is null, "unauthenticated selected hero should not receive raw XP totals");
+        AssertEqual("XP Total: hidden", briefing.HeroCard.XpTotalLabel, "unexpected hidden XP label");
+        AssertEqual(MyHeroBriefingHeroIdentitySource.SelectedHero, briefing.HeroIdentitySource, "unexpected selected identity source");
+    }
+
+    internal static void MyHeroBriefingBuildsRecentHeroActivity()
+    {
+        var heroes = new PartyHeroSheet[]
+        {
+            new("Jelb Garrick", null, "3", "Illusionist", "8", "Jelb sheet")
+        };
+        var matchingPosts = Enumerable.Range(1, 12)
+            .Select(index => new RpolThreadPost(
+                index,
+                index % 2 == 0 ? "Dungeon Master" : "Kelpie",
+                string.Empty,
+                "Mon 1 Jan 2026",
+                $"{index:00}:00",
+                $"{index:000}.html",
+                "<div></div>",
+                "<p></p>",
+                index == 12
+                    ? "Jelb Garrick considers the long corridor. " + new string('x', 220)
+                    : $"Jelb studies clue {index}."))
+            .Concat(
+            [
+                new RpolThreadPost(
+                    13,
+                    "Dungeon Master",
+                    string.Empty,
+                    "Mon 1 Jan 2026",
+                    "13:00",
+                    "013.html",
+                    "<div></div>",
+                    "<p></p>",
+                    "A jelbian carving is unrelated."),
+                new RpolThreadPost(
+                    14,
+                    "Dungeon Master",
+                    string.Empty,
+                    "Mon 1 Jan 2026",
+                    "14:00",
+                    "014.html",
+                    "<div></div>",
+                    "<p></p>",
+                    "Kelpie studies the same clue."),
+                new RpolThreadPost(
+                    15,
+                    "Jelb",
+                    string.Empty,
+                    "Mon 1 Jan 2026",
+                    "15:00",
+                    "015.html",
+                    "<div></div>",
+                    "<p></p>",
+                    "I check the stonework for hidden catches.")
+            ])
+            .ToArray();
+        var briefing = MyHeroBriefingUtility.Build(new MyHeroBriefingRequest(
+            heroes,
+            AuthenticatedHeroName: "Jelb",
+            ThreadPosts:
+            [
+                new MyHeroBriefingThreadPosts(
+                    "Chapter 1",
+                    "https://rpol.net/display.cgi?gi=80170&ti=7",
+                    matchingPosts)
+            ]));
+
+        AssertEqual(10, briefing.RecentActivity.Count, "recent activity should be capped at ten matching posts");
+        AssertEqual(15, briefing.RecentActivity[0].MessageNumber, "latest hero-authored post should appear first");
+        AssertEqual(4, briefing.RecentActivity[^1].MessageNumber, "oldest retained matching post should be message 4");
+        AssertTrue(
+            briefing.RecentActivity.All(item => item.ThreadTitle == "Chapter 1"
+                && item.ThreadUrl == "https://rpol.net/display.cgi?gi=80170&ti=7"),
+            "activity items should retain thread context");
+        AssertTrue(
+            briefing.RecentActivity.All(item => item.MessageNumber != 13 && item.MessageNumber != 14),
+            "activity should exclude substring matches and unrelated hero posts");
+        AssertTrue(briefing.RecentActivity.Any(item => item.MessageNumber == 15), "hero-authored posts should count as recent activity");
+        AssertTrue(briefing.RecentActivity[1].Excerpt.EndsWith("...", StringComparison.Ordinal), "long excerpts should be shortened");
+        AssertTrue(briefing.RecentActivity[1].Excerpt.Length <= 183, "shortened excerpts should stay bounded");
+    }
+
+    internal static void MyHeroBriefingBuildsLikelyOpenResponseItems()
+    {
+        var heroes = new PartyHeroSheet[]
+        {
+            new("Jelb Garrick", null, "3", "Illusionist", "8", "Jelb sheet")
+        };
+        var chapterPosts = new RpolThreadPost[]
+        {
+            CreateRpolThreadPost(1, "Dungeon Master", "Before Jelb posts."),
+            CreateRpolThreadPost(2, "Jelb", "Jelb watches the door."),
+            CreateRpolThreadPost(3, "Kelpie", "Should we open it?"),
+            CreateRpolThreadPost(4, "Dungeon Master", "Jelb hears a faint click."),
+            CreateRpolThreadPost(5, "Nuanda", "The corridor stays quiet."),
+            CreateRpolThreadPost(6, "Jelb", "Jelb studies the lock."),
+            CreateRpolThreadPost(7, "Dungeon Master", "The lock gives way."),
+            CreateRpolThreadPost(8, "Kelpie", "Jelb, do you want the lantern?")
+        };
+        var noHeroPostThread = new RpolThreadPost[]
+        {
+            CreateRpolThreadPost(1, "Kelpie", "Jelb might know this."),
+            CreateRpolThreadPost(2, "Dungeon Master", "What happens next?")
+        };
+
+        var briefing = MyHeroBriefingUtility.Build(new MyHeroBriefingRequest(
+            heroes,
+            AuthenticatedHeroName: "Jelb",
+            ThreadPosts:
+            [
+                new MyHeroBriefingThreadPosts(
+                    "Chapter 1",
+                    "https://rpol.net/display.cgi?gi=80170&ti=7",
+                    chapterPosts),
+                new MyHeroBriefingThreadPosts(
+                    "Chapter 2",
+                    "https://rpol.net/display.cgi?gi=80170&ti=8",
+                    noHeroPostThread)
+            ]));
+
+        AssertEqual(2, briefing.LikelyResponseItems.Count, "only posts after the hero's latest post should be response candidates");
+        AssertEqual(8, briefing.LikelyResponseItems[0].MessageNumber, "direct mention should rank first");
+        AssertEqual("Direct mention after your last post", briefing.LikelyResponseItems[0].Reason, "unexpected direct-mention reason");
+        AssertEqual(7, briefing.LikelyResponseItems[1].MessageNumber, "neutral follow-up should remain after direct mentions and questions");
+        AssertEqual("Recent post after your last post", briefing.LikelyResponseItems[1].Reason, "weak evidence should stay neutral");
+        AssertTrue(
+            briefing.LikelyResponseItems.All(item => item.ThreadTitle == "Chapter 1"
+                && item.ThreadUrl == "https://rpol.net/display.cgi?gi=80170&ti=7"),
+            "response items should be grouped by retaining thread context and ignore threads without a hero post");
+    }
+
+    private static RpolThreadPost CreateRpolThreadPost(int messageNumber, string author, string bodyText)
+    {
+        return new RpolThreadPost(
+            messageNumber,
+            author,
+            string.Empty,
+            "Mon 1 Jan 2026",
+            $"{messageNumber:00}:00",
+            $"{messageNumber:000}.html",
+            "<div></div>",
+            "<p></p>",
+            bodyText);
+    }
+
+    internal static void MyHeroBriefingSurfacesRelevantUnlockedNotes()
+    {
+        var heroes = new PartyHeroSheet[]
+        {
+            new("Jelb Garrick", null, "3", "Illusionist", "8", "Jelb sheet")
+        };
+        var encryptedIndex = new EncryptedTextIndexEntry[]
+        {
+            new(
+                "https://publish.obsidian.md/scarlethorizons/Secrets/Illusionist+Clue",
+                2,
+                ["Class Illusionist"]),
+            new(
+                "https://publish.obsidian.md/scarlethorizons/Secrets/Jelb+Only",
+                1,
+                ["Hero Jelb"]),
+            new(
+                "https://publish.obsidian.md/scarlethorizons/Secrets/High+Level",
+                1,
+                ["Level 4"]),
+            new(
+                "https://publish.obsidian.md/scarlethorizons/Secrets/Fighter+Only",
+                1,
+                ["Class Fighter"]),
+            new(
+                "https://publish.obsidian.md/scarlethorizons/Secrets/Public",
+                0,
+                ["Class Illusionist"])
+        };
+
+        var briefing = MyHeroBriefingUtility.Build(new MyHeroBriefingRequest(
+            heroes,
+            AuthenticatedHeroName: "Jelb",
+            EncryptedTextIndex: encryptedIndex));
+
+        AssertEqual(2, briefing.UnlockedNotes.Count, "only notes unlocked by hero tags should be surfaced");
+        AssertTrue(
+            briefing.UnlockedNotes.Any(note =>
+                note.Title == "Illusionist Clue"
+                && note.Url == "https://publish.obsidian.md/scarlethorizons/Secrets/Illusionist+Clue"
+                && note.Excerpt == "2 unlocked encrypted sections may be relevant."),
+            "class-matched encrypted note should be included");
+        AssertTrue(
+            briefing.UnlockedNotes.Any(note =>
+                note.Title == "Jelb Only"
+                && note.Excerpt == "1 unlocked encrypted section may be relevant."),
+            "hero-name matched encrypted note should be included");
+        AssertFalse(
+            briefing.UnlockedNotes.Any(note => note.Title is "High Level" or "Fighter Only" or "Public"),
+            "locked notes and entries without encrypted sections should remain hidden");
+    }
+
+    internal static void MyHeroBriefingRequestsHeroSelectionWhenNoHeroSelected()
+    {
+        var heroes = new PartyHeroSheet[]
+        {
+            new("Kelpie Lawfuller", null, "3", "Fighter", "12", "Kelpie sheet"),
+            new("Jelb Garrick", null, "3", "Illusionist", "8", "Jelb sheet")
+        };
+
+        var briefing = MyHeroBriefingUtility.Build(new MyHeroBriefingRequest(heroes));
+
+        AssertTrue(briefing.Hero is null, "briefing should not choose a hero before identity resolution exists");
+        AssertTrue(briefing.NeedsHeroSelection, "briefing should request a hero selection");
+        AssertEqual(2, briefing.HeroChoices.Count, "unexpected hero choice count");
+        AssertEqual(MyHeroBriefingHeroIdentitySource.None, briefing.HeroIdentitySource, "unexpected unresolved identity source");
+        AssertEqual("Choose a hero to build My Hero Briefing.", briefing.StatusMessage, "unexpected picker status");
+    }
+
+    internal static void MyHeroBriefingDisplayTextIncludesFocusedSections()
+    {
+        var briefing = CreateMyHeroBriefingDisplayFixture();
+        var text = (string)(InvokeStaticMethod(typeof(Form1), "FormatMyHeroBriefingForDisplay", briefing)
+            ?? throw new InvalidOperationException("briefing display text was null."));
+
+        AssertContains(text, "My Hero Briefing");
+        AssertContains(text, "Current Hero");
+        AssertContains(text, "Jelb Garrick");
+        AssertContains(text, "Class: Illusionist");
+        AssertContains(text, "Level: 3");
+        AssertContains(text, "HP: 8");
+        AssertContains(text, "XP: 1,234 XP");
+        AssertContains(text, "Likely Open Response Items");
+        AssertContains(text, "*First, the app finds the hero's latest authored post in each thread.*");
+        AssertContains(text, "*Then it looks at later posts in that same thread by other authors.*");
+        AssertContains(text, "*Those later posts are ranked as:*");
+        AssertContains(text, "*- Direct mention after your last post when the post mentions the hero by name or first name.*");
+        AssertContains(text, "*- Question-like post after your last post when the post contains a ?.*");
+        AssertContains(text, "*- Recent post after your last post when it is simply a later post in that thread.*");
+        AssertContains(text, "Direct mention after your last post");
+        AssertContains(text, "Recent Hero Activity");
+        AssertContains(text, "Relevant Unlocked Notes");
+        AssertContains(text, "Jelb Only");
+        AssertContains(text, "Quick Links");
+    }
+
+    internal static void MyHeroBriefingStylesLikelyResponseKey()
+    {
+        RunOnStaThread(() =>
+        {
+            using var form = new Form1(suppressHeroImagesForThisRun: true);
+            InvokePrivateMethod(form, "ShowMyHeroBriefing", CreateMyHeroBriefingDisplayFixture());
+            var textBox = (RichTextBox)(GetPrivateField(form, "_myHeroBriefingTextBox")
+                ?? throw new InvalidOperationException("my hero briefing text box was null."));
+            const string keyLine = "*First, the app finds the hero's latest authored post in each thread.*";
+            var start = textBox.Text.IndexOf(keyLine, StringComparison.Ordinal);
+
+            AssertTrue(start >= 0, "expected likely response key line to be present");
+            textBox.Select(start, 1);
+            AssertEqual(Color.FromArgb(246, 241, 222), textBox.SelectionBackColor, "unexpected likely response key background color");
+        });
+    }
+
+    private static MyHeroBriefing CreateMyHeroBriefingDisplayFixture()
+    {
+        var heroes = new PartyHeroSheet[]
+        {
+            new("Jelb Garrick", "jelb-token.webp", "3", "Illusionist", "8", "Jelb sheet")
+        };
+        var posts = new[]
+        {
+            new MyHeroBriefingThreadPosts(
+                "Chapter 2",
+                "https://rpol.net/display.cgi?gi=80170&ti=8",
+                [
+                    CreateRpolThreadPost(1, "Jelb", "Jelb checks the suspicious door."),
+                    CreateRpolThreadPost(2, "Dungeon Master", "Jelb hears a lock click. What do you do?")
+                ])
+        };
+        var encryptedIndex = new[]
+        {
+            new EncryptedTextIndexEntry(
+                "https://publish.obsidian.md/scarlethorizons/Secrets/Jelb+Only",
+                1,
+                ["Hero Jelb"])
+        };
+        return MyHeroBriefingUtility.Build(new MyHeroBriefingRequest(
+            heroes,
+            AuthenticatedHeroName: "Jelb",
+            ThreadPosts: posts,
+            XpTotals: [new PcXpTotal("Jelb Garrick", 1234)],
+            EncryptedTextIndex: encryptedIndex));
+    }
+
+    internal static void MyHeroBriefingEncryptedIndexLoaderToleratesMalformedJson()
+    {
+        WithTemporaryEncryptedTextIndex(
+            "{ not-json",
+            () =>
+            {
+                var entries = (IReadOnlyList<EncryptedTextIndexEntry>)(InvokeStaticMethod(typeof(Form1), "LoadMyHeroBriefingEncryptedTextIndex")
+                    ?? throw new InvalidOperationException("encrypted index entries were null."));
+
+                AssertEqual(0, entries.Count, "malformed encrypted index should be ignored");
+            });
+    }
+
+    private static string CreateRpolSourceHtml(params (int MessageNumber, string Author, string Date, string Time, string BodyText)[] posts)
+    {
+        return string.Join(
+            Environment.NewLine,
+            posts.Select(post => $"""
+            <div class='message'>
+            <span class='messageauthor'>{WebUtility.HtmlEncode(post.Author)}</span>
+            <ul><li>msg #{post.MessageNumber}</li></ul>
+            {post.Date} at {post.Time}
+            <div class='messagebody' id='msg{post.MessageNumber}'>{WebUtility.HtmlEncode(post.BodyText)}</div>
+            </div><!-- 1 -->
+            """));
+    }
+
+    internal static void PartyHeroListingSummaryOverridesStaleCachedSheet()
+    {
+        using var directory = TemporaryDirectory.Create();
+        var activeDirectory = Path.Combine(directory.Path, "active");
+        Directory.CreateDirectory(activeDirectory);
+        File.WriteAllText(
+            PlayerCharacterAssetUtility.GetPlayerCharactersListingMarkdownCachePath(directory.Path),
+            """
+            | Name | Class | Level | Token | HP | Race | AC |
+            | ---- | ----- | ----- | ----- | -- | ---- | -- |
+            | [[Jelb Garrick, Illusionist\|Jelb]] | Illusionist | 3 | ![[jelb-token.webp\|70]] | 8 | Human | 7[12] |
+            """);
+        File.WriteAllText(
+            Path.Combine(activeDirectory, "jelb.md"),
+            """
+            Class: Illusionist
+            HP: 4
+            Level: 1
+
+            Name: Jelb Garrick
+            """);
+
+        var heroes = PartyHeroUtility.LoadActiveParty(directory.Path);
+
+        AssertEqual(1, heroes.Count, "unexpected active party count");
+        AssertEqual("Jelb Garrick", heroes[0].Name, "sheet name should remain the displayed party name");
+        AssertEqual("Illusionist", heroes[0].CharacterClass, "listing class should be used");
+        AssertEqual("3", heroes[0].Level, "listing level should override stale sheet level");
+        AssertEqual("8", heroes[0].HitPoints, "listing HP should override stale sheet HP");
+        AssertContains(heroes[0].CharacterSheetText, "HP: 4");
+    }
+
+    internal static void PartyHeroXpVisibilityFollowsAuthenticatedCharacter()
+    {
+        var heroes = new PartyHeroSheet[]
+        {
+            new("Kelpie Lawfuller", null, "3", "Fighter", "12", "Kelpie sheet"),
+            new("Jelb Garrick", null, "1", "Illusionist", "4", "Jelb sheet")
+        };
+        var xpTotals = new PcXpTotal[]
+        {
+            new("Kelpie Lawfuller", 7062),
+            new("Jelb Garrick", 8575)
+        };
+
+        var kelpieView = PartyHeroUtility.WithVisibleXpTotals(
+            heroes,
+            xpTotals,
+            "Kelpie",
+            isDungeonMaster: false);
+        var dmView = PartyHeroUtility.WithVisibleXpTotals(
+            heroes,
+            xpTotals,
+            "Dungeon Master",
+            isDungeonMaster: true);
+
+        AssertEqual(7062, kelpieView[0].XpTotal ?? -1, "authenticated hero should see their own XP");
+        AssertTrue(kelpieView[1].XpTotal is null, "authenticated hero should not see another hero's XP");
+        AssertEqual(7062, dmView[0].XpTotal ?? -1, "DM should see Kelpie XP");
+        AssertEqual(8575, dmView[1].XpTotal ?? -1, "DM should see Jelb XP");
+    }
+
+    internal static void TaggedNoteCipherDecryptsForMatchingLevelTag()
+    {
+        var hero = new HeroAccessContext(
+            Level: 8,
+            CharacterClass: "Paladin",
+            AbilityScores: new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["Wis"] = 12
+            });
+
+        var encrypted = TaggedNoteCipherUtility.TransformTaggedText(
+            "{Level 8}The shrine door opens at moonrise.{Level 8}",
+            TaggedNoteCipherMode.Encrypt);
+        var decrypted = TaggedNoteCipherUtility.TransformTaggedText(
+            encrypted,
+            TaggedNoteCipherMode.Decrypt,
+            hero: hero);
+
+        AssertEqual("{Level 8}The shrine door opens at moonrise.{Level 8}", decrypted, "matching level tag should decrypt note text");
+        AssertTrue(encrypted.StartsWith("{Level 8}", StringComparison.Ordinal), "encrypted note should preserve opening tags as plaintext");
+        AssertTrue(encrypted.EndsWith("{Level 8}", StringComparison.Ordinal), "encrypted note should preserve closing tags as plaintext");
+        AssertFalse(encrypted.Contains("The shrine door opens", StringComparison.Ordinal), "encrypted note should hide wrapped plaintext");
+    }
+
+    internal static void TaggedNoteCipherDecryptsForMatchingCharacterTag()
+    {
+        var jelbHero = HeroAccessContext.FromPartyHeroSheet(new PartyHeroSheet(
+            Name: "Jelb Stonehand",
+            TokenImagePath: null,
+            Level: "3",
+            CharacterClass: "Fighter",
+            HitPoints: "20",
+            CharacterSheetText: "Name: Jelb Stonehand"));
+        var otherHero = HeroAccessContext.FromPartyHeroSheet(new PartyHeroSheet(
+            Name: "Kelpie Lawfuller",
+            TokenImagePath: null,
+            Level: "8",
+            CharacterClass: "Paladin",
+            HitPoints: "42",
+            CharacterSheetText: "Name: Kelpie Lawfuller"));
+        var encrypted = TaggedNoteCipherUtility.TransformTaggedText(
+            "{Character Jelb}sample text{Character Jelb}",
+            TaggedNoteCipherMode.Encrypt);
+
+        var decrypted = TaggedNoteCipherUtility.TransformTaggedText(
+            encrypted,
+            TaggedNoteCipherMode.Decrypt,
+            hero: jelbHero);
+
+        AssertEqual("{Character Jelb}sample text{Character Jelb}", decrypted, "matching character tag should decrypt note text");
+        AssertThrows<UnauthorizedAccessException>(
+            () => TaggedNoteCipherUtility.TransformTaggedText(encrypted, TaggedNoteCipherMode.Decrypt, hero: otherHero));
+    }
+
+    internal static void TaggedNoteCipherRejectsUnmetClassTag()
+    {
+        var hero = new HeroAccessContext(
+            Level: 12,
+            CharacterClass: "Illusionist",
+            AbilityScores: new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase));
+        var encrypted = TaggedNoteCipherUtility.TransformTaggedText(
+            "{Class paladin}Only paladins may read this vow.{Class paladin}",
+            TaggedNoteCipherMode.Encrypt);
+
+        AssertThrows<UnauthorizedAccessException>(
+            () => TaggedNoteCipherUtility.TransformTaggedText(encrypted, TaggedNoteCipherMode.Decrypt, hero: hero));
+    }
+
+    internal static void TaggedNoteCipherAcceptsEitherOrAbilityTag()
+    {
+        var hero = new HeroAccessContext(
+            Level: 4,
+            CharacterClass: "Cleric",
+            AbilityScores: new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["Wisdom"] = 15
+            });
+        var encrypted = TaggedNoteCipherUtility.TransformTaggedText(
+            "{Level 6|Wis 15}The omen points east.{Level 6|Wis 15}",
+            TaggedNoteCipherMode.Encrypt);
+        var decrypted = TaggedNoteCipherUtility.TransformTaggedText(
+            encrypted,
+            TaggedNoteCipherMode.Decrypt,
+            hero: hero);
+
+        AssertEqual("{Level 6|Wis 15}The omen points east.{Level 6|Wis 15}", decrypted, "either-or wisdom tag should decrypt note text");
+    }
+
+    internal static void TaggedNoteCipherAcceptsBareClassAlternative()
+    {
+        var hero = new HeroAccessContext(
+            Level: 1,
+            CharacterClass: "Wizard",
+            AbilityScores: new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase));
+        var encrypted = TaggedNoteCipherUtility.TransformTaggedText(
+            "{Wizard|Level 5}The sigil means danger.{Wizard|Level 5}",
+            TaggedNoteCipherMode.Encrypt);
+        var decrypted = TaggedNoteCipherUtility.TransformTaggedText(
+            encrypted,
+            TaggedNoteCipherMode.Decrypt,
+            hero: hero);
+
+        AssertTrue(encrypted.StartsWith("{Wizard|Level 5}", StringComparison.Ordinal), "encrypted note should preserve bare class opening tag");
+        AssertTrue(encrypted.EndsWith("{Wizard|Level 5}", StringComparison.Ordinal), "encrypted note should preserve bare class closing tag");
+        AssertEqual("{Wizard|Level 5}The sigil means danger.{Wizard|Level 5}", decrypted, "bare class alternative should decrypt note text");
+    }
+
+    internal static void TaggedNoteCipherAcceptsClassLevelShorthandAndFactionTag()
+    {
+        var spyHero = new HeroAccessContext(
+            Level: 4,
+            CharacterClass: "Spy",
+            AbilityScores: new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase));
+        var factionHero = new HeroAccessContext(
+            Level: 1,
+            CharacterClass: "Fighter",
+            AbilityScores: new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase),
+            Attributes: new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["Faction"] = "Scyntarn"
+            });
+        var encrypted = TaggedNoteCipherUtility.TransformTaggedText(
+            "{Spy 4|Faction Scyntarn}Nimba is actually a witch, like her sister Nuanda.{Spy 4|Faction Scyntarn}",
+            TaggedNoteCipherMode.Encrypt);
+
+        var spyDecrypted = TaggedNoteCipherUtility.TransformTaggedText(
+            encrypted,
+            TaggedNoteCipherMode.Decrypt,
+            hero: spyHero);
+        var factionDecrypted = TaggedNoteCipherUtility.TransformTaggedText(
+            encrypted,
+            TaggedNoteCipherMode.Decrypt,
+            hero: factionHero);
+
+        AssertEqual(
+            "{Spy 4|Faction Scyntarn}Nimba is actually a witch, like her sister Nuanda.{Spy 4|Faction Scyntarn}",
+            spyDecrypted,
+            "class level shorthand should decrypt note text");
+        AssertEqual(spyDecrypted, factionDecrypted, "faction tag alternative should decrypt the same note text");
+    }
+
+    internal static void TaggedNoteCipherAcceptsGroupedAndExpressionTag()
+    {
+        const string taggedPlaintext = "{(Level 6 && Spy 3)|Scyntarn 9}The sealed paragraph opens.{(Level 6 && Spy 3)|Scyntarn 9}";
+        var spyHero = new HeroAccessContext(
+            Level: 6,
+            CharacterClass: "Spy",
+            AbilityScores: new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase));
+        var scyntarnHero = new HeroAccessContext(
+            Level: 1,
+            CharacterClass: "Fighter",
+            AbilityScores: new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase),
+            RankedMemberships: new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["Scyntarn"] = 9
+            });
+        var deniedHero = new HeroAccessContext(
+            Level: 6,
+            CharacterClass: "Fighter",
+            AbilityScores: new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase),
+            RankedMemberships: new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["Scyntarn"] = 8
+            });
+        var encrypted = TaggedNoteCipherUtility.TransformTaggedText(
+            taggedPlaintext,
+            TaggedNoteCipherMode.Encrypt);
+
+        var spyDecrypted = TaggedNoteCipherUtility.TransformTaggedText(
+            encrypted,
+            TaggedNoteCipherMode.Decrypt,
+            hero: spyHero);
+        var scyntarnDecrypted = TaggedNoteCipherUtility.TransformTaggedText(
+            encrypted,
+            TaggedNoteCipherMode.Decrypt,
+            hero: scyntarnHero);
+
+        AssertEqual(taggedPlaintext, spyDecrypted, "level and spy class-level branch should decrypt note text");
+        AssertEqual(taggedPlaintext, scyntarnDecrypted, "ranked Scyntarn branch should decrypt note text");
+        AssertThrows<UnauthorizedAccessException>(
+            () => TaggedNoteCipherUtility.TransformTaggedText(encrypted, TaggedNoteCipherMode.Decrypt, hero: deniedHero));
+    }
+
+    internal static void TaggedNoteCipherReportsMismatchedDecryptTags()
+    {
+        var hero = new HeroAccessContext(
+            Level: 8,
+            CharacterClass: "Spy",
+            AbilityScores: new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase));
+        var encrypted = TaggedNoteCipherUtility.TransformTaggedText(
+            "{Level 8}The ward is real.{Level 8}",
+            TaggedNoteCipherMode.Encrypt);
+        var mismatched = encrypted[..^"{Level 8}".Length] + "{Level 9}";
+        var decrypted = TaggedNoteCipherUtility.TransformTaggedText(
+            mismatched,
+            TaggedNoteCipherMode.Decrypt,
+            hero: hero);
+
+        AssertEqual(
+            "unable to decrypt due to non-matching opening and closing tags",
+            decrypted,
+            "mismatched opening and closing tags should return the player-safe decrypt failure text");
+    }
+
+    internal static void TaggedNoteCipherAuthenticatesVisibleTags()
+    {
+        var originalHero = new HeroAccessContext(
+            Level: 8,
+            CharacterClass: "Fighter",
+            AbilityScores: new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase));
+        var lowerLevelHero = originalHero with { Level = 7 };
+        var encrypted = TaggedNoteCipherUtility.TransformTaggedText(
+            "{Level 8}The ward is real.{Level 8}",
+            TaggedNoteCipherMode.Encrypt);
+        var tampered = encrypted.Replace("{Level 8}", "{Level 7}", StringComparison.Ordinal);
+
+        AssertThrows<InvalidOperationException>(
+            () => TaggedNoteCipherUtility.TransformTaggedText(tampered, TaggedNoteCipherMode.Decrypt, hero: lowerLevelHero));
+    }
+
+    internal static void XpDisplayRecognizesDungeonMasterAccess()
+    {
+        AssertTrue(
+            (bool)(InvokeStaticMethod(typeof(Form1), "IsDungeonMasterXpAccess", "Dungeon Master") ?? false),
+            "Dungeon Master should unlock all XP totals");
+        AssertTrue(
+            (bool)(InvokeStaticMethod(typeof(Form1), "IsDungeonMasterXpAccess", "dungeon master") ?? false),
+            "Dungeon Master XP access should be case-insensitive");
+        AssertFalse(
+            (bool)(InvokeStaticMethod(typeof(Form1), "IsDungeonMasterXpAccess", "Kelpie") ?? true),
+            "ordinary PCs should not unlock all XP totals");
+    }
+
+    internal static void XpDisplayFindsTotalsByFirstAndFullCharacterNames()
+    {
+        var totals = new PcXpTotal[]
+        {
+            new("Kelpie Lawfuller", 7062),
+            new("Jelb", 8575)
+        };
+
+        var kelpieTotal = (PcXpTotal?)InvokeStaticMethod(
+            typeof(Form1),
+            "FindXpTotalForCharacter",
+            totals,
+            "Kelpie");
+        var jelbTotal = (PcXpTotal?)InvokeStaticMethod(
+            typeof(Form1),
+            "FindXpTotalForCharacter",
+            totals,
+            "Jelb Garrick");
+
+        if (kelpieTotal is null)
+        {
+            throw new InvalidOperationException("first-name Kelpie lookup should find full-name XP row");
+        }
+
+        if (jelbTotal is null)
+        {
+            throw new InvalidOperationException("full-name Jelb lookup should find first-name XP row");
+        }
+
+        AssertEqual(new PcXpTotal("Kelpie Lawfuller", 7062), kelpieTotal!, "unexpected Kelpie XP row");
+        AssertEqual(new PcXpTotal("Jelb", 8575), jelbTotal!, "unexpected Jelb XP row");
+    }
+
+    internal static void XpDisplayStoresMultipleTotalsForDungeonMaster()
+    {
+        RunOnStaThread(() =>
+        {
+            using var form = new Form1(suppressHeroImagesForThisRun: true);
+            var totals = new PcXpTotal[]
+            {
+                new("Kelpie", 7062),
+                new("Jelb", 8575)
+            };
+
+            InvokePrivateMethod(form, "ShowXpTotals", "As of 7.04.2026", totals);
+
+            var storedTotals = (IReadOnlyList<PcXpTotal>)(GetPrivateField(form, "_xpTotals")
+                ?? throw new InvalidOperationException("_xpTotals was null."));
+            AssertEqual(2, storedTotals.Count, "Dungeon Master XP display should retain all requested totals");
+            AssertEqual(new PcXpTotal("Kelpie", 7062), storedTotals[0], "unexpected first stored XP total");
+            AssertTrue((bool)(GetPrivateField(form, "_showXpTotal") ?? false), "XP display should be active");
+        });
+    }
+
+    internal static void XpTrackingParserReadsLatestTableTotals()
+    {
+        const string markdown =
+            """
+            ---
+            status: XP
+            ---
+            As of 7.04.2026
+
+            | Name     | Class       | Level | XP Total |
+            | -------- | ----------- | ----- | -------- |
+            | Kelpie   | Fighter     | 3     | 7,062    |
+            | Jelb     | Illusionist | 2     | 8,575    |
+            | Max      | Theurge     | 1     | 3,175    |
+            | Geoffroy | Cleric      | 2     | 2,950    |
+
+            As of 7.01.2026
+
+            | Name     | Class       | Level | XP Total |
+            | -------- | ----------- | ----- | -------- |
+            | Kelpie   | Fighter     | 3     | 6,562    |
+            | Jelb     | Illusionist | 2     | 8,075    |
+            """;
+
+        var totals = XpTrackingUtility.ParseCurrentXpTotals(markdown).ToArray();
+
+        AssertEqual(4, totals.Length, "expected latest XP table to contain four current PCs");
+        AssertEqual(new PcXpTotal("Kelpie", 7062), totals[0], "unexpected Kelpie XP total");
+        AssertEqual(new PcXpTotal("Jelb", 8575), totals[1], "unexpected Jelb XP total");
+        AssertEqual(new PcXpTotal("Max", 3175), totals[2], "unexpected Max XP total");
+        AssertEqual(new PcXpTotal("Geoffroy", 2950), totals[3], "unexpected Geoffroy XP total");
+    }
+
+    internal static void XpTrackingParserRejectsMissingLatestTable()
+    {
+        var exception = AssertThrows<InvalidOperationException>(() =>
+            XpTrackingUtility.ParseCurrentXpTotals(
+                """
+                As of 7.04.2026
+
+                No table today.
+                """));
+
+        AssertContains(exception.Message, "latest XP tracking date does not have a markdown table");
+    }
+
+    internal static void XpTrackingFailureMessageHidesUrlAndDirectsPlayersToDm()
+    {
+        const string trackingUrl = "https://publish.obsidian.md/scarlethorizons/Intentional+Orphans/XP+Tracking";
+        var message = XpTrackingUtility.FormatUserFacingFailureMessage(
+            new InvalidOperationException($"XP tracking markdown could not be fetched from {trackingUrl}."));
+
+        AssertContains(message, "XP totals could not be loaded from the XP Tracking page.");
+        AssertContains(message, "Please contact the DM");
+        AssertContains(message, "Technical detail:");
+        AssertFalse(message.Contains(trackingUrl, StringComparison.Ordinal), "XP failure dialog should not expose the unlisted tracking URL");
+        AssertFalse(message.Contains("https://", StringComparison.OrdinalIgnoreCase), "XP failure dialog should not expose URL-shaped text");
+    }
+
+    internal static void XpTrackingMissingPcMessageDirectsPlayersToDm()
+    {
+        var message = XpTrackingUtility.FormatMissingPcFailureMessage("Kelpie");
+
+        AssertContains(message, "No XP total was found for 'Kelpie'.");
+        AssertContains(message, "Please contact the DM");
+        AssertFalse(message.Contains("https://", StringComparison.OrdinalIgnoreCase), "missing-PC message should not expose URL-shaped text");
+    }
+
+    internal static void IllusionistProgressionDataExposesXpThresholds()
+    {
+        var path = Path.Combine(GetRepositoryRoot(), "class-progression.json");
+        using var document = JsonDocument.Parse(File.ReadAllText(path));
+        var root = document.RootElement;
+        AssertEqual(1, root.GetProperty("schema_version").GetInt32(), "unexpected class progression schema");
+
+        var illusionist = root
+            .GetProperty("classes")
+            .GetProperty("illusionist");
+        AssertEqual("Illusionist", illusionist.GetProperty("name").GetString() ?? string.Empty, "unexpected class name");
+        AssertEqual(36, illusionist.GetProperty("maximum_level").GetInt32(), "unexpected Illusionist maximum level");
+        AssertEqual(14, illusionist.GetProperty("published_maximum_level").GetInt32(), "unexpected published Illusionist maximum level");
+
+        var extension = illusionist.GetProperty("extended_progression");
+        AssertEqual(14, extension.GetProperty("starts_after_level").GetInt32(), "unexpected Illusionist extension starting level");
+        AssertEqual(150000, extension.GetProperty("xp_per_additional_level").GetInt32(), "unexpected Illusionist extended XP increment");
+        AssertFalse(extension.GetProperty("mechanical_statistics_available").GetBoolean(), "extended Illusionist mechanics should not be presented as published");
+
+        var progression = illusionist.GetProperty("level_progression").EnumerateArray().ToArray();
+        AssertEqual(36, progression.Length, "expected all Illusionist levels");
+        var expectedThresholds = new[]
+        {
+            0, 2500, 5000, 10000, 20000, 40000, 80000,
+            150000, 300000, 450000, 600000, 750000, 900000, 1050000,
+            1200000, 1350000, 1500000, 1650000, 1800000, 1950000, 2100000,
+            2250000, 2400000, 2550000, 2700000, 2850000, 3000000, 3150000,
+            3300000, 3450000, 3600000, 3750000, 3900000, 4050000, 4200000,
+            4350000
+        };
+        for (var index = 0; index < progression.Length; index++)
+        {
+            AssertEqual(index + 1, progression[index].GetProperty("level").GetInt32(), "unexpected Illusionist level");
+            AssertEqual(
+                expectedThresholds[index],
+                progression[index].GetProperty("minimum_xp").GetInt32(),
+                $"unexpected XP threshold for Illusionist level {index + 1}");
+            if (index < 14)
+            {
+                AssertEqual(
+                    6,
+                    progression[index].GetProperty("spell_slots").GetArrayLength(),
+                    $"unexpected spell-slot columns for Illusionist level {index + 1}");
+            }
+            else
+            {
+                AssertTrue(
+                    progression[index].GetProperty("extrapolated").GetBoolean(),
+                    $"Illusionist level {index + 1} should be marked as extrapolated");
+                AssertFalse(
+                    progression[index].TryGetProperty("spell_slots", out _),
+                    $"Illusionist level {index + 1} should not invent unpublished spell slots");
+                AssertFalse(
+                    progression[index].TryGetProperty("hit_dice", out _),
+                    $"Illusionist level {index + 1} should not invent unpublished hit dice");
+                AssertFalse(
+                    progression[index].TryGetProperty("thac0", out _),
+                    $"Illusionist level {index + 1} should not invent unpublished THAC0");
+                AssertFalse(
+                    progression[index].TryGetProperty("saving_throws", out _),
+                    $"Illusionist level {index + 1} should not invent unpublished saving throws");
+            }
+        }
+    }
+
+    private static void ResetRpolAuthFailureCache()
+    {
+        SetStaticField(typeof(RpolAuthUtility), "_cachedFatalAuthFailure", null);
+        SetStaticField(typeof(RpolAuthUtility), "_cachedFatalAuthFailureLogged", false);
+    }
+
+    private static void WriteRpolStorageState(string storageStatePath, string contents, DateTimeOffset lastWriteUtc)
+    {
+        Directory.CreateDirectory(Path.GetDirectoryName(storageStatePath)!);
+        File.WriteAllText(storageStatePath, contents);
+        File.SetLastWriteTimeUtc(storageStatePath, lastWriteUtc.UtcDateTime);
+    }
+
+    private static string CreateSampleRpolThreadHtml()
+    {
+        return """
+            <html><body>
+            <div class='message'>
+                <ul><li>msg #1</li></ul>
+                <span class='messageauthor'>Alice</span>
+                <div class='characterdetails'>Scout</div>
+                <span>Mon 1 Jan 2024 at 12:00</span>
+                <div class='messagebody' id='msg1'>Hello from Alice.</div>
+            </div><!-- 1 -->
+            </div><!-- 2 -->
+            <div class='message'>
+                <ul><li>msg #2</li></ul>
+                <span class='messageauthor'>Bob</span>
+                <div class='characterdetails'>Wizard</div>
+                <span>Tue 2 Jan 2024 at 13:30</span>
+                <div class='messagebody' id='msg2'>Hello from Bob.</div>
+            </div><!-- 1 -->
+            </div><!-- 2 -->
+            </body></html>
+            """;
+    }
+
+    internal static void RpolSnapshotSignsAndVerifiesCanonicalPayload()
+    {
+        var signingKey = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32));
+        var payload = RpolSnapshotUtility.CreatePayload(
+            new Uri("https://rpol.net/game.php?gi=80170"),
+            "<html>campaign</html>",
+            "text/html; charset=utf-8",
+            DateTimeOffset.Parse("2026-07-16T12:00:00Z"),
+            signingKey);
+
+        AssertTrue(RpolSnapshotUtility.VerifySignature(payload, signingKey), "snapshot signature should verify");
+        AssertEqual(
+            "<html>campaign</html>",
+            System.Text.Encoding.UTF8.GetString(Convert.FromBase64String(payload.ContentBase64)),
+            "transport-wrapped snapshot content should round-trip");
+        AssertFalse(
+            System.Text.RegularExpressions.Regex.IsMatch(payload.ContentBase64, "[A-Za-z0-9+/]{4}"),
+            "snapshot transport should not expose four-character base64 phrases to request filtering");
+        AssertFalse(
+            RpolSnapshotUtility.VerifySignature(payload with { ContentSha256 = new string('0', 64) }, signingKey),
+            "tampered snapshot metadata should fail signature verification");
+    }
+
+    internal static void AdventureOutlineFillsEveryChapterThroughLatestIcChapter()
+    {
+        using var directory = TemporaryDirectory.Create();
+        var icDirectory = Path.Combine(directory.Path, "Posts", "IC");
+        Directory.CreateDirectory(icDirectory);
+        File.WriteAllText(
+            Path.Combine(icDirectory, "ch-1.html"),
+            """
+            <html><body>
+            <h1>Ch 1 - Kirkilston.</h1>
+            <span class="messageauthor">Dungeon Master</span>
+            <div class="messagebody">The party leaves town.</div>
+            </body></html>
+            """);
+        File.WriteAllText(
+            Path.Combine(icDirectory, "ch-3.html"),
+            """
+            <html><body>
+            <h1>Ch 3 - The Road.</h1>
+            <span class="messageauthor">Kelpie</span>
+            <div class="messagebody">Kelpie keeps watch while the party travels.</div>
+            </body></html>
+            """);
+
+        var outline = AdventureOutlineUtility.BuildAdventureOutlineAsync(icDirectory)
+            .GetAwaiter()
+            .GetResult();
+
+        AssertContains(outline, "## Ch 1 - Kirkilston");
+        AssertContains(outline, "## Ch 2");
+        AssertContains(outline, "- The in-character chapter source is not available yet.");
+        AssertContains(outline, "## Ch 3 - The Road");
+        AssertTrue(
+            outline.IndexOf("## Ch 1", StringComparison.Ordinal) < outline.IndexOf("## Ch 2", StringComparison.Ordinal)
+                && outline.IndexOf("## Ch 2", StringComparison.Ordinal) < outline.IndexOf("## Ch 3", StringComparison.Ordinal),
+            "adventure outline chapters should form a contiguous numeric range");
+    }
+
+    internal static void RpolSnapshotRejectsAnotherGame()
+    {
+        var exception = AssertThrows<InvalidOperationException>(() =>
+            RpolSnapshotUtility.ValidateSourceUri(new Uri("https://rpol.net/game.php?gi=12345")));
+        AssertContains(exception.Message, "80170");
+    }
+
+    internal static void RpolSnapshotAcceptsSanitizedCampaignContent()
+    {
+        var html = "<html><title>Scarlet Horizons</title><body>" + new string('x', 1200) + "</body></html>";
+        AssertTrue(RpolSnapshotUtility.IsUsableSnapshotHtml(html), "campaign HTML should be accepted after sanitization");
+    }
+
+    internal static void RpolSnapshotRejectsLoginOnlyContent()
+    {
+        var html = "<html><title>RPoL Login</title><body>" + new string('x', 1200)
+            + "<form action='/login.cgi'><input name='username'><input name='password'></form></body></html>";
+        AssertFalse(RpolSnapshotUtility.IsUsableSnapshotHtml(html), "login-only HTML should not be published");
+    }
+
+    internal static void RpolChallengeDetectionIgnoresPassiveCloudflareReferences()
+    {
+        AssertFalse(
+            RpolAuthUtility.LooksLikeCloudflareChallengePage("<html><body>Protected by Cloudflare</body></html>"),
+            "a passive Cloudflare reference should not be treated as a browser challenge");
+        AssertTrue(
+            RpolAuthUtility.LooksLikeCloudflareChallengePage("<title>Just a moment...</title>"),
+            "a concrete Cloudflare challenge marker should still be detected");
+    }
+
+    internal static void RpolVerificationRecognizesAuthenticatedBrowserTitle()
+    {
+        AssertTrue(
+            RpolAuthUtility.IsVerifiedRpolBrowserWindowTitle("RPoL: World of Issenda - Scarlet Horizons - Google Chrome"),
+            "an authenticated RPOL window title should complete manual verification");
+        AssertFalse(
+            RpolAuthUtility.IsVerifiedRpolBrowserWindowTitle("Just a moment... - Google Chrome"),
+            "a challenge window title should remain open");
+    }
+
+    internal static void RpolDiceRollerNavigationUsesGamePageReferrer()
+    {
+        AssertTrue(
+            string.Equals(
+                AppSettingsUtility.GameForumUrl,
+                RpolAuthUtility.GetNavigationReferer(
+                    new Uri("https://rpol.net/usermodules/diceroller.cgi?gi=80170")),
+                StringComparison.Ordinal),
+            "Dice Roller navigation should carry the configured game page as its referrer");
+        AssertTrue(
+            RpolAuthUtility.GetNavigationReferer(
+                new Uri("https://rpol.net/display.cgi?gi=80170&ti=7")) is null,
+            "ordinary RPOL navigation should not receive a synthetic referrer");
+    }
+
+    internal static void SnapshotPublisherStateAdvancesOneTargetAndWraps()
+    {
+        var root = new Uri("https://rpol.net/game.php?gi=80170");
+        var cast = new Uri("https://rpol.net/gameinfo.php?action=cast&gi=80170");
+        var state = RpolSnapshotUtility.CreatePublisherState([root, cast]);
+
+        AssertEqual(root, RpolSnapshotUtility.GetNextSourceUri(state), "the root should be the initial publisher target");
+        state = RpolSnapshotUtility.AdvancePublisherState(state);
+        AssertEqual(cast, RpolSnapshotUtility.GetNextSourceUri(state), "one success should advance exactly one target");
+        state = RpolSnapshotUtility.AdvancePublisherState(state);
+        AssertEqual(root, RpolSnapshotUtility.GetNextSourceUri(state), "the publisher queue should wrap after the last target");
+    }
+
+    internal static void SnapshotDiscoveryApprovesGameLinksAndDiceRoller()
+    {
+        var gameLinksApproved = (bool)(InvokeStaticMethod(
+            typeof(RpolSnapshotUtility),
+            "IsApprovedLinkLabel",
+            "Game Links") ?? false);
+        var diceRollerApproved = (bool)(InvokeStaticMethod(
+            typeof(RpolSnapshotUtility),
+            "IsApprovedLinkLabel",
+            "Die Roller") ?? false);
+        var unrelated = (bool)(InvokeStaticMethod(
+            typeof(RpolSnapshotUtility),
+            "IsApprovedLinkLabel",
+            "Edit Game") ?? true);
+
+        AssertTrue(gameLinksApproved, "Game Links should be included in snapshot discovery");
+        AssertTrue(diceRollerApproved, "Die Roller should be included in snapshot discovery");
+        AssertFalse(unrelated, "unrelated game administration links should remain excluded");
+    }
+
+    internal static void SnapshotPublisherNormalizesThreadTargetsToShowAll()
+    {
+        var state = RpolSnapshotUtility.CreatePublisherState(
+        [
+            new Uri("https://rpol.net/game.php?gi=80170"),
+            new Uri("https://rpol.net/display.cgi?gi=80170&ti=7&date=1779581880&msgpage=2")
+        ]);
+
+        AssertEqual(
+            "https://rpol.net/display.cgi?gi=80170&ti=7&msgpage=&show=all",
+            state.SourceUrls[1],
+            "new publisher state should normalize thread targets");
+
+        var legacyState = new RpolSnapshotPublisherState(
+            1,
+            [
+                "https://rpol.net/game.php?gi=80170",
+                "https://rpol.net/display.cgi?gi=80170&ti=7&date=1779581880&msgpage=2",
+                "https://rpol.net/usermodules/diceroller.cgi?gi=80170"
+            ],
+            1);
+        var normalized = RpolSnapshotUtility.EnsureRequiredSourceUris(legacyState);
+
+        AssertEqual(
+            "https://rpol.net/display.cgi?gi=80170&ti=7&msgpage=&show=all",
+            normalized.SourceUrls[normalized.NextIndex],
+            "legacy publisher state should normalize its current thread without losing the cursor");
+    }
+
+    internal static void SnapshotPublisherStateInjectsRequiredDiceRollerTarget()
+    {
+        var root = new Uri("https://rpol.net/game.php?gi=80170");
+        var cast = new Uri("https://rpol.net/gameinfo.php?action=cast&gi=80170");
+        var state = RpolSnapshotUtility.AdvancePublisherState(
+            RpolSnapshotUtility.CreatePublisherState([root, cast]));
+
+        var updated = RpolSnapshotUtility.EnsureRequiredSourceUris(state);
+
+        AssertEqual(3, updated.SourceUrls.Count, "the required Dice Roller target should be inserted once");
+        AssertEqual(
+            "https://rpol.net/usermodules/diceroller.cgi?gi=80170",
+            updated.SourceUrls[updated.NextIndex],
+            "the newly required target should be the next publisher item");
+        AssertEqual(cast.AbsoluteUri, updated.SourceUrls[updated.NextIndex + 1], "the previous next target should be preserved");
+        AssertTrue(
+            ReferenceEquals(updated, RpolSnapshotUtility.EnsureRequiredSourceUris(updated)),
+            "a current publisher queue should not be rewritten");
+    }
+
+    internal static void SnapshotPublisherStatePersistsItsCursor()
+    {
+        using var directory = TemporaryDirectory.Create();
+        var statePath = Path.Combine(directory.Path, "publisher-state.json");
+        var state = RpolSnapshotUtility.AdvancePublisherState(
+            RpolSnapshotUtility.CreatePublisherState(
+            [
+                new Uri("https://rpol.net/game.php?gi=80170"),
+                new Uri("https://rpol.net/gameinfo.php?action=cast&gi=80170")
+            ]));
+
+        RpolSnapshotUtility.SavePublisherStateAsync(statePath, state).GetAwaiter().GetResult();
+        var loaded = RpolSnapshotUtility.LoadPublisherState(statePath)
+            ?? throw new InvalidOperationException("expected persisted publisher state");
+
+        AssertEqual(1, loaded.NextIndex, "the persisted publisher cursor should be retained");
+        AssertEqual(state.SourceUrls[1], loaded.SourceUrls[1], "the persisted publisher queue should be retained");
+    }
+
+    internal static void SnapshotPublisherStateRejectsInvalidCursor()
+    {
+        var state = new RpolSnapshotPublisherState(
+            1,
+            ["https://rpol.net/game.php?gi=80170"],
+            1);
+
+        var exception = AssertThrows<InvalidOperationException>(() => RpolSnapshotUtility.GetNextSourceUri(state));
+        AssertContains(exception.Message, "cursor");
+    }
+
+    internal static void SnapshotPublisherArgumentIsRecognized()
+    {
+        AssertTrue(PlayerAssistant.Program.IsPublishRpolSnapshotsArgument("--publish-rpol-snapshots"), "long snapshot argument should be recognized");
+        AssertTrue(PlayerAssistant.Program.IsPublishRpolSnapshotsArgument("/publish-rpol-snapshots"), "slash snapshot argument should be recognized");
+    }
+
+}

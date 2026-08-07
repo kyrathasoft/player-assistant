@@ -151,6 +151,10 @@ jobs:
         shell: pwsh
         run: .\verify-dotnet-dependencies.ps1
 
+      - name: Verify test harness structure
+        shell: pwsh
+        run: .\verify-test-harness-structure.ps1
+
       - name: Install Inno Setup
         shell: pwsh
         run: choco install innosetup --no-progress --yes
