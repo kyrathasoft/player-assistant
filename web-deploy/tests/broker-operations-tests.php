@@ -17,8 +17,11 @@ $backupDirectory = $root . '/backups';
 $restoreDirectory = $root . '/restore-tests';
 $offsiteDirectory = $root . '/offsite';
 $statusPath = $root . '/operations-status.json';
+$environmentPath = $root . '/operations.env';
 $originalEncryptionKey = getenv('BACKUP_ENCRYPTION_KEY');
-putenv('BACKUP_ENCRYPTION_KEY=test-backup-encryption-key-with-sufficient-entropy');
+$originalUnrelatedValue = getenv('UNRELATED_BACKUP_SETTING');
+putenv('BACKUP_ENCRYPTION_KEY');
+putenv('UNRELATED_BACKUP_SETTING');
 
 try {
     if (!mkdir($root, 0700, true) && !is_dir($root)) {
@@ -30,6 +33,12 @@ try {
     $database->exec('CREATE TABLE fixture (id INTEGER PRIMARY KEY, value TEXT NOT NULL)');
     $database->exec("INSERT INTO fixture (value) VALUES ('healthy')");
     $database = null;
+    file_put_contents(
+        $environmentPath,
+        "BACKUP_ENCRYPTION_KEY=test-backup-encryption-key-with-sufficient-entropy\n"
+            . "UNRELATED_BACKUP_SETTING=must-not-load\n",
+        LOCK_EX);
+    chmod($environmentPath, 0600);
 
     $operations = new BrokerOperations([
         'api' => ['database_path' => $databasePath],
@@ -37,6 +46,7 @@ try {
             'backup_directory' => $backupDirectory,
             'restore_test_directory' => $restoreDirectory,
             'status_path' => $statusPath,
+            'environment_file' => $environmentPath,
             'retention_count' => 2,
             'server_error_threshold' => 3,
             'server_error_window_seconds' => 900,
@@ -44,6 +54,10 @@ try {
             'offsite' => ['local_directory' => $offsiteDirectory],
         ],
     ]);
+    operationsAssert(
+        getenv('BACKUP_ENCRYPTION_KEY') === 'test-backup-encryption-key-with-sufficient-entropy',
+        'The private backup encryption key was not loaded.');
+    operationsAssert(getenv('UNRELATED_BACKUP_SETTING') === false, 'An unapproved environment key was loaded.');
 
     $maintenance = $operations->runMaintenance();
     operationsAssert($maintenance['status'] === 'ok', 'Broker maintenance did not succeed.');
@@ -76,6 +90,9 @@ try {
     putenv($originalEncryptionKey === false
         ? 'BACKUP_ENCRYPTION_KEY'
         : 'BACKUP_ENCRYPTION_KEY=' . $originalEncryptionKey);
+    putenv($originalUnrelatedValue === false
+        ? 'UNRELATED_BACKUP_SETTING'
+        : 'UNRELATED_BACKUP_SETTING=' . $originalUnrelatedValue);
     if (is_dir($root)) {
         $iterator = new RecursiveIteratorIterator(
             new RecursiveDirectoryIterator($root, FilesystemIterator::SKIP_DOTS),

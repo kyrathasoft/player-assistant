@@ -274,6 +274,7 @@ final class BrokerOperations
             'backup_directory' => dirname($this->databasePath) . '/broker-backups',
             'restore_test_directory' => dirname($this->databasePath) . '/broker-restore-tests',
             'status_path' => dirname($this->databasePath) . '/broker-operations-status.json',
+            'environment_file' => dirname(dirname($this->databasePath)) . '/.player-assistant-ftps.env',
             'retention_count' => 14,
             'server_error_threshold' => 5,
             'server_error_window_seconds' => 900,
@@ -282,6 +283,7 @@ final class BrokerOperations
             'alert_from' => '',
             'offsite' => [],
         ], is_array($config['operations'] ?? null) ? $config['operations'] : []);
+        $this->loadPrivateEnvironment((string)$this->operationsConfig['environment_file']);
         $offsite = is_array($this->operationsConfig['offsite'])
             ? $this->operationsConfig['offsite']
             : [];
@@ -303,6 +305,35 @@ final class BrokerOperations
             }
             $offsite['port'] ??= 21;
             $this->operationsConfig['offsite'] = $offsite;
+        }
+    }
+
+    private function loadPrivateEnvironment(string $path): void
+    {
+        if ($path === '' || !is_file($path) || !is_readable($path)) {
+            return;
+        }
+        $values = parse_ini_file($path, false, INI_SCANNER_RAW);
+        if (!is_array($values)) {
+            throw new RuntimeException('The private backup environment file is invalid.');
+        }
+        foreach ([
+            'BACKUP_FTPS_HOST',
+            'BACKUP_FTPS_PORT',
+            'BACKUP_FTPS_USERNAME',
+            'BACKUP_FTPS_PASSWORD',
+            'BACKUP_FTPS_REMOTE_PATH',
+            'BACKUP_ENCRYPTION_KEY',
+        ] as $name) {
+            if (getenv($name) !== false || !array_key_exists($name, $values)) {
+                continue;
+            }
+            $value = (string)$values[$name];
+            if ($value === '' || preg_match('/[\x00-\x1F\x7F]/', $value) === 1) {
+                throw new RuntimeException('The private backup environment file contains an invalid value.');
+            }
+            putenv($name . '=' . $value);
+            $_ENV[$name] = $value;
         }
     }
 
