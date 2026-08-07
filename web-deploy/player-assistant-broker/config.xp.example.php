@@ -14,7 +14,6 @@ return [
         'connect_timeout_seconds' => 3,
         'timeout_seconds' => 8,
         'maximum_response_bytes' => 524288,
-        'cache_ttl_seconds' => 300,
         'maximum_stale_seconds' => 86400,
         'awards_directory' => '/home/dh_4gg2za/player-assistant-broker/xp-awards',
         'award_groups' => [

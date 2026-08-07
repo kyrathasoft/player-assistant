@@ -42,7 +42,6 @@ function xpConfiguration(): array
         'connect_timeout_seconds' => 1,
         'timeout_seconds' => 2,
         'maximum_response_bytes' => 65536,
-        'cache_ttl_seconds' => 5,
         'maximum_stale_seconds' => 300,
     ];
 }
@@ -84,7 +83,7 @@ if (!mkdir($awardsDirectory, 0700, true) && !is_dir($awardsDirectory)) {
 try {
     $fetchCount = 0;
     $markdown = implode("\n", [
-        'As of 7.20.2026',
+        'As of 7.20.2026 (question bonus)',
         '',
         '| Name | Class | Level | XP Total |',
         '| --- | --- | ---: | ---: |',
@@ -97,6 +96,8 @@ try {
         '| [[Jelb]] | Illusionist | 4 | 12,345 |',
         '| Dorn | Fighter | 5 | 98,765 |',
         '| Max | Theurge | **3** | 6,100 |',
+        '| Borca | Fighter | 1 | 304 |',
+        '| Arilia | Feycaster | 1 | 200 |',
     ]);
     $characterMarkdown = implode("\n", [
         '| Name | Class | Level | Token | HP |',
@@ -212,6 +213,118 @@ try {
         503,
         'xp_awards_unavailable');
 
+    $dynamicAwardPath = $awardsDirectory . '/dynamic-xp.json';
+    file_put_contents($dynamicAwardPath, json_encode([[
+        'character_name' => 'Dynamic Hero',
+        'character_class' => 'Fighter',
+        'level_before_award' => 1,
+        'xp_award' => 400,
+        'xp_award_date' => '7.31.2026',
+        'level_after_award' => 1,
+    ]], JSON_THROW_ON_ERROR));
+    $dynamicMarkdown = implode("\n", [
+        'As of 8.04.2026',
+        '',
+        '| Name | Class | Level | XP Total |',
+        '| --- | --- | ---: | ---: |',
+        '| Dynamic Hero | Fighter | 2 | 600 |',
+        '',
+        'As of 7.31.2026',
+        '',
+        '| Name | Class | Level | XP Total |',
+        '| --- | --- | ---: | ---: |',
+        '| Dynamic Hero | Fighter | 1 | 400 |',
+    ]);
+    $dynamicAwardConfiguration = array_replace(xpConfiguration(), [
+        'awards_directory' => $awardsDirectory,
+        'awards_root' => $awardsRoot,
+        'award_groups' => ['dynamic-hero' => ['dynamic-xp']],
+    ]);
+    $dynamicAwardService = new XpTrackingService(
+        xpDatabase(':memory:'),
+        $dynamicAwardConfiguration,
+        static fn(string $url): string => $dynamicMarkdown);
+    $dynamicAwards = $dynamicAwardService->getAwardsForAccount([
+        'role' => 'player',
+        'character_key' => 'dynamic-hero',
+    ]);
+    $dynamicEntries = $dynamicAwards['progressions'][0]['entries'];
+    xpAssert(count($dynamicEntries) === 2, 'The live XP source did not extend the cached progression.');
+    xpAssert(
+        $dynamicEntries[1]['xp_award_date'] === '8.04.2026'
+            && $dynamicEntries[1]['xp_award'] === 200
+            && $dynamicEntries[1]['level_before_award'] === 1
+            && $dynamicEntries[1]['level_after_award'] === 2,
+        'The latest live XP total was not converted into the expected award entry.');
+    $dynamicFallbackService = new XpTrackingService(
+        xpDatabase(':memory:'),
+        $dynamicAwardConfiguration,
+        static fn(string $url): never => throw new RuntimeException('simulated upstream failure'));
+    $dynamicFallbackAwards = $dynamicFallbackService->getAwardsForAccount([
+        'role' => 'player',
+        'character_key' => 'dynamic-hero',
+    ]);
+    xpAssert(
+        count($dynamicFallbackAwards['progressions'][0]['entries']) === 2,
+        'The last live XP progression was not cached for upstream failure fallback.');
+    xpAssert(
+        is_file($awardsDirectory . '/.xp-refresh.lock'),
+        'The XP award refresh lock was not created.');
+
+    file_put_contents($dynamicAwardPath, json_encode([[
+        'character_name' => 'Dynamic Hero',
+        'character_class' => 'Fighter',
+        'level_before_award' => 1,
+        'xp_award' => 400,
+        'xp_award_date' => '7.31.2026',
+        'level_after_award' => 1,
+    ]], JSON_THROW_ON_ERROR));
+    $missingBaselineMarkdown = implode("\n", [
+        'As of 8.04.2026',
+        '| Name | Class | Level | XP Total |',
+        '| --- | --- | ---: | ---: |',
+        '| Dynamic Hero | Fighter | 2 | 600 |',
+        '',
+        'As of 7.30.2026',
+        '| Name | Class | Level | XP Total |',
+        '| --- | --- | ---: | ---: |',
+        '| Dynamic Hero | Fighter | 1 | 300 |',
+    ]);
+    $missingBaselineService = new XpTrackingService(
+        xpDatabase(':memory:'),
+        $dynamicAwardConfiguration,
+        static fn(string $url): string => $missingBaselineMarkdown);
+    $missingBaselineAwards = $missingBaselineService->getAwardsForAccount([
+        'role' => 'player',
+        'character_key' => 'dynamic-hero',
+    ]);
+    xpAssert(
+        count($missingBaselineAwards['progressions'][0]['entries']) === 1,
+        'A nonmatching historical snapshot was used as an award baseline.');
+
+    $mismatchPath = $awardsDirectory . '/mismatch-xp.json';
+    file_put_contents($mismatchPath, json_encode([[
+        'character_name' => 'Dynamic Hero',
+        'character_class' => 'Fighter',
+        'level_before_award' => 1,
+        'xp_award' => 400,
+        'xp_award_date' => '7.31.2026',
+        'level_after_award' => 1,
+    ]], JSON_THROW_ON_ERROR));
+    $mismatchService = new XpTrackingService(
+        xpDatabase(':memory:'),
+        array_replace($dynamicAwardConfiguration, [
+            'award_groups' => ['mismatch-owner' => ['mismatch-xp']],
+        ]),
+        static fn(string $url): string => $dynamicMarkdown);
+    expectXpError(
+        fn() => $mismatchService->getAwardsForAccount([
+            'role' => 'player',
+            'character_key' => 'mismatch-owner',
+        ]),
+        503,
+        'xp_awards_unavailable');
+
     $publicRootService = new XpTrackingService(
         xpDatabase(':memory:'),
         array_replace(xpConfiguration(), [
@@ -259,8 +372,20 @@ try {
         'character_key' => 'dungeon-master',
     ]);
     xpAssert($dm['scope'] === 'party', 'The Dungeon Master did not receive party-scoped XP.');
-    xpAssert(count($dm['characters']) === 3, 'The Dungeon Master did not receive every current XP row.');
-    xpAssert($fetchCount === 6, 'The validated XP, character, and class snapshots were not served from the server cache.');
+    xpAssert(count($dm['characters']) === 5, 'The Dungeon Master did not receive every current XP row.');
+    $borca = array_values(array_filter(
+        $dm['characters'],
+        static fn(array $character): bool => $character['character_name'] === 'Borca'));
+    xpAssert(
+        count($borca) === 1 && $borca[0]['hit_points'] === 0,
+        'A current XP character absent from the active roster did not receive the safe HP fallback.');
+    $arilia = array_values(array_filter(
+        $dm['characters'],
+        static fn(array $character): bool => $character['character_name'] === 'Arilia'));
+    xpAssert(
+        count($arilia) === 1 && $arilia[0]['xp_to_next_level'] === null,
+        'An unavailable class progression prevented the live XP snapshot from loading.');
+    xpAssert($fetchCount === 18, 'Each XP request did not attempt the live source before using cached data.');
 
     expectXpError(
         fn() => $service->getForAccount(['role' => 'player', 'character_key' => 'missing']),
@@ -357,6 +482,7 @@ try {
     @unlink($databasePath);
     @unlink($invalidDatabasePath);
     if (is_dir($awardsDirectory)) {
+        @unlink($awardsDirectory . '/.xp-refresh.lock');
         foreach (glob($awardsDirectory . '/*') ?: [] as $awardFile) {
             @unlink($awardFile);
         }
