@@ -70,16 +70,29 @@ function Invoke-WebRequestAllowError {
         if ($null -eq $response) {
             throw
         }
-        $reader = [IO.StreamReader]::new($response.GetResponseStream())
-        try {
-            $content = $reader.ReadToEnd()
+        if ($response.GetType().FullName -eq 'System.Net.Http.HttpResponseMessage') {
+            $content = $response.Content.ReadAsStringAsync().GetAwaiter().GetResult()
+            $responseHeaders = @{}
+            foreach ($header in $response.Headers) {
+                $responseHeaders[$header.Key] = @($header.Value) -join ', '
+            }
+            foreach ($header in $response.Content.Headers) {
+                $responseHeaders[$header.Key] = @($header.Value) -join ', '
+            }
         }
-        finally {
-            $reader.Dispose()
+        else {
+            $reader = [IO.StreamReader]::new($response.GetResponseStream())
+            try {
+                $content = $reader.ReadToEnd()
+            }
+            finally {
+                $reader.Dispose()
+            }
+            $responseHeaders = $response.Headers
         }
         return [pscustomobject]@{
             StatusCode = [int]$response.StatusCode
-            Headers = $response.Headers
+            Headers = $responseHeaders
             Content = $content
         }
     }

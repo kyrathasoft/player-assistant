@@ -38,6 +38,7 @@ $workflowPath = Join-Path $RepoRoot '.github\workflows\hardening.yml'
 $browserPackagePath = Join-Path $RepoRoot 'pwa\package.json'
 $browserTestPath = Join-Path $RepoRoot 'pwa\browser-smoke.mjs'
 $translatorWorkerTestPath = Join-Path $RepoRoot 'pwa\translator-worker-tests.mjs'
+$httpAuthTestPath = Join-Path $RepoRoot 'web-deploy\tests\run-http-auth-tests.ps1'
 $brokerOperationsPath = Join-Path $RepoRoot 'web-deploy\player-assistant-broker\BrokerOperations.php'
 $operationsConfigExamplePath = Join-Path $RepoRoot 'web-deploy\player-assistant-broker\config.operations.example.php'
 $wordCountDeploymentPath = Join-Path $RepoRoot 'web-deploy\deploy-word-count-refresh.ps1'
@@ -58,6 +59,7 @@ $requiredLockFiles = @(
 Assert-Condition -Condition (Test-Path -LiteralPath $workflowPath -PathType Leaf) -Message 'The full-regression workflow is missing.'
 
 $workflow = Get-Content -Raw -LiteralPath $workflowPath
+$httpAuthTest = Get-Content -Raw -LiteralPath $httpAuthTestPath
 Assert-Condition -Condition ($workflow.Contains('name: Full regression')) -Message 'The workflow must expose the stable Full regression check name.'
 Assert-Condition -Condition ($workflow.Contains('  full-regression:') -and $workflow.Contains('    name: Required full regression')) -Message 'The workflow must define the required full-regression job.'
 Assert-WorkflowRunCommand -WorkflowText $workflow -Command 'dotnet build .\player-assistant.csproj --configuration Release --nologo --no-restore' -Message 'The required job must build the desktop application without an implicit restore.'
@@ -98,6 +100,7 @@ for ($lineIndex = 0; $lineIndex -lt $workflowLines.Count; $lineIndex++) {
 }
 Assert-Condition -Condition ($workflow.Contains('./web-deploy/tests/publish-word-counts-tests.ps1')) -Message 'The required workflow must run the PowerShell publication test suite.'
 Assert-Condition -Condition ($workflow.Contains('./web-deploy/tests/run-http-auth-tests.ps1 -PhpPath (Get-Command php).Source')) -Message 'The required workflow must run the HTTP authentication integration suite with the setup PHP executable.'
+Assert-Condition -Condition ($httpAuthTest.Contains("FullName -eq 'System.Net.Http.HttpResponseMessage'") -and $httpAuthTest.Contains('ReadAsStringAsync()')) -Message 'The HTTP authentication suite must inspect expected error responses under PowerShell 7 HttpClient without breaking Windows PowerShell.'
 Assert-Condition -Condition ($workflow.Contains('./web-deploy/tests/backup-encryption-tests.ps1')) -Message 'The required workflow must run the broker backup encryption suite.'
 Assert-Condition -Condition (Test-Path -LiteralPath $browserPackagePath -PathType Leaf) -Message 'The browser smoke package manifest is missing.'
 Assert-Condition -Condition (Test-Path -LiteralPath $browserTestPath -PathType Leaf) -Message 'The browser smoke test is missing.'
