@@ -71,7 +71,15 @@ function Invoke-WebRequestAllowError {
             throw
         }
         if ($response.GetType().FullName -eq 'System.Net.Http.HttpResponseMessage') {
-            $content = $response.Content.ReadAsStringAsync().GetAwaiter().GetResult()
+            $content = [string]$_.ErrorDetails.Message
+            if ([string]::IsNullOrWhiteSpace($content)) {
+                try {
+                    $content = $response.Content.ReadAsStringAsync().GetAwaiter().GetResult()
+                }
+                catch [ObjectDisposedException] {
+                    $content = ''
+                }
+            }
             $responseHeaders = @{}
             foreach ($header in $response.Headers) {
                 $responseHeaders[$header.Key] = @($header.Value) -join ', '

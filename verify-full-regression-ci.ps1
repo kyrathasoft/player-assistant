@@ -100,7 +100,7 @@ for ($lineIndex = 0; $lineIndex -lt $workflowLines.Count; $lineIndex++) {
 }
 Assert-Condition -Condition ($workflow.Contains('./web-deploy/tests/publish-word-counts-tests.ps1')) -Message 'The required workflow must run the PowerShell publication test suite.'
 Assert-Condition -Condition ($workflow.Contains('./web-deploy/tests/run-http-auth-tests.ps1 -PhpPath (Get-Command php).Source')) -Message 'The required workflow must run the HTTP authentication integration suite with the setup PHP executable.'
-Assert-Condition -Condition ($httpAuthTest.Contains("FullName -eq 'System.Net.Http.HttpResponseMessage'") -and $httpAuthTest.Contains('ReadAsStringAsync()')) -Message 'The HTTP authentication suite must inspect expected error responses under PowerShell 7 HttpClient without breaking Windows PowerShell.'
+Assert-Condition -Condition ($httpAuthTest.Contains("FullName -eq 'System.Net.Http.HttpResponseMessage'") -and $httpAuthTest.Contains('$_.ErrorDetails.Message') -and $httpAuthTest.Contains('ReadAsStringAsync()')) -Message 'The HTTP authentication suite must inspect disposed error responses under PowerShell 7 without breaking Windows PowerShell.'
 Assert-Condition -Condition ($workflow.Contains('./web-deploy/tests/backup-encryption-tests.ps1')) -Message 'The required workflow must run the broker backup encryption suite.'
 Assert-Condition -Condition (Test-Path -LiteralPath $browserPackagePath -PathType Leaf) -Message 'The browser smoke package manifest is missing.'
 Assert-Condition -Condition (Test-Path -LiteralPath $browserTestPath -PathType Leaf) -Message 'The browser smoke test is missing.'
