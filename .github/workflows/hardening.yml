@@ -39,6 +39,7 @@ jobs:
           - pwa
           - php
           - browser
+          - powershell
 
     steps:
       - name: Checkout
@@ -53,11 +54,11 @@ jobs:
           cache-dependency-path: pwa/package-lock.json
 
       - name: Setup PHP
-        if: matrix.group == 'php'
+        if: matrix.group == 'php' || matrix.group == 'powershell'
         uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240 # v2
         with:
           php-version: '8.4'
-          extensions: curl, pdo_sqlite, sodium, sqlite3
+          extensions: curl, openssl, pdo_sqlite, sodium, sqlite3
 
       - name: Prepare PHP dependency cache
         if: matrix.group == 'php'
@@ -106,6 +107,14 @@ jobs:
         if: matrix.group == 'browser'
         shell: pwsh
         run: npm --prefix .\pwa test
+
+      - name: Run PowerShell deployment and HTTP authentication suites
+        if: matrix.group == 'powershell'
+        shell: pwsh
+        run: |
+          ./web-deploy/tests/backup-encryption-tests.ps1
+          ./web-deploy/tests/publish-word-counts-tests.ps1
+          ./web-deploy/tests/run-http-auth-tests.ps1
 
   # Keep this job name aligned with the required GitHub Actions check on master.
   full-regression:
@@ -375,7 +384,17 @@ jobs:
         shell: pwsh
         run: .\verify-installer-clean-machine-smoke.ps1
 
+      - name: Build ephemeral release update artifacts for untrusted events
+        if: github.event_name != 'push'
+        shell: pwsh
+        run: >
+          .\build-release-update-artifacts.ps1
+          -OutputDir $env:INSTALLER_DIR
+          -PublishDir $env:PUBLISH_DIR
+          -GenerateEphemeralSigningKey
+
       - name: Build signed release update artifacts
+        if: github.event_name == 'push'
         shell: pwsh
         env:
           UPDATE_MANIFEST_PRIVATE_KEY_XML: ${{ secrets.PLAYER_ASSISTANT_UPDATE_MANIFEST_PRIVATE_KEY_XML }}

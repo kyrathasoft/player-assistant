@@ -91,6 +91,10 @@ final class DatabaseMigrationService
                 PRIMARY KEY (token_id, window_start),
                 FOREIGN KEY (token_id) REFERENCES api_tokens(id) ON DELETE CASCADE
             );
+            CREATE TABLE IF NOT EXISTS admin_request_nonces (
+                nonce TEXT PRIMARY KEY,
+                used_at INTEGER NOT NULL
+            );
             CREATE TABLE IF NOT EXISTS audit_events (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 token_id TEXT NOT NULL,

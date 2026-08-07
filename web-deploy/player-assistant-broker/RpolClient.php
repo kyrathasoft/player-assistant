@@ -29,10 +29,6 @@ final class RpolClient
         curl_setopt($this->curl, CURLOPT_COOKIEFILE, '');
     }
 
-    public function __destruct()
-    {
-        curl_close($this->curl);
-    }
 
     public function fetchPage(string $url): array
     {
@@ -40,7 +36,14 @@ final class RpolClient
         $this->ensureConfigured();
         $this->ensureAuthenticated();
 
-        $response = $this->requestFollowingRedirects('GET', $url);
+        $response = $this->requestFollowingRedirects(
+            'GET',
+            $url,
+            null,
+            [],
+            function (string $redirectUrl): void {
+                $this->validateRedirectUrl($redirectUrl, true);
+            });
         if ($this->looksLikeLoginPage($response['body'])) {
             throw new RuntimeException('RPOL returned a login page after authentication.');
         }
@@ -68,7 +71,15 @@ final class RpolClient
         }
 
         $initialUrl = (string)$this->config['initial_url'];
-        $loginPage = $this->requestFollowingRedirects('GET', $initialUrl);
+        $this->validateRedirectUrl($initialUrl, true);
+        $loginPage = $this->requestFollowingRedirects(
+            'GET',
+            $initialUrl,
+            null,
+            [],
+            function (string $redirectUrl): void {
+                $this->validateRedirectUrl($redirectUrl, true);
+            });
         if ($this->looksLikeCloudflareChallenge($loginPage['body'])) {
             throw new RuntimeException('RPOL requires browser verification that PHP cURL cannot complete.');
         }
@@ -88,7 +99,10 @@ final class RpolClient
             'POST',
             $actionUrl,
             http_build_query($fields, '', '&', PHP_QUERY_RFC3986),
-            ['Content-Type: application/x-www-form-urlencoded']);
+            ['Content-Type: application/x-www-form-urlencoded'],
+            function (string $redirectUrl): void {
+                $this->validateRedirectUrl($redirectUrl, true);
+            });
 
         if ($this->looksLikeLoginPage($loginResponse['body'])) {
             throw new RuntimeException('RPOL rejected the configured credentials.');
@@ -168,8 +182,12 @@ final class RpolClient
         string $method,
         string $url,
         ?string $body = null,
-        array $headers = []): array
+        array $headers = [],
+        ?callable $redirectValidator = null): array
     {
+        $redirectValidator ??= function (string $redirectUrl): void {
+            $this->validateTransportUrl($redirectUrl);
+        };
         for ($redirectCount = 0; $redirectCount <= 5; $redirectCount++) {
             $this->validateTransportUrl($url);
             $response = $this->request($method, $url, $body, $headers);
@@ -187,6 +205,7 @@ final class RpolClient
             }
 
             $url = $this->resolveUrl($url, $location);
+            $redirectValidator($url);
             if (in_array($response['status'], [301, 302, 303], true)) {
                 $method = 'GET';
                 $body = null;
@@ -195,6 +214,18 @@ final class RpolClient
         }
 
         throw new RuntimeException('RPOL exceeded the redirect limit.');
+    }
+
+    private function validateRedirectUrl(string $url, bool $allowLoginEndpoint): void
+    {
+        $path = (string)parse_url($url, PHP_URL_PATH);
+        if ($allowLoginEndpoint && $path === '/login.cgi'
+            && (string)parse_url($url, PHP_URL_QUERY) === '') {
+            $this->validateTransportUrl($url);
+            return;
+        }
+
+        $this->validateTargetUrl($url);
     }
 
     private function request(string $method, string $url, ?string $body, array $headers): array

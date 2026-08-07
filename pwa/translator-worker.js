@@ -7,6 +7,7 @@ const wordPattern = /[\p{L}\p{N}&]+(?:['’\-][\p{L}\p{N}]+)*/gu;
 const normalize = (value) => value
     .normalize('NFKC')
     .trim()
+    .replace(/\s+/gu, ' ')
     .toLocaleLowerCase('en-US');
 
 const applySourceCapitalization = (source, translation) => {
@@ -101,7 +102,7 @@ const translateText = (text, dictionary, maxPhraseWords) => {
             if (!contiguous) continue;
 
             const sourcePhrase = text.slice(first.start, last.end);
-            const normalizedPhrase = normalize(sourcePhrase.replace(/\s+/gu, ' '));
+            const normalizedPhrase = normalize(sourcePhrase);
             const translated = dictionary.get(normalizedPhrase);
             if (translated !== undefined) {
                 selected = { length, last, sourcePhrase, translated };

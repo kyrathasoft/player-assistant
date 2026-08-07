@@ -74,7 +74,7 @@ foreach ($language in @('orcish', 'elvish', 'ghukliak')) {
     foreach ($property in $termProperties) {
         $phraseWords = @(($property.Name -split '\s+') | Where-Object { $_.Length -gt 0 }).Count
         $actualMaxPhraseWords = [Math]::Max($actualMaxPhraseWords, $phraseWords)
-        $normalizedTerm = $property.Name.Normalize([System.Text.NormalizationForm]::FormKC).Trim().ToLowerInvariant()
+        $normalizedTerm = (($property.Name.Normalize([System.Text.NormalizationForm]::FormKC).Trim() -split '\s+') -join ' ').ToLowerInvariant()
         Assert-Condition -Condition ($normalizedTerms.Add($normalizedTerm)) -Message "$language contains duplicate terms under translator-worker normalization: $normalizedTerm"
     }
     Assert-Condition -Condition ([int]$payload.maxPhraseWords -eq $actualMaxPhraseWords) -Message "$language maxPhraseWords does not match its terms."

@@ -51,6 +51,9 @@ final class CharacterAuthService
             'login_window_seconds' => 900,
             'login_max_failures' => 5,
             'login_lockout_seconds' => 900,
+            'audit_retention_seconds' => 90 * 86400,
+            'audit_address_mode' => 'hash',
+            'audit_address_hash_key' => '',
         ], $authConfig);
         $this->validateConfiguration();
         $this->ensureSchema();
@@ -719,12 +722,20 @@ final class CharacterAuthService
 
     private function recordAuthAudit(?string $accountId, string $remoteAddress, string $event): void
     {
+        $address = substr($remoteAddress, 0, 64);
+        if ($this->authConfig['audit_address_mode'] === 'hash') {
+            $hashKey = (string)$this->authConfig['audit_address_hash_key'];
+            if ($hashKey === '') {
+                $hashKey = hash('sha256', (string)$this->authConfig['expected_origin']);
+            }
+            $address = hash_hmac('sha256', $address, $hashKey);
+        }
         $this->database->prepare(
             'INSERT INTO auth_audit_events (account_id, occurred_at, remote_address, event)
              VALUES (?, ?, ?, ?)')
-            ->execute([$accountId, time(), substr($remoteAddress, 0, 64), $event]);
+            ->execute([$accountId, time(), $address, $event]);
         $this->database->prepare('DELETE FROM auth_audit_events WHERE occurred_at < ?')
-            ->execute([time() - (90 * 86400)]);
+            ->execute([time() - $this->authConfig['audit_retention_seconds']]);
     }
 
     private function loadAccount(string $accountId): array
@@ -858,6 +869,7 @@ final class CharacterAuthService
             'login_window_seconds',
             'login_max_failures',
             'login_lockout_seconds',
+            'audit_retention_seconds',
         ] as $key) {
             if (!is_int($this->authConfig[$key]) || $this->authConfig[$key] <= 0) {
                 throw new RuntimeException("Character authentication setting '$key' must be a positive integer.");
@@ -865,6 +877,9 @@ final class CharacterAuthService
         }
         if ($this->authConfig['absolute_timeout_seconds'] <= $this->authConfig['idle_timeout_seconds']) {
             throw new RuntimeException('The absolute session timeout must exceed the idle timeout.');
+        }
+        if (!in_array($this->authConfig['audit_address_mode'], ['hash', 'raw'], true)) {
+            throw new RuntimeException("Character authentication setting 'audit_address_mode' must be hash or raw.");
         }
     }
 

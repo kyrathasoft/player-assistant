@@ -34,6 +34,12 @@ const OFFLINE_DATA_ASSETS = [
     './data/ghukliak.json',
     './campaign-search.json'
 ];
+const canonicalRequestKey = (asset) => {
+    const url = new URL(asset, self.location.href);
+    return `${url.pathname}${url.search}`;
+};
+const SHELL_REQUEST_KEYS = new Set(SHELL_ASSETS.map(canonicalRequestKey));
+const OFFLINE_DATA_REQUEST_KEYS = new Set(OFFLINE_DATA_ASSETS.map(canonicalRequestKey));
 
 self.addEventListener('install', (event) => {
     event.waitUntil(
@@ -116,11 +122,13 @@ self.addEventListener('fetch', (event) => {
     }
 
 
-    if (url.pathname.includes('/data/')
-        || url.pathname.endsWith('/campaign-search.json')) {
+    const requestKey = `${url.pathname}${url.search}`;
+    if (OFFLINE_DATA_REQUEST_KEYS.has(requestKey)) {
         event.respondWith(cacheFirst(request, DATA_CACHE));
         return;
     }
 
-    event.respondWith(cacheFirst(request, SHELL_CACHE));
+    if (SHELL_REQUEST_KEYS.has(requestKey)) {
+        event.respondWith(cacheFirst(request, SHELL_CACHE));
+    }
 });

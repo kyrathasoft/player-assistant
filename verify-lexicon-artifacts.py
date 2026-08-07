@@ -63,7 +63,7 @@ def normalize_runtime_key(value: str, normalization: str) -> str:
     if normalization == "apostrophe-fold-trim-lower":
         return value.replace("’", "'").strip().lower()
     if normalization == "nfkc-trim-lower":
-        return unicodedata.normalize("NFKC", value).strip().lower()
+        return " ".join(unicodedata.normalize("NFKC", value).strip().lower().split())
     raise VerificationError(f"Unsupported runtime normalization: {normalization}")
 
 

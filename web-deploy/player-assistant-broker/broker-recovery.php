@@ -113,12 +113,10 @@ try {
         $httpCode = (int)curl_getinfo($curl, CURLINFO_RESPONSE_CODE);
         curl_close($curl);
         $health = is_string($body) ? json_decode($body, true) : null;
-        $refreshHealthy = !is_array($health['word_count_refresh'] ?? null)
-            || ($health['word_count_refresh']['healthy'] ?? true) !== false;
         $status['health_check'] = ($httpCode === 200
             && is_array($health)
             && ($health['status'] ?? null) === 'ok'
-            && $refreshHealthy) ? 'ok' : 'failed';
+            && (int)($health['schema_version'] ?? 0) === 7) ? 'ok' : 'failed';
         if ($status['health_check'] !== 'ok') {
             $alerts->recordHealthFailure('health_endpoint_failed', 'Broker health endpoint reported a failure.');
             throw new RuntimeException('Broker health endpoint reported a failure.');

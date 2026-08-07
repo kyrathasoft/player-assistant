@@ -37,6 +37,7 @@ function Assert-WorkflowRunCommand {
 $workflowPath = Join-Path $RepoRoot '.github\workflows\hardening.yml'
 $browserPackagePath = Join-Path $RepoRoot 'pwa\package.json'
 $browserTestPath = Join-Path $RepoRoot 'pwa\browser-smoke.mjs'
+$translatorWorkerTestPath = Join-Path $RepoRoot 'pwa\translator-worker-tests.mjs'
 $brokerOperationsPath = Join-Path $RepoRoot 'web-deploy\player-assistant-broker\BrokerOperations.php'
 $operationsConfigExamplePath = Join-Path $RepoRoot 'web-deploy\player-assistant-broker\config.operations.example.php'
 $wordCountDeploymentPath = Join-Path $RepoRoot 'web-deploy\deploy-word-count-refresh.ps1'
@@ -82,11 +83,28 @@ Assert-Condition -Condition ($brokerOperations.Contains('BACKUP_FTPS_PASSWORD') 
 Assert-Condition -Condition (!$wordCountDeployment.Contains("copy(`$configPath, `$configPath . '.bak-deploy-'") -and $wordCountDeployment.Contains("`$config['operations']['offsite'] = [")) -Message 'Deployment must scrub FTPS credentials and avoid retaining config.php copies that could contain them.'
 Assert-Condition -Condition ($wordCountDeployment.Contains("`$configBackupPatterns = [") -and $wordCountDeployment.Contains("'config.php.bak-deploy-*'") -and $wordCountDeployment.Contains("'config.php.bak-word-count-refresh-*'")) -Message 'Deployment must remove legacy config backups that may contain serialized FTPS credentials.'
 Assert-Condition -Condition ($workflow.Contains('npm ci --prefix .\pwa') -and $workflow.Contains('npm --prefix .\pwa test')) -Message 'The required job must install and run the browser-level PWA smoke tests.'
+Assert-Condition -Condition ([regex]::IsMatch($workflow, "- name: Build ephemeral release update artifacts for untrusted events[\x0D\x0A]+\s+if: github[.]event_name != 'push'[\x0D\x0A]")) -Message 'Pull-request and manually dispatched builds must use an explicit ephemeral update-manifest signing key step.'
+Assert-Condition -Condition ([regex]::IsMatch($workflow, "- name: Build signed release update artifacts[\x0D\x0A]+\s+if: github[.]event_name == 'push'[\x0D\x0A]")) -Message 'The secret-bearing release signing step must run only for protected push events.'
+$workflowLines = @($workflow -split "`n")
+for ($lineIndex = 0; $lineIndex -lt $workflowLines.Count; $lineIndex++) {
+    if ($workflowLines[$lineIndex] -notmatch '\$\{\{\s*secrets[.]') { continue }
+    $stepStart = $lineIndex
+    while ($stepStart -ge 0 -and $workflowLines[$stepStart] -notmatch '^\s{6}- name:') { $stepStart-- }
+    Assert-Condition -Condition ($stepStart -ge 0) -Message "Signing or deployment secret found outside an individually guarded step at workflow line $($lineIndex + 1)."
+    $stepEnd = $lineIndex + 1
+    while ($stepEnd -lt $workflowLines.Count -and $workflowLines[$stepEnd] -notmatch '^\s{6}- name:') { $stepEnd++ }
+    $stepBlock = $workflowLines[$stepStart..($stepEnd - 1)] -join "`n"
+    Assert-Condition -Condition ($stepBlock -match "(?m)^\s+if: github[.]event_name == 'push'\s*$") -Message "A secret-bearing workflow step can run outside protected push events near line $($lineIndex + 1)."
+}
+Assert-Condition -Condition ($workflow.Contains('./web-deploy/tests/publish-word-counts-tests.ps1')) -Message 'The required workflow must run the PowerShell publication test suite.'
+Assert-Condition -Condition ($workflow.Contains('./web-deploy/tests/run-http-auth-tests.ps1')) -Message 'The required workflow must run the HTTP authentication integration suite.'
+Assert-Condition -Condition ($workflow.Contains('./web-deploy/tests/backup-encryption-tests.ps1')) -Message 'The required workflow must run the broker backup encryption suite.'
 Assert-Condition -Condition (Test-Path -LiteralPath $browserPackagePath -PathType Leaf) -Message 'The browser smoke package manifest is missing.'
 Assert-Condition -Condition (Test-Path -LiteralPath $browserTestPath -PathType Leaf) -Message 'The browser smoke test is missing.'
+Assert-Condition -Condition (Test-Path -LiteralPath $translatorWorkerTestPath -PathType Leaf) -Message 'The translator worker runtime test is missing.'
 
 $package = Get-Content -Raw -LiteralPath $browserPackagePath | ConvertFrom-Json
-Assert-Condition -Condition ([string]$package.scripts.test -eq 'node browser-smoke.mjs') -Message 'The PWA browser smoke test script is not pinned to browser-smoke.mjs.'
+Assert-Condition -Condition ([string]$package.scripts.test -eq 'node translator-worker-tests.mjs && node browser-smoke.mjs') -Message 'The PWA test script must run translator-worker runtime and browser smoke coverage.'
 Assert-Condition -Condition (![string]::IsNullOrWhiteSpace([string]$package.devDependencies.playwright)) -Message 'The browser smoke test must declare Playwright explicitly.'
 
 Assert-Condition -Condition (Test-Path -LiteralPath $directoryBuildPropsPath -PathType Leaf) -Message 'Directory.Build.props is missing.'

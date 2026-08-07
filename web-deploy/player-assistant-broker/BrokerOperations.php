@@ -15,6 +15,93 @@ interface BrokerFtpsClient
     public function listFiles(string $directory): array;
 }
 
+final class BrokerBackupCipher
+{
+    private const MAGIC = 'PABACKUPENCV1';
+    private const IV_BYTES = 16;
+    private const MAC_BYTES = 32;
+
+    public static function encryptFile(string $sourcePath, string $destinationPath, string $secret): array
+    {
+        if (!function_exists('openssl_encrypt')) {
+            throw new RuntimeException('The PHP OpenSSL extension is required for encrypted broker backups.');
+        }
+        if (!is_file($sourcePath)) {
+            throw new RuntimeException('The plaintext broker backup does not exist.');
+        }
+        [$encryptionKey, $authenticationKey] = self::deriveKeys($secret);
+        $plaintext = file_get_contents($sourcePath);
+        if ($plaintext === false) {
+            throw new RuntimeException('Unable to read the plaintext broker backup.');
+        }
+        $iv = random_bytes(self::IV_BYTES);
+        $ciphertext = openssl_encrypt($plaintext, 'aes-256-cbc', $encryptionKey, OPENSSL_RAW_DATA, $iv);
+        if ($ciphertext === false) {
+            throw new RuntimeException('Unable to encrypt the broker backup.');
+        }
+        $payload = self::MAGIC . $iv . $ciphertext;
+        $mac = hash_hmac('sha256', $payload, $authenticationKey, true);
+        if (file_put_contents($destinationPath, $payload . $mac, LOCK_EX) === false) {
+            throw new RuntimeException('Unable to write the encrypted broker backup.');
+        }
+        chmod($destinationPath, 0600);
+        self::clear($plaintext, $encryptionKey, $authenticationKey);
+        return [
+            'format' => 'player-assistant-backup-v1',
+            'algorithm' => 'AES-256-CBC+HMAC-SHA256',
+            'bytes' => filesize($destinationPath),
+            'sha256' => hash_file('sha256', $destinationPath),
+        ];
+    }
+
+    public static function decryptFile(string $sourcePath, string $destinationPath, string $secret): void
+    {
+        if (!function_exists('openssl_decrypt')) {
+            throw new RuntimeException('The PHP OpenSSL extension is required for encrypted broker backups.');
+        }
+        [$encryptionKey, $authenticationKey] = self::deriveKeys($secret);
+        $document = file_get_contents($sourcePath);
+        $minimumLength = strlen(self::MAGIC) + self::IV_BYTES + self::MAC_BYTES + 1;
+        if ($document === false || strlen($document) < $minimumLength || !str_starts_with($document, self::MAGIC)) {
+            throw new RuntimeException('The encrypted broker backup format is invalid.');
+        }
+        $payload = substr($document, 0, -self::MAC_BYTES);
+        $actualMac = substr($document, -self::MAC_BYTES);
+        $expectedMac = hash_hmac('sha256', $payload, $authenticationKey, true);
+        if (!hash_equals($expectedMac, $actualMac)) {
+            throw new RuntimeException('The encrypted broker backup authentication failed.');
+        }
+        $offset = strlen(self::MAGIC);
+        $iv = substr($payload, $offset, self::IV_BYTES);
+        $ciphertext = substr($payload, $offset + self::IV_BYTES);
+        $plaintext = openssl_decrypt($ciphertext, 'aes-256-cbc', $encryptionKey, OPENSSL_RAW_DATA, $iv);
+        if ($plaintext === false || file_put_contents($destinationPath, $plaintext, LOCK_EX) === false) {
+            throw new RuntimeException('Unable to decrypt the broker backup.');
+        }
+        chmod($destinationPath, 0600);
+        self::clear($document, $plaintext, $encryptionKey, $authenticationKey);
+    }
+
+    private static function deriveKeys(string $secret): array
+    {
+        if (strlen($secret) < 32) {
+            throw new RuntimeException('BACKUP_ENCRYPTION_KEY must contain at least 32 characters.');
+        }
+        $material = hash('sha512', $secret, true);
+        return [substr($material, 0, 32), substr($material, 32, 32)];
+    }
+
+    private static function clear(string &...$values): void
+    {
+        if (!function_exists('sodium_memzero')) {
+            return;
+        }
+        foreach ($values as &$value) {
+            sodium_memzero($value);
+        }
+    }
+}
+
 final class CurlBrokerFtpsClient implements BrokerFtpsClient
 {
     private string $host;
@@ -448,15 +535,53 @@ final class BrokerOperations
 
     private function copyOffsite(string $backupPath, string $metadataPath): void
     {
+        $secret = (string)(getenv('BACKUP_ENCRYPTION_KEY') ?: '');
+        if ($secret === '') {
+            throw new RuntimeException('BACKUP_ENCRYPTION_KEY is required for offsite broker backups.');
+        }
+        $stagingDirectory = sys_get_temp_dir() . '/pa-backup-encrypted-' . bin2hex(random_bytes(6));
+        if (!mkdir($stagingDirectory, 0700, true) && !is_dir($stagingDirectory)) {
+            throw new RuntimeException('Unable to create encrypted backup staging.');
+        }
+        $encryptedPath = $stagingDirectory . '/' . basename($backupPath) . '.enc';
+        $encryptedMetadataPath = $encryptedPath . '.json';
+        try {
+            $encryption = BrokerBackupCipher::encryptFile($backupPath, $encryptedPath, $secret);
+            $plaintextMetadata = json_decode((string)file_get_contents($metadataPath), true);
+            $this->writePrivateJson($encryptedMetadataPath, [
+                'schema_version' => 2,
+                'created_at' => is_array($plaintextMetadata)
+                    ? ($plaintextMetadata['created_at'] ?? gmdate(DATE_ATOM))
+                    : gmdate(DATE_ATOM),
+                'file' => basename($encryptedPath),
+                'bytes' => $encryption['bytes'],
+                'sha256' => $encryption['sha256'],
+                'encryption' => [
+                    'format' => $encryption['format'],
+                    'algorithm' => $encryption['algorithm'],
+                ],
+            ]);
+            $this->transferOffsite($encryptedPath, $encryptedMetadataPath);
+        } finally {
+            @unlink($encryptedPath);
+            @unlink($encryptedMetadataPath);
+            @rmdir($stagingDirectory);
+        }
+    }
+
+    private function transferOffsite(string $backupPath, string $metadataPath): void
+    {
         $offsite = is_array($this->operationsConfig['offsite'])
             ? $this->operationsConfig['offsite']
             : [];
         if (isset($offsite['local_directory']) && (string)$offsite['local_directory'] !== '') {
             $directory = $this->prepareDirectory((string)$offsite['local_directory']);
             foreach ([$backupPath, $metadataPath] as $path) {
-                if (!copy($path, $directory . '/' . basename($path))) {
+                $destination = $directory . '/' . basename($path);
+                if (!copy($path, $destination)) {
                     throw new RuntimeException('Unable to copy the broker backup to the configured offsite directory.');
                 }
+                chmod($destination, 0600);
             }
             return;
         }
@@ -489,7 +614,7 @@ final class BrokerOperations
         $this->runCommand($scpCommand);
         $retention = max(1, (int)$this->operationsConfig['retention_count']);
         $cleanupCommand = 'find ' . escapeshellarg(rtrim($directory, '/'))
-            . ' -maxdepth 1 -type f -name ' . escapeshellarg('broker-*.sqlite')
+            . ' -maxdepth 1 -type f -name ' . escapeshellarg('broker-*.sqlite.enc')
             . " -printf '%T@ %p\\n' | sort -nr | tail -n +" . ($retention + 1)
             . " | cut -d' ' -f2- | while IFS= read -r file; do rm -f -- \"\$file\" \"\$file.json\"; done";
         $this->runCommand(
@@ -568,7 +693,7 @@ final class BrokerOperations
         $backups = array_values(array_filter(
             $names,
             static fn(string $name): bool => preg_match(
-                '/^broker-\d{8}T\d{6}Z-[a-f0-9]{8}\.sqlite$/D',
+                '/^broker-\d{8}T\d{6}Z-[a-f0-9]{8}\.sqlite\.enc$/D',
                 $name) === 1));
         rsort($backups, SORT_STRING);
         $retention = max(1, (int)$this->operationsConfig['retention_count']);
@@ -731,16 +856,22 @@ final class BrokerOperations
         $offsite = is_array($this->operationsConfig['offsite'])
             ? $this->operationsConfig['offsite']
             : [];
+        $hasEncryptionKey = strlen((string)(getenv('BACKUP_ENCRYPTION_KEY') ?: '')) >= 32;
+        if (isset($offsite['local_directory']) && trim((string)$offsite['local_directory']) !== '') {
+            return $hasEncryptionKey;
+        }
         if (strtolower((string)($offsite['transport'] ?? '')) === 'ftps') {
             $port = (int)($offsite['port'] ?? 0);
-            return trim((string)($offsite['host'] ?? '')) !== ''
+            return $hasEncryptionKey
+                && trim((string)($offsite['host'] ?? '')) !== ''
                 && $port > 0
                 && $port <= 65535
                 && trim((string)($offsite['username'] ?? '')) !== ''
                 && (string)($offsite['password'] ?? '') !== ''
                 && trim((string)($offsite['directory'] ?? '')) !== '';
         }
-        return (string)($offsite['ssh_target'] ?? '') !== ''
+        return $hasEncryptionKey
+            && (string)($offsite['ssh_target'] ?? '') !== ''
             && (string)($offsite['directory'] ?? '') !== '';
     }
 

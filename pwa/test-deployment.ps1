@@ -153,16 +153,10 @@ try {
         $healthResponse = $client.GetAsync([uri]::new($apiBaseUri, 'health')).GetAwaiter().GetResult()
         $healthPayload = $healthResponse.Content.ReadAsStringAsync().GetAwaiter().GetResult() | ConvertFrom-Json
         Assert-Condition -Condition $healthResponse.IsSuccessStatusCode -Message 'The broker health endpoint is unavailable.'
-        Assert-Condition -Condition ([int]$healthPayload.schema_version -eq 6) -Message 'The broker health schema is not version 6.'
-        Assert-Condition -Condition ($healthPayload.PSObject.Properties.Name -contains 'xp_tracking_configured') -Message 'The live broker does not expose XP tracking readiness.'
-        Assert-Condition -Condition ($healthPayload.xp_tracking_configured -eq $true) -Message 'XP tracking is not configured on the live broker.'
-        Assert-Condition -Condition ($healthPayload.PSObject.Properties.Name -contains 'word_count_snapshot_available') -Message 'The live broker does not expose word-count snapshot readiness.'
-        Assert-Condition -Condition ($healthPayload.PSObject.Properties.Name -contains 'word_count_refresh') -Message 'The live broker does not expose word-count refresh readiness.'
-        Assert-Condition -Condition ($healthPayload.word_count_refresh.configured -eq $true) -Message 'Word-count refresh is not configured on the live broker.'
-        Assert-Condition -Condition ($healthPayload.word_count_refresh.signing_configured -eq $true) -Message 'Signed word-count refresh is not configured on the live broker.'
-        Assert-Condition -Condition ($healthPayload.word_count_refresh.healthy -eq $true) -Message 'The live word-count refresh is unhealthy.'
-        Assert-Condition -Condition (-not [string]::IsNullOrWhiteSpace([string]$healthPayload.word_count_refresh.last_scheduler_run_at)) -Message 'The live broker does not report a word-count scheduler run.'
-        Assert-Condition -Condition ($healthPayload.quest_request_workflow_configured -eq $true) -Message 'The live broker does not expose quest-request workflow readiness.'
+        Assert-Condition -Condition ([int]$healthPayload.schema_version -eq 7) -Message 'The broker liveness schema is not version 7.'
+        Assert-Condition -Condition ($healthPayload.status -eq 'ok') -Message 'The broker liveness endpoint is not healthy.'
+        Assert-Condition -Condition ($healthPayload.PSObject.Properties.Name -notcontains 'xp_tracking_configured') -Message 'The public broker health endpoint disclosed XP readiness.'
+        Assert-Condition -Condition ($healthPayload.PSObject.Properties.Name -notcontains 'character_account_count') -Message 'The public broker health endpoint disclosed account counts.'
 
         $xpResponse = $client.GetAsync([uri]::new($apiBaseUri, 'xp')).GetAwaiter().GetResult()
         $xpPayload = $xpResponse.Content.ReadAsStringAsync().GetAwaiter().GetResult() | ConvertFrom-Json

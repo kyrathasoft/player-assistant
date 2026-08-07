@@ -19,6 +19,27 @@ function routingAssert(bool $condition, string $message): void
     }
 }
 
+function routingAdminHeaders(string $method, string $route, array $body, string $key): array
+{
+    $timestamp = (string)time();
+    $nonce = bin2hex(random_bytes(16));
+    $bodyJson = json_encode(
+        $body,
+        JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_PRESERVE_ZERO_FRACTION | JSON_THROW_ON_ERROR);
+    $canonical = implode("\n", [
+        $timestamp,
+        $nonce,
+        strtoupper($method),
+        $route,
+        hash('sha256', $bodyJson),
+    ]);
+    return [
+        'admin-timestamp' => $timestamp,
+        'admin-nonce' => $nonce,
+        'admin-signature' => hash_hmac('sha256', $canonical, $key),
+    ];
+}
+
 $databasePath = tempnam(sys_get_temp_dir(), 'pa-broker-route-');
 $snapshotDirectory = sys_get_temp_dir() . '/pa-broker-snapshots-' . bin2hex(random_bytes(6));
 $snapshotSigningKey = random_bytes(32);
@@ -194,7 +215,6 @@ try {
         $wordCountFetcher,
         $questDataPath);
     $session = [];
-    $adminHeaders = ['admin-key' => $config['api']['admin_key']];
     if (!mkdir($snapshotDirectory, 0700, true) && !is_dir($snapshotDirectory)) {
         throw new RuntimeException('Unable to create the snapshot retention test directory.');
     }
@@ -230,16 +250,67 @@ try {
         '/v1/snapshots/page',
         [],
         $snapshot,
-        $adminHeaders,
+        routingAdminHeaders('PUT', '/v1/snapshots/page', $snapshot, $config['api']['admin_key']),
         '192.0.2.30',
         $session);
     routingAssert($storedSnapshot['status'] === 201, 'The signed RPOL snapshot upload failed.');
     routingAssert(!file_exists($staleSnapshotPath), 'The expired RPOL snapshot was not pruned.');
     $currentSnapshotPath = $snapshotDirectory . '/' . hash('sha256', $snapshotSourceUrl) . '.json';
     routingAssert(is_file($currentSnapshotPath), 'The current RPOL snapshot was pruned.');
+    $publicHealth = $broker->dispatch('GET', '/v1/health', [], [], [], '192.0.2.30', $session);
+    routingAssert(
+        $publicHealth['body']['schema_version'] === 7
+            && !isset($publicHealth['body']['character_account_count']),
+        'The public health route disclosed operational details.');
+    $healthHeaders = routingAdminHeaders('GET', '/v1/admin/health', [], $config['api']['admin_key']);
+    $adminHealth = $broker->dispatch(
+        'GET',
+        '/v1/admin/health',
+        [],
+        [],
+        $healthHeaders,
+        '192.0.2.30',
+        $session);
+    routingAssert(
+        $adminHealth['body']['schema_version'] === 7
+            && $adminHealth['body']['quest_request_workflow_configured'] === true,
+        'The admin health route did not expose readiness details.');
+    try {
+        $broker->dispatch(
+            'GET',
+            '/v1/admin/health',
+            [],
+            [],
+            $healthHeaders,
+            '192.0.2.30',
+            $session);
+        throw new RuntimeException('The admin signature nonce was replayable.');
+    } catch (BrokerHttpException $exception) {
+        routingAssert(
+            $exception->status === 403 && $exception->errorName === 'admin_replay',
+            'The admin signature replay was rejected with the wrong response.');
+    }
 
     $rpolClient = new RpolClient($config['rpol']);
     $rpolClient->validateTargetUrl('https://rpol.net/usermodules/diceroller.cgi?gi=80170');
+    $redirectValidator = new ReflectionMethod(RpolClient::class, 'validateRedirectUrl');
+    $redirectValidator->setAccessible(true);
+    $redirectValidator->invoke($rpolClient, 'https://rpol.net/login.cgi', true);
+    try {
+        $redirectValidator->invoke($rpolClient, 'https://rpol.net/admin.cgi', true);
+        throw new RuntimeException('The RPOL redirect allowlist accepted an unsupported endpoint.');
+    } catch (InvalidArgumentException) {
+    }
+    try {
+        $redirectValidator->invoke($rpolClient, 'https://rpol.net/login.cgi?next=/admin.cgi', true);
+        throw new RuntimeException('The RPOL redirect allowlist accepted a login query redirect.');
+    } catch (InvalidArgumentException) {
+    }
+    try {
+        $redirectValidator->invoke($rpolClient, 'https://rpol.net/usermodules/diceroller.cgi?gi=99999', true);
+        throw new RuntimeException('The RPOL redirect allowlist accepted a different game.');
+    } catch (InvalidArgumentException) {
+    }
     try {
         $rpolClient->validateTargetUrl('https://rpol.net/usermodules/diceroller.cgi?gi=80170&admin=1');
         throw new RuntimeException('The Dice Roller allowlist accepted an unsupported query parameter.');
@@ -313,7 +384,7 @@ try {
         '/v1/admin/word-counts',
         [],
         $wordCountSnapshot,
-        $adminHeaders,
+        routingAdminHeaders('PUT', '/v1/admin/word-counts', $wordCountSnapshot, $config['api']['admin_key']),
         '192.0.2.30',
         $session);
     routingAssert($storedWordCounts['status'] === 201, 'The word-count upload route failed.');
@@ -328,7 +399,7 @@ try {
             '/v1/admin/word-counts',
             [],
             $invalidSnapshot,
-            $adminHeaders,
+            routingAdminHeaders('PUT', '/v1/admin/word-counts', $invalidSnapshot, $config['api']['admin_key']),
             '192.0.2.30',
             $session);
         throw new RuntimeException('The word-count upload route accepted an invalid snapshot.');
@@ -338,17 +409,18 @@ try {
             'The word-count upload route rejected invalid data with the wrong response.');
     }
 
+    $createdBody = [
+        'character_name' => 'Routing Hero',
+        'password' => 'routing password',
+        'character_key' => 'routing',
+        'role' => 'player',
+    ];
     $created = $broker->dispatch(
         'POST',
         '/v1/admin/character-accounts',
         [],
-        [
-            'character_name' => 'Routing Hero',
-            'password' => 'routing password',
-            'character_key' => 'routing',
-            'role' => 'player',
-        ],
-        $adminHeaders,
+        $createdBody,
+        routingAdminHeaders('POST', '/v1/admin/character-accounts', $createdBody, $config['api']['admin_key']),
         '192.0.2.30',
         $session);
     routingAssert($created['status'] === 201, 'The account administration route did not create an account.');
@@ -587,34 +659,36 @@ try {
             'A player quest decision failed with the wrong response.');
     }
 
+    $createdDungeonMasterBody = [
+        'character_name' => 'Dungeon Master',
+        'password' => 'dungeon master routing password',
+        'character_key' => 'dungeon-master',
+        'role' => 'dm',
+    ];
     $createdDungeonMaster = $broker->dispatch(
         'POST',
         '/v1/admin/character-accounts',
         [],
-        [
-            'character_name' => 'Dungeon Master',
-            'password' => 'dungeon master routing password',
-            'character_key' => 'dungeon-master',
-            'role' => 'dm',
-        ],
-        $adminHeaders,
+        $createdDungeonMasterBody,
+        routingAdminHeaders('POST', '/v1/admin/character-accounts', $createdDungeonMasterBody, $config['api']['admin_key']),
         '192.0.2.30',
         $session);
     routingAssert(
         $createdDungeonMaster['status'] === 201,
         'The routing test could not create a Dungeon Master account.');
 
+    $createdSecondPlayerBody = [
+        'character_name' => 'Second Routing Hero',
+        'password' => 'second routing password',
+        'character_key' => 'second-routing-hero',
+        'role' => 'player',
+    ];
     $createdSecondPlayer = $broker->dispatch(
         'POST',
         '/v1/admin/character-accounts',
         [],
-        [
-            'character_name' => 'Second Routing Hero',
-            'password' => 'second routing password',
-            'character_key' => 'second-routing-hero',
-            'role' => 'player',
-        ],
-        $adminHeaders,
+        $createdSecondPlayerBody,
+        routingAdminHeaders('POST', '/v1/admin/character-accounts', $createdSecondPlayerBody, $config['api']['admin_key']),
         '192.0.2.30',
         $session);
     routingAssert(
@@ -1068,21 +1142,25 @@ try {
         [],
         '192.0.2.30',
         $session);
-    routingAssert($health['body']['schema_version'] === 6, 'The broker schema version was not advanced.');
-    routingAssert($health['body']['character_account_count'] === 3, 'The health route account count was incorrect.');
-    routingAssert($health['body']['xp_tracking_configured'] === true, 'The health route XP configuration state was incorrect.');
     routingAssert(
-        $health['body']['word_count_snapshot_available'] === true,
-        'The health route word-count snapshot state was incorrect.');
+        $health['body']['schema_version'] === 7
+            && $health['body']['status'] === 'ok'
+            && !isset($health['body']['character_account_count']),
+        'The public health route disclosed operational details.');
+    $finalAdminHealth = $broker->dispatch(
+        'GET',
+        '/v1/admin/health',
+        [],
+        [],
+        routingAdminHeaders('GET', '/v1/admin/health', [], $config['api']['admin_key']),
+        '192.0.2.30',
+        $session);
     routingAssert(
-        $health['body']['word_count_refresh']['configured'] === true
-            && $health['body']['word_count_refresh']['signing_configured'] === true
-            && $health['body']['word_count_refresh']['healthy'] === true
-            && $health['body']['word_count_refresh']['last_success_at'] !== null,
-        'The health route word-count refresh state was incorrect.');
-    routingAssert(
-        $health['body']['quest_request_workflow_configured'] === true,
-        'The health route quest-request workflow state was incorrect.');
+        $finalAdminHealth['body']['schema_version'] === 7
+            && $finalAdminHealth['body']['character_account_count'] === 3
+            && $finalAdminHealth['body']['xp_tracking_configured'] === true
+            && $finalAdminHealth['body']['quest_request_workflow_configured'] === true,
+        'The admin health route readiness state was incorrect.');
 
     fwrite(STDOUT, "Broker authentication routing tests passed.\n");
 } finally {

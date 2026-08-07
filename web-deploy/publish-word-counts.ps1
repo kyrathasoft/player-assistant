@@ -62,6 +62,39 @@ $snapshot = [ordered]@{
     ooc = [ordered]@{ files = $OocFiles; words = $OocWords }
 }
 
+function New-BrokerAdminHeaders {
+    param(
+        [Parameter(Mandatory = $true)][string]$Method,
+        [Parameter(Mandatory = $true)][string]$Route,
+        [Parameter(Mandatory = $true)][string]$BodyJson,
+        [Parameter(Mandatory = $true)][string]$Key
+    )
+    $timestamp = [DateTimeOffset]::UtcNow.ToUnixTimeSeconds().ToString()
+    $nonce = [Guid]::NewGuid().ToString('N')
+    $sha = [Security.Cryptography.SHA256]::Create()
+    try {
+        $bodyHashBytes = $sha.ComputeHash([Text.Encoding]::UTF8.GetBytes($BodyJson))
+    }
+    finally {
+        $sha.Dispose()
+    }
+    $bodyHash = [BitConverter]::ToString($bodyHashBytes).Replace('-', '').ToLowerInvariant()
+    $canonical = "$timestamp`n$nonce`n$($Method.ToUpperInvariant())`n$Route`n$bodyHash"
+    $hmac = [Security.Cryptography.HMACSHA256]::new([Text.Encoding]::UTF8.GetBytes($Key))
+    try {
+        $signature = [BitConverter]::ToString(
+            $hmac.ComputeHash([Text.Encoding]::UTF8.GetBytes($canonical))).Replace('-', '').ToLowerInvariant()
+    }
+    finally {
+        $hmac.Dispose()
+    }
+    return @{
+        'X-Broker-Admin-Timestamp' = $timestamp
+        'X-Broker-Admin-Nonce' = $nonce
+        'X-Broker-Admin-Signature' = $signature
+    }
+}
+
 $keyPointer = [IntPtr]::Zero
 $plainAdminKey = $null
 $localSourceTemp = $null
@@ -90,7 +123,7 @@ try {
             -Method Put `
             -Uri $ApiUrl `
             -ContentType 'application/json' `
-            -Headers @{ 'X-Broker-Admin-Key' = $plainAdminKey } `
+            -Headers (New-BrokerAdminHeaders -Method 'PUT' -Route '/v1/admin/word-counts' -BodyJson $snapshotJson -Key $plainAdminKey) `
             -MaximumRedirection 0 `
             -TimeoutSec 30 `
             -Body $snapshotJson

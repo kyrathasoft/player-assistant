@@ -84,6 +84,12 @@ if (!mkdir($awardsDirectory, 0700, true) && !is_dir($awardsDirectory)) {
 try {
     $fetchCount = 0;
     $markdown = implode("\n", [
+        'As of 7.20.2026',
+        '',
+        '| Name | Class | Level | XP Total |',
+        '| --- | --- | ---: | ---: |',
+        '| Jelb | Illusionist | 3 | 1 |',
+        '',
         'As of 7.23.2026',
         '',
         '| Name | Class | Level | XP Total |',
@@ -91,11 +97,6 @@ try {
         '| [[Jelb]] | Illusionist | 4 | 12,345 |',
         '| Dorn | Fighter | 5 | 98,765 |',
         '| Max | Theurge | **3** | 6,100 |',
-        '',
-        'As of 7.20.2026',
-        '| Name | Class | Level | XP Total |',
-        '| --- | --- | ---: | ---: |',
-        '| Jelb | Illusionist | 3 | 1 |',
     ]);
     $characterMarkdown = implode("\n", [
         '| Name | Class | Level | Token | HP |',

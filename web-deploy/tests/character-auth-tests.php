@@ -43,6 +43,9 @@ try {
         'login_window_seconds' => 300,
         'login_max_failures' => 2,
         'login_lockout_seconds' => 300,
+        'audit_retention_seconds' => 3600,
+        'audit_address_mode' => 'hash',
+        'audit_address_hash_key' => 'test-audit-key',
     ]);
 
     $legacyPassword = 'correct horse battery staple';
@@ -455,6 +458,21 @@ try {
     assertTrue(in_array('login_success', $auditEvents, true), 'Successful login audit event was missing.');
     assertTrue(in_array('login_failure', $auditEvents, true), 'Failed login audit event was missing.');
     assertTrue(in_array('logout', $auditEvents, true), 'Logout audit event was missing.');
+    $auditAddresses = $database->query('SELECT remote_address FROM auth_audit_events')->fetchAll(PDO::FETCH_COLUMN);
+    assertTrue(
+        count($auditAddresses) > 0
+            && array_reduce($auditAddresses, static fn(bool $valid, string $address): bool =>
+                $valid && preg_match('/^[a-f0-9]{64}$/', $address) === 1, true),
+        'Authentication audit addresses were not pseudonymized.');
+    $database->exec("INSERT INTO auth_audit_events (account_id, occurred_at, remote_address, event) VALUES (NULL, 0, 'old', 'old')");
+    $service->login(
+        ['character_name' => 'Test Hero', 'password' => $legacyPassword],
+        '192.0.2.10',
+        'https://example.test',
+        $session);
+    assertTrue(
+        (int)$database->query("SELECT COUNT(*) FROM auth_audit_events WHERE event = 'old'")->fetchColumn() === 0,
+        'Expired authentication audit events were not removed.');
 
     fwrite(STDOUT, "Character authentication tests passed.\n");
 } finally {
