@@ -16,6 +16,7 @@ return [
         'backup_directory' => '/home/dh_4gg2za/player-assistant-broker/broker-backups',
         'restore_test_directory' => '/home/dh_4gg2za/player-assistant-broker/broker-restore-tests',
         'status_path' => '/home/dh_4gg2za/player-assistant-broker/broker-operations-status.json',
+        'environment_file' => '/home/dh_4gg2za/.player-assistant-ftps.env',
         'retention_count' => 14,
         'server_error_threshold' => 5,
         'server_error_window_seconds' => 900,
