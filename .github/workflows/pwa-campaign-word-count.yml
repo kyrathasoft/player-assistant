@@ -1,0 +1,57 @@
+name: Refresh PWA campaign word count
+
+on:
+  # GitHub Actions cron is UTC. Running at both UTC hours lets the script
+  # select 07:00 in America/Chicago across standard and daylight time.
+  schedule:
+    - cron: '0 12,13 * * 5'
+  workflow_dispatch:
+    inputs:
+      force:
+        description: 'Refresh immediately instead of waiting for the Friday 07:00 Central window'
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  contents: write
+
+concurrency:
+  group: pwa-campaign-word-count-refresh
+  cancel-in-progress: false
+
+jobs:
+  refresh:
+    name: Refresh campaign word count
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: true
+
+      - name: Refresh the PWA campaign search index
+        shell: pwsh
+        env:
+          FORCE_REFRESH: ${{ inputs.force || 'false' }}
+        run: |
+          if ($env:FORCE_REFRESH -eq 'true') {
+            .\pwa\refresh-campaign-search-scheduled.ps1 -Force
+          }
+          else {
+            .\pwa\refresh-campaign-search-scheduled.ps1
+          }
+
+      - name: Commit refreshed index
+        shell: pwsh
+        run: |
+          if (git diff --quiet -- .\pwa\campaign-search.json) {
+            Write-Output 'The campaign search index is unchanged.'
+            exit 0
+          }
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -- .\pwa\campaign-search.json
+          git commit -m 'chore(pwa): refresh campaign word count'
+          git push

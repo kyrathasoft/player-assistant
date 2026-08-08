@@ -148,6 +148,11 @@ self.addEventListener('fetch', (event) => {
         return;
     }
 
+    if (url.pathname.endsWith('/campaign-search.json')) {
+        event.respondWith(networkFirstData(request));
+        return;
+    }
+
 
     const requestKey = `${url.pathname}${url.search}`;
     if (OFFLINE_DATA_REQUEST_KEYS.has(requestKey)) {
