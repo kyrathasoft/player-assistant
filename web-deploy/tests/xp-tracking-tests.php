@@ -71,6 +71,49 @@ if (($argv[1] ?? '') === 'lock-reader') {
     exit(0);
 }
 
+if (($argv[1] ?? '') === 'crash-writer') {
+    $awardsRootArgument = (string)($argv[2] ?? '');
+    $awardsDirectoryArgument = (string)($argv[3] ?? '');
+    $crashMarkdown = implode("\n", [
+        'As of 8.01.2026',
+        '| Name | Class | Level | XP Total |',
+        '| --- | --- | ---: | ---: |',
+        '| Alpha Hero | Fighter | 1 | 150 |',
+        '| Beta Hero | Fighter | 1 | 150 |',
+        '',
+        'As of 7.31.2026',
+        '| Name | Class | Level | XP Total |',
+        '| --- | --- | ---: | ---: |',
+        '| Alpha Hero | Fighter | 1 | 100 |',
+        '| Beta Hero | Fighter | 1 | 100 |',
+    ]);
+    $crashPromotionCount = 0;
+    $crashService = new XpTrackingService(
+        xpDatabase(':memory:'),
+        array_replace(xpConfiguration(), [
+            'awards_root' => $awardsRootArgument,
+            'awards_directory' => $awardsDirectoryArgument,
+            'award_groups' => [
+                'dynamic-hero' => ['dynamic-xp'],
+                'atomic-owner' => ['alpha-xp', 'beta-xp'],
+            ],
+        ]),
+        static fn(string $url): string => $crashMarkdown,
+        static function (string $temporaryPath, string $targetPath) use (
+            &$crashPromotionCount): bool {
+            $crashPromotionCount++;
+            if ($crashPromotionCount === 2) {
+                exit(91);
+            }
+            return rename($temporaryPath, $targetPath);
+        });
+    $crashService->getAwardsForAccount([
+        'role' => 'player',
+        'character_key' => 'atomic-owner',
+    ]);
+    exit(92);
+}
+
 $xpTrackingReflection = new ReflectionClass(XpTrackingService::class);
 $serverProgressionEntryLimit = $xpTrackingReflection->getConstant(
     'MAXIMUM_AWARD_PROGRESSION_ENTRIES');
@@ -98,6 +141,7 @@ $databasePath = tempnam(sys_get_temp_dir(), 'pa-xp-test-');
 $invalidDatabasePath = tempnam(sys_get_temp_dir(), 'pa-xp-invalid-');
 $awardsRoot = sys_get_temp_dir() . '/pa-xp-private-root-' . bin2hex(random_bytes(6));
 $awardsDirectory = $awardsRoot . '/xp-awards';
+$awardStatePath = $awardsDirectory . '/.xp-award-state.json';
 if ($databasePath === false || $invalidDatabasePath === false) {
     throw new RuntimeException('Unable to create the XP test databases.');
 }
@@ -238,6 +282,21 @@ try {
         503,
         'xp_awards_unavailable');
 
+    $reservedKeyService = new XpTrackingService(
+        xpDatabase(':memory:'),
+        array_replace(xpConfiguration(), [
+            'awards_directory' => $awardsDirectory,
+            'awards_root' => $awardsRoot,
+            'award_groups' => ['reserved-owner' => ['cumulative-state']],
+        ]));
+    expectXpError(
+        fn() => $reservedKeyService->getAwardsForAccount([
+            'role' => 'player',
+            'character_key' => 'reserved-owner',
+        ]),
+        503,
+        'xp_awards_unavailable');
+
     $dynamicAwardPath = $awardsDirectory . '/dynamic-xp.json';
     file_put_contents($dynamicAwardPath, json_encode([[
         'character_name' => 'Dynamic Hero',
@@ -335,6 +394,7 @@ try {
         'xp_award_date' => '7.31.2026',
         'level_after_award' => 1,
     ]], JSON_THROW_ON_ERROR));
+    @unlink($awardStatePath);
     $sameDateMarkdown = implode("\n", [
         'As of 7.31.2026',
         '| Name | Class | Level | XP Total |',
@@ -351,10 +411,61 @@ try {
     ]);
     $sameDateEntries = $sameDateAwards['progressions'][0]['entries'];
     xpAssert(
-        count($sameDateEntries) === 2
-            && $sameDateEntries[1]['xp_award'] === 50
-            && $sameDateEntries[1]['xp_award_date'] === '7.31.2026',
-        'A later cumulative XP increase on the same date was not recorded.');
+        count($sameDateEntries) === 1,
+        'Initial cumulative XP state migration created a spurious same-date award.');
+    $sameDateState = json_decode(
+        (string)file_get_contents($awardStatePath),
+        true,
+        16,
+        JSON_THROW_ON_ERROR);
+    xpAssert(
+        ($sameDateState['progressions']['dynamic-xp']['source_date'] ?? '') === '7.31.2026'
+            && ($sameDateState['progressions']['dynamic-xp']['xp_total'] ?? -1) === 450,
+        'Initial cumulative XP state was not persisted.');
+
+    $sameDateFollowupMarkdown = str_replace('450', '500', $sameDateMarkdown);
+    $sameDateFollowupService = new XpTrackingService(
+        xpDatabase(':memory:'),
+        $dynamicAwardConfiguration,
+        static fn(string $url): string => $sameDateFollowupMarkdown);
+    $sameDateFollowupAwards = $sameDateFollowupService->getAwardsForAccount([
+        'role' => 'player',
+        'character_key' => 'dynamic-hero',
+    ]);
+    $sameDateFollowupEntries = $sameDateFollowupAwards['progressions'][0]['entries'];
+    xpAssert(
+        count($sameDateFollowupEntries) === 2
+            && $sameDateFollowupEntries[1]['xp_award'] === 50
+            && $sameDateFollowupEntries[1]['xp_award_date'] === '7.31.2026',
+        'A post-migration cumulative XP increase on the same date was not recorded.');
+
+    $trustedAwardState = (string)file_get_contents($awardStatePath);
+    $trustedDynamicProgression = (string)file_get_contents($dynamicAwardPath);
+    $tamperedAwardState = json_decode($trustedAwardState, true, 16, JSON_THROW_ON_ERROR);
+    $tamperedAwardState['progressions']['dynamic-xp']['xp_total']++;
+    file_put_contents(
+        $awardStatePath,
+        json_encode($tamperedAwardState, JSON_THROW_ON_ERROR));
+    $tamperedPromotionCount = 0;
+    $tamperedStateService = new XpTrackingService(
+        xpDatabase(':memory:'),
+        $dynamicAwardConfiguration,
+        static fn(string $url): string => str_replace('450', '550', $sameDateMarkdown),
+        static function (string $temporaryPath, string $targetPath) use (
+            &$tamperedPromotionCount): bool {
+            $tamperedPromotionCount++;
+            return rename($temporaryPath, $targetPath);
+        });
+    $tamperedStateAwards = $tamperedStateService->getAwardsForAccount([
+        'role' => 'player',
+        'character_key' => 'dynamic-hero',
+    ]);
+    xpAssert(
+        $tamperedPromotionCount === 0
+            && count($tamperedStateAwards['progressions'][0]['entries']) === 2
+            && file_get_contents($dynamicAwardPath) === $trustedDynamicProgression,
+        'A cumulative XP sidecar detached from its progression was trusted.');
+    file_put_contents($awardStatePath, $trustedAwardState);
 
     $baselineDynamicEntries = [[
         'character_name' => 'Dynamic Hero',
@@ -440,11 +551,14 @@ try {
     $atomicBefore = array_map(
         static fn(string $path): string => (string)file_get_contents($path),
         $atomicPaths);
+    $atomicStateBefore = (string)file_get_contents($awardStatePath);
+    $atomicAwardGroups = $dynamicAwardConfiguration['award_groups'];
+    $atomicAwardGroups['atomic-owner'] = array_keys($atomicPaths);
     $promotionCount = 0;
     $atomicService = new XpTrackingService(
         xpDatabase(':memory:'),
         array_replace($dynamicAwardConfiguration, [
-            'award_groups' => ['atomic-owner' => array_keys($atomicPaths)],
+            'award_groups' => $atomicAwardGroups,
         ]),
         static fn(string $url): string => $atomicMarkdown,
         static function (string $temporaryPath, string $targetPath) use (&$promotionCount): bool {
@@ -461,9 +575,71 @@ try {
             'A failed multi-progression refresh exposed a mixed cache generation.');
     }
     xpAssert(
+        $promotionCount === 2
+            && file_get_contents($awardStatePath) === $atomicStateBefore,
+        'A failed multi-progression refresh did not restore the cumulative state.');
+    xpAssert(
         (glob($awardsDirectory . '/.xp-cache-*') ?: []) === []
-            && (glob($awardsDirectory . '/*.rollback-*') ?: []) === [],
+            && (glob($awardsDirectory . '/*.rollback-*') ?: []) === []
+            && (glob($awardsDirectory . '/.xp-award-state.json.rollback-*') ?: []) === [],
         'A failed multi-progression refresh left staging or rollback artifacts.');
+
+    $stateFailureService = new XpTrackingService(
+        xpDatabase(':memory:'),
+        array_replace($dynamicAwardConfiguration, ['award_groups' => $atomicAwardGroups]),
+        static fn(string $url): string => $atomicMarkdown,
+        static function (string $temporaryPath, string $targetPath): bool {
+            return basename($targetPath) === '.xp-award-state.json'
+                ? false
+                : rename($temporaryPath, $targetPath);
+        });
+    $stateFailureService->getAwardsForAccount([
+        'role' => 'player',
+        'character_key' => 'atomic-owner',
+    ]);
+    foreach ($atomicPaths as $progressionKey => $atomicPath) {
+        xpAssert(
+            file_get_contents($atomicPath) === $atomicBefore[$progressionKey],
+            'A sidecar promotion failure did not restore an XP progression.');
+    }
+    xpAssert(
+        file_get_contents($awardStatePath) === $atomicStateBefore,
+        'A sidecar promotion failure did not restore the prior cumulative state.');
+
+    $crashProcess = proc_open(
+        [PHP_BINARY, __FILE__, 'crash-writer', $awardsRoot, $awardsDirectory],
+        [1 => ['pipe', 'w'], 2 => ['pipe', 'w']],
+        $crashPipes,
+        __DIR__);
+    xpAssert(is_resource($crashProcess), 'The crash-recovery writer could not be started.');
+    foreach ($crashPipes as $crashPipe) {
+        stream_get_contents($crashPipe);
+        fclose($crashPipe);
+    }
+    xpAssert(proc_close($crashProcess) === 91, 'The crash-recovery writer did not stop mid-commit.');
+    xpAssert(
+        is_file($awardsDirectory . '/.xp-award-transaction.json'),
+        'The interrupted XP transaction did not preserve its recovery journal.');
+    $recoveryService = new XpTrackingService(
+        xpDatabase(':memory:'),
+        array_replace($dynamicAwardConfiguration, ['award_groups' => $atomicAwardGroups]),
+        static function (string $url): string {
+            throw new RuntimeException('Simulated source outage after process interruption.');
+        });
+    $recoveredAwards = $recoveryService->getAwardsForAccount([
+        'role' => 'player',
+        'character_key' => 'atomic-owner',
+    ]);
+    xpAssert(count($recoveredAwards['progressions']) === 2, 'Recovered XP progressions were unavailable.');
+    foreach ($atomicPaths as $progressionKey => $atomicPath) {
+        xpAssert(
+            file_get_contents($atomicPath) === $atomicBefore[$progressionKey],
+            'Crash recovery did not restore an original XP progression.');
+    }
+    xpAssert(
+        file_get_contents($awardStatePath) === $atomicStateBefore
+            && !is_file($awardsDirectory . '/.xp-award-transaction.json'),
+        'Crash recovery did not restore the cumulative XP state or clear its journal.');
 
     $lockHandle = fopen($awardsDirectory . '/.xp-refresh.lock', 'c');
     xpAssert(is_resource($lockHandle), 'The XP refresh lock fixture could not be opened.');
@@ -769,6 +945,7 @@ try {
     @unlink($invalidDatabasePath);
     if (is_dir($awardsDirectory)) {
         @unlink($awardsDirectory . '/.xp-refresh.lock');
+        @unlink($awardStatePath);
         foreach (glob($awardsDirectory . '/*') ?: [] as $awardFile) {
             @unlink($awardFile);
         }

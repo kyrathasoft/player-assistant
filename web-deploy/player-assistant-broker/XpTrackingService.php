@@ -134,6 +134,7 @@ final class XpTrackingService
                 $progressionKeys,
                 LOCK_EX,
                 function () use ($progressionKeys, $snapshots): array {
+                    $awardState = $this->loadAwardState();
                     $progressions = array_map(
                         fn(string $progressionKey): array => [
                             'character_key' => $progressionKey,
@@ -141,13 +142,17 @@ final class XpTrackingService
                         ],
                         $progressionKeys);
                     foreach ($progressions as &$progression) {
-                        $progression['entries'] = $this->refreshAwardProgression(
+                        $refreshed = $this->refreshAwardProgression(
                             $progression['character_key'],
                             $progression['entries'],
-                            $snapshots);
+                            $snapshots,
+                            $awardState['progressions'][$progression['character_key']] ?? null);
+                        $progression['entries'] = $refreshed['entries'];
+                        $awardState['progressions'][$progression['character_key']] =
+                            $refreshed['state'];
                     }
                     unset($progression);
-                    $this->storeAwardProgressions($progressions);
+                    $this->storeAwardProgressions($progressions, $awardState);
                     return $progressions;
                 });
         } catch (Throwable) {
@@ -165,7 +170,7 @@ final class XpTrackingService
     {
         return $this->withAwardLock(
             $progressionKeys,
-            LOCK_SH,
+            LOCK_EX,
             fn(): array => array_map(
                 fn(string $progressionKey): array => [
                     'character_key' => $progressionKey,
@@ -186,11 +191,86 @@ final class XpTrackingService
             if (!flock($lockHandle, $lockType)) {
                 throw new RuntimeException('The XP award refresh lock could not be acquired.');
             }
+            if ($lockType === LOCK_EX) {
+                $this->recoverAwardTransaction();
+            }
             return $action();
         } finally {
             @flock($lockHandle, LOCK_UN);
             fclose($lockHandle);
         }
+    }
+
+    private function loadAwardState(): array
+    {
+        $path = $this->awardStatePath();
+        if (!is_file($path)) {
+            return ['schema_version' => 1, 'progressions' => []];
+        }
+        $resolvedPath = realpath($path);
+        $directory = $this->awardDirectoryPath();
+        if ($resolvedPath === false
+            || is_link($path)
+            || !$this->pathIsWithin($resolvedPath, $directory)) {
+            throw new RuntimeException('The cumulative XP award state path is invalid.');
+        }
+        $size = filesize($resolvedPath);
+        if (!is_int($size) || $size < 2 || $size > 1048576) {
+            throw new RuntimeException('The cumulative XP award state is invalid.');
+        }
+        $contents = file_get_contents($resolvedPath);
+        $state = is_string($contents)
+            ? json_decode($contents, true, 16, JSON_THROW_ON_ERROR)
+            : null;
+        if (!is_array($state)
+            || array_keys($state) !== ['schema_version', 'progressions']
+            || $state['schema_version'] !== 1
+            || !is_array($state['progressions'])) {
+            throw new RuntimeException('The cumulative XP award state is invalid.');
+        }
+        $configuredProgressionKeys = [];
+        foreach ($this->validatedAwardGroups() as $groupProgressionKeys) {
+            foreach ($groupProgressionKeys as $configuredProgressionKey) {
+                $configuredProgressionKeys[$configuredProgressionKey] = true;
+            }
+        }
+        foreach ($state['progressions'] as $progressionKey => $progressionState) {
+            if (!is_string($progressionKey)
+                || preg_match('/^[a-z0-9]+(?:-[a-z0-9]+)*$/', $progressionKey) !== 1
+                || !isset($configuredProgressionKeys[$progressionKey])
+                || !is_array($progressionState)
+                || array_keys($progressionState) !== [
+                    'source_date',
+                    'xp_total',
+                    'level',
+                    'state_digest',
+                ]
+                || !is_string($progressionState['source_date'])
+                || !is_int($progressionState['xp_total'])
+                || $progressionState['xp_total'] < 0
+                || !is_int($progressionState['level'])
+                || $progressionState['level'] < 0
+                || !is_string($progressionState['state_digest'])
+                || preg_match('/^[a-f0-9]{64}$/', $progressionState['state_digest']) !== 1) {
+                throw new RuntimeException('The cumulative XP award state is invalid.');
+            }
+            $this->parseXpDate($progressionState['source_date']);
+        }
+        return $state;
+    }
+
+    private function awardStatePath(): string
+    {
+        return $this->awardDirectoryPath() . DIRECTORY_SEPARATOR . '.xp-award-state.json';
+    }
+
+    private function pathIsWithin(string $path, string $directory): bool
+    {
+        $prefix = rtrim($directory, '/\\') . DIRECTORY_SEPARATOR;
+        if (DIRECTORY_SEPARATOR === '\\') {
+            return str_starts_with(strtolower($path), strtolower($prefix));
+        }
+        return str_starts_with($path, $prefix);
     }
 
     private function validatedAwardGroups(): array
@@ -218,6 +298,7 @@ final class XpTrackingService
             foreach ($progressionKeys as $progressionKey) {
                 if (!is_string($progressionKey)
                     || preg_match('/^[a-z0-9]+(?:-[a-z0-9]+)*$/', $progressionKey) !== 1
+                    || $progressionKey === 'cumulative-state'
                     || in_array($progressionKey, $keys, true)) {
                     throw new BrokerHttpException(
                         503,
@@ -238,9 +319,7 @@ final class XpTrackingService
         $resolvedPath = realpath($path);
         if ($resolvedPath === false
             || !is_file($resolvedPath)
-            || !str_starts_with(
-                $resolvedPath,
-                rtrim($directory, '/\\') . DIRECTORY_SEPARATOR)) {
+            || !$this->pathIsWithin($resolvedPath, $directory)) {
             throw new BrokerHttpException(
                 503,
                 'xp_awards_unavailable',
@@ -336,15 +415,30 @@ final class XpTrackingService
     private function refreshAwardProgression(
         string $progressionKey,
         array $entries,
-        array $snapshots): array
+        array $snapshots,
+        ?array $state): array
     {
         $lastEntry = $entries[array_key_last($entries)];
         $characterKey = $this->characterKeyForName((string)$lastEntry['character_name']);
         $lastAwardDate = $this->parseXpDate((string)$lastEntry['xp_award_date']);
-        $cachedXpTotal = $this->awardProgressionTotal($entries, $progressionKey);
-        $previousCharacter = null;
-        $baselineFound = false;
+        if ($state !== null
+            && !hash_equals(
+                (string)$state['state_digest'],
+                $this->awardStateDigest($progressionKey, $state, $entries))) {
+            throw new RuntimeException(
+                "The cumulative XP state does not match progression '$progressionKey'.");
+        }
+        $cursorDate = $state === null
+            ? $lastAwardDate
+            : $this->parseXpDate((string)$state['source_date']);
+        if ($cursorDate < $lastAwardDate) {
+            throw new RuntimeException(
+                "The cumulative XP state predates progression '$progressionKey'.");
+        }
 
+        $previousCharacter = null;
+        $cursorFound = false;
+        $nextState = $state;
         foreach ($snapshots as $snapshot) {
             $currentCharacter = null;
             foreach ($snapshot['characters'] as $character) {
@@ -353,37 +447,44 @@ final class XpTrackingService
                     break;
                 }
             }
-            if ($snapshot['date'] < $lastAwardDate) {
+            if ($snapshot['date'] < $cursorDate) {
                 continue;
             }
-            if ($snapshot['date'] == $lastAwardDate) {
+            if ($snapshot['date'] == $cursorDate) {
                 if ($currentCharacter === null) {
                     throw new RuntimeException(
                         "The cached XP progression '$progressionKey' has no live-source baseline.");
                 }
-                $sameDateAward = (int)$currentCharacter['xp_total'] - $cachedXpTotal;
-                if ($sameDateAward < 0) {
-                    throw new RuntimeException(
-                        "The live XP total decreased for progression '$progressionKey'.");
-                }
-                if ($sameDateAward > 0) {
-                    $entries[] = [
-                        'character_name' => (string)$lastEntry['character_name'],
-                        'character_class' => (string)$currentCharacter['character_class'],
-                        'level_before_award' => (int)$lastEntry['level_after_award'],
-                        'xp_award' => $sameDateAward,
-                        'xp_award_date' => (string)$snapshot['date_text'],
-                        'level_after_award' => (int)$currentCharacter['level'],
-                    ];
+                if ($state !== null) {
+                    $sameDateAward = (int)$currentCharacter['xp_total'] - (int)$state['xp_total'];
+                    if ($sameDateAward < 0) {
+                        throw new RuntimeException(
+                            "The live XP total decreased for progression '$progressionKey'.");
+                    }
+                    if ($sameDateAward > 0) {
+                        $entries[] = [
+                            'character_name' => (string)$lastEntry['character_name'],
+                            'character_class' => (string)$currentCharacter['character_class'],
+                            'level_before_award' => (int)$state['level'],
+                            'xp_award' => $sameDateAward,
+                            'xp_award_date' => (string)$snapshot['date_text'],
+                            'level_after_award' => (int)$currentCharacter['level'],
+                        ];
+                    }
                 }
                 $previousCharacter = $currentCharacter;
-                $baselineFound = true;
+                $cursorFound = true;
+                $nextState = [
+                    'source_date' => (string)$snapshot['date_text'],
+                    'xp_total' => (int)$currentCharacter['xp_total'],
+                    'level' => (int)$currentCharacter['level'],
+                ];
                 continue;
             }
             if ($currentCharacter === null) {
                 continue;
             }
-            if (!$baselineFound || $previousCharacter === null) {
+            if (!$cursorFound || $previousCharacter === null) {
                 throw new RuntimeException(
                     "The cached XP progression '$progressionKey' has no live-source baseline.");
             }
@@ -403,8 +504,13 @@ final class XpTrackingService
                 ];
             }
             $previousCharacter = $currentCharacter;
+            $nextState = [
+                'source_date' => (string)$snapshot['date_text'],
+                'xp_total' => (int)$currentCharacter['xp_total'],
+                'level' => (int)$currentCharacter['level'],
+            ];
         }
-        if (!$baselineFound) {
+        if (!$cursorFound || $nextState === null) {
             throw new RuntimeException(
                 "The cached XP progression '$progressionKey' has no live-source baseline.");
         }
@@ -412,101 +518,361 @@ final class XpTrackingService
             throw new RuntimeException(
                 "The refreshed XP progression '$progressionKey' contains too many entries.");
         }
-        return $entries;
+        $nextState['state_digest'] = $this->awardStateDigest(
+            $progressionKey,
+            $nextState,
+            $entries);
+        return ['entries' => $entries, 'state' => $nextState];
     }
 
-    private function awardProgressionTotal(array $entries, string $progressionKey): int
+    private function awardStateDigest(
+        string $progressionKey,
+        array $state,
+        array $entries): string
     {
-        $total = 0;
-        foreach ($entries as $entry) {
-            $award = (int)$entry['xp_award'];
-            if ($award > PHP_INT_MAX - $total) {
-                throw new RuntimeException(
-                    "The cached XP progression '$progressionKey' total is too large.");
-            }
-            $total += $award;
-        }
-        return $total;
+        return hash('sha256', json_encode(
+            [
+                'progression_key' => $progressionKey,
+                'source_date' => $state['source_date'],
+                'xp_total' => $state['xp_total'],
+                'level' => $state['level'],
+                'entries' => $entries,
+            ],
+            JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR));
     }
 
-    private function storeAwardProgressions(array $progressions): void
+    private function storeAwardProgressions(array $progressions, array $awardState): void
     {
-        $staged = [];
+        $transactionId = bin2hex(random_bytes(16));
+        $items = [];
+        $journalWritten = false;
+        $journalWasWritten = false;
+        $commitSynchronized = false;
         try {
-            foreach ($progressions as $progression) {
+            foreach ($progressions as $index => $progression) {
                 $progressionKey = (string)$progression['character_key'];
-                $path = $this->awardProgressionPath($progressionKey);
-                $contents = json_encode(
-                    $progression['entries'],
+                $items[] = $this->stageAwardTransactionItem(
+                    $transactionId,
+                    (int)$index,
+                    $progressionKey,
+                    $this->awardProgressionPath($progressionKey),
+                    json_encode(
+                        $progression['entries'],
+                        JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE
+                            | JSON_THROW_ON_ERROR) . "\n");
+            }
+
+            $statePath = $this->awardStatePath();
+            $items[] = $this->stageAwardTransactionItem(
+                $transactionId,
+                count($items),
+                'cumulative-state',
+                $statePath,
+                json_encode(
+                    $awardState,
                     JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE
-                        | JSON_THROW_ON_ERROR) . "\n";
-                $temporaryPath = tempnam(dirname($path), '.xp-cache-');
-                if ($temporaryPath === false) {
-                    throw new RuntimeException('The XP progression cache could not be staged.');
-                }
-                $staged[] = [
-                    'progression_key' => $progressionKey,
-                    'path' => $path,
-                    'temporary_path' => $temporaryPath,
-                    'backup_path' => $path . '.rollback-' . bin2hex(random_bytes(8)),
-                    'backed_up' => false,
-                ];
-                $written = file_put_contents($temporaryPath, $contents, LOCK_EX);
-                if ($written !== strlen($contents)) {
-                    throw new RuntimeException(
-                        "The refreshed XP progression '$progressionKey' could not be cached.");
-                }
-                @chmod($temporaryPath, 0600);
-            }
+                        | JSON_THROW_ON_ERROR) . "\n");
+            $this->writeAwardTransactionJournal(
+                $transactionId,
+                array_map(
+                    static fn(array $item): string => (string)$item['progression_key'],
+                    $items),
+                array_map(
+                    static fn(array $item): bool => (bool)$item['had_original'],
+                    $items));
+            $journalWritten = true;
+            $journalWasWritten = true;
 
-            try {
-                foreach ($staged as &$item) {
-                    if (!rename($item['path'], $item['backup_path'])) {
-                        throw new RuntimeException(
-                            "The XP progression '{$item['progression_key']}' could not be backed up.");
-                    }
-                    $item['backed_up'] = true;
-                    if (!$this->promoteAwardFile($item['temporary_path'], $item['path'])) {
-                        throw new RuntimeException(
-                            "The refreshed XP progression '{$item['progression_key']}' could not be promoted.");
-                    }
-                }
-                unset($item);
-            } catch (Throwable $exception) {
-                $rollbackFailed = false;
-                for ($index = count($staged) - 1; $index >= 0; $index--) {
-                    if (!$staged[$index]['backed_up']) {
-                        continue;
-                    }
-                    if (is_file($staged[$index]['path'])
-                        && !@unlink($staged[$index]['path'])) {
-                        $rollbackFailed = true;
-                        continue;
-                    }
-                    if (!is_file($staged[$index]['backup_path'])
-                        || !@rename($staged[$index]['backup_path'], $staged[$index]['path'])) {
-                        $rollbackFailed = true;
-                    }
-                }
-                if ($rollbackFailed) {
+            foreach ($items as $item) {
+                if (is_file($item['path']) && !unlink($item['path'])) {
                     throw new RuntimeException(
-                        'The XP progression cache transaction could not be rolled back.',
+                        "The XP cache item '{$item['progression_key']}' could not be replaced.");
+                }
+                if (!$this->promoteAwardFile($item['temporary_path'], $item['path'])) {
+                    throw new RuntimeException(
+                        "The XP cache item '{$item['progression_key']}' could not be promoted.");
+                }
+                @chmod($item['path'], 0600);
+            }
+            $this->synchronizeAwardDirectory();
+
+            $journalPath = $this->awardTransactionJournalPath();
+            if (!unlink($journalPath)) {
+                throw new RuntimeException('The XP cache transaction could not be committed.');
+            }
+            // Journal deletion plus directory sync is the commit point. A surviving journal
+            // intentionally rolls the generation back so the next live refresh can retry it.
+            // Every promoted target was synchronized before deletion, so a sync error here
+            // leaves either the complete new generation or a recoverable old generation.
+            $journalWritten = false;
+            $this->synchronizeAwardDirectory();
+            $commitSynchronized = true;
+            foreach ($items as $item) {
+                if ($item['had_original']) {
+                    @unlink($item['backup_path']);
+                }
+            }
+            $this->synchronizeAwardDirectory();
+        } catch (Throwable $exception) {
+            if ($journalWritten) {
+                try {
+                    $this->recoverAwardTransaction();
+                } catch (Throwable $rollbackException) {
+                    throw new RuntimeException(
+                        'The XP cache transaction could not be rolled back.',
                         0,
-                        $exception);
+                        $rollbackException);
                 }
-                throw $exception;
             }
-
-            foreach ($staged as $item) {
-                @unlink($item['backup_path']);
-            }
+            throw $exception;
         } finally {
-            foreach ($staged as $item) {
+            foreach ($items as $item) {
                 if (is_file($item['temporary_path'])) {
                     @unlink($item['temporary_path']);
                 }
+                if ((!$journalWasWritten || $commitSynchronized)
+                    && is_file($item['backup_path'])) {
+                    @unlink($item['backup_path']);
+                }
             }
         }
+    }
+
+    private function stageAwardTransactionItem(
+        string $transactionId,
+        int $index,
+        string $progressionKey,
+        string $path,
+        string $contents): array
+    {
+        $directory = $this->awardDirectoryPath();
+        $temporaryPath = $directory . DIRECTORY_SEPARATOR
+            . '.xp-cache-' . $transactionId . '-' . $index;
+        $backupPath = $path . '.rollback-' . $transactionId;
+        $hadOriginal = is_file($path);
+        if (file_exists($temporaryPath) || file_exists($backupPath)) {
+            throw new RuntimeException('The XP cache transaction paths already exist.');
+        }
+        try {
+            $written = file_put_contents($temporaryPath, $contents, LOCK_EX);
+            if ($written !== strlen($contents)) {
+                throw new RuntimeException(
+                    "The XP cache item '$progressionKey' could not be staged.");
+            }
+            @chmod($temporaryPath, 0600);
+            $this->synchronizeAwardFile($temporaryPath);
+            if ($hadOriginal) {
+                if (!copy($path, $backupPath)) {
+                    throw new RuntimeException(
+                        "The XP cache item '$progressionKey' could not be backed up.");
+                }
+                @chmod($backupPath, 0600);
+                $this->synchronizeAwardFile($backupPath);
+            }
+        } catch (Throwable $exception) {
+            @unlink($temporaryPath);
+            @unlink($backupPath);
+            throw $exception;
+        }
+        return [
+            'progression_key' => $progressionKey,
+            'path' => $path,
+            'temporary_path' => $temporaryPath,
+            'backup_path' => $backupPath,
+            'had_original' => $hadOriginal,
+        ];
+    }
+
+    private function synchronizeAwardFile(string $path): void
+    {
+        if (!function_exists('fsync')) {
+            throw new RuntimeException('XP cache synchronization is unavailable.');
+        }
+        $handle = fopen($path, 'r+b');
+        if ($handle === false) {
+            throw new RuntimeException('An XP cache transaction file could not be synchronized.');
+        }
+        try {
+            if (!fflush($handle) || !fsync($handle)) {
+                throw new RuntimeException('An XP cache transaction file could not be synchronized.');
+            }
+        } finally {
+            fclose($handle);
+        }
+    }
+
+    private function synchronizeAwardDirectory(): void
+    {
+        if (DIRECTORY_SEPARATOR === '\\') {
+            return;
+        }
+        if (!function_exists('fsync')) {
+            throw new RuntimeException('XP cache directory synchronization is unavailable.');
+        }
+        $handle = fopen($this->awardDirectoryPath(), 'r');
+        if ($handle === false) {
+            throw new RuntimeException('The XP cache directory could not be synchronized.');
+        }
+        try {
+            if (!fsync($handle)) {
+                throw new RuntimeException('The XP cache directory could not be synchronized.');
+            }
+        } finally {
+            fclose($handle);
+        }
+    }
+
+    private function writeAwardTransactionJournal(
+        string $transactionId,
+        array $progressionKeys,
+        array $hadOriginal): void
+    {
+        $path = $this->awardTransactionJournalPath();
+        $temporaryPath = $path . '.tmp-' . $transactionId;
+        $contents = json_encode([
+            'schema_version' => 1,
+            'transaction_id' => $transactionId,
+            'progression_keys' => $progressionKeys,
+            'had_original' => $hadOriginal,
+        ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR) . "\n";
+        $handle = fopen($temporaryPath, 'x+b');
+        if ($handle === false) {
+            throw new RuntimeException('The XP cache transaction journal could not be staged.');
+        }
+        try {
+            if (fwrite($handle, $contents) !== strlen($contents) || !fflush($handle)) {
+                throw new RuntimeException('The XP cache transaction journal could not be written.');
+            }
+            if (function_exists('fsync') && !fsync($handle)) {
+                throw new RuntimeException('The XP cache transaction journal could not be synchronized.');
+            }
+        } catch (Throwable $exception) {
+            fclose($handle);
+            @unlink($temporaryPath);
+            throw $exception;
+        } finally {
+            if (is_resource($handle)) {
+                fclose($handle);
+            }
+        }
+        @chmod($temporaryPath, 0600);
+        if (!rename($temporaryPath, $path)) {
+            @unlink($temporaryPath);
+            throw new RuntimeException('The XP cache transaction journal could not be promoted.');
+        }
+        @chmod($path, 0600);
+        $this->synchronizeAwardDirectory();
+    }
+
+    private function recoverAwardTransaction(): void
+    {
+        $journalPath = $this->awardTransactionJournalPath();
+        if (!is_file($journalPath)) {
+            $this->cleanupStaleAwardTransactionArtifacts();
+            return;
+        }
+        if (is_link($journalPath)) {
+            throw new RuntimeException('The XP cache transaction journal path is invalid.');
+        }
+        $journalSize = filesize($journalPath);
+        if (!is_int($journalSize) || $journalSize < 2 || $journalSize > 1048576) {
+            throw new RuntimeException('The XP cache transaction journal is invalid.');
+        }
+        $contents = file_get_contents($journalPath);
+        $journal = is_string($contents)
+            ? json_decode($contents, true, 8, JSON_THROW_ON_ERROR)
+            : null;
+        if (!is_array($journal)
+            || array_keys($journal) !== [
+                'schema_version',
+                'transaction_id',
+                'progression_keys',
+                'had_original',
+            ]
+            || $journal['schema_version'] !== 1
+            || !is_string($journal['transaction_id'])
+            || preg_match('/^[a-f0-9]{32}$/', $journal['transaction_id']) !== 1
+            || !is_array($journal['progression_keys'])
+            || !is_array($journal['had_original'])
+            || count($journal['progression_keys']) !== count($journal['had_original'])
+            || $journal['progression_keys'] === []) {
+            throw new RuntimeException('The XP cache transaction journal is invalid.');
+        }
+
+        $configuredProgressionKeys = [];
+        foreach ($this->validatedAwardGroups() as $groupProgressionKeys) {
+            foreach ($groupProgressionKeys as $configuredProgressionKey) {
+                $configuredProgressionKeys[$configuredProgressionKey] = true;
+            }
+        }
+        if (count(array_unique($journal['progression_keys']))
+                !== count($journal['progression_keys'])
+            || end($journal['progression_keys']) !== 'cumulative-state') {
+            throw new RuntimeException('The XP cache transaction journal is invalid.');
+        }
+        $directory = $this->awardDirectoryPath();
+        foreach ($journal['progression_keys'] as $index => $progressionKey) {
+            $isState = $progressionKey === 'cumulative-state';
+            if (!is_string($progressionKey)
+                || (!$isState && !isset($configuredProgressionKeys[$progressionKey]))
+                || !is_bool($journal['had_original'][$index])) {
+                throw new RuntimeException('The XP cache transaction journal is invalid.');
+            }
+            $path = $isState
+                ? $this->awardStatePath()
+                : $directory . DIRECTORY_SEPARATOR . $progressionKey . '.json';
+            $backupPath = $path . '.rollback-' . $journal['transaction_id'];
+            $temporaryPath = $directory . DIRECTORY_SEPARATOR
+                . '.xp-cache-' . $journal['transaction_id'] . '-' . $index;
+            if ($journal['had_original'][$index]) {
+                if (!is_file($backupPath)) {
+                    throw new RuntimeException('The XP cache transaction backup is unavailable.');
+                }
+                if (is_file($path) && !unlink($path)) {
+                    throw new RuntimeException('The XP cache transaction target could not be restored.');
+                }
+                if (!copy($backupPath, $path)) {
+                    throw new RuntimeException('The XP cache transaction backup could not be restored.');
+                }
+                @chmod($path, 0600);
+                $this->synchronizeAwardFile($path);
+            } elseif (is_file($path) && !unlink($path)) {
+                throw new RuntimeException('The XP cache transaction target could not be removed.');
+            }
+            if (is_file($temporaryPath)) {
+                @unlink($temporaryPath);
+            }
+        }
+        $this->synchronizeAwardDirectory();
+        if (!unlink($journalPath)) {
+            throw new RuntimeException('The XP cache transaction journal could not be cleared.');
+        }
+        $this->synchronizeAwardDirectory();
+        $this->cleanupStaleAwardTransactionArtifacts();
+    }
+
+    private function cleanupStaleAwardTransactionArtifacts(): void
+    {
+        $directory = $this->awardDirectoryPath();
+        $patterns = [
+            $directory . DIRECTORY_SEPARATOR . '.xp-cache-*',
+            $directory . DIRECTORY_SEPARATOR . '*.json.rollback-*',
+            $directory . DIRECTORY_SEPARATOR . '.xp-award-state.json.rollback-*',
+            $directory . DIRECTORY_SEPARATOR . '.xp-award-transaction.json.tmp-*',
+        ];
+        foreach ($patterns as $pattern) {
+            foreach (glob($pattern) ?: [] as $path) {
+                if (is_file($path) && !is_link($path)) {
+                    @unlink($path);
+                }
+            }
+        }
+    }
+
+    private function awardTransactionJournalPath(): string
+    {
+        return $this->awardDirectoryPath()
+            . DIRECTORY_SEPARATOR . '.xp-award-transaction.json';
     }
 
     private function promoteAwardFile(string $temporaryPath, string $targetPath): bool
@@ -524,9 +890,7 @@ final class XpTrackingService
             rtrim($directory, '/\\') . DIRECTORY_SEPARATOR . $progressionKey . '.json');
         if ($resolvedPath === false
             || !is_file($resolvedPath)
-            || !str_starts_with(
-                $resolvedPath,
-                rtrim($directory, '/\\') . DIRECTORY_SEPARATOR)) {
+            || !$this->pathIsWithin($resolvedPath, $directory)) {
             throw new BrokerHttpException(
                 503,
                 'xp_awards_unavailable',
@@ -544,9 +908,7 @@ final class XpTrackingService
             || !is_dir($directory)
             || !is_dir($root)
             || $directory === rtrim($root, '/\\')
-            || !str_starts_with(
-                $directory . DIRECTORY_SEPARATOR,
-                rtrim($root, '/\\') . DIRECTORY_SEPARATOR)) {
+            || !$this->pathIsWithin($directory, $root)) {
             throw new BrokerHttpException(
                 503,
                 'xp_awards_unavailable',
