@@ -146,6 +146,8 @@
                         <button class="secondary-button" id="xp-refresh" type="button" hidden>Refresh XP</button>
                     </div>
                     <p class="xp-status" id="xp-status" role="status" aria-live="polite">Log in to view your current XP total.</p>
+                    <small class="data-freshness" id="xp-freshness" aria-live="polite" hidden></small>
+                    <button class="secondary-button protected-retry" id="xp-retry" type="button" hidden>Retry</button>
                     <div class="xp-character-summary" id="xp-character-summary" hidden>
                         <span class="xp-character-name" id="xp-character-name"></span>
                         <strong id="xp-total"></strong>
@@ -230,6 +232,8 @@
 
                 <div class="quests-dashboard">
                     <p class="quests-status" id="quests-status" role="status" aria-live="polite">Log in as your character to view available quests.</p>
+                    <small class="data-freshness" id="quests-freshness" aria-live="polite" hidden></small>
+                    <button class="secondary-button protected-retry" id="quests-retry" type="button" hidden>Retry</button>
                     <div class="quest-list" id="quest-list" hidden></div>
                 </div>
             </section>
@@ -251,6 +255,7 @@
                 <div class="magic-items-dashboard">
                     <div class="magic-items-source-row">
                         <p class="magic-items-status" id="magic-items-status" role="status" aria-live="polite">Magic items load when this page is opened.</p>
+                        <small class="data-freshness" id="magic-items-freshness" aria-live="polite" hidden></small>
                         <button class="secondary-button" id="magic-items-refresh" type="button">Refresh</button>
                     </div>
                     <div class="magic-item-list" id="magic-item-list" hidden></div>
@@ -269,6 +274,7 @@
                 <div class="magic-items-dashboard">
                     <div class="magic-items-source-row">
                         <p class="magic-items-status" id="party-funds-status" role="status" aria-live="polite">Party funds load when this view is opened.</p>
+                        <small class="data-freshness" id="party-funds-freshness" aria-live="polite" hidden></small>
                         <button class="secondary-button" id="party-funds-refresh" type="button">Refresh</button>
                     </div>
                     <p class="party-funds-total" id="party-funds-total" aria-live="polite">&mdash;</p>
@@ -284,7 +290,9 @@
                     </div>
                 </div>
                 <div class="xp-awards-dashboard">
-                    <p class="xp-awards-status" id="xp-awards-status" role="status" aria-live="polite">XP progressions load when this view is opened.</p>
+                    <p class="xp-awards-status" id="xp-awards-status" role="status" aria-live="polite">Log in to view XP progressions.</p>
+                    <small class="data-freshness" id="xp-awards-freshness" aria-live="polite" hidden></small>
+                    <button class="secondary-button protected-retry" id="xp-awards-retry" type="button" hidden>Retry</button>
                     <div class="xp-awards-list" id="xp-awards-list" hidden></div>
                 </div>
             </section>
@@ -492,13 +500,19 @@
         </footer>
     </div>
 
-    <dialog id="auth-dialog">
+    <aside class="update-banner" id="update-banner" role="status" aria-live="polite" hidden>
+        <span>A newer version of Player Assistant is ready.</span>
+        <button class="secondary-button" id="update-apply" type="button">Update now</button>
+        <button class="dialog-close" id="update-dismiss" type="button" aria-label="Dismiss update notice">&#10005;</button>
+    </aside>
+
+    <dialog id="auth-dialog" aria-labelledby="auth-dialog-title">
         <div class="auth-dialog-surface">
             <button class="dialog-close" id="auth-dialog-close" type="button" aria-label="Close character login">&#10005;</button>
             <p class="eyebrow">Protected player access</p>
 
             <form class="auth-login-form" id="auth-login-form">
-                <h2>Character login</h2>
+                <h2 id="auth-dialog-title">Character login</h2>
                 <p>Use the character name and XP password provided by the Dungeon Master.</p>
                 <label for="auth-character-name">
                     <span>Character name</span>
@@ -542,15 +556,17 @@
             <p class="eyebrow">Messages</p>
             <h2 id="message-notification-title">Unread messages</h2>
             <p id="message-notification-summary"></p>
+            <small class="data-freshness" id="messages-freshness" aria-live="polite" hidden></small>
+            <button class="secondary-button protected-retry" id="messages-retry" type="button">Refresh messages</button>
             <div class="message-notification-list" id="message-notification-list"></div>
         </div>
     </dialog>
 
-    <dialog id="install-help">
+    <dialog id="install-help" aria-labelledby="install-help-title">
         <form method="dialog">
             <button class="dialog-close" value="close" aria-label="Close install instructions">&#10005;</button>
             <p class="eyebrow">Install Player Assistant</p>
-            <h2>Keep it with your apps</h2>
+            <h2 id="install-help-title">Keep it with your apps</h2>
             <div id="install-help-content"></div>
             <button class="primary-button" value="close">Got it</button>
         </form>

@@ -40,15 +40,15 @@
 ## PWA hardening backlog
 
 - [ ] Strengthen PWA runtime resilience and coverage.
-  - [ ] Add authenticated browser coverage for XP Awards, current XP, quests, messages, and party funds, including failed login, logout, account switching, expired sessions, and cross-account denial.
-  - [ ] Add an XP regression test proving that a newly published cumulative total produces exactly one award with the correct date and delta, without duplication on subsequent refreshes.
-  - [ ] Add freshness timestamps, stale/fallback indicators, and explicit retry or refresh controls for protected data views.
-  - [ ] Test service-worker install failures, quota exhaustion, corrupted caches, interrupted updates, and obsolete-worker protection; add an in-app update-available prompt.
-  - [ ] Add automated accessibility coverage for focus trapping/restoration, keyboard navigation, visible focus, labels, table semantics, reduced motion, larger text, and narrow mobile layouts.
-  - [ ] Review and strengthen production security headers, including `object-src`, `frame-src`, `upgrade-insecure-requests`, and HSTS options after subdomain verification.
-  - [ ] Extend integrity and hash-pinned validation to additional generated public data, including timestamps, source hashes, and declared record counts.
-  - [ ] Add synthetic monitoring for anonymous API denial, authorized response shape, protected-cache exclusion, asset versions, service-worker activation, and stale broker/source conditions.
-  - [ ] Measure and improve mobile startup, install, first-interaction, and campaign-search performance; consider lazy-loading or indexing large search data.
+  - [x] Authenticated browser coverage covers XP Awards, current XP, quests, messages, party funds, failed login, logout, account switching, expired sessions, and cross-account denial.
+  - [x] The browser fixture proves that a newly published cumulative total produces exactly one XP award with the correct date and delta, without duplication on subsequent refreshes.
+  - [x] Protected views expose local freshness timestamps and explicit retry or refresh controls; broker stale/fallback metadata and full message/quest coverage remain.
+  - [ ] Service-worker installation cleans up failed partial caches, handles quota failures, validates corrupted cache entries, protects newer workers from obsolete activation, and has failure-injection coverage.
+  - [ ] Browser smoke covers dialog focus containment/restoration, accessible names, visible focus contracts, table-backed protected data, reduced motion, and narrow mobile layouts.
+  - [x] Production security headers now include `object-src`, `frame-src`, and `upgrade-insecure-requests`; host-level HSTS remains enabled pending any future verified subdomain expansion.
+  - [x] Static PWA verification validates generated data schemas, source URLs, record counts, token hashes, cache revisions, and deployment parity.
+  - [ ] Deployment verification and the new scheduled monitor provide production coverage for anonymous API denial, authorized response shape, protected-cache exclusion, asset versions, service-worker activation, and stale broker/source conditions; the current production monitor detects local/remote asset drift and must be run after deployment.
+  - [x] Startup timing and 320px narrow-layout overflow are enforced by browser smoke; campaign search and large dictionaries remain demand-loaded/cached.
 
 ## Completed
 

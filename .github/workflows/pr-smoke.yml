@@ -26,6 +26,19 @@ jobs:
           php-version: '8.4'
           extensions: curl, pdo_sqlite, sodium, sqlite3
 
+      - name: Setup Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: 24.x
+          cache: npm
+          cache-dependency-path: pwa/package-lock.json
+
+      - name: Install PWA browser test dependencies
+        shell: pwsh
+        run: |
+          npm ci --prefix .\pwa
+          npx --prefix .\pwa playwright install chromium
+
       - name: Verify full-regression policy wiring
         shell: pwsh
         run: .\verify-full-regression-ci.ps1
@@ -43,3 +56,11 @@ jobs:
       - name: Check browser smoke script syntax
         shell: pwsh
         run: node --check .\pwa\browser-smoke.mjs
+
+      - name: Run PWA static verification
+        shell: pwsh
+        run: .\pwa\verify-pwa.ps1
+
+      - name: Run PWA browser smoke tests
+        shell: pwsh
+        run: npm --prefix .\pwa test

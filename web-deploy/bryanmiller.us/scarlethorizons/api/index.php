@@ -6,7 +6,7 @@ header('Content-Type: application/json; charset=utf-8');
 header('Cache-Control: no-store');
 header('X-Content-Type-Options: nosniff');
 header('Referrer-Policy: no-referrer');
-header("Content-Security-Policy: default-src 'none'; frame-ancestors 'none'");
+header("Content-Security-Policy: default-src 'none'; frame-ancestors 'none'; frame-src 'none'; object-src 'none'; upgrade-insecure-requests");
 header('Permissions-Policy: camera=(), microphone=(), geolocation=()');
 header('Strict-Transport-Security: max-age=31536000');
 

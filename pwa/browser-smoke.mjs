@@ -339,6 +339,7 @@ try {
     browser = await chromium.launch({ headless: true });
     const context = await browser.newContext({ serviceWorkers: 'allow' });
     const page = await context.newPage();
+    await page.emulateMedia({ reducedMotion: 'reduce' });
     const pageErrors = [];
     const consoleErrors = [];
     const requestFailures = [];
@@ -374,6 +375,40 @@ try {
     await page.locator('#dashboard-title').waitFor({ state: 'visible' });
     await page.waitForFunction(() => navigator.serviceWorker?.controller !== null);
 
+    const navigationTiming = await page.evaluate(() => {
+        const navigation = performance.getEntriesByType('navigation')[0];
+        return navigation ? navigation.domContentLoadedEventEnd - navigation.startTime : NaN;
+    });
+    if (!Number.isFinite(navigationTiming) || navigationTiming > 5000) {
+        throw new Error(`PWA startup exceeded the 5-second smoke budget: ${navigationTiming}ms.`);
+    }
+    const accessibilityContract = await page.evaluate(() => {
+        const controls = [...document.querySelectorAll('button, input, select, textarea, a[href]')];
+        return controls.filter((element) => {
+            if (element.hidden || element.closest('[hidden]')) return false;
+            const label = element.getAttribute('aria-label')
+                || element.getAttribute('title')
+                || element.textContent?.trim()
+                || document.querySelector(`label[for="${element.id}"]`)?.textContent?.trim();
+            return !label;
+        }).map((element) => `${element.tagName}#${element.id}`);
+    });
+    if (accessibilityContract.length > 0) {
+        throw new Error(`Visible control(s) lack an accessible name: ${accessibilityContract.join(', ')}`);
+    }
+    const hiddenLoadingDisplay = await page.evaluate(() => {
+        const indicator = document.querySelector('#translation-loading');
+        return {
+            hidden: indicator?.hidden === true,
+            display: indicator ? getComputedStyle(indicator).display : '',
+            reducedMotion: matchMedia('(prefers-reduced-motion: reduce)').matches
+        };
+    });
+    if (!hiddenLoadingDisplay.hidden || hiddenLoadingDisplay.display !== 'none'
+        || !hiddenLoadingDisplay.reducedMotion) {
+        throw new Error('The hidden translation loading indicator or reduced-motion contract failed.');
+    }
+
     const anonymousPresenceStatus = await page.evaluate(async () =>
         (await fetch('/scarlethorizons/api/v1/presence')).status);
     if (anonymousPresenceStatus !== 401) {
@@ -381,6 +416,10 @@ try {
     }
 
     await page.locator('#auth-button').click();
+    if (!await page.locator('#auth-dialog').evaluate((dialog) => dialog.open
+        && dialog.contains(document.activeElement))) {
+        throw new Error('Opening the login dialog did not move focus inside the dialog.');
+    }
     await page.locator('#auth-character-name').fill('CI Hero');
     await page.locator('#auth-password').fill('wrong-password');
     await page.locator('#auth-submit').click();
@@ -612,6 +651,20 @@ try {
     await page.locator('#dice-history li').first().getByText('1d20', { exact: true }).waitFor();
     await context.setOffline(false);
     offlineExpected = false;
+
+    const mobilePage = await context.newPage();
+    await mobilePage.setViewportSize({ width: 320, height: 800 });
+    await mobilePage.emulateMedia({ reducedMotion: 'reduce' });
+    await mobilePage.goto(`${origin}${pwaPrefix}`, { waitUntil: 'domcontentloaded' });
+    await mobilePage.locator('#dashboard-title').waitFor({ state: 'visible' });
+    const mobileLayout = await mobilePage.evaluate(() => ({
+        viewport: document.documentElement.clientWidth,
+        content: document.documentElement.scrollWidth
+    }));
+    if (mobileLayout.content > mobileLayout.viewport + 1) {
+        throw new Error(`Narrow mobile layout overflows horizontally: ${JSON.stringify(mobileLayout)}.`);
+    }
+    await mobilePage.close();
 
     if (pageErrors.length > 0) {
         throw new Error(`PWA page error: ${pageErrors[0].stack || pageErrors[0].message}`);
