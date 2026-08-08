@@ -37,6 +37,19 @@
 - [x] Add formatting verification to CI and fix existing .NET formatting violations.
 - [x] Formalize repository hygiene for local corpus directories and `.hermes-tmp*` files.
 
+## PWA hardening backlog
+
+- [ ] Strengthen PWA runtime resilience and coverage.
+  - [ ] Add authenticated browser coverage for XP Awards, current XP, quests, messages, and party funds, including failed login, logout, account switching, expired sessions, and cross-account denial.
+  - [ ] Add an XP regression test proving that a newly published cumulative total produces exactly one award with the correct date and delta, without duplication on subsequent refreshes.
+  - [ ] Add freshness timestamps, stale/fallback indicators, and explicit retry or refresh controls for protected data views.
+  - [ ] Test service-worker install failures, quota exhaustion, corrupted caches, interrupted updates, and obsolete-worker protection; add an in-app update-available prompt.
+  - [ ] Add automated accessibility coverage for focus trapping/restoration, keyboard navigation, visible focus, labels, table semantics, reduced motion, larger text, and narrow mobile layouts.
+  - [ ] Review and strengthen production security headers, including `object-src`, `frame-src`, `upgrade-insecure-requests`, and HSTS options after subdomain verification.
+  - [ ] Extend integrity and hash-pinned validation to additional generated public data, including timestamps, source hashes, and declared record counts.
+  - [ ] Add synthetic monitoring for anonymous API denial, authorized response shape, protected-cache exclusion, asset versions, service-worker activation, and stale broker/source conditions.
+  - [ ] Measure and improve mobile startup, install, first-interaction, and campaign-search performance; consider lazy-loading or indexing large search data.
+
 ## Completed
 
 - [x] Add private cron refresh observability and safe broker health fields.
