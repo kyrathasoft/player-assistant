@@ -24,6 +24,9 @@
   - [x] Pin GitHub Actions to immutable versions or hashes.
   - [x] Enable NuGet locked restore and dependency scanning.
   - [x] Move generated recovery archives out of the tracked source tree.
+- [ ] Try RPOL snapshot creation again and resolve the browser-worker failure.
+  - [ ] Make the WinForms publisher connect reliably to its temporary Chrome/Edge CDP session.
+  - [ ] Publish and verify at least one fresh snapshot before relying on the broker freshness cron.
 
 ## Architecture and maintainability
 
