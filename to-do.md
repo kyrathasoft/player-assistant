@@ -24,6 +24,9 @@
   - [x] Pin GitHub Actions to immutable versions or hashes.
   - [x] Enable NuGet locked restore and dependency scanning.
   - [x] Move generated recovery archives out of the tracked source tree.
+- [ ] Try RPOL snapshot creation again and resolve the browser-worker failure.
+  - [ ] Make the WinForms publisher connect reliably to its temporary Chrome/Edge CDP session.
+  - [ ] Publish and verify at least one fresh snapshot before relying on the broker freshness cron.
 - [x] Schedule and deploy the PWA campaign word-count refresh.
   - [x] Refresh `pwa/campaign-search.json` every Friday at 07:00 Central time with payload integrity checks.
   - [x] Deploy the refreshed public index through the protected DreamHost SSH workflow using the `DREAMHOST_SSH_PRIVATE_KEY` repository secret.
