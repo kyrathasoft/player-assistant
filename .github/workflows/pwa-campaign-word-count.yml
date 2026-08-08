@@ -55,3 +55,32 @@ jobs:
           git add -- .\pwa\campaign-search.json
           git commit -m 'chore(pwa): refresh campaign word count'
           git push
+
+      - name: Deploy refreshed index to DreamHost
+        shell: pwsh
+        env:
+          DREAMHOST_SSH_PRIVATE_KEY: ${{ secrets.DREAMHOST_SSH_PRIVATE_KEY }}
+        run: |
+          if ([string]::IsNullOrWhiteSpace($env:DREAMHOST_SSH_PRIVATE_KEY)) {
+            throw 'The DREAMHOST_SSH_PRIVATE_KEY repository secret is required for scheduled PWA deployment.'
+          }
+          $keyPath = Join-Path $env:RUNNER_TEMP 'player-assistant-dreamhost-deploy.key'
+          [System.IO.File]::WriteAllText($keyPath, $env:DREAMHOST_SSH_PRIVATE_KEY, [System.Text.ASCIIEncoding]::new())
+          $sshTarget = 'dh_4gg2za@pdx1-shared-a1-13.dreamhost.com'
+          $remoteDirectory = '/home/dh_4gg2za/bryanmiller.us/scarlethorizons/pwa'
+          $sshOptions = @('-i', $keyPath, '-o', 'BatchMode=yes', '-o', 'ConnectTimeout=15')
+          try {
+            & ssh.exe @sshOptions $sshTarget "test -d $remoteDirectory && test -w $remoteDirectory"
+            if ($LASTEXITCODE -ne 0) { throw 'DreamHost destination preflight failed.' }
+            & scp.exe @sshOptions '.\pwa\campaign-search.json' "$sshTarget`:$remoteDirectory/"
+            if ($LASTEXITCODE -ne 0) { throw 'DreamHost campaign-search upload failed.' }
+            $localHash = (Get-FileHash -LiteralPath '.\pwa\campaign-search.json' -Algorithm SHA256).Hash.ToLowerInvariant()
+            $remoteHash = (& ssh.exe @sshOptions $sshTarget "cd $remoteDirectory && sha256sum campaign-search.json").Trim().Split()[0].ToLowerInvariant()
+            if ($localHash -ne $remoteHash) {
+              throw "DreamHost SHA-256 mismatch: local $localHash, remote $remoteHash."
+            }
+            Write-Output "DreamHost campaign-search.json SHA-256 verified: $localHash"
+          }
+          finally {
+            Remove-Item -LiteralPath $keyPath -Force -ErrorAction SilentlyContinue
+          }
