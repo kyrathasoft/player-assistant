@@ -160,7 +160,6 @@ namespace PlayerAssistant
             Directory.CreateDirectory(RuntimePathUtility.CombineUnderBase(postsDirectory, IcDirectoryName));
             Directory.CreateDirectory(RuntimePathUtility.CombineUnderBase(postsDirectory, IcDirectoryName, AsideDirectoryName));
             Directory.CreateDirectory(RuntimePathUtility.CombineUnderBase(postsDirectory, OocDirectoryName));
-            Directory.CreateDirectory(RuntimePathUtility.CombineUnderBase(postsDirectory, OocDirectoryName, AsideDirectoryName));
         }
 
         internal static bool IsVersionArgument(string argument)
