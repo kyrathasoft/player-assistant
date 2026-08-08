@@ -1,0 +1,35 @@
+name: PWA synthetic monitor
+
+on:
+  schedule:
+    - cron: '17 6 * * *'
+  workflow_dispatch:
+    inputs:
+      require_current_xp_api:
+        description: 'Also verify anonymous protected broker endpoints'
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+
+jobs:
+  monitor:
+    name: Production PWA synthetic monitor
+    runs-on: windows-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Run public PWA monitor
+        shell: pwsh
+        env:
+          REQUIRE_CURRENT_XP_API: ${{ inputs.require_current_xp_api || 'false' }}
+        run: |
+          $params = @{}
+          if ($env:REQUIRE_CURRENT_XP_API -eq 'true') {
+            $params.RequireCurrentXpApi = $true
+          }
+          .\web-deploy\monitor-pwa.ps1 @params

@@ -100,6 +100,30 @@ import { initializeDice } from './modules/dice.js?v=61';
     let heroTokenData = null;
     let heroTokenDataLoading = null;
     let activeView = 'dashboard';
+    let xpUpdatedAt = 0;
+    let questsUpdatedAt = 0;
+    let xpAwardsUpdatedAt = 0;
+    let magicItemsUpdatedAt = 0;
+    let partyFundsUpdatedAt = 0;
+    let messagesUpdatedAt = 0;
+
+    const renderFreshness = (id, timestamp) => {
+        const element = byId(id);
+        if (!(element instanceof HTMLElement)) return;
+        element.hidden = timestamp <= 0;
+        element.textContent = timestamp > 0
+            ? `Last refreshed ${new Date(timestamp).toLocaleString()}.`
+            : '';
+    };
+
+    const clearProtectedFreshness = () => {
+        xpUpdatedAt = 0;
+        questsUpdatedAt = 0;
+        xpAwardsUpdatedAt = 0;
+        magicItemsUpdatedAt = 0;
+        partyFundsUpdatedAt = 0;
+        messagesUpdatedAt = 0;
+    };
 
     const setView = (viewName, updateHistory = true) => {
         const requestedView = views.has(viewName) ? viewName : 'dashboard';
@@ -174,7 +198,12 @@ import { initializeDice } from './modules/dice.js?v=61';
         }
 
         byId('main-content')?.focus({ preventScroll: true });
-        window.scrollTo({ top: 0, behavior: 'smooth' });
+        window.scrollTo({
+            top: 0,
+            behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches
+                ? 'auto'
+                : 'smooth'
+        });
         document.title = resolvedView === 'dashboard'
             ? APP_NAME
             : `${resolvedView[0].toUpperCase()}${resolvedView.slice(1)} · ${APP_NAME}`;
@@ -224,6 +253,7 @@ import { initializeDice } from './modules/dice.js?v=61';
     const renderXpUi = () => {
         const authenticated = authenticatedAccount !== null;
         const refreshButton = byId('xp-refresh');
+        const retryButton = byId('xp-retry');
         const status = byId('xp-status');
         const characterSummary = byId('xp-character-summary');
         const partySummary = byId('xp-party-summary');
@@ -236,6 +266,8 @@ import { initializeDice } from './modules/dice.js?v=61';
         const partyDate = byId('xp-party-date');
         const partyRows = byId('xp-party-rows');
         if (refreshButton) refreshButton.hidden = !authenticated;
+        if (retryButton) retryButton.hidden = !authenticated || authenticatedXpSnapshot !== null;
+        renderFreshness('xp-freshness', authenticated ? xpUpdatedAt : 0);
         if (characterSummary) characterSummary.hidden = true;
         if (partySummary) partySummary.hidden = true;
         if (characterName) characterName.textContent = '';
@@ -369,6 +401,7 @@ import { initializeDice } from './modules/dice.js?v=61';
             const snapshot = validateXpSnapshot(await requestAuthenticationApi('/xp'));
             if (requestId !== xpRequestId || authenticatedAccount?.id !== accountId) return;
             authenticatedXpSnapshot = snapshot;
+            xpUpdatedAt = Date.now();
             renderXpUi();
         } catch (error) {
             if (requestId !== xpRequestId || authenticatedAccount?.id !== accountId) return;
@@ -384,7 +417,12 @@ import { initializeDice } from './modules/dice.js?v=61';
     const renderXpAwardsUi = () => {
         const status = byId('xp-awards-status');
         const list = byId('xp-awards-list');
+        const retryButton = byId('xp-awards-retry');
         if (!(status instanceof HTMLElement) || !(list instanceof HTMLElement)) return;
+        if (retryButton) retryButton.hidden = authenticatedAccount === null
+            || (xpAwardsError === '' && xpAwardsLoading !== null)
+            || authenticatedXpAwardsSnapshot !== null;
+        renderFreshness('xp-awards-freshness', authenticatedAccount === null ? 0 : xpAwardsUpdatedAt);
         list.hidden = true;
         list.replaceChildren();
         if (authenticatedAccount === null) {
@@ -512,6 +550,7 @@ import { initializeDice } from './modules/dice.js?v=61';
                     await requestAuthenticationApi('/xp-awards'));
                 if (requestId !== xpAwardsRequestId || authenticatedAccount?.id !== account.id) return;
                 authenticatedXpAwardsSnapshot = progressions;
+                xpAwardsUpdatedAt = Date.now();
             } catch (error) {
                 if (requestId === xpAwardsRequestId && authenticatedAccount?.id === account.id) {
                     xpAwardsError = error instanceof Error ? error.message : 'XP progressions are unavailable.';
@@ -853,12 +892,16 @@ import { initializeDice } from './modules/dice.js?v=61';
     const renderQuestUi = () => {
         const status = byId('quests-status');
         const list = byId('quest-list');
+        const retryButton = byId('quests-retry');
         const stateCycle = byId('quest-state-cycle');
         const stateCycleLabel = byId('quest-state-cycle-label');
         list?.replaceChildren();
         if (list) list.hidden = true;
         if (stateCycle) stateCycle.hidden = true;
         updateQuestNavCount(0);
+        if (retryButton) retryButton.hidden = authenticatedAccount === null
+            || authenticatedQuestSnapshot !== null;
+        renderFreshness('quests-freshness', authenticatedAccount === null ? 0 : questsUpdatedAt);
 
         if (authenticatedAccount === null) {
             questStateFilter = '';
@@ -1002,6 +1045,7 @@ import { initializeDice } from './modules/dice.js?v=61';
                 await requestAuthenticationApi('/quests'));
             if (requestId !== questRequestId || authenticatedAccount?.id !== accountId) return;
             authenticatedQuestSnapshot = snapshot;
+            questsUpdatedAt = Date.now();
             renderQuestUi();
         } catch (error) {
             if (requestId !== questRequestId || authenticatedAccount?.id !== accountId) return;
@@ -1140,6 +1184,7 @@ import { initializeDice } from './modules/dice.js?v=61';
         const status = byId('magic-items-status');
         const list = byId('magic-item-list');
         const counts = byId('magic-item-counts');
+        renderFreshness('magic-items-freshness', authenticatedAccount === null ? 0 : magicItemsUpdatedAt);
         list?.replaceChildren();
         if (list) list.hidden = true;
         if (counts) counts.hidden = true;
@@ -1287,6 +1332,7 @@ import { initializeDice } from './modules/dice.js?v=61';
         const status = byId('party-funds-status');
         const total = byId('party-funds-total');
         const note = byId('party-funds-note');
+        renderFreshness('party-funds-freshness', authenticatedAccount === null ? 0 : partyFundsUpdatedAt);
         if (status) {
             status.textContent = partyFundsSnapshot === null
                 ? (partyFundsLoading
@@ -1375,6 +1421,7 @@ import { initializeDice } from './modules/dice.js?v=61';
         const summary = byId('message-notification-summary');
         const list = byId('message-notification-list');
         const messages = authenticatedMessageSnapshot?.messages || [];
+        renderFreshness('messages-freshness', authenticatedAccount === null ? 0 : messagesUpdatedAt);
         const showNotification = authenticatedAccount !== null && messages.length > 0;
 
         if (button instanceof HTMLButtonElement) {
@@ -1445,6 +1492,7 @@ import { initializeDice } from './modules/dice.js?v=61';
                 await requestAuthenticationApi('/messages'));
             if (requestId !== messageRequestId || authenticatedAccount?.id !== accountId) return;
             authenticatedMessageSnapshot = snapshot;
+            messagesUpdatedAt = Date.now();
             updateAuthenticationUi();
         } catch (error) {
             if (requestId !== messageRequestId || authenticatedAccount?.id !== accountId) return;
@@ -1593,6 +1641,7 @@ import { initializeDice } from './modules/dice.js?v=61';
         partyFundsLoading = (async () => {
             try {
                 partyFundsSnapshot = await fetchPartyFunds();
+                partyFundsUpdatedAt = Date.now();
             } catch {
                 partyFundsError = 'Party-funds information is unavailable from the bundled file.';
             } finally {
@@ -1762,6 +1811,7 @@ import { initializeDice } from './modules/dice.js?v=61';
                     magicItemError = 'Magic-item information is unavailable from both the campaign wiki and the bundled fallback.';
                 }
             } finally {
+                if (magicItemSnapshot !== null) magicItemsUpdatedAt = Date.now();
                 magicItemLoading = null;
                 if (refreshButton instanceof HTMLButtonElement) refreshButton.disabled = false;
                 renderMagicItems();
@@ -2140,6 +2190,7 @@ import { initializeDice } from './modules/dice.js?v=61';
             authenticatedAccount = null;
             authenticationCsrfToken = '';
         }
+        clearProtectedFreshness();
         authenticatedXpSnapshot = null;
         authenticatedXpAwardsSnapshot = null;
         xpAwardsLoading = null;
@@ -2189,6 +2240,9 @@ import { initializeDice } from './modules/dice.js?v=61';
         renderMessageNotifications();
         messageDialog.showModal();
     });
+    byId('messages-retry')?.addEventListener('click', () => {
+        void loadMessages();
+    });
     authDialog?.addEventListener('close', () => {
         void renderAuthenticatedHeroToken();
     });
@@ -2216,6 +2270,7 @@ import { initializeDice } from './modules/dice.js?v=61';
             });
             authenticationCsrfToken = String(session.csrf_token || '');
             authenticatedAccount = session.account;
+            clearProtectedFreshness();
             authenticatedXpSnapshot = null;
             authenticatedXpAwardsSnapshot = null;
             xpAwardsLoading = null;
@@ -2243,6 +2298,7 @@ import { initializeDice } from './modules/dice.js?v=61';
         } catch (error) {
             authenticatedAccount = null;
             authenticationCsrfToken = '';
+            clearProtectedFreshness();
             authenticatedXpSnapshot = null;
             authenticatedXpAwardsSnapshot = null;
             xpAwardsLoading = null;
@@ -2273,6 +2329,7 @@ import { initializeDice } from './modules/dice.js?v=61';
             await requestAuthenticationApi('/logout', { method: 'POST', csrf: true });
             authenticatedAccount = null;
             authenticationCsrfToken = '';
+            clearProtectedFreshness();
             authenticatedXpSnapshot = null;
             xpRequestId++;
             authenticatedXpAwardsSnapshot = null;
@@ -2308,6 +2365,18 @@ import { initializeDice } from './modules/dice.js?v=61';
 
     byId('xp-refresh')?.addEventListener('click', () => {
         void loadXpSummary();
+    });
+
+    byId('xp-retry')?.addEventListener('click', () => {
+        void loadXpSummary();
+    });
+
+    byId('quests-retry')?.addEventListener('click', () => {
+        void loadQuests();
+    });
+
+    byId('xp-awards-retry')?.addEventListener('click', () => {
+        void loadXpAwards(true);
     });
 
     byId('word-count-refresh')?.addEventListener('click', () => {
@@ -2380,10 +2449,22 @@ import { initializeDice } from './modules/dice.js?v=61';
     updateInstallButtons();
 
     if ('serviceWorker' in navigator) {
-        const replacingExistingWorker = navigator.serviceWorker.controller !== null;
+        const hadServiceWorkerController = navigator.serviceWorker.controller !== null;
         let reloadingForServiceWorker = false;
+        let pendingServiceWorker = null;
+        const updateBanner = byId('update-banner');
+        const showServiceWorkerUpdate = (worker) => {
+            pendingServiceWorker = worker;
+            if (updateBanner) updateBanner.hidden = false;
+        };
+        byId('update-dismiss')?.addEventListener('click', () => {
+            if (updateBanner) updateBanner.hidden = true;
+        });
+        byId('update-apply')?.addEventListener('click', () => {
+            pendingServiceWorker?.postMessage({ type: 'SKIP_WAITING' });
+        });
         navigator.serviceWorker.addEventListener('controllerchange', () => {
-            if (replacingExistingWorker && !reloadingForServiceWorker) {
+            if (hadServiceWorkerController && !reloadingForServiceWorker) {
                 reloadingForServiceWorker = true;
                 window.location.reload();
             }
@@ -2393,6 +2474,16 @@ import { initializeDice } from './modules/dice.js?v=61';
                 const registration = await navigator.serviceWorker.register(
                     'service-worker.js',
                     { scope: './', updateViaCache: 'none' });
+                if (registration.waiting) showServiceWorkerUpdate(registration.waiting);
+                registration.addEventListener('updatefound', () => {
+                    const worker = registration.installing;
+                    if (!worker) return;
+                    worker.addEventListener('statechange', () => {
+                        if (worker.state === 'installed' && navigator.serviceWorker.controller) {
+                            showServiceWorkerUpdate(worker);
+                        }
+                    });
+                });
                 await registration.update();
                 await navigator.serviceWorker.ready;
                 const offlineReadiness = byId('offline-readiness');

@@ -119,7 +119,7 @@ try {
     Assert-Condition -Condition ((Get-HeaderValue $indexResponse 'X-Content-Type-Options') -eq 'nosniff') -Message 'The PWA is missing X-Content-Type-Options: nosniff.'
     Assert-Condition -Condition ((Get-HeaderValue $indexResponse 'Strict-Transport-Security') -match 'max-age=') -Message 'The PWA is missing HSTS.'
     $contentSecurityPolicy = Get-HeaderValue $indexResponse 'Content-Security-Policy'
-    Assert-Condition -Condition ($contentSecurityPolicy.Contains("default-src 'self'") -and $contentSecurityPolicy.Contains("frame-ancestors 'none'") -and $contentSecurityPolicy.Contains("connect-src 'self' https://publish-01.obsidian.md")) -Message 'The PWA Content-Security-Policy is incomplete.'
+    Assert-Condition -Condition ($contentSecurityPolicy.Contains("default-src 'self'") -and $contentSecurityPolicy.Contains("frame-ancestors 'none'") -and $contentSecurityPolicy.Contains("frame-src 'none'") -and $contentSecurityPolicy.Contains("object-src 'none'") -and $contentSecurityPolicy.Contains('upgrade-insecure-requests') -and $contentSecurityPolicy.Contains("connect-src 'self' https://publish-01.obsidian.md")) -Message 'The PWA Content-Security-Policy is incomplete.'
 
     $uncachedFiles = @('service-worker.js', 'manifest.webmanifest', 'level-progression.json', 'magic-items.json', 'party-funds.json', 'quests.json') |
         Where-Object { $responses.ContainsKey($_) }
