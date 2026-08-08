@@ -7,10 +7,16 @@ import { fileURLToPath } from 'node:url';
 const pwaRoot = dirname(fileURLToPath(import.meta.url));
 const pwaPrefix = '/scarlethorizons/pwa/';
 const apiPrefix = '/scarlethorizons/api/v1';
-const account = Object.freeze({
+const playerAccount = Object.freeze({
     id: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
     character_name: 'CI Hero',
     character_key: 'ci-hero',
+    role: 'player'
+});
+const secondPlayerAccount = Object.freeze({
+    id: 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
+    character_name: 'CI Second Hero',
+    character_key: 'ci-second-hero',
     role: 'player'
 });
 const dungeonMasterAccount = Object.freeze({
@@ -38,10 +44,107 @@ const jsonResponse = (response, status, payload, headers = {}) => {
     response.end(JSON.stringify(payload));
 };
 
-const sessionRole = (request) => request.headers.cookie?.match(/(?:^|;\s*)ci-session=(player|dm)(?:;|$)/u)?.[1] || '';
+const sessionRole = (request) => request.headers.cookie?.match(
+    /(?:^|;\s*)ci-session=(player-a|player-b|dm)(?:;|$)/u)?.[1] || '';
 const hasSession = (request) => sessionRole(request) !== '';
-const sessionAccount = (request) => sessionRole(request) === 'dm' ? dungeonMasterAccount : account;
+const sessionAccount = (request) => ({
+    'player-a': playerAccount,
+    'player-b': secondPlayerAccount,
+    dm: dungeonMasterAccount
+}[sessionRole(request)] || null);
 const expectedErrorResponse = { 'X-CI-Expected-Error': 'true' };
+let xpAwardsProjected = false;
+let messagesRead = false;
+
+const readJsonBody = async (request) => {
+    let body = '';
+    for await (const chunk of request) body += chunk;
+    return JSON.parse(body || '{}');
+};
+
+const requireSession = (request, response) => {
+    if (hasSession(request)) return sessionAccount(request);
+    jsonResponse(response, 401, { message: 'Authentication required.' }, expectedErrorResponse);
+    return null;
+};
+
+const xpCharacter = (currentAccount) => ({
+    character_name: currentAccount.character_name,
+    character_class: 'Fighter',
+    level_before_award: 1,
+    xp_award: 0,
+    xp_award_date: '8.07.2026',
+    level_after_award: 1,
+    level: 1,
+    hit_points: 10,
+    xp_total: currentAccount === playerAccount ? 2000 : 1200,
+    xp_to_next_level: 3000
+});
+
+const xpAwardEntry = (currentAccount) => ({
+    character_name: currentAccount.character_name,
+    character_class: 'Fighter',
+    level_before_award: 1,
+    xp_award: 500,
+    xp_award_date: '8.07.2026',
+    level_after_award: 1
+});
+
+const xpProgression = (currentAccount) => ({
+    character_key: currentAccount.character_key,
+    entries: [
+        {
+            ...xpAwardEntry(currentAccount),
+            xp_award: 400,
+            xp_award_date: '7.31.2026'
+        },
+        ...(currentAccount === playerAccount && xpAwardsProjected ? [xpAwardEntry(currentAccount)] : [])
+    ]
+});
+
+const questPayload = (currentAccount) => ({
+    schema_version: 2,
+    status_values: [
+        'individual-only', 'party-only', 'individual-or-party',
+        'gated', 'available', 'active', 'available (abandoned)', 'completed', 'withdrawn'
+    ],
+    request_status_values: ['pending', 'approved', 'denied'],
+    quests: [{
+        id: 'ci-quest',
+        title: `${currentAccount.character_name}'s test quest`,
+        summary: 'A deterministic browser-smoke quest.',
+        quest_giver: 'CI Quest Giver',
+        visibility: 'individual-or-party',
+        state: 'available',
+        objectives: ['Complete the browser-smoke objective.'],
+        reward: 'Confidence',
+        accepted_on: '',
+        expires_on: '',
+        request_status: null,
+        wiki_url: 'https://publish.obsidian.md/scarlethorizons/Quests/CI+Quest'
+    }],
+    pending_requests: [],
+    notifications: []
+});
+
+const messagePayload = (currentAccount) => ({
+    schema_version: 2,
+    messages: currentAccount === playerAccount && !messagesRead ? [{
+        id: '11111111111111111111111111111111',
+        sender_character_name: 'CI Dungeon Master',
+        recipient_character_name: currentAccount.character_name,
+        message: 'Browser smoke message',
+        sent_at: '2026-08-07T12:00:00Z',
+        read_at: null
+    }] : [],
+    player_recipients: currentAccount === playerAccount ? [{
+        account_id: secondPlayerAccount.id,
+        character_name: secondPlayerAccount.character_name
+    }] : currentAccount === secondPlayerAccount ? [{
+        account_id: playerAccount.id,
+        character_name: playerAccount.character_name
+    }] : []
+});
 
 const serveApi = async (request, response, pathname) => {
     const route = pathname.slice(apiPrefix.length) || '/';
@@ -53,18 +156,22 @@ const serveApi = async (request, response, pathname) => {
         return;
     }
     if (route === '/login' && request.method === 'POST') {
-        let body = '';
-        for await (const chunk of request) body += chunk;
-        const credentials = JSON.parse(body || '{}');
+        const credentials = await readJsonBody(request);
         const isPlayer = credentials.character_name === 'CI Hero' && credentials.password === 'ci-password';
-        const isDungeonMaster = credentials.character_name === 'CI Dungeon Master' && credentials.password === 'ci-dm-password';
-        if (!isPlayer && !isDungeonMaster) {
+        const isSecondPlayer = credentials.character_name === 'CI Second Hero'
+            && credentials.password === 'ci-second-password';
+        const isDungeonMaster = credentials.character_name === 'CI Dungeon Master'
+            && credentials.password === 'ci-dm-password';
+        if (!isPlayer && !isSecondPlayer && !isDungeonMaster) {
             jsonResponse(response, 401, { message: 'Invalid CI credentials.' }, expectedErrorResponse);
             return;
         }
-        const selectedAccount = isDungeonMaster ? dungeonMasterAccount : account;
+        const selectedAccount = isDungeonMaster
+            ? dungeonMasterAccount
+            : isSecondPlayer ? secondPlayerAccount : playerAccount;
+        const session = isDungeonMaster ? 'dm' : isSecondPlayer ? 'player-b' : 'player-a';
         jsonResponse(response, 200, { account: selectedAccount, csrf_token: 'ci-csrf-token' }, {
-            'Set-Cookie': `ci-session=${isDungeonMaster ? 'dm' : 'player'}; HttpOnly; SameSite=Strict; Path=/scarlethorizons/`
+            'Set-Cookie': `ci-session=${session}; HttpOnly; SameSite=Strict; Path=/scarlethorizons/`
         });
         return;
     }
@@ -102,6 +209,72 @@ const serveApi = async (request, response, pathname) => {
             active_window_seconds: 120,
             users: []
         });
+        return;
+    }
+    if (route === '/xp' && request.method === 'GET') {
+        const currentAccount = requireSession(request, response);
+        if (!currentAccount) return;
+        jsonResponse(response, 200, sessionRole(request) === 'dm'
+            ? {
+                schema_version: 1,
+                date_label: 'As of 8.07.2026',
+                stale: false,
+                scope: 'party',
+                characters: [xpCharacter(playerAccount), xpCharacter(secondPlayerAccount)]
+            }
+            : {
+                schema_version: 1,
+                date_label: 'As of 8.07.2026',
+                stale: false,
+                scope: 'character',
+                character: xpCharacter(currentAccount)
+            });
+        return;
+    }
+    if (route === '/xp-awards' && request.method === 'GET') {
+        const currentAccount = requireSession(request, response);
+        if (!currentAccount) return;
+        if (currentAccount === playerAccount) xpAwardsProjected = true;
+        const accounts = currentAccount.role === 'dm' ? [playerAccount, secondPlayerAccount] : [currentAccount];
+        jsonResponse(response, 200, {
+            schema_version: 1,
+            scope: currentAccount.role === 'dm' ? 'party' : 'character',
+            progressions: accounts.map(xpProgression)
+        });
+        return;
+    }
+    if (route === '/quests' && request.method === 'GET') {
+        const currentAccount = requireSession(request, response);
+        if (!currentAccount) return;
+        jsonResponse(response, 200, questPayload(currentAccount));
+        return;
+    }
+    if (route === '/messages' && request.method === 'GET') {
+        const currentAccount = requireSession(request, response);
+        if (!currentAccount) return;
+        jsonResponse(response, 200, messagePayload(currentAccount));
+        return;
+    }
+    if (route.match(/^\/messages\/[a-f0-9]{32}\/read$/u) && request.method === 'POST') {
+        const currentAccount = requireSession(request, response);
+        if (!currentAccount) return;
+        if (request.headers['x-csrf-token'] !== 'ci-csrf-token') {
+            jsonResponse(response, 403, { message: 'CSRF validation failed.' }, expectedErrorResponse);
+            return;
+        }
+        messagesRead = true;
+        jsonResponse(response, 200, { status: 'ok' });
+        return;
+    }
+    if (route === '/quest-requests' && request.method === 'POST') {
+        const currentAccount = requireSession(request, response);
+        if (!currentAccount) return;
+        if (currentAccount.role !== 'player' || request.headers['x-csrf-token'] !== 'ci-csrf-token') {
+            jsonResponse(response, 403, { message: 'Quest request is not authorized.' }, expectedErrorResponse);
+            return;
+        }
+        await readJsonBody(request);
+        jsonResponse(response, 201, { status: 'pending' });
         return;
     }
     jsonResponse(response, hasSession(request) ? 503 : 401, {
@@ -209,6 +382,17 @@ try {
 
     await page.locator('#auth-button').click();
     await page.locator('#auth-character-name').fill('CI Hero');
+    await page.locator('#auth-password').fill('wrong-password');
+    await page.locator('#auth-submit').click();
+    await page.waitForFunction(() => {
+        const text = document.querySelector('#auth-message')?.textContent || '';
+        return text !== '' && text !== 'Signing in…';
+    });
+    const failedLoginMessage = await page.locator('#auth-message').textContent();
+    if (!failedLoginMessage.includes('Invalid CI credentials.')) {
+        throw new Error(`Failed-login smoke did not expose the expected error: ${failedLoginMessage}`);
+    }
+    await page.locator('#auth-character-name').fill('CI Hero');
     await page.locator('#auth-password').fill('ci-password');
     await page.locator('#auth-submit').click();
     await page.locator('#auth-button-label').getByText('CI Hero', { exact: true }).waitFor();
@@ -217,6 +401,54 @@ try {
     }
     await page.locator('#auth-dialog-close').click();
     await page.locator('#auth-dialog').waitFor({ state: 'hidden' });
+
+    await page.waitForFunction(() => {
+        const total = document.querySelector('#xp-total')?.textContent || '';
+        const status = document.querySelector('#xp-status')?.textContent || '';
+        return total !== '' || (status !== '' && !status.includes('Loading'));
+    });
+    const playerXpTotal = await page.locator('#xp-total').textContent();
+    if (!playerXpTotal.startsWith('2,000')) {
+        throw new Error(`Current XP dashboard did not render the expected total: ${playerXpTotal}; status=${await page.locator('#xp-status').textContent()}`);
+    }
+    await page.locator('[data-view="quests"]').click();
+    await page.locator('#quest-list').waitFor({ state: 'visible' });
+    await page.locator('#quest-list .quest-card').first().waitFor({ state: 'visible' });
+    if (!(await page.locator('#quest-list .quest-card').first().textContent()).includes("CI Hero's test quest")) {
+        throw new Error('Quest dashboard did not render the authenticated player quest.');
+    }
+
+    await page.locator('[data-view="party-funds"]').click();
+    await page.locator('#party-funds-total').waitFor({ state: 'visible' });
+    await page.waitForFunction(() => document.querySelector('#party-funds-total')?.textContent?.trim() !== '—');
+
+    await page.locator('[data-view="xp-awards"]').click();
+    await page.locator('#xp-awards-list').waitFor({ state: 'visible' });
+    const firstAwardRows = page.locator('#xp-awards-list tbody tr');
+    await firstAwardRows.nth(1).waitFor({ state: 'visible' });
+    const firstAwardText = await firstAwardRows.nth(1).textContent();
+    if (!firstAwardText.includes('8.07.2026') || !firstAwardText.includes('500')) {
+        throw new Error(`XP award projection did not create the expected single new award: ${firstAwardText}`);
+    }
+    const secondAwardResponse = await page.evaluate(async () => {
+        const response = await fetch('/scarlethorizons/api/v1/xp-awards', {
+            credentials: 'same-origin', cache: 'no-store'
+        });
+        return response.json();
+    });
+    const secondAwardEntries = secondAwardResponse.progressions[0].entries;
+    if (secondAwardEntries.length !== 2
+        || secondAwardEntries.filter((entry) => entry.xp_award_date === '8.07.2026').length !== 1
+        || secondAwardEntries.filter((entry) => entry.xp_award === 500).length !== 1) {
+        throw new Error('A repeated XP-awards refresh duplicated or changed the projected award.');
+    }
+
+    await page.locator('#message-notification-button').waitFor({ state: 'visible' });
+    await page.locator('#message-notification-button').click();
+    await page.locator('#message-notification-dialog').waitFor({ state: 'visible' });
+    await page.locator('#message-notification-list .message-notification').first().getByText('Browser smoke message', { exact: true }).waitFor();
+    await page.locator('#message-notification-list .message-notification').first().getByText('Mark as read', { exact: true }).click();
+    await page.locator('#message-notification-button').waitFor({ state: 'hidden' });
 
     const playerPresenceStatus = await page.evaluate(async () =>
         (await fetch('/scarlethorizons/api/v1/presence')).status);
@@ -235,6 +467,35 @@ try {
     if (!(await page.locator('#auth-account-panel').isHidden())) {
         throw new Error('Logout left the account panel visible.');
     }
+
+    await page.locator('#auth-button').click();
+    await page.locator('#auth-character-name').fill('CI Second Hero');
+    await page.locator('#auth-password').fill('ci-second-password');
+    await page.locator('#auth-submit').click();
+    await page.locator('#auth-button-label').getByText('CI Second Hero', { exact: true }).waitFor();
+    await page.locator('#auth-dialog-close').click();
+    await page.locator('#auth-dialog').waitFor({ state: 'hidden' });
+    await page.waitForFunction(() => document.querySelector('#xp-total')?.textContent?.startsWith('1,200'));
+    await page.locator('[data-view="xp-awards"]').click();
+    await page.locator('#xp-awards-list').waitFor({ state: 'visible' });
+    const secondPlayerAwardText = await page.locator('#xp-awards-list').textContent();
+    if (!secondPlayerAwardText.includes('CI Second Hero') || secondPlayerAwardText.includes('CI Hero')) {
+        throw new Error('Account switching or cross-account XP filtering failed.');
+    }
+    const secondPlayerMessages = await page.evaluate(async () => {
+        const response = await fetch('/scarlethorizons/api/v1/messages', {
+            credentials: 'same-origin', cache: 'no-store'
+        });
+        return response.json();
+    });
+    if (secondPlayerMessages.messages.length !== 0
+        || !secondPlayerMessages.player_recipients.some((recipient) => recipient.character_name === 'CI Hero')) {
+        throw new Error('Cross-account message filtering failed.');
+    }
+
+    await page.locator('#auth-button').click();
+    await page.locator('#auth-logout').click();
+    await page.locator('#auth-button-label').getByText('Log in', { exact: true }).waitFor();
 
     await page.locator('#auth-button').click();
     await page.locator('#auth-character-name').fill('CI Dungeon Master');
