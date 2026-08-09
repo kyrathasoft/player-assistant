@@ -9,7 +9,7 @@ param(
     [ValidateLength(1, 100)][string]$CountingRuleVersion = 'obsidian-publish-word-count-v1',
     [uri]$ApiUrl = 'https://bryanmiller.us/scarlethorizons/api/v1/admin/word-counts',
     [uri]$SourceUrl = 'https://bryanmiller.us/scarlethorizons/data/word-counts.json',
-    [string]$SourceSshTarget = 'player-assistant-dreamhost',
+    [string]$SourceSshTarget = 'dh_4gg2za@pdx1-shared-a1-13.dreamhost.com',
     [string]$SourceSshKeyPath = (Join-Path $env:USERPROFILE '.ssh\dreamhost_player_assistant'),
     [ValidatePattern('^/home/dh_4gg2za/bryanmiller\.us/scarlethorizons/data/word-counts\.json$')]
     [string]$SourceRemotePath = '/home/dh_4gg2za/bryanmiller.us/scarlethorizons/data/word-counts.json',
@@ -23,6 +23,18 @@ param(
 
 $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'word-count-publishing.ps1')
+$nativeSshPath = Join-Path $env:WINDIR 'System32\OpenSSH\ssh.exe'
+$nativeScpPath = Join-Path $env:WINDIR 'System32\OpenSSH\scp.exe'
+$sshCommand = if (Test-Path -LiteralPath $nativeSshPath -PathType Leaf) {
+    $nativeSshPath
+} else {
+    (Get-Command 'ssh' -ErrorAction SilentlyContinue).Source
+}
+$scpCommand = if (Test-Path -LiteralPath $nativeScpPath -PathType Leaf) {
+    $nativeScpPath
+} else {
+    (Get-Command 'scp' -ErrorAction SilentlyContinue).Source
+}
 
 if ($ApiUrl.Scheme -ne [Uri]::UriSchemeHttps -or
     !$ApiUrl.IsDefaultPort -or
@@ -38,10 +50,8 @@ if (!$SkipSourceUpload) {
     if (-not (Test-Path -LiteralPath $SourceSshKeyPath -PathType Leaf)) {
         throw "The DreamHost SSH key was not found at '$SourceSshKeyPath'."
     }
-    foreach ($commandName in @('ssh', 'scp')) {
-        if ($null -eq (Get-Command $commandName -ErrorAction SilentlyContinue)) {
-            throw "Required OpenSSH command not found: $commandName"
-        }
+    if ([string]::IsNullOrWhiteSpace($sshCommand) -or [string]::IsNullOrWhiteSpace($scpCommand)) {
+        throw 'Required OpenSSH commands were not found.'
     }
     if (-not (Test-Path -LiteralPath $SigningMetadataPath -PathType Leaf)) {
         throw "The word-count signing metadata was not found at '$SigningMetadataPath'."
@@ -129,8 +139,11 @@ try {
             -Body $snapshotJson
         if ([int]$brokerResponse.schema_version -ne 1 -or
             [DateTimeOffset]$brokerResponse.observed_at -ne [DateTimeOffset]$snapshot.observed_at -or
+            [int]$brokerResponse.wiki.pages -ne $WikiPages -or
             [long]$brokerResponse.wiki.words -ne $WikiWords -or
+            [int]$brokerResponse.ic.files -ne $IcFiles -or
             [long]$brokerResponse.ic.words -ne $IcWords -or
+            [int]$brokerResponse.ooc.files -ne $OocFiles -or
             [long]$brokerResponse.ooc.words -ne $OocWords) {
             throw 'The broker did not return the exact uploaded word-count snapshot.'
         }
@@ -169,7 +182,7 @@ try {
         $remoteSourceBackup = "$SourceRemotePath.rollback-$transactionId"
 
         $stageSource = {
-            & scp -i $SourceSshKeyPath -o BatchMode=yes -o IdentitiesOnly=yes -o ConnectTimeout=15 -- `
+            & $scpCommand -i $SourceSshKeyPath -o BatchMode=yes -o IdentitiesOnly=yes -o ConnectTimeout=15 -- `
                 $localSourceTemp "${SourceSshTarget}:$remoteSourceTemp" | Out-Null
             if ($LASTEXITCODE -ne 0) {
                 throw 'The canonical word-count source could not be staged on DreamHost.'
@@ -177,7 +190,7 @@ try {
         }
         $publishSource = {
             $command = "if [ -f '$SourceRemotePath' ]; then cp '$SourceRemotePath' '$remoteSourceBackup'; else rm -f -- '$remoteSourceBackup'; fi && chmod 0644 '$remoteSourceTemp' && mv -f '$remoteSourceTemp' '$SourceRemotePath'"
-            & ssh -i $SourceSshKeyPath -o BatchMode=yes -o IdentitiesOnly=yes -o ConnectTimeout=15 `
+            & $sshCommand -i $SourceSshKeyPath -o BatchMode=yes -o IdentitiesOnly=yes -o ConnectTimeout=15 `
                 $SourceSshTarget $command | Out-Null
             if ($LASTEXITCODE -ne 0) {
                 throw 'The canonical word-count source could not be published atomically.'
@@ -202,11 +215,11 @@ try {
         }
         $rollbackSource = {
             $command = "if [ -f '$remoteSourceBackup' ]; then mv -f '$remoteSourceBackup' '$SourceRemotePath'; else rm -f -- '$SourceRemotePath'; fi; rm -f -- '$remoteSourceTemp'"
-            & ssh -i $SourceSshKeyPath -o BatchMode=yes -o IdentitiesOnly=yes -o ConnectTimeout=15 `
+            & $sshCommand -i $SourceSshKeyPath -o BatchMode=yes -o IdentitiesOnly=yes -o ConnectTimeout=15 `
                 $SourceSshTarget $command | Out-Null
         }
         $cleanupSource = {
-            & ssh -i $SourceSshKeyPath -o BatchMode=yes -o IdentitiesOnly=yes -o ConnectTimeout=15 `
+            & $sshCommand -i $SourceSshKeyPath -o BatchMode=yes -o IdentitiesOnly=yes -o ConnectTimeout=15 `
                 $SourceSshTarget "rm -f -- '$remoteSourceTemp' '$remoteSourceBackup'" | Out-Null
         }
         $response = Invoke-WordCountPublishTransaction `
@@ -223,8 +236,11 @@ try {
         Published       = $true
         SourcePublished = $sourcePublished
         ObservedAt      = ([DateTimeOffset]$response.observed_at).ToString('o')
+        WikiPages       = [int]$response.wiki.pages
         WikiWords       = [long]$response.wiki.words
+        IcFiles         = [int]$response.ic.files
         IcWords         = [long]$response.ic.words
+        OocFiles        = [int]$response.ooc.files
         OocWords        = [long]$response.ooc.words
     }
 }

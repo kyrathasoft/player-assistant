@@ -38,6 +38,7 @@ $workflowPath = Join-Path $RepoRoot '.github\workflows\hardening.yml'
 $browserPackagePath = Join-Path $RepoRoot 'pwa\package.json'
 $browserTestPath = Join-Path $RepoRoot 'pwa\browser-smoke.mjs'
 $translatorWorkerTestPath = Join-Path $RepoRoot 'pwa\translator-worker-tests.mjs'
+$serviceWorkerTestPath = Join-Path $RepoRoot 'pwa\service-worker-tests.mjs'
 $httpAuthTestPath = Join-Path $RepoRoot 'web-deploy\tests\run-http-auth-tests.ps1'
 $brokerOperationsPath = Join-Path $RepoRoot 'web-deploy\player-assistant-broker\BrokerOperations.php'
 $operationsConfigExamplePath = Join-Path $RepoRoot 'web-deploy\player-assistant-broker\config.operations.example.php'
@@ -102,12 +103,14 @@ Assert-Condition -Condition ($workflow.Contains('./web-deploy/tests/publish-word
 Assert-Condition -Condition ($workflow.Contains('./web-deploy/tests/run-http-auth-tests.ps1 -PhpPath (Get-Command php).Source')) -Message 'The required workflow must run the HTTP authentication integration suite with the setup PHP executable.'
 Assert-Condition -Condition ($httpAuthTest.Contains("FullName -eq 'System.Net.Http.HttpResponseMessage'") -and $httpAuthTest.Contains('$_.ErrorDetails.Message') -and $httpAuthTest.Contains('ReadAsStringAsync()')) -Message 'The HTTP authentication suite must inspect disposed error responses under PowerShell 7 without breaking Windows PowerShell.'
 Assert-Condition -Condition ($workflow.Contains('./web-deploy/tests/backup-encryption-tests.ps1')) -Message 'The required workflow must run the broker backup encryption suite.'
+Assert-Condition -Condition ($workflow.Contains('.\verify-word-count-schedule.ps1')) -Message 'The required workflow must verify the full word-count scheduled publisher.'
 Assert-Condition -Condition (Test-Path -LiteralPath $browserPackagePath -PathType Leaf) -Message 'The browser smoke package manifest is missing.'
 Assert-Condition -Condition (Test-Path -LiteralPath $browserTestPath -PathType Leaf) -Message 'The browser smoke test is missing.'
 Assert-Condition -Condition (Test-Path -LiteralPath $translatorWorkerTestPath -PathType Leaf) -Message 'The translator worker runtime test is missing.'
+Assert-Condition -Condition (Test-Path -LiteralPath $serviceWorkerTestPath -PathType Leaf) -Message 'The service-worker failure-injection test is missing.'
 
 $package = Get-Content -Raw -LiteralPath $browserPackagePath | ConvertFrom-Json
-Assert-Condition -Condition ([string]$package.scripts.test -eq 'node translator-worker-tests.mjs && node browser-smoke.mjs') -Message 'The PWA test script must run translator-worker runtime and browser smoke coverage.'
+Assert-Condition -Condition ([string]$package.scripts.test -eq 'node service-worker-tests.mjs && node translator-worker-tests.mjs && node browser-smoke.mjs') -Message 'The PWA test script must run service-worker failure injection, translator-worker runtime, and browser smoke coverage.'
 Assert-Condition -Condition (![string]::IsNullOrWhiteSpace([string]$package.devDependencies.playwright)) -Message 'The browser smoke test must declare Playwright explicitly.'
 
 Assert-Condition -Condition (Test-Path -LiteralPath $directoryBuildPropsPath -PathType Leaf) -Message 'Directory.Build.props is missing.'

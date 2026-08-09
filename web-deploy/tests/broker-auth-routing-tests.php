@@ -256,6 +256,33 @@ try {
     routingAssert(!file_exists($staleSnapshotPath), 'The expired RPOL snapshot was not pruned.');
     $currentSnapshotPath = $snapshotDirectory . '/' . hash('sha256', $snapshotSourceUrl) . '.json';
     routingAssert(is_file($currentSnapshotPath), 'The current RPOL snapshot was pruned.');
+    $issuedToken = $broker->dispatch(
+        'POST',
+        '/v1/tokens',
+        [],
+        ['label' => 'snapshot route validation'],
+        routingAdminHeaders(
+            'POST',
+            '/v1/tokens',
+            ['label' => 'snapshot route validation'],
+            $config['api']['admin_key']),
+        '192.0.2.30',
+        $session);
+    try {
+        $broker->dispatch(
+            'GET',
+            '/v1/snapshots/page',
+            ['url' => 'https://rpol.net/display.cgi?gi=80170&ti=3&unsupported=1'],
+            [],
+            ['authorization' => 'Bearer ' . $issuedToken['body']['token']],
+            '192.0.2.30',
+            $session);
+        throw new RuntimeException('The snapshot route accepted an unsupported RPOL query parameter.');
+    } catch (BrokerHttpException $exception) {
+        routingAssert(
+            $exception->status === 400 && $exception->errorName === 'invalid_rpol_url',
+            'The snapshot route treated an invalid RPOL URL as a server error.');
+    }
     $publicHealth = $broker->dispatch('GET', '/v1/health', [], [], [], '192.0.2.30', $session);
     routingAssert(
         $publicHealth['body']['schema_version'] === 7
