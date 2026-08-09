@@ -1586,13 +1586,15 @@ internal static partial class TestCases
     internal static void NetworkAllowlistGenericPolicyRejectsUnrelatedUpdateHostPaths()
     {
         var genericAllowed = NetworkUrlAllowlistUtility.Validate("https://bryanmiller.us/scarlethorizons/p-assist-0.9.1.exe");
-        var regionalMap = NetworkUrlAllowlistUtility.Validate("https://bryanmiller.us/scarlethorizons/northernreaches.png");
-        var blogRegionalMap = NetworkUrlAllowlistUtility.Validate("https://bryanmiller.us/blog/content/bryan/blog/images/rpg-maps/northernreaches.png");
+        var regionalMap = NetworkUrlAllowlistUtility.Validate("https://bryanmiller.us/scarlethorizons/maps/northernreaches.png");
+        var obsoleteRegionalMap = NetworkUrlAllowlistUtility.Validate("https://bryanmiller.us/scarlethorizons/northernreaches.png");
+        var obsoleteBlogRegionalMap = NetworkUrlAllowlistUtility.Validate("https://bryanmiller.us/blog/content/bryan/blog/images/rpg-maps/northernreaches.png");
         var genericRejected = NetworkUrlAllowlistUtility.Validate("https://bryanmiller.us/random-note.txt");
 
         AssertTrue(genericAllowed.IsAllowed, "generic allowlist should still permit approved update artifact paths");
         AssertTrue(regionalMap.IsAllowed, "generic allowlist should permit the hosted regional map image");
-        AssertTrue(blogRegionalMap.IsAllowed, "generic allowlist should permit the hosted blog regional map image");
+        AssertFalse(obsoleteRegionalMap.IsAllowed, "generic allowlist should reject the obsolete regional map path");
+        AssertFalse(obsoleteBlogRegionalMap.IsAllowed, "generic allowlist should reject the obsolete blog regional map path");
         AssertFalse(genericRejected.IsAllowed, "generic allowlist should reject unrelated paths on an otherwise approved host");
     }
 

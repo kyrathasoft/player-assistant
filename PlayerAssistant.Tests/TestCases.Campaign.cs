@@ -613,6 +613,14 @@ internal static partial class TestCases
         AssertTrue(GameForumUtility.ShouldDownloadRegionalMap(filePath), "missing regional map should be downloaded");
     }
 
+    internal static void RegionalMapUsesHostedMapsUrl()
+    {
+        AssertEqual(
+            "https://bryanmiller.us/scarlethorizons/maps/northernreaches.png",
+            GameForumUtility.RegionalMapUrl,
+            "regional map downloads should use the canonical hosted maps URL");
+    }
+
     internal static void RegionalMapDownloadsWhenOlderThanOneHour()
     {
         using var directory = TemporaryDirectory.Create();
@@ -2926,6 +2934,126 @@ internal static partial class TestCases
         AssertEqual(cast, RpolSnapshotUtility.GetNextSourceUri(state), "one success should advance exactly one target");
         state = RpolSnapshotUtility.AdvancePublisherState(state);
         AssertEqual(root, RpolSnapshotUtility.GetNextSourceUri(state), "the publisher queue should wrap after the last target");
+    }
+
+    internal static void RpolSnapshotFreshnessDetectsPossiblyStalePayloads()
+    {
+        var now = DateTimeOffset.Parse("2026-08-09T12:00:00Z");
+        var current = new RpolSnapshotPayload(
+            1,
+            "80170",
+            "https://rpol.net/game.php?gi=80170",
+            now.AddMinutes(-59).ToString("O"),
+            "text/html; charset=utf-8",
+            new string('a', 64),
+            "YQ==",
+            "HMAC-SHA256",
+            new string('b', 64));
+
+        AssertFalse(
+            RpolSnapshotUtility.IsPossiblyStale(current, now),
+            "a snapshot newer than the startup freshness interval should remain current");
+        AssertTrue(
+            RpolSnapshotUtility.IsPossiblyStale(current with { FetchedAt = now.AddHours(-1).ToString("O") }, now),
+            "a snapshot at the startup freshness boundary should be refreshed");
+        AssertTrue(
+            RpolSnapshotUtility.IsPossiblyStale(current with { FetchedAt = "not-a-timestamp" }, now),
+            "an invalid snapshot timestamp should fail closed as possibly stale");
+    }
+
+    internal static void RpolSnapshotPreparationRejectsLoginPageBeforeSanitizing()
+    {
+        var loginHtml = "<html><title>Scarlet Horizons</title><body>"
+            + new string('x', 1200)
+            + "<form action='/login.cgi'><input name='username'><input name='password'></form></body></html>";
+
+        var exception = AssertThrows<InvalidOperationException>(() =>
+            RpolSnapshotUtility.PrepareSnapshotHtml(loginHtml));
+
+        AssertContains(exception.Message, "usable Scarlet Horizons");
+    }
+
+    internal static void RpolSnapshotPreparationAcceptsCampaignPostsQuotingChallengeText()
+    {
+        var campaignHtml = "<html><title>Scarlet Horizons - Chapter</title><body>"
+            + new string('x', 1200)
+            + "<article>A character quoted: Just a moment; Verify you are human; An Error Has Occurred; "
+            + "You have encountered an error.</article></body></html>";
+
+        var prepared = RpolSnapshotUtility.PrepareSnapshotHtml(campaignHtml);
+
+        AssertContains(prepared, "Just a moment");
+        AssertContains(prepared, "An Error Has Occurred");
+    }
+
+    internal static void RpolSnapshotProbeFailureRequiresRefresh()
+    {
+        var shouldRefresh = RpolSnapshotUtility.IsSnapshotRefreshRequiredAsync(
+            _ => Task.FromException<RpolSnapshotPayload?>(
+                new InvalidOperationException("invalid signed broker payload")),
+            DateTimeOffset.Parse("2026-08-09T12:00:00Z"),
+            CancellationToken.None).GetAwaiter().GetResult();
+
+        AssertTrue(shouldRefresh, "a poisoned queued snapshot should be refreshed instead of blocking the cursor");
+    }
+
+    internal static void RpolSnapshotPublisherPreservesCallerCancellation()
+    {
+        using var cancellationSource = new CancellationTokenSource();
+        cancellationSource.Cancel();
+
+        AssertFalse(
+            RpolSnapshotUtility.ShouldHandlePublisherFailure(
+                new OperationCanceledException(cancellationSource.Token),
+                cancellationSource.Token),
+            "caller cancellation must escape the publisher instead of becoming a failed report");
+        AssertTrue(
+            RpolSnapshotUtility.ShouldHandlePublisherFailure(
+                new InvalidOperationException("refresh failed"),
+                cancellationSource.Token),
+            "ordinary publisher failures should still produce a failed report");
+    }
+
+    internal static void SnapshotDiscoveryMergePrioritizesNewTargetAndPreservesNormalizedQueue()
+    {
+        var legacy = new RpolSnapshotPublisherState(
+            1,
+            [
+                "https://rpol.net/game.php?gi=80170",
+                "https://rpol.net/display.cgi?gi=80170&ti=7&date=1779581880&msgpage=2",
+                "https://rpol.net/usermodules/diceroller.cgi?gi=80170"
+            ],
+            1);
+        var chapterSeven = new Uri("https://rpol.net/display.cgi?gi=80170&ti=23&msgpage=&show=all");
+
+        var merged = RpolSnapshotUtility.MergeDiscoveredSourceUris(
+            legacy,
+            [new Uri("https://rpol.net/game.php?gi=80170"), chapterSeven]);
+
+        AssertEqual(chapterSeven, RpolSnapshotUtility.GetNextSourceUri(merged), "a newly discovered target should be refreshed first");
+        AssertTrue(
+            merged.SourceUrls.Contains("https://rpol.net/display.cgi?gi=80170&ti=7&msgpage=&show=all"),
+            "the existing cursor target should remain normalized in the merged queue");
+    }
+
+    internal static void GameForumStartupChecksSnapshotsBeforeDownloads()
+    {
+        var phases = new List<string>();
+        var shouldStartCrawler = Form1.RunGameForumStartupAsync(
+            _ =>
+            {
+                phases.Add("snapshot check");
+                return Task.CompletedTask;
+            },
+            _ =>
+            {
+                phases.Add("post downloads");
+                return Task.FromResult(true);
+            },
+            CancellationToken.None).GetAwaiter().GetResult();
+
+        AssertEqual("snapshot check,post downloads", string.Join(',', phases), "startup should check snapshots before downloading posts");
+        AssertTrue(shouldStartCrawler, "successful post downloads should still start keyword indexing");
     }
 
     internal static void SnapshotDiscoveryApprovesGameLinksAndDiceRoller()

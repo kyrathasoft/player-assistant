@@ -30,11 +30,23 @@ $triggerTimes = @($task.Triggers | ForEach-Object {
 })
 $morningTrigger = [TimeSpan]::FromHours(4)
 $eveningTrigger = [TimeSpan]::FromHours(20) + [TimeSpan]::FromMinutes(30)
+$sundayMorningTrigger = [TimeSpan]::FromHours(8)
+$sundayTrigger = @($task.Triggers | Where-Object {
+    ([DateTimeOffset]$_.StartBoundary).TimeOfDay -eq $sundayMorningTrigger -and
+    ([int]$_.DaysOfWeek -band 1) -eq 1
+})
+$wednesdayEveningTrigger = [TimeSpan]::FromHours(17)
+$wednesdayTrigger = @($task.Triggers | Where-Object {
+    ([DateTimeOffset]$_.StartBoundary).TimeOfDay -eq $wednesdayEveningTrigger -and
+    ([int]$_.DaysOfWeek -band 8) -eq 8
+})
 
 if (-not [bool]$task.Settings.StartWhenAvailable -or
-    $triggerTimes.Count -ne 2 -or
+    $triggerTimes.Count -ne 4 -or
     $triggerTimes -notcontains $morningTrigger -or
     $triggerTimes -notcontains $eveningTrigger -or
+    $sundayTrigger.Count -ne 1 -or
+    $wednesdayTrigger.Count -ne 1 -or
     $task.Actions.Count -ne 1 -or
     -not $task.Actions[0].Execute.EndsWith('pwsh.exe', [StringComparison]::OrdinalIgnoreCase) -or
     -not $task.Actions[0].Arguments.Contains($publisherPath)) {
@@ -46,7 +58,7 @@ $taskInfo = Get-ScheduledTaskInfo -TaskName $TaskName
     TaskName           = $task.TaskName
     State              = [string]$task.State
     TimeZone           = $timeZone.Id
-    Triggers           = @('04:00', '20:30')
+    Triggers           = @('Daily 04:00', 'Daily 20:30', 'Sunday 08:00', 'Wednesday 17:00')
     StartWhenAvailable = [bool]$task.Settings.StartWhenAvailable
     NextRunTime        = $taskInfo.NextRunTime
     PublisherPath      = $publisherPath

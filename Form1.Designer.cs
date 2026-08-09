@@ -30,6 +30,7 @@ namespace PlayerAssistant
         {
             menuStrip = new MenuStrip();
             fileToolStripMenuItem = new ToolStripMenuItem();
+            countWordsAndTakeSnapshotsToolStripMenuItem = new ToolStripMenuItem();
             exitToolStripMenuItem = new ToolStripMenuItem();
             showToolStripMenuItem = new ToolStripMenuItem();
             loginInfoToolStripMenuItem = new ToolStripMenuItem();
@@ -85,10 +86,17 @@ namespace PlayerAssistant
             // 
             // fileToolStripMenuItem
             // 
-            fileToolStripMenuItem.DropDownItems.AddRange(new ToolStripItem[] { exitToolStripMenuItem });
+            fileToolStripMenuItem.DropDownItems.AddRange(new ToolStripItem[] { countWordsAndTakeSnapshotsToolStripMenuItem, exitToolStripMenuItem });
             fileToolStripMenuItem.Name = "fileToolStripMenuItem";
             fileToolStripMenuItem.Size = new Size(37, 20);
             fileToolStripMenuItem.Text = "File";
+            //
+            // countWordsAndTakeSnapshotsToolStripMenuItem
+            //
+            countWordsAndTakeSnapshotsToolStripMenuItem.Name = "countWordsAndTakeSnapshotsToolStripMenuItem";
+            countWordsAndTakeSnapshotsToolStripMenuItem.Size = new Size(230, 22);
+            countWordsAndTakeSnapshotsToolStripMenuItem.Text = "Count Words && Take Snapshots";
+            countWordsAndTakeSnapshotsToolStripMenuItem.Click += CountWordsAndTakeSnapshotsToolStripMenuItem_Click;
             // 
             // exitToolStripMenuItem
             // 
@@ -448,6 +456,7 @@ namespace PlayerAssistant
 
         private MenuStrip menuStrip;
         private ToolStripMenuItem fileToolStripMenuItem;
+        private ToolStripMenuItem countWordsAndTakeSnapshotsToolStripMenuItem;
         private ToolStripMenuItem showToolStripMenuItem;
         private ToolStripMenuItem searchToolStripMenuItem;
         private ToolStripMenuItem loginInfoToolStripMenuItem;

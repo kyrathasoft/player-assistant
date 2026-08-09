@@ -45,6 +45,8 @@ if ($InstallScheduledTask) {
     $triggers = @(
         New-ScheduledTaskTrigger -Daily -At '4:00 AM'
         New-ScheduledTaskTrigger -Daily -At '8:30 PM'
+        New-ScheduledTaskTrigger -Weekly -DaysOfWeek Sunday -At '8:00 AM'
+        New-ScheduledTaskTrigger -Weekly -DaysOfWeek Wednesday -At '5:00 PM'
     )
     $settings = New-ScheduledTaskSettingsSet -StartWhenAvailable `
         -ExecutionTimeLimit (New-TimeSpan -Hours 2) `

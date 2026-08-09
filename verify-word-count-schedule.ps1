@@ -19,9 +19,14 @@ Assert-Condition (Test-Path -LiteralPath $installerPath -PathType Leaf) 'The por
 $scheduledPublisher = Get-Content -Raw -LiteralPath $scheduledPublisherPath
 $installer = Get-Content -Raw -LiteralPath $installerPath
 $brokerPublisher = Get-Content -Raw -LiteralPath (Join-Path $RepoRoot 'web-deploy\publish-word-counts.ps1')
+$snapshotPublisher = Get-Content -Raw -LiteralPath (Join-Path $RepoRoot 'publish-rpol-snapshots.ps1')
 
 Assert-Condition ($scheduledPublisher.Contains("New-ScheduledTaskTrigger -Daily -At '4:00 AM'") -and
-    $scheduledPublisher.Contains("New-ScheduledTaskTrigger -Daily -At '8:30 PM'")) 'The full recount must run daily at 4:00 AM and 8:30 PM local time.'
+    $scheduledPublisher.Contains("New-ScheduledTaskTrigger -Daily -At '8:30 PM'") -and
+    $scheduledPublisher.Contains("New-ScheduledTaskTrigger -Weekly -DaysOfWeek Sunday -At '8:00 AM'") -and
+    $scheduledPublisher.Contains("New-ScheduledTaskTrigger -Weekly -DaysOfWeek Wednesday -At '5:00 PM'")) 'The full recount must run daily at 4:00 AM and 8:30 PM, Sunday at 8:00 AM, and Wednesday at 5:00 PM local Central time.'
+Assert-Condition ($snapshotPublisher.Contains("New-ScheduledTaskTrigger -Daily -At '3:00 AM'") -and
+    $snapshotPublisher.Contains("New-ScheduledTaskTrigger -Weekly -DaysOfWeek Wednesday -At '5:00 PM'")) 'The RPOL snapshot publisher must run daily at 3:00 AM and Wednesday at 5:00 PM local Central time.'
 Assert-Condition ($scheduledPublisher.Contains("Get-Command 'pwsh.exe'") -and
     $scheduledPublisher.Contains("Join-Path `$env:ProgramFiles 'PowerShell\7\pwsh.exe'") -and
     $scheduledPublisher.Contains('PSVersion.Major -lt 7')) 'The full recount must use PowerShell 7 because the canonical crawler uses parallel execution.'
@@ -49,6 +54,9 @@ Assert-Condition ($installer.Contains("& `$publisherPath -InstallScheduledTask -
     $installer.Contains("EndsWith('pwsh.exe'") -and
     $installer.Contains('StartWhenAvailable') -and
     $installer.Contains("[TimeSpan]::FromHours(4)") -and
+    $installer.Contains("[TimeSpan]::FromHours(8)") -and
+    $installer.Contains("[TimeSpan]::FromHours(17)") -and
+    $installer.Contains('DaysOfWeek') -and
     $installer.Contains("[TimeSpan]::FromMinutes(30)")) 'The portable installer must create and verify the Central-time task contract.'
 
 Write-Output 'Full word-count schedule policy verified.'

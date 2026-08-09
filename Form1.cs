@@ -77,6 +77,8 @@ namespace PlayerAssistant
         private const string RegionalMapFileName = "northernreaches.png";
         private const string KeywordIndexFileName = "keyword-index.json";
         private const string DungeonMasterXpAccessName = "Dungeon Master";
+        internal const string FullWordCountScheduledTaskName = "Player Assistant Full Word Count Publisher";
+        internal const string RpolSnapshotScheduledTaskName = "Player Assistant RPOL Snapshot Publisher";
         private static readonly TimeSpan HeroImageShowcaseStartDelay = TimeSpan.FromMilliseconds(2500);
         private static readonly TimeSpan HeroImageIntroDuration = TimeSpan.FromSeconds(1);
         private static readonly TimeSpan HeroImageFadeInDuration = TimeSpan.FromMilliseconds(200);
@@ -193,6 +195,7 @@ namespace PlayerAssistant
         private int _activeAsyncOperationCount;
         private int _statusActivityFrameIndex;
         private CancellationTokenSource? _searchOperationCancellation;
+        private readonly CancellationTokenSource _formLifetimeCancellation = new();
         private static readonly string[] StatusActivityFrames = ["-", "\\", "|", "/"];
         private Func<string[], DialogResult> _showLocalIndexMissPrompt = _ => DialogResult.No;
         private Action<string[], int> _showOnlineSearchCompletedMessage = static (_, _) => { };
@@ -290,6 +293,7 @@ namespace PlayerAssistant
 
         protected override void OnFormClosed(FormClosedEventArgs e)
         {
+            _formLifetimeCancellation.Cancel();
             StopHeroImageShowcase();
             _attributionTimer?.Dispose();
             _welcomeTimer?.Dispose();
@@ -298,6 +302,7 @@ namespace PlayerAssistant
             _searchOperationCancellation?.Cancel();
             _translatorController.Dispose();
             _backgroundTasks.Dispose();
+            _formLifetimeCancellation.Dispose();
             if (RpolAuthUtility.WebViewVerificationHandler == ShowRpolWebViewVerificationAsync)
             {
                 RpolAuthUtility.WebViewVerificationHandler = null;
@@ -338,11 +343,82 @@ namespace PlayerAssistant
                 "game forum startup",
                 async cancellationToken =>
                 {
-                    if (await LoadGameForumChapterPrefixesAsync(cancellationToken))
+                    if (await RunGameForumStartupAsync(
+                        CheckForPossiblyStaleSnapshotsAsync,
+                        LoadGameForumChapterPrefixesAsync,
+                        cancellationToken))
                     {
                         StartKeywordIndexCrawler();
                     }
                 });
+        }
+
+        internal static async Task<bool> RunGameForumStartupAsync(
+            Func<CancellationToken, Task> snapshotCheck,
+            Func<CancellationToken, Task<bool>> postDownloads,
+            CancellationToken cancellationToken)
+        {
+            ArgumentNullException.ThrowIfNull(snapshotCheck);
+            ArgumentNullException.ThrowIfNull(postDownloads);
+            await snapshotCheck(cancellationToken);
+            return await postDownloads(cancellationToken);
+        }
+
+        internal static async Task<bool> RunCountWordsAndTakeSnapshotsAsync(
+            string password,
+            Func<string, bool> validateDungeonMasterPassword,
+            Func<string, CancellationToken, Task> launchScheduledTask,
+            CancellationToken cancellationToken)
+        {
+            ArgumentNullException.ThrowIfNull(password);
+            ArgumentNullException.ThrowIfNull(validateDungeonMasterPassword);
+            ArgumentNullException.ThrowIfNull(launchScheduledTask);
+            cancellationToken.ThrowIfCancellationRequested();
+            if (!validateDungeonMasterPassword(password))
+            {
+                return false;
+            }
+
+            var failures = new List<Exception>();
+            foreach (var taskName in new[] { FullWordCountScheduledTaskName, RpolSnapshotScheduledTaskName })
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                try
+                {
+                    await launchScheduledTask(taskName, cancellationToken);
+                }
+                catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+                {
+                    throw;
+                }
+                catch (Exception ex)
+                {
+                    failures.Add(ex);
+                }
+            }
+
+            if (failures.Count > 0)
+            {
+                throw new AggregateException("One or more publisher tasks could not be launched.", failures);
+            }
+
+            return true;
+        }
+
+        private async Task CheckForPossiblyStaleSnapshotsAsync(CancellationToken cancellationToken)
+        {
+            try
+            {
+                await RpolSnapshotUtility.CheckForPossiblyStaleSnapshotsAsync(cancellationToken);
+            }
+            catch (OperationCanceledException)
+            {
+                throw;
+            }
+            catch (Exception ex)
+            {
+                await AppendStartupErrorLogAsync("RPOL snapshot freshness check", ex);
+            }
         }
 
         private void ShowStartupConfigurationWarning()
@@ -858,6 +934,106 @@ namespace PlayerAssistant
                         30,
                         ClientRectangle,
                         Color.LightGray);
+                }
+            }
+        }
+
+        private bool CanContinueManualPublisherUi()
+        {
+            return !_formLifetimeCancellation.IsCancellationRequested
+                && !IsDisposed
+                && !Disposing;
+        }
+
+        internal static async Task ReportManualPublisherFailureAsync(
+            Func<Task> appendLog,
+            Func<bool> canUpdateUi,
+            Action reportUi)
+        {
+            ArgumentNullException.ThrowIfNull(appendLog);
+            ArgumentNullException.ThrowIfNull(canUpdateUi);
+            ArgumentNullException.ThrowIfNull(reportUi);
+
+            await appendLog();
+            if (canUpdateUi())
+            {
+                reportUi();
+            }
+        }
+
+        private async void CountWordsAndTakeSnapshotsToolStripMenuItem_Click(object? sender, EventArgs e)
+        {
+            var password = PromptForDungeonMasterPassword();
+            if (password is null)
+            {
+                return;
+            }
+
+            countWordsAndTakeSnapshotsToolStripMenuItem.Enabled = false;
+            try
+            {
+                SetStatusBarMessage("Starting word-count and RPOL snapshot tasks...");
+                using var activity = BeginStatusBarActivity();
+                var authorized = await RunCountWordsAndTakeSnapshotsAsync(
+                    password,
+                    candidate => XpPasswordStoreUtility.ValidatePassword(
+                        DungeonMasterXpAccessName,
+                        candidate,
+                        AppContext.BaseDirectory),
+                    ScheduledTaskLaunchUtility.StartAsync,
+                    _formLifetimeCancellation.Token);
+                if (!CanContinueManualPublisherUi())
+                {
+                    return;
+                }
+
+                if (!authorized)
+                {
+                    MessageBox.Show(
+                        this,
+                        "The Dungeon Master password did not match.",
+                        "Count Words & Take Snapshots",
+                        MessageBoxButtons.OK,
+                        MessageBoxIcon.Warning);
+                    SetStatusBarMessage("Publisher task access denied.");
+                    return;
+                }
+
+                SetStatusBarMessage("Word-count and RPOL snapshot tasks launched.");
+                MessageBox.Show(
+                    this,
+                    "The word-count and RPOL snapshot tasks were launched.",
+                    "Count Words & Take Snapshots",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Information);
+            }
+            catch (OperationCanceledException) when (_formLifetimeCancellation.IsCancellationRequested)
+            {
+                return;
+            }
+            catch (Exception ex)
+            {
+                if (!CanContinueManualPublisherUi())
+                {
+                    return;
+                }
+
+                await ReportManualPublisherFailureAsync(
+                    () => AppendStartupErrorLogAsync("manual publisher task launch", ex),
+                    CanContinueManualPublisherUi,
+                    () =>
+                    {
+                        SetStatusBarMessage(UiOperationFailureReporter.FormatStatusMessage(
+                            "One or more publisher tasks could not be launched",
+                            ex));
+                        _showWarningDialog("Publisher Task Error", ex.Message);
+                    });
+            }
+            finally
+            {
+                if (CanContinueManualPublisherUi())
+                {
+                    countWordsAndTakeSnapshotsToolStripMenuItem.Enabled = true;
                 }
             }
         }
@@ -1505,6 +1681,76 @@ namespace PlayerAssistant
                 MessageBoxButtons.OK,
                 MessageBoxIcon.Warning);
             return false;
+        }
+
+        private string? PromptForDungeonMasterPassword()
+        {
+            using var dialog = new Form
+            {
+                Text = "Count Words & Take Snapshots",
+                FormBorderStyle = FormBorderStyle.FixedDialog,
+                StartPosition = FormStartPosition.CenterParent,
+                MinimizeBox = false,
+                MaximizeBox = false,
+                ShowInTaskbar = false,
+                ClientSize = new Size(410, 142)
+            };
+            using var instructionLabel = new Label
+            {
+                AutoSize = true,
+                Location = new Point(18, 18),
+                Text = "Enter the Dungeon Master password used to log in to the PWA."
+            };
+            using var passwordLabel = new Label
+            {
+                AutoSize = true,
+                Location = new Point(18, 58),
+                Text = "Password:"
+            };
+            using var passwordTextBox = new TextBox
+            {
+                Location = new Point(100, 54),
+                Size = new Size(286, 23),
+                UseSystemPasswordChar = true
+            };
+            using var okButton = new Button
+            {
+                DialogResult = DialogResult.OK,
+                Location = new Point(230, 96),
+                Size = new Size(75, 26),
+                Text = "OK"
+            };
+            using var cancelButton = new Button
+            {
+                DialogResult = DialogResult.Cancel,
+                Location = new Point(311, 96),
+                Size = new Size(75, 26),
+                Text = "Cancel"
+            };
+
+            dialog.Controls.AddRange(
+                [instructionLabel, passwordLabel, passwordTextBox, okButton, cancelButton]);
+            dialog.AcceptButton = okButton;
+            dialog.CancelButton = cancelButton;
+            dialog.Shown += (_, _) => passwordTextBox.Focus();
+
+            if (dialog.ShowDialog(this) != DialogResult.OK)
+            {
+                return null;
+            }
+
+            if (passwordTextBox.Text.Length == 0)
+            {
+                MessageBox.Show(
+                    this,
+                    "Enter the Dungeon Master password.",
+                    "Count Words & Take Snapshots",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Warning);
+                return null;
+            }
+
+            return passwordTextBox.Text;
         }
 
         private string? PromptForMyHeroBriefingHeroSelection(IReadOnlyList<string> heroChoices)
@@ -4689,7 +4935,6 @@ namespace PlayerAssistant
             cancellationToken.ThrowIfCancellationRequested();
             var mapsDirectory = EnsureMapsDirectory();
             var download = await GameForumUtility.DownloadRegionalMapAsync(
-                AppSettingsUtility.GameForumUrl,
                 mapsDirectory,
                 cancellationToken);
             await PreloadRegionalMapImageAsync(cancellationToken);
