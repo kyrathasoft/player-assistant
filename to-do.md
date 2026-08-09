@@ -24,6 +24,13 @@
   - [x] Pin GitHub Actions to immutable versions or hashes.
   - [x] Enable NuGet locked restore and dependency scanning.
   - [x] Move generated recovery archives out of the tracked source tree.
+- [ ] Try RPOL snapshot creation again and resolve the browser-worker failure.
+  - [ ] Make the WinForms publisher connect reliably to its temporary Chrome/Edge CDP session.
+  - [ ] Publish and verify at least one fresh snapshot before relying on the broker freshness cron.
+- [x] Schedule and deploy the PWA campaign word-count refresh.
+  - [x] Refresh `pwa/campaign-search.json` every Friday at 07:00 Central time with payload integrity checks.
+  - [x] Deploy the refreshed public index through the protected DreamHost SSH workflow using the `DREAMHOST_SSH_PRIVATE_KEY` repository secret.
+  - [x] Verify the live artifact with SHA-256 and run the production PWA deployment verifier.
 
 ## Architecture and maintainability
 
@@ -47,7 +54,8 @@
   - [ ] Browser smoke covers dialog focus containment/restoration, accessible names, visible focus contracts, table-backed protected data, reduced motion, and narrow mobile layouts.
   - [x] Production security headers now include `object-src`, `frame-src`, and `upgrade-insecure-requests`; host-level HSTS remains enabled pending any future verified subdomain expansion.
   - [x] Static PWA verification validates generated data schemas, source URLs, record counts, token hashes, cache revisions, and deployment parity.
-  - [ ] Deployment verification and the new scheduled monitor provide production coverage for anonymous API denial, authorized response shape, protected-cache exclusion, asset versions, service-worker activation, and stale broker/source conditions; the current production monitor detects local/remote asset drift and must be run after deployment.
+  - [x] Deployment verification and the scheduled monitor provide production coverage for anonymous API denial, asset parity, security/cache headers, and public runtime files; the live PWA deployment passed SHA-256 verification.
+  - [ ] Add explicit production detection for stale broker/source conditions and authorized protected-response shape.
   - [x] Startup timing and 320px narrow-layout overflow are enforced by browser smoke; campaign search and large dictionaries remain demand-loaded/cached.
 
 ## Completed
