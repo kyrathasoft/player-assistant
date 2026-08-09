@@ -365,6 +365,30 @@ internal static partial class TestCases
         AssertContains(File.ReadAllText(downloads[0].FilePath), "all chapter posts");
     }
 
+    internal static void HouseRulesDownloadUsesShowAllThreadUrl()
+    {
+        using var directory = TemporaryDirectory.Create();
+        var requestedUrls = new List<string>();
+
+        var download = GameForumUtility.DownloadHouseRulesHtmlAsync(
+            [new Hyperlink(
+                "https://rpol.net/display.cgi?gi=80170&ti=3&date=1774814820&msgpage=2",
+                "Notice: Welcome & House Rules")],
+            directory.Path,
+            (url, _) =>
+            {
+                requestedUrls.Add(url);
+                return Task.FromResult("<html><body>all house rules posts</body></html>");
+            }).GetAwaiter().GetResult();
+
+        AssertEqual(1, requestedUrls.Count, "house rules downloader should fetch one URL");
+        AssertEqual(
+            "https://rpol.net/display.cgi?gi=80170&ti=3&msgpage=&show=all",
+            requestedUrls[0],
+            "house rules downloader should request the canonical complete thread");
+        AssertTrue(download?.Downloaded == true, "missing House Rules file should be downloaded");
+    }
+
     internal static void AsideDownloadsUseShowAllUrlsAndRefreshExistingFiles()
     {
         using var directory = TemporaryDirectory.Create();
@@ -552,6 +576,9 @@ internal static partial class TestCases
         AssertEqual(first[0].RollId, saved[0].RollId, "saved synthetic roll IDs should remain stable");
         AssertEqual(3, normalizedSnapshotEntries.Length, "normalized snapshots should retain every unique live roll");
         AssertContains(normalizedSnapshot, $"[roll={first[0].RollId}]");
+        AssertTrue(
+            RpolSnapshotUtility.IsUsableSnapshotHtml(normalizedSnapshot),
+            "normalized Dice Roller HTML should pass snapshot publisher validation");
     }
 
     internal static void DieRollSyncAppendsOnlyUnsavedRolls()
@@ -2832,6 +2859,45 @@ internal static partial class TestCases
         AssertFalse(
             RpolAuthUtility.IsVerifiedRpolBrowserWindowTitle("Just a moment... - Google Chrome"),
             "a challenge window title should remain open");
+    }
+
+    internal static void RpolVerificationBrowserStartsWithCdpEnabled()
+    {
+        var arguments = RpolAuthUtility.CreateExternalBrowserVerificationArguments(
+            54808,
+            "C:/temp/rpol-profile",
+            "C:/temp/rpol-notice.html");
+
+        AssertTrue(
+            arguments.Contains("--remote-debugging-port=54808", StringComparer.Ordinal),
+            "the manually verified browser should expose CDP before verification starts");
+        AssertTrue(
+            arguments.Contains("--user-data-dir=C:/temp/rpol-profile", StringComparer.Ordinal),
+            "the verified profile should remain isolated");
+        AssertTrue(
+            arguments.Contains(new Uri("C:/temp/rpol-notice.html").AbsoluteUri, StringComparer.Ordinal),
+            "the verification browser should retain its local instructions page");
+        AssertEqual(
+            AppSettingsUtility.GameForumUrl,
+            arguments[^1],
+            "the RPOL page should be the active tab used to detect completed verification");
+    }
+
+    internal static void RpolSnapshotUploadJsonUsesBrokerCanonicalEscaping()
+    {
+        var payload = RpolSnapshotUtility.CreatePayload(
+            new Uri("https://rpol.net/display.cgi?gi=80170&ti=18&msgpage=&show=all"),
+            "<html><title>Scarlet Horizons</title><body>test</body></html>",
+            "text/html; charset=utf-8",
+            DateTimeOffset.Parse("2026-08-08T12:00:00Z"),
+            Convert.ToBase64String(new byte[32]));
+
+        var json = RpolSnapshotUtility.SerializePayloadForUpload(payload);
+
+        AssertContains(json, "?gi=80170&ti=18&msgpage=&show=all");
+        AssertFalse(
+            json.Contains("\\u0026", StringComparison.OrdinalIgnoreCase),
+            "snapshot JSON must use the same ampersand escaping as the broker's canonical body");
     }
 
     internal static void RpolDiceRollerNavigationUsesGamePageReferrer()

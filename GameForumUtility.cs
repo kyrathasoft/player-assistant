@@ -298,7 +298,22 @@ namespace PlayerAssistant
             string outputDirectory,
             CancellationToken cancellationToken = default)
         {
+            return await DownloadHouseRulesHtmlAsync(
+                hyperlinks,
+                outputDirectory,
+                GetHtmlFromUrlWithRateLimitAsync,
+                cancellationToken);
+        }
+
+        internal static async Task<GameForumPostDownload?> DownloadHouseRulesHtmlAsync(
+            IEnumerable<Hyperlink> hyperlinks,
+            string outputDirectory,
+            Func<string, CancellationToken, Task<string>> htmlFetcher,
+            CancellationToken cancellationToken = default)
+        {
+            ArgumentNullException.ThrowIfNull(hyperlinks);
             ArgumentException.ThrowIfNullOrWhiteSpace(outputDirectory);
+            ArgumentNullException.ThrowIfNull(htmlFetcher);
 
             Directory.CreateDirectory(outputDirectory);
 
@@ -316,7 +331,8 @@ namespace PlayerAssistant
 
                 if (ShouldDownload(filePath))
                 {
-                    var html = await GetHtmlFromUrlWithRateLimitAsync(hyperlink.Url, cancellationToken);
+                    var showAllUrl = RpolThreadPostUtility.GetShowAllThreadUrl(hyperlink.Url);
+                    var html = await htmlFetcher(showAllUrl, cancellationToken);
                     await AtomicFileUtility.WriteAllTextAsync(filePath, html, cancellationToken);
                     FileDownloadCounters.AddCompletedDownload(filePath);
                     downloaded = true;
@@ -720,7 +736,8 @@ namespace PlayerAssistant
                 <html lang="en">
                 <head>
                     <meta charset="utf-8">
-                    <title>Die Rolls</title>
+                    <meta name="player-assistant-snapshot" content="dice-rolls">
+                    <title>Scarlet Horizons - Die Rolls</title>
                 </head>
                 <body>
                     <h1>Die Rolls</h1>

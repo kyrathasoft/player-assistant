@@ -272,7 +272,12 @@ final class BrokerService
             $token = $this->authenticateBearerToken($headers);
             $this->enforceRateLimit($token['id']);
             $url = is_string($query['url'] ?? null) ? $query['url'] : '';
-            $this->rpolClient->validateTargetUrl($url);
+            try {
+                $this->rpolClient->validateTargetUrl($url);
+            } catch (InvalidArgumentException $exception) {
+                $this->recordAudit($token['id'], $remoteAddress, $url, 'rejected');
+                throw new BrokerHttpException(400, 'invalid_rpol_url', $exception->getMessage(), $exception);
+            }
             $snapshot = $this->loadSnapshot($url);
             $this->recordAudit($token['id'], $remoteAddress, $url, 'snapshot_success');
             return $this->response(200, $snapshot);

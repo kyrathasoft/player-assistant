@@ -2,6 +2,7 @@ using System.Net;
 using System.Net.Http.Headers;
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.Encodings.Web;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Text.RegularExpressions;
@@ -358,9 +359,12 @@ namespace PlayerAssistant
         internal static bool IsUsableSnapshotHtml(string sanitizedHtml)
         {
             return !string.IsNullOrWhiteSpace(sanitizedHtml)
-                && sanitizedHtml.Length >= 1024
                 && sanitizedHtml.Contains("<html", StringComparison.OrdinalIgnoreCase)
-                && sanitizedHtml.Contains("Scarlet Horizons", StringComparison.OrdinalIgnoreCase)
+                && ((sanitizedHtml.Length >= 1024
+                        && sanitizedHtml.Contains("Scarlet Horizons", StringComparison.OrdinalIgnoreCase))
+                    || sanitizedHtml.Contains(
+                        "<meta name=\"player-assistant-snapshot\" content=\"dice-rolls\">",
+                        StringComparison.OrdinalIgnoreCase))
                 && !RpolAuthUtility.LooksLikeCloudflareChallengePage(sanitizedHtml)
                 && !LoginFormRegex().IsMatch(sanitizedHtml);
         }
@@ -437,7 +441,7 @@ namespace PlayerAssistant
             CancellationToken cancellationToken)
         {
             var endpoint = CreateEndpoint("snapshots/page");
-            var json = JsonSerializer.Serialize(payload);
+            var json = SerializePayloadForUpload(payload);
             using var response = await NetworkRequestUtility.SendAsync(
                 HttpClient,
                 () =>
@@ -473,6 +477,17 @@ namespace PlayerAssistant
                     $"The RPOL snapshot broker returned HTTP {(int)response.StatusCode}: "
                     + SensitiveTextRedactionUtility.Redact(responseBody));
             }
+        }
+
+        internal static string SerializePayloadForUpload(RpolSnapshotPayload payload)
+        {
+            ArgumentNullException.ThrowIfNull(payload);
+            return JsonSerializer.Serialize(
+                payload,
+                new JsonSerializerOptions
+                {
+                    Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping
+                });
         }
 
         private static HttpRequestMessage CreateRequest(HttpMethod method, Uri uri, string? bearerToken)

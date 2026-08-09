@@ -400,40 +400,17 @@ namespace PlayerAssistant
                 $"rpol-browser-verification-{Guid.NewGuid():N}.html");
             Directory.CreateDirectory(profileDirectory);
             File.WriteAllText(noticePath, CreateExternalBrowserNoticeHtml(), Encoding.UTF8);
-
-            using var verificationProcess = StartExternalBrowserForManualVerification(
-                browserPath,
-                profileDirectory,
-                noticePath);
-            try
-            {
-                await WaitForManualBrowserVerificationAsync(verificationProcess, cancellationToken);
-            }
-            catch
-            {
-                if (!verificationProcess.HasExited)
-                {
-                    try
-                    {
-                        verificationProcess.Kill(entireProcessTree: true);
-                    }
-                    catch
-                    {
-                    }
-                }
-
-                throw;
-            }
-
             var remoteDebuggingPort = GetAvailableLoopbackPort();
-            var importProcess = StartExternalBrowserForStorageImport(
+            var verificationProcess = StartExternalBrowserForManualVerification(
                 browserPath,
                 remoteDebuggingPort,
-                profileDirectory);
+                profileDirectory,
+                noticePath);
 
             IBrowser? browser = null;
             try
             {
+                await WaitForManualBrowserVerificationAsync(verificationProcess, cancellationToken);
                 browser = await ConnectToExternalBrowserAsync(
                     playwright,
                     remoteDebuggingPort,
@@ -454,7 +431,7 @@ namespace PlayerAssistant
                     playwright,
                     browser,
                     context,
-                    importProcess,
+                    verificationProcess,
                     profileDirectory);
             }
             catch
@@ -470,11 +447,11 @@ namespace PlayerAssistant
                     }
                 }
 
-                if (!importProcess.HasExited)
+                if (!verificationProcess.HasExited)
                 {
                     try
                     {
-                        importProcess.Kill(entireProcessTree: true);
+                        verificationProcess.Kill(entireProcessTree: true);
                     }
                     catch
                     {
@@ -483,7 +460,7 @@ namespace PlayerAssistant
 
                 DeleteTemporaryStorageStateFile(noticePath);
                 DeleteTemporaryDirectory(profileDirectory);
-                importProcess.Dispose();
+                verificationProcess.Dispose();
                 throw;
             }
         }
@@ -504,7 +481,7 @@ namespace PlayerAssistant
                 process.Refresh();
                 if (IsVerifiedRpolBrowserWindowTitle(process.MainWindowTitle))
                 {
-                    process.CloseMainWindow();
+                    return;
                 }
 
                 await Task.Delay(CloudflareClearancePollInterval, cancellationToken);
@@ -689,6 +666,7 @@ namespace PlayerAssistant
 
         private static Process StartExternalBrowserForManualVerification(
             string browserPath,
+            int remoteDebuggingPort,
             string profileDirectory,
             string noticePath)
         {
@@ -697,32 +675,31 @@ namespace PlayerAssistant
                 FileName = browserPath,
                 UseShellExecute = false
             };
-            startInfo.ArgumentList.Add($"--user-data-dir={profileDirectory}");
-            startInfo.ArgumentList.Add("--no-first-run");
-            startInfo.ArgumentList.Add("--new-window");
-            startInfo.ArgumentList.Add(AppSettingsUtility.GameForumUrl);
-            startInfo.ArgumentList.Add(new Uri(noticePath).AbsoluteUri);
+            foreach (var argument in CreateExternalBrowserVerificationArguments(
+                remoteDebuggingPort,
+                profileDirectory,
+                noticePath))
+            {
+                startInfo.ArgumentList.Add(argument);
+            }
 
             return StartExternalBrowserProcess(startInfo);
         }
 
-        private static Process StartExternalBrowserForStorageImport(
-            string browserPath,
+        internal static string[] CreateExternalBrowserVerificationArguments(
             int remoteDebuggingPort,
-            string profileDirectory)
+            string profileDirectory,
+            string noticePath)
         {
-            var startInfo = new ProcessStartInfo
-            {
-                FileName = browserPath,
-                UseShellExecute = false
-            };
-            startInfo.ArgumentList.Add($"--remote-debugging-port={remoteDebuggingPort}");
-            startInfo.ArgumentList.Add($"--user-data-dir={profileDirectory}");
-            startInfo.ArgumentList.Add("--no-first-run");
-            startInfo.ArgumentList.Add("--new-window");
-            startInfo.ArgumentList.Add(AppSettingsUtility.GameForumUrl);
-
-            return StartExternalBrowserProcess(startInfo);
+            return
+            [
+                $"--remote-debugging-port={remoteDebuggingPort}",
+                $"--user-data-dir={profileDirectory}",
+                "--no-first-run",
+                "--new-window",
+                new Uri(noticePath).AbsoluteUri,
+                AppSettingsUtility.GameForumUrl
+            ];
         }
 
         private static Process StartExternalBrowserProcess(ProcessStartInfo startInfo)
