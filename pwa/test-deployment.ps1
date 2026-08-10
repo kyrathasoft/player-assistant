@@ -58,7 +58,7 @@ function Invoke-ProductionMonitorLogout {
         [System.Net.Http.HttpMethod]::Post,
         [uri]::new($ApiBaseUri, 'logout'))
     $logoutRequest.Headers.TryAddWithoutValidation('Origin', $Origin) | Out-Null
-    $logoutRequest.Headers.TryAddWithoutValidation('CSRF-Token', $CsrfToken) | Out-Null
+    $logoutRequest.Headers.TryAddWithoutValidation('X-CSRF-Token', $CsrfToken) | Out-Null
     $logoutResponse = $null
     $postLogoutSessionResponse = $null
     try {
