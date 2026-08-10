@@ -10,12 +10,19 @@ $executablePath = Join-Path $repositoryRoot 'Release\player-assistant.exe'
 $resultPath = Join-Path $repositoryRoot 'Release\rpol-snapshot-publish-result.json'
 
 if ($InstallScheduledTask) {
+    $timeZone = Get-TimeZone
+    if ($timeZone.Id -ne 'Central Standard Time') {
+        throw "This task must be installed on a computer using the 'Central Standard Time' Windows time zone. Current time zone: $($timeZone.Id)"
+    }
     $scriptPath = $MyInvocation.MyCommand.Path
     $action = New-ScheduledTaskAction -Execute 'powershell.exe' -Argument (
         "-NoProfile -ExecutionPolicy Bypass -File `"$scriptPath`"")
-    $trigger = New-ScheduledTaskTrigger -Daily -At '3:00 AM'
+    $triggers = @(
+        New-ScheduledTaskTrigger -Daily -At '3:00 AM'
+        New-ScheduledTaskTrigger -Weekly -DaysOfWeek Wednesday -At '5:00 PM'
+    )
     $settings = New-ScheduledTaskSettingsSet -StartWhenAvailable -ExecutionTimeLimit (New-TimeSpan -Hours 1)
-    Register-ScheduledTask -TaskName $TaskName -Action $action -Trigger $trigger -Settings $settings `
+    Register-ScheduledTask -TaskName $TaskName -Action $action -Trigger $triggers -Settings $settings `
         -Description 'Publishes signed RPOL game 80170 snapshots for Player Assistant.' -Force | Out-Null
     Write-Output "Installed scheduled task '$TaskName'."
     return

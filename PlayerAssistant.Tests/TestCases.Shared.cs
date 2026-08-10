@@ -306,6 +306,258 @@ internal static partial class TestCases
         });
     }
 
+    internal static void FileMenuContainsCountWordsAndTakeSnapshotsItem()
+    {
+        RunOnStaThread(() =>
+        {
+            using var form = new Form1(suppressHeroImagesForThisRun: true);
+            var fileMenuItem = (ToolStripMenuItem)(GetPrivateField(form, "fileToolStripMenuItem")
+                ?? throw new InvalidOperationException("fileToolStripMenuItem was null."));
+            var countWordsMenuItem = (ToolStripMenuItem)(GetPrivateField(form, "countWordsAndTakeSnapshotsToolStripMenuItem")
+                ?? throw new InvalidOperationException("countWordsAndTakeSnapshotsToolStripMenuItem was null."));
+            var exitMenuItem = (ToolStripMenuItem)(GetPrivateField(form, "exitToolStripMenuItem")
+                ?? throw new InvalidOperationException("exitToolStripMenuItem was null."));
+
+            AssertEqual("Count Words && Take Snapshots", countWordsMenuItem.Text ?? string.Empty, "unexpected publisher menu item text");
+            AssertTrue(
+                fileMenuItem.DropDownItems.Cast<ToolStripItem>().SequenceEqual([countWordsMenuItem, exitMenuItem]),
+                "File menu should contain Count Words & Take Snapshots before Exit");
+        });
+    }
+
+    internal static void CountWordsAndTakeSnapshotsRejectsInvalidDungeonMasterPassword()
+    {
+        var launchedTasks = new List<string>();
+
+        var authorized = Form1.RunCountWordsAndTakeSnapshotsAsync(
+            "wrong password",
+            password => password == "correct password",
+            (taskName, _) =>
+            {
+                launchedTasks.Add(taskName);
+                return Task.CompletedTask;
+            },
+            CancellationToken.None).GetAwaiter().GetResult();
+
+        AssertFalse(authorized, "an invalid Dungeon Master password must deny manual publication");
+        AssertEqual(0, launchedTasks.Count, "no scheduled task should launch after failed authentication");
+    }
+
+    internal static void CountWordsAndTakeSnapshotsLaunchesBothPublisherTasks()
+    {
+        var launchedTasks = new List<string>();
+
+        var authorized = Form1.RunCountWordsAndTakeSnapshotsAsync(
+            "correct password",
+            password => password == "correct password",
+            (taskName, _) =>
+            {
+                launchedTasks.Add(taskName);
+                return Task.CompletedTask;
+            },
+            CancellationToken.None).GetAwaiter().GetResult();
+
+        AssertTrue(authorized, "the Dungeon Master password should authorize manual publication");
+        AssertTrue(
+            launchedTasks.SequenceEqual(
+            [
+                "Player Assistant Full Word Count Publisher",
+                "Player Assistant RPOL Snapshot Publisher"
+            ]),
+            "manual publication should launch both installed publisher tasks exactly once");
+    }
+
+    internal static void ScheduledTaskLauncherUsesNativeSchtasksArguments()
+    {
+        var startInfo = ScheduledTaskLaunchUtility.CreateStartInfo(Form1.FullWordCountScheduledTaskName);
+
+        AssertTrue(
+            startInfo.FileName.EndsWith("schtasks.exe", StringComparison.OrdinalIgnoreCase),
+            "scheduled tasks should launch through the native schtasks executable");
+        AssertTrue(
+            startInfo.ArgumentList.SequenceEqual(["/Run", "/TN", Form1.FullWordCountScheduledTaskName]),
+            "scheduled task arguments should not be shell-concatenated");
+        AssertFalse(startInfo.UseShellExecute, "scheduled task launch must not use shell execution");
+        AssertTrue(startInfo.CreateNoWindow, "scheduled task launch should not open a console window");
+    }
+
+    internal static void ScheduledTaskLauncherRejectsPreCanceledRequestBeforeProcessCreation()
+    {
+        using var cancellation = new CancellationTokenSource();
+        cancellation.Cancel();
+        var processCreationCount = 0;
+        ScheduledTaskLaunchUtility.ProcessFactoryForTests = startInfo =>
+        {
+            processCreationCount++;
+            return new Process { StartInfo = startInfo };
+        };
+
+        try
+        {
+            AssertThrows<OperationCanceledException>(() =>
+                ScheduledTaskLaunchUtility.StartAsync(
+                    Form1.FullWordCountScheduledTaskName,
+                    cancellation.Token).GetAwaiter().GetResult());
+            AssertEqual(0, processCreationCount, "a pre-canceled launch must not create or start schtasks.exe");
+        }
+        finally
+        {
+            ScheduledTaskLaunchUtility.ProcessFactoryForTests = null;
+        }
+    }
+
+    internal static void ScheduledTaskLauncherCancellationTerminatesProcess()
+    {
+        var pidPath = Path.Combine(Path.GetTempPath(), $"player-assistant-schtasks-test-{Guid.NewGuid():N}.pid");
+        using var cancellation = new CancellationTokenSource();
+        ScheduledTaskLaunchUtility.ProcessFactoryForTests = _ =>
+        {
+            var startInfo = new ProcessStartInfo
+            {
+                FileName = "powershell.exe",
+                UseShellExecute = false,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                CreateNoWindow = true
+            };
+            startInfo.ArgumentList.Add("-NoProfile");
+            startInfo.ArgumentList.Add("-NonInteractive");
+            startInfo.ArgumentList.Add("-Command");
+            startInfo.ArgumentList.Add($"$PID | Set-Content -LiteralPath '{pidPath.Replace("'", "''")}'; Start-Sleep -Seconds 30");
+            return new Process { StartInfo = startInfo };
+        };
+
+        int? processId = null;
+        try
+        {
+            var launchTask = ScheduledTaskLaunchUtility.StartAsync(
+                Form1.FullWordCountScheduledTaskName,
+                cancellation.Token);
+            AssertTrue(
+                SpinWait.SpinUntil(() => File.Exists(pidPath), TimeSpan.FromSeconds(5)),
+                "the cancellation test process should start");
+            processId = int.Parse(File.ReadAllText(pidPath).Trim(), System.Globalization.CultureInfo.InvariantCulture);
+
+            cancellation.Cancel();
+            AssertThrows<OperationCanceledException>(() => launchTask.GetAwaiter().GetResult());
+            AssertTrue(
+                SpinWait.SpinUntil(() => !IsProcessRunning(processId.Value), TimeSpan.FromSeconds(5)),
+                "cancellation should terminate the launched process");
+        }
+        finally
+        {
+            cancellation.Cancel();
+            ScheduledTaskLaunchUtility.ProcessFactoryForTests = null;
+            if (processId.HasValue && IsProcessRunning(processId.Value))
+            {
+                Process.GetProcessById(processId.Value).Kill(entireProcessTree: true);
+            }
+
+            File.Delete(pidPath);
+        }
+    }
+
+    private static bool IsProcessRunning(int processId)
+    {
+        try
+        {
+            using var process = Process.GetProcessById(processId);
+            return !process.HasExited;
+        }
+        catch (ArgumentException)
+        {
+            return false;
+        }
+    }
+
+    internal static void CountWordsAndTakeSnapshotsAttemptsBothTasksAfterOneFailure()
+    {
+        var launchedTasks = new List<string>();
+
+        var exception = AssertThrows<AggregateException>(() =>
+            Form1.RunCountWordsAndTakeSnapshotsAsync(
+                "correct password",
+                _ => true,
+                (taskName, _) =>
+                {
+                    launchedTasks.Add(taskName);
+                    return taskName == Form1.FullWordCountScheduledTaskName
+                        ? Task.FromException(new InvalidOperationException("word-count launch failed"))
+                        : Task.CompletedTask;
+                },
+                CancellationToken.None).GetAwaiter().GetResult());
+
+        AssertEqual(2, launchedTasks.Count, "one failed task request must not suppress the other task request");
+        AssertEqual(1, exception.InnerExceptions.Count, "only the failed task request should be reported");
+    }
+
+    internal static void FormClosureCancelsManualPublisherLaunch()
+    {
+        RunOnStaThread(() =>
+        {
+            var form = new Form1(suppressHeroImagesForThisRun: true);
+            var lifetimeCancellation = (CancellationTokenSource)(GetPrivateField(form, "_formLifetimeCancellation")
+                ?? throw new InvalidOperationException("_formLifetimeCancellation was null."));
+
+            try
+            {
+                InvokePrivateMethod(
+                    form,
+                    "OnFormClosed",
+                    new FormClosedEventArgs(CloseReason.UserClosing));
+
+                AssertTrue(
+                    lifetimeCancellation.IsCancellationRequested,
+                    "closing the form should cancel an in-flight manual publisher launch");
+                AssertFalse(
+                    (bool)(InvokePrivateMethod(form, "CanContinueManualPublisherUi")
+                        ?? throw new InvalidOperationException("CanContinueManualPublisherUi returned null.")),
+                    "a closed form must not update manual publisher UI after an awaited launch");
+            }
+            finally
+            {
+                form.Dispose();
+            }
+        });
+    }
+
+    internal static void CountWordsAndTakeSnapshotsPreservesCallerCancellation()
+    {
+        using var cancellation = new CancellationTokenSource();
+        var launchedTasks = new List<string>();
+
+        AssertThrows<OperationCanceledException>(() =>
+            Form1.RunCountWordsAndTakeSnapshotsAsync(
+                "correct password",
+                _ => true,
+                (taskName, cancellationToken) =>
+                {
+                    launchedTasks.Add(taskName);
+                    cancellation.Cancel();
+                    return Task.CompletedTask;
+                },
+                cancellation.Token).GetAwaiter().GetResult());
+
+        AssertEqual(1, launchedTasks.Count, "caller cancellation should stop the second task launch request");
+    }
+
+    internal static void ManualPublisherFailureReportingSkipsUiAfterClosure()
+    {
+        var loggingCompletion = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var canUpdateUi = true;
+        var uiReportCount = 0;
+
+        var reportTask = Form1.ReportManualPublisherFailureAsync(
+            () => loggingCompletion.Task,
+            () => canUpdateUi,
+            () => uiReportCount++);
+        canUpdateUi = false;
+        loggingCompletion.SetResult();
+        reportTask.GetAwaiter().GetResult();
+
+        AssertEqual(0, uiReportCount, "form closure during failure logging must suppress later UI access");
+    }
+
     internal static void AboutAuthorTextListsDeveloperInfo()
     {
         var authorText = (string)(InvokeStaticMethod(typeof(Form1), "GetAuthorInfoText")

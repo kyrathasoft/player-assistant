@@ -45,7 +45,7 @@ Assert-Condition -Condition (!$program.Contains('var tests = new (string Name, A
 $registrationMatches = [regex]::Matches(
     $catalog,
     '(?m)^\s*\("(?<name>[^"]+)",\s*(?<target>[A-Za-z0-9_.]+)\),?\s*$')
-Assert-Condition -Condition ($registrationMatches.Count -eq 410) -Message 'The test catalog must retain all 410 desktop regression tests.'
+Assert-Condition -Condition ($registrationMatches.Count -eq 428) -Message 'The test catalog must retain all 428 desktop regression tests.'
 
 $names = @($registrationMatches | ForEach-Object { $_.Groups['name'].Value })
 $duplicateNames = @($names | Group-Object | Where-Object Count -gt 1 | Select-Object -ExpandProperty Name)

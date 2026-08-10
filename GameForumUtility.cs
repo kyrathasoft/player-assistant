@@ -32,6 +32,7 @@ namespace PlayerAssistant
         private static readonly TimeSpan ChapterHtmlRefreshInterval = TimeSpan.FromHours(1);
         private static readonly TimeSpan GameIntroHtmlRefreshInterval = TimeSpan.FromHours(24);
         private static readonly TimeSpan RegionalMapRefreshInterval = TimeSpan.FromHours(1);
+        internal const string RegionalMapUrl = "https://bryanmiller.us/scarlethorizons/maps/northernreaches.png";
         private const long MinimumRegionalMapFileSizeBytes = 500_000;
         private static readonly TimeSpan TheCastHtmlRefreshInterval = TimeSpan.FromHours(1);
         private static readonly TimeSpan RpolDownloadAttemptInterval = TimeSpan.FromMilliseconds(5000);
@@ -420,11 +421,9 @@ namespace PlayerAssistant
         }
 
         public static async Task<GameForumPostDownload> DownloadRegionalMapAsync(
-            string gameForumUrl,
             string outputDirectory,
             CancellationToken cancellationToken = default)
         {
-            ArgumentException.ThrowIfNullOrWhiteSpace(gameForumUrl);
             ArgumentException.ThrowIfNullOrWhiteSpace(outputDirectory);
 
             Directory.CreateDirectory(outputDirectory);
@@ -439,16 +438,8 @@ namespace PlayerAssistant
 
             try
             {
-                var gameLinksUrl = await GetRequiredLinkUrlAsync(
-                    gameForumUrl,
-                    "Game Links",
-                    cancellationToken);
-                var regionalMapUrl = await GetRequiredLinkUrlAsync(
-                    gameLinksUrl,
-                    linkText,
-                    cancellationToken);
                 await ImageDownloadUtility.DownloadImageFileAsPngAsync(
-                    regionalMapUrl,
+                    RegionalMapUrl,
                     filePath,
                     cancellationToken);
 

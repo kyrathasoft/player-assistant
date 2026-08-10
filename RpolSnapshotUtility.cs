@@ -38,6 +38,7 @@ namespace PlayerAssistant
         private const int SchemaVersion = 1;
         private const int PublisherStateSchemaVersion = 1;
         private const string PublisherStateFileName = "rpol-snapshot-publisher-state.json";
+        private static readonly TimeSpan StartupFreshnessInterval = TimeSpan.FromHours(1);
         private static readonly Uri DiceRollerUri = new($"https://rpol.net/usermodules/diceroller.cgi?gi={GameId}");
         private static readonly HttpClient HttpClient = new(new SocketsHttpHandler
         {
@@ -47,34 +48,130 @@ namespace PlayerAssistant
 
         public static async Task<string> GetHtmlAsync(Uri sourceUri, CancellationToken cancellationToken = default)
         {
-            ValidateSourceUri(sourceUri);
-            var token = RuntimeSecretStoreUtility.GetBrokerToken();
-            if (string.IsNullOrWhiteSpace(token))
-            {
-                throw new InvalidOperationException("The Player Assistant broker token is missing from Windows Credential Manager.");
-            }
-
-            var endpoint = CreateEndpoint("snapshots/page?url=" + Uri.EscapeDataString(sourceUri.AbsoluteUri));
-            using var response = await NetworkRequestUtility.SendAsync(
-                HttpClient,
-                () => CreateRequest(HttpMethod.Get, endpoint, token),
-                HttpCompletionOption.ResponseHeadersRead,
-                purpose: NetworkUrlPurpose.PlayerAssistantBroker,
-                cancellationToken: cancellationToken);
-            if (!response.IsSuccessStatusCode)
-            {
-                throw new InvalidOperationException(
-                    $"The RPOL snapshot broker returned HTTP {(int)response.StatusCode} for '{sourceUri}'.");
-            }
-
-            var json = await NetworkRequestUtility.ReadStringAsync(
-                response.Content,
-                NetworkResponseContentLimit.JsonCache,
-                cancellationToken);
-            var payload = JsonSerializer.Deserialize<RpolSnapshotPayload>(json)
+            var payload = await GetSnapshotPayloadAsync(
+                sourceUri,
+                allowUnavailable: false,
+                verifySignature: false,
+                cancellationToken)
                 ?? throw new InvalidOperationException("The RPOL snapshot broker returned an empty response.");
-            ValidateResponse(payload, sourceUri);
             return Encoding.UTF8.GetString(Convert.FromBase64String(payload.ContentBase64));
+        }
+
+        public static async Task CheckForPossiblyStaleSnapshotsAsync(
+            CancellationToken cancellationToken = default)
+        {
+            var now = DateTimeOffset.UtcNow;
+            var statePath = RuntimePathUtility.GetUserDataPath(PublisherStateFileName);
+            var state = LoadPublisherState(statePath);
+            if (state is not null)
+            {
+                var normalizedState = EnsureRequiredSourceUris(state);
+                if (!ReferenceEquals(normalizedState, state))
+                {
+                    state = normalizedState;
+                    await SavePublisherStateAsync(statePath, state, cancellationToken);
+                }
+            }
+
+            var rootUri = new Uri(AppSettingsUtility.GameForumUrl);
+            var rootPayload = await GetSnapshotPayloadAsync(
+                rootUri,
+                allowUnavailable: true,
+                verifySignature: true,
+                cancellationToken);
+            if (state is null || rootPayload is null || IsPossiblyStale(rootPayload, now))
+            {
+                var discovery = await DiscoverSourceUrisAsync(cancellationToken);
+                state = MergeDiscoveredSourceUris(state, discovery.SourceUris);
+                await SavePublisherStateAsync(statePath, state, cancellationToken);
+                await PublishSnapshotAsync(rootUri, discovery.RootHtml, cancellationToken);
+                if (state.SourceUrls.Count > 1)
+                {
+                    await PublishNextSnapshotForStartupAsync(statePath, state, cancellationToken);
+                }
+
+                return;
+            }
+
+            var sourceUri = GetNextSourceUri(state);
+            if (sourceUri == rootUri && state.SourceUrls.Count > 1)
+            {
+                state = AdvancePublisherState(state);
+                await SavePublisherStateAsync(statePath, state, cancellationToken);
+                sourceUri = GetNextSourceUri(state);
+            }
+
+            var refreshRequired = await IsSnapshotRefreshRequiredAsync(
+                token => GetSnapshotPayloadAsync(
+                    sourceUri,
+                    allowUnavailable: true,
+                    verifySignature: true,
+                    token),
+                now,
+                cancellationToken);
+            if (refreshRequired)
+            {
+                await PublishNextSnapshotForStartupAsync(statePath, state, cancellationToken);
+            }
+            else if (state.SourceUrls.Count > 1)
+            {
+                await SavePublisherStateAsync(
+                    statePath,
+                    AdvancePublisherState(state),
+                    cancellationToken);
+            }
+        }
+
+        internal static bool IsPossiblyStale(RpolSnapshotPayload payload, DateTimeOffset now)
+        {
+            ArgumentNullException.ThrowIfNull(payload);
+            return !DateTimeOffset.TryParse(payload.FetchedAt, out var fetchedAt)
+                || fetchedAt > now.AddMinutes(5)
+                || now - fetchedAt >= StartupFreshnessInterval;
+        }
+
+        internal static async Task<bool> IsSnapshotRefreshRequiredAsync(
+            Func<CancellationToken, Task<RpolSnapshotPayload?>> payloadLoader,
+            DateTimeOffset now,
+            CancellationToken cancellationToken)
+        {
+            ArgumentNullException.ThrowIfNull(payloadLoader);
+            try
+            {
+                var payload = await payloadLoader(cancellationToken);
+                return payload is null || IsPossiblyStale(payload, now);
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                throw;
+            }
+            catch
+            {
+                return true;
+            }
+        }
+
+        internal static RpolSnapshotPublisherState MergeDiscoveredSourceUris(
+            RpolSnapshotPublisherState? state,
+            IEnumerable<Uri> discoveredSourceUris)
+        {
+            ArgumentNullException.ThrowIfNull(discoveredSourceUris);
+            var normalizedState = state is null ? null : EnsureRequiredSourceUris(state);
+            var existingUrls = normalizedState?.SourceUrls.ToList() ?? [];
+            var discoveredState = CreatePublisherState(discoveredSourceUris);
+            var newUrls = discoveredState.SourceUrls
+                .Where(url => !existingUrls.Contains(url, StringComparer.OrdinalIgnoreCase))
+                .ToList();
+            var merged = CreatePublisherState(existingUrls.Concat(newUrls).Select(url => new Uri(url)));
+            var nextUrl = newUrls.FirstOrDefault(url =>
+                    !string.Equals(url, AppSettingsUtility.GameForumUrl, StringComparison.OrdinalIgnoreCase))
+                ?? normalizedState?.SourceUrls[normalizedState.NextIndex]
+                ?? merged.SourceUrls.FirstOrDefault(url =>
+                    !string.Equals(url, AppSettingsUtility.GameForumUrl, StringComparison.OrdinalIgnoreCase))
+                ?? merged.SourceUrls[0];
+            var nextIndex = merged.SourceUrls.ToList().FindIndex(url =>
+                string.Equals(url, nextUrl, StringComparison.OrdinalIgnoreCase));
+            return merged with { NextIndex = nextIndex };
         }
 
         public static async Task<RpolSnapshotPublishReport> PublishAsync(CancellationToken cancellationToken = default)
@@ -128,12 +225,7 @@ namespace PlayerAssistant
                     html = GameForumUtility.NormalizeDieRollSnapshotHtml(html);
                 }
 
-                var sanitizedHtml = SanitizeHtml(html);
-                if (!IsUsableSnapshotHtml(sanitizedHtml))
-                {
-                    throw new InvalidOperationException(
-                        "RPOL returned HTML without usable Scarlet Horizons page content.");
-                }
+                var sanitizedHtml = PrepareSnapshotHtml(html);
 
                 var payload = CreatePayload(
                     sourceUri,
@@ -148,11 +240,19 @@ namespace PlayerAssistant
                     cancellationToken);
                 return new RpolSnapshotPublishReport(state.SourceUrls.Count, 1, 0, []);
             }
-            catch (Exception ex)
+            catch (Exception ex) when (ShouldHandlePublisherFailure(ex, cancellationToken))
             {
                 var error = $"{sourceUri}: {SensitiveTextRedactionUtility.Redact(ex.Message)}";
                 return new RpolSnapshotPublishReport(state.SourceUrls.Count, 0, 1, [error]);
             }
+        }
+
+        internal static bool ShouldHandlePublisherFailure(
+            Exception exception,
+            CancellationToken cancellationToken)
+        {
+            ArgumentNullException.ThrowIfNull(exception);
+            return exception is not OperationCanceledException || !cancellationToken.IsCancellationRequested;
         }
 
         internal static RpolSnapshotPublisherState CreatePublisherState(IEnumerable<Uri> sourceUris)
@@ -356,8 +456,32 @@ namespace PlayerAssistant
             return sanitized;
         }
 
+        internal static string PrepareSnapshotHtml(string html)
+        {
+            ArgumentNullException.ThrowIfNull(html);
+            var title = SnapshotTitleRegex().Match(html).Groups["title"].Value;
+            if (LooksLikeSnapshotChallengePage(html, title)
+                || title.Contains("login", StringComparison.OrdinalIgnoreCase)
+                || title.Contains("error", StringComparison.OrdinalIgnoreCase)
+                || LoginFormRegex().IsMatch(html))
+            {
+                throw new InvalidOperationException(
+                    "RPOL returned HTML without usable Scarlet Horizons page content.");
+            }
+
+            var sanitizedHtml = SanitizeHtml(html);
+            if (!IsUsableSnapshotHtml(sanitizedHtml))
+            {
+                throw new InvalidOperationException(
+                    "RPOL returned HTML without usable Scarlet Horizons page content.");
+            }
+
+            return sanitizedHtml;
+        }
+
         internal static bool IsUsableSnapshotHtml(string sanitizedHtml)
         {
+            var title = SnapshotTitleRegex().Match(sanitizedHtml).Groups["title"].Value;
             return !string.IsNullOrWhiteSpace(sanitizedHtml)
                 && sanitizedHtml.Contains("<html", StringComparison.OrdinalIgnoreCase)
                 && ((sanitizedHtml.Length >= 1024
@@ -365,8 +489,16 @@ namespace PlayerAssistant
                     || sanitizedHtml.Contains(
                         "<meta name=\"player-assistant-snapshot\" content=\"dice-rolls\">",
                         StringComparison.OrdinalIgnoreCase))
-                && !RpolAuthUtility.LooksLikeCloudflareChallengePage(sanitizedHtml)
+                && !LooksLikeSnapshotChallengePage(sanitizedHtml, title)
                 && !LoginFormRegex().IsMatch(sanitizedHtml);
+        }
+
+        private static bool LooksLikeSnapshotChallengePage(string html, string title)
+        {
+            return html.Contains("cf-challenge", StringComparison.OrdinalIgnoreCase)
+                || html.Contains("cf_clearance", StringComparison.OrdinalIgnoreCase)
+                || title.Contains("Just a moment", StringComparison.OrdinalIgnoreCase)
+                || title.Contains("Verify you are human", StringComparison.OrdinalIgnoreCase);
         }
 
         internal static void ValidateSourceUri(Uri sourceUri)
@@ -479,6 +611,118 @@ namespace PlayerAssistant
             }
         }
 
+        private static async Task<RpolSnapshotPayload?> GetSnapshotPayloadAsync(
+            Uri sourceUri,
+            bool allowUnavailable,
+            bool verifySignature,
+            CancellationToken cancellationToken)
+        {
+            ValidateSourceUri(sourceUri);
+            var token = RuntimeSecretStoreUtility.GetBrokerToken();
+            if (string.IsNullOrWhiteSpace(token))
+            {
+                throw new InvalidOperationException("The Player Assistant broker token is missing from Windows Credential Manager.");
+            }
+
+            var endpoint = CreateEndpoint("snapshots/page?url=" + Uri.EscapeDataString(sourceUri.AbsoluteUri));
+            using var response = await NetworkRequestUtility.SendAsync(
+                HttpClient,
+                () => CreateRequest(HttpMethod.Get, endpoint, token),
+                HttpCompletionOption.ResponseHeadersRead,
+                purpose: NetworkUrlPurpose.PlayerAssistantBroker,
+                cancellationToken: cancellationToken);
+            if (allowUnavailable && response.StatusCode is HttpStatusCode.NotFound or HttpStatusCode.Gone)
+            {
+                return null;
+            }
+
+            if (!response.IsSuccessStatusCode)
+            {
+                throw new InvalidOperationException(
+                    $"The RPOL snapshot broker returned HTTP {(int)response.StatusCode} for '{sourceUri}'.");
+            }
+
+            var json = await NetworkRequestUtility.ReadStringAsync(
+                response.Content,
+                NetworkResponseContentLimit.JsonCache,
+                cancellationToken);
+            var payload = JsonSerializer.Deserialize<RpolSnapshotPayload>(json)
+                ?? throw new InvalidOperationException("The RPOL snapshot broker returned an empty response.");
+            ValidateResponse(payload, sourceUri);
+            if (verifySignature)
+            {
+                var signingKey = RuntimeSecretStoreUtility.GetSnapshotSigningKey();
+                if (string.IsNullOrWhiteSpace(signingKey)
+                    || !string.Equals(payload.SignatureAlgorithm, SignatureAlgorithm, StringComparison.Ordinal)
+                    || !VerifySignature(payload, signingKey))
+                {
+                    throw new InvalidOperationException("The RPOL snapshot response signature is invalid.");
+                }
+            }
+
+            return payload;
+        }
+
+        private static async Task PublishSnapshotAsync(
+            Uri sourceUri,
+            string html,
+            CancellationToken cancellationToken)
+        {
+            var adminKey = RuntimeSecretStoreUtility.GetBrokerAdminKey();
+            var signingKey = RuntimeSecretStoreUtility.GetSnapshotSigningKey();
+            if (string.IsNullOrWhiteSpace(adminKey) || string.IsNullOrWhiteSpace(signingKey))
+            {
+                throw new InvalidOperationException(
+                    "Broker administrator and snapshot signing keys are required in Windows Credential Manager.");
+            }
+
+            if (sourceUri == DiceRollerUri)
+            {
+                html = GameForumUtility.NormalizeDieRollSnapshotHtml(html);
+            }
+
+            var sanitizedHtml = PrepareSnapshotHtml(html);
+
+            await UploadAsync(
+                CreatePayload(sourceUri, sanitizedHtml, "text/html; charset=utf-8", DateTimeOffset.UtcNow, signingKey),
+                adminKey,
+                cancellationToken);
+        }
+
+        private static async Task PublishNextSnapshotForStartupAsync(
+            string statePath,
+            RpolSnapshotPublisherState state,
+            CancellationToken cancellationToken)
+        {
+            try
+            {
+                var report = await PublishAsync(cancellationToken);
+                if (report.Failed == 0)
+                {
+                    return;
+                }
+
+                throw new InvalidOperationException(
+                    "RPOL snapshot refresh failed: " + string.Join("; ", report.Errors));
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                throw;
+            }
+            catch
+            {
+                if (state.SourceUrls.Count > 1)
+                {
+                    await SavePublisherStateAsync(
+                        statePath,
+                        AdvancePublisherState(state),
+                        cancellationToken);
+                }
+
+                throw;
+            }
+        }
+
         internal static string SerializePayloadForUpload(RpolSnapshotPayload payload)
         {
             ArgumentNullException.ThrowIfNull(payload);
@@ -545,5 +789,8 @@ namespace PlayerAssistant
 
         [GeneratedRegex("""<form\b[^>]*action\s*=\s*(['"]?)/login\.cgi\1[^>]*>.*?</form>""", RegexOptions.IgnoreCase | RegexOptions.Singleline)]
         private static partial Regex LoginFormRegex();
+
+        [GeneratedRegex("""<title\b[^>]*>(?<title>.*?)</title>""", RegexOptions.IgnoreCase | RegexOptions.Singleline)]
+        private static partial Regex SnapshotTitleRegex();
     }
 }
