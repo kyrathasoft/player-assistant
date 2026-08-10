@@ -45,6 +45,40 @@ function Get-Sha256 {
         [System.Security.Cryptography.SHA256]::HashData($Bytes))
 }
 
+function Get-ProductionStaticResponse {
+    param(
+        [Parameter(Mandatory = $true)][System.Net.Http.HttpClient]$Client,
+        [Parameter(Mandatory = $true)][uri]$RequestUri,
+        [ValidateRange(1, 6)][int]$MaximumAttempts = 4
+    )
+
+    $backoffSeconds = @(2, 5, 10, 20, 30)
+    $lastError = $null
+    for ($attempt = 1; $attempt -le $MaximumAttempts; $attempt++) {
+        $response = $null
+        try {
+            $response = $Client.GetAsync($RequestUri).GetAwaiter().GetResult()
+            $statusCode = [int]$response.StatusCode
+            $retryable = ($statusCode -eq 403) -or ($statusCode -eq 408) -or ($statusCode -eq 429) -or ($statusCode -ge 500)
+            if (!$retryable -or $attempt -eq $MaximumAttempts) {
+                return $response
+            }
+            $response.Dispose()
+        }
+        catch {
+            $lastError = $_
+            if ($attempt -eq $MaximumAttempts) {
+                throw
+            }
+        }
+        Start-Sleep -Seconds $backoffSeconds[$attempt - 1]
+    }
+    if ($null -ne $lastError) {
+        throw $lastError
+    }
+    throw 'The production static-response retry loop ended unexpectedly.'
+}
+
 function Invoke-ProductionMonitorLogout {
     param(
         [Parameter(Mandatory = $true)][System.Net.Http.HttpClient]$Client,
@@ -148,7 +182,7 @@ try {
         $requestUri = [uri]::new(
             $BaseUri,
             "$relativePath`?deployment-test=$([DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds())")
-        $response = $client.GetAsync($requestUri).GetAwaiter().GetResult()
+        $response = Get-ProductionStaticResponse -Client $client -RequestUri $requestUri
         $responses[$relativePath] = $response
         Assert-Condition -Condition $response.IsSuccessStatusCode -Message "$relativePath returned HTTP $([int]$response.StatusCode)."
 
