@@ -216,8 +216,8 @@ namespace PlayerAssistant
                 else
                 {
                     var response = await RpolAuthUtility.GetSnapshotResponseAsync(sourceUri, cancellationToken);
-                    html = Encoding.UTF8.GetString(response.Body);
-                    contentType = response.ContentType ?? "text/html; charset=utf-8";
+                    html = RpolAuthUtility.DecodeHtmlBody(response.Body, response.ContentType);
+                    contentType = "text/html; charset=utf-8";
                 }
 
                 if (sourceUri == DiceRollerUri)
@@ -462,8 +462,7 @@ namespace PlayerAssistant
             var title = SnapshotTitleRegex().Match(html).Groups["title"].Value;
             if (LooksLikeSnapshotChallengePage(html, title)
                 || title.Contains("login", StringComparison.OrdinalIgnoreCase)
-                || title.Contains("error", StringComparison.OrdinalIgnoreCase)
-                || LoginFormRegex().IsMatch(html))
+                || title.Contains("error", StringComparison.OrdinalIgnoreCase))
             {
                 throw new InvalidOperationException(
                     "RPOL returned HTML without usable Scarlet Horizons page content.");
@@ -482,15 +481,34 @@ namespace PlayerAssistant
         internal static bool IsUsableSnapshotHtml(string sanitizedHtml)
         {
             var title = SnapshotTitleRegex().Match(sanitizedHtml).Groups["title"].Value;
+            return IsUsableCampaignSnapshotHtml(sanitizedHtml)
+                || (!string.IsNullOrWhiteSpace(sanitizedHtml)
+                    && sanitizedHtml.Contains("<html", StringComparison.OrdinalIgnoreCase)
+                    && sanitizedHtml.Contains(
+                        "<meta name=\"player-assistant-snapshot\" content=\"dice-rolls\">",
+                        StringComparison.OrdinalIgnoreCase)
+                    && !LooksLikeSnapshotChallengePage(sanitizedHtml, title));
+        }
+
+        internal static bool IsUsableCampaignSnapshotHtml(string sanitizedHtml)
+        {
+            var title = SnapshotTitleRegex().Match(sanitizedHtml).Groups["title"].Value;
+            var hasCampaignIdentity = sanitizedHtml.Length >= 1024
+                && CampaignGameIdRegex().IsMatch(sanitizedHtml)
+                && CampaignStructureRegex().IsMatch(sanitizedHtml)
+                && (title.StartsWith(
+                        "View RPoL: World of Issenda - Scarlet Horizons - ",
+                        StringComparison.OrdinalIgnoreCase)
+                    || title.Equals(
+                        "RPoL: World of Issenda - Scarlet Horizons",
+                        StringComparison.OrdinalIgnoreCase)
+                    || title.Equals(
+                        "World of Issenda - Scarlet Horizons Information - RPoL",
+                        StringComparison.OrdinalIgnoreCase));
             return !string.IsNullOrWhiteSpace(sanitizedHtml)
                 && sanitizedHtml.Contains("<html", StringComparison.OrdinalIgnoreCase)
-                && ((sanitizedHtml.Length >= 1024
-                        && sanitizedHtml.Contains("Scarlet Horizons", StringComparison.OrdinalIgnoreCase))
-                    || sanitizedHtml.Contains(
-                        "<meta name=\"player-assistant-snapshot\" content=\"dice-rolls\">",
-                        StringComparison.OrdinalIgnoreCase))
-                && !LooksLikeSnapshotChallengePage(sanitizedHtml, title)
-                && !LoginFormRegex().IsMatch(sanitizedHtml);
+                && hasCampaignIdentity
+                && !LooksLikeSnapshotChallengePage(sanitizedHtml, title);
         }
 
         private static bool LooksLikeSnapshotChallengePage(string html, string title)
@@ -520,7 +538,8 @@ namespace PlayerAssistant
         private static async Task<RpolSnapshotDiscovery> DiscoverSourceUrisAsync(CancellationToken cancellationToken)
         {
             var rootUri = new Uri(AppSettingsUtility.GameForumUrl);
-            var rootHtml = await RpolAuthUtility.GetHtmlFromUrlAsync(rootUri, cancellationToken);
+            var rootResponse = await RpolAuthUtility.GetSnapshotResponseAsync(rootUri, cancellationToken);
+            var rootHtml = RpolAuthUtility.DecodeHtmlBody(rootResponse.Body, rootResponse.ContentType);
             var candidates = new List<Uri>
             {
                 rootUri,
@@ -792,5 +811,11 @@ namespace PlayerAssistant
 
         [GeneratedRegex("""<title\b[^>]*>(?<title>.*?)</title>""", RegexOptions.IgnoreCase | RegexOptions.Singleline)]
         private static partial Regex SnapshotTitleRegex();
+
+        [GeneratedRegex("""class\s*=\s*(['"])[^'"]*\b(message|threadstate|info_box|two-aside|sidebar)\b[^'"]*\1""", RegexOptions.IgnoreCase)]
+        private static partial Regex CampaignStructureRegex();
+
+        [GeneratedRegex("""(?:\?|&amp;|&)gi=80170(?:&amp;|&|['"\s<>]|$)""", RegexOptions.IgnoreCase)]
+        private static partial Regex CampaignGameIdRegex();
     }
 }

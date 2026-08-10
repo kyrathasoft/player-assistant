@@ -8,7 +8,7 @@
   - [x] Anonymous legacy XP requests return `404`, and the service worker no longer caches `/XP/` paths.
   - [x] Tracked deletions were committed and pushed; Git-history purging was intentionally deferred.
 - [x] Make the full regression suite a required CI gate.
-  - [x] Run all 405 desktop tests instead of only focused filters.
+  - [x] Run all 435 desktop tests instead of only focused filters.
   - [x] Run `pwa/verify-pwa.ps1` and the PHP broker suites.
   - [x] Add browser-level PWA smoke tests for authentication, translation, navigation, and offline startup.
 - [x] Replace stale hard-coded quest-count expectations in PHP broker and HTTP tests with fixture-derived expectations.
@@ -24,9 +24,9 @@
   - [x] Pin GitHub Actions to immutable versions or hashes.
   - [x] Enable NuGet locked restore and dependency scanning.
   - [x] Move generated recovery archives out of the tracked source tree.
-- [ ] Try RPOL snapshot creation again and resolve the browser-worker failure.
-  - [ ] Make the WinForms publisher connect reliably to its temporary Chrome/Edge CDP session.
-  - [ ] Publish and verify at least one fresh snapshot before relying on the broker freshness cron.
+- [x] Try RPOL snapshot creation again and resolve the browser-worker failure.
+  - [x] Make the WinForms publisher connect reliably to its temporary Chrome/Edge CDP session.
+  - [x] Publish and verify at least one fresh snapshot before relying on the broker freshness cron.
 - [x] Schedule and deploy the PWA campaign word-count refresh.
   - [x] Refresh `pwa/campaign-search.json` every Friday at 07:00 Central time with payload integrity checks.
   - [x] Deploy the refreshed public index through the protected DreamHost SSH workflow using the `DREAMHOST_SSH_PRIVATE_KEY` repository secret.
@@ -36,7 +36,7 @@
 
 - [x] Decompose `Form1` into feature controllers or presenters with injected services.
 - [x] **Split the custom regression harness into discoverable domain-focused test classes.**
-  - The 407-test catalog now delegates to partial application, campaign, release, shared, and translator test classes while preserving name-based filtering and failure aggregation.
+  - The 435-test catalog now delegates to partial application, campaign, release, shared, and translator test classes while preserving name-based filtering and failure aggregation.
   - `verify-test-harness-structure.ps1` enforces catalog uniqueness, domain file presence, and the runner/catalog boundary in PR smoke and full regression CI.
 - [x] Modularize `pwa/app.js` by feature without introducing an unnecessary framework.
 - [x] Make schema-rich lexicon data the canonical source for desktop, PWA, and web-translator artifacts.
@@ -51,7 +51,7 @@
   - [x] The browser fixture proves that a newly published cumulative total produces exactly one XP award with the correct date and delta, without duplication on subsequent refreshes.
   - [x] Protected views expose local freshness timestamps and explicit retry or refresh controls; broker stale/fallback metadata and full message/quest coverage remain.
   - [x] Service-worker installation cleans up failed partial caches, handles quota failures, validates corrupted cache entries, protects newer workers from obsolete activation, and has failure-injection coverage.
-  - [ ] Browser smoke covers dialog focus containment/restoration, accessible names, visible focus contracts, table-backed protected data, reduced motion, and narrow mobile layouts.
+  - [x] Browser smoke covers dialog focus containment/restoration, accessible names, visible focus contracts, table-backed protected data, reduced motion, and narrow mobile layouts.
   - [x] Production security headers now include `object-src`, `frame-src`, and `upgrade-insecure-requests`; host-level HSTS remains enabled pending any future verified subdomain expansion.
   - [x] Static PWA verification validates generated data schemas, source URLs, record counts, token hashes, cache revisions, and deployment parity.
   - [x] Deployment verification and the scheduled monitor provide production coverage for anonymous API denial, asset parity, security/cache headers, and public runtime files; the live PWA deployment passed SHA-256 verification.
