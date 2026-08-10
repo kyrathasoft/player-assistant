@@ -11,7 +11,7 @@ permissions:
 jobs:
   monitor:
     name: Production PWA synthetic monitor
-    runs-on: windows-latest
+    runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
       - name: Checkout
