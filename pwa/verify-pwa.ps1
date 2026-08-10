@@ -263,6 +263,7 @@ $requestTranslationFunction = [regex]::Match(
 $styles = Get-Content -Raw -LiteralPath (Join-Path $PwaRoot 'styles.css')
 $serviceWorker = Get-Content -Raw -LiteralPath (Join-Path $PwaRoot 'service-worker.js')
 $serviceWorkerTests = Get-Content -Raw -LiteralPath (Join-Path $PwaRoot 'service-worker-tests.mjs')
+$browserSmoke = Get-Content -Raw -LiteralPath (Join-Path $PwaRoot 'browser-smoke.mjs')
 $deploymentTest = Get-Content -Raw -LiteralPath (Join-Path $PwaRoot 'test-deployment.ps1')
 $referencedIds = [regex]::Matches($appScript, "byId\('([^']+)'\)") | ForEach-Object { $_.Groups[1].Value } | Sort-Object -Unique
 foreach ($id in $referencedIds) {
@@ -309,6 +310,8 @@ Assert-Condition -Condition ($appScript.Contains("image.title = ``click here to 
 Assert-Condition -Condition ($appScript.Contains('if (hero.preferLocal === true) return;')) -Message 'The Dungeon Master token must be able to retain its approved local image.'
 Assert-Condition -Condition ($appScript.Contains('const DUNGEON_MASTER_HERO') -and $appScript.Contains("if (accountAtStart.role === 'dm')") -and $appScript.Contains("setHeroTokenImage(byId('auth-dashboard-token'), DUNGEON_MASTER_HERO)")) -Message 'The Dungeon Master dashboard token must render synchronously without depending on the hero manifest.'
 Assert-Condition -Condition ($appScript.Contains("authDialog?.addEventListener('close'") -and $appScript.Contains('void renderAuthenticatedHeroToken()')) -Message 'Closing the login dialog must restore the authenticated dashboard token.'
+Assert-Condition -Condition ($browserSmoke.Contains('Dialog focus containment failed') -and $browserSmoke.Contains('Dialog focus restoration failed') -and $browserSmoke.Contains('Visible keyboard focus contract failed') -and $browserSmoke.Contains('Protected XP Awards table semantics failed') -and $browserSmoke.Contains('Protected narrow mobile layout overflows horizontally')) -Message 'Browser smoke must cover dialog focus containment/restoration, visible keyboard focus, protected table semantics, and authenticated narrow mobile layout.'
+Assert-Condition -Condition ($browserSmoke.Contains("transitionDuration") -and $browserSmoke.Contains("animationDuration") -and $browserSmoke.Contains("reduced-motion visual contract failed")) -Message 'Browser smoke must verify computed reduced-motion styling, not only media-query matching.'
 Assert-Condition -Condition ($appScript.Contains("navigator.serviceWorker.addEventListener('controllerchange'") -and $appScript.Contains('window.location.reload()')) -Message 'Existing PWA clients must reload after a service-worker update.'
 Assert-Condition -Condition ($styles.Contains('width: 256px;') -and $styles.Contains('height: 256px;') -and $styles.Contains('.authenticated-hero-token')) -Message 'Authenticated hero tokens must be displayed at twice their original width and height.'
 Assert-Condition -Condition ($styles.Contains('transform: translateY(10px);')) -Message 'Authenticated hero tokens must retain their horizontal position and sit 10 pixels lower.'

@@ -130,6 +130,66 @@ internal static partial class TestCases
             "transport-security failures should stop authentication retries for the current process");
     }
 
+    internal static void RpolAuthRetriesInitialLoginRejectionWithHeadedBrowser()
+    {
+        var loginRejected = new RpolAuthException(RpolAuthFailureKind.LoginRejected, "login rejected");
+        var challenge = new RpolAuthException(RpolAuthFailureKind.CloudflareChallenge, "challenge");
+        var remoteFailure = new RpolAuthException(RpolAuthFailureKind.RemoteUnavailable, "remote failure");
+
+        AssertTrue(RpolAuthUtility.ShouldRetryWithHeadedBrowser(loginRejected, 0),
+            "the first headless login rejection should receive one visible-browser retry");
+        AssertFalse(RpolAuthUtility.ShouldRetryWithHeadedBrowser(loginRejected, 1),
+            "a second login rejection must remain fatal");
+        AssertTrue(RpolAuthUtility.ShouldRetryWithHeadedBrowser(challenge, 0),
+            "the first Cloudflare challenge should receive a visible-browser retry");
+        AssertFalse(RpolAuthUtility.ShouldRetryWithHeadedBrowser(remoteFailure, 0),
+            "ordinary remote failures should not launch the verification browser");
+    }
+
+    internal static void RpolAuthRejectsPersistentHeadedLoginPage()
+    {
+        AssertFalse(RpolAuthUtility.ShouldRejectPersistentExternalLoginPage(0),
+            "the headed browser should submit configured credentials once");
+        AssertTrue(RpolAuthUtility.ShouldRejectPersistentExternalLoginPage(1),
+            "a login page that remains after submission must fail as rejected credentials");
+    }
+
+    internal static void RpolAuthClassifiesEmbeddedLoginFormByCampaignContent()
+    {
+        var authenticatedHtml = "<html><title>RPoL: World of Issenda - Scarlet Horizons</title><body>"
+            + "<div class='threadstate'>Authenticated campaign thread list</div>"
+            + "<a href='/game.php?gi=80170'>Campaign</a>"
+            + new string('x', 1200)
+            + "<form action='/login.cgi'><input name='username'><input name='password'></form></body></html>";
+        var disguisedLoginHtml = "<html><title>RPoL: World of Issenda - Scarlet Horizons</title><body>"
+            + "<meta name=\"player-assistant-snapshot\" content=\"dice-rolls\">"
+            + "<a href='/game.php?gi=80170'>Campaign</a>"
+            + new string('x', 1200)
+            + "<form action='/login.cgi'><input name='username'><input name='password'></form></body></html>";
+        var wrongGameHtml = authenticatedHtml.Replace("gi=80170", "gi=801700", StringComparison.Ordinal);
+
+        AssertFalse(RpolAuthUtility.ShouldTreatExternalPageAsLogin(authenticatedHtml),
+            "an authenticated campaign page may retain RPOL's embedded login form");
+        AssertTrue(RpolAuthUtility.ShouldTreatExternalPageAsLogin(disguisedLoginHtml),
+            "campaign-looking title and links without RPOL campaign structure must remain a login page");
+        AssertTrue(RpolAuthUtility.ShouldTreatExternalPageAsLogin(wrongGameHtml),
+            "a neighboring game ID must not satisfy the Scarlet Horizons identity check");
+        AssertEqual("café", RpolAuthUtility.DecodeHtmlBody(
+            System.Text.Encoding.Latin1.GetBytes("café"),
+            "text/html; charset=iso-8859-1"),
+            "RPOL response decoding should honor the declared charset");
+        AssertFalse(RpolAuthUtility.ShouldTreatResponseAsLogin(
+            "text/html; charset=utf-8",
+            System.Text.Encoding.UTF8.GetBytes(authenticatedHtml),
+            allowEmbeddedLoginForm: true),
+            "snapshot responses should allow the authenticated campaign page's embedded login form");
+        AssertTrue(RpolAuthUtility.ShouldTreatResponseAsLogin(
+            "text/html; charset=utf-8",
+            System.Text.Encoding.UTF8.GetBytes(disguisedLoginHtml),
+            allowEmbeddedLoginForm: true),
+            "snapshot responses must still reject a full or disguised login response");
+    }
+
     internal static void RpolAuthCachedFailureShortCircuitsHtmlFetch()
     {
         ResetRpolAuthFailureCache();
@@ -2838,7 +2898,11 @@ internal static partial class TestCases
 
     internal static void RpolSnapshotAcceptsSanitizedCampaignContent()
     {
-        var html = "<html><title>Scarlet Horizons</title><body>" + new string('x', 1200) + "</body></html>";
+        var html = "<html><title>RPoL: World of Issenda - Scarlet Horizons</title><body>"
+            + "<div class='threadstate'>Authenticated campaign thread list</div>"
+            + "<a href='/game.php?gi=80170'>Campaign</a>"
+            + new string('x', 1200)
+            + "</body></html>";
         AssertTrue(RpolSnapshotUtility.IsUsableSnapshotHtml(html), "campaign HTML should be accepted after sanitization");
     }
 
@@ -2889,6 +2953,19 @@ internal static partial class TestCases
             AppSettingsUtility.GameForumUrl,
             arguments[^1],
             "the RPOL page should be the active tab used to detect completed verification");
+    }
+
+    internal static void RpolVerificationConnectsOverCdpBeforeInspectingPageState()
+    {
+        var source = File.ReadAllText(Path.Combine(GetRepositoryRoot(), "RpolAuthUtility.cs"));
+        var connectIndex = source.IndexOf("browser = await ConnectToExternalBrowserAsync(", StringComparison.Ordinal);
+        var inspectIndex = source.IndexOf("await CompleteExternalBrowserVerificationAsync(", StringComparison.Ordinal);
+
+        AssertTrue(connectIndex >= 0, "external RPOL verification must connect over CDP");
+        AssertTrue(inspectIndex > connectIndex,
+            "external RPOL verification must connect over CDP before inspecting the RPOL page state");
+        AssertFalse(source.Contains("await WaitForManualBrowserVerificationAsync(", StringComparison.Ordinal),
+            "the local instructions tab title must not block CDP connection to an already-authenticated RPOL tab");
     }
 
     internal static void RpolSnapshotUploadJsonUsesBrokerCanonicalEscaping()
@@ -2963,7 +3040,7 @@ internal static partial class TestCases
 
     internal static void RpolSnapshotPreparationRejectsLoginPageBeforeSanitizing()
     {
-        var loginHtml = "<html><title>Scarlet Horizons</title><body>"
+        var loginHtml = "<html><title>RPoL Login</title><body>"
             + new string('x', 1200)
             + "<form action='/login.cgi'><input name='username'><input name='password'></form></body></html>";
 
@@ -2973,11 +3050,40 @@ internal static partial class TestCases
         AssertContains(exception.Message, "usable Scarlet Horizons");
     }
 
+    internal static void RpolSnapshotPreparationAcceptsCampaignContentWithEmbeddedLoginForm()
+    {
+        var campaignHtml = "<html><title>View RPoL: World of Issenda - Scarlet Horizons - Chapter</title><body>"
+            + "<article class='message'>Authenticated Scarlet Horizons campaign content.</article>"
+            + "<a href='/display.cgi?gi=80170&amp;ti=23'>Campaign thread</a>"
+            + new string('x', 1200)
+            + "<form action='/login.cgi'><input name='username'><input name='password'></form></body></html>";
+
+        var prepared = RpolSnapshotUtility.PrepareSnapshotHtml(campaignHtml);
+
+        AssertTrue(RpolSnapshotUtility.IsUsableSnapshotHtml(prepared),
+            "authenticated campaign pages should remain usable when RPOL includes its normal embedded login form");
+        AssertContains(prepared, "Authenticated Scarlet Horizons campaign content.");
+    }
+
+    internal static void RpolSnapshotPreparationRejectsDisguisedLoginPage()
+    {
+        var disguisedLoginHtml = "<html><title>View RPoL: World of Issenda - Scarlet Horizons - Chapter</title><body>"
+            + "<a href='/display.cgi?gi=80170&amp;ti=23'>Campaign thread</a>"
+            + new string('x', 1200)
+            + "<form action='/login.cgi'><input name='username'><input name='password'></form></body></html>";
+
+        var exception = AssertThrows<InvalidOperationException>(() =>
+            RpolSnapshotUtility.PrepareSnapshotHtml(disguisedLoginHtml));
+
+        AssertContains(exception.Message, "usable Scarlet Horizons");
+    }
+
     internal static void RpolSnapshotPreparationAcceptsCampaignPostsQuotingChallengeText()
     {
-        var campaignHtml = "<html><title>Scarlet Horizons - Chapter</title><body>"
+        var campaignHtml = "<html><title>View RPoL: World of Issenda - Scarlet Horizons - Chapter</title><body>"
             + new string('x', 1200)
-            + "<article>A character quoted: Just a moment; Verify you are human; An Error Has Occurred; "
+            + "<a href='/display.cgi?gi=80170&amp;ti=23'>Campaign thread</a>"
+            + "<article class='message'>A character quoted: Just a moment; Verify you are human; An Error Has Occurred; "
             + "You have encountered an error.</article></body></html>";
 
         var prepared = RpolSnapshotUtility.PrepareSnapshotHtml(campaignHtml);
@@ -3034,6 +3140,20 @@ internal static partial class TestCases
         AssertTrue(
             merged.SourceUrls.Contains("https://rpol.net/display.cgi?gi=80170&ti=7&msgpage=&show=all"),
             "the existing cursor target should remain normalized in the merged queue");
+    }
+
+    internal static void SnapshotDiscoveryAllowsEmbeddedLoginFormOnCampaignRoot()
+    {
+        var source = File.ReadAllText(Path.Combine(GetRepositoryRoot(), "RpolSnapshotUtility.cs"));
+        var discoveryStart = source.IndexOf(
+            "private static async Task<RpolSnapshotDiscovery> DiscoverSourceUrisAsync",
+            StringComparison.Ordinal);
+        var discoveryEnd = source.IndexOf("private static", discoveryStart + 1, StringComparison.Ordinal);
+        var discoverySource = source[discoveryStart..discoveryEnd];
+
+        AssertContains(discoverySource, "RpolAuthUtility.GetSnapshotResponseAsync(rootUri");
+        AssertFalse(discoverySource.Contains("RpolAuthUtility.GetHtmlFromUrlAsync(rootUri", StringComparison.Ordinal),
+            "snapshot discovery must not reject the authenticated campaign root merely because RPOL embeds its login form");
     }
 
     internal static void GameForumStartupChecksSnapshotsBeforeDownloads()

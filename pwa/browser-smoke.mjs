@@ -408,6 +408,43 @@ try {
         || !hiddenLoadingDisplay.reducedMotion) {
         throw new Error('The hidden translation loading indicator or reduced-motion contract failed.');
     }
+    const reducedMotionVisualContract = await page.evaluate(() => {
+        const probe = document.querySelector('#auth-button');
+        if (!(probe instanceof HTMLElement)) return null;
+        const style = getComputedStyle(probe);
+        const durationsAreReduced = (value) => value.split(',').every((duration) => {
+            const trimmed = duration.trim();
+            const numeric = Number.parseFloat(trimmed);
+            if (!Number.isFinite(numeric)) return false;
+            return trimmed.endsWith('ms') ? numeric <= 0.01 : numeric <= 0.00001;
+        });
+        return {
+            transitionDuration: style.transitionDuration,
+            animationDuration: style.animationDuration,
+            valid: durationsAreReduced(style.transitionDuration)
+                && durationsAreReduced(style.animationDuration)
+        };
+    });
+    if (!reducedMotionVisualContract?.valid) {
+        throw new Error(`The reduced-motion visual contract failed: ${JSON.stringify(reducedMotionVisualContract)}.`);
+    }
+
+    await page.keyboard.press('Tab');
+    const visibleFocusContract = await page.evaluate(() => {
+        const active = document.activeElement;
+        if (!(active instanceof HTMLElement)) return null;
+        const style = getComputedStyle(active);
+        return {
+            id: active.id,
+            outlineStyle: style.outlineStyle,
+            outlineWidth: style.outlineWidth
+        };
+    });
+    if (!visibleFocusContract
+        || visibleFocusContract.outlineStyle === 'none'
+        || Number.parseFloat(visibleFocusContract.outlineWidth) < 1) {
+        throw new Error(`Visible keyboard focus contract failed: ${JSON.stringify(visibleFocusContract)}.`);
+    }
 
     const anonymousPresenceStatus = await page.evaluate(async () =>
         (await fetch('/scarlethorizons/api/v1/presence')).status);
@@ -419,6 +456,14 @@ try {
     if (!await page.locator('#auth-dialog').evaluate((dialog) => dialog.open
         && dialog.contains(document.activeElement))) {
         throw new Error('Opening the login dialog did not move focus inside the dialog.');
+    }
+    for (let index = 0; index < 8; index++) {
+        await page.keyboard.press(index % 2 === 0 ? 'Tab' : 'Shift+Tab');
+        const focusStayedInDialog = await page.locator('#auth-dialog').evaluate((dialog) =>
+            dialog.open && dialog.contains(document.activeElement));
+        if (!focusStayedInDialog) {
+            throw new Error('Dialog focus containment failed while cycling keyboard focus.');
+        }
     }
     await page.locator('#auth-character-name').fill('CI Hero');
     await page.locator('#auth-password').fill('wrong-password');
@@ -440,6 +485,9 @@ try {
     }
     await page.locator('#auth-dialog-close').click();
     await page.locator('#auth-dialog').waitFor({ state: 'hidden' });
+    if (!await page.locator('#auth-button').evaluate((button) => document.activeElement === button)) {
+        throw new Error('Dialog focus restoration failed after closing character login.');
+    }
 
     await page.waitForFunction(() => {
         const total = document.querySelector('#xp-total')?.textContent || '';
@@ -469,6 +517,27 @@ try {
     if (!firstAwardText.includes('8.07.2026') || !firstAwardText.includes('500')) {
         throw new Error(`XP award projection did not create the expected single new award: ${firstAwardText}`);
     }
+    const protectedTableSemantics = await page.locator('#xp-awards-list table').first().evaluate((table) => ({
+        headerLabels: [...table.querySelectorAll('th[scope="col"]')].map((cell) => cell.textContent?.trim()),
+        rowCount: table.querySelectorAll('tbody tr').length
+    }));
+    if (protectedTableSemantics.headerLabels.join('|') !== 'Date|XP award|Level'
+        || protectedTableSemantics.rowCount !== 2) {
+        throw new Error(`Protected XP Awards table semantics failed: ${JSON.stringify(protectedTableSemantics)}.`);
+    }
+
+    await page.setViewportSize({ width: 320, height: 800 });
+    const protectedMobileLayout = await page.evaluate(() => ({
+        viewport: document.documentElement.clientWidth,
+        content: document.documentElement.scrollWidth,
+        tableViewport: document.querySelector('#xp-awards-list table')?.getBoundingClientRect().width || 0
+    }));
+    if (protectedMobileLayout.content > protectedMobileLayout.viewport + 1
+        || protectedMobileLayout.tableViewport <= 0) {
+        throw new Error(`Protected narrow mobile layout overflows horizontally: ${JSON.stringify(protectedMobileLayout)}.`);
+    }
+    await page.setViewportSize({ width: 1280, height: 720 });
+
     const secondAwardResponse = await page.evaluate(async () => {
         const response = await fetch('/scarlethorizons/api/v1/xp-awards', {
             credentials: 'same-origin', cache: 'no-store'

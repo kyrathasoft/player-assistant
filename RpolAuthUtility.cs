@@ -84,7 +84,7 @@ namespace PlayerAssistant
 
                     return html;
                 }
-                catch (RpolAuthException ex) when (ex.Kind == RpolAuthFailureKind.CloudflareChallenge && attempt == 0)
+                catch (RpolAuthException ex) when (ShouldRetryWithHeadedBrowser(ex, attempt))
                 {
                     await ResetSessionAsync(cancellationToken);
                     _clearCloudflareChallengeWithHeadedBrowser = true;
@@ -129,7 +129,10 @@ namespace PlayerAssistant
                     var context = await GetAuthenticatedContextAsync(cancellationToken);
                     var response = await GetPageResponseAsync(context, uri, cancellationToken);
 
-                    if (!allowEmbeddedLoginForm && LooksLikeLoginResponse(response.ContentType, response.Body))
+                    if (ShouldTreatResponseAsLogin(
+                        response.ContentType,
+                        response.Body,
+                        allowEmbeddedLoginForm))
                     {
                         await ResetSessionAsync(cancellationToken);
                         if (attempt == 0)
@@ -142,7 +145,7 @@ namespace PlayerAssistant
 
                     return response;
                 }
-                catch (RpolAuthException ex) when (ex.Kind == RpolAuthFailureKind.CloudflareChallenge && attempt == 0)
+                catch (RpolAuthException ex) when (ShouldRetryWithHeadedBrowser(ex, attempt))
                 {
                     await ResetSessionAsync(cancellationToken);
                     _clearCloudflareChallengeWithHeadedBrowser = true;
@@ -410,7 +413,6 @@ namespace PlayerAssistant
             IBrowser? browser = null;
             try
             {
-                await WaitForManualBrowserVerificationAsync(verificationProcess, cancellationToken);
                 browser = await ConnectToExternalBrowserAsync(
                     playwright,
                     remoteDebuggingPort,
@@ -465,33 +467,6 @@ namespace PlayerAssistant
             }
         }
 
-        private static async Task WaitForManualBrowserVerificationAsync(
-            Process process,
-            CancellationToken cancellationToken)
-        {
-            var startedAt = DateTimeOffset.UtcNow;
-            while (DateTimeOffset.UtcNow - startedAt < CloudflareClearanceMaxWait)
-            {
-                cancellationToken.ThrowIfCancellationRequested();
-                if (process.HasExited)
-                {
-                    return;
-                }
-
-                process.Refresh();
-                if (IsVerifiedRpolBrowserWindowTitle(process.MainWindowTitle))
-                {
-                    return;
-                }
-
-                await Task.Delay(CloudflareClearancePollInterval, cancellationToken);
-            }
-
-            throw new RpolAuthException(
-                RpolAuthFailureKind.CloudflareChallenge,
-                $"RPOL browser verification did not complete within {CloudflareClearanceMaxWait.TotalMinutes:0} minutes. Complete any RPOL browser verification in the temporary Chrome or Edge window, then close that temporary window so Player Assistant can import the verified browser state.");
-        }
-
         internal static bool IsVerifiedRpolBrowserWindowTitle(string? title)
         {
             return !string.IsNullOrWhiteSpace(title)
@@ -538,6 +513,7 @@ namespace PlayerAssistant
             var gameForumUri = new Uri(AppSettingsUtility.GameForumUrl);
             var page = await GetExternalRpolPageAsync(context, gameForumUri, cancellationToken);
             var startedAt = DateTimeOffset.UtcNow;
+            var loginSubmissionCount = 0;
 
             while (DateTimeOffset.UtcNow - startedAt < CloudflareClearanceMaxWait)
             {
@@ -554,9 +530,17 @@ namespace PlayerAssistant
                         page.ContentAsync(),
                         "checking the external RPOL browser page",
                         cancellationToken);
-                    if (LooksLikeLoginPage(html))
+                    if (ShouldTreatExternalPageAsLogin(html))
                     {
+                        if (ShouldRejectPersistentExternalLoginPage(loginSubmissionCount))
+                        {
+                            throw new RpolAuthException(
+                                RpolAuthFailureKind.LoginRejected,
+                                "RPOL rejected the configured credentials in the temporary browser.");
+                        }
+
                         await SubmitExternalBrowserLoginAsync(page, userName, password, cancellationToken);
+                        loginSubmissionCount++;
                         await Task.Delay(TimeSpan.FromSeconds(3), cancellationToken);
                         continue;
                     }
@@ -768,7 +752,7 @@ namespace PlayerAssistant
                     <main>
                         <h1>Player Assistant is verifying RPOL access</h1>
                         <p><strong>Please wait patiently.</strong> In the RPOL tab, complete any "verify you are human" checkbox or browser prompt that appears.</p>
-                        <p>When RPOL no longer shows a browser verification page, close this temporary browser window. Player Assistant will reopen this same temporary browser profile, use the configured RPOL credentials, save the browser state, and close it again when finished.</p>
+                        <p>When RPOL no longer shows a browser verification page, leave this temporary browser window open. Player Assistant will capture the verified browser state over CDP and close the temporary window when finished.</p>
                         <p>RPOL target: {{encodedUrl}}</p>
                     </main>
                 </body>
@@ -1084,7 +1068,39 @@ namespace PlayerAssistant
                 return false;
             }
 
-            return LooksLikeLoginPage(Encoding.UTF8.GetString(body));
+            return LooksLikeLoginPage(DecodeHtmlBody(body, contentType));
+        }
+
+        internal static bool ShouldTreatResponseAsLogin(
+            string? contentType,
+            byte[] body,
+            bool allowEmbeddedLoginForm)
+        {
+            if (!LooksLikeLoginResponse(contentType, body))
+            {
+                return false;
+            }
+
+            return !allowEmbeddedLoginForm
+                || ShouldTreatExternalPageAsLogin(DecodeHtmlBody(body, contentType));
+        }
+
+        internal static string DecodeHtmlBody(byte[] body, string? contentType)
+        {
+            ArgumentNullException.ThrowIfNull(body);
+            if (System.Net.Http.Headers.MediaTypeHeaderValue.TryParse(contentType, out var mediaType)
+                && !string.IsNullOrWhiteSpace(mediaType.CharSet))
+            {
+                try
+                {
+                    return Encoding.GetEncoding(mediaType.CharSet.Trim('"')).GetString(body);
+                }
+                catch (ArgumentException)
+                {
+                }
+            }
+
+            return Encoding.UTF8.GetString(body);
         }
 
         internal static bool LooksLikeLoginPage(string html)
@@ -1369,7 +1385,7 @@ namespace PlayerAssistant
                     uri,
                     response,
                     contentType is not null && contentType.Contains("text/html", StringComparison.OrdinalIgnoreCase)
-                        ? Encoding.UTF8.GetString(body)
+                        ? DecodeHtmlBody(body, contentType)
                         : null);
                 var limit = contentType is not null && contentType.StartsWith("image/", StringComparison.OrdinalIgnoreCase)
                     ? NetworkResponseContentLimit.Image
@@ -1537,6 +1553,26 @@ namespace PlayerAssistant
 
             cachedException = null!;
             return false;
+        }
+
+        internal static bool ShouldRetryWithHeadedBrowser(RpolAuthException exception, int attempt)
+        {
+            ArgumentNullException.ThrowIfNull(exception);
+            return attempt == 0
+                && exception.Kind is RpolAuthFailureKind.CloudflareChallenge
+                    or RpolAuthFailureKind.LoginRejected;
+        }
+
+        internal static bool ShouldRejectPersistentExternalLoginPage(int loginSubmissionCount)
+        {
+            return loginSubmissionCount > 0;
+        }
+
+        internal static bool ShouldTreatExternalPageAsLogin(string html)
+        {
+            ArgumentNullException.ThrowIfNull(html);
+            return LooksLikeLoginPage(html)
+                && !RpolSnapshotUtility.IsUsableCampaignSnapshotHtml(RpolSnapshotUtility.SanitizeHtml(html));
         }
 
         internal static bool IsFatalAuthFailure(RpolAuthException exception)
