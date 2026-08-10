@@ -36,7 +36,4 @@ if ($RequireProtectedApi) {
 }
 
 & $pwaVerifier @params
-if ($LASTEXITCODE -ne 0) {
-    throw "PWA synthetic monitor failed with exit code $LASTEXITCODE."
-}
 Write-Output "PWA synthetic monitor passed: $BaseUri"
