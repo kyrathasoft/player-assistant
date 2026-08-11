@@ -24,6 +24,7 @@ $requiredFiles = @(
     'version.js',
     'app.js',
     'translator-worker.js',
+    'campaign-search-worker.js',
     'service-worker.js',
     'manifest.webmanifest',
     'offline.html',
@@ -243,7 +244,7 @@ $featureModulePaths = @(
 $versionedFeatureModulePaths = @($featureModulePaths | ForEach-Object {
     './{0}?v=${{VERSION_METADATA.appRevision}}' -f $_
 })
-foreach ($script in @('version.js', 'app.js', 'translator-worker.js', 'service-worker.js', 'service-worker-tests.mjs') + $featureModulePaths) {
+foreach ($script in @('version.js', 'app.js', 'translator-worker.js', 'campaign-search-worker.js', 'service-worker.js', 'service-worker-tests.mjs', 'campaign-search-worker-tests.mjs') + $featureModulePaths) {
     & node --check (Join-Path $PwaRoot $script)
     Assert-Condition -Condition ($LASTEXITCODE -eq 0) -Message "JavaScript syntax check failed: $script"
 }
@@ -256,6 +257,7 @@ $featureModuleScripts = @($featureModulePaths | ForEach-Object {
 })
 $appScript = @($appScriptEntry) + $featureModuleScripts -join [Environment]::NewLine
 $translatorWorker = Get-Content -Raw -LiteralPath (Join-Path $PwaRoot 'translator-worker.js')
+$campaignSearchWorker = Get-Content -Raw -LiteralPath (Join-Path $PwaRoot 'campaign-search-worker.js')
 $requestTranslationFunction = [regex]::Match(
     $appScript,
     'const requestTranslation = \(event\) => \{.*?worker\?\.addEventListener',

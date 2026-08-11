@@ -20,6 +20,7 @@ const SHELL_ASSETS = [
     `./modules/search.js?v=${VERSION_METADATA.appRevision}`,
     `./modules/dice.js?v=${VERSION_METADATA.appRevision}`,
     './translator-worker.js',
+    `./campaign-search-worker.js?v=${VERSION_METADATA.appRevision}`,
     './offline.html',
     './manifest.webmanifest',
     './icons/icon-192.png',
