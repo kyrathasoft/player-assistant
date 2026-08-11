@@ -48,7 +48,10 @@ const loadLexicon = async (language) => {
             forward,
             reverse,
             forwardMaxPhraseWords: Math.max(1, Number(payload.maxPhraseWords) || 1),
-            reverseMaxPhraseWords: getMaxPhraseWords(reverse),
+            reverseMaxPhraseWords: Number.isInteger(Number(payload.reverseMaxPhraseWords))
+                && Number(payload.reverseMaxPhraseWords) >= 1
+                ? Number(payload.reverseMaxPhraseWords)
+                : getMaxPhraseWords(reverse),
             entryCount: Number(payload.entryCount) || forward.size
         };
         lexicons.set(language, lexicon);

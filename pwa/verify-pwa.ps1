@@ -71,14 +71,19 @@ foreach ($language in @('orcish', 'elvish', 'ghukliak')) {
     Assert-Condition -Condition ($actualCount -gt 0) -Message "$language lexicon is empty."
     Assert-Condition -Condition ([int]$payload.entryCount -eq $actualCount) -Message "$language lexicon entryCount does not match its terms."
     $actualMaxPhraseWords = 1
+    $actualReverseMaxPhraseWords = 1
     $normalizedTerms = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::Ordinal)
     foreach ($property in $termProperties) {
         $phraseWords = @(($property.Name -split '\s+') | Where-Object { $_.Length -gt 0 }).Count
         $actualMaxPhraseWords = [Math]::Max($actualMaxPhraseWords, $phraseWords)
+        $normalizedTranslation = ([string]$property.Value).Normalize([System.Text.NormalizationForm]::FormKC).Trim() -replace '\s+', ' '
+        $reversePhraseWords = @(($normalizedTranslation -split '\s+') | Where-Object { $_.Length -gt 0 }).Count
+        $actualReverseMaxPhraseWords = [Math]::Max($actualReverseMaxPhraseWords, $reversePhraseWords)
         $normalizedTerm = (($property.Name.Normalize([System.Text.NormalizationForm]::FormKC).Trim() -split '\s+') -join ' ').ToLowerInvariant()
         Assert-Condition -Condition ($normalizedTerms.Add($normalizedTerm)) -Message "$language contains duplicate terms under translator-worker normalization: $normalizedTerm"
     }
     Assert-Condition -Condition ([int]$payload.maxPhraseWords -eq $actualMaxPhraseWords) -Message "$language maxPhraseWords does not match its terms."
+    Assert-Condition -Condition ([int]$payload.reverseMaxPhraseWords -eq $actualReverseMaxPhraseWords) -Message "$language reverseMaxPhraseWords does not match its translations."
     $lexiconCounts[$language] = $actualCount
 }
 Assert-Condition -Condition ([int]$lexiconCounts.ghukliak -eq 81204) -Message 'The Ghukliak lexicon must cover every Orcish English term plus its source-only terms.'

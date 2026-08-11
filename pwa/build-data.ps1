@@ -55,6 +55,20 @@ function Get-MaxPhraseWords {
     return $maximum
 }
 
+function Get-MaxTranslationPhraseWords {
+    param([Parameter(Mandatory = $true)][System.Collections.Generic.Dictionary[string,string]]$Terms)
+
+    $maximum = 1
+    foreach ($english in $Terms.get_Keys()) {
+        $translation = ([string]$Terms[$english]).Trim() -replace '\s+', ' '
+        if ($translation.Length -eq 0) {
+            continue
+        }
+        $maximum = [Math]::Max($maximum, @($translation -split '\s+' | Where-Object { $_.Length -gt 0 }).Count)
+    }
+    return $maximum
+}
+
 function Add-TermIfMissing {
     param(
         [Parameter(Mandatory = $true)][System.Collections.Generic.Dictionary[string,string]]$Dictionary,
@@ -129,6 +143,7 @@ $orcishPayload = [ordered]@{
     language = 'Orcish'
     entryCount = $orcishTerms.get_Count()
     maxPhraseWords = Get-MaxPhraseWords -Terms $orcishTerms
+    reverseMaxPhraseWords = Get-MaxTranslationPhraseWords -Terms $orcishTerms
     terms = $orcishTerms
 }
 Write-CompactJson -Value $orcishPayload -Path (Join-Path $dataDirectory 'orcish.json')
@@ -161,6 +176,7 @@ $elvishPayload = [ordered]@{
     source = 'Eldamo 0.8.13, CC BY 4.0, plus project-generated reviewed forms.'
     entryCount = $elvishTerms.get_Count()
     maxPhraseWords = Get-MaxPhraseWords -Terms $elvishTerms
+    reverseMaxPhraseWords = Get-MaxTranslationPhraseWords -Terms $elvishTerms
     terms = $elvishTerms
 }
 Write-CompactJson -Value $elvishPayload -Path (Join-Path $dataDirectory 'elvish.json')
@@ -188,6 +204,7 @@ $ghukliakPayload = [ordered]@{
     source = 'IssendaCampaign Meta/Ghukliak (Goblin Tongue).md + deterministic complete coverage'
     entryCount = $ghukliakTerms.get_Count()
     maxPhraseWords = Get-MaxPhraseWords -Terms $ghukliakTerms
+    reverseMaxPhraseWords = Get-MaxTranslationPhraseWords -Terms $ghukliakTerms
     terms = $ghukliakTerms
 }
 Write-CompactJson -Value $ghukliakPayload -Path (Join-Path $dataDirectory 'ghukliak.json')

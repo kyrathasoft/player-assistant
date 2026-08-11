@@ -78,9 +78,11 @@
   - [x] Preserve wildcard searches through a worker-side full-corpus fallback path.
   - [x] Validate generated schema, page-ID bounds, sorted unique postings, complete term coverage, and behavior parity against the current corpus.
   - [x] Bump the PWA cache revision because the generated campaign-search payload and worker contract changed.
-- [ ] Step 4: Optimize lexicon construction while preserving background preload.
-  - Generate reverse maximum-phrase metadata and avoid the second reverse-map scan.
-  - Benchmark JSON parsing, normalization, Map construction, and translation readiness before changing data format.
+- [x] Step 4: Optimize lexicon construction while preserving background preload.
+  - [x] Generate reverse maximum-phrase metadata and use it to avoid the redundant reverse-map scan.
+  - [x] Validate the declared reverse maximum against generated translation values for all three lexicons.
+  - [x] Benchmark JSON parsing, normalization, Map construction, and translation readiness before adopting the metadata field; preserve a compatibility fallback for older payloads.
+  - [x] Bump synchronized app/cache revisions and query-busted runtime references.
 - [ ] Step 5: Improve perceived lexicon readiness by preloading the last-used language after first paint.
   - Keep the current default-language preload when no preference exists.
   - Do not preload all three large dictionaries.

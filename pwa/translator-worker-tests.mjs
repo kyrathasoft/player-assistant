@@ -33,6 +33,7 @@ const createWorker = (payloadFactory) => {
 const worker = createWorker(() => ({
     entryCount: 6,
     maxPhraseWords: 3,
+    reverseMaxPhraseWords: 2,
     terms: {
         'silver   moon': 'luna',
         'battle cry': 'zug zug',
