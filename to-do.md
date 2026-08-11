@@ -61,6 +61,21 @@
     - [ ] Configure `PWA_MONITOR_CHARACTER_NAME` and `PWA_MONITOR_PASSWORD` for a dedicated production monitor account, then verify the first authenticated live run.
   - [x] Startup timing and 320px narrow-layout overflow are enforced by browser smoke; campaign search and large dictionaries remain demand-loaded/cached.
 
+## High-Priority-Fixes
+
+Cross-cutting reliability, concurrency, API, and identity corrections to implement as a coordinated backlog.
+
+- [ ] Service worker: validate network responses before returning them, treat 404/503/wrong-MIME/captive-portal/corrupt-JSON responses as network failures when a valid cached copy exists, and add a bounded navigation timeout.
+- [ ] Offline party funds: place `party-funds.json` in the data cache or route its fallback through the cache where it is actually installed.
+- [ ] Messages: add server-side pagination, unread counts, cursor navigation, and retention so responses remain valid beyond 200 unread messages.
+- [ ] Stale data: add an Activity/Inbox view and a lightweight revisions endpoint with visibility-aware polling or opt-in Web Push so open PWAs discover new messages and quest decisions.
+- [ ] PHP concurrency: resolve and copy the authenticated identity, call `session_write_close()`, then perform read-only XP, word-count, quest, and message work—or return one dashboard payload instead of serialized `Promise.all` requests.
+- [ ] Broker startup: move migrations to deployment and lazily instantiate only the requested service; keep `/health` free of unnecessary SQLite, schema, and subsystem startup work.
+- [ ] Login hardening: rate-limit primarily by account-plus-source, retain a stronger address throttle, and use progressive delays instead of globally locking a known character name for everyone.
+- [ ] Identity schema: audit existing data, add a unique `character_key` constraint, use opaque IDs for authorization, and retain aliases only as login convenience.
+- [ ] API client: add an `AbortController`-based timeout/cancellation layer, typed structured errors, request IDs, centralized expired-session handling, idempotency keys, and generation guards.
+- [ ] Presence: restrict polling to the DM presence view, pause it while hidden or offline, and derive activity from useful requests where possible instead of polling every player every 30 seconds.
+
 ## PWA performance ordering
 
 - [x] Step 1: Reduce campaign-search work without changing behavior.
