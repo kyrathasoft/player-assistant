@@ -344,6 +344,7 @@ try {
     const consoleErrors = [];
     const requestFailures = [];
     const unexpectedResponses = [];
+    const workerUrls = new Set();
     let offlineExpected = false;
     page.on('pageerror', (error) => pageErrors.push(error));
     context.on('console', (message) => {
@@ -364,6 +365,7 @@ try {
             unexpectedResponses.push(`${response.status()} ${response.url()}`);
         }
     });
+    page.on('worker', (worker) => workerUrls.add(worker.url()));
     context.on('serviceworker', (worker) => {
         void worker.evaluate(() => {
             self.addEventListener('error', (event) => console.error(`service-worker-error:${event.message}`));
@@ -638,6 +640,9 @@ try {
     await page.locator('[data-view="search"]').click();
     await page.locator('#campaign-search').fill('Kirkilston');
     await page.locator('#search-results .search-result').first().waitFor({ state: 'visible' });
+    if (![...workerUrls].some((url) => url.includes('/campaign-search-worker.js?v=62'))) {
+        throw new Error(`Campaign search did not start its dedicated worker: ${JSON.stringify([...workerUrls])}.`);
+    }
 
     await page.locator('[data-view="dice"]').click();
     await page.locator('[data-die="1d20"]').click();
@@ -666,6 +671,9 @@ try {
         if (!cachedUrls.some((url) => new URL(url).pathname.endsWith(requiredPath))) {
             throw new Error(`Offline feature data was not cached: ${requiredPath}`);
         }
+    }
+    if (!cachedUrls.some((url) => url.endsWith('/campaign-search-worker.js?v=62'))) {
+        throw new Error('Campaign search worker was not present in the offline shell cache.');
     }
     await page.evaluate(async () => {
         await fetch('/scarlethorizons/api/v1/session');

@@ -67,11 +67,11 @@
   - Cache compiled search expressions with a bounded cache.
   - Precompute each entry's normalized title/content combination when the corpus is loaded.
   - Add focused expression-cache coverage to the PWA test command.
-- [ ] Step 2: Move campaign search loading, normalization, scoring, and sorting into a dedicated Web Worker.
+- [x] Step 2: Move campaign search loading, normalization, scoring, and sorting into a dedicated Web Worker.
   - [x] Initial worker vertical slice now owns corpus loading, normalization, scoring, sorting, and bounded expression caching.
   - [x] Use request IDs so stale worker responses cannot overwrite newer queries.
   - [x] Keep snippets and DOM rendering on the main thread.
-  - [ ] Add browser smoke coverage for the worker path.
+  - [x] Browser smoke verifies the worker starts, returns online results, and is available from the offline shell cache.
 - [ ] Step 3: Add a build-time exact-term inverted index consumed by the search worker.
   - Intersect candidate page IDs for ordinary multi-term searches.
   - Preserve wildcard searches through a worker-side fallback path.
