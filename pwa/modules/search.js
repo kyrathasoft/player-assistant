@@ -1,10 +1,39 @@
 'use strict';
 
 const MAX_SEARCH_RESULTS = 40;
+const SEARCH_EXPRESSION_CACHE_LIMIT = 128;
+const searchWordCharacters = "\\p{L}\\p{N}'’-";
+
+export const createSearchExpression = (term) => {
+    const leadingWildcard = term.startsWith('*');
+    const trailingWildcard = term.endsWith('*');
+    const core = term
+        .split('*')
+        .map((value) => value.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&'))
+        .join(`[${searchWordCharacters}]*`);
+    if (!core) return null;
+    const prefix = leadingWildcard ? '' : `(^|[^${searchWordCharacters}])`;
+    const suffix = trailingWildcard ? '' : `(?=$|[^${searchWordCharacters}])`;
+    return new RegExp(`${prefix}${core}${suffix}`, 'iu');
+};
+
+export const createSearchExpressionCache = (createExpression = createSearchExpression) => {
+    const expressions = new Map();
+    return (term) => {
+        if (expressions.has(term)) return expressions.get(term);
+        const expression = createExpression(term);
+        if (expressions.size >= SEARCH_EXPRESSION_CACHE_LIMIT) {
+            expressions.delete(expressions.keys().next().value);
+        }
+        expressions.set(term, expression);
+        return expression;
+    };
+};
 
 export const initializeCampaignSearch = ({ byId }) => {
     let campaignSearchIndex = null;
     let campaignSearchLoading = null;
+    const getCachedSearchExpression = createSearchExpressionCache();
 
     async function loadCampaignSearch() {
         if (campaignSearchIndex) {
@@ -34,6 +63,10 @@ export const initializeCampaignSearch = ({ byId }) => {
                         ...entry,
                         normalizedTitle: normalizeSearchText(entry.title),
                         normalizedContent: normalizeSearchText(entry.content)
+                    }))
+                    .map((entry) => ({
+                        ...entry,
+                        normalizedCombined: `${entry.normalizedTitle} ${entry.normalizedContent}`.trim()
                     }));
                 return campaignSearchIndex;
             })
@@ -61,23 +94,7 @@ export const initializeCampaignSearch = ({ byId }) => {
         .replace(/\s+/gu, ' ')
         .trim();
 
-    const searchWordCharacters = "\\p{L}\\p{N}'’-";
-    const escapeRegularExpression = (value) => value.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&');
-
-    const createSearchExpression = (term) => {
-        const leadingWildcard = term.startsWith('*');
-        const trailingWildcard = term.endsWith('*');
-        const core = term
-            .split('*')
-            .map(escapeRegularExpression)
-            .join(`[${searchWordCharacters}]*`);
-        if (!core) return null;
-        const prefix = leadingWildcard ? '' : `(^|[^${searchWordCharacters}])`;
-        const suffix = trailingWildcard ? '' : `(?=$|[^${searchWordCharacters}])`;
-        return new RegExp(`${prefix}${core}${suffix}`, 'iu');
-    };
-
-    const matchesSearchTerm = (text, term) => createSearchExpression(term)?.test(text) === true;
+    const matchesSearchTerm = (text, term) => getCachedSearchExpression(term)?.test(text) === true;
 
     const buildSearchSnippet = (entry, queryTerms) => {
         if (!entry.content) return 'Title match';
@@ -116,7 +133,7 @@ export const initializeCampaignSearch = ({ byId }) => {
             .map((entry) => {
                 const title = entry.normalizedTitle;
                 const content = entry.normalizedContent;
-                const combined = `${title} ${content}`;
+                const combined = entry.normalizedCombined;
                 const titleMatchesAll = queryTerms.every((term) => matchesSearchTerm(title, term));
                 const allTermsMatch = queryTerms.every((term) => matchesSearchTerm(combined, term));
                 const score = !hasWildcards && title === literalQuery ? 0

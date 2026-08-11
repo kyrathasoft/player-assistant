@@ -56,7 +56,34 @@
   - [x] Static PWA verification validates generated data schemas, source URLs, record counts, token hashes, cache revisions, and deployment parity.
   - [x] Deployment verification and the scheduled monitor provide production coverage for anonymous API denial, asset parity, security/cache headers, and public runtime files; the live PWA deployment passed SHA-256 verification.
   - [ ] Add explicit production detection for stale broker/source conditions and authorized protected-response shape.
+    - [x] The scheduled monitor now authenticates, validates login/identity plus XP and word-count contracts, rejects stale XP/source/broker timestamps, and fails closed when monitor credentials are absent.
+    - [x] Focused contract tests, canonical PWA verification, HTTP authentication tests, browser/service-worker smoke tests, parser and CI-policy checks, secret scanning, and an independent fail-closed review all pass.
+    - [ ] Configure `PWA_MONITOR_CHARACTER_NAME` and `PWA_MONITOR_PASSWORD` for a dedicated production monitor account, then verify the first authenticated live run.
   - [x] Startup timing and 320px narrow-layout overflow are enforced by browser smoke; campaign search and large dictionaries remain demand-loaded/cached.
+
+## PWA performance ordering
+
+- [x] Step 1: Reduce campaign-search work without changing behavior.
+  - Cache compiled search expressions with a bounded cache.
+  - Precompute each entry's normalized title/content combination when the corpus is loaded.
+  - Add focused expression-cache coverage to the PWA test command.
+- [ ] Step 2: Move campaign search loading, normalization, scoring, and sorting into a dedicated Web Worker.
+  - Use request IDs so stale worker responses cannot overwrite newer queries.
+  - Keep snippets and DOM rendering on the main thread.
+  - Add worker runtime and browser smoke coverage.
+- [ ] Step 3: Add a build-time exact-term inverted index consumed by the search worker.
+  - Intersect candidate page IDs for ordinary multi-term searches.
+  - Preserve wildcard searches through a worker-side fallback path.
+  - Verify generated counts, schema, and behavior parity against the current corpus.
+- [ ] Step 4: Optimize lexicon construction while preserving background preload.
+  - Generate reverse maximum-phrase metadata and avoid the second reverse-map scan.
+  - Benchmark JSON parsing, normalization, Map construction, and translation readiness before changing data format.
+- [ ] Step 5: Improve perceived lexicon readiness by preloading the last-used language after first paint.
+  - Keep the current default-language preload when no preference exists.
+  - Do not preload all three large dictionaries.
+- [ ] Step 6: Evaluate persisted compiled lexicons with IndexedDB only if startup benchmarks justify the added invalidation/storage complexity.
+  - Version the cache from the generated lexicon schema/hash.
+  - Compare cold-load, repeat-load, memory, and first-translation timings before adoption.
 
 ## Completed
 

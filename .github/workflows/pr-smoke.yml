@@ -61,6 +61,10 @@ jobs:
         shell: pwsh
         run: .\pwa\verify-pwa.ps1
 
+      - name: Run production-response contract tests
+        shell: pwsh
+        run: .\web-deploy\tests\pwa-monitor-contract-tests.ps1
+
       - name: Run PWA browser smoke tests
         shell: pwsh
         run: npm --prefix .\pwa test
