@@ -24,6 +24,7 @@ $requiredFiles = @(
     'version.js',
     'app.js',
     'translator-worker.js',
+    'campaign-search-worker.js',
     'service-worker.js',
     'manifest.webmanifest',
     'offline.html',
@@ -70,14 +71,20 @@ foreach ($language in @('orcish', 'elvish', 'ghukliak')) {
     Assert-Condition -Condition ($actualCount -gt 0) -Message "$language lexicon is empty."
     Assert-Condition -Condition ([int]$payload.entryCount -eq $actualCount) -Message "$language lexicon entryCount does not match its terms."
     $actualMaxPhraseWords = 1
+    $actualReverseMaxPhraseWords = 1
     $normalizedTerms = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::Ordinal)
     foreach ($property in $termProperties) {
         $phraseWords = @(($property.Name -split '\s+') | Where-Object { $_.Length -gt 0 }).Count
         $actualMaxPhraseWords = [Math]::Max($actualMaxPhraseWords, $phraseWords)
+        $normalizedTranslation = ([string]$property.Value).Normalize([System.Text.NormalizationForm]::FormKC).Trim() -replace '\s+', ' '
+        $reversePhraseWords = @(($normalizedTranslation -split '\s+') | Where-Object { $_.Length -gt 0 }).Count
+        $actualReverseMaxPhraseWords = [Math]::Max($actualReverseMaxPhraseWords, $reversePhraseWords)
         $normalizedTerm = (($property.Name.Normalize([System.Text.NormalizationForm]::FormKC).Trim() -split '\s+') -join ' ').ToLowerInvariant()
         Assert-Condition -Condition ($normalizedTerms.Add($normalizedTerm)) -Message "$language contains duplicate terms under translator-worker normalization: $normalizedTerm"
     }
     Assert-Condition -Condition ([int]$payload.maxPhraseWords -eq $actualMaxPhraseWords) -Message "$language maxPhraseWords does not match its terms."
+    Assert-Condition -Condition ([int]$payload.reverseMaxPhraseWords -eq $actualReverseMaxPhraseWords) -Message "$language reverseMaxPhraseWords does not match its translations."
+    Assert-Condition -Condition ([string]$payload.contentHash -match '^[a-f0-9]{64}$') -Message "$language contentHash is missing or malformed."
     $lexiconCounts[$language] = $actualCount
 }
 Assert-Condition -Condition ([int]$lexiconCounts.ghukliak -eq 81204) -Message 'The Ghukliak lexicon must cover every Orcish English term plus its source-only terms.'
@@ -86,6 +93,14 @@ $campaignSearch = Get-Content -Raw -LiteralPath (Join-Path $PwaRoot 'campaign-se
 Assert-Condition -Condition ([int]$campaignSearch.schemaVersion -eq 2) -Message 'Campaign search data must use the full-text schema.'
 Assert-Condition -Condition (@($campaignSearch.pages).Count -gt 0) -Message 'Campaign search data contains no pages.'
 Assert-Condition -Condition ([int]$campaignSearch.pageCount -eq @($campaignSearch.pages).Count) -Message 'Campaign search pageCount does not match its pages.'
+Assert-Condition -Condition ([int]$campaignSearch.termIndexVersion -eq 1 -and $null -ne $campaignSearch.termIndex) -Message 'Campaign search exact-term index is missing or has an unsupported version.'
+foreach ($termProperty in @($campaignSearch.termIndex.PSObject.Properties)) {
+    $previousPageId = -1L
+    foreach ($pageId in @($termProperty.Value)) {
+        Assert-Condition -Condition (($pageId -is [int] -or $pageId -is [long]) -and [int64]$pageId -gt $previousPageId -and [int64]$pageId -lt [int64]$campaignSearch.pageCount) -Message "Campaign search term index contains an invalid or unsorted page ID for '$($termProperty.Name)'."
+        $previousPageId = [int64]$pageId
+    }
+}
 Assert-Condition -Condition (@($campaignSearch.pages | Where-Object { ![string]::IsNullOrWhiteSpace($_.content) }).Count -gt 0) -Message 'Campaign search data contains no Markdown content.'
 Assert-Condition -Condition (@($campaignSearch.pages | Where-Object { [string]::IsNullOrWhiteSpace($_.title) -or $_.url -notmatch '^https://' }).Count -eq 0) -Message 'Campaign search data contains an invalid page title or URL.'
 Assert-Condition -Condition (@($campaignSearch.pages | Where-Object { $_.title -eq 'XP Tracking' }).Count -eq 0) -Message 'The protected XP Tracking page must not be included in public PWA search data.'
@@ -243,7 +258,7 @@ $featureModulePaths = @(
 $versionedFeatureModulePaths = @($featureModulePaths | ForEach-Object {
     './{0}?v=${{VERSION_METADATA.appRevision}}' -f $_
 })
-foreach ($script in @('version.js', 'app.js', 'translator-worker.js', 'service-worker.js', 'service-worker-tests.mjs') + $featureModulePaths) {
+foreach ($script in @('version.js', 'app.js', 'translator-worker.js', 'campaign-search-worker.js', 'service-worker.js', 'service-worker-tests.mjs', 'campaign-search-worker-tests.mjs') + $featureModulePaths) {
     & node --check (Join-Path $PwaRoot $script)
     Assert-Condition -Condition ($LASTEXITCODE -eq 0) -Message "JavaScript syntax check failed: $script"
 }
@@ -256,6 +271,7 @@ $featureModuleScripts = @($featureModulePaths | ForEach-Object {
 })
 $appScript = @($appScriptEntry) + $featureModuleScripts -join [Environment]::NewLine
 $translatorWorker = Get-Content -Raw -LiteralPath (Join-Path $PwaRoot 'translator-worker.js')
+$campaignSearchWorker = Get-Content -Raw -LiteralPath (Join-Path $PwaRoot 'campaign-search-worker.js')
 $requestTranslationFunction = [regex]::Match(
     $appScript,
     'const requestTranslation = \(event\) => \{.*?worker\?\.addEventListener',
@@ -265,6 +281,11 @@ $serviceWorker = Get-Content -Raw -LiteralPath (Join-Path $PwaRoot 'service-work
 $serviceWorkerTests = Get-Content -Raw -LiteralPath (Join-Path $PwaRoot 'service-worker-tests.mjs')
 $browserSmoke = Get-Content -Raw -LiteralPath (Join-Path $PwaRoot 'browser-smoke.mjs')
 $deploymentTest = Get-Content -Raw -LiteralPath (Join-Path $PwaRoot 'test-deployment.ps1')
+$productionResponseContracts = Get-Content -Raw -LiteralPath (Join-Path $PwaRoot 'production-response-contracts.ps1')
+$monitorScript = Get-Content -Raw -LiteralPath (Join-Path $PwaRoot '..\web-deploy\monitor-pwa.ps1')
+$monitorWorkflow = Get-Content -Raw -LiteralPath (Join-Path $PwaRoot '..\.github\workflows\pwa-synthetic-monitor.yml')
+$prSmokeWorkflow = Get-Content -Raw -LiteralPath (Join-Path $PwaRoot '..\.github\workflows\pr-smoke.yml')
+$fullRegressionWorkflow = Get-Content -Raw -LiteralPath (Join-Path $PwaRoot '..\.github\workflows\hardening.yml')
 $referencedIds = [regex]::Matches($appScript, "byId\('([^']+)'\)") | ForEach-Object { $_.Groups[1].Value } | Sort-Object -Unique
 foreach ($id in $referencedIds) {
     Assert-Condition -Condition ($html.Contains("id=`"$id`"")) -Message "app.js references a missing HTML element: $id"
@@ -336,6 +357,11 @@ Assert-Condition -Condition ($manifest.start_url -eq './#dashboard' -and $manife
 Assert-Condition -Condition ($html.Contains('href="manifest.webmanifest"') -and $appScript.Contains('service-worker.js')) -Message 'The install manifest or service-worker registration is missing.'
 Assert-Condition -Condition ($html.Contains("<script src=`"version.js?v=$($versionMetadata.PwaMetadataRevision)`"></script>") -and $html.Contains("<script type=`"module`" src=`"app.js?v=$($versionMetadata.PwaAppRevision)`"></script>") -and $appScriptEntry.Contains("from './modules/translator.js?v=$($versionMetadata.PwaAppRevision)'") -and $appScriptEntry.Contains("from './modules/search.js?v=$($versionMetadata.PwaAppRevision)'") -and $appScriptEntry.Contains("from './modules/dice.js?v=$($versionMetadata.PwaAppRevision)'")) -Message 'The PWA entry point must load version metadata and cache-busted translator, search, and dice feature modules.'
 Assert-Condition -Condition ($featureModulePaths.Count -eq @($featureModulePaths | Where-Object { $deploymentTest.Contains("'$_' = @('application/javascript', 'text/javascript')") }).Count) -Message 'Public deployment verification must allow every PWA feature module.'
+Assert-Condition -Condition ($monitorScript.Contains('RequireProtectedApi') -and $monitorScript.Contains('PWA_MONITOR_CHARACTER_NAME') -and $monitorScript.Contains('PWA_MONITOR_PASSWORD') -and $monitorScript.Contains('MaximumXpAgeSeconds') -and $monitorScript.Contains('MaximumWordCountAgeSeconds')) -Message 'The production monitor must require credentials and explicit XP/word-count freshness limits.'
+Assert-Condition -Condition ($productionResponseContracts.Contains('[bool]$Payload.stale -eq $false') -and $productionResponseContracts.Contains('XP source snapshot is stale') -and $productionResponseContracts.Contains('Word-count source snapshot is stale') -and $productionResponseContracts.Contains('Word-count broker snapshot is stale') -and $productionResponseContracts.Contains('Test-ProductionInteger $Payload.schema_version') -and $deploymentTest.Contains('Assert-ProductionXpResponse') -and $deploymentTest.Contains('Assert-ProductionWordCountResponse')) -Message 'Deployment verification must reject stale or malformed authorized protected responses.'
+Assert-Condition -Condition ($productionResponseContracts.Contains('Invoke-ProductionSessionCleanup') -and $productionResponseContracts.Contains('Assert-ProductionAnonymousSessionResponse') -and $productionResponseContracts.Contains('Assert-ProductionLoginResponse') -and $productionResponseContracts.Contains('Assert-ProductionIdentityResponse') -and $deploymentTest.Contains('Assert-ProductionAnonymousSessionResponse') -and $deploymentTest.Contains('Assert-ProductionLoginResponse') -and $deploymentTest.Contains('Assert-ProductionIdentityResponse') -and $deploymentTest.Contains('Invoke-ProductionSessionCleanup') -and $deploymentTest.Contains('Invoke-ProductionMonitorLogout') -and $deploymentTest.Contains('$postLogoutSessionResponse') -and $deploymentTest.Contains("'X-CSRF-Token'")) -Message 'Anonymous and authorized identity response shapes must use reusable fail-closed contracts, and monitor cleanup must verify logout.'
+Assert-Condition -Condition ($monitorWorkflow.Contains('secrets.PWA_MONITOR_CHARACTER_NAME') -and $monitorWorkflow.Contains('secrets.PWA_MONITOR_PASSWORD') -and $monitorWorkflow.Contains('RequireProtectedApi')) -Message 'The scheduled production monitor must exercise authorized protected-response and freshness checks.'
+Assert-Condition -Condition ($prSmokeWorkflow.Contains('.\web-deploy\tests\pwa-monitor-contract-tests.ps1') -and $fullRegressionWorkflow.Contains('./web-deploy/tests/pwa-monitor-contract-tests.ps1')) -Message 'PR smoke and full-regression CI must execute the production-response contract tests.'
 Assert-Condition -Condition ($html.Contains("styles.css?v=$($versionMetadata.PwaStylesRevision)") -and $html.Contains("$($versionMetadata.PwaVersion) PWA") -and $versionScript.Contains("pwaVersion: '$($versionMetadata.PwaVersion)'") -and $versionScript.Contains("metadataRevision: $($versionMetadata.PwaMetadataRevision)") -and $versionScript.Contains("stylesRevision: $($versionMetadata.PwaStylesRevision)") -and $versionScript.Contains("appRevision: $($versionMetadata.PwaAppRevision)") -and $versionScript.Contains("cacheRevision: $($versionMetadata.PwaCacheRevision)") -and $serviceWorker.Contains("importScripts('./version.js?v=$($versionMetadata.PwaMetadataRevision)')") -and $serviceWorker.Contains('VERSION_METADATA.cacheRevision') -and $serviceWorker.Contains('VERSION_METADATA.stylesRevision') -and $serviceWorker.Contains('VERSION_METADATA.appRevision') -and $appScriptEntry.Contains('PLAYER_ASSISTANT_VERSION_METADATA?.pwaVersion') -and $deploymentTest.Contains("'version.js' = @('application/javascript', 'text/javascript')") -and $versionedFeatureModulePaths.Count -eq @($versionedFeatureModulePaths | Where-Object { $serviceWorker.Contains($_) }).Count -and $serviceWorker.Contains("'./level-progression.json'") -and $serviceWorker.Contains("'./magic-items.json'")) -Message 'The PWA shell must use centralized cache-busting metadata, preload every cache-busted feature module, and preload the progression and magic-item data.'
 Assert-Condition -Condition ($html.Contains('value="ghukliak"') -and $html.Contains('Goblin') -and $appScript.Contains("languageSelect?.value === 'ghukliak'") -and $translatorWorker.Contains("message.language === 'ghukliak'")) -Message 'The PWA translator must expose the Goblin/Ghukliak language in its UI and worker.'
 Assert-Condition -Condition ([System.Text.RegularExpressions.Regex]::IsMatch($styles, '\.translation-loading\[hidden\]\s*\{\s*display:\s*none\s*!important;\s*\}', [System.Text.RegularExpressions.RegexOptions]::Singleline)) -Message 'The translator loading indicator must remain hidden whenever its hidden attribute is set.'

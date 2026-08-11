@@ -1,6 +1,8 @@
 'use strict';
 
 const MAX_TRANSLATOR_WORDS = 5000;
+const TRANSLATOR_LANGUAGE_STORAGE_KEY = 'player-assistant.translator-language';
+const TRANSLATOR_LANGUAGES = new Set(['orcish', 'elvish', 'ghukliak']);
 const textEncoder = new TextEncoder();
 
 export const initializeTranslator = ({ byId }) => {
@@ -17,6 +19,27 @@ export const initializeTranslator = ({ byId }) => {
     const exportButton = byId('export-translation');
     const translationLoading = byId('translation-loading');
     const translationLoadingLabel = byId('translation-loading-label');
+
+    const normalizeLanguage = (value) => TRANSLATOR_LANGUAGES.has(value) ? value : 'orcish';
+    const getSelectedLanguage = () => normalizeLanguage(languageSelect?.value);
+    const readPreferredLanguage = () => {
+        try {
+            return normalizeLanguage(window.localStorage.getItem(TRANSLATOR_LANGUAGE_STORAGE_KEY));
+        } catch {
+            return 'orcish';
+        }
+    };
+    const savePreferredLanguage = (language) => {
+        try {
+            window.localStorage.setItem(TRANSLATOR_LANGUAGE_STORAGE_KEY, normalizeLanguage(language));
+        } catch {
+            // Private browsing or storage policy may make preferences unavailable.
+        }
+    };
+    const preferredLanguage = readPreferredLanguage();
+    if (languageSelect && TRANSLATOR_LANGUAGES.has(preferredLanguage)) {
+        languageSelect.value = preferredLanguage;
+    }
 
     const countWords = (text) => text.match(/[\p{L}\p{N}]+(?:['’\-][\p{L}\p{N}]+)*/gu)?.length ?? 0;
 
@@ -98,9 +121,7 @@ export const initializeTranslator = ({ byId }) => {
                 worker.postMessage({
                     type: 'translate',
                     id,
-                    language: languageSelect?.value === 'elvish'
-                        ? 'elvish'
-                        : languageSelect?.value === 'ghukliak' ? 'ghukliak' : 'orcish',
+                    language: getSelectedLanguage(),
                     reverse: reverseToggle?.checked === true,
                     text: source
                 });
@@ -147,9 +168,10 @@ export const initializeTranslator = ({ byId }) => {
 
     input?.addEventListener('input', requestTranslation);
     languageSelect?.addEventListener('change', () => {
+        savePreferredLanguage(getSelectedLanguage());
         if (reverseToggle instanceof HTMLInputElement) reverseToggle.checked = false;
         resetTranslator();
-        worker?.postMessage({ type: 'preload', language: languageSelect.value });
+        worker?.postMessage({ type: 'preload', language: getSelectedLanguage() });
     });
     reverseToggle?.addEventListener('change', () => {
         resetTranslator();
@@ -175,5 +197,12 @@ export const initializeTranslator = ({ byId }) => {
 
     updateTranslatorLabels();
     updateTranslationCounts();
-    worker?.postMessage({ type: 'preload', language: 'orcish' });
+    const preloadPreferredLanguage = () => {
+        worker?.postMessage({ type: 'preload', language: preferredLanguage });
+    };
+    if (typeof window.requestAnimationFrame === 'function') {
+        window.requestAnimationFrame(preloadPreferredLanguage);
+    } else {
+        window.setTimeout(preloadPreferredLanguage, 0);
+    }
 };

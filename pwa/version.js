@@ -4,6 +4,6 @@ globalThis.PLAYER_ASSISTANT_VERSION_METADATA = Object.freeze({
     pwaVersion: '0.9.8',
     metadataRevision: 1,
     stylesRevision: 43,
-    appRevision: 61,
-    cacheRevision: 75
+    appRevision: 65,
+    cacheRevision: 80
 });

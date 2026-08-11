@@ -105,6 +105,7 @@ const translatorPayload = Object.freeze({
     language: 'Orcish',
     entryCount: 1,
     maxPhraseWords: 1,
+    contentHash: 'a'.repeat(64),
     terms: { hello: 'zug' }
 });
 

@@ -240,7 +240,9 @@ broker returns the exact uploaded totals and observation time.
 
 ## Verification
 
-- Health response reports schema version `6`, a nonzero `character_account_count`, `xp_tracking_configured: true`, the word-count snapshot availability state, `quest_request_workflow_configured: true`, and configured broker operations.
+- Health response reports schema version `7`, a nonzero `character_account_count`, `xp_tracking_configured: true`, the word-count snapshot availability state, `quest_request_workflow_configured: true`, and configured broker operations.
+- Configure a dedicated, enabled player monitor account whose `character_key` maps to a current XP character. Store only its login name and password in the `PWA_MONITOR_CHARACTER_NAME` and `PWA_MONITOR_PASSWORD` GitHub repository secrets.
+- The scheduled PWA monitor fails closed when either secret is absent. Its authenticated checks require the login and identity response contracts, `Cache-Control: no-store`, a non-stale XP snapshot fetched within 24 hours, and a source-observed and broker-uploaded word-count snapshot no older than seven days. It never prints protected response bodies or credentials.
 
 ## Broker database recovery and observability
 

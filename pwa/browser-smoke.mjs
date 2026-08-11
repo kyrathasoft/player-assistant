@@ -344,6 +344,7 @@ try {
     const consoleErrors = [];
     const requestFailures = [];
     const unexpectedResponses = [];
+    const workerUrls = new Set();
     let offlineExpected = false;
     page.on('pageerror', (error) => pageErrors.push(error));
     context.on('console', (message) => {
@@ -364,6 +365,7 @@ try {
             unexpectedResponses.push(`${response.status()} ${response.url()}`);
         }
     });
+    page.on('worker', (worker) => workerUrls.add(worker.url()));
     context.on('serviceworker', (worker) => {
         void worker.evaluate(() => {
             self.addEventListener('error', (event) => console.error(`service-worker-error:${event.message}`));
@@ -631,13 +633,37 @@ try {
         throw new Error(`Navigation smoke failed: unexpected URL ${page.url()}`);
     }
 
+    await page.locator('#translator-language').selectOption('elvish');
+    await page.waitForFunction(() => window.localStorage.getItem('player-assistant.translator-language') === 'elvish');
+    await page.reload({ waitUntil: 'domcontentloaded' });
+    await page.locator('#view-translator').waitFor({ state: 'visible' });
+    if (await page.locator('#translator-language').inputValue() !== 'elvish') {
+        throw new Error('Translator did not restore the last-used language.');
+    }
+    await page.waitForFunction(() => document.querySelector('#lexicon-status')?.textContent?.includes('Elvish lexicon ready'));
+    await page.locator('#translator-language').selectOption('orcish');
+    await page.waitForFunction(() => window.localStorage.getItem('player-assistant.translator-language') === 'orcish');
+
     await page.locator('#translator-input').fill('hello');
     await page.locator('#translator-output').waitFor({ state: 'visible' });
     await page.waitForFunction(() => document.querySelector('#translator-output')?.value === 'zug');
+    await page.waitForFunction(async () => new Promise((resolve) => {
+        const request = indexedDB.open('player-assistant-lexicons', 1);
+        request.onsuccess = () => {
+            const transaction = request.result.transaction('compiled', 'readonly');
+            const keysRequest = transaction.objectStore('compiled').getAllKeys();
+            keysRequest.onsuccess = () => resolve(keysRequest.result.some((key) => String(key).startsWith('orcish:1:')));
+            keysRequest.onerror = () => resolve(false);
+        };
+        request.onerror = () => resolve(false);
+    }));
 
     await page.locator('[data-view="search"]').click();
     await page.locator('#campaign-search').fill('Kirkilston');
     await page.locator('#search-results .search-result').first().waitFor({ state: 'visible' });
+    if (![...workerUrls].some((url) => url.includes('/campaign-search-worker.js?v=65'))) {
+        throw new Error(`Campaign search did not start its dedicated worker: ${JSON.stringify([...workerUrls])}.`);
+    }
 
     await page.locator('[data-view="dice"]').click();
     await page.locator('[data-die="1d20"]').click();
@@ -666,6 +692,9 @@ try {
         if (!cachedUrls.some((url) => new URL(url).pathname.endsWith(requiredPath))) {
             throw new Error(`Offline feature data was not cached: ${requiredPath}`);
         }
+    }
+    if (!cachedUrls.some((url) => url.endsWith('/campaign-search-worker.js?v=65'))) {
+        throw new Error('Campaign search worker was not present in the offline shell cache.');
     }
     await page.evaluate(async () => {
         await fetch('/scarlethorizons/api/v1/session');

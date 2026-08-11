@@ -20,6 +20,7 @@ const SHELL_ASSETS = [
     `./modules/search.js?v=${VERSION_METADATA.appRevision}`,
     `./modules/dice.js?v=${VERSION_METADATA.appRevision}`,
     './translator-worker.js',
+    `./campaign-search-worker.js?v=${VERSION_METADATA.appRevision}`,
     './offline.html',
     './manifest.webmanifest',
     './icons/icon-192.png',
@@ -115,6 +116,8 @@ const isValidJsonPayload = (pathname, value) => {
             && value.entryCount > 0
             && Number.isInteger(value.maxPhraseWords)
             && value.maxPhraseWords > 0
+            && typeof value.contentHash === 'string'
+            && /^[a-f0-9]{64}$/u.test(value.contentHash)
             && isRecord(value.terms)
             && Object.keys(value.terms).length === value.entryCount;
     }
@@ -125,7 +128,13 @@ const isValidJsonPayload = (pathname, value) => {
             && Array.isArray(value.pages)
             && value.pages.length === value.pageCount
             && Number.isInteger(value.wordCount)
-            && value.wordCount >= 0;
+            && value.wordCount >= 0
+            && value.termIndexVersion === 1
+            && isRecord(value.termIndex)
+            && Object.values(value.termIndex).every((pageIds) => Array.isArray(pageIds)
+                && pageIds.every((pageId) => Number.isInteger(pageId)
+                    && pageId >= 0
+                    && pageId < value.pageCount));
     }
     if (pathname.endsWith('/magic-items.json')) {
         return Number.isInteger(value.schema_version) && Array.isArray(value.items);
