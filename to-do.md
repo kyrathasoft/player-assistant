@@ -72,10 +72,12 @@
   - [x] Use request IDs so stale worker responses cannot overwrite newer queries.
   - [x] Keep snippets and DOM rendering on the main thread.
   - [x] Browser smoke verifies the worker starts, returns online results, and is available from the offline shell cache.
-- [ ] Step 3: Add a build-time exact-term inverted index consumed by the search worker.
-  - Intersect candidate page IDs for ordinary multi-term searches.
-  - Preserve wildcard searches through a worker-side fallback path.
-  - Verify generated counts, schema, and behavior parity against the current corpus.
+- [x] Step 3: Add a build-time exact-term inverted index consumed by the search worker.
+  - [x] Generate normalized exact-term postings for title/content pages, including hyphen/apostrophe component terms for behavior compatibility.
+  - [x] Intersect candidate page IDs for ordinary multi-term searches.
+  - [x] Preserve wildcard searches through a worker-side full-corpus fallback path.
+  - [x] Validate generated schema, page-ID bounds, sorted unique postings, complete term coverage, and behavior parity against the current corpus.
+  - [x] Bump the PWA cache revision because the generated campaign-search payload and worker contract changed.
 - [ ] Step 4: Optimize lexicon construction while preserving background preload.
   - Generate reverse maximum-phrase metadata and avoid the second reverse-map scan.
   - Benchmark JSON parsing, normalization, Map construction, and translation readiness before changing data format.
@@ -85,6 +87,80 @@
 - [ ] Step 6: Evaluate persisted compiled lexicons with IndexedDB only if startup benchmarks justify the added invalidation/storage complexity.
   - Version the cache from the generated lexicon schema/hash.
   - Compare cold-load, repeat-load, memory, and first-translation timings before adoption.
+
+## Improved-PWA
+
+Planned correction for the PWA's approximately 10.1 MB optional-data installation cost. The service worker must install a small usable shell; translator and campaign-search packs must be independently downloadable, schema-validated, retriable, removable, and retained across app updates when their content hashes remain unchanged.
+
+- [ ] 1. Establish the optional-pack inventory and a red-capable regression harness.
+  - Record the current pack sizes and declared records: Orcish 3.87 MB/80,874 terms, Elvish 2.23 MB/84,460 terms, Ghukliak 2.11 MB/81,204 terms, and campaign search 1.90 MB/1,055 pages.
+  - Add static assertions that no large dictionary or complete campaign index appears in the service-worker install shell list.
+  - Add an install fixture that proves the shell activates successfully when every optional pack is unavailable.
+  - Add failure fixtures for truncated, wrong-MIME, invalid-schema, stale-hash, HTTP-error, timeout, and quota-exceeded pack downloads.
+  - Keep the target measurable: initial install must not request the approximately 10.1 MB optional payload.
+
+- [ ] 2. Define a generated, content-addressed optional-pack manifest.
+  - Generate one manifest entry per translator language and the campaign-search pack with URL, pack kind, schema version, content hash, byte size, record/page count, and validation metadata.
+  - Hash the exact served bytes, not a source description or mutable timestamp.
+  - Validate that declared counts, schema versions, and hashes match the generated files before packaging or deployment.
+  - Make the manifest itself a small shell asset and version it independently from the application shell.
+  - Add verifier coverage for missing, duplicate, mismatched, and unexpectedly large manifest entries.
+
+- [ ] 3. Reduce service-worker installation to the minimal shell.
+  - Remove all three dictionaries and `campaign-search.json` from `OFFLINE_DATA_ASSETS` and any install-time `cacheAssets` call.
+  - Keep only the shell, feature modules/workers, small required UI data, offline page, manifest, and icons in the install transaction.
+  - Ensure one optional-pack failure cannot delete the shell cache or abort worker activation.
+  - Preserve fail-closed validation for assets that remain mandatory for shell startup.
+  - Bump centralized app/cache revisions and update the HTML, service-worker inventory, verifier, and deployment file manifest together.
+
+- [ ] 4. Implement an independent optional-pack download and validation controller.
+  - Add a shared pack loader used by the translator worker and campaign-search worker.
+  - Fetch one pack at a time with bounded retries and backoff for idempotent GETs; do not retry indefinitely or block shell activation.
+  - Validate response status, MIME type, byte presence, content hash, schema, declared counts, and language/pack identity before storing.
+  - Write to a temporary or isolated cache entry first, then promote atomically only after every validation succeeds.
+  - Preserve the previous valid pack when a replacement fails; expose a retryable error state instead of deleting usable data.
+
+- [ ] 5. Create content-addressed, independently removable caches.
+  - Store packs under cache keys containing pack kind, schema version, and content hash so an app-shell revision does not invalidate unchanged packs.
+  - Retain valid packs across service-worker activation and app updates when the manifest hash still matches.
+  - Remove obsolete hashes only after the new manifest is validated and no active client needs the old pack.
+  - Add explicit per-pack removal controls and ensure removal does not delete the shell or unrelated packs.
+  - Handle storage quota failures by preserving existing packs and returning a usable network result or clear retry state.
+
+- [ ] 6. Integrate translator readiness without restoring the install-time download.
+  - Preload only the selected/default language after shell startup or on the first translation request, preserving the instant-response requirement after that pack is ready.
+  - Keep Elvish and Ghukliak demand-loaded; do not download all three languages merely because the worker starts.
+  - Report loading, ready, stale, unavailable, retrying, and removed states in the translator UI.
+  - Ensure language switching cannot display a stale response from a previous language or identity of the pack.
+  - Verify already-cached packs work offline while an uncached language reports an actionable unavailable state.
+
+- [ ] 7. Integrate campaign-search readiness without restoring the install-time download.
+  - Demand-load the campaign-search pack when the user first opens or queries campaign search.
+  - Keep search worker initialization independent from pack availability so the rest of the PWA remains usable.
+  - Validate the pack before search begins and return a clear retryable search-unavailable state on failure.
+  - Preserve the existing worker request-ID behavior and offline search for a previously retained valid pack.
+  - Ensure a failed search-pack replacement never discards the last known-good index.
+
+- [ ] 8. Add service-worker lifecycle and cache-retention coverage.
+  - Prove install and activation succeed with zero optional packs cached or reachable.
+  - Prove each pack can be downloaded, validated, used offline, removed, retried, and independently replaced.
+  - Prove an unchanged content hash survives an app-shell cache revision, while a changed hash creates a new pack entry and retires the old one safely.
+  - Prove corrupt cached packs are deleted without damaging the shell or other packs.
+  - Prove optional-pack network failures never delete the current shell or unrelated valid packs.
+
+- [ ] 9. Add browser, offline, and performance acceptance coverage.
+  - Measure initial install requests, bytes, activation time, and first usable shell time; assert the optional 10.1 MB payload is absent from install.
+  - Exercise first translation, language switching, first campaign search, retries, removal, offline reload, and shell navigation through the real browser.
+  - Assert Cache Storage contains only requested/validated packs and that protected API responses never enter any pack cache.
+  - Verify status/error messaging and accessible retry/remove controls at normal and narrow viewport sizes.
+  - Keep full PWA smoke, service-worker failure injection, and CI policy checks synchronized with the new pack lifecycle.
+
+- [ ] 10. Correct documentation, deployment, and operational contracts.
+  - Update `pwa/README.md` so it accurately describes shell-only installation and independently demand-loaded packs.
+  - Update `verify-pwa.ps1`, `test-deployment.ps1`, service-worker inventories, generated-data validation, and release checklists for the manifest and pack caches.
+  - Deploy the complete runtime slice, including the manifest, loader, workers, generated packs, and cache-busting metadata; do not deploy only the changed browser module.
+  - Verify public HTTPS hashes, MIME/cache headers, pack manifest parity, anonymous protected-data denial, and representative online/offline pack behavior after deployment.
+  - Record pack hashes and cache-generation evidence without exposing protected data or credentials.
 
 ## Fix-Same-First-Name-Flaw
 

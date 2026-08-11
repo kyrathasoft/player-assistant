@@ -46,6 +46,26 @@ const createSearchExpression = (term) => {
 
 const matchesSearchTerm = (text, term) => createSearchExpression(term)?.test(text) === true;
 
+const isValidTermIndex = (termIndex, pageCount) => {
+    if (!termIndex || typeof termIndex !== 'object' || Array.isArray(termIndex)) return false;
+    return Object.values(termIndex).every((pageIds) => Array.isArray(pageIds)
+        && pageIds.every((pageId) => Number.isInteger(pageId) && pageId >= 0 && pageId < pageCount));
+};
+
+const getCandidateEntries = (entries, queryTerms, hasWildcards, termIndex) => {
+    if (hasWildcards || !isValidTermIndex(termIndex, entries.length)) return entries;
+    let candidateIds = null;
+    for (const term of queryTerms) {
+        const postings = termIndex[term];
+        if (!Array.isArray(postings)) return [];
+        candidateIds = candidateIds === null
+            ? [...postings]
+            : candidateIds.filter((pageId) => postings.includes(pageId));
+        if (candidateIds.length === 0) return [];
+    }
+    return candidateIds.map((pageId) => entries[pageId]).filter(Boolean);
+};
+
 const loadCampaignSearch = async () => {
     if (campaignSearchIndex) return campaignSearchIndex;
     if (campaignSearchLoading) return campaignSearchLoading;
@@ -58,7 +78,7 @@ const loadCampaignSearch = async () => {
             const sourceEntries = Array.isArray(data.pages)
                 ? data.pages
                 : Object.entries(data).map(([title, url]) => ({ title, url, content: '' }));
-            campaignSearchIndex = sourceEntries
+            const entries = sourceEntries
                 .map((entry) => ({
                     title: String(entry.title || ''),
                     url: String(entry.url || ''),
@@ -75,6 +95,10 @@ const loadCampaignSearch = async () => {
                         normalizedCombined: `${normalizedTitle} ${normalizedContent}`.trim()
                     };
                 });
+            const termIndex = data.termIndexVersion === 1 && isValidTermIndex(data.termIndex, entries.length)
+                ? data.termIndex
+                : null;
+            campaignSearchIndex = { entries, termIndex };
             return campaignSearchIndex;
         })
         .finally(() => {
@@ -89,7 +113,12 @@ const searchCampaign = async (query) => {
     const queryTerms = [...new Set(normalizedQuery.split(' ').filter(Boolean))];
     const literalQuery = normalizedQuery.replaceAll('*', '').replace(/\s+/gu, ' ').trim();
     const hasWildcards = normalizedQuery.includes('*');
-    const entries = await loadCampaignSearch();
+    const searchData = await loadCampaignSearch();
+    const entries = getCandidateEntries(
+        searchData.entries,
+        queryTerms,
+        hasWildcards,
+        searchData.termIndex);
     return entries
         .map((entry) => {
             const titleMatchesAll = queryTerms.every((term) => matchesSearchTerm(entry.normalizedTitle, term));

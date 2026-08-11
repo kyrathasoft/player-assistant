@@ -197,8 +197,12 @@ if ($RefreshCampaignSearch) {
     & (Join-Path $PSScriptRoot 'refresh-campaign-search.ps1') -OutputPath $campaignSearchDestination
 }
 $campaignSearch = Read-Json -Path $campaignSearchDestination
-if ([int]$campaignSearch.schemaVersion -ne 2 -or @($campaignSearch.pages).Count -eq 0) {
-    throw 'The PWA campaign search index is missing full-text page data. Run pwa\refresh-campaign-search.ps1.'
+if ([int]$campaignSearch.schemaVersion -ne 2 -or
+    [int]$campaignSearch.termIndexVersion -ne 1 -or
+    $null -eq $campaignSearch.termIndex -or
+    @($campaignSearch.pages).Count -eq 0) {
+    throw 'The PWA campaign search index is missing full-text page data or its exact-term index. Run pwa
+efresh-campaign-search.ps1.'
 }
 if (@($campaignSearch.pages | Where-Object { $_.title -eq 'XP Tracking' }).Count -gt 0) {
     throw 'The protected XP Tracking page must not be included in the public PWA campaign search index.'

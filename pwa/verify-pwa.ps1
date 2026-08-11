@@ -87,6 +87,14 @@ $campaignSearch = Get-Content -Raw -LiteralPath (Join-Path $PwaRoot 'campaign-se
 Assert-Condition -Condition ([int]$campaignSearch.schemaVersion -eq 2) -Message 'Campaign search data must use the full-text schema.'
 Assert-Condition -Condition (@($campaignSearch.pages).Count -gt 0) -Message 'Campaign search data contains no pages.'
 Assert-Condition -Condition ([int]$campaignSearch.pageCount -eq @($campaignSearch.pages).Count) -Message 'Campaign search pageCount does not match its pages.'
+Assert-Condition -Condition ([int]$campaignSearch.termIndexVersion -eq 1 -and $null -ne $campaignSearch.termIndex) -Message 'Campaign search exact-term index is missing or has an unsupported version.'
+foreach ($termProperty in @($campaignSearch.termIndex.PSObject.Properties)) {
+    $previousPageId = -1L
+    foreach ($pageId in @($termProperty.Value)) {
+        Assert-Condition -Condition (($pageId -is [int] -or $pageId -is [long]) -and [int64]$pageId -gt $previousPageId -and [int64]$pageId -lt [int64]$campaignSearch.pageCount) -Message "Campaign search term index contains an invalid or unsorted page ID for '$($termProperty.Name)'."
+        $previousPageId = [int64]$pageId
+    }
+}
 Assert-Condition -Condition (@($campaignSearch.pages | Where-Object { ![string]::IsNullOrWhiteSpace($_.content) }).Count -gt 0) -Message 'Campaign search data contains no Markdown content.'
 Assert-Condition -Condition (@($campaignSearch.pages | Where-Object { [string]::IsNullOrWhiteSpace($_.title) -or $_.url -notmatch '^https://' }).Count -eq 0) -Message 'Campaign search data contains an invalid page title or URL.'
 Assert-Condition -Condition (@($campaignSearch.pages | Where-Object { $_.title -eq 'XP Tracking' }).Count -eq 0) -Message 'The protected XP Tracking page must not be included in public PWA search data.'

@@ -126,7 +126,13 @@ const isValidJsonPayload = (pathname, value) => {
             && Array.isArray(value.pages)
             && value.pages.length === value.pageCount
             && Number.isInteger(value.wordCount)
-            && value.wordCount >= 0;
+            && value.wordCount >= 0
+            && value.termIndexVersion === 1
+            && isRecord(value.termIndex)
+            && Object.values(value.termIndex).every((pageIds) => Array.isArray(pageIds)
+                && pageIds.every((pageId) => Number.isInteger(pageId)
+                    && pageId >= 0
+                    && pageId < value.pageCount));
     }
     if (pathname.endsWith('/magic-items.json')) {
         return Number.isInteger(value.schema_version) && Array.isArray(value.items);
