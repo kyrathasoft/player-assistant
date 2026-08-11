@@ -83,12 +83,18 @@
   - [x] Validate the declared reverse maximum against generated translation values for all three lexicons.
   - [x] Benchmark JSON parsing, normalization, Map construction, and translation readiness before adopting the metadata field; preserve a compatibility fallback for older payloads.
   - [x] Bump synchronized app/cache revisions and query-busted runtime references.
-- [ ] Step 5: Improve perceived lexicon readiness by preloading the last-used language after first paint.
-  - Keep the current default-language preload when no preference exists.
-  - Do not preload all three large dictionaries.
-- [ ] Step 6: Evaluate persisted compiled lexicons with IndexedDB only if startup benchmarks justify the added invalidation/storage complexity.
-  - Version the cache from the generated lexicon schema/hash.
-  - Compare cold-load, repeat-load, memory, and first-translation timings before adoption.
+- [x] Step 5: Improve perceived lexicon readiness by preloading the last-used language after first paint.
+  - [x] Persist only supported language selections and restore the preference on startup.
+  - [x] Schedule exactly the restored/default language preload after the first paint; no preference still uses Orcish.
+  - [x] Do not preload all three large dictionaries.
+  - [x] Browser smoke verifies persistence, restoration, Elvish readiness, and switching back to Orcish.
+- [x] Step 6: Evaluate persisted compiled lexicons with IndexedDB only if startup benchmarks justify the added invalidation/storage complexity.
+  - [x] Add generated content hashes for each lexicon and use schema/hash/language cache keys for invalidation.
+  - [x] Persist compiled forward/reverse Map entries in an optional IndexedDB store from the translator worker.
+  - [x] Restore only matching compiled data; remove obsolete same-language hashes when a new version is written.
+  - [x] Fail open to normal JSON parsing when IndexedDB is unavailable, corrupt, quota-limited, or otherwise fails.
+  - [x] Real-browser benchmark: Orcish cold fetch/parse/map construction median 280.8 ms versus 44.6 ms IndexedDB restore, with a 42.5 ms initial write; the measured repeat-startup benefit justifies the bounded complexity.
+  - [x] Browser smoke verifies the compiled Orcish record is written while translation behavior remains online/offline compatible.
 
 ## Improved-PWA
 

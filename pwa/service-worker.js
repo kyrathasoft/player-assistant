@@ -116,6 +116,8 @@ const isValidJsonPayload = (pathname, value) => {
             && value.entryCount > 0
             && Number.isInteger(value.maxPhraseWords)
             && value.maxPhraseWords > 0
+            && typeof value.contentHash === 'string'
+            && /^[a-f0-9]{64}$/u.test(value.contentHash)
             && isRecord(value.terms)
             && Object.keys(value.terms).length === value.entryCount;
     }

@@ -42,6 +42,26 @@ function Write-CompactJson {
     [System.IO.File]::WriteAllText($Path, $json, [System.Text.UTF8Encoding]::new($false))
 }
 
+function Get-TermsContentHash {
+    param([Parameter(Mandatory = $true)][System.Collections.Generic.Dictionary[string,string]]$Terms)
+
+    $canonicalTerms = [ordered]@{}
+    foreach ($english in ($Terms.get_Keys() | Sort-Object)) {
+        $canonicalTerms[$english] = $Terms[$english]
+    }
+    $options = [System.Text.Json.JsonSerializerOptions]::new()
+    $options.Encoder = [System.Text.Encodings.Web.JavaScriptEncoder]::UnsafeRelaxedJsonEscaping
+    $json = [System.Text.Json.JsonSerializer]::Serialize($canonicalTerms, $options)
+    $bytes = [System.Text.Encoding]::UTF8.GetBytes($json)
+    $hash = [System.Security.Cryptography.SHA256]::Create()
+    try {
+        return ([System.BitConverter]::ToString($hash.ComputeHash($bytes))).Replace('-', '').ToLowerInvariant()
+    }
+    finally {
+        $hash.Dispose()
+    }
+}
+
 function Get-MaxPhraseWords {
     param([Parameter(Mandatory = $true)][System.Collections.Generic.Dictionary[string,string]]$Terms)
     $maximum = 1
@@ -144,6 +164,7 @@ $orcishPayload = [ordered]@{
     entryCount = $orcishTerms.get_Count()
     maxPhraseWords = Get-MaxPhraseWords -Terms $orcishTerms
     reverseMaxPhraseWords = Get-MaxTranslationPhraseWords -Terms $orcishTerms
+    contentHash = Get-TermsContentHash -Terms $orcishTerms
     terms = $orcishTerms
 }
 Write-CompactJson -Value $orcishPayload -Path (Join-Path $dataDirectory 'orcish.json')
@@ -177,6 +198,7 @@ $elvishPayload = [ordered]@{
     entryCount = $elvishTerms.get_Count()
     maxPhraseWords = Get-MaxPhraseWords -Terms $elvishTerms
     reverseMaxPhraseWords = Get-MaxTranslationPhraseWords -Terms $elvishTerms
+    contentHash = Get-TermsContentHash -Terms $elvishTerms
     terms = $elvishTerms
 }
 Write-CompactJson -Value $elvishPayload -Path (Join-Path $dataDirectory 'elvish.json')
@@ -205,6 +227,7 @@ $ghukliakPayload = [ordered]@{
     entryCount = $ghukliakTerms.get_Count()
     maxPhraseWords = Get-MaxPhraseWords -Terms $ghukliakTerms
     reverseMaxPhraseWords = Get-MaxTranslationPhraseWords -Terms $ghukliakTerms
+    contentHash = Get-TermsContentHash -Terms $ghukliakTerms
     terms = $ghukliakTerms
 }
 Write-CompactJson -Value $ghukliakPayload -Path (Join-Path $dataDirectory 'ghukliak.json')

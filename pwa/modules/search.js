@@ -58,7 +58,7 @@ export const initializeCampaignSearch = ({ byId }) => {
     const results = byId('search-results');
     const guidance = byId('search-guidance');
     const worker = typeof Worker !== 'undefined'
-        ? new Worker('campaign-search-worker.js?v=63')
+        ? new Worker('campaign-search-worker.js?v=65')
         : null;
     let searchRequestId = 0;
     let searchDebounce = 0;
