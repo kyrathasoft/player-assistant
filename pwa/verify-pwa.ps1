@@ -280,7 +280,7 @@ $featureModulePaths = @(
 $versionedFeatureModulePaths = @($featureModulePaths | ForEach-Object {
     './{0}?v=${{VERSION_METADATA.appRevision}}' -f $_
 })
-foreach ($script in @('version.js', 'app.js', 'translator-worker.js', 'campaign-search-worker.js', 'service-worker.js', 'service-worker-tests.mjs', 'campaign-search-worker-tests.mjs') + $featureModulePaths) {
+foreach ($script in @('version.js', 'app.js', 'translator-worker.js', 'campaign-search-worker.js', 'service-worker.js', 'service-worker-tests.mjs', 'campaign-search-worker-tests.mjs', 'optional-pack-tests.mjs', 'optional-pack-lifecycle-tests.mjs') + $featureModulePaths) {
     & node --check (Join-Path $PwaRoot $script)
     Assert-Condition -Condition ($LASTEXITCODE -eq 0) -Message "JavaScript syntax check failed: $script"
 }
@@ -301,6 +301,8 @@ $requestTranslationFunction = [regex]::Match(
 $styles = Get-Content -Raw -LiteralPath (Join-Path $PwaRoot 'styles.css')
 $serviceWorker = Get-Content -Raw -LiteralPath (Join-Path $PwaRoot 'service-worker.js')
 $serviceWorkerTests = Get-Content -Raw -LiteralPath (Join-Path $PwaRoot 'service-worker-tests.mjs')
+$optionalPackTests = Get-Content -Raw -LiteralPath (Join-Path $PwaRoot 'optional-pack-tests.mjs')
+$optionalPackLifecycleTests = Get-Content -Raw -LiteralPath (Join-Path $PwaRoot 'optional-pack-lifecycle-tests.mjs')
 $browserSmoke = Get-Content -Raw -LiteralPath (Join-Path $PwaRoot 'browser-smoke.mjs')
 $deploymentTest = Get-Content -Raw -LiteralPath (Join-Path $PwaRoot 'test-deployment.ps1')
 $productionResponseContracts = Get-Content -Raw -LiteralPath (Join-Path $PwaRoot 'production-response-contracts.ps1')
@@ -407,6 +409,7 @@ Assert-Condition -Condition ($apacheConfig.Contains('data/heroes\.json|data/hero
 Assert-Condition -Condition ($html.Contains('id="update-banner"') -and $html.Contains('id="update-apply"') -and $appScript.Contains('SKIP_WAITING') -and $serviceWorker.Contains("event.data?.type === 'SKIP_WAITING'")) -Message 'The PWA must expose an explicit service-worker update prompt.'
 Assert-Condition -Condition ($serviceWorker.Contains('cacheAssets') -and $serviceWorker.Contains('deleteCurrentCaches') -and $serviceWorker.Contains('safeCachePut') -and $serviceWorker.Contains('isValidJsonPayload') -and $serviceWorker.Contains('rejectObsoleteWorker') -and !$serviceWorker.Contains('.then(() => self.skipWaiting())')) -Message 'Service-worker installation and cache reads must fail closed on interrupted, corrupt, quota-limited, or obsolete-worker paths.'
 Assert-Condition -Condition ($serviceWorkerTests.Contains('testPartialInstallDeletesVersionedCaches') -and $serviceWorkerTests.Contains('testQuotaFailureReturnsNetworkResponse') -and $serviceWorkerTests.Contains('testSchemaInvalidCachedJsonIsDeletedAndRefetched') -and $serviceWorkerTests.Contains('testCorruptNavigationFallbackUsesValidOfflineShell') -and $serviceWorkerTests.Contains('testObsoleteWorkerCannotDeleteNewerCaches')) -Message 'Service-worker failure-injection coverage is incomplete.'
+Assert-Condition -Condition ($optionalPackTests.Contains('crypto') -and $optionalPackTests.Contains('optional-pack-loader') -and $optionalPackLifecycleTests.Contains('valid cached pack should survive failed replacement') -and $optionalPackLifecycleTests.Contains('bounded retries') -and $optionalPackLifecycleTests.Contains('removePack')) -Message 'Optional-pack lifecycle coverage is incomplete.'
 Assert-Condition -Condition ($html.Contains('id="xp-retry"') -and $html.Contains('id="quests-retry"') -and $html.Contains('id="xp-awards-retry"') -and $html.Contains('id="messages-retry"') -and $html.Contains('id="magic-items-freshness"') -and $html.Contains('id="party-funds-freshness"') -and $html.Contains('id="messages-freshness"') -and $appScript.Contains("void loadXpAwards(true)")) -Message 'Protected PWA views must expose freshness indicators and explicit retry controls.'
 
 Write-Output "PWA verified: $($lexiconCounts.orcish) Orcish terms, $($lexiconCounts.elvish) Elvish terms, $($lexiconCounts.ghukliak) Ghukliak terms, $(@($heroData.heroes).Count) player tokens and the Dungeon Master token, $($campaignSearch.pageCount) full-text campaign pages, install manifest and offline shell valid."

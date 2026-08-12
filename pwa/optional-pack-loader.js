@@ -47,7 +47,7 @@
         return manifestPromise.get(manifestUrl);
     };
 
-    const fetchPack = async (requestUrl, attempts = 3) => {
+    const fetchPack = async (requestUrl, attempts = 3, onRetry = () => {}) => {
         let lastError;
         for (let attempt = 0; attempt < attempts; attempt += 1) {
             try {
@@ -57,16 +57,20 @@
             } catch (error) {
                 lastError = error;
             }
-            if (attempt + 1 < attempts) await new Promise((resolve) => setTimeout(resolve, 250 * (2 ** attempt)));
+            if (attempt + 1 < attempts) {
+                onRetry(attempt + 2, attempts);
+                await new Promise((resolve) => setTimeout(resolve, 250 * (2 ** attempt)));
+            }
         }
         throw lastError || new Error('Optional pack request failed.');
     };
 
-    const loadPack = async (id, { manifestUrl = 'optional-packs.json', force = false } = {}) => {
-        const cacheName = `${CACHE_PREFIX}${id}`;
+    const loadPack = async (id, { manifestUrl = 'optional-packs.json', force = false, onStatus = () => {} } = {}) => {
+        onStatus('loading', `Loading ${id} pack…`);
         const manifest = await getManifest(manifestUrl);
         const entry = manifest.packs.find((pack) => pack.id === id);
         if (!entry) throw new Error(`Optional pack '${id}' is not declared.`);
+        const cacheName = `${CACHE_PREFIX}${id}`;
         if (!force && loaded.has(id)) return loaded.get(id);
         const requestUrl = new URL(entry.url, new URL(manifestUrl, globalThis.location?.href || entry.url));
         const cacheKey = `${requestUrl.href}?pack-hash=${entry.contentHash}`;
@@ -84,10 +88,15 @@
         let validated = null;
         if (cache && !force) {
             const cached = await cache.match(cacheKey);
-            try { validated = cached ? await read(cached) : null; } catch { await cache.delete(cacheKey); }
+            try {
+                validated = cached ? await read(cached) : null;
+                if (validated) onStatus('ready', `${id} pack ready offline.`);
+            } catch { await cache.delete(cacheKey); }
         }
         if (!validated) {
-            validated = await read(await fetchPack(requestUrl));
+            validated = await read(await fetchPack(requestUrl, 3, (attempt, attempts) => {
+                onStatus('retrying', `Retrying ${id} pack (${attempt}/${attempts})…`);
+            }));
             if (cache) {
                 try {
                     await cache.put(cacheKey, validated.response.clone());
@@ -99,6 +108,7 @@
                 } catch (error) { if (error?.name !== 'QuotaExceededError') throw error; }
             }
         }
+        onStatus('ready', `${id} pack ready offline.`);
         const payload = validated.payload;
         loaded.set(id, payload);
         return payload;

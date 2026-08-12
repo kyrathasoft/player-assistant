@@ -298,6 +298,7 @@ const serveStatic = async (request, response, pathname) => {
         const content = await readFile(filePath);
         response.writeHead(200, {
             'Cache-Control': 'no-cache',
+            'Content-Length': String(content.byteLength),
             'Content-Type': contentTypes.get(extname(filePath).toLowerCase()) || 'application/octet-stream'
         });
         response.end(content);
@@ -343,7 +344,9 @@ try {
     const pageErrors = [];
     const consoleErrors = [];
     const requestFailures = [];
+    const requestUrls = [];
     const unexpectedResponses = [];
+    let initialResponseBytes = 0;
     const workerUrls = new Set();
     let offlineExpected = false;
     page.on('pageerror', (error) => pageErrors.push(error));
@@ -355,12 +358,17 @@ try {
             consoleErrors.push(text);
         }
     });
+    page.on('request', (request) => requestUrls.push(request.url()));
     page.on('requestfailed', (request) => {
         if (!offlineExpected) {
             requestFailures.push(`${request.method()} ${request.url()}: ${request.failure()?.errorText || 'failed'}`);
         }
     });
     page.on('response', (response) => {
+        if (response.status() === 200 && !offlineExpected) {
+            const contentLength = Number.parseInt(response.headers()['content-length'] || '', 10);
+            if (Number.isFinite(contentLength)) initialResponseBytes += contentLength;
+        }
         if (response.status() >= 400 && response.headers()['x-ci-expected-error'] !== 'true') {
             unexpectedResponses.push(`${response.status()} ${response.url()}`);
         }
@@ -376,6 +384,21 @@ try {
     await page.goto(`${origin}${pwaPrefix}`, { waitUntil: 'domcontentloaded' });
     await page.locator('#dashboard-title').waitFor({ state: 'visible' });
     await page.waitForFunction(() => navigator.serviceWorker?.controller !== null);
+
+    if (initialResponseBytes <= 0) {
+        throw new Error('Initial shell response byte measurement was unavailable.');
+    }
+    const initialOptionalRequests = await page.evaluate(() => {
+        const navigation = performance.getEntriesByType('navigation')[0];
+        const cutoff = navigation?.domContentLoadedEventEnd ?? 0;
+        return performance.getEntriesByType('resource')
+            .filter((entry) => entry.startTime <= cutoff
+                && /(?:orcish|elvish|ghukliak|campaign-search)\.json(?:[?#]|$)/u.test(entry.name))
+            .map((entry) => entry.name);
+    });
+    if (initialOptionalRequests.length > 0) {
+        throw new Error(`Optional packs were requested during shell installation: ${JSON.stringify(initialOptionalRequests)}.`);
+    }
 
     const navigationTiming = await page.evaluate(() => {
         const navigation = performance.getEntriesByType('navigation')[0];
@@ -656,7 +679,10 @@ try {
     await page.waitForFunction(() => window.localStorage.getItem('player-assistant.translator-language') === 'orcish');
 
     await page.locator('#translator-input').fill('hello');
-    await page.locator('#translator-output').waitFor({ state: 'visible' });
+    await page.waitForFunction(() => document.querySelector('#translator-output')?.value === 'zug');
+    await page.locator('#translator-remove-pack').click();
+    await page.waitForFunction(() => document.querySelector('#lexicon-status')?.textContent?.includes('pack removed'));
+    await page.locator('#translator-input').fill('hello');
     await page.waitForFunction(() => document.querySelector('#translator-output')?.value === 'zug');
     await page.waitForFunction(async () => new Promise((resolve) => {
         const request = indexedDB.open('player-assistant-lexicons', 1);
@@ -670,6 +696,12 @@ try {
     }));
 
     await page.locator('[data-view="search"]').click();
+    await page.locator('#campaign-search').fill('Kirkilston');
+    await page.locator('#search-results .search-result').first().waitFor({ state: 'visible' });
+    await page.locator('#campaign-search-remove-pack').click();
+    await page.waitForFunction(() => document.querySelector('#search-guidance')?.textContent?.includes('pack removed'));
+    await page.locator('#campaign-search-retry-pack').click();
+    await page.waitForFunction(() => document.querySelector('#search-guidance')?.textContent?.includes('pack ready offline'));
     await page.locator('#campaign-search').fill('Kirkilston');
     await page.locator('#search-results .search-result').first().waitFor({ state: 'visible' });
     if (![...workerUrls].some((url) => url.includes('/campaign-search-worker.js?v=67'))) {

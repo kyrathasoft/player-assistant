@@ -125,7 +125,9 @@ const loadLexicon = async (language) => {
 
     const request = (async () => {
         self.postMessage({ type: 'status', loading: true, message: `Loading ${languageName(language)} lexicon…` });
-        const payload = await packLoader.loadPack(`translator-${language}`);
+        const payload = await packLoader.loadPack(`translator-${language}`, {
+            onStatus: (state, message) => self.postMessage({ type: 'status', loading: state === 'loading', state, message })
+        });
         const contentHash = typeof payload.contentHash === 'string'
             && /^[a-f0-9]{64}$/u.test(payload.contentHash)
             ? payload.contentHash
@@ -259,6 +261,7 @@ self.addEventListener('message', async (event) => {
         const translation = translateText(String(message.text || ''), dictionary, maxPhraseWords);
         self.postMessage({ type: 'translation', id: message.id, translation });
     } catch (error) {
+        self.postMessage({ type: 'status', loading: false, state: 'unavailable', message: `${languageName(language)} lexicon unavailable: ${error.message || String(error)}` });
         self.postMessage({ type: 'translation', id: message.id, error: error.message || String(error) });
     }
 });

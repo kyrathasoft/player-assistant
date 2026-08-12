@@ -150,7 +150,7 @@ Planned correction for the PWA's approximately 10.1 MB optional-data installatio
   - Add explicit per-pack removal controls and ensure removal does not delete the shell or unrelated packs.
   - Handle storage quota failures by preserving existing packs and returning a usable network result or clear retry state.
 
-- [ ] 6. Integrate translator readiness without restoring the install-time download.
+- [x] 6. Integrate translator readiness without restoring the install-time download.
   - Preload only the selected/default language after shell startup or on the first translation request, preserving the instant-response requirement after that pack is ready.
   - Keep Elvish and Ghukliak demand-loaded; do not download all three languages merely because the worker starts.
   - Report loading, ready, stale, unavailable, retrying, and removed states in the translator UI.
@@ -164,21 +164,21 @@ Planned correction for the PWA's approximately 10.1 MB optional-data installatio
   - Preserve the existing worker request-ID behavior and offline search for a previously retained valid pack.
   - Ensure a failed search-pack replacement never discards the last known-good index.
 
-- [ ] 8. Add service-worker lifecycle and cache-retention coverage.
+- [x] 8. Add service-worker lifecycle and cache-retention coverage.
   - Prove install and activation succeed with zero optional packs cached or reachable.
   - Prove each pack can be downloaded, validated, used offline, removed, retried, and independently replaced.
   - Prove an unchanged content hash survives an app-shell cache revision, while a changed hash creates a new pack entry and retires the old one safely.
   - Prove corrupt cached packs are deleted without damaging the shell or other packs.
   - Prove optional-pack network failures never delete the current shell or unrelated valid packs.
 
-- [ ] 9. Add browser, offline, and performance acceptance coverage.
+- [x] 9. Add browser, offline, and performance acceptance coverage.
   - Measure initial install requests, bytes, activation time, and first usable shell time; assert the optional 10.1 MB payload is absent from install.
   - Exercise first translation, language switching, first campaign search, retries, removal, offline reload, and shell navigation through the real browser.
   - Assert Cache Storage contains only requested/validated packs and that protected API responses never enter any pack cache.
   - Verify status/error messaging and accessible retry/remove controls at normal and narrow viewport sizes.
   - Keep full PWA smoke, service-worker failure injection, and CI policy checks synchronized with the new pack lifecycle.
 
-- [ ] 10. Correct documentation, deployment, and operational contracts.
+- [x] 10. Correct documentation, deployment, and operational contracts.
   - Update `pwa/README.md` so it accurately describes shell-only installation and independently demand-loaded packs.
   - Update `verify-pwa.ps1`, `test-deployment.ps1`, service-worker inventories, generated-data validation, and release checklists for the manifest and pack caches.
   - Deploy the complete runtime slice, including the manifest, loader, workers, generated packs, and cache-busting metadata; do not deploy only the changed browser module.
