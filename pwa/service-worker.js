@@ -19,7 +19,7 @@ const SHELL_ASSETS = [
     `./modules/translator.js?v=${VERSION_METADATA.appRevision}`,
     `./modules/search.js?v=${VERSION_METADATA.appRevision}`,
     `./modules/dice.js?v=${VERSION_METADATA.appRevision}`,
-    './translator-worker.js',
+    `./translator-worker.js?v=${VERSION_METADATA.appRevision}`,
     `./campaign-search-worker.js?v=${VERSION_METADATA.appRevision}`,
     './offline.html',
     './manifest.webmanifest',
@@ -28,14 +28,11 @@ const SHELL_ASSETS = [
     './icons/dragon-mark.png',
     './magic-items.json',
     './party-funds.json',
-    './level-progression.json'
+    './level-progression.json',
+    './optional-packs.json',
+    './optional-pack-loader.js'
 ];
-const OFFLINE_DATA_ASSETS = [
-    './data/orcish.json',
-    './data/elvish.json',
-    './data/ghukliak.json',
-    './campaign-search.json'
-];
+const OFFLINE_DATA_ASSETS = [];
 const canonicalRequestKey = (asset) => {
     const url = new URL(asset, self.location.href);
     return `${url.pathname}${url.search}`;
@@ -180,10 +177,7 @@ const cacheResponseIfValid = async (cache, request, response) => {
 
 self.addEventListener('install', (event) => {
     event.waitUntil(
-        Promise.all([
-            cacheAssets(SHELL_CACHE, SHELL_ASSETS),
-            cacheAssets(DATA_CACHE, OFFLINE_DATA_ASSETS)
-        ])
+        cacheAssets(SHELL_CACHE, SHELL_ASSETS)
             .catch(async (error) => {
                 await deleteCurrentCaches();
                 throw error;
@@ -256,6 +250,29 @@ self.addEventListener('fetch', (event) => {
 
     if (request.mode === 'navigate') {
         event.respondWith(networkFirstNavigation(request));
+        return;
+    }
+
+    if (url.searchParams.has('pack-hash')) {
+        event.respondWith((async () => {
+            try {
+                return await fetch(request);
+            } catch (error) {
+                for (const cacheName of await caches.keys()) {
+                    if (!cacheName.startsWith('player-assistant-optional-pack-')) continue;
+                    const cached = await (await caches.open(cacheName)).match(request);
+                    if (cached) return cached;
+                }
+                throw error;
+            }
+        })());
+        return;
+    }
+
+    if (url.pathname.endsWith('/data/orcish.json')
+        || url.pathname.endsWith('/data/elvish.json')
+        || url.pathname.endsWith('/data/ghukliak.json')) {
+        event.respondWith(cacheFirst(request, DATA_CACHE));
         return;
     }
 

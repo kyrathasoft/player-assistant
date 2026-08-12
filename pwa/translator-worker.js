@@ -1,5 +1,14 @@
 'use strict';
 
+if (typeof importScripts === 'function') importScripts('./optional-pack-loader.js');
+const packLoader = globalThis.PlayerAssistantPackLoader || {
+    loadPack: async (id) => {
+        const language = id.replace('translator-', '');
+        const response = await fetch(id === 'campaign-search' ? 'campaign-search.json' : `data/${language}.json`);
+        if (!response.ok) throw new Error(`${id} pack returned ${response.status}`);
+        return response.json();
+    }
+};
 const lexicons = new Map();
 const pendingLexicons = new Map();
 const LEXICON_CACHE_DB_NAME = 'player-assistant-lexicons';
@@ -116,9 +125,9 @@ const loadLexicon = async (language) => {
 
     const request = (async () => {
         self.postMessage({ type: 'status', loading: true, message: `Loading ${languageName(language)} lexicon…` });
-        const response = await fetch(`data/${language}.json`);
-        if (!response.ok) throw new Error(`${language} lexicon returned ${response.status}`);
-        const payload = await response.json();
+        const payload = await packLoader.loadPack(`translator-${language}`, {
+            onStatus: (state, message) => self.postMessage({ type: 'status', loading: state === 'loading', state, message })
+        });
         const contentHash = typeof payload.contentHash === 'string'
             && /^[a-f0-9]{64}$/u.test(payload.contentHash)
             ? payload.contentHash
@@ -227,11 +236,17 @@ self.addEventListener('message', async (event) => {
     const language = message.language === 'elvish'
         ? 'elvish'
         : message.language === 'ghukliak' ? 'ghukliak' : 'orcish';
+    if (message.type === 'clear-pack') {
+        lexicons.delete(language);
+        try { await packLoader.removePack?.(`translator-${language}`); } catch { /* best-effort removal */ }
+        self.postMessage({ type: 'status', loading: false, state: 'removed', message: `${languageName(language)} pack removed. It will download again when needed.` });
+        return;
+    }
     if (message.type === 'preload') {
         try {
             await loadLexicon(language);
         } catch (error) {
-            self.postMessage({ type: 'status', loading: false, message: `${languageName(language)} lexicon unavailable: ${error.message}` });
+            self.postMessage({ type: 'status', loading: false, state: 'unavailable', message: `${languageName(language)} lexicon unavailable: ${error.message}` });
         }
         return;
     }
@@ -246,6 +261,7 @@ self.addEventListener('message', async (event) => {
         const translation = translateText(String(message.text || ''), dictionary, maxPhraseWords);
         self.postMessage({ type: 'translation', id: message.id, translation });
     } catch (error) {
+        self.postMessage({ type: 'status', loading: false, state: 'unavailable', message: `${languageName(language)} lexicon unavailable: ${error.message || String(error)}` });
         self.postMessage({ type: 'translation', id: message.id, error: error.message || String(error) });
     }
 });

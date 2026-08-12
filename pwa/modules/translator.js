@@ -9,7 +9,7 @@ export const initializeTranslator = ({ byId }) => {
     let translatorRequestId = 0;
     let translatorDebounce = 0;
     const worker = typeof Worker !== 'undefined'
-        ? new Worker('translator-worker.js')
+        ? new Worker('translator-worker.js?v=67')
         : null;
 
     const input = byId('translator-input');
@@ -19,6 +19,8 @@ export const initializeTranslator = ({ byId }) => {
     const exportButton = byId('export-translation');
     const translationLoading = byId('translation-loading');
     const translationLoadingLabel = byId('translation-loading-label');
+    const removePackButton = byId('translator-remove-pack');
+    const retryPackButton = byId('translator-retry-pack');
 
     const normalizeLanguage = (value) => TRANSLATOR_LANGUAGES.has(value) ? value : 'orcish';
     const getSelectedLanguage = () => normalizeLanguage(languageSelect?.value);
@@ -139,7 +141,14 @@ export const initializeTranslator = ({ byId }) => {
             const status = byId('lexicon-status');
             if (status) {
                 status.lastElementChild.textContent = message.message;
+                status.dataset.state = message.state || (message.loading ? 'loading' : 'ready');
+                if (retryPackButton) {
+                    const retryable = ['unavailable', 'retrying', 'stale', 'removed'].includes(status.dataset.state);
+                    retryPackButton.hidden = !retryable;
+                    retryPackButton.disabled = status.dataset.state === 'retrying';
+                }
             }
+            if (message.error && translationLoadingLabel) translationLoadingLabel.textContent = message.message;
             return;
         }
 
@@ -193,6 +202,14 @@ export const initializeTranslator = ({ byId }) => {
         link.download = filename;
         link.click();
         window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+    });
+
+    retryPackButton?.addEventListener('click', () => {
+        worker?.postMessage({ type: 'preload', language: getSelectedLanguage() });
+    });
+    removePackButton?.addEventListener('click', () => {
+        worker?.postMessage({ type: 'clear-pack', language: getSelectedLanguage() });
+        resetTranslator();
     });
 
     updateTranslatorLabels();

@@ -299,7 +299,9 @@ try {
         $session);
     routingAssert(
         $adminHealth['body']['schema_version'] === 7
-            && $adminHealth['body']['quest_request_workflow_configured'] === true,
+        && $adminHealth['body']['quest_request_workflow_configured'] === true
+        && isset($adminHealth['body']['pwa_monitor'])
+        && $adminHealth['body']['pwa_monitor']['configured'] === false,
         'The admin health route did not expose readiness details.');
     try {
         $broker->dispatch(
