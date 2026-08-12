@@ -136,14 +136,14 @@ Planned correction for the PWA's approximately 10.1 MB optional-data installatio
   - Preserve fail-closed validation for assets that remain mandatory for shell startup.
   - Bump centralized app/cache revisions and update the HTML, service-worker inventory, verifier, and deployment file manifest together.
 
-- [ ] 4. Implement an independent optional-pack download and validation controller.
+- [x] 4. Implement an independent optional-pack download and validation controller.
   - Add a shared pack loader used by the translator worker and campaign-search worker.
   - Fetch one pack at a time with bounded retries and backoff for idempotent GETs; do not retry indefinitely or block shell activation.
   - Validate response status, MIME type, byte presence, content hash, schema, declared counts, and language/pack identity before storing.
   - Write to a temporary or isolated cache entry first, then promote atomically only after every validation succeeds.
   - Preserve the previous valid pack when a replacement fails; expose a retryable error state instead of deleting usable data.
 
-- [ ] 5. Create content-addressed, independently removable caches.
+- [x] 5. Create content-addressed, independently removable caches.
   - Store packs under cache keys containing pack kind, schema version, and content hash so an app-shell revision does not invalidate unchanged packs.
   - Retain valid packs across service-worker activation and app updates when the manifest hash still matches.
   - Remove obsolete hashes only after the new manifest is validated and no active client needs the old pack.
@@ -157,7 +157,7 @@ Planned correction for the PWA's approximately 10.1 MB optional-data installatio
   - Ensure language switching cannot display a stale response from a previous language or identity of the pack.
   - Verify already-cached packs work offline while an uncached language reports an actionable unavailable state.
 
-- [ ] 7. Integrate campaign-search readiness without restoring the install-time download.
+- [x] 7. Integrate campaign-search readiness without restoring the install-time download.
   - Demand-load the campaign-search pack when the user first opens or queries campaign search.
   - Keep search worker initialization independent from pack availability so the rest of the PWA remains usable.
   - Validate the pack before search begins and return a clear retryable search-unavailable state on failure.
