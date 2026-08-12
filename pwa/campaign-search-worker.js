@@ -147,6 +147,14 @@ const searchCampaign = async (query) => {
 
 self.addEventListener('message', async (event) => {
     const message = event.data || {};
+    if (message.type === 'retry-pack') {
+        campaignSearchIndex = null;
+        campaignSearchLoading = null;
+        try { await loadCampaignSearch(); } catch (error) {
+            self.postMessage({ type: 'pack-status', state: 'unavailable', message: `Campaign search unavailable: ${error.message || String(error)}` });
+        }
+        return;
+    }
     if (message.type === 'clear-pack') {
         campaignSearchIndex = null;
         try { await packLoader.removePack?.('campaign-search'); } catch { /* best-effort removal */ }

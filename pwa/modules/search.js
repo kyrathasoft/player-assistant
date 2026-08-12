@@ -58,6 +58,7 @@ export const initializeCampaignSearch = ({ byId }) => {
     const results = byId('search-results');
     const guidance = byId('search-guidance');
     const removePackButton = byId('campaign-search-remove-pack');
+    const retryPackButton = byId('campaign-search-retry-pack');
     const worker = typeof Worker !== 'undefined'
         ? new Worker('campaign-search-worker.js?v=66')
         : null;
@@ -97,6 +98,10 @@ export const initializeCampaignSearch = ({ byId }) => {
         const message = event.data || {};
         if (message.type === 'pack-status') {
             if (guidance) guidance.textContent = message.message;
+            if (retryPackButton) {
+                retryPackButton.hidden = !['unavailable', 'retrying', 'stale', 'removed'].includes(message.state);
+                retryPackButton.disabled = message.state === 'retrying';
+            }
             return;
         }
         if (message.type !== 'search-results' || message.id !== searchRequestId) return;
@@ -128,6 +133,9 @@ export const initializeCampaignSearch = ({ byId }) => {
         searchDebounce = window.setTimeout(renderSearchResults, 100);
     });
 
+    retryPackButton?.addEventListener('click', () => {
+        worker?.postMessage({ type: 'retry-pack' });
+    });
     removePackButton?.addEventListener('click', () => {
         worker?.postMessage({ type: 'clear-pack' });
         if (results) results.replaceChildren();
