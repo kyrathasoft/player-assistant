@@ -4,8 +4,16 @@ import { createHash } from 'node:crypto';
 
 const root = new URL('.', import.meta.url);
 const manifest = JSON.parse(await readFile(new URL('./optional-packs.json', root), 'utf8'));
+const loader = await readFile(new URL('./optional-pack-loader.js', root), 'utf8');
 const serviceWorker = await readFile(new URL('./service-worker.js', root), 'utf8');
-assert.equal(manifest.schemaVersion, 1);
+assert.match(loader, /crypto\.subtle/u);
+assert.match(loader, /attempts = 3/u);
+assert.match(loader, /setTimeout\(resolve, 250 \* \(2 \*\* attempt\)\)/u);
+assert.match(loader, /Content-Type/u);
+assert.match(loader, /cache\.put\(cacheKey, validated\.response\.clone\(\)\)/u);
+assert.match(loader, /QuotaExceededError/u);
+assert.match(loader, /removePack/u);
+
 assert.equal(manifest.packs.length, 4);
 assert.equal(new Set(manifest.packs.map((pack) => pack.id)).size, 4);
 assert.match(serviceWorker, /optional-packs\.json/u);

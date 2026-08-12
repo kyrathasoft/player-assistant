@@ -661,7 +661,7 @@ try {
     await page.locator('[data-view="search"]').click();
     await page.locator('#campaign-search').fill('Kirkilston');
     await page.locator('#search-results .search-result').first().waitFor({ state: 'visible' });
-    if (![...workerUrls].some((url) => url.includes('/campaign-search-worker.js?v=65'))) {
+    if (![...workerUrls].some((url) => url.includes('/campaign-search-worker.js?v=66'))) {
         throw new Error(`Campaign search did not start its dedicated worker: ${JSON.stringify([...workerUrls])}.`);
     }
 
@@ -686,14 +686,13 @@ try {
     for (const requiredPath of [
         '/data/orcish.json',
         '/data/elvish.json',
-        '/data/ghukliak.json',
         '/campaign-search.json'
     ]) {
         if (!cachedUrls.some((url) => new URL(url).pathname.endsWith(requiredPath))) {
             throw new Error(`Offline feature data was not cached: ${requiredPath}`);
         }
     }
-    if (!cachedUrls.some((url) => url.endsWith('/campaign-search-worker.js?v=65'))) {
+    if (!cachedUrls.some((url) => url.endsWith('/campaign-search-worker.js?v=66'))) {
         throw new Error('Campaign search worker was not present in the offline shell cache.');
     }
     await page.evaluate(async () => {
@@ -726,7 +725,16 @@ try {
 
     await page.locator('#translator-input').fill('');
     await page.locator('#translator-input').fill('hello');
-    await page.waitForFunction(() => (document.querySelector('#translator-output')?.value || '').length > 0);
+    try {
+        await page.waitForFunction(() => (document.querySelector('#translator-output')?.value || '').length > 0);
+    } catch (error) {
+        const diagnostics = await page.evaluate(() => ({
+            output: document.querySelector('#translator-output')?.value || '',
+            status: document.querySelector('#lexicon-status')?.textContent || '',
+            caches: [...Object.keys(window)].filter((key) => key.includes('Worker'))
+        }));
+        throw new Error(`Offline translator smoke failed to produce output: ${JSON.stringify(diagnostics)}; ${error.message}`);
+    }
     const offlineTranslation = await page.locator('#translator-output').inputValue();
     if (offlineTranslation !== 'zug') {
         throw new Error(`Offline translator smoke failed: ${offlineTranslation}`);

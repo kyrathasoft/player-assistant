@@ -19,7 +19,7 @@ const SHELL_ASSETS = [
     `./modules/translator.js?v=${VERSION_METADATA.appRevision}`,
     `./modules/search.js?v=${VERSION_METADATA.appRevision}`,
     `./modules/dice.js?v=${VERSION_METADATA.appRevision}`,
-    './translator-worker.js',
+    `./translator-worker.js?v=${VERSION_METADATA.appRevision}`,
     `./campaign-search-worker.js?v=${VERSION_METADATA.appRevision}`,
     './offline.html',
     './manifest.webmanifest',
@@ -254,7 +254,18 @@ self.addEventListener('fetch', (event) => {
     }
 
     if (url.searchParams.has('pack-hash')) {
-        event.respondWith(fetch(request));
+        event.respondWith((async () => {
+            try {
+                return await fetch(request);
+            } catch (error) {
+                for (const cacheName of await caches.keys()) {
+                    if (!cacheName.startsWith('player-assistant-optional-pack-')) continue;
+                    const cached = await (await caches.open(cacheName)).match(request);
+                    if (cached) return cached;
+                }
+                throw error;
+            }
+        })());
         return;
     }
 
