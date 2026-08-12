@@ -47,6 +47,21 @@
         return manifestPromise.get(manifestUrl);
     };
 
+    const fetchPack = async (requestUrl, attempts = 3) => {
+        let lastError;
+        for (let attempt = 0; attempt < attempts; attempt += 1) {
+            try {
+                const response = await fetch(requestUrl, { cache: 'no-store' });
+                if (response.ok || ![408, 429, 500, 502, 503, 504].includes(response.status)) return response;
+                lastError = new Error(`Optional pack returned ${response.status}.`);
+            } catch (error) {
+                lastError = error;
+            }
+            if (attempt + 1 < attempts) await new Promise((resolve) => setTimeout(resolve, 250 * (2 ** attempt)));
+        }
+        throw lastError || new Error('Optional pack request failed.');
+    };
+
     const loadPack = async (id, { manifestUrl = 'optional-packs.json', force = false } = {}) => {
         const cacheName = `${CACHE_PREFIX}${id}`;
         const manifest = await getManifest(manifestUrl);
@@ -72,7 +87,7 @@
             try { validated = cached ? await read(cached) : null; } catch { await cache.delete(cacheKey); }
         }
         if (!validated) {
-            validated = await read(await fetch(requestUrl, { cache: 'no-store' }));
+            validated = await read(await fetchPack(requestUrl));
             if (cache) {
                 try {
                     await cache.put(cacheKey, validated.response.clone());

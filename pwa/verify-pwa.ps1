@@ -38,7 +38,9 @@ $requiredFiles = @(
     'magic-items.json',
     'party-funds.json',
     'quests.json',
-    'campaign-search.json'
+    'campaign-search.json',
+    'optional-packs.json',
+    'optional-pack-loader.js'
 )
 foreach ($relativePath in $requiredFiles) {
     Assert-Condition -Condition (Test-Path -LiteralPath (Join-Path $PwaRoot $relativePath) -PathType Leaf) -Message "Missing PWA file: $relativePath"
@@ -104,6 +106,26 @@ foreach ($termProperty in @($campaignSearch.termIndex.PSObject.Properties)) {
 Assert-Condition -Condition (@($campaignSearch.pages | Where-Object { ![string]::IsNullOrWhiteSpace($_.content) }).Count -gt 0) -Message 'Campaign search data contains no Markdown content.'
 Assert-Condition -Condition (@($campaignSearch.pages | Where-Object { [string]::IsNullOrWhiteSpace($_.title) -or $_.url -notmatch '^https://' }).Count -eq 0) -Message 'Campaign search data contains an invalid page title or URL.'
 Assert-Condition -Condition (@($campaignSearch.pages | Where-Object { $_.title -eq 'XP Tracking' }).Count -eq 0) -Message 'The protected XP Tracking page must not be included in public PWA search data.'
+
+$optionalManifest = Get-Content -Raw -LiteralPath (Join-Path $PwaRoot 'optional-packs.json') | ConvertFrom-Json
+Assert-Condition -Condition ([int]$optionalManifest.schemaVersion -eq 1 -and [int]$optionalManifest.manifestVersion -eq 1) -Message 'Optional-pack manifest version is invalid.'
+$optionalPacks = @($optionalManifest.packs)
+Assert-Condition -Condition ($optionalPacks.Count -eq 4) -Message 'Optional-pack manifest must contain exactly four packs.'
+Assert-Condition -Condition (@($optionalPacks.id | Select-Object -Unique).Count -eq $optionalPacks.Count) -Message 'Optional-pack manifest contains duplicate IDs.'
+foreach ($pack in $optionalPacks) {
+    $packPath = Join-Path $PwaRoot ([string]$pack.url).Replace('/', '\')
+    Assert-Condition -Condition (Test-Path -LiteralPath $packPath -PathType Leaf) -Message "Optional pack is missing: $($pack.id)"
+    $packBytes = [System.IO.File]::ReadAllBytes($packPath)
+    Assert-Condition -Condition ([int64]$pack.byteSize -eq $packBytes.Length) -Message "Optional pack byte size is stale: $($pack.id)"
+    Assert-Condition -Condition ([string]$pack.contentHash -eq (Get-FileHash -LiteralPath $packPath -Algorithm SHA256).Hash.ToLowerInvariant()) -Message "Optional pack hash is stale: $($pack.id)"
+    $packPayload = Get-Content -Raw -LiteralPath $packPath | ConvertFrom-Json
+    Assert-Condition -Condition ([int]$packPayload.schemaVersion -eq [int]$pack.schemaVersion) -Message "Optional pack schema version is stale: $($pack.id)"
+    $actualCount = if ([string]$pack.kind -eq 'translator') { @($packPayload.terms.PSObject.Properties).Count } else { @($packPayload.pages).Count }
+    Assert-Condition -Condition ([int]$pack.recordCount -eq $actualCount) -Message "Optional pack record count is stale: $($pack.id)"
+}
+$serviceWorkerText = Get-Content -Raw -LiteralPath (Join-Path $PwaRoot 'service-worker.js')
+$offlineDataBody = [regex]::Match($serviceWorkerText, 'const OFFLINE_DATA_ASSETS = \[(?<body>[\s\S]*?)\];').Groups['body'].Value
+Assert-Condition -Condition ($offlineDataBody -notmatch 'orcish|elvish|ghukliak|campaign-search') -Message 'Optional packs must not be present in the service-worker install data list.'
 
 $heroData = Get-Content -Raw -LiteralPath (Join-Path $PwaRoot 'data\heroes.json') | ConvertFrom-Json
 Assert-Condition -Condition ([int]$heroData.schemaVersion -eq 1) -Message 'Hero-token data must use schema version 1.'
@@ -349,7 +371,7 @@ Assert-Condition -Condition ($heroTokenStyle.Success -and $heroTokenStyle.Groups
 Assert-Condition -Condition (!$appScript.Contains('XP+Tracking') -and !$html.Contains('XP+Tracking')) -Message 'The XP source URL must remain outside the browser application.'
 Assert-Condition -Condition ($serviceWorker.Contains("url.pathname.startsWith('/scarlethorizons/api/')")) -Message 'The service worker must exclude protected API responses.'
 Assert-Condition -Condition ($serviceWorker.Contains("new Request(asset, { cache: 'reload' })")) -Message 'Service-worker upgrades must bypass stale browser shell caches.'
-Assert-Condition -Condition ($serviceWorker.Contains('OFFLINE_DATA_ASSETS') -and $serviceWorker.Contains("'./data/orcish.json'") -and $serviceWorker.Contains("'./data/elvish.json'") -and $serviceWorker.Contains("'./data/ghukliak.json'") -and $serviceWorker.Contains("'./campaign-search.json'")) -Message 'Offline translator and campaign-search data must be preloaded into the data cache.'
+Assert-Condition -Condition ($serviceWorker.Contains('OFFLINE_DATA_ASSETS') -and $serviceWorker.Contains("'./optional-packs.json'") -and $serviceWorker.Contains("'./optional-pack-loader.js'") -and !$offlineDataBody.Contains('orcish') -and !$offlineDataBody.Contains('elvish') -and !$offlineDataBody.Contains('ghukliak') -and !$offlineDataBody.Contains('campaign-search')) -Message 'The install shell must include the optional-pack manifest and loader without preloading large optional packs.'
 Assert-Condition -Condition ($serviceWorker.Contains('networkFirstData') -and $serviceWorker.Contains("url.pathname.endsWith('/data/heroes.json')") -and $serviceWorker.Contains("url.pathname.includes('/data/hero-tokens/')")) -Message 'Hero-token manifests and images must refresh from the network before using cached copies.'
 Assert-Condition -Condition ($serviceWorker.Contains("url.pathname.endsWith('/campaign-search.json')") -and $serviceWorker.Contains("event.respondWith(networkFirstData(request))")) -Message 'Scheduled campaign-search data must refresh from the network before using its offline cache.'
 Assert-Condition -Condition ($appScript.Contains("updateViaCache: 'none'") -and $appScript.Contains('await registration.update()')) -Message 'The PWA must explicitly check for uncached service-worker updates.'

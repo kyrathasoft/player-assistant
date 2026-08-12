@@ -31,6 +31,11 @@ function Get-CanonicalLexiconSourcePath {
     return Join-Path $RepositoryRoot ([string]$sources[$Index].path).Replace('/', '\')
 }
 
+function Get-FileSha256 {
+    param([Parameter(Mandatory = $true)][string]$Path)
+    return (Get-FileHash -LiteralPath $Path -Algorithm SHA256).Hash.ToLowerInvariant()
+}
+
 function Write-CompactJson {
     param(
         [Parameter(Mandatory = $true)][object]$Value,
@@ -247,6 +252,48 @@ efresh-campaign-search.ps1.'
 if (@($campaignSearch.pages | Where-Object { $_.title -eq 'XP Tracking' }).Count -gt 0) {
     throw 'The protected XP Tracking page must not be included in the public PWA campaign search index.'
 }
+
+$packDefinitions = @(
+    [ordered]@{ id = 'translator-orcish'; kind = 'translator'; language = 'orcish'; relativePath = 'data\orcish.json'; payload = $orcishPayload },
+    [ordered]@{ id = 'translator-elvish'; kind = 'translator'; language = 'elvish'; relativePath = 'data\elvish.json'; payload = $elvishPayload },
+    [ordered]@{ id = 'translator-ghukliak'; kind = 'translator'; language = 'ghukliak'; relativePath = 'data\ghukliak.json'; payload = $ghukliakPayload },
+    [ordered]@{ id = 'campaign-search'; kind = 'campaign-search'; language = $null; relativePath = 'campaign-search.json'; payload = $campaignSearch }
+)
+$optionalPacks = @(
+    foreach ($definition in $packDefinitions) {
+        $packPath = Join-Path $PSScriptRoot $definition.relativePath
+        $packPayload = $definition.payload
+        $validation = if ($definition.kind -eq 'translator') {
+            [ordered]@{
+                entryCount = [int]$packPayload.entryCount
+                maxPhraseWords = [int]$packPayload.maxPhraseWords
+                reverseMaxPhraseWords = [int]$packPayload.reverseMaxPhraseWords
+            }
+        } else {
+            [ordered]@{
+                pageCount = [int]$packPayload.pageCount
+                termIndexVersion = [int]$packPayload.termIndexVersion
+            }
+        }
+        [ordered]@{
+            id = $definition.id
+            kind = $definition.kind
+            language = $definition.language
+            url = $definition.relativePath.Replace('\', '/')
+            schemaVersion = [int]$packPayload.schemaVersion
+            contentHash = Get-FileSha256 -Path $packPath
+            byteSize = [int64](Get-Item -LiteralPath $packPath).Length
+            recordCount = if ($definition.kind -eq 'translator') { [int]$packPayload.entryCount } else { [int]$packPayload.pageCount }
+            validation = $validation
+        }
+    }
+)
+$optionalManifest = [ordered]@{
+    schemaVersion = 1
+    manifestVersion = 1
+    packs = $optionalPacks
+}
+Write-CompactJson -Value $optionalManifest -Path (Join-Path $PSScriptRoot 'optional-packs.json')
 
 if ($RefreshHeroTokens) {
     & (Join-Path $PSScriptRoot 'refresh-hero-tokens.ps1')
