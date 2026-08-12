@@ -360,3 +360,13 @@ Archived from `to-do.md` on 7/30/2026 after all checklist items were completed.
   - [x] Deploy and configure the current-XP PHP broker update, then pass `pwa\test-deployment.ps1 -RequireCurrentXpApi`.
     - Live verification: production health reports XP tracking configured, anonymous `/v1/xp` fails closed with HTTP 401 and `Cache-Control: no-store`, the broker fetched and parsed the fresh six-character `As of 7.24.2026` snapshot, and all 13 public PWA runtime files match.
   - Expanded `web-translator/` into a two-language landing page with separate Orcish and Elven translators, a consolidated 84,531-term Sindarin-first Elvish web lexicon, reverse Elvish lookup, downloads, and a parallel Elvish JSON API.
+
+## Project Efficiency — completed
+
+- [x] Reduced campaign-search work with bounded expression caching and normalized corpus reuse.
+- [x] Moved campaign-search loading, normalization, scoring, and sorting into a dedicated Web Worker with request-ID stale-response protection.
+- [x] Added and validated the generated exact-term inverted index, preserving wildcard full-corpus fallback behavior.
+- [x] Optimized lexicon construction with generated reverse-phrase metadata and compatibility fallback.
+- [x] Restored only the supported last-used language after first paint instead of preloading all dictionaries.
+- [x] Added content-hash/schema-keyed IndexedDB persistence for compiled lexicons with safe invalidation and fail-open fallback.
+- [x] Focused worker, service-worker, PWA verifier, browser smoke, and CI checks passed for the completed batch.
