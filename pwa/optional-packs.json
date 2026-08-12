@@ -1,0 +1,49 @@
+{
+  "schemaVersion": 1,
+  "manifestVersion": 1,
+  "packs": [
+    {
+      "id": "translator-orcish",
+      "kind": "translator",
+      "language": "orcish",
+      "url": "data/orcish.json",
+      "schemaVersion": 1,
+      "contentHash": "450aef3bf9c0686b7959951051511518f6488a2399eeeb9d8dc18a7f34054a65",
+      "byteSize": 3869681,
+      "recordCount": 80874,
+      "validation": { "entryCount": 80874, "maxPhraseWords": 5, "reverseMaxPhraseWords": 5 }
+    },
+    {
+      "id": "translator-elvish",
+      "kind": "translator",
+      "language": "elvish",
+      "url": "data/elvish.json",
+      "schemaVersion": 1,
+      "contentHash": "6d1139a9d0712b35539f7fa3152e1037bea3e84fc102ba6254b4a4ce0a9ebbb9",
+      "byteSize": 2228649,
+      "recordCount": 84460,
+      "validation": { "entryCount": 84460, "maxPhraseWords": 8, "reverseMaxPhraseWords": 2 }
+    },
+    {
+      "id": "translator-ghukliak",
+      "kind": "translator",
+      "language": "ghukliak",
+      "url": "data/ghukliak.json",
+      "schemaVersion": 1,
+      "contentHash": "f533dc630eef73554459996e528f4dced86c6904e19c5fcc6687343c18b82260",
+      "byteSize": 2115078,
+      "recordCount": 81204,
+      "validation": { "entryCount": 81204, "maxPhraseWords": 12, "reverseMaxPhraseWords": 2 }
+    },
+    {
+      "id": "campaign-search",
+      "kind": "campaign-search",
+      "url": "campaign-search.json",
+      "schemaVersion": 2,
+      "contentHash": "f09cfc712807dfcf61012e788ad1d7695d61d8e7ade0c4f7250548bb497490fc",
+      "byteSize": 2787772,
+      "recordCount": 1055,
+      "validation": { "pageCount": 1055, "termIndexVersion": 1 }
+    }
+  ]
+}

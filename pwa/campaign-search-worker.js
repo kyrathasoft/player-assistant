@@ -1,5 +1,13 @@
 'use strict';
 
+if (typeof importScripts === 'function') importScripts('./optional-pack-loader.js');
+const packLoader = globalThis.PlayerAssistantPackLoader || {
+    loadPack: async () => {
+        const response = await fetch('campaign-search.json');
+        if (!response.ok) throw new Error(`campaign-search pack returned ${response.status}`);
+        return response.json();
+    }
+};
 const MAX_SEARCH_RESULTS = 40;
 const SEARCH_EXPRESSION_CACHE_LIMIT = 128;
 const searchWordCharacters = "\\p{L}\\p{N}'’-";
@@ -69,11 +77,12 @@ const getCandidateEntries = (entries, queryTerms, hasWildcards, termIndex) => {
 const loadCampaignSearch = async () => {
     if (campaignSearchIndex) return campaignSearchIndex;
     if (campaignSearchLoading) return campaignSearchLoading;
-    campaignSearchLoading = fetch('campaign-search.json')
-        .then((response) => {
-            if (!response.ok) throw new Error(`Search data returned ${response.status}.`);
-            return response.json();
-        })
+    campaignSearchLoading = (async () => {
+        self.postMessage({ type: 'pack-status', state: 'loading', message: 'Loading campaign search pack…' });
+        const data = await packLoader.loadPack('campaign-search');
+        self.postMessage({ type: 'pack-status', state: 'ready', message: 'Campaign search pack ready offline.' });
+        return data;
+    })()
         .then((data) => {
             const sourceEntries = Array.isArray(data.pages)
                 ? data.pages
@@ -138,11 +147,18 @@ const searchCampaign = async (query) => {
 
 self.addEventListener('message', async (event) => {
     const message = event.data || {};
+    if (message.type === 'clear-pack') {
+        campaignSearchIndex = null;
+        try { await packLoader.removePack?.('campaign-search'); } catch { /* best-effort removal */ }
+        self.postMessage({ type: 'pack-status', state: 'removed', message: 'Campaign search pack removed. It will download again when needed.' });
+        return;
+    }
     if (message.type !== 'search') return;
     try {
         const results = await searchCampaign(message.query);
         self.postMessage({ type: 'search-results', id: message.id, results });
     } catch (error) {
+        self.postMessage({ type: 'pack-status', state: 'unavailable', message: `Campaign search unavailable: ${error.message || String(error)}` });
         self.postMessage({
             type: 'search-results',
             id: message.id,

@@ -57,8 +57,9 @@ export const initializeCampaignSearch = ({ byId }) => {
     const searchInput = byId('campaign-search');
     const results = byId('search-results');
     const guidance = byId('search-guidance');
+    const removePackButton = byId('campaign-search-remove-pack');
     const worker = typeof Worker !== 'undefined'
-        ? new Worker('campaign-search-worker.js?v=65')
+        ? new Worker('campaign-search-worker.js?v=66')
         : null;
     let searchRequestId = 0;
     let searchDebounce = 0;
@@ -94,6 +95,10 @@ export const initializeCampaignSearch = ({ byId }) => {
 
     worker?.addEventListener('message', (event) => {
         const message = event.data || {};
+        if (message.type === 'pack-status') {
+            if (guidance) guidance.textContent = message.message;
+            return;
+        }
         if (message.type !== 'search-results' || message.id !== searchRequestId) return;
         if (message.error) {
             if (guidance) guidance.textContent = `Campaign search is unavailable: ${message.error}`;
@@ -121,6 +126,12 @@ export const initializeCampaignSearch = ({ byId }) => {
     searchInput?.addEventListener('input', () => {
         window.clearTimeout(searchDebounce);
         searchDebounce = window.setTimeout(renderSearchResults, 100);
+    });
+
+    removePackButton?.addEventListener('click', () => {
+        worker?.postMessage({ type: 'clear-pack' });
+        if (results) results.replaceChildren();
+        if (guidance) guidance.textContent = 'Campaign search pack removed. It will download again when needed.';
     });
 
     return Object.freeze({ load: () => Promise.resolve([]) });
