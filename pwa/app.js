@@ -1,6 +1,6 @@
-import { initializeTranslator } from './modules/translator.js?v=66';
-import { initializeCampaignSearch } from './modules/search.js?v=66';
-import { initializeDice } from './modules/dice.js?v=66';
+import { initializeTranslator } from './modules/translator.js?v=67';
+import { initializeCampaignSearch } from './modules/search.js?v=67';
+import { initializeDice } from './modules/dice.js?v=67';
 
 (() => {
     'use strict';
@@ -19,7 +19,7 @@ import { initializeDice } from './modules/dice.js?v=66';
     const DUNGEON_MASTER_HERO = Object.freeze({
         name: 'Dungeon Master',
         aliases: ['Dungeon Master'],
-        token: 'data/hero-tokens/dungeon-master-914c56786be2.webp',
+        token: 'data/hero-tokens/dungeon-master.webp',
         preferLocal: true
     });
     const QUEST_STATE_VALUES = Object.freeze([

@@ -9,7 +9,7 @@ export const initializeTranslator = ({ byId }) => {
     let translatorRequestId = 0;
     let translatorDebounce = 0;
     const worker = typeof Worker !== 'undefined'
-        ? new Worker('translator-worker.js?v=66')
+        ? new Worker('translator-worker.js?v=67')
         : null;
 
     const input = byId('translator-input');

@@ -635,6 +635,17 @@ try {
     await page.locator('#auth-password').fill('ci-dm-password');
     await page.locator('#auth-submit').click();
     await page.locator('#auth-button-label').getByText('CI Dungeon Master', { exact: true }).waitFor();
+    await page.locator('#auth-dashboard-token').waitFor({ state: 'visible' });
+    const dungeonMasterToken = await page.locator('#auth-dashboard-token').evaluate((image) => ({
+        src: image.getAttribute('src'),
+        alt: image.getAttribute('alt'),
+        hidden: image.hidden
+    }));
+    if (!new URL(dungeonMasterToken.src || '', page.url()).pathname.endsWith('/data/hero-tokens/dungeon-master.webp')
+        || dungeonMasterToken.alt !== 'Dungeon Master token'
+        || dungeonMasterToken.hidden) {
+        throw new Error(`Dungeon Master token did not render correctly: ${JSON.stringify(dungeonMasterToken)}.`);
+    }
     await page.locator('#online-users-summary').waitFor({ state: 'visible' });
     const dungeonMasterPresenceStatus = await page.evaluate(async () =>
         (await fetch('/scarlethorizons/api/v1/presence')).status);
@@ -693,7 +704,7 @@ try {
     await page.waitForFunction(() => document.querySelector('#search-guidance')?.textContent?.includes('pack ready offline'));
     await page.locator('#campaign-search').fill('Kirkilston');
     await page.locator('#search-results .search-result').first().waitFor({ state: 'visible' });
-    if (![...workerUrls].some((url) => url.includes('/campaign-search-worker.js?v=66'))) {
+    if (![...workerUrls].some((url) => url.includes('/campaign-search-worker.js?v=67'))) {
         throw new Error(`Campaign search did not start its dedicated worker: ${JSON.stringify([...workerUrls])}.`);
     }
 
@@ -724,7 +735,7 @@ try {
             throw new Error(`Offline feature data was not cached: ${requiredPath}`);
         }
     }
-    if (!cachedUrls.some((url) => url.endsWith('/campaign-search-worker.js?v=66'))) {
+    if (!cachedUrls.some((url) => url.endsWith('/campaign-search-worker.js?v=67'))) {
         throw new Error('Campaign search worker was not present in the offline shell cache.');
     }
     await page.evaluate(async () => {
