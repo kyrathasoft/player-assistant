@@ -156,8 +156,6 @@ jobs:
         with:
           path: ~\.nuget\packages
           key: dotnet-${{ runner.os }}-${{ hashFiles('**/packages.lock.json') }}
-          restore-keys: |
-            dotnet-${{ runner.os }}-
 
       - name: Verify parallel test groups
         shell: pwsh
