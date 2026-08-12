@@ -7,6 +7,17 @@ internal static class Program
 {
     private static int Main(string[] args)
     {
+        if (args is ["--cancellation-child", var pidPath])
+        {
+            var temporaryPidPath = pidPath + ".tmp";
+            File.WriteAllText(
+                temporaryPidPath,
+                Environment.ProcessId.ToString(System.Globalization.CultureInfo.InvariantCulture));
+            File.Move(temporaryPidPath, pidPath);
+            Thread.Sleep(Timeout.Infinite);
+            return 0;
+        }
+
         var requestedTestFilter = args.Length > 0 ? string.Join(" ", args).Trim() : string.Empty;
         var tests = TestCatalog.Create();
         if (!string.IsNullOrWhiteSpace(requestedTestFilter)) tests = tests.Where(test => test.Name.Contains(requestedTestFilter, StringComparison.OrdinalIgnoreCase)).ToArray();

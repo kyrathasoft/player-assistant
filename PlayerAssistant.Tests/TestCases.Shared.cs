@@ -412,18 +412,18 @@ internal static partial class TestCases
         using var cancellation = new CancellationTokenSource();
         ScheduledTaskLaunchUtility.ProcessFactoryForTests = _ =>
         {
+            var executablePath = Environment.ProcessPath
+                ?? throw new InvalidOperationException("The test executable path is unavailable.");
             var startInfo = new ProcessStartInfo
             {
-                FileName = "powershell.exe",
+                FileName = executablePath,
                 UseShellExecute = false,
                 RedirectStandardOutput = true,
                 RedirectStandardError = true,
                 CreateNoWindow = true
             };
-            startInfo.ArgumentList.Add("-NoProfile");
-            startInfo.ArgumentList.Add("-NonInteractive");
-            startInfo.ArgumentList.Add("-Command");
-            startInfo.ArgumentList.Add($"$PID | Set-Content -LiteralPath '{pidPath.Replace("'", "''")}'; Start-Sleep -Seconds 30");
+            startInfo.ArgumentList.Add("--cancellation-child");
+            startInfo.ArgumentList.Add(pidPath);
             return new Process { StartInfo = startInfo };
         };
 
