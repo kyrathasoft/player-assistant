@@ -558,6 +558,12 @@ try {
         || protectedTableSemantics.rowCount !== 2) {
         throw new Error(`Protected XP Awards table semantics failed: ${JSON.stringify(protectedTableSemantics)}.`);
     }
+    const playerProgressSummaries = await page.locator('#xp-awards-list .xp-award-character .xp-award-progress-summary').allTextContents();
+    if (playerProgressSummaries.length !== 1
+        || playerProgressSummaries[0] !== 'Progress toward next class level CI Hero is 40.0% of the way toward Fighter Level 2'
+        || await page.locator('#xp-awards-list > .xp-award-progress-section').count() !== 0) {
+        throw new Error(`Player XP Awards progress summary was incorrect: ${JSON.stringify(playerProgressSummaries)}`);
+    }
 
     await page.setViewportSize({ width: 320, height: 800 });
     const protectedMobileLayout = await page.evaluate(() => ({
@@ -673,7 +679,7 @@ try {
     await page.locator('#xp-awards-list').waitFor({ state: 'visible' });
     const dungeonMasterProgressItems = await page.locator('#xp-awards-list .xp-award-progress-list li').allTextContents();
     if (dungeonMasterProgressItems.length !== 2
-        || dungeonMasterProgressItems[0] !== 'CI Hero is 67.3% of the way toward attaining Level 5 Fighter'
+        || dungeonMasterProgressItems[0] !== 'CI Hero is 67.3% of the way toward Fighter Level 5'
         || !dungeonMasterProgressItems[1].startsWith('CI Second Hero is ')
         || await page.locator('#xp-awards-list .xp-award-character .xp-award-progress-summary').count() !== 0) {
         throw new Error(`Dungeon Master XP Awards progress list was incorrect: ${JSON.stringify(dungeonMasterProgressItems)}`);
@@ -729,7 +735,7 @@ try {
     await page.waitForFunction(() => document.querySelector('#search-guidance')?.textContent?.includes('pack ready offline'));
     await page.locator('#campaign-search').fill('Kirkilston');
     await page.locator('#search-results .search-result').first().waitFor({ state: 'visible' });
-    if (![...workerUrls].some((url) => url.includes('/campaign-search-worker.js?v=70'))) {
+    if (![...workerUrls].some((url) => url.includes('/campaign-search-worker.js?v=72'))) {
         throw new Error(`Campaign search did not start its dedicated worker: ${JSON.stringify([...workerUrls])}.`);
     }
 
@@ -760,7 +766,7 @@ try {
             throw new Error(`Offline feature data was not cached: ${requiredPath}`);
         }
     }
-    if (!cachedUrls.some((url) => url.endsWith('/campaign-search-worker.js?v=70'))) {
+    if (!cachedUrls.some((url) => url.endsWith('/campaign-search-worker.js?v=72'))) {
         throw new Error('Campaign search worker was not present in the offline shell cache.');
     }
     await page.evaluate(async () => {

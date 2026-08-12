@@ -1,6 +1,6 @@
-import { initializeTranslator } from './modules/translator.js?v=70';
-import { initializeCampaignSearch } from './modules/search.js?v=70';
-import { initializeDice } from './modules/dice.js?v=70';
+import { initializeTranslator } from './modules/translator.js?v=72';
+import { initializeCampaignSearch } from './modules/search.js?v=72';
+import { initializeDice } from './modules/dice.js?v=72';
 
 (() => {
     'use strict';
@@ -424,7 +424,7 @@ import { initializeDice } from './modules/dice.js?v=70';
             maximumFractionDigits: 1,
             useGrouping: false
         }).format((character.xp_total / nextLevelXp) * 100);
-        return `${character.character_name} is ${percentage}% of the way toward attaining Level ${character.level + 1} ${character.character_class}`;
+        return `${character.character_name} is ${percentage}% of the way toward ${character.character_class} Level ${character.level + 1}`;
     };
 
     const renderXpAwardsUi = () => {
@@ -467,6 +467,16 @@ import { initializeDice } from './modules/dice.js?v=70';
             const characterClass = document.createElement('span');
             characterClass.textContent = character.character_class;
             heading.append(name, characterClass);
+            if (authenticatedXpSnapshot?.scope === 'character'
+                && authenticatedXpSnapshot.character.character_name === character.character_name) {
+                const progressSummary = formatXpProgressSummary(authenticatedXpSnapshot.character);
+                if (progressSummary !== '') {
+                    const progress = document.createElement('span');
+                    progress.className = 'xp-award-progress-summary';
+                    progress.textContent = `Progress toward next class level ${progressSummary}`;
+                    heading.append(progress);
+                }
+            }
             const table = document.createElement('table');
             const thead = document.createElement('thead');
             const headerRow = document.createElement('tr');
@@ -493,25 +503,26 @@ import { initializeDice } from './modules/dice.js?v=70';
             card.append(heading, table);
             fragment.append(card);
         });
-        if (authenticatedXpSnapshot?.scope === 'party') {
-            const progressItems = authenticatedXpSnapshot.characters
-                .map((character) => formatXpProgressSummary(character))
-                .filter((summary) => summary !== '');
-            if (progressItems.length > 0) {
-                const progressSection = document.createElement('section');
-                progressSection.className = 'xp-award-progress-section';
-                const progressHeading = document.createElement('h2');
-                progressHeading.textContent = 'Progress toward next class level';
-                const progressList = document.createElement('ul');
-                progressList.className = 'xp-award-progress-list';
-                progressItems.forEach((summary) => {
-                    const item = document.createElement('li');
-                    item.textContent = summary;
-                    progressList.append(item);
-                });
-                progressSection.append(progressHeading, progressList);
-                fragment.append(progressSection);
-            }
+        const progressCharacters = authenticatedXpSnapshot?.scope === 'party'
+            ? authenticatedXpSnapshot.characters
+            : [];
+        const progressItems = progressCharacters
+            .map((character) => formatXpProgressSummary(character))
+            .filter((summary) => summary !== '');
+        if (progressItems.length > 0) {
+            const progressSection = document.createElement('section');
+            progressSection.className = 'xp-award-progress-section';
+            const progressHeading = document.createElement('h2');
+            progressHeading.textContent = 'Progress toward next class level';
+            const progressList = document.createElement('ul');
+            progressList.className = 'xp-award-progress-list';
+            progressItems.forEach((summary) => {
+                const item = document.createElement('li');
+                item.textContent = summary;
+                progressList.append(item);
+            });
+            progressSection.append(progressHeading, progressList);
+            fragment.append(progressSection);
         }
         list.append(fragment);
         list.hidden = false;
