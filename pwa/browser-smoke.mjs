@@ -672,7 +672,7 @@ try {
     await page.locator('[data-view="search"]').click();
     await page.locator('#campaign-search').fill('Kirkilston');
     await page.locator('#search-results .search-result').first().waitFor({ state: 'visible' });
-    if (![...workerUrls].some((url) => url.includes('/campaign-search-worker.js?v=65'))) {
+    if (![...workerUrls].some((url) => url.includes('/campaign-search-worker.js?v=67'))) {
         throw new Error(`Campaign search did not start its dedicated worker: ${JSON.stringify([...workerUrls])}.`);
     }
 
@@ -704,7 +704,7 @@ try {
             throw new Error(`Offline feature data was not cached: ${requiredPath}`);
         }
     }
-    if (!cachedUrls.some((url) => url.endsWith('/campaign-search-worker.js?v=65'))) {
+    if (!cachedUrls.some((url) => url.endsWith('/campaign-search-worker.js?v=67'))) {
         throw new Error('Campaign search worker was not present in the offline shell cache.');
     }
     await page.evaluate(async () => {
