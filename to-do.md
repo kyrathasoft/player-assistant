@@ -58,7 +58,8 @@
   - [ ] Add explicit production detection for stale broker/source conditions and authorized protected-response shape.
     - [x] The scheduled monitor now authenticates, validates login/identity plus XP and word-count contracts, rejects stale XP/source/broker timestamps, and fails closed when monitor credentials are absent.
     - [x] Focused contract tests, canonical PWA verification, HTTP authentication tests, browser/service-worker smoke tests, parser and CI-policy checks, secret scanning, and an independent fail-closed review all pass.
-    - [ ] Configure `PWA_MONITOR_CHARACTER_NAME` and `PWA_MONITOR_PASSWORD` for a dedicated production monitor account, then verify the first authenticated live run.
+    - [x] Configure `PWA_MONITOR_CHARACTER_NAME` and `PWA_MONITOR_PASSWORD` for a dedicated production monitor account, then verify the first authenticated live run.
+      - Repository secrets are configured. The authenticated monitor now runs every 15 minutes from private DreamHost cron because DreamHost rejects GitHub-hosted Azure runners before authentication; it persists private status, alerts on failure/recovery with cooldown, and exposes only sanitized state through admin health.
   - [x] Startup timing and 320px narrow-layout overflow are enforced by browser smoke; campaign search and large dictionaries remain demand-loaded/cached.
 
 ## High-Priority-Fixes
