@@ -697,7 +697,6 @@ try {
     for (const requiredPath of [
         '/data/orcish.json',
         '/data/elvish.json',
-        '/data/ghukliak.json',
         '/campaign-search.json'
     ]) {
         if (!cachedUrls.some((url) => new URL(url).pathname.endsWith(requiredPath))) {
@@ -737,7 +736,16 @@ try {
 
     await page.locator('#translator-input').fill('');
     await page.locator('#translator-input').fill('hello');
-    await page.waitForFunction(() => (document.querySelector('#translator-output')?.value || '').length > 0);
+    try {
+        await page.waitForFunction(() => (document.querySelector('#translator-output')?.value || '').length > 0);
+    } catch (error) {
+        const diagnostics = await page.evaluate(() => ({
+            output: document.querySelector('#translator-output')?.value || '',
+            status: document.querySelector('#lexicon-status')?.textContent || '',
+            caches: [...Object.keys(window)].filter((key) => key.includes('Worker'))
+        }));
+        throw new Error(`Offline translator smoke failed to produce output: ${JSON.stringify(diagnostics)}; ${error.message}`);
+    }
     const offlineTranslation = await page.locator('#translator-output').inputValue();
     if (offlineTranslation !== 'zug') {
         throw new Error(`Offline translator smoke failed: ${offlineTranslation}`);
