@@ -115,21 +115,21 @@ Cross-cutting reliability, concurrency, API, and identity corrections to impleme
 
 Planned correction for the PWA's approximately 10.1 MB optional-data installation cost. The service worker must install a small usable shell; translator and campaign-search packs must be independently downloadable, schema-validated, retriable, removable, and retained across app updates when their content hashes remain unchanged.
 
-- [ ] 1. Establish the optional-pack inventory and a red-capable regression harness.
+- [x] 1. Establish the optional-pack inventory and a red-capable regression harness.
   - Record the current pack sizes and declared records: Orcish 3.87 MB/80,874 terms, Elvish 2.23 MB/84,460 terms, Ghukliak 2.11 MB/81,204 terms, and campaign search 1.90 MB/1,055 pages.
   - Add static assertions that no large dictionary or complete campaign index appears in the service-worker install shell list.
   - Add an install fixture that proves the shell activates successfully when every optional pack is unavailable.
   - Add failure fixtures for truncated, wrong-MIME, invalid-schema, stale-hash, HTTP-error, timeout, and quota-exceeded pack downloads.
   - Keep the target measurable: initial install must not request the approximately 10.1 MB optional payload.
 
-- [ ] 2. Define a generated, content-addressed optional-pack manifest.
+- [x] 2. Define a generated, content-addressed optional-pack manifest.
   - Generate one manifest entry per translator language and the campaign-search pack with URL, pack kind, schema version, content hash, byte size, record/page count, and validation metadata.
   - Hash the exact served bytes, not a source description or mutable timestamp.
   - Validate that declared counts, schema versions, and hashes match the generated files before packaging or deployment.
   - Make the manifest itself a small shell asset and version it independently from the application shell.
   - Add verifier coverage for missing, duplicate, mismatched, and unexpectedly large manifest entries.
 
-- [ ] 3. Reduce service-worker installation to the minimal shell.
+- [x] 3. Reduce service-worker installation to the minimal shell.
   - Remove all three dictionaries and `campaign-search.json` from `OFFLINE_DATA_ASSETS` and any install-time `cacheAssets` call.
   - Keep only the shell, feature modules/workers, small required UI data, offline page, manifest, and icons in the install transaction.
   - Ensure one optional-pack failure cannot delete the shell cache or abort worker activation.
