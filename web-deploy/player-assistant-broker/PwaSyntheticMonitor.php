@@ -264,7 +264,11 @@ final class PwaSyntheticMonitor
                 $length = strlen($line);
                 $parts = explode(':', $line, 2);
                 if (count($parts) === 2) {
-                    $responseHeaders[strtolower(trim($parts[0]))] = trim($parts[1]);
+                    $name = strtolower(trim($parts[0]));
+                    $value = trim($parts[1]);
+                    $responseHeaders[$name] = isset($responseHeaders[$name])
+                        ? $responseHeaders[$name] . ', ' . $value
+                        : $value;
                 }
                 return $length;
             },
