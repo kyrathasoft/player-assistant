@@ -121,7 +121,7 @@ if ($action === 'install') {
 
     $uploaded = $false
     for ($attempt = 1; $attempt -le 3 -and -not $uploaded; $attempt++) {
-        & scp.exe -q -i $SshKeyPath -o BatchMode=yes -o ConnectTimeout=15 `
+        & scp.exe -q -O -i $SshKeyPath -o BatchMode=yes -o ConnectTimeout=15 `
             -o ConnectionAttempts=1 -- `
             $localArchive "${DreamHostTarget}:$remoteArchive"
         $uploaded = $LASTEXITCODE -eq 0
