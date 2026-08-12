@@ -28,14 +28,11 @@ const SHELL_ASSETS = [
     './icons/dragon-mark.png',
     './magic-items.json',
     './party-funds.json',
-    './level-progression.json'
+    './level-progression.json',
+    './optional-packs.json',
+    './optional-pack-loader.js'
 ];
-const OFFLINE_DATA_ASSETS = [
-    './data/orcish.json',
-    './data/elvish.json',
-    './data/ghukliak.json',
-    './campaign-search.json'
-];
+const OFFLINE_DATA_ASSETS = [];
 const canonicalRequestKey = (asset) => {
     const url = new URL(asset, self.location.href);
     return `${url.pathname}${url.search}`;
@@ -180,10 +177,7 @@ const cacheResponseIfValid = async (cache, request, response) => {
 
 self.addEventListener('install', (event) => {
     event.waitUntil(
-        Promise.all([
-            cacheAssets(SHELL_CACHE, SHELL_ASSETS),
-            cacheAssets(DATA_CACHE, OFFLINE_DATA_ASSETS)
-        ])
+        cacheAssets(SHELL_CACHE, SHELL_ASSETS)
             .catch(async (error) => {
                 await deleteCurrentCaches();
                 throw error;
@@ -256,6 +250,18 @@ self.addEventListener('fetch', (event) => {
 
     if (request.mode === 'navigate') {
         event.respondWith(networkFirstNavigation(request));
+        return;
+    }
+
+    if (url.searchParams.has('pack-hash')) {
+        event.respondWith(fetch(request));
+        return;
+    }
+
+    if (url.pathname.endsWith('/data/orcish.json')
+        || url.pathname.endsWith('/data/elvish.json')
+        || url.pathname.endsWith('/data/ghukliak.json')) {
+        event.respondWith(cacheFirst(request, DATA_CACHE));
         return;
     }
 

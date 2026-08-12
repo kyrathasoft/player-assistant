@@ -345,7 +345,7 @@
                     </div>
                     <div class="lexicon-status" id="lexicon-status" role="status">
                         <span class="status-dot" aria-hidden="true"></span>
-                        <span>Orcish lexicon ready on demand</span>
+                        <span>Orcish lexicon available on demand</span>
                     </div>
                 </div>
 
@@ -391,7 +391,8 @@
                     </div>
 
                     <div class="translator-footer">
-                        <p id="translation-note">Unknown words remain unchanged. The first translation for each language may take a moment while the lexicon is cached.</p>
+                        <p id="translation-note">Language packs download only when selected and remain available offline after validation. Unknown words remain unchanged.</p>
+                        <button class="secondary-button" id="translator-remove-pack" type="button">Remove selected language pack</button>
                         <button class="primary-button" id="export-translation" type="button" hidden disabled>Export Translation</button>
                     </div>
                 </div>
@@ -410,7 +411,8 @@
                         <span aria-hidden="true">&#x2315;</span>
                         <input id="campaign-search" type="search" autocomplete="off" placeholder="Search people, places, quests, rules&hellip;">
                     </label>
-                    <p class="search-guidance" id="search-guidance">Whole words are matched by default. Use wildcards for partial words: *king, king*, or *king*. Search covers titles and public page text.</p>
+                    <p class="search-guidance" id="search-guidance">Campaign search downloads and validates its 1,055-page pack only when first used, then retains it for offline search. Whole words are matched by default. Use wildcards for partial words: *king, king*, or *king*.</p>
+                    <button class="secondary-button" id="campaign-search-remove-pack" type="button">Remove cached search pack</button>
                     <div class="search-results" id="search-results" aria-live="polite"></div>
                 </div>
             </section>
