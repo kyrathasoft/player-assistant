@@ -38,7 +38,9 @@ $requiredFiles = @(
     'magic-items.json',
     'party-funds.json',
     'quests.json',
-    'campaign-search.json'
+    'campaign-search.json',
+    'optional-packs.json',
+    'optional-pack-loader.js'
 )
 foreach ($relativePath in $requiredFiles) {
     Assert-Condition -Condition (Test-Path -LiteralPath (Join-Path $PwaRoot $relativePath) -PathType Leaf) -Message "Missing PWA file: $relativePath"
@@ -104,6 +106,26 @@ foreach ($termProperty in @($campaignSearch.termIndex.PSObject.Properties)) {
 Assert-Condition -Condition (@($campaignSearch.pages | Where-Object { ![string]::IsNullOrWhiteSpace($_.content) }).Count -gt 0) -Message 'Campaign search data contains no Markdown content.'
 Assert-Condition -Condition (@($campaignSearch.pages | Where-Object { [string]::IsNullOrWhiteSpace($_.title) -or $_.url -notmatch '^https://' }).Count -eq 0) -Message 'Campaign search data contains an invalid page title or URL.'
 Assert-Condition -Condition (@($campaignSearch.pages | Where-Object { $_.title -eq 'XP Tracking' }).Count -eq 0) -Message 'The protected XP Tracking page must not be included in public PWA search data.'
+
+$optionalManifest = Get-Content -Raw -LiteralPath (Join-Path $PwaRoot 'optional-packs.json') | ConvertFrom-Json
+Assert-Condition -Condition ([int]$optionalManifest.schemaVersion -eq 1 -and [int]$optionalManifest.manifestVersion -eq 1) -Message 'Optional-pack manifest version is invalid.'
+$optionalPacks = @($optionalManifest.packs)
+Assert-Condition -Condition ($optionalPacks.Count -eq 4) -Message 'Optional-pack manifest must contain exactly four packs.'
+Assert-Condition -Condition (@($optionalPacks.id | Select-Object -Unique).Count -eq $optionalPacks.Count) -Message 'Optional-pack manifest contains duplicate IDs.'
+foreach ($pack in $optionalPacks) {
+    $packPath = Join-Path $PwaRoot ([string]$pack.url).Replace('/', '\')
+    Assert-Condition -Condition (Test-Path -LiteralPath $packPath -PathType Leaf) -Message "Optional pack is missing: $($pack.id)"
+    $packBytes = [System.IO.File]::ReadAllBytes($packPath)
+    Assert-Condition -Condition ([int64]$pack.byteSize -eq $packBytes.Length) -Message "Optional pack byte size is stale: $($pack.id)"
+    Assert-Condition -Condition ([string]$pack.contentHash -eq (Get-FileHash -LiteralPath $packPath -Algorithm SHA256).Hash.ToLowerInvariant()) -Message "Optional pack hash is stale: $($pack.id)"
+    $packPayload = Get-Content -Raw -LiteralPath $packPath | ConvertFrom-Json
+    Assert-Condition -Condition ([int]$packPayload.schemaVersion -eq [int]$pack.schemaVersion) -Message "Optional pack schema version is stale: $($pack.id)"
+    $actualCount = if ([string]$pack.kind -eq 'translator') { @($packPayload.terms.PSObject.Properties).Count } else { @($packPayload.pages).Count }
+    Assert-Condition -Condition ([int]$pack.recordCount -eq $actualCount) -Message "Optional pack record count is stale: $($pack.id)"
+}
+$serviceWorkerText = Get-Content -Raw -LiteralPath (Join-Path $PwaRoot 'service-worker.js')
+$offlineDataBody = [regex]::Match($serviceWorkerText, 'const OFFLINE_DATA_ASSETS = \[(?<body>[\s\S]*?)\];').Groups['body'].Value
+Assert-Condition -Condition ($offlineDataBody -notmatch 'orcish|elvish|ghukliak|campaign-search') -Message 'Optional packs must not be present in the service-worker install data list.'
 
 $heroData = Get-Content -Raw -LiteralPath (Join-Path $PwaRoot 'data\heroes.json') | ConvertFrom-Json
 Assert-Condition -Condition ([int]$heroData.schemaVersion -eq 1) -Message 'Hero-token data must use schema version 1.'
@@ -258,7 +280,7 @@ $featureModulePaths = @(
 $versionedFeatureModulePaths = @($featureModulePaths | ForEach-Object {
     './{0}?v=${{VERSION_METADATA.appRevision}}' -f $_
 })
-foreach ($script in @('version.js', 'app.js', 'translator-worker.js', 'campaign-search-worker.js', 'service-worker.js', 'service-worker-tests.mjs', 'campaign-search-worker-tests.mjs') + $featureModulePaths) {
+foreach ($script in @('version.js', 'app.js', 'translator-worker.js', 'campaign-search-worker.js', 'service-worker.js', 'service-worker-tests.mjs', 'campaign-search-worker-tests.mjs', 'optional-pack-tests.mjs', 'optional-pack-lifecycle-tests.mjs') + $featureModulePaths) {
     & node --check (Join-Path $PwaRoot $script)
     Assert-Condition -Condition ($LASTEXITCODE -eq 0) -Message "JavaScript syntax check failed: $script"
 }
@@ -279,10 +301,14 @@ $requestTranslationFunction = [regex]::Match(
 $styles = Get-Content -Raw -LiteralPath (Join-Path $PwaRoot 'styles.css')
 $serviceWorker = Get-Content -Raw -LiteralPath (Join-Path $PwaRoot 'service-worker.js')
 $serviceWorkerTests = Get-Content -Raw -LiteralPath (Join-Path $PwaRoot 'service-worker-tests.mjs')
+$optionalPackTests = Get-Content -Raw -LiteralPath (Join-Path $PwaRoot 'optional-pack-tests.mjs')
+$optionalPackLifecycleTests = Get-Content -Raw -LiteralPath (Join-Path $PwaRoot 'optional-pack-lifecycle-tests.mjs')
 $browserSmoke = Get-Content -Raw -LiteralPath (Join-Path $PwaRoot 'browser-smoke.mjs')
 $deploymentTest = Get-Content -Raw -LiteralPath (Join-Path $PwaRoot 'test-deployment.ps1')
 $productionResponseContracts = Get-Content -Raw -LiteralPath (Join-Path $PwaRoot 'production-response-contracts.ps1')
 $monitorScript = Get-Content -Raw -LiteralPath (Join-Path $PwaRoot '..\web-deploy\monitor-pwa.ps1')
+$privateMonitorScript = Get-Content -Raw -LiteralPath (Join-Path $PwaRoot '..\web-deploy\player-assistant-broker\PwaSyntheticMonitor.php')
+$privateMonitorInstaller = Get-Content -Raw -LiteralPath (Join-Path $PwaRoot '..\web-deploy\install-pwa-monitor.php')
 $monitorWorkflow = Get-Content -Raw -LiteralPath (Join-Path $PwaRoot '..\.github\workflows\pwa-synthetic-monitor.yml')
 $prSmokeWorkflow = Get-Content -Raw -LiteralPath (Join-Path $PwaRoot '..\.github\workflows\pr-smoke.yml')
 $fullRegressionWorkflow = Get-Content -Raw -LiteralPath (Join-Path $PwaRoot '..\.github\workflows\hardening.yml')
@@ -349,7 +375,7 @@ Assert-Condition -Condition ($heroTokenStyle.Success -and $heroTokenStyle.Groups
 Assert-Condition -Condition (!$appScript.Contains('XP+Tracking') -and !$html.Contains('XP+Tracking')) -Message 'The XP source URL must remain outside the browser application.'
 Assert-Condition -Condition ($serviceWorker.Contains("url.pathname.startsWith('/scarlethorizons/api/')")) -Message 'The service worker must exclude protected API responses.'
 Assert-Condition -Condition ($serviceWorker.Contains("new Request(asset, { cache: 'reload' })")) -Message 'Service-worker upgrades must bypass stale browser shell caches.'
-Assert-Condition -Condition ($serviceWorker.Contains('OFFLINE_DATA_ASSETS') -and $serviceWorker.Contains("'./data/orcish.json'") -and $serviceWorker.Contains("'./data/elvish.json'") -and $serviceWorker.Contains("'./data/ghukliak.json'") -and $serviceWorker.Contains("'./campaign-search.json'")) -Message 'Offline translator and campaign-search data must be preloaded into the data cache.'
+Assert-Condition -Condition ($serviceWorker.Contains('OFFLINE_DATA_ASSETS') -and $serviceWorker.Contains("'./optional-packs.json'") -and $serviceWorker.Contains("'./optional-pack-loader.js'") -and !$offlineDataBody.Contains('orcish') -and !$offlineDataBody.Contains('elvish') -and !$offlineDataBody.Contains('ghukliak') -and !$offlineDataBody.Contains('campaign-search')) -Message 'The install shell must include the optional-pack manifest and loader without preloading large optional packs.'
 Assert-Condition -Condition ($serviceWorker.Contains('networkFirstData') -and $serviceWorker.Contains("url.pathname.endsWith('/data/heroes.json')") -and $serviceWorker.Contains("url.pathname.includes('/data/hero-tokens/')")) -Message 'Hero-token manifests and images must refresh from the network before using cached copies.'
 Assert-Condition -Condition ($serviceWorker.Contains("url.pathname.endsWith('/campaign-search.json')") -and $serviceWorker.Contains("event.respondWith(networkFirstData(request))")) -Message 'Scheduled campaign-search data must refresh from the network before using its offline cache.'
 Assert-Condition -Condition ($appScript.Contains("updateViaCache: 'none'") -and $appScript.Contains('await registration.update()')) -Message 'The PWA must explicitly check for uncached service-worker updates.'
@@ -360,7 +386,7 @@ Assert-Condition -Condition ($featureModulePaths.Count -eq @($featureModulePaths
 Assert-Condition -Condition ($monitorScript.Contains('RequireProtectedApi') -and $monitorScript.Contains('PWA_MONITOR_CHARACTER_NAME') -and $monitorScript.Contains('PWA_MONITOR_PASSWORD') -and $monitorScript.Contains('MaximumXpAgeSeconds') -and $monitorScript.Contains('MaximumWordCountAgeSeconds')) -Message 'The production monitor must require credentials and explicit XP/word-count freshness limits.'
 Assert-Condition -Condition ($productionResponseContracts.Contains('[bool]$Payload.stale -eq $false') -and $productionResponseContracts.Contains('XP source snapshot is stale') -and $productionResponseContracts.Contains('Word-count source snapshot is stale') -and $productionResponseContracts.Contains('Word-count broker snapshot is stale') -and $productionResponseContracts.Contains('Test-ProductionInteger $Payload.schema_version') -and $deploymentTest.Contains('Assert-ProductionXpResponse') -and $deploymentTest.Contains('Assert-ProductionWordCountResponse')) -Message 'Deployment verification must reject stale or malformed authorized protected responses.'
 Assert-Condition -Condition ($productionResponseContracts.Contains('Invoke-ProductionSessionCleanup') -and $productionResponseContracts.Contains('Assert-ProductionAnonymousSessionResponse') -and $productionResponseContracts.Contains('Assert-ProductionLoginResponse') -and $productionResponseContracts.Contains('Assert-ProductionIdentityResponse') -and $deploymentTest.Contains('Assert-ProductionAnonymousSessionResponse') -and $deploymentTest.Contains('Assert-ProductionLoginResponse') -and $deploymentTest.Contains('Assert-ProductionIdentityResponse') -and $deploymentTest.Contains('Invoke-ProductionSessionCleanup') -and $deploymentTest.Contains('Invoke-ProductionMonitorLogout') -and $deploymentTest.Contains('$postLogoutSessionResponse') -and $deploymentTest.Contains("'X-CSRF-Token'")) -Message 'Anonymous and authorized identity response shapes must use reusable fail-closed contracts, and monitor cleanup must verify logout.'
-Assert-Condition -Condition ($monitorWorkflow.Contains('secrets.PWA_MONITOR_CHARACTER_NAME') -and $monitorWorkflow.Contains('secrets.PWA_MONITOR_PASSWORD') -and $monitorWorkflow.Contains('RequireProtectedApi')) -Message 'The scheduled production monitor must exercise authorized protected-response and freshness checks.'
+Assert-Condition -Condition ($monitorWorkflow.Contains('secrets.PWA_MONITOR_CHARACTER_NAME') -and $monitorWorkflow.Contains('secrets.PWA_MONITOR_PASSWORD') -and $monitorWorkflow.Contains('install-pwa-monitor.php') -and $monitorWorkflow.Contains('run-pwa-monitor.php') -and $privateMonitorInstaller.Contains("'maximum_xp_age_seconds' => 86400") -and $privateMonitorInstaller.Contains("'maximum_word_count_age_seconds' => 604800") -and $privateMonitorScript.Contains("'/xp'") -and $privateMonitorScript.Contains("'/word-counts'") -and $privateMonitorScript.Contains("['character', 'party']") -and $privateMonitorScript.Contains('maximum_xp_age_seconds') -and $privateMonitorScript.Contains('maximum_word_count_age_seconds')) -Message 'The scheduled private production monitor must exercise authorized protected-response and freshness checks.'
 Assert-Condition -Condition ($prSmokeWorkflow.Contains('.\web-deploy\tests\pwa-monitor-contract-tests.ps1') -and $fullRegressionWorkflow.Contains('./web-deploy/tests/pwa-monitor-contract-tests.ps1')) -Message 'PR smoke and full-regression CI must execute the production-response contract tests.'
 Assert-Condition -Condition ($html.Contains("styles.css?v=$($versionMetadata.PwaStylesRevision)") -and $html.Contains("$($versionMetadata.PwaVersion) PWA") -and $versionScript.Contains("pwaVersion: '$($versionMetadata.PwaVersion)'") -and $versionScript.Contains("metadataRevision: $($versionMetadata.PwaMetadataRevision)") -and $versionScript.Contains("stylesRevision: $($versionMetadata.PwaStylesRevision)") -and $versionScript.Contains("appRevision: $($versionMetadata.PwaAppRevision)") -and $versionScript.Contains("cacheRevision: $($versionMetadata.PwaCacheRevision)") -and $serviceWorker.Contains("importScripts('./version.js?v=$($versionMetadata.PwaMetadataRevision)')") -and $serviceWorker.Contains('VERSION_METADATA.cacheRevision') -and $serviceWorker.Contains('VERSION_METADATA.stylesRevision') -and $serviceWorker.Contains('VERSION_METADATA.appRevision') -and $appScriptEntry.Contains('PLAYER_ASSISTANT_VERSION_METADATA?.pwaVersion') -and $deploymentTest.Contains("'version.js' = @('application/javascript', 'text/javascript')") -and $versionedFeatureModulePaths.Count -eq @($versionedFeatureModulePaths | Where-Object { $serviceWorker.Contains($_) }).Count -and $serviceWorker.Contains("'./level-progression.json'") -and $serviceWorker.Contains("'./magic-items.json'")) -Message 'The PWA shell must use centralized cache-busting metadata, preload every cache-busted feature module, and preload the progression and magic-item data.'
 Assert-Condition -Condition ($html.Contains('value="ghukliak"') -and $html.Contains('Goblin') -and $appScript.Contains("languageSelect?.value === 'ghukliak'") -and $translatorWorker.Contains("message.language === 'ghukliak'")) -Message 'The PWA translator must expose the Goblin/Ghukliak language in its UI and worker.'
@@ -385,6 +411,7 @@ Assert-Condition -Condition ($apacheConfig.Contains('data/heroes\.json|data/hero
 Assert-Condition -Condition ($html.Contains('id="update-banner"') -and $html.Contains('id="update-apply"') -and $appScript.Contains('SKIP_WAITING') -and $serviceWorker.Contains("event.data?.type === 'SKIP_WAITING'")) -Message 'The PWA must expose an explicit service-worker update prompt.'
 Assert-Condition -Condition ($serviceWorker.Contains('cacheAssets') -and $serviceWorker.Contains('deleteCurrentCaches') -and $serviceWorker.Contains('safeCachePut') -and $serviceWorker.Contains('isValidJsonPayload') -and $serviceWorker.Contains('rejectObsoleteWorker') -and !$serviceWorker.Contains('.then(() => self.skipWaiting())')) -Message 'Service-worker installation and cache reads must fail closed on interrupted, corrupt, quota-limited, or obsolete-worker paths.'
 Assert-Condition -Condition ($serviceWorkerTests.Contains('testPartialInstallDeletesVersionedCaches') -and $serviceWorkerTests.Contains('testQuotaFailureReturnsNetworkResponse') -and $serviceWorkerTests.Contains('testSchemaInvalidCachedJsonIsDeletedAndRefetched') -and $serviceWorkerTests.Contains('testCorruptNavigationFallbackUsesValidOfflineShell') -and $serviceWorkerTests.Contains('testObsoleteWorkerCannotDeleteNewerCaches')) -Message 'Service-worker failure-injection coverage is incomplete.'
+Assert-Condition -Condition ($optionalPackTests.Contains('crypto') -and $optionalPackTests.Contains('optional-pack-loader') -and $optionalPackLifecycleTests.Contains('valid cached pack should survive failed replacement') -and $optionalPackLifecycleTests.Contains('bounded retries') -and $optionalPackLifecycleTests.Contains('removePack')) -Message 'Optional-pack lifecycle coverage is incomplete.'
 Assert-Condition -Condition ($html.Contains('id="xp-retry"') -and $html.Contains('id="quests-retry"') -and $html.Contains('id="xp-awards-retry"') -and $html.Contains('id="messages-retry"') -and $html.Contains('id="magic-items-freshness"') -and $html.Contains('id="party-funds-freshness"') -and $html.Contains('id="messages-freshness"') -and $appScript.Contains("void loadXpAwards(true)")) -Message 'Protected PWA views must expose freshness indicators and explicit retry controls.'
 
 Write-Output "PWA verified: $($lexiconCounts.orcish) Orcish terms, $($lexiconCounts.elvish) Elvish terms, $($lexiconCounts.ghukliak) Ghukliak terms, $(@($heroData.heroes).Count) player tokens and the Dungeon Master token, $($campaignSearch.pageCount) full-text campaign pages, install manifest and offline shell valid."
