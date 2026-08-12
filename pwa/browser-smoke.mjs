@@ -220,7 +220,15 @@ const serveApi = async (request, response, pathname) => {
                 date_label: 'As of 8.07.2026',
                 stale: false,
                 scope: 'party',
-                characters: [xpCharacter(playerAccount), xpCharacter(secondPlayerAccount)]
+                characters: [
+                    {
+                        ...xpCharacter(playerAccount),
+                        level: 4,
+                        xp_total: 10770,
+                        xp_to_next_level: 5230
+                    },
+                    xpCharacter(secondPlayerAccount)
+                ]
             }
             : {
                 schema_version: 1,
@@ -661,6 +669,15 @@ try {
         throw new Error(`Dungeon Master presence API returned ${dungeonMasterPresenceStatus}.`);
     }
     await page.locator('#auth-dialog-close').click();
+    await page.locator('[data-view="xp-awards"]').click();
+    await page.locator('#xp-awards-list').waitFor({ state: 'visible' });
+    const dungeonMasterProgressItems = await page.locator('#xp-awards-list .xp-award-progress-list li').allTextContents();
+    if (dungeonMasterProgressItems.length !== 2
+        || dungeonMasterProgressItems[0] !== 'CI Hero is 67.3% of the way toward attaining Level 5 Fighter'
+        || !dungeonMasterProgressItems[1].startsWith('CI Second Hero is ')
+        || await page.locator('#xp-awards-list .xp-award-character .xp-award-progress-summary').count() !== 0) {
+        throw new Error(`Dungeon Master XP Awards progress list was incorrect: ${JSON.stringify(dungeonMasterProgressItems)}`);
+    }
 
     await context.clearCookies();
     await page.reload({ waitUntil: 'domcontentloaded' });
@@ -712,7 +729,7 @@ try {
     await page.waitForFunction(() => document.querySelector('#search-guidance')?.textContent?.includes('pack ready offline'));
     await page.locator('#campaign-search').fill('Kirkilston');
     await page.locator('#search-results .search-result').first().waitFor({ state: 'visible' });
-    if (![...workerUrls].some((url) => url.includes('/campaign-search-worker.js?v=68'))) {
+    if (![...workerUrls].some((url) => url.includes('/campaign-search-worker.js?v=70'))) {
         throw new Error(`Campaign search did not start its dedicated worker: ${JSON.stringify([...workerUrls])}.`);
     }
 
@@ -743,7 +760,7 @@ try {
             throw new Error(`Offline feature data was not cached: ${requiredPath}`);
         }
     }
-    if (!cachedUrls.some((url) => url.endsWith('/campaign-search-worker.js?v=68'))) {
+    if (!cachedUrls.some((url) => url.endsWith('/campaign-search-worker.js?v=70'))) {
         throw new Error('Campaign search worker was not present in the offline shell cache.');
     }
     await page.evaluate(async () => {

@@ -83,8 +83,8 @@ const createHarness = ({ cacheEntries = {}, fetchImpl } = {}) => {
                 pwaVersion: '0.9.8',
                 metadataRevision: 1,
                 stylesRevision: 43,
-                appRevision: 68,
-                cacheRevision: 85
+                appRevision: 70,
+                cacheRevision: 87
             });
         },
         self
@@ -102,8 +102,8 @@ const createHarness = ({ cacheEntries = {}, fetchImpl } = {}) => {
     };
 };
 
-const currentDataCache = 'player-assistant-pwa-0.9.8-v85-data';
-const currentShellCache = 'player-assistant-pwa-0.9.8-v85-shell';
+const currentDataCache = 'player-assistant-pwa-0.9.8-v87-data';
+const currentShellCache = 'player-assistant-pwa-0.9.8-v87-shell';
 const translatorPayload = Object.freeze({
     schemaVersion: 1,
     language: 'Orcish',
@@ -394,7 +394,7 @@ const testPartialInstallDeletesVersionedCaches = async () => {
 };
 
 const testQuotaFailureReturnsNetworkResponse = async () => {
-    const request = new Request('https://example.test/scarlethorizons/pwa/app.js?v=68');
+    const request = new Request('https://example.test/scarlethorizons/pwa/app.js?v=70');
     const fresh = new Response("console.log('ready');", {
         status: 200,
         headers: { 'Content-Type': 'text/javascript' }
@@ -419,8 +419,8 @@ const testQuotaFailureReturnsNetworkResponse = async () => {
 };
 
 const testObsoleteWorkerCannotDeleteNewerCaches = async () => {
-    const newerShell = 'player-assistant-pwa-0.9.8-v86-shell';
-    const newerData = 'player-assistant-pwa-0.9.8-v86-data';
+    const newerShell = 'player-assistant-pwa-0.9.8-v88-shell';
+    const newerData = 'player-assistant-pwa-0.9.8-v88-data';
     const harness = createHarness({
         cacheEntries: {
             [newerShell]: [],

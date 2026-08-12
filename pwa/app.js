@@ -1,6 +1,6 @@
-import { initializeTranslator } from './modules/translator.js?v=68';
-import { initializeCampaignSearch } from './modules/search.js?v=68';
-import { initializeDice } from './modules/dice.js?v=68';
+import { initializeTranslator } from './modules/translator.js?v=70';
+import { initializeCampaignSearch } from './modules/search.js?v=70';
+import { initializeDice } from './modules/dice.js?v=70';
 
 (() => {
     'use strict';
@@ -403,6 +403,7 @@ import { initializeDice } from './modules/dice.js?v=68';
             authenticatedXpSnapshot = snapshot;
             xpUpdatedAt = Date.now();
             renderXpUi();
+            renderXpAwardsUi();
         } catch (error) {
             if (requestId !== xpRequestId || authenticatedAccount?.id !== accountId) return;
             const status = byId('xp-status');
@@ -412,6 +413,18 @@ import { initializeDice } from './modules/dice.js?v=68';
                 refreshButton.disabled = false;
             }
         }
+    };
+
+    const formatXpProgressSummary = (character) => {
+        if (!character || character.xp_to_next_level === null) return '';
+        const nextLevelXp = character.xp_total + character.xp_to_next_level;
+        if (!Number.isSafeInteger(nextLevelXp) || nextLevelXp <= 0) return '';
+        const percentage = new Intl.NumberFormat('en-US', {
+            minimumFractionDigits: 1,
+            maximumFractionDigits: 1,
+            useGrouping: false
+        }).format((character.xp_total / nextLevelXp) * 100);
+        return `${character.character_name} is ${percentage}% of the way toward attaining Level ${character.level + 1} ${character.character_class}`;
     };
 
     const renderXpAwardsUi = () => {
@@ -480,6 +493,26 @@ import { initializeDice } from './modules/dice.js?v=68';
             card.append(heading, table);
             fragment.append(card);
         });
+        if (authenticatedXpSnapshot?.scope === 'party') {
+            const progressItems = authenticatedXpSnapshot.characters
+                .map((character) => formatXpProgressSummary(character))
+                .filter((summary) => summary !== '');
+            if (progressItems.length > 0) {
+                const progressSection = document.createElement('section');
+                progressSection.className = 'xp-award-progress-section';
+                const progressHeading = document.createElement('h2');
+                progressHeading.textContent = 'Progress toward next class level';
+                const progressList = document.createElement('ul');
+                progressList.className = 'xp-award-progress-list';
+                progressItems.forEach((summary) => {
+                    const item = document.createElement('li');
+                    item.textContent = summary;
+                    progressList.append(item);
+                });
+                progressSection.append(progressHeading, progressList);
+                fragment.append(progressSection);
+            }
+        }
         list.append(fragment);
         list.hidden = false;
     };
