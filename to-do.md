@@ -66,7 +66,7 @@
 
 Cross-cutting reliability, concurrency, API, and identity corrections to implement as a coordinated backlog.
 
-- [ ] Service worker: validate network responses before returning them, treat 404/503/wrong-MIME/captive-portal/corrupt-JSON responses as network failures when a valid cached copy exists, and add a bounded navigation timeout.
+- [x] Service worker: validate network responses before returning them, treat 404/503/wrong-MIME/captive-portal/corrupt-JSON responses as network failures when a valid cached copy exists, and add a bounded navigation timeout.
 - [ ] Offline party funds: place `party-funds.json` in the data cache or route its fallback through the cache where it is actually installed.
 - [ ] Messages: add server-side pagination, unread counts, cursor navigation, and retention so responses remain valid beyond 200 unread messages.
 - [ ] Stale data: add an Activity/Inbox view and a lightweight revisions endpoint with visibility-aware polling or opt-in Web Push so open PWAs discover new messages and quest decisions.

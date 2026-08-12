@@ -636,14 +636,22 @@ try {
     await page.locator('#auth-submit').click();
     await page.locator('#auth-button-label').getByText('CI Dungeon Master', { exact: true }).waitFor();
     await page.locator('#auth-dashboard-token').waitFor({ state: 'visible' });
+    await page.waitForFunction(() => {
+        const image = document.querySelector('#auth-dashboard-token');
+        return image?.complete && image.naturalWidth > 0 && image.naturalHeight > 0;
+    });
     const dungeonMasterToken = await page.locator('#auth-dashboard-token').evaluate((image) => ({
         src: image.getAttribute('src'),
         alt: image.getAttribute('alt'),
-        hidden: image.hidden
+        hidden: image.hidden,
+        naturalWidth: image.naturalWidth,
+        naturalHeight: image.naturalHeight
     }));
     if (!new URL(dungeonMasterToken.src || '', page.url()).pathname.endsWith('/data/hero-tokens/dungeon-master.webp')
         || dungeonMasterToken.alt !== 'Dungeon Master token'
-        || dungeonMasterToken.hidden) {
+        || dungeonMasterToken.hidden
+        || dungeonMasterToken.naturalWidth === 0
+        || dungeonMasterToken.naturalHeight === 0) {
         throw new Error(`Dungeon Master token did not render correctly: ${JSON.stringify(dungeonMasterToken)}.`);
     }
     await page.locator('#online-users-summary').waitFor({ state: 'visible' });
@@ -704,7 +712,7 @@ try {
     await page.waitForFunction(() => document.querySelector('#search-guidance')?.textContent?.includes('pack ready offline'));
     await page.locator('#campaign-search').fill('Kirkilston');
     await page.locator('#search-results .search-result').first().waitFor({ state: 'visible' });
-    if (![...workerUrls].some((url) => url.includes('/campaign-search-worker.js?v=67'))) {
+    if (![...workerUrls].some((url) => url.includes('/campaign-search-worker.js?v=68'))) {
         throw new Error(`Campaign search did not start its dedicated worker: ${JSON.stringify([...workerUrls])}.`);
     }
 
@@ -735,7 +743,7 @@ try {
             throw new Error(`Offline feature data was not cached: ${requiredPath}`);
         }
     }
-    if (!cachedUrls.some((url) => url.endsWith('/campaign-search-worker.js?v=67'))) {
+    if (!cachedUrls.some((url) => url.endsWith('/campaign-search-worker.js?v=68'))) {
         throw new Error('Campaign search worker was not present in the offline shell cache.');
     }
     await page.evaluate(async () => {

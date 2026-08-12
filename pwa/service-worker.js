@@ -9,6 +9,7 @@ if (!VERSION_METADATA) {
 const CACHE_VERSION = `player-assistant-pwa-${VERSION_METADATA.pwaVersion}-v${VERSION_METADATA.cacheRevision}`;
 const SHELL_CACHE = `${CACHE_VERSION}-shell`;
 const DATA_CACHE = `${CACHE_VERSION}-data`;
+const NAVIGATION_TIMEOUT_MS = 8000;
 const CACHE_GENERATION_PATTERN = /^player-assistant-pwa-(\d+(?:\.\d+)*)-v(\d+)-(?:shell|data)$/;
 const SHELL_ASSETS = [
     './',
@@ -175,6 +176,30 @@ const cacheResponseIfValid = async (cache, request, response) => {
     }
 };
 
+const isValidNavigationResponse = async (response) => {
+    if (!(await isValidCachedResponse('./index.html', response))) return false;
+    try {
+        const body = (await response.clone().text()).toLowerCase();
+        return !/(?:captive portal|login portal|sign in to continue|network authentication)/u.test(body);
+    } catch {
+        return false;
+    }
+};
+
+const fetchWithValidation = async (request, { timeoutMs = 0, validationRequest = request, validator = isValidCachedResponse } = {}) => {
+    const controller = timeoutMs > 0 ? new AbortController() : null;
+    const timeout = controller ? setTimeout(() => controller.abort(), timeoutMs) : null;
+    try {
+        const response = await fetch(request, controller ? { signal: controller.signal } : undefined);
+        if (!(await validator(validationRequest, response))) {
+            throw new Error('Network response failed PWA validation.');
+        }
+        return response;
+    } finally {
+        if (timeout !== null) clearTimeout(timeout);
+    }
+};
+
 self.addEventListener('install', (event) => {
     event.waitUntil(
         cacheAssets(SHELL_CACHE, SHELL_ASSETS)
@@ -198,27 +223,29 @@ self.addEventListener('activate', (event) => {
 
 const cacheFirst = async (request, cacheName) => {
     let cache = null;
+    let cached = null;
     try {
         cache = await caches.open(cacheName);
-        const cached = await cache.match(request);
+        cached = await cache.match(request);
         if (await isValidCachedResponse(request, cached)) return cached;
         if (cached) await cache.delete(request);
+        cached = null;
     } catch {
         cache = null;
     }
-    const response = await fetch(request);
+    const response = await fetchWithValidation(request);
     if (cache) await cacheResponseIfValid(cache, request, response);
     return response;
 };
 
 const networkFirstData = async (request) => {
     const cache = await caches.open(DATA_CACHE);
+    const cached = await cache.match(request);
     try {
-        const response = await fetch(new Request(request, { cache: 'reload' }));
+        const response = await fetchWithValidation(new Request(request, { cache: 'reload' }));
         await cacheResponseIfValid(cache, request, response);
         return response;
     } catch {
-        const cached = await cache.match(request);
         if (await isValidCachedResponse(request, cached)) return cached;
         if (cached) await cache.delete(request);
         throw new Error('Network and cached PWA data are unavailable.');
@@ -227,11 +254,18 @@ const networkFirstData = async (request) => {
 
 const networkFirstNavigation = async (request) => {
     const cache = await caches.open(SHELL_CACHE);
+    const cachedIndex = await cache.match('./index.html');
     try {
-        const response = await fetch(request);
+        const response = await fetchWithValidation(request, {
+            timeoutMs: NAVIGATION_TIMEOUT_MS,
+            validationRequest: './index.html',
+            validator: async (_request, candidate) => isValidNavigationResponse(candidate)
+        });
         await cacheResponseIfValid(cache, './index.html', response);
         return response;
     } catch {
+        if (await isValidCachedResponse('./index.html', cachedIndex)) return cachedIndex;
+        if (cachedIndex) await cache.delete('./index.html');
         for (const fallbackRequest of ['./index.html', './offline.html']) {
             const cached = await cache.match(fallbackRequest);
             if (await isValidCachedResponse(fallbackRequest, cached)) return cached;
