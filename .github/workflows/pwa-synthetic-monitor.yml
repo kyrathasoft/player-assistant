@@ -3,6 +3,10 @@ name: Deploy DreamHost PWA monitor
 on:
   workflow_dispatch:
 
+concurrency:
+  group: production-dreamhost-pwa-monitor-deployment
+  cancel-in-progress: false
+
 permissions:
   contents: read
 
@@ -77,12 +81,9 @@ jobs:
 
             $installCommand = "chmod 600 '$remoteCredentialPath' '$privateDirectory/.install-pwa-monitor-$env:GITHUB_RUN_ID.php' && /usr/bin/php '$privateDirectory/.install-pwa-monitor-$env:GITHUB_RUN_ID.php' '$stageDirectory' '$privateDirectory' '$remoteCredentialPath' '*/15 * * * *'"
             & ssh @sshOptions $sshTarget $installCommand
-            if ($LASTEXITCODE -ne 0) { throw 'Private monitor installation failed.' }
+            if ($LASTEXITCODE -ne 0) { throw 'Private monitor installation or authenticated verification failed.' }
 
-            & ssh @sshOptions $sshTarget "/usr/bin/php '$privateDirectory/run-pwa-monitor.php'"
-            if ($LASTEXITCODE -ne 0) { throw 'The first authenticated DreamHost monitor run failed.' }
-
-            & ssh @sshOptions $sshTarget "test ! -e '$remoteCredentialPath' && test `$(stat -c %a '$privateDirectory/config.php') = 600 && test `$(stat -c %a '$privateDirectory/pwa-monitor-status.json') = 600 && crontab -l | grep -F '$privateDirectory/run-pwa-monitor.php'"
+            & ssh @sshOptions $sshTarget "test ! -e '$remoteCredentialPath' && test `$(stat -c %a '$privateDirectory/config.php') = 600 && test `$(stat -c %a '$privateDirectory/pwa-monitor-status.json') = 600 && test `$(crontab -l | grep -Fc '$privateDirectory/run-pwa-monitor.php') = 1"
             if ($LASTEXITCODE -ne 0) { throw 'Private monitor permissions or cron verification failed.' }
           }
           finally {

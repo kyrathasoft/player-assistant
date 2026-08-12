@@ -45,7 +45,8 @@ foreach ($files as $file) {
 }
 
 $configPath = $privateDirectory . '/config.php';
-$config = is_file($configPath) ? require $configPath : [];
+$configOriginallyExisted = is_file($configPath);
+$config = $configOriginallyExisted ? require $configPath : [];
 if (!is_array($config)) {
     throw new RuntimeException('The private broker configuration is invalid.');
 }
@@ -91,8 +92,10 @@ try {
         $installed[] = $file;
     }
 
-    if (is_file($configPath)) {
-        copy($configPath, $backupDirectory . '/config.php');
+    if ($configOriginallyExisted) {
+        if (!copy($configPath, $backupDirectory . '/config.php')) {
+            throw new RuntimeException('Unable to back up private broker configuration.');
+        }
         chmod($backupDirectory . '/config.php', 0600);
     }
     $newConfig = "<?php\nreturn " . var_export($config, true) . ";\n";
@@ -106,10 +109,30 @@ try {
     }
     chmod($configPath, 0600);
 
+    $monitorOutput = [];
+    $monitorExit = 0;
+    exec('/usr/bin/php ' . escapeshellarg($privateDirectory . '/run-pwa-monitor.php') . ' 2>&1', $monitorOutput, $monitorExit);
+    if ($monitorExit !== 0) {
+        throw new RuntimeException('The first authenticated private monitor run failed.');
+    }
+    $statusPath = $privateDirectory . '/pwa-monitor-status.json';
+    if (!is_file($statusPath)
+        || substr(sprintf('%o', fileperms($configPath)), -4) !== '0600'
+        || substr(sprintf('%o', fileperms($statusPath)), -4) !== '0600') {
+        throw new RuntimeException('Private monitor permissions verification failed.');
+    }
+
     $output = [];
     $listExit = 0;
-    exec('timeout 10 /usr/bin/crontab -l 2>/dev/null', $output, $listExit);
-    if ($listExit !== 0 && $listExit !== 1) {
+    $listCommand = 'timeout 10 /usr/bin/crontab -l 2>&1';
+    exec($listCommand, $output, $listExit);
+    if ($listExit === 1) {
+        $diagnostic = strtolower(implode("\n", $output));
+        if (!str_contains($diagnostic, 'no crontab for')) {
+            throw new RuntimeException('Unable to read the existing crontab.');
+        }
+        $output = [];
+    } elseif ($listExit !== 0) {
         throw new RuntimeException('Unable to read the existing crontab.');
     }
     file_put_contents($backupDirectory . '/crontab.txt', implode("\n", $output) . "\n", LOCK_EX);
@@ -137,9 +160,13 @@ try {
             @unlink($target);
         }
     }
-    if (is_file($backupDirectory . '/config.php')) {
-        copy($backupDirectory . '/config.php', $configPath);
+    if ($configOriginallyExisted && is_file($backupDirectory . '/config.php')) {
+        if (!copy($backupDirectory . '/config.php', $configPath)) {
+            throw new RuntimeException('Monitor deployment failed and private configuration rollback also failed.', 0, $error);
+        }
         chmod($configPath, 0600);
+    } elseif (!$configOriginallyExisted) {
+        @unlink($configPath);
     }
     throw $error;
 } finally {
