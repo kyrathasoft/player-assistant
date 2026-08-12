@@ -41,7 +41,8 @@ jobs:
           $keyPath = Join-Path $env:RUNNER_TEMP 'dreamhost-monitor.key'
           $credentialPath = Join-Path $env:RUNNER_TEMP 'pwa-monitor-credentials.json'
           $knownHostsPath = Join-Path $env:RUNNER_TEMP 'known_hosts'
-          [IO.File]::WriteAllText($keyPath, $env:DREAMHOST_SSH_PRIVATE_KEY, [Text.ASCIIEncoding]::new())
+          $normalizedPrivateKey = $env:DREAMHOST_SSH_PRIVATE_KEY.Replace("`r`n", "`n").Replace("\r\n", "`n").Replace("\n", "`n").Trim() + "`n"
+          [IO.File]::WriteAllText($keyPath, $normalizedPrivateKey, [Text.ASCIIEncoding]::new())
           chmod 600 $keyPath
           @{
             character_name = $env:PWA_MONITOR_CHARACTER_NAME
