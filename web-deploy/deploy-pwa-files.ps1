@@ -121,8 +121,8 @@ if ($action === 'install') {
 
     $uploaded = $false
     for ($attempt = 1; $attempt -le 3 -and -not $uploaded; $attempt++) {
-        & scp -q -i $SshKeyPath -o BatchMode=yes -o IdentitiesOnly=yes -o ConnectTimeout=15 `
-            -o ConnectionAttempts=1 -o ServerAliveInterval=5 -o ServerAliveCountMax=3 -- `
+        & scp.exe -q -i $SshKeyPath -o BatchMode=yes -o ConnectTimeout=15 `
+            -o ConnectionAttempts=1 -- `
             $localArchive "${DreamHostTarget}:$remoteArchive"
         $uploaded = $LASTEXITCODE -eq 0
         if (-not $uploaded) {
@@ -136,8 +136,8 @@ if ($action === 'install') {
     $command = "mkdir '$remoteStage' && tar -xf '$remoteArchive' -C '$remoteStage' && /usr/bin/php '$remoteStage/install.php' install"
     $installed = $false
     for ($attempt = 1; $attempt -le 3 -and -not $installed; $attempt++) {
-        & ssh -i $SshKeyPath -o BatchMode=yes -o IdentitiesOnly=yes -o ConnectTimeout=15 `
-            -o ConnectionAttempts=1 -o ServerAliveInterval=5 -o ServerAliveCountMax=3 `
+        & ssh.exe -i $SshKeyPath -o BatchMode=yes -o ConnectTimeout=15 `
+            -o ConnectionAttempts=1 `
             $DreamHostTarget $command
         $installed = $LASTEXITCODE -eq 0
         if (-not $installed) {
@@ -156,8 +156,8 @@ if ($action === 'install') {
         }
 
         $finalizeCommand = "/usr/bin/php '$remoteStage/install.php' finalize"
-        & ssh -i $SshKeyPath -o BatchMode=yes -o IdentitiesOnly=yes -o ConnectTimeout=15 `
-            -o ConnectionAttempts=1 -o ServerAliveInterval=5 -o ServerAliveCountMax=3 `
+        & ssh.exe -i $SshKeyPath -o BatchMode=yes -o ConnectTimeout=15 `
+            -o ConnectionAttempts=1 `
             $DreamHostTarget $finalizeCommand
         if ($LASTEXITCODE -ne 0) {
             throw 'Unable to finalize the verified PWA release.'
@@ -167,16 +167,16 @@ if ($action === 'install') {
     catch {
         if (-not $finalized) {
             $rollbackCommand = "/usr/bin/php '$remoteStage/install.php' rollback; rm -rf -- '$remoteStage' '$remoteArchive'"
-            & ssh -i $SshKeyPath -o BatchMode=yes -o IdentitiesOnly=yes -o ConnectTimeout=15 `
-                -o ConnectionAttempts=1 -o ServerAliveInterval=5 -o ServerAliveCountMax=3 `
+            & ssh.exe -i $SshKeyPath -o BatchMode=yes -o ConnectTimeout=15 `
+                -o ConnectionAttempts=1 `
                 $DreamHostTarget $rollbackCommand
         }
         throw
     }
 
     $cleanupCommand = "rm -rf -- '$remoteStage' '$remoteArchive'"
-    & ssh -i $SshKeyPath -o BatchMode=yes -o IdentitiesOnly=yes -o ConnectTimeout=15 `
-        -o ConnectionAttempts=1 -o ServerAliveInterval=5 -o ServerAliveCountMax=3 `
+    & ssh.exe -i $SshKeyPath -o BatchMode=yes -o ConnectTimeout=15 `
+        -o ConnectionAttempts=1 `
         $DreamHostTarget $cleanupCommand
     if ($LASTEXITCODE -ne 0) {
         throw 'Unable to clean up the finalized PWA release staging files.'
