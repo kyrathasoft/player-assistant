@@ -1,25 +1,91 @@
-name: PWA synthetic monitor
+name: Deploy DreamHost PWA monitor
 
 on:
-  schedule:
-    - cron: '17 6 * * *'
   workflow_dispatch:
 
 permissions:
   contents: read
 
 jobs:
-  monitor:
-    name: Production PWA synthetic monitor
+  deploy-and-verify:
+    name: Deploy and verify private PWA monitor
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
-      - name: Run authenticated PWA monitor
+      - name: Run monitor source tests
+        run: |
+          php web-deploy/tests/dreamhost-pwa-monitor-tests.php
+          php web-deploy/tests/broker-auth-routing-tests.php
+
+      - name: Deploy private monitor and install cron
         shell: pwsh
         env:
+          DREAMHOST_SSH_PRIVATE_KEY: ${{ secrets.DREAMHOST_SSH_PRIVATE_KEY }}
           PWA_MONITOR_CHARACTER_NAME: ${{ secrets.PWA_MONITOR_CHARACTER_NAME }}
           PWA_MONITOR_PASSWORD: ${{ secrets.PWA_MONITOR_PASSWORD }}
-        run: .\web-deploy\monitor-pwa.ps1 -RequireProtectedApi
+        run: |
+          $ErrorActionPreference = 'Stop'
+          foreach ($name in @('DREAMHOST_SSH_PRIVATE_KEY', 'PWA_MONITOR_CHARACTER_NAME', 'PWA_MONITOR_PASSWORD')) {
+            if ([string]::IsNullOrWhiteSpace([Environment]::GetEnvironmentVariable($name))) {
+              throw "The $name repository secret is required."
+            }
+          }
+
+          $sshTarget = 'dh_4gg2za@pdx1-shared-a1-13.dreamhost.com'
+          $privateDirectory = '/home/dh_4gg2za/player-assistant-broker'
+          $stageDirectory = "$privateDirectory/.pwa-monitor-stage-$env:GITHUB_RUN_ID"
+          $remoteCredentialPath = "$privateDirectory/.pwa-monitor-credentials-$env:GITHUB_RUN_ID.json"
+          $keyPath = Join-Path $env:RUNNER_TEMP 'dreamhost-monitor.key'
+          $credentialPath = Join-Path $env:RUNNER_TEMP 'pwa-monitor-credentials.json'
+          $knownHostsPath = Join-Path $env:RUNNER_TEMP 'known_hosts'
+          [IO.File]::WriteAllText($keyPath, $env:DREAMHOST_SSH_PRIVATE_KEY, [Text.ASCIIEncoding]::new())
+          chmod 600 $keyPath
+          @{
+            character_name = $env:PWA_MONITOR_CHARACTER_NAME
+            password = $env:PWA_MONITOR_PASSWORD
+          } | ConvertTo-Json -Compress | Set-Content -LiteralPath $credentialPath -NoNewline
+          chmod 600 $credentialPath
+
+          try {
+            ssh-keyscan -t ed25519 pdx1-shared-a1-13.dreamhost.com 2>$null | Set-Content -LiteralPath $knownHostsPath
+            if (!(Test-Path -LiteralPath $knownHostsPath) -or (Get-Item -LiteralPath $knownHostsPath).Length -eq 0) {
+              throw 'Unable to obtain the DreamHost SSH host key.'
+            }
+            $hostFingerprint = (& ssh-keygen -lf $knownHostsPath -E sha256).Split()[1]
+            if ($hostFingerprint -ne 'SHA256:/daqVGD4lg3vdZqYJSBQqsgKaqzD5AhApbcsK57fQJ4') {
+              throw "DreamHost SSH host-key fingerprint mismatch: $hostFingerprint"
+            }
+            $sshOptions = @('-i', $keyPath, '-o', 'BatchMode=yes', '-o', 'IdentitiesOnly=yes', '-o', 'ConnectTimeout=15', '-o', "UserKnownHostsFile=$knownHostsPath", '-o', 'StrictHostKeyChecking=yes')
+            & ssh @sshOptions $sshTarget "mkdir -m 700 -p '$stageDirectory'"
+            if ($LASTEXITCODE -ne 0) { throw 'Unable to prepare the private monitor stage.' }
+
+            $files = @(
+              'web-deploy/player-assistant-broker/PwaSyntheticMonitor.php',
+              'web-deploy/player-assistant-broker/run-pwa-monitor.php',
+              'web-deploy/player-assistant-broker/BrokerService.php'
+            )
+            & scp @sshOptions @files "${sshTarget}:$stageDirectory/"
+            if ($LASTEXITCODE -ne 0) { throw 'Unable to upload the private monitor runtime.' }
+            & scp @sshOptions 'web-deploy/install-pwa-monitor.php' "${sshTarget}:$privateDirectory/.install-pwa-monitor-$env:GITHUB_RUN_ID.php"
+            if ($LASTEXITCODE -ne 0) { throw 'Unable to upload the private monitor installer.' }
+            & scp @sshOptions $credentialPath "${sshTarget}:$remoteCredentialPath"
+            if ($LASTEXITCODE -ne 0) { throw 'Unable to upload the private monitor credentials.' }
+
+            $installCommand = "chmod 600 '$remoteCredentialPath' '$privateDirectory/.install-pwa-monitor-$env:GITHUB_RUN_ID.php' && /usr/bin/php '$privateDirectory/.install-pwa-monitor-$env:GITHUB_RUN_ID.php' '$stageDirectory' '$privateDirectory' '$remoteCredentialPath' '*/15 * * * *'"
+            & ssh @sshOptions $sshTarget $installCommand
+            if ($LASTEXITCODE -ne 0) { throw 'Private monitor installation failed.' }
+
+            & ssh @sshOptions $sshTarget "/usr/bin/php '$privateDirectory/run-pwa-monitor.php'"
+            if ($LASTEXITCODE -ne 0) { throw 'The first authenticated DreamHost monitor run failed.' }
+
+            & ssh @sshOptions $sshTarget "test ! -e '$remoteCredentialPath' && test `$(stat -c %a '$privateDirectory/config.php') = 600 && test `$(stat -c %a '$privateDirectory/pwa-monitor-status.json') = 600 && crontab -l | grep -F '$privateDirectory/run-pwa-monitor.php'"
+            if ($LASTEXITCODE -ne 0) { throw 'Private monitor permissions or cron verification failed.' }
+          }
+          finally {
+            & ssh @sshOptions $sshTarget "rm -rf -- '$stageDirectory' '$remoteCredentialPath' '$privateDirectory/.install-pwa-monitor-$env:GITHUB_RUN_ID.php'" 2>$null
+            Remove-Item -LiteralPath $credentialPath, $keyPath, $knownHostsPath -Force -ErrorAction SilentlyContinue
+            if (Test-Path -LiteralPath $keyPath) { throw 'Temporary SSH key cleanup failed.' }
+          }

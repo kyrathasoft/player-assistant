@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/DatabaseMigrationService.php';
 require_once __DIR__ . '/BrokerAlertService.php';
+require_once __DIR__ . '/PwaSyntheticMonitor.php';
 
 final class BrokerService
 {
@@ -105,6 +106,8 @@ final class BrokerService
                 'word_count_snapshot_available' => $this->wordCounts->hasSnapshot(),
                 'word_count_refresh' => $wordCountRefresh,
                 'operations' => $this->operations->healthStatus(),
+                'pwa_monitor' => (new PwaSyntheticMonitor(
+                    is_array($this->config['pwa_monitor'] ?? null) ? $this->config['pwa_monitor'] : []))->healthStatus(),
                 'quest_request_workflow_configured' => true,
             ]);
         }
