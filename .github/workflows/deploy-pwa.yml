@@ -34,9 +34,7 @@ jobs:
               'data/ghukliak.json', 'data/heroes.json', 'level-progression.json',
               'magic-items.json', 'party-funds.json', 'quests.json', 'campaign-search.json'
             )
-            $args = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', '.\web-deploy\deploy-pwa-files.ps1', '-SshKeyPath', $keyPath)
-            foreach ($file in $files) { $args += @('-Files', $file) }
-            & pwsh @args
+            & .\web-deploy\deploy-pwa-files.ps1 -SshKeyPath $keyPath -Files $files
             if ($LASTEXITCODE -ne 0) { throw 'The PWA deployment or production verification failed.' }
           }
           finally {
