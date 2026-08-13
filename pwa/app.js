@@ -1,6 +1,6 @@
-import { initializeTranslator } from './modules/translator.js?v=78';
-import { initializeCampaignSearch } from './modules/search.js?v=78';
-import { initializeDice } from './modules/dice.js?v=78';
+import { initializeTranslator } from './modules/translator.js?v=79';
+import { initializeCampaignSearch } from './modules/search.js?v=79';
+import { initializeDice } from './modules/dice.js?v=79';
 
 (() => {
     'use strict';

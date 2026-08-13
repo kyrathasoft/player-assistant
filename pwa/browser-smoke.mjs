@@ -129,6 +129,32 @@ const playerHirelingXp = Object.freeze({
     xp_to_next_level: 3000
 });
 
+const secondPlayerHirelingProgression = Object.freeze({
+    character_key: 'corba-xp',
+    is_account_character: false,
+    entries: [{
+        character_name: 'Corba',
+        character_class: 'Ranger',
+        level_before_award: 1,
+        xp_award: 554,
+        xp_award_date: '8.01.2026',
+        level_after_award: 1
+    }]
+});
+
+const secondPlayerHirelingXp = Object.freeze({
+    character_name: 'Corba',
+    character_class: 'Ranger',
+    level_before_award: 1,
+    xp_award: 0,
+    xp_award_date: '8.07.2026',
+    level_after_award: 1,
+    level: 1,
+    hit_points: 8,
+    xp_total: 554,
+    xp_to_next_level: 1696
+});
+
 const questPayload = (currentAccount) => ({
     schema_version: 2,
     status_values: [
@@ -267,7 +293,9 @@ const serveApi = async (request, response, pathname) => {
                     { character_key: currentAccount.character_key, character: xpCharacter(currentAccount) },
                     ...(currentAccount === playerAccount
                         ? [{ character_key: 'ci-hireling', character: playerHirelingXp }]
-                        : [])
+                        : currentAccount === secondPlayerAccount
+                            ? [{ character_key: 'corba-xp', character: secondPlayerHirelingXp }]
+                            : [])
                 ]
             });
         return;
@@ -282,7 +310,8 @@ const serveApi = async (request, response, pathname) => {
             scope: currentAccount.role === 'dm' ? 'party' : 'character',
             progressions: [
                 ...accounts.map(xpProgression),
-                ...(currentAccount === playerAccount ? [playerHirelingProgression] : [])
+                ...(currentAccount === playerAccount ? [playerHirelingProgression] : []),
+                ...(currentAccount === secondPlayerAccount ? [secondPlayerHirelingProgression] : [])
             ]
         });
         return;
@@ -681,6 +710,7 @@ try {
     await page.locator('#xp-awards-list').waitFor({ state: 'visible' });
     const secondPlayerAwardText = await page.locator('#xp-awards-list').textContent();
     if (!secondPlayerAwardText.includes('Maximilian - Progress: 28.6% of the way toward Fighter Level 2')
+        || !secondPlayerAwardText.includes('Corba - Progress: 24.6% of the way toward Ranger Level 2')
         || secondPlayerAwardText.includes('Max Progress toward')
         || secondPlayerAwardText.includes('CI Hero')) {
         throw new Error('Account switching or cross-account XP filtering failed.');
@@ -791,7 +821,7 @@ try {
     await page.waitForFunction(() => document.querySelector('#search-guidance')?.textContent?.includes('pack ready offline'));
     await page.locator('#campaign-search').fill('Kirkilston');
     await page.locator('#search-results .search-result').first().waitFor({ state: 'visible' });
-    if (![...workerUrls].some((url) => url.includes('/campaign-search-worker.js?v=78'))) {
+    if (![...workerUrls].some((url) => url.includes('/campaign-search-worker.js?v=79'))) {
         throw new Error(`Campaign search did not start its dedicated worker: ${JSON.stringify([...workerUrls])}.`);
     }
 
@@ -822,7 +852,7 @@ try {
             throw new Error(`Offline feature data was not cached: ${requiredPath}`);
         }
     }
-    if (!cachedUrls.some((url) => url.endsWith('/campaign-search-worker.js?v=78'))) {
+    if (!cachedUrls.some((url) => url.endsWith('/campaign-search-worker.js?v=79'))) {
         throw new Error('Campaign search worker was not present in the offline shell cache.');
     }
     await page.evaluate(async () => {
