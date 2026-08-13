@@ -1530,6 +1530,40 @@ final class XpTrackingService
             return $this->validateClassProgression($progression);
         }
 
+        $xpColumn = null;
+        $levelColumn = null;
+        foreach ($lines as $line) {
+            $cells = $this->splitTableRow((string)$line);
+            if ($cells === []) {
+                continue;
+            }
+            $normalizedCells = array_map(
+                fn(string $cell): string => $this->normalizeClassName($cell),
+                $cells);
+            if ($levelColumn === null || $xpColumn === null) {
+                $levelIndex = array_search('level', $normalizedCells, true);
+                $xpIndex = array_search('xp', $normalizedCells, true);
+                if ($levelIndex !== false && $xpIndex !== false && $levelIndex !== $xpIndex) {
+                    $levelColumn = $levelIndex;
+                    $xpColumn = $xpIndex;
+                }
+                continue;
+            }
+            if (!array_key_exists($levelColumn, $cells)
+                || !array_key_exists($xpColumn, $cells)
+                || preg_match('/^\d{1,3}$/', trim($cells[$levelColumn])) !== 1
+                || preg_match('/^\d[\d,]*$/', trim($cells[$xpColumn])) !== 1) {
+                continue;
+            }
+            $this->addClassProgressionEntry(
+                $progression,
+                trim($cells[$levelColumn]),
+                trim($cells[$xpColumn]));
+        }
+        if ($progression !== []) {
+            return $this->validateClassProgression($progression);
+        }
+
         $inProgression = false;
         foreach ($lines as $line) {
             $normalizedLine = trim(str_replace("\u{00A0}", ' ', (string)$line));

@@ -191,10 +191,11 @@ try {
         '| 6 | 32,000 |',
     ]);
     $feycasterProgressionMarkdown = implode("\n", [
-        '| 1 | 0 |',
-        '| --- | --- |',
-        '| 2 | 1,500 |',
-        '| 3 | 3,000 |',
+        '|XP|Level|Spells Known|Max Spell Level|',
+        '|---:|---:|---:|---:|',
+        '|0|1|0|0|',
+        '|1,500|2|1|1|',
+        '|3,000|3|2|1|',
     ]);
     $illusionistProgressionMarkdown = implode("\n", [
         '| 1 | 0 |',
