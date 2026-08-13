@@ -405,7 +405,7 @@ Assert-Condition -Condition ($apacheConfig.Contains('img-src ''self'' data: http
 Assert-Condition -Condition ($apacheConfig.Contains('connect-src ''self'' https://publish-01.obsidian.md')) -Message 'The content security policy must allow the preferred magic-item wiki source.'
 Assert-Condition -Condition ($apacheConfig.Contains("object-src 'none'") -and $apacheConfig.Contains("frame-src 'none'") -and $apacheConfig.Contains('upgrade-insecure-requests')) -Message 'The content security policy must deny plugin/frame execution and upgrade insecure requests.'
 Assert-Condition -Condition ($apacheConfig.Contains('Strict-Transport-Security "max-age=31536000"')) -Message 'HSTS must be enabled for the PWA host.'
-Assert-Condition -Condition ($apacheConfig.Contains('magic-items\.json|party-funds\.json|quests\.json')) -Message 'Apache must require revalidation for public quest, party funds, and magic-item data.'
+Assert-Condition -Condition ($apacheConfig.Contains('magic-items\.json|data/party-funds\.json|quests\.json')) -Message 'Apache must require revalidation for public quest, party funds, and magic-item data.'
 Assert-Condition -Condition ($apacheConfig.Contains('campaign-search\.json')) -Message 'Apache must require revalidation for the scheduled campaign-search word-count data.'
 Assert-Condition -Condition ($apacheConfig.Contains('data/heroes\.json|data/hero-tokens/[^/]+')) -Message 'Apache must require revalidation for hero-token metadata and images.'
 Assert-Condition -Condition ($html.Contains('id="update-banner"') -and $html.Contains('id="update-apply"') -and $appScript.Contains('SKIP_WAITING') -and $serviceWorker.Contains("event.data?.type === 'SKIP_WAITING'")) -Message 'The PWA must expose an explicit service-worker update prompt.'

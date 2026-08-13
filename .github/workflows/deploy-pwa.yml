@@ -32,7 +32,7 @@ jobs:
               'manifest.webmanifest', 'icons/icon-192.png', 'icons/icon-512.png',
               'icons/dragon-mark.png', 'data/orcish.json', 'data/elvish.json',
               'data/ghukliak.json', 'data/heroes.json', 'level-progression.json',
-              'magic-items.json', 'party-funds.json', 'quests.json', 'campaign-search.json'
+              'magic-items.json', 'data/party-funds.json', 'quests.json', 'campaign-search.json'
             )
             & .\web-deploy\deploy-pwa-files.ps1 `
               -DreamHostTarget 'dh_4gg2za@pdx1-shared-a1-13.dreamhost.com' `
