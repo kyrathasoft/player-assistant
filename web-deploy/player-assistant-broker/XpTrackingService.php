@@ -10,6 +10,9 @@ final class XpTrackingService
     private const CHARACTER_KEY_ALIASES = [
         'max' => 'maximilian',
     ];
+    private const CHARACTER_DISPLAY_NAME_ALIASES = [
+        'maximilian' => 'Maximilian',
+    ];
 
     private array $xpConfig;
     private $markdownFetcher;
@@ -88,9 +91,12 @@ final class XpTrackingService
                 'No unambiguous XP total is authorized for this account.');
         }
 
+        $character = $matches[0];
+        $character['character_name'] = $this->canonicalCharacterDisplayName(
+            (string)$character['character_name']);
         return $baseResponse + [
             'scope' => 'character',
-            'character' => $matches[0],
+            'character' => $character,
         ];
     }
 
@@ -1649,6 +1655,12 @@ final class XpTrackingService
             }
         }
         return trim($cleaned);
+    }
+
+    private function canonicalCharacterDisplayName(string $name): string
+    {
+        $characterKey = $this->characterKeyForName($name);
+        return self::CHARACTER_DISPLAY_NAME_ALIASES[$characterKey] ?? $name;
     }
 
     private function characterKeyForName(string $name): string

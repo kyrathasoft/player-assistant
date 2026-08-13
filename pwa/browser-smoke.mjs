@@ -15,8 +15,8 @@ const playerAccount = Object.freeze({
 });
 const secondPlayerAccount = Object.freeze({
     id: 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
-    character_name: 'CI Second Hero',
-    character_key: 'ci-second-hero',
+    character_name: 'Max',
+    character_key: 'maximilian',
     role: 'player'
 });
 const dungeonMasterAccount = Object.freeze({
@@ -69,7 +69,7 @@ const requireSession = (request, response) => {
 };
 
 const xpCharacter = (currentAccount) => ({
-    character_name: currentAccount.character_name,
+    character_name: currentAccount === secondPlayerAccount ? 'Maximilian' : currentAccount.character_name,
     character_class: 'Fighter',
     level_before_award: 1,
     xp_award: 0,
@@ -158,7 +158,7 @@ const serveApi = async (request, response, pathname) => {
     if (route === '/login' && request.method === 'POST') {
         const credentials = await readJsonBody(request);
         const isPlayer = credentials.character_name === 'CI Hero' && credentials.password === 'ci-password';
-        const isSecondPlayer = credentials.character_name === 'CI Second Hero'
+        const isSecondPlayer = credentials.character_name === 'Max'
             && credentials.password === 'ci-second-password';
         const isDungeonMaster = credentials.character_name === 'CI Dungeon Master'
             && credentials.password === 'ci-dm-password';
@@ -574,8 +574,8 @@ try {
         };
     });
     if (!playerProgressPresentation.insideName
-        || playerProgressPresentation.text !== ' - 40.0% of the way toward Fighter Level 2'
-        || await page.locator('#xp-awards-list .xp-award-character h2').first().textContent() !== 'CI Hero - 40.0% of the way toward Fighter Level 2'
+        || playerProgressPresentation.text !== ' - Progress toward next class level is 40.0% of the way toward Fighter Level 2'
+        || await page.locator('#xp-awards-list .xp-award-character h2').first().textContent() !== 'CI Hero - Progress toward next class level is 40.0% of the way toward Fighter Level 2'
         || playerProgressPresentation.font !== playerProgressPresentation.headingFont
         || !playerProgressPresentation.sameLine
         || await page.locator('#xp-awards-list > .xp-award-progress-section').count() !== 0) {
@@ -633,17 +633,19 @@ try {
     }
 
     await page.locator('#auth-button').click();
-    await page.locator('#auth-character-name').fill('CI Second Hero');
+    await page.locator('#auth-character-name').fill('Max');
     await page.locator('#auth-password').fill('ci-second-password');
     await page.locator('#auth-submit').click();
-    await page.locator('#auth-button-label').getByText('CI Second Hero', { exact: true }).waitFor();
+    await page.locator('#auth-button-label').getByText('Max', { exact: true }).waitFor();
     await page.locator('#auth-dialog-close').click();
     await page.locator('#auth-dialog').waitFor({ state: 'hidden' });
     await page.waitForFunction(() => document.querySelector('#xp-total')?.textContent?.startsWith('1,200'));
     await page.locator('[data-view="xp-awards"]').click();
     await page.locator('#xp-awards-list').waitFor({ state: 'visible' });
     const secondPlayerAwardText = await page.locator('#xp-awards-list').textContent();
-    if (!secondPlayerAwardText.includes('CI Second Hero') || secondPlayerAwardText.includes('CI Hero')) {
+    if (!secondPlayerAwardText.includes('Maximilian - Progress toward next class level is 28.6% of the way toward Fighter Level 2')
+        || secondPlayerAwardText.includes('Max Progress toward')
+        || secondPlayerAwardText.includes('CI Hero')) {
         throw new Error('Account switching or cross-account XP filtering failed.');
     }
     const secondPlayerMessages = await page.evaluate(async () => {
@@ -697,7 +699,7 @@ try {
     const dungeonMasterProgressItems = await page.locator('#xp-awards-list .xp-award-progress-list li').allTextContents();
     if (dungeonMasterProgressItems.length !== 2
         || dungeonMasterProgressItems[0] !== 'CI Hero is 67.3% of the way toward Fighter Level 5'
-        || !dungeonMasterProgressItems[1].startsWith('CI Second Hero is ')
+        || !dungeonMasterProgressItems[1].startsWith('Maximilian is ')
         || await page.locator('#xp-awards-list .xp-award-character .xp-award-progress-summary').count() !== 0) {
         throw new Error(`Dungeon Master XP Awards progress list was incorrect: ${JSON.stringify(dungeonMasterProgressItems)}`);
     }
@@ -752,7 +754,7 @@ try {
     await page.waitForFunction(() => document.querySelector('#search-guidance')?.textContent?.includes('pack ready offline'));
     await page.locator('#campaign-search').fill('Kirkilston');
     await page.locator('#search-results .search-result').first().waitFor({ state: 'visible' });
-    if (![...workerUrls].some((url) => url.includes('/campaign-search-worker.js?v=74'))) {
+    if (![...workerUrls].some((url) => url.includes('/campaign-search-worker.js?v=75'))) {
         throw new Error(`Campaign search did not start its dedicated worker: ${JSON.stringify([...workerUrls])}.`);
     }
 
@@ -783,7 +785,7 @@ try {
             throw new Error(`Offline feature data was not cached: ${requiredPath}`);
         }
     }
-    if (!cachedUrls.some((url) => url.endsWith('/campaign-search-worker.js?v=74'))) {
+    if (!cachedUrls.some((url) => url.endsWith('/campaign-search-worker.js?v=75'))) {
         throw new Error('Campaign search worker was not present in the offline shell cache.');
     }
     await page.evaluate(async () => {

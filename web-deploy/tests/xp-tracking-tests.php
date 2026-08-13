@@ -733,7 +733,7 @@ try {
         'character_key' => 'maximilian',
     ]);
     xpAssert($maximilian['scope'] === 'character', 'Maximilian did not receive character-scoped XP.');
-    xpAssert($maximilian['character']['character_name'] === 'Max', 'Maximilian did not receive the Max XP row.');
+    xpAssert($maximilian['character']['character_name'] === 'Maximilian', 'Maximilian did not receive the canonical XP display name.');
     xpAssert($maximilian['character']['character_class'] === 'Theurge', 'Maximilian received the wrong class.');
     xpAssert($maximilian['character']['level'] === 3, 'Maximilian received the stale listing level.');
     xpAssert($maximilian['character']['hit_points'] === 5, 'Maximilian received the wrong hit-point total.');

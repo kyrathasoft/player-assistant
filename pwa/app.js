@@ -1,6 +1,6 @@
-import { initializeTranslator } from './modules/translator.js?v=74';
-import { initializeCampaignSearch } from './modules/search.js?v=74';
-import { initializeDice } from './modules/dice.js?v=74';
+import { initializeTranslator } from './modules/translator.js?v=75';
+import { initializeCampaignSearch } from './modules/search.js?v=75';
+import { initializeDice } from './modules/dice.js?v=75';
 
 (() => {
     'use strict';
@@ -463,21 +463,24 @@ import { initializeDice } from './modules/dice.js?v=74';
         const fragment = document.createDocumentFragment();
         authenticatedXpAwardsSnapshot.forEach(({ entries }) => {
             const character = entries[0];
+            const headingName = authenticatedXpSnapshot?.scope === 'character'
+                ? authenticatedXpSnapshot.character.character_name
+                : character.character_name;
             const card = document.createElement('article');
             card.className = 'xp-award-character';
             const heading = document.createElement('div');
             heading.className = 'xp-award-character-heading';
             const name = document.createElement('h2');
-            name.textContent = character.character_name;
+            name.textContent = headingName;
             const characterClass = document.createElement('span');
             characterClass.textContent = character.character_class;
             if (authenticatedXpSnapshot?.scope === 'character'
-                && authenticatedXpSnapshot.character.character_name === character.character_name) {
+                && authenticatedXpAwardsSnapshot.length === 1) {
                 const progressAmount = formatXpProgressAmount(authenticatedXpSnapshot.character);
                 if (progressAmount !== '') {
                     const progress = document.createElement('span');
                     progress.className = 'xp-award-progress-summary';
-                    progress.textContent = ` - ${progressAmount}`;
+                    progress.textContent = ` - Progress toward next class level is ${progressAmount}`;
                     name.append(progress);
                 }
             }
