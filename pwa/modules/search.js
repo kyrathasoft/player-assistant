@@ -60,7 +60,7 @@ export const initializeCampaignSearch = ({ byId }) => {
     const removePackButton = byId('campaign-search-remove-pack');
     const retryPackButton = byId('campaign-search-retry-pack');
     const worker = typeof Worker !== 'undefined'
-        ? new Worker('campaign-search-worker.js?v=76')
+        ? new Worker('campaign-search-worker.js?v=77')
         : null;
     let searchRequestId = 0;
     let searchDebounce = 0;

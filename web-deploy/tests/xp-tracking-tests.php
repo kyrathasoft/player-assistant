@@ -333,6 +333,9 @@ try {
         'character_key' => 'dynamic-hero',
     ]);
     $dynamicEntries = $dynamicAwards['progressions'][0]['entries'];
+    xpAssert(
+        ($dynamicAwards['progressions'][0]['is_account_character'] ?? false) === true,
+        'The player XP Awards response did not identify its primary account-character progression.');
     xpAssert(count($dynamicEntries) === 2, 'The live XP source did not extend the cached progression.');
     xpAssert(
         $dynamicEntries[1]['xp_award_date'] === '8.04.2026'

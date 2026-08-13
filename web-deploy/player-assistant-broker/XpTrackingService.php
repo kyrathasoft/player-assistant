@@ -165,6 +165,13 @@ final class XpTrackingService
             $progressions = $this->loadAwardProgressionsWithLock($progressionKeys);
         }
 
+        if ($scope === 'character') {
+            foreach ($progressions as $index => &$progression) {
+                $progression['is_account_character'] = $index === 0;
+            }
+            unset($progression);
+        }
+
         return [
             'schema_version' => 1,
             'scope' => $scope,

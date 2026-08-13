@@ -1,6 +1,6 @@
-import { initializeTranslator } from './modules/translator.js?v=76';
-import { initializeCampaignSearch } from './modules/search.js?v=76';
-import { initializeDice } from './modules/dice.js?v=76';
+import { initializeTranslator } from './modules/translator.js?v=77';
+import { initializeCampaignSearch } from './modules/search.js?v=77';
+import { initializeDice } from './modules/dice.js?v=77';
 
 (() => {
     'use strict';
@@ -461,9 +461,9 @@ import { initializeDice } from './modules/dice.js?v=76';
         }
         status.textContent = '';
         const fragment = document.createDocumentFragment();
-        authenticatedXpAwardsSnapshot.forEach(({ entries }) => {
+        authenticatedXpAwardsSnapshot.forEach(({ entries, isAccountCharacter }) => {
             const character = entries[0];
-            const headingName = authenticatedXpSnapshot?.scope === 'character'
+            const headingName = authenticatedXpSnapshot?.scope === 'character' && isAccountCharacter
                 ? authenticatedXpSnapshot.character.character_name
                 : character.character_name;
             const card = document.createElement('article');
@@ -475,7 +475,7 @@ import { initializeDice } from './modules/dice.js?v=76';
             const characterClass = document.createElement('span');
             characterClass.textContent = character.character_class;
             if (authenticatedXpSnapshot?.scope === 'character'
-                && authenticatedXpAwardsSnapshot.length === 1) {
+                && isAccountCharacter) {
                 const progressAmount = formatXpProgressAmount(authenticatedXpSnapshot.character);
                 if (progressAmount !== '') {
                     const progress = document.createElement('span');
@@ -578,13 +578,20 @@ import { initializeDice } from './modules/dice.js?v=76';
         return payload.progressions.map((progression) => {
             if (!progression
                 || typeof progression.character_key !== 'string'
-                || !/^[a-z0-9]+(?:-[a-z0-9]+)*$/u.test(progression.character_key)) {
+                || !/^[a-z0-9]+(?:-[a-z0-9]+)*$/u.test(progression.character_key)
+                || (payload.scope === 'character' && typeof progression.is_account_character !== 'boolean')) {
                 throw new Error('The XP Awards response was invalid.');
             }
             return {
                 characterKey: progression.character_key,
+                isAccountCharacter: progression.is_account_character === true,
                 entries: validateXpAwardsEntries(progression.entries)
             };
+        }).filter((progression, index, progressions) => {
+            if (payload.scope !== 'character') return true;
+            const primaryCount = progressions.filter((entry) => entry.isAccountCharacter).length;
+            if (primaryCount !== 1) throw new Error('The XP Awards response was invalid.');
+            return true;
         });
     };
 
