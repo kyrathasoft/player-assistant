@@ -1370,7 +1370,7 @@ import { initializeDice } from './modules/dice.js?v=79';
     };
 
     const fetchPartyFunds = async () => {
-        const response = await fetch('party-funds.json', { cache: 'no-cache' });
+        const response = await fetch('data/party-funds.json', { cache: 'no-cache' });
         if (!response.ok) {
             throw new Error('The bundled party-funds file is unavailable.');
         }

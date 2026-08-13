@@ -36,7 +36,7 @@ $requiredFiles = @(
     'data\heroes.json',
     'level-progression.json',
     'magic-items.json',
-    'party-funds.json',
+    'data\party-funds.json',
     'quests.json',
     'campaign-search.json',
     'optional-packs.json',
@@ -166,7 +166,7 @@ foreach ($magicItem in @($magicItems.items)) {
 }
 Assert-Condition -Condition (@($magicItems.items | Where-Object { $_.name -eq "Armstrong's Chamois" -and $_.'viewable-by' -eq 'all' }).Count -eq 1) -Message "Armstrong's Chamois must be viewable by all."
 
-$partyFunds = Get-Content -Raw -LiteralPath (Join-Path $PwaRoot 'party-funds.json') | ConvertFrom-Json
+$partyFunds = Get-Content -Raw -LiteralPath (Join-Path $PwaRoot 'data\party-funds.json') | ConvertFrom-Json
 $partyFundsGemstoneValuePattern = '^\s*(\d+(?:\.\d+)?)\s+gp$'
 $partyFundsExpectedFields = @('coins', 'fiction-date', 'gemstones', 'meta-date', 'schema_version', 'text')
 $partyFundsNormalizedText = ([string]$partyFunds.text).Replace("`r`n", "`n").Replace("`r", "`n")
@@ -395,7 +395,7 @@ Assert-Condition -Condition (!$translatorWorker.Contains(".replaceAll('’', `"'
 Assert-Condition -Condition ($requestTranslationFunction.IndexOf('const id = ++translatorRequestId;', [System.StringComparison]::Ordinal) -ge 0 -and $requestTranslationFunction.IndexOf('const id = ++translatorRequestId;', [System.StringComparison]::Ordinal) -lt $requestTranslationFunction.IndexOf('if (source.trim().length === 0)', [System.StringComparison]::Ordinal) -and !$appScript.Contains('if (message.loading)')) -Message 'Every translator input state must invalidate prior worker responses before early-return validation.'
 Assert-Condition -Condition (!$serviceWorker.Contains("url.pathname.includes('/XP/')")) -Message 'The service worker must never fetch or cache legacy public XP data.'
 Assert-Condition -Condition ($html.Contains('class="magic-items-dashboard message-player-form"') -and $styles.Contains('.message-player-form > #message-player-recipient') -and $styles.Contains('margin-block: 5px;') -and $styles.Contains('.message-player-form > #message-player-text') -and $styles.Contains('margin-top: 5px;') -and $styles.Contains('.message-player-form > .magic-items-source-row') -and $styles.Contains('margin-top: 10px;')) -Message 'The Message a Player form must preserve the requested spacing between its labels, fields, and submit row.'
-Assert-Condition -Condition ($serviceWorker.Contains("'./party-funds.json'")) -Message 'The PWA shell must preload party-funds data.'
+Assert-Condition -Condition ($serviceWorker.Contains("url.pathname.endsWith('/data/party-funds.json')") -and $serviceWorker.Contains('event.respondWith(networkFirstData(request))')) -Message 'Party-funds data must use the installed data-cache fallback.'
 $apacheConfig = Get-Content -Raw -LiteralPath (Join-Path $PwaRoot '.htaccess')
 Assert-Condition -Condition ($apacheConfig.Contains('RewriteRule ^XP(?:/|$) - [R=404,L,NC]')) -Message 'Apache must deny legacy public XP paths.'
 Assert-Condition -Condition (!(Test-Path -LiteralPath (Join-Path $PwaRoot 'XP'))) -Message 'Legacy XP histories must not remain in the public PWA tree.'

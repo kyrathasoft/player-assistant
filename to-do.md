@@ -67,7 +67,7 @@
 Cross-cutting reliability, concurrency, API, and identity corrections to implement as a coordinated backlog.
 
 - [x] Service worker: validate network responses before returning them, treat 404/503/wrong-MIME/captive-portal/corrupt-JSON responses as network failures when a valid cached copy exists, and add a bounded navigation timeout.
-- [ ] Offline party funds: place `party-funds.json` in the data cache or route its fallback through the cache where it is actually installed.
+- [x] Offline party funds: place `party-funds.json` in the data cache and route its fallback through the installed data-cache path.
 - [ ] Messages: add server-side pagination, unread counts, cursor navigation, and retention so responses remain valid beyond 200 unread messages.
 - [ ] Stale data: add an Activity/Inbox view and a lightweight revisions endpoint with visibility-aware polling or opt-in Web Push so open PWAs discover new messages and quest decisions.
 - [ ] PHP concurrency: resolve and copy the authenticated identity, call `session_write_close()`, then perform read-only XP, word-count, quest, and message work—or return one dashboard payload instead of serialized `Promise.all` requests.
