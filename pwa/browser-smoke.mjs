@@ -181,7 +181,7 @@ const questPayload = (currentAccount) => ({
 });
 
 const messagePayload = (currentAccount) => ({
-    schema_version: 2,
+    schema_version: 3,
     messages: currentAccount === playerAccount && !messagesRead ? [{
         id: '11111111111111111111111111111111',
         sender_character_name: 'CI Dungeon Master',
@@ -190,6 +190,8 @@ const messagePayload = (currentAccount) => ({
         sent_at: '2026-08-07T12:00:00Z',
         read_at: null
     }] : [],
+    unread_count: currentAccount === playerAccount && !messagesRead ? 1 : 0,
+    next_cursor: null,
     player_recipients: currentAccount === playerAccount ? [{
         account_id: secondPlayerAccount.id,
         character_name: secondPlayerAccount.character_name
@@ -821,7 +823,7 @@ try {
     await page.waitForFunction(() => document.querySelector('#search-guidance')?.textContent?.includes('pack ready offline'));
     await page.locator('#campaign-search').fill('Kirkilston');
     await page.locator('#search-results .search-result').first().waitFor({ state: 'visible' });
-    if (![...workerUrls].some((url) => url.includes('/campaign-search-worker.js?v=79'))) {
+    if (![...workerUrls].some((url) => url.includes('/campaign-search-worker.js?v=80'))) {
         throw new Error(`Campaign search did not start its dedicated worker: ${JSON.stringify([...workerUrls])}.`);
     }
 
@@ -852,7 +854,7 @@ try {
             throw new Error(`Offline feature data was not cached: ${requiredPath}`);
         }
     }
-    if (!cachedUrls.some((url) => url.endsWith('/campaign-search-worker.js?v=79'))) {
+    if (!cachedUrls.some((url) => url.endsWith('/campaign-search-worker.js?v=80'))) {
         throw new Error('Campaign search worker was not present in the offline shell cache.');
     }
     await page.evaluate(async () => {

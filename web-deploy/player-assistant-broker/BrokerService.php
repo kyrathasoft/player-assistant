@@ -63,7 +63,9 @@ final class BrokerService
             is_array($config['word_counts'] ?? null) ? $config['word_counts'] : [],
             $wordCountFetcher);
         $this->quests = new QuestService($this->database, (string)$questDataPath);
-        $this->messages = new MessageService($this->database);
+        $this->messages = new MessageService(
+            $this->database,
+            is_array($config['messages'] ?? null) ? $config['messages'] : []);
     }
 
     public function dispatch(
@@ -190,7 +192,7 @@ final class BrokerService
 
         if ($method === 'GET' && $route === '/v1/messages') {
             $current = $this->characterAuth->requireCurrentAccount($session);
-            return $this->response(200, $this->messages->forAccount($current['account']));
+            return $this->response(200, $this->messages->forAccount($current['account'], $query));
         }
 
         if ($method === 'POST' && $route === '/v1/messages') {
