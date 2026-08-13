@@ -1,6 +1,6 @@
-import { initializeTranslator } from './modules/translator.js?v=73';
-import { initializeCampaignSearch } from './modules/search.js?v=73';
-import { initializeDice } from './modules/dice.js?v=73';
+import { initializeTranslator } from './modules/translator.js?v=74';
+import { initializeCampaignSearch } from './modules/search.js?v=74';
+import { initializeDice } from './modules/dice.js?v=74';
 
 (() => {
     'use strict';
@@ -415,7 +415,7 @@ import { initializeDice } from './modules/dice.js?v=73';
         }
     };
 
-    const formatXpProgressSummary = (character) => {
+    const formatXpProgressAmount = (character) => {
         if (!character || character.xp_to_next_level === null) return '';
         const nextLevelXp = character.xp_total + character.xp_to_next_level;
         if (!Number.isSafeInteger(nextLevelXp) || nextLevelXp <= 0) return '';
@@ -424,7 +424,12 @@ import { initializeDice } from './modules/dice.js?v=73';
             maximumFractionDigits: 1,
             useGrouping: false
         }).format((character.xp_total / nextLevelXp) * 100);
-        return `${character.character_name} is ${percentage}% of the way toward ${character.character_class} Level ${character.level + 1}`;
+        return `${percentage}% of the way toward ${character.character_class} Level ${character.level + 1}`;
+    };
+
+    const formatXpProgressSummary = (character) => {
+        const progressAmount = formatXpProgressAmount(character);
+        return progressAmount === '' ? '' : `${character.character_name} is ${progressAmount}`;
     };
 
     const renderXpAwardsUi = () => {
@@ -468,12 +473,12 @@ import { initializeDice } from './modules/dice.js?v=73';
             characterClass.textContent = character.character_class;
             if (authenticatedXpSnapshot?.scope === 'character'
                 && authenticatedXpSnapshot.character.character_name === character.character_name) {
-                const progressSummary = formatXpProgressSummary(authenticatedXpSnapshot.character);
-                if (progressSummary !== '') {
+                const progressAmount = formatXpProgressAmount(authenticatedXpSnapshot.character);
+                if (progressAmount !== '') {
                     const progress = document.createElement('span');
                     progress.className = 'xp-award-progress-summary';
-                    progress.textContent = `Progress toward next class level ${progressSummary}`;
-                    name.append(document.createTextNode(' '), progress);
+                    progress.textContent = ` - ${progressAmount}`;
+                    name.append(progress);
                 }
             }
             heading.append(name, characterClass);

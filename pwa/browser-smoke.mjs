@@ -574,7 +574,8 @@ try {
         };
     });
     if (!playerProgressPresentation.insideName
-        || playerProgressPresentation.text !== 'Progress toward next class level CI Hero is 40.0% of the way toward Fighter Level 2'
+        || playerProgressPresentation.text !== ' - 40.0% of the way toward Fighter Level 2'
+        || await page.locator('#xp-awards-list .xp-award-character h2').first().textContent() !== 'CI Hero - 40.0% of the way toward Fighter Level 2'
         || playerProgressPresentation.font !== playerProgressPresentation.headingFont
         || !playerProgressPresentation.sameLine
         || await page.locator('#xp-awards-list > .xp-award-progress-section').count() !== 0) {
@@ -751,7 +752,7 @@ try {
     await page.waitForFunction(() => document.querySelector('#search-guidance')?.textContent?.includes('pack ready offline'));
     await page.locator('#campaign-search').fill('Kirkilston');
     await page.locator('#search-results .search-result').first().waitFor({ state: 'visible' });
-    if (![...workerUrls].some((url) => url.includes('/campaign-search-worker.js?v=73'))) {
+    if (![...workerUrls].some((url) => url.includes('/campaign-search-worker.js?v=74'))) {
         throw new Error(`Campaign search did not start its dedicated worker: ${JSON.stringify([...workerUrls])}.`);
     }
 
@@ -782,7 +783,7 @@ try {
             throw new Error(`Offline feature data was not cached: ${requiredPath}`);
         }
     }
-    if (!cachedUrls.some((url) => url.endsWith('/campaign-search-worker.js?v=73'))) {
+    if (!cachedUrls.some((url) => url.endsWith('/campaign-search-worker.js?v=74'))) {
         throw new Error('Campaign search worker was not present in the offline shell cache.');
     }
     await page.evaluate(async () => {
