@@ -177,6 +177,7 @@ try {
     ]);
     $progressionIndexMarkdown = implode("\n", [
         '- [[Fighter]]',
+        '- [[Feycaster]]',
         '- [[Illusionist]]',
         '- [[Mystic Theurge]]',
     ]);
@@ -188,6 +189,12 @@ try {
         '| 4 | 8,000 |',
         '| 5 | 16,000 |',
         '| 6 | 32,000 |',
+    ]);
+    $feycasterProgressionMarkdown = implode("\n", [
+        '| 1 | 0 |',
+        '| --- | --- |',
+        '| 2 | 1,500 |',
+        '| 3 | 3,000 |',
     ]);
     $illusionistProgressionMarkdown = implode("\n", [
         '| 1 | 0 |',
@@ -210,6 +217,7 @@ try {
     $progressionFixture = static function (string $url) use (
         $progressionIndexMarkdown,
         $fighterProgressionMarkdown,
+        $feycasterProgressionMarkdown,
         $illusionistProgressionMarkdown,
         $theurgeProgressionMarkdown): ?string {
         if (str_contains($url, 'Class+Level+Progression')) {
@@ -217,6 +225,9 @@ try {
         }
         if (str_contains($url, '/Classes/Fighter')) {
             return $fighterProgressionMarkdown;
+        }
+        if (str_contains($url, '/Classes/Feycaster')) {
+            return $feycasterProgressionMarkdown;
         }
         if (str_contains($url, '/Classes/Illusionist')) {
             return $illusionistProgressionMarkdown;
@@ -228,7 +239,12 @@ try {
     };
     $service = new XpTrackingService(
         xpDatabase($databasePath),
-        xpConfiguration(),
+        array_replace(xpConfiguration(), [
+            'award_groups' => [
+                'jelb' => ['jelb-xp', 'arilia-xp'],
+                'maximilian' => ['maximilian-xp'],
+            ],
+        ]),
         static function (string $url) use (
             &$fetchCount,
             $markdown,
@@ -728,6 +744,15 @@ try {
     xpAssert($player['character']['hit_points'] === 13, 'The player received the wrong hit-point total.');
     xpAssert($player['character']['xp_total'] === 12345, 'The current player XP total was incorrect.');
     xpAssert($player['character']['xp_to_next_level'] === 7655, 'The player received the wrong TNL value.');
+    xpAssert(
+        count($player['authorized_characters'] ?? []) === 2
+            && $player['authorized_characters'][0]['character_key'] === 'jelb-xp'
+            && $player['authorized_characters'][0]['character']['character_name'] === 'Jelb'
+            && $player['authorized_characters'][1]['character_key'] === 'arilia-xp'
+            && $player['authorized_characters'][1]['character']['character_name'] === 'Arilia'
+            && $player['authorized_characters'][1]['character']['xp_total'] === 200
+            && $player['authorized_characters'][1]['character']['xp_to_next_level'] === 1300,
+        'Jelb did not receive current XP for both his own and Arilia progression.');
     xpAssert($player['date_label'] === 'As of 7.23.2026', 'The latest XP date was not selected.');
     xpAssert(!isset($player['characters']), 'A player response exposed the party XP array.');
 
@@ -760,9 +785,9 @@ try {
         $dm['characters'],
         static fn(array $character): bool => $character['character_name'] === 'Arilia'));
     xpAssert(
-        count($arilia) === 1 && $arilia[0]['xp_to_next_level'] === null,
-        'An unavailable class progression prevented the live XP snapshot from loading.');
-    xpAssert($fetchCount === 18, 'Each XP request did not attempt the live source before using cached data.');
+        count($arilia) === 1 && $arilia[0]['xp_to_next_level'] === 1300,
+        'Arilia did not receive the expected Feycaster next-level progression.');
+    xpAssert($fetchCount === 21, 'Each XP request did not attempt the live source before using cached data.');
 
     $olderMarkdown = implode("\n", [
         'As of 7.20.2026',

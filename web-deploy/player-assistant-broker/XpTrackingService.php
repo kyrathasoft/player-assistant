@@ -94,9 +94,34 @@ final class XpTrackingService
         $character = $matches[0];
         $character['character_name'] = $this->canonicalCharacterDisplayName(
             (string)$character['character_name']);
+        $authorizedCharacters = [];
+        $configuredGroups = $this->xpConfig['award_groups'] ?? [];
+        $progressionKeys = is_array($configuredGroups)
+            && is_array($configuredGroups[$characterKey] ?? null)
+            ? $this->validatedAwardGroups()[$characterKey]
+            : [$characterKey . '-xp'];
+        foreach ($progressionKeys as $progressionKey) {
+            $progressionCharacterKey = $this->characterKeyForProgression($progressionKey);
+            $progressionMatches = array_values(array_filter(
+                $snapshot['characters'],
+                fn(array $candidate): bool => hash_equals(
+                    $progressionCharacterKey,
+                    $this->characterKeyForName((string)$candidate['character_name']))));
+            if (count($progressionMatches) !== 1) {
+                continue;
+            }
+            $authorizedCharacter = $progressionMatches[0];
+            $authorizedCharacter['character_name'] = $this->canonicalCharacterDisplayName(
+                (string)$authorizedCharacter['character_name']);
+            $authorizedCharacters[] = [
+                'character_key' => $progressionKey,
+                'character' => $authorizedCharacter,
+            ];
+        }
         return $baseResponse + [
             'scope' => 'character',
             'character' => $character,
+            'authorized_characters' => $authorizedCharacters,
         ];
     }
 
@@ -1676,6 +1701,13 @@ final class XpTrackingService
         $key = strtolower((string)preg_replace('/[^A-Za-z0-9]+/', '-', $firstName));
         $key = trim($key, '-');
         return self::CHARACTER_KEY_ALIASES[$key] ?? $key;
+    }
+
+    private function characterKeyForProgression(string $progressionKey): string
+    {
+        return str_ends_with($progressionKey, '-xp')
+            ? substr($progressionKey, 0, -3)
+            : $progressionKey;
     }
 
     private function loadCachedSnapshot(): ?array

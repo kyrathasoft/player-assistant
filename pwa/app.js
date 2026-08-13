@@ -1,6 +1,6 @@
-import { initializeTranslator } from './modules/translator.js?v=77';
-import { initializeCampaignSearch } from './modules/search.js?v=77';
-import { initializeDice } from './modules/dice.js?v=77';
+import { initializeTranslator } from './modules/translator.js?v=78';
+import { initializeCampaignSearch } from './modules/search.js?v=78';
+import { initializeDice } from './modules/dice.js?v=78';
 
 (() => {
     'use strict';
@@ -372,7 +372,15 @@ import { initializeDice } from './modules/dice.js?v=77';
             && (character.xp_to_next_level === null
                 || (Number.isSafeInteger(character.xp_to_next_level)
                     && character.xp_to_next_level >= 0));
-        if (payload.scope === 'character' && validCharacter(payload.character)) {
+        if (payload.scope === 'character'
+            && validCharacter(payload.character)
+            && Array.isArray(payload.authorized_characters)
+            && payload.authorized_characters.length > 0
+            && payload.authorized_characters.length <= 200
+            && payload.authorized_characters.every((entry) => entry
+                && typeof entry.character_key === 'string'
+                && /^[a-z0-9]+(?:-[a-z0-9]+)*$/u.test(entry.character_key)
+                && validCharacter(entry.character))) {
             return payload;
         }
         if (payload.scope === 'party'
@@ -461,11 +469,13 @@ import { initializeDice } from './modules/dice.js?v=77';
         }
         status.textContent = '';
         const fragment = document.createDocumentFragment();
-        authenticatedXpAwardsSnapshot.forEach(({ entries, isAccountCharacter }) => {
+        authenticatedXpAwardsSnapshot.forEach(({ characterKey, entries }) => {
             const character = entries[0];
-            const headingName = authenticatedXpSnapshot?.scope === 'character' && isAccountCharacter
-                ? authenticatedXpSnapshot.character.character_name
-                : character.character_name;
+            const currentProgression = authenticatedXpSnapshot?.scope === 'character'
+                ? authenticatedXpSnapshot.authorized_characters.find(
+                    (entry) => entry.character_key === characterKey)?.character
+                : null;
+            const headingName = currentProgression?.character_name || character.character_name;
             const card = document.createElement('article');
             card.className = 'xp-award-character';
             const heading = document.createElement('div');
@@ -474,9 +484,8 @@ import { initializeDice } from './modules/dice.js?v=77';
             name.textContent = headingName;
             const characterClass = document.createElement('span');
             characterClass.textContent = character.character_class;
-            if (authenticatedXpSnapshot?.scope === 'character'
-                && isAccountCharacter) {
-                const progressAmount = formatXpProgressAmount(authenticatedXpSnapshot.character);
+            if (currentProgression !== null) {
+                const progressAmount = formatXpProgressAmount(currentProgression);
                 if (progressAmount !== '') {
                     const progress = document.createElement('span');
                     progress.className = 'xp-award-progress-summary';
