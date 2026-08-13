@@ -82,9 +82,9 @@ const createHarness = ({ cacheEntries = {}, fetchImpl } = {}) => {
             context.PLAYER_ASSISTANT_VERSION_METADATA = Object.freeze({
                 pwaVersion: '0.9.8',
                 metadataRevision: 1,
-                stylesRevision: 43,
-                appRevision: 72,
-                cacheRevision: 89
+                stylesRevision: 44,
+                appRevision: 73,
+                cacheRevision: 90
             });
         },
         self
@@ -102,8 +102,8 @@ const createHarness = ({ cacheEntries = {}, fetchImpl } = {}) => {
     };
 };
 
-const currentDataCache = 'player-assistant-pwa-0.9.8-v89-data';
-const currentShellCache = 'player-assistant-pwa-0.9.8-v89-shell';
+const currentDataCache = 'player-assistant-pwa-0.9.8-v90-data';
+const currentShellCache = 'player-assistant-pwa-0.9.8-v90-shell';
 const translatorPayload = Object.freeze({
     schemaVersion: 1,
     language: 'Orcish',
@@ -181,7 +181,7 @@ const testSchemaInvalidNetworkResponseIsNotCached = async () => {
 };
 
 const testWrongMimeCachedShellAssetIsDeletedAndRefetched = async () => {
-    const request = new Request('https://example.test/scarlethorizons/pwa/styles.css?v=43');
+    const request = new Request('https://example.test/scarlethorizons/pwa/styles.css?v=44');
     const corrupt = new Response('<html>not css</html>', {
         status: 200,
         headers: { 'Content-Type': 'text/html' }
@@ -208,7 +208,7 @@ const testWrongMimeCachedShellAssetIsDeletedAndRefetched = async () => {
 };
 
 const testEmptyCachedShellAssetIsDeletedAndRefetched = async () => {
-    const request = new Request('https://example.test/scarlethorizons/pwa/styles.css?v=43');
+    const request = new Request('https://example.test/scarlethorizons/pwa/styles.css?v=44');
     const empty = new Response('', {
         status: 200,
         headers: { 'Content-Type': 'text/css' }
@@ -394,7 +394,7 @@ const testPartialInstallDeletesVersionedCaches = async () => {
 };
 
 const testQuotaFailureReturnsNetworkResponse = async () => {
-    const request = new Request('https://example.test/scarlethorizons/pwa/app.js?v=72');
+    const request = new Request('https://example.test/scarlethorizons/pwa/app.js?v=73');
     const fresh = new Response("console.log('ready');", {
         status: 200,
         headers: { 'Content-Type': 'text/javascript' }
@@ -419,8 +419,8 @@ const testQuotaFailureReturnsNetworkResponse = async () => {
 };
 
 const testObsoleteWorkerCannotDeleteNewerCaches = async () => {
-    const newerShell = 'player-assistant-pwa-0.9.8-v90-shell';
-    const newerData = 'player-assistant-pwa-0.9.8-v90-data';
+    const newerShell = 'player-assistant-pwa-0.9.8-v91-shell';
+    const newerData = 'player-assistant-pwa-0.9.8-v91-data';
     const harness = createHarness({
         cacheEntries: {
             [newerShell]: [],

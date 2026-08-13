@@ -1,6 +1,6 @@
-import { initializeTranslator } from './modules/translator.js?v=72';
-import { initializeCampaignSearch } from './modules/search.js?v=72';
-import { initializeDice } from './modules/dice.js?v=72';
+import { initializeTranslator } from './modules/translator.js?v=73';
+import { initializeCampaignSearch } from './modules/search.js?v=73';
+import { initializeDice } from './modules/dice.js?v=73';
 
 (() => {
     'use strict';
@@ -466,7 +466,6 @@ import { initializeDice } from './modules/dice.js?v=72';
             name.textContent = character.character_name;
             const characterClass = document.createElement('span');
             characterClass.textContent = character.character_class;
-            heading.append(name, characterClass);
             if (authenticatedXpSnapshot?.scope === 'character'
                 && authenticatedXpSnapshot.character.character_name === character.character_name) {
                 const progressSummary = formatXpProgressSummary(authenticatedXpSnapshot.character);
@@ -474,9 +473,10 @@ import { initializeDice } from './modules/dice.js?v=72';
                     const progress = document.createElement('span');
                     progress.className = 'xp-award-progress-summary';
                     progress.textContent = `Progress toward next class level ${progressSummary}`;
-                    heading.append(progress);
+                    name.append(document.createTextNode(' '), progress);
                 }
             }
+            heading.append(name, characterClass);
             const table = document.createElement('table');
             const thead = document.createElement('thead');
             const headerRow = document.createElement('tr');

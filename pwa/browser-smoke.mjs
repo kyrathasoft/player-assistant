@@ -558,11 +558,27 @@ try {
         || protectedTableSemantics.rowCount !== 2) {
         throw new Error(`Protected XP Awards table semantics failed: ${JSON.stringify(protectedTableSemantics)}.`);
     }
-    const playerProgressSummaries = await page.locator('#xp-awards-list .xp-award-character .xp-award-progress-summary').allTextContents();
-    if (playerProgressSummaries.length !== 1
-        || playerProgressSummaries[0] !== 'Progress toward next class level CI Hero is 40.0% of the way toward Fighter Level 2'
+    const playerProgressPresentation = await page.locator('#xp-awards-list .xp-award-progress-summary').evaluate((summary) => {
+        const heading = summary.closest('h2');
+        if (!(heading instanceof HTMLElement)) return { insideName: false };
+        const headingStyle = getComputedStyle(heading);
+        const summaryStyle = getComputedStyle(summary);
+        const headingRect = heading.getBoundingClientRect();
+        const summaryRect = summary.getBoundingClientRect();
+        return {
+            insideName: true,
+            text: summary.textContent,
+            font: summaryStyle.font,
+            headingFont: headingStyle.font,
+            sameLine: Math.abs(summaryRect.top - headingRect.top) < 2
+        };
+    });
+    if (!playerProgressPresentation.insideName
+        || playerProgressPresentation.text !== 'Progress toward next class level CI Hero is 40.0% of the way toward Fighter Level 2'
+        || playerProgressPresentation.font !== playerProgressPresentation.headingFont
+        || !playerProgressPresentation.sameLine
         || await page.locator('#xp-awards-list > .xp-award-progress-section').count() !== 0) {
-        throw new Error(`Player XP Awards progress summary was incorrect: ${JSON.stringify(playerProgressSummaries)}`);
+        throw new Error(`Player XP Awards progress presentation was incorrect: ${JSON.stringify(playerProgressPresentation)}`);
     }
 
     await page.setViewportSize({ width: 320, height: 800 });
@@ -735,7 +751,7 @@ try {
     await page.waitForFunction(() => document.querySelector('#search-guidance')?.textContent?.includes('pack ready offline'));
     await page.locator('#campaign-search').fill('Kirkilston');
     await page.locator('#search-results .search-result').first().waitFor({ state: 'visible' });
-    if (![...workerUrls].some((url) => url.includes('/campaign-search-worker.js?v=72'))) {
+    if (![...workerUrls].some((url) => url.includes('/campaign-search-worker.js?v=73'))) {
         throw new Error(`Campaign search did not start its dedicated worker: ${JSON.stringify([...workerUrls])}.`);
     }
 
@@ -766,7 +782,7 @@ try {
             throw new Error(`Offline feature data was not cached: ${requiredPath}`);
         }
     }
-    if (!cachedUrls.some((url) => url.endsWith('/campaign-search-worker.js?v=72'))) {
+    if (!cachedUrls.some((url) => url.endsWith('/campaign-search-worker.js?v=73'))) {
         throw new Error('Campaign search worker was not present in the offline shell cache.');
     }
     await page.evaluate(async () => {
