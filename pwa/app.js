@@ -1,6 +1,6 @@
-import { initializeTranslator } from './modules/translator.js?v=75';
-import { initializeCampaignSearch } from './modules/search.js?v=75';
-import { initializeDice } from './modules/dice.js?v=75';
+import { initializeTranslator } from './modules/translator.js?v=76';
+import { initializeCampaignSearch } from './modules/search.js?v=76';
+import { initializeDice } from './modules/dice.js?v=76';
 
 (() => {
     'use strict';
@@ -480,7 +480,7 @@ import { initializeDice } from './modules/dice.js?v=75';
                 if (progressAmount !== '') {
                     const progress = document.createElement('span');
                     progress.className = 'xp-award-progress-summary';
-                    progress.textContent = ` - Progress toward next class level is ${progressAmount}`;
+                    progress.textContent = ` - Progress: ${progressAmount}`;
                     name.append(progress);
                 }
             }

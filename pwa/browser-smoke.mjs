@@ -574,8 +574,8 @@ try {
         };
     });
     if (!playerProgressPresentation.insideName
-        || playerProgressPresentation.text !== ' - Progress toward next class level is 40.0% of the way toward Fighter Level 2'
-        || await page.locator('#xp-awards-list .xp-award-character h2').first().textContent() !== 'CI Hero - Progress toward next class level is 40.0% of the way toward Fighter Level 2'
+        || playerProgressPresentation.text !== ' - Progress: 40.0% of the way toward Fighter Level 2'
+        || await page.locator('#xp-awards-list .xp-award-character h2').first().textContent() !== 'CI Hero - Progress: 40.0% of the way toward Fighter Level 2'
         || playerProgressPresentation.font !== playerProgressPresentation.headingFont
         || !playerProgressPresentation.sameLine
         || await page.locator('#xp-awards-list > .xp-award-progress-section').count() !== 0) {
@@ -643,7 +643,7 @@ try {
     await page.locator('[data-view="xp-awards"]').click();
     await page.locator('#xp-awards-list').waitFor({ state: 'visible' });
     const secondPlayerAwardText = await page.locator('#xp-awards-list').textContent();
-    if (!secondPlayerAwardText.includes('Maximilian - Progress toward next class level is 28.6% of the way toward Fighter Level 2')
+    if (!secondPlayerAwardText.includes('Maximilian - Progress: 28.6% of the way toward Fighter Level 2')
         || secondPlayerAwardText.includes('Max Progress toward')
         || secondPlayerAwardText.includes('CI Hero')) {
         throw new Error('Account switching or cross-account XP filtering failed.');
@@ -754,7 +754,7 @@ try {
     await page.waitForFunction(() => document.querySelector('#search-guidance')?.textContent?.includes('pack ready offline'));
     await page.locator('#campaign-search').fill('Kirkilston');
     await page.locator('#search-results .search-result').first().waitFor({ state: 'visible' });
-    if (![...workerUrls].some((url) => url.includes('/campaign-search-worker.js?v=75'))) {
+    if (![...workerUrls].some((url) => url.includes('/campaign-search-worker.js?v=76'))) {
         throw new Error(`Campaign search did not start its dedicated worker: ${JSON.stringify([...workerUrls])}.`);
     }
 
@@ -785,7 +785,7 @@ try {
             throw new Error(`Offline feature data was not cached: ${requiredPath}`);
         }
     }
-    if (!cachedUrls.some((url) => url.endsWith('/campaign-search-worker.js?v=75'))) {
+    if (!cachedUrls.some((url) => url.endsWith('/campaign-search-worker.js?v=76'))) {
         throw new Error('Campaign search worker was not present in the offline shell cache.');
     }
     await page.evaluate(async () => {
