@@ -157,8 +157,9 @@ foreach ($patterns as $pattern) {
 $cron = shell_exec('crontab -l 2>/dev/null');
 $result['cron'] = is_string($cron) ? $cron : '';
 echo json_encode($result, JSON_UNESCAPED_SLASHES);
-'@.Replace('__PRIVATE_DIRECTORY__', $PrivateDirectory.Replace("'", "\'"))
-   .Replace('__PUBLIC_API_PATH__', $PublicApiPath.Replace("'", "\'"))
+'@
+$remoteCode = $remoteCode.Replace('__PRIVATE_DIRECTORY__', $PrivateDirectory.Replace("'", "\'"))
+$remoteCode = $remoteCode.Replace('__PUBLIC_API_PATH__', $PublicApiPath.Replace("'", "\'"))
 
 $remote = (Invoke-RemotePhp $remoteCode) | Out-String | ConvertFrom-Json
 foreach ($file in $deployFiles) {

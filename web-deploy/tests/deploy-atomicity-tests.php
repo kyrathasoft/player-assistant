@@ -28,6 +28,9 @@ deployAtomicityAssert(
         && str_contains($deploymentVerifier, '[IO.File]::WriteAllText($localScript, "<?php`n" + $Code'),
     'Remote PHP transaction scripts must include an opening PHP tag.');
 deployAtomicityAssert(
+    !preg_match('/^\s+[.]Replace\(/m', $deploymentVerifier),
+    'The production verifier must remain callable under inherited strict mode.');
+deployAtomicityAssert(
     str_contains($deploymentScript, "if (\$PrivateDirectory -cne '/home/dh_4gg2za/player-assistant-broker')")
         && str_contains($deploymentScript, "if (\$PublicApiPath -cne '/home/dh_4gg2za/bryanmiller.us/scarlethorizons/api/index.php')"),
     'Deployment paths must be pinned to the approved private root and public API target.');
