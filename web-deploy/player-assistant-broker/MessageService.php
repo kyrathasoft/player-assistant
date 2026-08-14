@@ -19,7 +19,6 @@ final class MessageService
             0,
             10000,
             'max_read_messages_per_account');
-        $this->ensureSchema();
     }
 
     public function sendForAccount(array $account, array $body): array
@@ -444,21 +443,5 @@ final class MessageService
             ]);
     }
 
-    private function ensureSchema(): void
-    {
-        $this->database->exec(
-            'CREATE TABLE IF NOT EXISTS message_notifications (
-                id TEXT PRIMARY KEY,
-                sender_account_id TEXT NOT NULL,
-                recipient_account_id TEXT NOT NULL,
-                message TEXT NOT NULL,
-                sent_at INTEGER NOT NULL,
-                read_at INTEGER NULL,
-                FOREIGN KEY (sender_account_id) REFERENCES character_accounts(id) ON DELETE CASCADE,
-                FOREIGN KEY (recipient_account_id) REFERENCES character_accounts(id) ON DELETE CASCADE
-            );
-            CREATE INDEX IF NOT EXISTS ix_message_notifications_recipient_read
-                ON message_notifications(recipient_account_id, read_at, sent_at DESC, id DESC);');
-    }
 }
 

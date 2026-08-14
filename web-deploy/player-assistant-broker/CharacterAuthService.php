@@ -56,7 +56,6 @@ final class CharacterAuthService
             'audit_address_hash_key' => '',
         ], $authConfig);
         $this->validateConfiguration();
-        $this->ensureSchema();
     }
 
     public function accountCount(): int
@@ -883,60 +882,6 @@ final class CharacterAuthService
         }
     }
 
-    private function ensureSchema(): void
-    {
-        $this->database->exec(
-            'CREATE TABLE IF NOT EXISTS character_accounts (
-                id TEXT PRIMARY KEY,
-                normalized_name TEXT NOT NULL UNIQUE,
-                display_name TEXT NOT NULL,
-                character_key TEXT NOT NULL,
-                role TEXT NOT NULL CHECK(role IN (\'player\', \'dm\')),
-                enabled INTEGER NOT NULL CHECK(enabled IN (0, 1)),
-                password_hash TEXT NULL,
-                legacy_algorithm TEXT NULL,
-                legacy_iterations INTEGER NULL,
-                legacy_salt TEXT NULL,
-                legacy_hash TEXT NULL,
-                created_at INTEGER NOT NULL,
-                password_changed_at INTEGER NOT NULL,
-                last_login_at INTEGER NULL,
-                session_version INTEGER NOT NULL DEFAULT 1,
-                CHECK(password_hash IS NOT NULL OR legacy_hash IS NOT NULL)
-            );
-            CREATE TABLE IF NOT EXISTS auth_rate_limits (
-                scope_hash TEXT PRIMARY KEY,
-                window_start INTEGER NOT NULL,
-                failure_count INTEGER NOT NULL,
-                blocked_until INTEGER NOT NULL
-            );
-            CREATE TABLE IF NOT EXISTS auth_audit_events (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                account_id TEXT NULL,
-                occurred_at INTEGER NOT NULL,
-                remote_address TEXT NOT NULL,
-                event TEXT NOT NULL,
-                FOREIGN KEY (account_id) REFERENCES character_accounts(id) ON DELETE SET NULL
-            );
-            CREATE TABLE IF NOT EXISTS character_session_presence (
-                presence_id TEXT PRIMARY KEY,
-                account_id TEXT NOT NULL,
-                last_seen_at INTEGER NOT NULL,
-                absolute_expires_at INTEGER NOT NULL,
-                FOREIGN KEY (account_id) REFERENCES character_accounts(id) ON DELETE CASCADE
-            );
-            CREATE INDEX IF NOT EXISTS ix_auth_audit_account_time
-                ON auth_audit_events(account_id, occurred_at);
-            CREATE INDEX IF NOT EXISTS ix_character_presence_activity
-                ON character_session_presence(last_seen_at, absolute_expires_at);');
-
-        $columns = $this->database->query('PRAGMA table_info(character_accounts)')->fetchAll();
-        $columnNames = array_map(static fn(array $column): string => (string)$column['name'], $columns);
-        if (!in_array('session_version', $columnNames, true)) {
-            $this->database->exec(
-                'ALTER TABLE character_accounts ADD COLUMN session_version INTEGER NOT NULL DEFAULT 1');
-        }
-    }
 
     private function base64UrlEncode(string $bytes): string
     {

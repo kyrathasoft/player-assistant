@@ -19,6 +19,30 @@ try {
 
     $privateDirectory = dirname(__DIR__, 3) . '/player-assistant-broker';
     require_once $privateDirectory . '/BrokerHttpException.php';
+    $configPathOverride = getenv('PLAYER_ASSISTANT_BROKER_CONFIG');
+    $configPath = is_string($configPathOverride) && $configPathOverride !== ''
+        ? $configPathOverride
+        : $privateDirectory . '/config.php';
+    if (!is_file($configPath)) {
+        throw new RuntimeException('The private broker configuration is unavailable.');
+    }
+    $config = require $configPath;
+    $config['xp'] = is_array($config['xp'] ?? null) ? $config['xp'] : [];
+    $config['xp']['awards_root'] = $privateDirectory;
+    $questDataPathOverride = getenv('PLAYER_ASSISTANT_QUESTS_PATH');
+    $questDataPath = is_string($questDataPathOverride) && $questDataPathOverride !== ''
+        ? $questDataPathOverride
+        : dirname(__DIR__) . '/pwa/quests.json';
+
+    $method = strtoupper($_SERVER['REQUEST_METHOD'] ?? 'GET');
+    $route = getRoutePath((string)($config['api']['base_path'] ?? ''));
+    if ($method === 'GET' && $route === '/v1/health') {
+        sendJson(200, [
+            'service' => 'player-assistant-broker',
+            'schema_version' => 7,
+            'status' => 'ok',
+        ]);
+    }
     require_once $privateDirectory . '/RpolClient.php';
     require_once $privateDirectory . '/CharacterAuthService.php';
     require_once $privateDirectory . '/XpTrackingService.php';
@@ -29,24 +53,7 @@ try {
     require_once $privateDirectory . '/RevisionService.php';
     require_once $privateDirectory . '/BrokerService.php';
     require_once $privateDirectory . '/BrokerAlertService.php';
-    $configPathOverride = getenv('PLAYER_ASSISTANT_BROKER_CONFIG');
-    $configPath = is_string($configPathOverride) && $configPathOverride !== ''
-        ? $configPathOverride
-        : $privateDirectory . '/config.php';
-    if (!is_file($configPath)) {
-        throw new RuntimeException('The private broker configuration is unavailable.');
-    }
-    $config = require $configPath;
     $operations = new BrokerOperations(is_array($config) ? $config : []);
-    $config['xp'] = is_array($config['xp'] ?? null) ? $config['xp'] : [];
-    $config['xp']['awards_root'] = $privateDirectory;
-    $questDataPathOverride = getenv('PLAYER_ASSISTANT_QUESTS_PATH');
-    $questDataPath = is_string($questDataPathOverride) && $questDataPathOverride !== ''
-        ? $questDataPathOverride
-        : dirname(__DIR__) . '/pwa/quests.json';
-
-    $method = strtoupper($_SERVER['REQUEST_METHOD'] ?? 'GET');
-    $route = getRoutePath((string)($config['api']['base_path'] ?? ''));
     requireJsonContentType($method);
     $requestBody = readJsonRequestBody(8 * 1024 * 1024);
     $sessionState = [];

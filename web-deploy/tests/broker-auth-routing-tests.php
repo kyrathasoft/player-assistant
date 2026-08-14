@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/../player-assistant-broker/BrokerHttpException.php';
+require_once __DIR__ . '/../player-assistant-broker/DatabaseMigrationService.php';
 require_once __DIR__ . '/../player-assistant-broker/RpolClient.php';
 require_once __DIR__ . '/../player-assistant-broker/CharacterAuthService.php';
 require_once __DIR__ . '/../player-assistant-broker/XpTrackingService.php';
@@ -207,6 +208,9 @@ try {
             '| Another Hero | Fighter | 5 | 98,765 |',
         ]);
     };
+    $migrationDatabase = new PDO('sqlite:' . $databasePath, null, null, [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]);
+    (new DatabaseMigrationService($migrationDatabase, dirname($databasePath) . '/migration-backups'))->migrate();
+    $migrationDatabase = null;
     $broker = new BrokerService(
         $config,
         new RpolClient($config['rpol']),

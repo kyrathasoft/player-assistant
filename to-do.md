@@ -78,7 +78,10 @@ Cross-cutting reliability, concurrency, API, and identity corrections to impleme
 - [x] PHP concurrency: resolve and copy the authenticated identity, call `session_write_close()`, then perform read-only XP, word-count, quest, revision, and message work.
   - [x] The API entry point provides a session-release callback; BrokerService closes the session after authorization and before slow read-only service work.
   - [x] Routing regression coverage proves the XP path releases the session lock.
-- [ ] Broker startup: move migrations to deployment and lazily instantiate only the requested service; keep `/health` free of unnecessary SQLite, schema, and subsystem startup work.
+- [x] Broker startup: move migrations to deployment and lazily instantiate only the requested service; keep `/health` free of unnecessary SQLite, schema, and subsystem startup work.
+  - [x] Added deployment-time `migrate-broker.php`; request startup now verifies the schema version instead of applying migrations.
+  - [x] Broker services are lazy factories, and public `/v1/health` exits before broker subsystem loading or database access.
+  - [x] Removed request-time schema creation from broker service constructors and wired deployment migration execution into the release script.
 - [ ] Login hardening: rate-limit primarily by account-plus-source, retain a stronger address throttle, and use progressive delays instead of globally locking a known character name for everyone.
 - [ ] Identity schema: audit existing data, add a unique `character_key` constraint, use opaque IDs for authorization, and retain aliases only as login convenience.
 - [ ] API client: add an `AbortController`-based timeout/cancellation layer, typed structured errors, request IDs, centralized expired-session handling, idempotency keys, and generation guards.

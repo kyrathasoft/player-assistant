@@ -26,11 +26,18 @@ function expectXpError(callable $action, int $status, string $errorName): void
 
 function xpDatabase(string $path): PDO
 {
-    return new PDO('sqlite:' . $path, null, null, [
+    $database = new PDO('sqlite:' . $path, null, null, [
         PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
         PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
         PDO::ATTR_EMULATE_PREPARES => false,
     ]);
+    $database->exec('CREATE TABLE IF NOT EXISTS xp_tracking_cache (
+        cache_key TEXT PRIMARY KEY,
+        fetched_at INTEGER NOT NULL,
+        payload_json TEXT NOT NULL,
+        content_sha256 TEXT NOT NULL
+    )');
+    return $database;
 }
 
 function xpConfiguration(): array
