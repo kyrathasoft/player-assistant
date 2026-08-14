@@ -22,6 +22,11 @@ function removeDeploymentFixture(string $path): void
 }
 
 $deploymentScript = (string)file_get_contents(__DIR__ . '/../deploy-word-count-refresh.ps1');
+$deploymentVerifier = (string)file_get_contents(__DIR__ . '/../test-word-count-refresh-deployment.ps1');
+deployAtomicityAssert(
+    str_contains($deploymentScript, '[IO.File]::WriteAllText($localScript, "<?php`n" + $Code')
+        && str_contains($deploymentVerifier, '[IO.File]::WriteAllText($localScript, "<?php`n" + $Code'),
+    'Remote PHP transaction scripts must include an opening PHP tag.');
 deployAtomicityAssert(
     str_contains($deploymentScript, "if (\$PrivateDirectory -cne '/home/dh_4gg2za/player-assistant-broker')")
         && str_contains($deploymentScript, "if (\$PublicApiPath -cne '/home/dh_4gg2za/bryanmiller.us/scarlethorizons/api/index.php')"),
