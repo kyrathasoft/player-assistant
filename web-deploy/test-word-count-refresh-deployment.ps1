@@ -227,7 +227,7 @@ $health = Invoke-RestMethod -Uri $HealthUrl -TimeoutSec 30
 if ([int]$health.schema_version -ne 7 -or $health.status -ne 'ok') {
     throw 'The public broker liveness endpoint is unavailable or unhealthy.'
 }
-if ($null -ne $health.word_count_refresh -or $null -ne $health.operations) {
+if ($null -ne $health.PSObject.Properties['word_count_refresh'] -or $null -ne $health.PSObject.Properties['operations']) {
     throw 'The public broker liveness endpoint disclosed operational details.'
 }
 
