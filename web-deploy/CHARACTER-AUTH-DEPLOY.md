@@ -32,6 +32,7 @@ BrokerHttpException.php
 CharacterAuthService.php
 BrokerService.php
 MessageService.php
+RevisionService.php
 QuestService.php
 RpolClient.php
 WordCountService.php
@@ -217,6 +218,7 @@ GET  /scarlethorizons/api/v1/xp
 GET  /scarlethorizons/api/v1/word-counts
 GET  /scarlethorizons/api/v1/presence
 GET  /scarlethorizons/api/v1/quests
+GET  /scarlethorizons/api/v1/revisions
 POST /scarlethorizons/api/v1/quest-requests
 POST /scarlethorizons/api/v1/quest-requests/{request-id}/decision
 POST /scarlethorizons/api/v1/quest-requests/{request-id}/acknowledge

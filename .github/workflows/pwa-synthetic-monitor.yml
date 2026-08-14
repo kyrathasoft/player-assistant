@@ -69,8 +69,7 @@ jobs:
 
             $files = @(
               'web-deploy/player-assistant-broker/PwaSyntheticMonitor.php',
-              'web-deploy/player-assistant-broker/run-pwa-monitor.php',
-              'web-deploy/player-assistant-broker/BrokerService.php'
+              'web-deploy/player-assistant-broker/run-pwa-monitor.php'
             )
             & scp @sshOptions @files "${sshTarget}:$stageDirectory/"
             if ($LASTEXITCODE -ne 0) { throw 'Unable to upload the private monitor runtime.' }

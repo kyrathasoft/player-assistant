@@ -26,6 +26,7 @@ try {
     require_once $privateDirectory . '/BrokerOperations.php';
     require_once $privateDirectory . '/QuestService.php';
     require_once $privateDirectory . '/MessageService.php';
+    require_once $privateDirectory . '/RevisionService.php';
     require_once $privateDirectory . '/BrokerService.php';
     require_once $privateDirectory . '/BrokerAlertService.php';
     $configPathOverride = getenv('PLAYER_ASSISTANT_BROKER_CONFIG');
@@ -235,6 +236,7 @@ function isCharacterSessionRoute(string $route): bool
             '/v1/word-counts',
             '/v1/presence',
             '/v1/quests',
+            '/v1/revisions',
             '/v1/quest-requests',
             '/v1/messages',
             '/v1/logout',

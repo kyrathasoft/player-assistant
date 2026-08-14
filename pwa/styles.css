@@ -351,6 +351,22 @@ button[hidden],
     font-size: 1.15rem;
 }
 
+.nav-count {
+    display: inline-grid;
+    min-width: 1.3rem;
+    height: 1.3rem;
+    place-items: center;
+    border-radius: 999px;
+    padding: 0 0.3rem;
+    background: var(--red);
+    color: #fff7eb;
+    font-size: 0.72rem;
+}
+
+.nav-count[hidden] {
+    display: none;
+}
+
 .quest-state-cycle {
     min-height: 2.35rem;
     border: 1px solid var(--line);
