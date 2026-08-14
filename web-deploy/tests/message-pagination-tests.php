@@ -47,10 +47,13 @@ $database->exec("CREATE TABLE character_accounts (
 )");
 $senderId = str_repeat('a', 32);
 $recipientId = str_repeat('b', 32);
+$otherRecipientId = str_repeat('e', 32);
 $database->prepare('INSERT INTO character_accounts (id, display_name, role, enabled) VALUES (?, ?, ?, 1)')
     ->execute([$senderId, 'Sender', 'player']);
 $database->prepare('INSERT INTO character_accounts (id, display_name, role, enabled) VALUES (?, ?, ?, 1)')
     ->execute([$recipientId, 'Recipient', 'player']);
+$database->prepare('INSERT INTO character_accounts (id, display_name, role, enabled) VALUES (?, ?, ?, 1)')
+    ->execute([$otherRecipientId, 'Other Recipient', 'player']);
 
 $service = new MessageService($database, [
     'retention_days' => 30,
@@ -169,6 +172,15 @@ for ($index = 301; $index <= 304; $index++) {
         $now - ($index === 301 ? 40 * 86400 : $index),
     ]);
 }
+$otherReadId = str_repeat('f', 32);
+$insert->execute([
+    $otherReadId,
+    $senderId,
+    $otherRecipientId,
+    'Other recipient read message',
+    $now - (60 * 86400),
+    $now - (60 * 86400),
+]);
 $service->markRead($account, str_pad(dechex(205), 32, '0', STR_PAD_LEFT));
 $readCount = (int)$database->query(
     "SELECT COUNT(*) FROM message_notifications WHERE recipient_account_id = '$recipientId' AND read_at IS NOT NULL")
@@ -178,5 +190,8 @@ $unreadCount = (int)$database->query(
     ->fetchColumn();
 messagePaginationAssert($readCount === 2, 'Retention must remove expired and excess read messages.');
 messagePaginationAssert($unreadCount === 204, 'Retention must never remove unread messages other than the acknowledged message.');
+messagePaginationAssert(
+    (int)$database->query("SELECT COUNT(*) FROM message_notifications WHERE id = '$otherReadId'")->fetchColumn() === 1,
+    'Retention for one recipient deleted another recipient\'s read message.');
 
 echo "Message pagination tests passed.\n";

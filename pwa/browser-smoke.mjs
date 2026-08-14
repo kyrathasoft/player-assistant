@@ -55,6 +55,7 @@ const sessionAccount = (request) => ({
 const expectedErrorResponse = { 'X-CI-Expected-Error': 'true' };
 let xpAwardsProjected = false;
 let messagesRead = false;
+let messageContinuationRequests = 0;
 
 const readJsonBody = async (request) => {
     let body = '';
@@ -190,8 +191,8 @@ const messagePayload = (currentAccount) => ({
         sent_at: '2026-08-07T12:00:00Z',
         read_at: null
     }] : [],
-    unread_count: currentAccount === playerAccount && !messagesRead ? 1 : 0,
-    next_cursor: null,
+    unread_count: currentAccount === playerAccount && !messagesRead ? 2 : 0,
+    next_cursor: currentAccount === playerAccount && !messagesRead ? 'browser-smoke-cursor' : null,
     player_recipients: currentAccount === playerAccount ? [{
         account_id: secondPlayerAccount.id,
         character_name: secondPlayerAccount.character_name
@@ -327,6 +328,12 @@ const serveApi = async (request, response, pathname) => {
     if (route === '/messages' && request.method === 'GET') {
         const currentAccount = requireSession(request, response);
         if (!currentAccount) return;
+        const cursor = new URL(request.url || '/', 'http://127.0.0.1').searchParams.get('cursor');
+        if (cursor !== null) {
+            messageContinuationRequests += 1;
+            jsonResponse(response, 503, { message: 'Simulated continuation failure.' }, expectedErrorResponse);
+            return;
+        }
         jsonResponse(response, 200, messagePayload(currentAccount));
         return;
     }
@@ -679,6 +686,17 @@ try {
     await page.locator('#message-notification-button').click();
     await page.locator('#message-notification-dialog').waitFor({ state: 'visible' });
     await page.locator('#message-notification-list .message-notification').first().getByText('Browser smoke message', { exact: true }).waitFor();
+    const [continuationResponse] = await Promise.all([
+        page.waitForResponse((response) => response.url().includes('/v1/messages?limit=50&cursor=')),
+        page.locator('#messages-next').click()
+    ]);
+    if (continuationResponse.status() !== 503) {
+        throw new Error(`Message continuation fixture returned ${continuationResponse.status()}.`);
+    }
+    await page.locator('#message-notification-list .message-notification').first().getByText('Browser smoke message', { exact: true }).waitFor();
+    if (messageContinuationRequests !== 1) {
+        throw new Error(`Message continuation failure fixture received ${messageContinuationRequests} requests.`);
+    }
     await page.locator('#message-notification-list .message-notification').first().getByText('Mark as read', { exact: true }).click();
     await page.locator('#message-notification-button').waitFor({ state: 'hidden' });
 
