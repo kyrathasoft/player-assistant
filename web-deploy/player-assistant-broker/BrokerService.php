@@ -5,6 +5,7 @@ declare(strict_types=1);
 require_once __DIR__ . '/DatabaseMigrationService.php';
 require_once __DIR__ . '/BrokerAlertService.php';
 require_once __DIR__ . '/PwaSyntheticMonitor.php';
+require_once __DIR__ . '/RevisionService.php';
 
 final class BrokerService
 {
@@ -15,6 +16,7 @@ final class BrokerService
     private WordCountService $wordCounts;
     private QuestService $quests;
     private MessageService $messages;
+    private RevisionService $revisions;
     private BrokerAlertService $alerts;
     private BrokerOperations $operations;
 
@@ -66,6 +68,7 @@ final class BrokerService
         $this->messages = new MessageService(
             $this->database,
             is_array($config['messages'] ?? null) ? $config['messages'] : []);
+        $this->revisions = new RevisionService($this->database, (string)$questDataPath);
     }
 
     public function dispatch(
@@ -159,6 +162,11 @@ final class BrokerService
         if ($method === 'GET' && $route === '/v1/quests') {
             $current = $this->characterAuth->requireCurrentAccount($session);
             return $this->response(200, $this->quests->forAccount($current['account']));
+        }
+
+        if ($method === 'GET' && $route === '/v1/revisions') {
+            $current = $this->characterAuth->requireCurrentAccount($session);
+            return $this->response(200, $this->revisions->forAccount($current['account']));
         }
 
         if ($method === 'POST' && $route === '/v1/quest-requests') {

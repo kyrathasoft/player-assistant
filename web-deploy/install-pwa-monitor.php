@@ -30,7 +30,7 @@ if ($characterName === '' || $password === '') {
     throw new RuntimeException('The monitor credentials are incomplete.');
 }
 
-$files = ['PwaSyntheticMonitor.php', 'run-pwa-monitor.php', 'BrokerService.php'];
+$files = ['PwaSyntheticMonitor.php', 'run-pwa-monitor.php'];
 foreach ($files as $file) {
     $path = $stageDirectory . '/' . $file;
     if (!is_file($path)) {

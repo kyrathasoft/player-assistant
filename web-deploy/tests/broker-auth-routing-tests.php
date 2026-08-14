@@ -631,6 +631,16 @@ try {
             && $quests['body']['notifications'] === [],
         'The player quest response returned invalid request metadata.');
 
+    $playerRevisions = $broker->dispatch(
+        'GET', '/v1/revisions', [], [], [], '192.0.2.30', $session);
+    routingAssert(
+        $playerRevisions['status'] === 200
+            && $playerRevisions['body']['schema_version'] === 1
+            && $playerRevisions['body']['messages']['unread_count'] === 0
+            && $playerRevisions['body']['quests']['activity_count'] === 0
+            && preg_match('/^[a-f0-9]{64}$/D', $playerRevisions['body']['messages']['revision']) === 1,
+        'The player revisions route returned an invalid response.');
+
     $playerMutationHeaders = [
         'origin' => 'https://example.test',
         'csrf-token' => $restored['body']['csrf_token'],
@@ -739,6 +749,11 @@ try {
         'origin' => 'https://example.test',
         'csrf-token' => $dungeonMasterLogin['body']['csrf_token'],
     ];
+    $dungeonMasterRevisions = $broker->dispatch(
+        'GET', '/v1/revisions', [], [], [], '192.0.2.31', $dungeonMasterSession);
+    routingAssert(
+        $dungeonMasterRevisions['body']['quests']['activity_count'] === 1,
+        'The Dungeon Master revisions route did not report the pending quest request.');
     $dungeonMasterXpAwards = $broker->dispatch(
         'GET',
         '/v1/xp-awards',

@@ -3,6 +3,7 @@ param(
     [string]$DreamHostTarget = 'player-assistant-dreamhost',
     [string]$SshKeyPath = (Join-Path $HOME '.ssh\dreamhost_player_assistant'),
     [string]$PrivateDirectory = '/home/dh_4gg2za/player-assistant-broker',
+    [string]$PublicApiPath = '/home/dh_4gg2za/bryanmiller.us/scarlethorizons/api/index.php',
     [uri]$SourceUrl = 'https://bryanmiller.us/scarlethorizons/data/word-counts.json',
     [uri]$HealthUrl = 'https://bryanmiller.us/scarlethorizons/api/v1/health',
     [string]$SigningMetadataPath = (Join-Path $PSScriptRoot 'word-count-signing-public.json'),
@@ -16,8 +17,11 @@ $ErrorActionPreference = 'Stop'
 if ($DreamHostTarget -notmatch '^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$') {
     throw 'The DreamHost target must be a simple SSH host alias or hostname.'
 }
-if ($PrivateDirectory -notmatch '^/home/[A-Za-z0-9._-]+(?:/[A-Za-z0-9._-]+)+$') {
-    throw 'The private directory must be an absolute path containing only safe path characters.'
+if ($PrivateDirectory -cne '/home/dh_4gg2za/player-assistant-broker') {
+    throw 'The private directory must be the approved Player Assistant broker root.'
+}
+if ($PublicApiPath -cne '/home/dh_4gg2za/bryanmiller.us/scarlethorizons/api/index.php') {
+    throw 'The public API path must be the approved Player Assistant API entry point.'
 }
 
 function Invoke-CheckedNative {
@@ -70,16 +74,18 @@ $metadata = Get-Content -Raw -LiteralPath $SigningMetadataPath | ConvertFrom-Jso
 if (-not (Test-Path -LiteralPath $PhpPath -PathType Leaf)) {
     throw "PHP signing runtime not found: $PhpPath"
 }
-$deployFiles = @('BrokerService.php', 'BrokerAlertService.php', 'BrokerOperations.php', 'DatabaseMigrationService.php', 'QuestService.php', 'WordCountService.php', 'refresh-word-counts.php', 'broker-maintenance.php')
+$deployFiles = @('BrokerService.php', 'BrokerAlertService.php', 'BrokerOperations.php', 'DatabaseMigrationService.php', 'QuestService.php', 'RevisionService.php', 'WordCountService.php', 'refresh-word-counts.php', 'broker-maintenance.php')
 $localHashes = @{}
 foreach ($file in $deployFiles) {
     $localHashes[$file] = (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $PSScriptRoot "player-assistant-broker\$file")).Hash.ToLowerInvariant()
 }
+$localPublicApiHash = (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $PSScriptRoot 'bryanmiller.us\scarlethorizons\api\index.php')).Hash.ToLowerInvariant()
 
 $remoteCode = @'
 $directory = '__PRIVATE_DIRECTORY__';
-$files = ['BrokerService.php', 'BrokerAlertService.php', 'BrokerOperations.php', 'DatabaseMigrationService.php', 'QuestService.php', 'WordCountService.php', 'refresh-word-counts.php', 'broker-maintenance.php'];
-$result = ['files' => [], 'config' => [], 'backups' => [], 'cron' => ''];
+$publicApiPath = '__PUBLIC_API_PATH__';
+$files = ['BrokerService.php', 'BrokerAlertService.php', 'BrokerOperations.php', 'DatabaseMigrationService.php', 'QuestService.php', 'RevisionService.php', 'WordCountService.php', 'refresh-word-counts.php', 'broker-maintenance.php'];
+$result = ['files' => [], 'public_api' => [], 'config' => [], 'backups' => [], 'cron' => ''];
 foreach ($files as $file) {
     $path = $directory . '/' . $file;
     $result['files'][$file] = [
@@ -87,6 +93,10 @@ foreach ($files as $file) {
         'mode' => is_file($path) ? substr(sprintf('%o', fileperms($path)), -4) : null,
     ];
 }
+$result['public_api'] = [
+    'sha256' => is_file($publicApiPath) ? hash_file('sha256', $publicApiPath) : null,
+    'mode' => is_file($publicApiPath) ? substr(sprintf('%o', fileperms($publicApiPath)), -4) : null,
+];
 $configPath = $directory . '/config.php';
 $config = is_file($configPath) ? require $configPath : [];
 $wordCounts = is_array($config['word_counts'] ?? null) ? $config['word_counts'] : [];
@@ -133,6 +143,7 @@ $patterns = [
     'BrokerAlertService.php.bak-deploy-*',
     'DatabaseMigrationService.php.bak-deploy-*',
     'QuestService.php.bak-deploy-*',
+    'RevisionService.php.bak-deploy-*',
     'WordCountService.php.bak-deploy-*',
     'WordCountService.php.bak-source-refresh-*',
     'refresh-word-counts.php.bak-deploy-*',
@@ -147,6 +158,7 @@ $cron = shell_exec('crontab -l 2>/dev/null');
 $result['cron'] = is_string($cron) ? $cron : '';
 echo json_encode($result, JSON_UNESCAPED_SLASHES);
 '@.Replace('__PRIVATE_DIRECTORY__', $PrivateDirectory.Replace("'", "\'"))
+   .Replace('__PUBLIC_API_PATH__', $PublicApiPath.Replace("'", "\'"))
 
 $remote = (Invoke-RemotePhp $remoteCode) | Out-String | ConvertFrom-Json
 foreach ($file in $deployFiles) {
@@ -156,6 +168,10 @@ foreach ($file in $deployFiles) {
     if ($remote.files.$file.mode -ne '0600') {
         throw "Unexpected production mode for ${file}: $($remote.files.$file.mode)."
     }
+}
+
+if ($remote.public_api.sha256 -ne $localPublicApiHash -or $remote.public_api.mode -ne '0644') {
+    throw 'Production drift detected for the public API entry point.'
 }
 
 $expectedStatusPath = "$PrivateDirectory/word-count-refresh-status.json"

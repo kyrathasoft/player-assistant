@@ -56,6 +56,11 @@ const expectedErrorResponse = { 'X-CI-Expected-Error': 'true' };
 let xpAwardsProjected = false;
 let messagesRead = false;
 let messageContinuationRequests = 0;
+let revisionRequests = 0;
+let messageRevisionGeneration = 0;
+let messageListFailuresRemaining = 0;
+let messageListRequests = 0;
+let expireSessionOnNextRevision = false;
 
 const readJsonBody = async (request) => {
     let body = '';
@@ -325,6 +330,38 @@ const serveApi = async (request, response, pathname) => {
         jsonResponse(response, 200, questPayload(currentAccount));
         return;
     }
+    if (route === '/revisions' && request.method === 'GET') {
+        const currentAccount = requireSession(request, response);
+        if (!currentAccount) return;
+        if (expireSessionOnNextRevision) {
+            expireSessionOnNextRevision = false;
+            response.writeHead(401, {
+                ...expectedErrorResponse,
+                'Content-Type': 'text/html; charset=utf-8',
+                'Set-Cookie': 'ci-session=; Max-Age=0; HttpOnly; SameSite=Strict; Path=/scarlethorizons/'
+            });
+            response.end('<html><body>Session expired.</body></html>');
+            return;
+        }
+        revisionRequests += 1;
+        const playerActivity = currentAccount === playerAccount && !messagesRead;
+        jsonResponse(response, 200, {
+            schema_version: 1,
+            observed_at: new Date().toISOString(),
+            messages: {
+                revision: playerActivity
+                    ? (messageRevisionGeneration === 0 ? '1' : '3').repeat(64)
+                    : '0'.repeat(64),
+                activity_count: playerActivity ? 2 : 0,
+                unread_count: playerActivity ? 2 : 0
+            },
+            quests: {
+                revision: playerActivity ? '2'.repeat(64) : '0'.repeat(64),
+                activity_count: 0
+            }
+        });
+        return;
+    }
     if (route === '/messages' && request.method === 'GET') {
         const currentAccount = requireSession(request, response);
         if (!currentAccount) return;
@@ -332,6 +369,12 @@ const serveApi = async (request, response, pathname) => {
         if (cursor !== null) {
             messageContinuationRequests += 1;
             jsonResponse(response, 503, { message: 'Simulated continuation failure.' }, expectedErrorResponse);
+            return;
+        }
+        messageListRequests += 1;
+        if (messageListFailuresRemaining > 0) {
+            messageListFailuresRemaining -= 1;
+            jsonResponse(response, 503, { message: 'Simulated message refresh failure.' }, expectedErrorResponse);
             return;
         }
         jsonResponse(response, 200, messagePayload(currentAccount));
@@ -585,7 +628,13 @@ try {
     }
     await page.locator('#auth-character-name').fill('CI Hero');
     await page.locator('#auth-password').fill('ci-password');
-    await page.locator('#auth-submit').click();
+    messageListFailuresRemaining = 2;
+    const initialMessageRequestsBeforeLogin = messageListRequests;
+    await Promise.all([
+        page.waitForResponse((response) => response.url().includes('/v1/messages?limit=50')
+            && response.status() === 503),
+        page.locator('#auth-submit').click()
+    ]);
     await page.locator('#auth-button-label').getByText('CI Hero', { exact: true }).waitFor();
     if (await page.locator('#auth-account-panel').isHidden()) {
         throw new Error('Authentication smoke failed: the signed-in account panel stayed hidden.');
@@ -594,6 +643,28 @@ try {
     await page.locator('#auth-dialog').waitFor({ state: 'hidden' });
     if (!await page.locator('#auth-button').evaluate((button) => document.activeElement === button)) {
         throw new Error('Dialog focus restoration failed after closing character login.');
+    }
+    for (let attempt = 0; attempt < 100 && messageListRequests < initialMessageRequestsBeforeLogin + 2; attempt++) {
+        await page.waitForTimeout(10);
+    }
+    if (messageListRequests < initialMessageRequestsBeforeLogin + 2) {
+        throw new Error('The first revision observation did not attempt the failed initial message refresh.');
+    }
+    await page.evaluate(() => {
+        Object.defineProperty(document, 'hidden', { configurable: true, value: true });
+        document.dispatchEvent(new Event('visibilitychange'));
+    });
+    await Promise.all([
+        page.waitForResponse((response) => response.url().endsWith('/v1/revisions')),
+        page.waitForResponse((response) => response.url().includes('/v1/messages?limit=50')
+            && response.status() === 200),
+        page.evaluate(() => {
+            Object.defineProperty(document, 'hidden', { configurable: true, value: false });
+            document.dispatchEvent(new Event('visibilitychange'));
+        })
+    ]);
+    if (messageListRequests < initialMessageRequestsBeforeLogin + 2) {
+        throw new Error('A failed initial message load was not retried from the first revision token.');
     }
 
     await page.waitForFunction(() => {
@@ -611,6 +682,87 @@ try {
     if (!(await page.locator('#quest-list .quest-card').first().textContent()).includes("CI Hero's test quest")) {
         throw new Error('Quest dashboard did not render the authenticated player quest.');
     }
+    await page.locator('[data-view="activity"]').click();
+    await page.locator('#view-activity').waitFor({ state: 'visible' });
+    await page.locator('#activity-list').getByText('Browser smoke message', { exact: true }).waitFor();
+    await page.waitForFunction(() => document.querySelector('#activity-status')?.textContent?.includes('2 active inbox items'));
+    if (revisionRequests < 1) {
+        throw new Error('Activity/Inbox did not load the lightweight revisions response.');
+    }
+    const revisionsBeforeHidden = revisionRequests;
+    await page.evaluate(() => {
+        Object.defineProperty(document, 'hidden', { configurable: true, value: true });
+        document.dispatchEvent(new Event('visibilitychange'));
+    });
+    await page.waitForTimeout(100);
+    if (revisionRequests !== revisionsBeforeHidden) {
+        throw new Error('Activity revisions polling ran while the page was hidden.');
+    }
+    await Promise.all([
+        page.waitForResponse((response) => response.url().endsWith('/v1/revisions')),
+        page.evaluate(() => {
+            Object.defineProperty(document, 'hidden', { configurable: true, value: false });
+            document.dispatchEvent(new Event('visibilitychange'));
+        })
+    ]);
+
+    messageRevisionGeneration = 1;
+    messageListFailuresRemaining = 1;
+    const messageRequestsBeforeFailedRevisionRefresh = messageListRequests;
+    await page.evaluate(() => {
+        Object.defineProperty(document, 'hidden', { configurable: true, value: true });
+        document.dispatchEvent(new Event('visibilitychange'));
+    });
+    await Promise.all([
+        page.waitForResponse((response) => response.url().endsWith('/v1/revisions')),
+        page.waitForResponse((response) => response.url().includes('/v1/messages?limit=50')
+            && response.status() === 503),
+        page.evaluate(() => {
+            Object.defineProperty(document, 'hidden', { configurable: true, value: false });
+            document.dispatchEvent(new Event('visibilitychange'));
+        })
+    ]);
+    await page.evaluate(() => {
+        Object.defineProperty(document, 'hidden', { configurable: true, value: true });
+        document.dispatchEvent(new Event('visibilitychange'));
+    });
+    await Promise.all([
+        page.waitForResponse((response) => response.url().endsWith('/v1/revisions')),
+        page.waitForResponse((response) => response.url().includes('/v1/messages?limit=50')
+            && response.status() === 200),
+        page.evaluate(() => {
+            Object.defineProperty(document, 'hidden', { configurable: true, value: false });
+            document.dispatchEvent(new Event('visibilitychange'));
+        })
+    ]);
+    if (messageListRequests !== messageRequestsBeforeFailedRevisionRefresh + 2) {
+        throw new Error('A failed revision-triggered message refresh was not retried.');
+    }
+
+    expireSessionOnNextRevision = true;
+    await page.evaluate(() => {
+        Object.defineProperty(document, 'hidden', { configurable: true, value: true });
+        document.dispatchEvent(new Event('visibilitychange'));
+    });
+    await Promise.all([
+        page.waitForResponse((response) => response.url().endsWith('/v1/revisions')
+            && response.status() === 401),
+        page.evaluate(() => {
+            Object.defineProperty(document, 'hidden', { configurable: true, value: false });
+            document.dispatchEvent(new Event('visibilitychange'));
+        })
+    ]);
+    await page.locator('#auth-button-label').getByText('Log in', { exact: true }).waitFor();
+    if (!(await page.locator('[data-view="activity"]').isHidden())
+        || !(await page.locator('#auth-account-panel').isHidden())) {
+        throw new Error('An expired polling session left protected UI visible.');
+    }
+    await page.locator('#auth-button').click();
+    await page.locator('#auth-character-name').fill('CI Hero');
+    await page.locator('#auth-password').fill('ci-password');
+    await page.locator('#auth-submit').click();
+    await page.locator('#auth-button-label').getByText('CI Hero', { exact: true }).waitFor();
+    await page.locator('#auth-dialog-close').click();
 
     await page.locator('[data-view="party-funds"]').click();
     await page.locator('#party-funds-total').waitFor({ state: 'visible' });
@@ -841,7 +993,7 @@ try {
     await page.waitForFunction(() => document.querySelector('#search-guidance')?.textContent?.includes('pack ready offline'));
     await page.locator('#campaign-search').fill('Kirkilston');
     await page.locator('#search-results .search-result').first().waitFor({ state: 'visible' });
-    if (![...workerUrls].some((url) => url.includes('/campaign-search-worker.js?v=80'))) {
+    if (![...workerUrls].some((url) => url.includes('/campaign-search-worker.js?v=83'))) {
         throw new Error(`Campaign search did not start its dedicated worker: ${JSON.stringify([...workerUrls])}.`);
     }
 
@@ -872,7 +1024,7 @@ try {
             throw new Error(`Offline feature data was not cached: ${requiredPath}`);
         }
     }
-    if (!cachedUrls.some((url) => url.endsWith('/campaign-search-worker.js?v=80'))) {
+    if (!cachedUrls.some((url) => url.endsWith('/campaign-search-worker.js?v=83'))) {
         throw new Error('Campaign search worker was not present in the offline shell cache.');
     }
     await page.evaluate(async () => {

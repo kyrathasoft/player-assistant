@@ -46,7 +46,7 @@
 
 ## PWA hardening backlog
 
-- [ ] Strengthen PWA runtime resilience and coverage.
+- [x] Strengthen PWA runtime resilience and coverage.
   - [x] Authenticated browser coverage covers XP Awards, current XP, quests, messages, party funds, failed login, logout, account switching, expired sessions, and cross-account denial.
   - [x] The browser fixture proves that a newly published cumulative total produces exactly one XP award with the correct date and delta, without duplication on subsequent refreshes.
   - [x] Protected views expose local freshness timestamps and explicit retry or refresh controls; broker stale/fallback metadata and full message/quest coverage remain.
@@ -72,7 +72,9 @@ Cross-cutting reliability, concurrency, API, and identity corrections to impleme
   - [x] The broker returns stable keyset-cursor pages of up to 100 unread messages with a total unread count and bounded cursor validation.
   - [x] The PWA displays the total count and lets users load older unread pages without discarding an already loaded page on continuation failure.
   - [x] Read-message retention is bounded by age and per-recipient count; unread messages are never pruned.
-- [ ] Stale data: add an Activity/Inbox view and a lightweight revisions endpoint with visibility-aware polling or opt-in Web Push so open PWAs discover new messages and quest decisions.
+- [x] Stale data: add an Activity/Inbox view and a lightweight revisions endpoint with visibility-aware polling so open PWAs discover new messages and quest decisions.
+  - [x] The authenticated `/v1/revisions` response exposes only account-scoped message and quest revision tokens plus activity counts.
+  - [x] Polling runs only while the authenticated PWA is visible and online; changed tokens refresh the existing protected message or quest response.
 - [ ] PHP concurrency: resolve and copy the authenticated identity, call `session_write_close()`, then perform read-only XP, word-count, quest, and message work—or return one dashboard payload instead of serialized `Promise.all` requests.
 - [ ] Broker startup: move migrations to deployment and lazily instantiate only the requested service; keep `/health` free of unnecessary SQLite, schema, and subsystem startup work.
 - [ ] Login hardening: rate-limit primarily by account-plus-source, retain a stronger address throttle, and use progressive delays instead of globally locking a known character name for everyone.

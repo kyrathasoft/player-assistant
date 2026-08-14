@@ -172,6 +172,8 @@ try {
     $unauthenticatedXp = Invoke-WebRequestAllowError -Uri "$baseUrl/v1/xp"
     Assert-Condition -Condition ($unauthenticatedXp.StatusCode -eq 401) -Message 'The HTTP XP route was not session-protected.'
     Assert-Condition -Condition ([string]$unauthenticatedXp.Headers['Cache-Control'] -match '(?i)(^|,\s*)no-store($|,)') -Message 'The rejected XP response was cacheable.'
+    $unauthenticatedRevisions = Invoke-WebRequestAllowError -Uri "$baseUrl/v1/revisions"
+    Assert-Condition -Condition ($unauthenticatedRevisions.StatusCode -eq 401) -Message 'The HTTP revisions route was not session-protected.'
 
     $createBody = @{
         character_name = 'HTTP Hero'
@@ -228,6 +230,14 @@ try {
         -WebSession $localWebSession
     $identity = $identityResponse.Content | ConvertFrom-Json
     Assert-Condition -Condition ($identity.account.character_key -eq 'http-hero') -Message 'The protected identity was not session-authorized.'
+
+    $revisionResponse = Invoke-WebRequest `
+        -UseBasicParsing `
+        -Uri "$baseUrl/v1/revisions" `
+        -WebSession $localWebSession
+    $revisionBody = $revisionResponse.Content | ConvertFrom-Json
+    Assert-Condition -Condition ($revisionResponse.StatusCode -eq 200) -Message 'The HTTP revisions route was not session-authorized.'
+    Assert-Condition -Condition ([int]$revisionBody.schema_version -eq 1 -and [string]$revisionBody.messages.revision -match '^[a-f0-9]{64}$' -and [string]$revisionBody.quests.revision -match '^[a-f0-9]{64}$') -Message 'The HTTP revisions route returned an invalid payload.'
 
     $unconfiguredXp = Invoke-WebRequestAllowError -Uri "$baseUrl/v1/xp" -WebSession $localWebSession
     $unconfiguredXpBody = $unconfiguredXp.Content | ConvertFrom-Json

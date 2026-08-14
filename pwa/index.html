@@ -13,9 +13,9 @@
     <link rel="manifest" href="manifest.webmanifest">
     <link rel="icon" href="icons/icon-192.png" sizes="192x192" type="image/png">
     <link rel="apple-touch-icon" href="icons/icon-192.png">
-    <link rel="stylesheet" href="styles.css?v=44">
+    <link rel="stylesheet" href="styles.css?v=45">
     <script src="version.js?v=1"></script>
-    <script type="module" src="app.js?v=80"></script>
+    <script type="module" src="app.js?v=83"></script>
 </head>
 <body>
     <a class="skip-link" href="#main-content">Skip to content</a>
@@ -56,6 +56,10 @@
             </button>
             <button class="nav-item" type="button" data-view="quests">
                 <span>Quests</span>
+            </button>
+            <button class="nav-item" type="button" data-view="activity" id="activity-nav" hidden>
+                <span>Activity / Inbox</span>
+                <span class="nav-count" id="activity-nav-count" hidden>0</span>
             </button>
             <button class="nav-item quest-state-cycle" id="quest-state-cycle" type="button"
                     aria-label="Cycle quest state filter" hidden>
@@ -235,6 +239,21 @@
                     <small class="data-freshness" id="quests-freshness" aria-live="polite" hidden></small>
                     <button class="secondary-button protected-retry" id="quests-retry" type="button" hidden>Retry</button>
                     <div class="quest-list" id="quest-list" hidden></div>
+                </div>
+            </section>
+
+            <section class="view" id="view-activity" data-view-panel="activity" aria-labelledby="activity-title" hidden>
+                <div class="page-heading">
+                    <div>
+                        <p class="eyebrow">Recent campaign updates</p>
+                        <h1 id="activity-title">Activity / Inbox</h1>
+                    </div>
+                    <button class="secondary-button" id="activity-refresh" type="button">Refresh</button>
+                </div>
+                <div class="quests-dashboard">
+                    <p id="activity-status" role="status" aria-live="polite">Log in to view campaign activity.</p>
+                    <small class="data-freshness" id="activity-freshness" aria-live="polite" hidden></small>
+                    <div class="quest-alert-list" id="activity-list" hidden></div>
                 </div>
             </section>
 

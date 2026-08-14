@@ -1,6 +1,6 @@
-import { initializeTranslator } from './modules/translator.js?v=80';
-import { initializeCampaignSearch } from './modules/search.js?v=80';
-import { initializeDice } from './modules/dice.js?v=80';
+import { initializeTranslator } from './modules/translator.js?v=83';
+import { initializeCampaignSearch } from './modules/search.js?v=83';
+import { initializeDice } from './modules/dice.js?v=83';
 
 (() => {
     'use strict';
@@ -67,7 +67,7 @@ import { initializeDice } from './modules/dice.js?v=80';
         [...document.querySelectorAll('[data-view-panel]')]
             .map((element) => [element.dataset.viewPanel, element]));
     const navButtons = [...document.querySelectorAll('[data-view]')];
-    const protectedNavViews = new Set(['quests', 'magic-items', 'party-funds', 'xp-awards']);
+    const protectedNavViews = new Set(['quests', 'activity', 'magic-items', 'party-funds', 'xp-awards']);
 
     let deferredInstallPrompt = null;
     let authenticatedAccount = null;
@@ -91,6 +91,12 @@ import { initializeDice } from './modules/dice.js?v=80';
     let messageRequestId = 0;
     let messageLoading = false;
     let messageError = '';
+    let authenticatedRevisionSnapshot = null;
+    let appliedMessageRevision = null;
+    let appliedQuestRevision = null;
+    let revisionRequestId = 0;
+    let revisionPollTimer = 0;
+    let revisionsUpdatedAt = 0;
     let magicItemSnapshot = null;
     let magicItemLoading = null;
     let magicItemError = '';
@@ -123,6 +129,7 @@ import { initializeDice } from './modules/dice.js?v=80';
         magicItemsUpdatedAt = 0;
         partyFundsUpdatedAt = 0;
         messagesUpdatedAt = 0;
+        revisionsUpdatedAt = 0;
     };
 
     const setView = (viewName, updateHistory = true) => {
@@ -828,7 +835,8 @@ import { initializeDice } from './modules/dice.js?v=80';
                 body: { quest_id: questId },
                 csrf: true
             });
-            await loadQuests();
+            authenticatedRevisionSnapshot = null;
+            await Promise.all([loadQuests(), loadRevisions()]);
         } catch (error) {
             if (status) status.textContent = error.message;
             button.disabled = false;
@@ -854,7 +862,8 @@ import { initializeDice } from './modules/dice.js?v=80';
                     body: { decision },
                     csrf: true
                 });
-            await loadQuests();
+            authenticatedRevisionSnapshot = null;
+            await Promise.all([loadQuests(), loadRevisions()]);
         } catch (error) {
             if (summary) summary.textContent = error.message;
             button.disabled = false;
@@ -873,7 +882,8 @@ import { initializeDice } from './modules/dice.js?v=80';
             await requestAuthenticationApi(
                 `/quest-requests/${requestId}/acknowledge`,
                 { method: 'POST', body: {}, csrf: true });
-            await loadQuests();
+            authenticatedRevisionSnapshot = null;
+            await Promise.all([loadQuests(), loadRevisions()]);
         } catch (error) {
             if (summary) summary.textContent = error.message;
             button.disabled = false;
@@ -1103,7 +1113,7 @@ import { initializeDice } from './modules/dice.js?v=80';
         if (authenticatedAccount === null) {
             authenticatedQuestSnapshot = null;
             renderQuestUi();
-            return;
+            return false;
         }
         const accountId = authenticatedAccount.id;
         authenticatedQuestSnapshot = null;
@@ -1111,14 +1121,17 @@ import { initializeDice } from './modules/dice.js?v=80';
         try {
             const snapshot = validateQuestSnapshot(
                 await requestAuthenticationApi('/quests'));
-            if (requestId !== questRequestId || authenticatedAccount?.id !== accountId) return;
+            if (requestId !== questRequestId || authenticatedAccount?.id !== accountId) return false;
             authenticatedQuestSnapshot = snapshot;
             questsUpdatedAt = Date.now();
             renderQuestUi();
+            renderActivityUi();
+            return true;
         } catch (error) {
-            if (requestId !== questRequestId || authenticatedAccount?.id !== accountId) return;
+            if (requestId !== questRequestId || authenticatedAccount?.id !== accountId) return false;
             const status = byId('quests-status');
             if (status) status.textContent = error.message;
+            return false;
         }
     };
 
@@ -1488,6 +1501,127 @@ import { initializeDice } from './modules/dice.js?v=80';
         undefined,
         { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value));
 
+    const validateRevisionSnapshot = (payload) => {
+        const validRevision = (entry, requireUnread) => entry
+            && typeof entry.revision === 'string'
+            && /^[a-f0-9]{64}$/u.test(entry.revision)
+            && Number.isInteger(entry.activity_count)
+            && entry.activity_count >= 0
+            && entry.activity_count <= 1000000
+            && (!requireUnread
+                || (Number.isInteger(entry.unread_count)
+                    && entry.unread_count === entry.activity_count));
+        if (!payload
+            || payload.schema_version !== 1
+            || typeof payload.observed_at !== 'string'
+            || !Number.isFinite(Date.parse(payload.observed_at))
+            || !validRevision(payload.messages, true)
+            || !validRevision(payload.quests, false)) {
+            throw new Error('The activity revision service returned an invalid response.');
+        }
+        return payload;
+    };
+
+    const renderActivityUi = () => {
+        const nav = byId('activity-nav');
+        const navCount = byId('activity-nav-count');
+        const status = byId('activity-status');
+        const list = byId('activity-list');
+        const messages = authenticatedMessageSnapshot?.messages || [];
+        const questActivity = authenticatedAccount?.role === 'dm'
+            ? (authenticatedQuestSnapshot?.pending_requests || [])
+            : (authenticatedQuestSnapshot?.notifications || []);
+        const total = (authenticatedRevisionSnapshot?.messages.activity_count ?? messages.length)
+            + (authenticatedRevisionSnapshot?.quests.activity_count ?? questActivity.length);
+        if (nav instanceof HTMLButtonElement) nav.hidden = authenticatedAccount === null;
+        if (navCount) {
+            navCount.hidden = total === 0;
+            navCount.textContent = total > 99 ? '99+' : String(total);
+        }
+        renderFreshness('activity-freshness', authenticatedAccount === null ? 0 : revisionsUpdatedAt);
+        list?.replaceChildren();
+        if (list) list.hidden = true;
+        if (authenticatedAccount === null) {
+            if (status) status.textContent = 'Log in to view campaign activity.';
+            return;
+        }
+        if (status) status.textContent = total === 0
+            ? 'You are caught up. New messages and quest decisions will appear here.'
+            : `${total} active inbox item${total === 1 ? '' : 's'}.`;
+        if (!list || (messages.length === 0 && questActivity.length === 0)) return;
+        const fragment = document.createDocumentFragment();
+        messages.forEach((message) => {
+            const card = document.createElement('article');
+            card.className = 'quest-alert-card';
+            const heading = document.createElement('h3');
+            heading.textContent = `Message from ${message.sender_character_name}`;
+            const body = document.createElement('p');
+            body.textContent = message.message;
+            const meta = document.createElement('p');
+            meta.className = 'message-notification-meta';
+            meta.textContent = formatMessageDate(message.sent_at);
+            card.append(heading, body, meta);
+            fragment.append(card);
+        });
+        questActivity.forEach((request) => {
+            const card = document.createElement('article');
+            card.className = 'quest-alert-card';
+            const heading = document.createElement('h3');
+            heading.textContent = authenticatedAccount.role === 'dm'
+                ? `Quest request from ${request.requester_character_name}`
+                : `Quest request ${request.status}`;
+            const body = document.createElement('p');
+            body.textContent = request.quest_title;
+            card.append(heading, body);
+            fragment.append(card);
+        });
+        list.append(fragment);
+        list.hidden = false;
+    };
+
+    const loadRevisions = async () => {
+        const requestId = ++revisionRequestId;
+        if (authenticatedAccount === null || document.hidden || !navigator.onLine) return;
+        const accountId = authenticatedAccount.id;
+        try {
+            const snapshot = validateRevisionSnapshot(await requestAuthenticationApi('/revisions'));
+            if (requestId !== revisionRequestId || authenticatedAccount?.id !== accountId) return;
+            authenticatedRevisionSnapshot = snapshot;
+            revisionsUpdatedAt = Date.now();
+            renderActivityUi();
+            const refreshes = [];
+            if (appliedMessageRevision !== snapshot.messages.revision) {
+                refreshes.push(loadMessages().then((succeeded) => {
+                    if (succeeded) appliedMessageRevision = snapshot.messages.revision;
+                }));
+            }
+            if (appliedQuestRevision !== snapshot.quests.revision) {
+                refreshes.push(loadQuests().then((succeeded) => {
+                    if (succeeded) appliedQuestRevision = snapshot.quests.revision;
+                }));
+            }
+            await Promise.all(refreshes);
+            renderActivityUi();
+        } catch (error) {
+            if (requestId !== revisionRequestId || authenticatedAccount?.id !== accountId) return;
+            if (activeView === 'activity') {
+                const status = byId('activity-status');
+                if (status) status.textContent = error.message;
+            }
+        }
+    };
+
+    const updateRevisionPolling = () => {
+        if (revisionPollTimer !== 0) {
+            window.clearInterval(revisionPollTimer);
+            revisionPollTimer = 0;
+        }
+        revisionRequestId++;
+        if (authenticatedAccount === null || document.hidden || !navigator.onLine) return;
+        void loadRevisions();
+        revisionPollTimer = window.setInterval(() => void loadRevisions(), 30000);
+    };
+
     const renderMessageNotifications = () => {
         const button = byId('message-notification-button');
         const count = byId('message-notification-count');
@@ -1562,7 +1696,7 @@ import { initializeDice } from './modules/dice.js?v=80';
             messageLoading = false;
             messageError = '';
             renderMessageNotifications();
-            return;
+            return false;
         }
         const accountId = authenticatedAccount.id;
         messageLoading = true;
@@ -1570,7 +1704,7 @@ import { initializeDice } from './modules/dice.js?v=80';
         try {
             const snapshot = validateMessageSnapshot(await requestAuthenticationApi(
                 cursor === null ? '/messages?limit=50' : `/messages?limit=50&cursor=${encodeURIComponent(cursor)}`));
-            if (requestId !== messageRequestId || authenticatedAccount?.id !== accountId) return;
+            if (requestId !== messageRequestId || authenticatedAccount?.id !== accountId) return false;
             const mergedMessages = [...new Map([
                 ...(authenticatedMessageSnapshot?.messages || []),
                 ...snapshot.messages
@@ -1580,14 +1714,18 @@ import { initializeDice } from './modules/dice.js?v=80';
                 : { ...snapshot, messages: mergedMessages };
             messagesUpdatedAt = Date.now();
             updateAuthenticationUi();
+            renderActivityUi();
+            return true;
         } catch (error) {
-            if (requestId !== messageRequestId || authenticatedAccount?.id !== accountId) return;
+            if (requestId !== messageRequestId || authenticatedAccount?.id !== accountId) return false;
             if (cursor === null) authenticatedMessageSnapshot = null;
             messageError = error.message;
+            return false;
         } finally {
             if (requestId === messageRequestId && authenticatedAccount?.id === accountId) {
                 messageLoading = false;
                 renderMessageNotifications();
+                renderActivityUi();
             }
         }
     };
@@ -1601,7 +1739,8 @@ import { initializeDice } from './modules/dice.js?v=80';
             await requestAuthenticationApi(
                 `/messages/${messageId}/read`,
                 { method: 'POST', body: {}, csrf: true });
-            await loadMessages();
+            authenticatedRevisionSnapshot = null;
+            await Promise.all([loadMessages(), loadRevisions()]);
         } catch (error) {
             messageError = error.message;
             if (summary) summary.textContent = messageError;
@@ -1977,6 +2116,7 @@ import { initializeDice } from './modules/dice.js?v=80';
         renderMessageDmUi();
         renderMessagePlayerUi();
         renderMessageNotifications();
+        renderActivityUi();
         updatePresencePolling();
         if (authenticated) {
             if (activeView === 'magic-items' && magicItemSnapshot === null) void loadMagicItems();
@@ -2120,6 +2260,42 @@ import { initializeDice } from './modules/dice.js?v=80';
         setHeroTokenImage(byId('auth-account-token'), hero);
     };
 
+    const clearExpiredAuthentication = () => {
+        if (authenticatedAccount === null) return;
+        authenticatedAccount = null;
+        authenticationCsrfToken = '';
+        clearProtectedFreshness();
+        authenticatedXpSnapshot = null;
+        xpRequestId++;
+        authenticatedXpAwardsSnapshot = null;
+        xpAwardsLoading = null;
+        xpAwardsError = '';
+        xpAwardsRequestId++;
+        authenticatedWordCountSnapshot = null;
+        wordCountRequestId++;
+        authenticatedPresenceSnapshot = null;
+        presenceRequestId++;
+        authenticatedQuestSnapshot = null;
+        questRequestId++;
+        authenticatedMessageSnapshot = null;
+        messageRequestId++;
+        authenticatedRevisionSnapshot = null;
+        appliedMessageRevision = null;
+        appliedQuestRevision = null;
+        revisionRequestId++;
+        messageLoading = false;
+        messageError = '';
+        questStateFilter = '';
+        lastQuestAlertSignature = '';
+        for (const id of ['quest-alert-dialog', 'message-notification-dialog']) {
+            const dialog = byId(id);
+            if (dialog instanceof HTMLDialogElement && dialog.open) dialog.close();
+        }
+        setAuthenticationMessage('Your session expired. Log in again.', true, true);
+        updateAuthenticationUi();
+        updateRevisionPolling();
+    };
+
     const requestAuthenticationApi = async (path, options = {}) => {
         const method = options.method || 'GET';
         const headers = new Headers({ Accept: 'application/json' });
@@ -2140,10 +2316,16 @@ import { initializeDice } from './modules/dice.js?v=80';
         } catch {
             throw new Error('The character login service is unavailable.');
         }
+        if (response.status === 401 && path !== '/login') clearExpiredAuthentication();
         let payload = {};
         try {
             payload = await response.json();
         } catch {
+            if (!response.ok) {
+                throw new Error(response.status === 401
+                    ? 'Authentication required.'
+                    : 'The character login request failed.');
+            }
             throw new Error('The character login service returned an invalid response.');
         }
         if (!response.ok) {
@@ -2286,12 +2468,17 @@ import { initializeDice } from './modules/dice.js?v=80';
         authenticatedPresenceSnapshot = null;
         authenticatedQuestSnapshot = null;
         authenticatedMessageSnapshot = null;
+        authenticatedRevisionSnapshot = null;
+        appliedMessageRevision = null;
+        appliedQuestRevision = null;
+        revisionRequestId++;
         messageRequestId++;
         messageLoading = false;
         messageError = '';
         questStateFilter = '';
         lastQuestAlertSignature = '';
         updateAuthenticationUi();
+        updateRevisionPolling();
         if (authenticatedAccount !== null) {
             await Promise.all([loadXpSummary(), loadWordCountSummary(), loadQuests(), loadMessages()]);
         }
@@ -2333,6 +2520,13 @@ import { initializeDice } from './modules/dice.js?v=80';
         const cursor = authenticatedMessageSnapshot?.next_cursor;
         if (typeof cursor === 'string') void loadMessages(cursor);
     });
+    byId('activity-refresh')?.addEventListener('click', async () => {
+        await Promise.all([loadMessages(), loadQuests(), loadRevisions()]);
+        renderActivityUi();
+    });
+    document.addEventListener('visibilitychange', updateRevisionPolling);
+    window.addEventListener('online', updateRevisionPolling);
+    window.addEventListener('offline', updateRevisionPolling);
     authDialog?.addEventListener('close', () => {
         void renderAuthenticatedHeroToken();
     });
@@ -2369,6 +2563,10 @@ import { initializeDice } from './modules/dice.js?v=80';
             authenticatedWordCountSnapshot = null;
             authenticatedQuestSnapshot = null;
             authenticatedMessageSnapshot = null;
+            authenticatedRevisionSnapshot = null;
+            appliedMessageRevision = null;
+            appliedQuestRevision = null;
+            revisionRequestId++;
             messageRequestId++;
             messageLoading = false;
             messageError = '';
@@ -2384,6 +2582,7 @@ import { initializeDice } from './modules/dice.js?v=80';
             setAuthenticationMessage('');
             setAuthenticationMessage('Character login succeeded.', false, true);
             updateAuthenticationUi();
+            updateRevisionPolling();
             await Promise.all([loadXpSummary(), loadWordCountSummary(), loadQuests(), loadMessages()]);
         } catch (error) {
             authenticatedAccount = null;
@@ -2397,6 +2596,10 @@ import { initializeDice } from './modules/dice.js?v=80';
             authenticatedWordCountSnapshot = null;
             authenticatedQuestSnapshot = null;
             authenticatedMessageSnapshot = null;
+            authenticatedRevisionSnapshot = null;
+            appliedMessageRevision = null;
+            appliedQuestRevision = null;
+            revisionRequestId++;
             messageRequestId++;
             messageLoading = false;
             messageError = '';
@@ -2404,6 +2607,7 @@ import { initializeDice } from './modules/dice.js?v=80';
             lastQuestAlertSignature = '';
             setAuthenticationMessage(error.message, true);
             updateAuthenticationUi();
+            updateRevisionPolling();
         } finally {
             password.value = '';
             submit.disabled = false;
@@ -2432,6 +2636,10 @@ import { initializeDice } from './modules/dice.js?v=80';
             questRequestId++;
             authenticatedMessageSnapshot = null;
             messageRequestId++;
+            authenticatedRevisionSnapshot = null;
+            appliedMessageRevision = null;
+            appliedQuestRevision = null;
+            revisionRequestId++;
             messageLoading = false;
             messageError = '';
             questStateFilter = '';
@@ -2445,6 +2653,7 @@ import { initializeDice } from './modules/dice.js?v=80';
                 messageDialog.close();
             }
             updateAuthenticationUi();
+            updateRevisionPolling();
             if (authDialog instanceof HTMLDialogElement) authDialog.close();
         } catch (error) {
             setAuthenticationMessage(error.message, true, true);
