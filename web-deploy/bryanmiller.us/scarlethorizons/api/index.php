@@ -52,6 +52,7 @@ try {
     $sessionState = [];
     $regenerateSession = null;
     $destroySession = null;
+    $releaseSession = null;
     if (isCharacterSessionRoute($route)) {
         startCharacterSession(is_array($config['auth'] ?? null) ? $config['auth'] : []);
         $sessionState =& $_SESSION;
@@ -62,6 +63,11 @@ try {
         };
         $destroySession = static function (): void {
             destroyCharacterSession();
+        };
+        $releaseSession = static function (): void {
+            if (session_status() === PHP_SESSION_ACTIVE) {
+                session_write_close();
+            }
         };
     }
 
@@ -80,7 +86,8 @@ try {
         (string)($_SERVER['REMOTE_ADDR'] ?? 'unknown'),
         $sessionState,
         $regenerateSession,
-        $destroySession);
+        $destroySession,
+        $releaseSession);
 
     sendJson($response['status'], $response['body']);
 } catch (BrokerHttpException $exception) {

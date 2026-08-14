@@ -489,6 +489,7 @@ try {
         $identity['body']['account']['character_key'] === 'routing',
         'The protected identity route did not use the session account.');
 
+    $sessionReleaseObserved = false;
     $xp = $broker->dispatch(
         'GET',
         '/v1/xp',
@@ -496,7 +497,13 @@ try {
         [],
         [],
         '192.0.2.30',
-        $session);
+        $session,
+        null,
+        null,
+        static function () use (&$sessionReleaseObserved): void {
+            $sessionReleaseObserved = true;
+        });
+    routingAssert($sessionReleaseObserved, 'The read-only XP route did not release the session lock before broker work.');
     routingAssert($xp['status'] === 200, 'The protected XP route failed.');
     routingAssert($xp['body']['scope'] === 'character', 'The player XP response had the wrong scope.');
     routingAssert($xp['body']['character']['xp_total'] === 12345, 'The player XP response had the wrong total.');
