@@ -28,7 +28,6 @@ const SHELL_ASSETS = [
     './icons/icon-512.png',
     './icons/dragon-mark.png',
     './magic-items.json',
-    './party-funds.json',
     './level-progression.json',
     './optional-packs.json',
     './optional-pack-loader.js'
@@ -316,7 +315,7 @@ self.addEventListener('fetch', (event) => {
         return;
     }
 
-    if (url.pathname.endsWith('/party-funds.json')) {
+    if (url.pathname.endsWith('/data/party-funds.json')) {
         event.respondWith(networkFirstData(request));
         return;
     }

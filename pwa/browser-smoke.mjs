@@ -15,8 +15,8 @@ const playerAccount = Object.freeze({
 });
 const secondPlayerAccount = Object.freeze({
     id: 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
-    character_name: 'CI Second Hero',
-    character_key: 'ci-second-hero',
+    character_name: 'Max',
+    character_key: 'maximilian',
     role: 'player'
 });
 const dungeonMasterAccount = Object.freeze({
@@ -55,6 +55,7 @@ const sessionAccount = (request) => ({
 const expectedErrorResponse = { 'X-CI-Expected-Error': 'true' };
 let xpAwardsProjected = false;
 let messagesRead = false;
+let messageContinuationRequests = 0;
 
 const readJsonBody = async (request) => {
     let body = '';
@@ -69,7 +70,7 @@ const requireSession = (request, response) => {
 };
 
 const xpCharacter = (currentAccount) => ({
-    character_name: currentAccount.character_name,
+    character_name: currentAccount === secondPlayerAccount ? 'Maximilian' : currentAccount.character_name,
     character_class: 'Fighter',
     level_before_award: 1,
     xp_award: 0,
@@ -92,6 +93,7 @@ const xpAwardEntry = (currentAccount) => ({
 
 const xpProgression = (currentAccount) => ({
     character_key: currentAccount.character_key,
+    is_account_character: true,
     entries: [
         {
             ...xpAwardEntry(currentAccount),
@@ -100,6 +102,58 @@ const xpProgression = (currentAccount) => ({
         },
         ...(currentAccount === playerAccount && xpAwardsProjected ? [xpAwardEntry(currentAccount)] : [])
     ]
+});
+
+const playerHirelingProgression = Object.freeze({
+    character_key: 'ci-hireling',
+    is_account_character: false,
+    entries: [{
+        character_name: 'CI Hireling',
+        character_class: 'Fighter',
+        level_before_award: 1,
+        xp_award: 250,
+        xp_award_date: '8.01.2026',
+        level_after_award: 1
+    }]
+});
+
+const playerHirelingXp = Object.freeze({
+    character_name: 'CI Hireling',
+    character_class: 'Fighter',
+    level_before_award: 1,
+    xp_award: 0,
+    xp_award_date: '8.07.2026',
+    level_after_award: 1,
+    level: 1,
+    hit_points: 8,
+    xp_total: 1000,
+    xp_to_next_level: 3000
+});
+
+const secondPlayerHirelingProgression = Object.freeze({
+    character_key: 'corba-xp',
+    is_account_character: false,
+    entries: [{
+        character_name: 'Corba',
+        character_class: 'Ranger',
+        level_before_award: 1,
+        xp_award: 554,
+        xp_award_date: '8.01.2026',
+        level_after_award: 1
+    }]
+});
+
+const secondPlayerHirelingXp = Object.freeze({
+    character_name: 'Corba',
+    character_class: 'Ranger',
+    level_before_award: 1,
+    xp_award: 0,
+    xp_award_date: '8.07.2026',
+    level_after_award: 1,
+    level: 1,
+    hit_points: 8,
+    xp_total: 554,
+    xp_to_next_level: 1696
 });
 
 const questPayload = (currentAccount) => ({
@@ -128,7 +182,7 @@ const questPayload = (currentAccount) => ({
 });
 
 const messagePayload = (currentAccount) => ({
-    schema_version: 2,
+    schema_version: 3,
     messages: currentAccount === playerAccount && !messagesRead ? [{
         id: '11111111111111111111111111111111',
         sender_character_name: 'CI Dungeon Master',
@@ -137,6 +191,8 @@ const messagePayload = (currentAccount) => ({
         sent_at: '2026-08-07T12:00:00Z',
         read_at: null
     }] : [],
+    unread_count: currentAccount === playerAccount && !messagesRead ? 2 : 0,
+    next_cursor: currentAccount === playerAccount && !messagesRead ? 'browser-smoke-cursor' : null,
     player_recipients: currentAccount === playerAccount ? [{
         account_id: secondPlayerAccount.id,
         character_name: secondPlayerAccount.character_name
@@ -158,7 +214,7 @@ const serveApi = async (request, response, pathname) => {
     if (route === '/login' && request.method === 'POST') {
         const credentials = await readJsonBody(request);
         const isPlayer = credentials.character_name === 'CI Hero' && credentials.password === 'ci-password';
-        const isSecondPlayer = credentials.character_name === 'CI Second Hero'
+        const isSecondPlayer = credentials.character_name === 'Max'
             && credentials.password === 'ci-second-password';
         const isDungeonMaster = credentials.character_name === 'CI Dungeon Master'
             && credentials.password === 'ci-dm-password';
@@ -220,14 +276,30 @@ const serveApi = async (request, response, pathname) => {
                 date_label: 'As of 8.07.2026',
                 stale: false,
                 scope: 'party',
-                characters: [xpCharacter(playerAccount), xpCharacter(secondPlayerAccount)]
+                characters: [
+                    {
+                        ...xpCharacter(playerAccount),
+                        level: 4,
+                        xp_total: 10770,
+                        xp_to_next_level: 5230
+                    },
+                    xpCharacter(secondPlayerAccount)
+                ]
             }
             : {
                 schema_version: 1,
                 date_label: 'As of 8.07.2026',
                 stale: false,
                 scope: 'character',
-                character: xpCharacter(currentAccount)
+                character: xpCharacter(currentAccount),
+                authorized_characters: [
+                    { character_key: currentAccount.character_key, character: xpCharacter(currentAccount) },
+                    ...(currentAccount === playerAccount
+                        ? [{ character_key: 'ci-hireling', character: playerHirelingXp }]
+                        : currentAccount === secondPlayerAccount
+                            ? [{ character_key: 'corba-xp', character: secondPlayerHirelingXp }]
+                            : [])
+                ]
             });
         return;
     }
@@ -239,7 +311,11 @@ const serveApi = async (request, response, pathname) => {
         jsonResponse(response, 200, {
             schema_version: 1,
             scope: currentAccount.role === 'dm' ? 'party' : 'character',
-            progressions: accounts.map(xpProgression)
+            progressions: [
+                ...accounts.map(xpProgression),
+                ...(currentAccount === playerAccount ? [playerHirelingProgression] : []),
+                ...(currentAccount === secondPlayerAccount ? [secondPlayerHirelingProgression] : [])
+            ]
         });
         return;
     }
@@ -252,6 +328,12 @@ const serveApi = async (request, response, pathname) => {
     if (route === '/messages' && request.method === 'GET') {
         const currentAccount = requireSession(request, response);
         if (!currentAccount) return;
+        const cursor = new URL(request.url || '/', 'http://127.0.0.1').searchParams.get('cursor');
+        if (cursor !== null) {
+            messageContinuationRequests += 1;
+            jsonResponse(response, 503, { message: 'Simulated continuation failure.' }, expectedErrorResponse);
+            return;
+        }
         jsonResponse(response, 200, messagePayload(currentAccount));
         return;
     }
@@ -550,6 +632,30 @@ try {
         || protectedTableSemantics.rowCount !== 2) {
         throw new Error(`Protected XP Awards table semantics failed: ${JSON.stringify(protectedTableSemantics)}.`);
     }
+    const playerProgressPresentation = await page.locator('#xp-awards-list .xp-award-progress-summary').first().evaluate((summary) => {
+        const heading = summary.closest('h2');
+        if (!(heading instanceof HTMLElement)) return { insideName: false };
+        const headingStyle = getComputedStyle(heading);
+        const summaryStyle = getComputedStyle(summary);
+        const headingRect = heading.getBoundingClientRect();
+        const summaryRect = summary.getBoundingClientRect();
+        return {
+            insideName: true,
+            text: summary.textContent,
+            font: summaryStyle.font,
+            headingFont: headingStyle.font,
+            sameLine: Math.abs(summaryRect.top - headingRect.top) < 2
+        };
+    });
+    if (!playerProgressPresentation.insideName
+        || playerProgressPresentation.text !== ' - Progress: 40.0% of the way toward Fighter Level 2'
+        || await page.locator('#xp-awards-list .xp-award-character h2').first().textContent() !== 'CI Hero - Progress: 40.0% of the way toward Fighter Level 2'
+        || await page.locator('#xp-awards-list .xp-award-character h2').nth(1).textContent() !== 'CI Hireling - Progress: 25.0% of the way toward Fighter Level 2'
+        || playerProgressPresentation.font !== playerProgressPresentation.headingFont
+        || !playerProgressPresentation.sameLine
+        || await page.locator('#xp-awards-list > .xp-award-progress-section').count() !== 0) {
+        throw new Error(`Player XP Awards progress presentation was incorrect: ${JSON.stringify(playerProgressPresentation)}`);
+    }
 
     await page.setViewportSize({ width: 320, height: 800 });
     const protectedMobileLayout = await page.evaluate(() => ({
@@ -580,6 +686,17 @@ try {
     await page.locator('#message-notification-button').click();
     await page.locator('#message-notification-dialog').waitFor({ state: 'visible' });
     await page.locator('#message-notification-list .message-notification').first().getByText('Browser smoke message', { exact: true }).waitFor();
+    const [continuationResponse] = await Promise.all([
+        page.waitForResponse((response) => response.url().includes('/v1/messages?limit=50&cursor=')),
+        page.locator('#messages-next').click()
+    ]);
+    if (continuationResponse.status() !== 503) {
+        throw new Error(`Message continuation fixture returned ${continuationResponse.status()}.`);
+    }
+    await page.locator('#message-notification-list .message-notification').first().getByText('Browser smoke message', { exact: true }).waitFor();
+    if (messageContinuationRequests !== 1) {
+        throw new Error(`Message continuation failure fixture received ${messageContinuationRequests} requests.`);
+    }
     await page.locator('#message-notification-list .message-notification').first().getByText('Mark as read', { exact: true }).click();
     await page.locator('#message-notification-button').waitFor({ state: 'hidden' });
 
@@ -602,17 +719,20 @@ try {
     }
 
     await page.locator('#auth-button').click();
-    await page.locator('#auth-character-name').fill('CI Second Hero');
+    await page.locator('#auth-character-name').fill('Max');
     await page.locator('#auth-password').fill('ci-second-password');
     await page.locator('#auth-submit').click();
-    await page.locator('#auth-button-label').getByText('CI Second Hero', { exact: true }).waitFor();
+    await page.locator('#auth-button-label').getByText('Max', { exact: true }).waitFor();
     await page.locator('#auth-dialog-close').click();
     await page.locator('#auth-dialog').waitFor({ state: 'hidden' });
     await page.waitForFunction(() => document.querySelector('#xp-total')?.textContent?.startsWith('1,200'));
     await page.locator('[data-view="xp-awards"]').click();
     await page.locator('#xp-awards-list').waitFor({ state: 'visible' });
     const secondPlayerAwardText = await page.locator('#xp-awards-list').textContent();
-    if (!secondPlayerAwardText.includes('CI Second Hero') || secondPlayerAwardText.includes('CI Hero')) {
+    if (!secondPlayerAwardText.includes('Maximilian - Progress: 28.6% of the way toward Fighter Level 2')
+        || !secondPlayerAwardText.includes('Corba - Progress: 24.6% of the way toward Ranger Level 2')
+        || secondPlayerAwardText.includes('Max Progress toward')
+        || secondPlayerAwardText.includes('CI Hero')) {
         throw new Error('Account switching or cross-account XP filtering failed.');
     }
     const secondPlayerMessages = await page.evaluate(async () => {
@@ -661,6 +781,15 @@ try {
         throw new Error(`Dungeon Master presence API returned ${dungeonMasterPresenceStatus}.`);
     }
     await page.locator('#auth-dialog-close').click();
+    await page.locator('[data-view="xp-awards"]').click();
+    await page.locator('#xp-awards-list').waitFor({ state: 'visible' });
+    const dungeonMasterProgressItems = await page.locator('#xp-awards-list .xp-award-progress-list li').allTextContents();
+    if (dungeonMasterProgressItems.length !== 2
+        || dungeonMasterProgressItems[0] !== 'CI Hero is 67.3% of the way toward Fighter Level 5'
+        || !dungeonMasterProgressItems[1].startsWith('Maximilian is ')
+        || await page.locator('#xp-awards-list .xp-award-character .xp-award-progress-summary').count() !== 0) {
+        throw new Error(`Dungeon Master XP Awards progress list was incorrect: ${JSON.stringify(dungeonMasterProgressItems)}`);
+    }
 
     await context.clearCookies();
     await page.reload({ waitUntil: 'domcontentloaded' });
@@ -712,7 +841,7 @@ try {
     await page.waitForFunction(() => document.querySelector('#search-guidance')?.textContent?.includes('pack ready offline'));
     await page.locator('#campaign-search').fill('Kirkilston');
     await page.locator('#search-results .search-result').first().waitFor({ state: 'visible' });
-    if (![...workerUrls].some((url) => url.includes('/campaign-search-worker.js?v=68'))) {
+    if (![...workerUrls].some((url) => url.includes('/campaign-search-worker.js?v=80'))) {
         throw new Error(`Campaign search did not start its dedicated worker: ${JSON.stringify([...workerUrls])}.`);
     }
 
@@ -743,7 +872,7 @@ try {
             throw new Error(`Offline feature data was not cached: ${requiredPath}`);
         }
     }
-    if (!cachedUrls.some((url) => url.endsWith('/campaign-search-worker.js?v=68'))) {
+    if (!cachedUrls.some((url) => url.endsWith('/campaign-search-worker.js?v=80'))) {
         throw new Error('Campaign search worker was not present in the offline shell cache.');
     }
     await page.evaluate(async () => {

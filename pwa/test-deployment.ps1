@@ -147,7 +147,7 @@ $runtimeFiles = [ordered]@{
     'data/heroes.json' = @('application/json', 'text/json')
     'level-progression.json' = @('application/json', 'text/json')
     'magic-items.json' = @('application/json', 'text/json')
-    'party-funds.json' = @('application/json', 'text/json')
+    'data/party-funds.json' = @('application/json', 'text/json')
     'quests.json' = @('application/json', 'text/json')
     'campaign-search.json' = @('application/json', 'text/json')
 }
@@ -206,7 +206,7 @@ try {
     $contentSecurityPolicy = Get-HeaderValue $indexResponse 'Content-Security-Policy'
     Assert-Condition -Condition ($contentSecurityPolicy.Contains("default-src 'self'") -and $contentSecurityPolicy.Contains("frame-ancestors 'none'") -and $contentSecurityPolicy.Contains("frame-src 'none'") -and $contentSecurityPolicy.Contains("object-src 'none'") -and $contentSecurityPolicy.Contains('upgrade-insecure-requests') -and $contentSecurityPolicy.Contains("connect-src 'self' https://publish-01.obsidian.md")) -Message 'The PWA Content-Security-Policy is incomplete.'
 
-    $uncachedFiles = @('service-worker.js', 'manifest.webmanifest', 'level-progression.json', 'magic-items.json', 'party-funds.json', 'quests.json') |
+    $uncachedFiles = @('service-worker.js', 'manifest.webmanifest', 'level-progression.json', 'magic-items.json', 'data/party-funds.json', 'quests.json') |
         Where-Object { $responses.ContainsKey($_) }
     foreach ($uncachedFile in $uncachedFiles) {
         $cacheControl = Get-HeaderValue $responses[$uncachedFile] 'Cache-Control'

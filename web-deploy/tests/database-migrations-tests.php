@@ -47,9 +47,17 @@ try {
     migrationAssert((int)$database->query('PRAGMA user_version')->fetchColumn() === DatabaseMigrationService::LATEST_VERSION, 'PRAGMA user_version was not advanced.');
     migrationAssert((int)$database->query("SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'broker_alert_events'")->fetchColumn() === 1, 'The alert-events migration did not run.');
     migrationAssert((int)$database->query("SELECT COUNT(*) FROM pragma_table_info('character_accounts') WHERE name = 'session_version'")->fetchColumn() === 1, 'The session-version upgrade did not run.');
+    $messageIndexSql = (string)$database->query(
+        "SELECT sql FROM sqlite_master WHERE type = 'index' AND name = 'ix_message_notifications_recipient_read'")
+        ->fetchColumn();
+    migrationAssert(
+        str_contains($messageIndexSql, 'sent_at DESC, id DESC'),
+        'The message pagination index was not upgraded for stable cursor ordering.');
     $backups = glob($backupDirectory . '/broker-migration-*.sqlite') ?: [];
-    migrationAssert(count($backups) === 1, 'The upgrade did not create one pre-migration backup.');
-    $backup = new PDO('sqlite:' . $backups[0], null, null, [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]);
+    migrationAssert(count($backups) === 2, 'The upgrade did not create one backup per migration step.');
+    $versionOneBackups = glob($backupDirectory . '/broker-migration-v1-to-v2-*.sqlite') ?: [];
+    migrationAssert(count($versionOneBackups) === 1, 'The version-one pre-migration backup is missing.');
+    $backup = new PDO('sqlite:' . $versionOneBackups[0], null, null, [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]);
     migrationAssert((int)$backup->query('PRAGMA user_version')->fetchColumn() === 1, 'The pre-migration backup was not from the old version.');
 
     echo "Database migration tests passed.\n";

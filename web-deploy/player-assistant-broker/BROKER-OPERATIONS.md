@@ -36,6 +36,7 @@ health endpoint and records health failures during scheduled recovery checks.
 Run:
 
 - `php web-deploy/tests/database-migrations-tests.php`
+- `php web-deploy/tests/message-pagination-tests.php`
 - `php web-deploy/tests/broker-alert-tests.php`
 - `php web-deploy/tests/broker-auth-routing-tests.php`
 

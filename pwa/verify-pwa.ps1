@@ -36,7 +36,7 @@ $requiredFiles = @(
     'data\heroes.json',
     'level-progression.json',
     'magic-items.json',
-    'party-funds.json',
+    'data\party-funds.json',
     'quests.json',
     'campaign-search.json',
     'optional-packs.json',
@@ -166,7 +166,7 @@ foreach ($magicItem in @($magicItems.items)) {
 }
 Assert-Condition -Condition (@($magicItems.items | Where-Object { $_.name -eq "Armstrong's Chamois" -and $_.'viewable-by' -eq 'all' }).Count -eq 1) -Message "Armstrong's Chamois must be viewable by all."
 
-$partyFunds = Get-Content -Raw -LiteralPath (Join-Path $PwaRoot 'party-funds.json') | ConvertFrom-Json
+$partyFunds = Get-Content -Raw -LiteralPath (Join-Path $PwaRoot 'data\party-funds.json') | ConvertFrom-Json
 $partyFundsGemstoneValuePattern = '^\s*(\d+(?:\.\d+)?)\s+gp$'
 $partyFundsExpectedFields = @('coins', 'fiction-date', 'gemstones', 'meta-date', 'schema_version', 'text')
 $partyFundsNormalizedText = ([string]$partyFunds.text).Replace("`r`n", "`n").Replace("`r", "`n")
@@ -320,9 +320,9 @@ Assert-Condition -Condition ($appScript.Contains("credentials: 'same-origin'")) 
 Assert-Condition -Condition ($appScript.Contains("cache: 'no-store'")) -Message 'Character authentication requests must bypass browser caching.'
 Assert-Condition -Condition ($appScript.Contains("'/login'") -and $appScript.Contains("'/session'") -and $appScript.Contains("'/xp'") -and $appScript.Contains("'/xp-awards'") -and $appScript.Contains("'/word-counts'") -and $appScript.Contains("'/presence'") -and $appScript.Contains("'/quests'") -and $appScript.Contains("'/quest-requests'") -and $appScript.Contains("'/messages'") -and $appScript.Contains("'/logout'")) -Message 'Character authentication and protected player-data routes are incomplete.'
 Assert-Condition -Condition ($html.Contains('id="message-dm-nav" hidden') -and $html.Contains('id="message-player-nav" hidden') -and $styles.Contains('.nav-item[hidden]') -and $appScript.Contains('messageDmNavButton.hidden = !authenticated || isDungeonMaster;') -and $appScript.Contains('messagePlayerNavButton.hidden = !canMessagePlayer;') -and $appScript.Contains("requestedView === 'message-player' && !canMessagePlayer") -and $appScript.Contains('authenticatedMessageSnapshot?.player_recipients.length')) -Message 'Messaging navigation and view access must remain hidden until the matching authenticated role and recipient availability are active.'
-Assert-Condition -Condition ($html.Contains('id="message-notification-button"') -and $html.Contains('id="message-notification-count"') -and $html.Contains('id="message-notification-dialog"') -and $html.Contains('id="message-notification-list"')) -Message 'Unread-message notification controls are incomplete.'
+Assert-Condition -Condition ($html.Contains('id="message-notification-button"') -and $html.Contains('id="message-notification-count"') -and $html.Contains('id="message-notification-dialog"') -and $html.Contains('id="message-notification-list"') -and $html.Contains('id="messages-next"')) -Message 'Unread-message notification controls are incomplete.'
 Assert-Condition -Condition ($appScript.Contains("everyPlayerOption.value = 'all-players';") -and $appScript.Contains("{ recipient_role: 'all_players' }")) -Message 'Dungeon Master messaging must support selecting every player.'
-Assert-Condition -Condition ($appScript.Contains('validateMessageSnapshot') -and $appScript.Contains('loadMessages') -and $appScript.Contains('renderMessageNotifications') -and $appScript.Contains('markMessageRead') -and $appScript.Contains('`/messages/${messageId}/read`') -and $appScript.Contains('loadXpSummary(), loadWordCountSummary(), loadQuests(), loadMessages()')) -Message 'Login-time unread-message retrieval or acknowledgement is incomplete.'
+Assert-Condition -Condition ($appScript.Contains('validateMessageSnapshot') -and $appScript.Contains('payload.unread_count') -and $appScript.Contains('payload.next_cursor') -and $appScript.Contains('loadMessages') -and $appScript.Contains('renderMessageNotifications') -and $appScript.Contains('markMessageRead') -and $appScript.Contains('`/messages/${messageId}/read`') -and $appScript.Contains('loadXpSummary(), loadWordCountSummary(), loadQuests(), loadMessages()')) -Message 'Login-time paginated unread-message retrieval or acknowledgement is incomplete.'
 Assert-Condition -Condition ($styles.Contains('.message-notification-button') -and $styles.Contains('.message-notification-button[hidden]') -and $styles.Contains('.message-notification-count') -and $styles.Contains('.message-notification-list')) -Message 'Unread-message notification styling is incomplete.'
 Assert-Condition -Condition ($html.Contains('autocomplete="current-password"')) -Message 'The character password field is not configured safely.'
 Assert-Condition -Condition ($html.Contains('id="xp-card"') -and $html.Contains('id="xp-total"') -and $html.Contains('id="xp-class-level"') -and $html.Contains('id="xp-hit-points"') -and $html.Contains('id="xp-tnl"') -and $html.Contains('id="xp-party-rows"')) -Message 'The protected XP dashboard card is incomplete.'
@@ -395,7 +395,7 @@ Assert-Condition -Condition (!$translatorWorker.Contains(".replaceAll('’', `"'
 Assert-Condition -Condition ($requestTranslationFunction.IndexOf('const id = ++translatorRequestId;', [System.StringComparison]::Ordinal) -ge 0 -and $requestTranslationFunction.IndexOf('const id = ++translatorRequestId;', [System.StringComparison]::Ordinal) -lt $requestTranslationFunction.IndexOf('if (source.trim().length === 0)', [System.StringComparison]::Ordinal) -and !$appScript.Contains('if (message.loading)')) -Message 'Every translator input state must invalidate prior worker responses before early-return validation.'
 Assert-Condition -Condition (!$serviceWorker.Contains("url.pathname.includes('/XP/')")) -Message 'The service worker must never fetch or cache legacy public XP data.'
 Assert-Condition -Condition ($html.Contains('class="magic-items-dashboard message-player-form"') -and $styles.Contains('.message-player-form > #message-player-recipient') -and $styles.Contains('margin-block: 5px;') -and $styles.Contains('.message-player-form > #message-player-text') -and $styles.Contains('margin-top: 5px;') -and $styles.Contains('.message-player-form > .magic-items-source-row') -and $styles.Contains('margin-top: 10px;')) -Message 'The Message a Player form must preserve the requested spacing between its labels, fields, and submit row.'
-Assert-Condition -Condition ($serviceWorker.Contains("'./party-funds.json'")) -Message 'The PWA shell must preload party-funds data.'
+Assert-Condition -Condition ($serviceWorker.Contains("url.pathname.endsWith('/data/party-funds.json')") -and $serviceWorker.Contains('event.respondWith(networkFirstData(request))')) -Message 'Party-funds data must use the installed data-cache fallback.'
 $apacheConfig = Get-Content -Raw -LiteralPath (Join-Path $PwaRoot '.htaccess')
 Assert-Condition -Condition ($apacheConfig.Contains('RewriteRule ^XP(?:/|$) - [R=404,L,NC]')) -Message 'Apache must deny legacy public XP paths.'
 Assert-Condition -Condition (!(Test-Path -LiteralPath (Join-Path $PwaRoot 'XP'))) -Message 'Legacy XP histories must not remain in the public PWA tree.'
@@ -405,7 +405,7 @@ Assert-Condition -Condition ($apacheConfig.Contains('img-src ''self'' data: http
 Assert-Condition -Condition ($apacheConfig.Contains('connect-src ''self'' https://publish-01.obsidian.md')) -Message 'The content security policy must allow the preferred magic-item wiki source.'
 Assert-Condition -Condition ($apacheConfig.Contains("object-src 'none'") -and $apacheConfig.Contains("frame-src 'none'") -and $apacheConfig.Contains('upgrade-insecure-requests')) -Message 'The content security policy must deny plugin/frame execution and upgrade insecure requests.'
 Assert-Condition -Condition ($apacheConfig.Contains('Strict-Transport-Security "max-age=31536000"')) -Message 'HSTS must be enabled for the PWA host.'
-Assert-Condition -Condition ($apacheConfig.Contains('magic-items\.json|party-funds\.json|quests\.json')) -Message 'Apache must require revalidation for public quest, party funds, and magic-item data.'
+Assert-Condition -Condition ($apacheConfig.Contains('magic-items\.json|data/party-funds\.json|quests\.json')) -Message 'Apache must require revalidation for public quest, party funds, and magic-item data.'
 Assert-Condition -Condition ($apacheConfig.Contains('campaign-search\.json')) -Message 'Apache must require revalidation for the scheduled campaign-search word-count data.'
 Assert-Condition -Condition ($apacheConfig.Contains('data/heroes\.json|data/hero-tokens/[^/]+')) -Message 'Apache must require revalidation for hero-token metadata and images.'
 Assert-Condition -Condition ($html.Contains('id="update-banner"') -and $html.Contains('id="update-apply"') -and $appScript.Contains('SKIP_WAITING') -and $serviceWorker.Contains("event.data?.type === 'SKIP_WAITING'")) -Message 'The PWA must expose an explicit service-worker update prompt.'

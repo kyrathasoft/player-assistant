@@ -1,6 +1,6 @@
-import { initializeTranslator } from './modules/translator.js?v=68';
-import { initializeCampaignSearch } from './modules/search.js?v=68';
-import { initializeDice } from './modules/dice.js?v=68';
+import { initializeTranslator } from './modules/translator.js?v=80';
+import { initializeCampaignSearch } from './modules/search.js?v=80';
+import { initializeDice } from './modules/dice.js?v=80';
 
 (() => {
     'use strict';
@@ -372,7 +372,15 @@ import { initializeDice } from './modules/dice.js?v=68';
             && (character.xp_to_next_level === null
                 || (Number.isSafeInteger(character.xp_to_next_level)
                     && character.xp_to_next_level >= 0));
-        if (payload.scope === 'character' && validCharacter(payload.character)) {
+        if (payload.scope === 'character'
+            && validCharacter(payload.character)
+            && Array.isArray(payload.authorized_characters)
+            && payload.authorized_characters.length > 0
+            && payload.authorized_characters.length <= 200
+            && payload.authorized_characters.every((entry) => entry
+                && typeof entry.character_key === 'string'
+                && /^[a-z0-9]+(?:-[a-z0-9]+)*$/u.test(entry.character_key)
+                && validCharacter(entry.character))) {
             return payload;
         }
         if (payload.scope === 'party'
@@ -403,6 +411,7 @@ import { initializeDice } from './modules/dice.js?v=68';
             authenticatedXpSnapshot = snapshot;
             xpUpdatedAt = Date.now();
             renderXpUi();
+            renderXpAwardsUi();
         } catch (error) {
             if (requestId !== xpRequestId || authenticatedAccount?.id !== accountId) return;
             const status = byId('xp-status');
@@ -412,6 +421,23 @@ import { initializeDice } from './modules/dice.js?v=68';
                 refreshButton.disabled = false;
             }
         }
+    };
+
+    const formatXpProgressAmount = (character) => {
+        if (!character || character.xp_to_next_level === null) return '';
+        const nextLevelXp = character.xp_total + character.xp_to_next_level;
+        if (!Number.isSafeInteger(nextLevelXp) || nextLevelXp <= 0) return '';
+        const percentage = new Intl.NumberFormat('en-US', {
+            minimumFractionDigits: 1,
+            maximumFractionDigits: 1,
+            useGrouping: false
+        }).format((character.xp_total / nextLevelXp) * 100);
+        return `${percentage}% of the way toward ${character.character_class} Level ${character.level + 1}`;
+    };
+
+    const formatXpProgressSummary = (character) => {
+        const progressAmount = formatXpProgressAmount(character);
+        return progressAmount === '' ? '' : `${character.character_name} is ${progressAmount}`;
     };
 
     const renderXpAwardsUi = () => {
@@ -443,16 +469,30 @@ import { initializeDice } from './modules/dice.js?v=68';
         }
         status.textContent = '';
         const fragment = document.createDocumentFragment();
-        authenticatedXpAwardsSnapshot.forEach(({ entries }) => {
+        authenticatedXpAwardsSnapshot.forEach(({ characterKey, entries }) => {
             const character = entries[0];
+            const currentProgression = authenticatedXpSnapshot?.scope === 'character'
+                ? authenticatedXpSnapshot.authorized_characters.find(
+                    (entry) => entry.character_key === characterKey)?.character
+                : null;
+            const headingName = currentProgression?.character_name || character.character_name;
             const card = document.createElement('article');
             card.className = 'xp-award-character';
             const heading = document.createElement('div');
             heading.className = 'xp-award-character-heading';
             const name = document.createElement('h2');
-            name.textContent = character.character_name;
+            name.textContent = headingName;
             const characterClass = document.createElement('span');
             characterClass.textContent = character.character_class;
+            if (currentProgression !== null) {
+                const progressAmount = formatXpProgressAmount(currentProgression);
+                if (progressAmount !== '') {
+                    const progress = document.createElement('span');
+                    progress.className = 'xp-award-progress-summary';
+                    progress.textContent = ` - Progress: ${progressAmount}`;
+                    name.append(progress);
+                }
+            }
             heading.append(name, characterClass);
             const table = document.createElement('table');
             const thead = document.createElement('thead');
@@ -480,6 +520,27 @@ import { initializeDice } from './modules/dice.js?v=68';
             card.append(heading, table);
             fragment.append(card);
         });
+        const progressCharacters = authenticatedXpSnapshot?.scope === 'party'
+            ? authenticatedXpSnapshot.characters
+            : [];
+        const progressItems = progressCharacters
+            .map((character) => formatXpProgressSummary(character))
+            .filter((summary) => summary !== '');
+        if (progressItems.length > 0) {
+            const progressSection = document.createElement('section');
+            progressSection.className = 'xp-award-progress-section';
+            const progressHeading = document.createElement('h2');
+            progressHeading.textContent = 'Progress toward next class level';
+            const progressList = document.createElement('ul');
+            progressList.className = 'xp-award-progress-list';
+            progressItems.forEach((summary) => {
+                const item = document.createElement('li');
+                item.textContent = summary;
+                progressList.append(item);
+            });
+            progressSection.append(progressHeading, progressList);
+            fragment.append(progressSection);
+        }
         list.append(fragment);
         list.hidden = false;
     };
@@ -526,13 +587,20 @@ import { initializeDice } from './modules/dice.js?v=68';
         return payload.progressions.map((progression) => {
             if (!progression
                 || typeof progression.character_key !== 'string'
-                || !/^[a-z0-9]+(?:-[a-z0-9]+)*$/u.test(progression.character_key)) {
+                || !/^[a-z0-9]+(?:-[a-z0-9]+)*$/u.test(progression.character_key)
+                || (payload.scope === 'character' && typeof progression.is_account_character !== 'boolean')) {
                 throw new Error('The XP Awards response was invalid.');
             }
             return {
                 characterKey: progression.character_key,
+                isAccountCharacter: progression.is_account_character === true,
                 entries: validateXpAwardsEntries(progression.entries)
             };
+        }).filter((progression, index, progressions) => {
+            if (payload.scope !== 'character') return true;
+            const primaryCount = progressions.filter((entry) => entry.isAccountCharacter).length;
+            if (primaryCount !== 1) throw new Error('The XP Awards response was invalid.');
+            return true;
         });
     };
 
@@ -1302,7 +1370,7 @@ import { initializeDice } from './modules/dice.js?v=68';
     };
 
     const fetchPartyFunds = async () => {
-        const response = await fetch('party-funds.json', { cache: 'no-cache' });
+        const response = await fetch('data/party-funds.json', { cache: 'no-cache' });
         if (!response.ok) {
             throw new Error('The bundled party-funds file is unavailable.');
         }
@@ -1398,10 +1466,16 @@ import { initializeDice } from './modules/dice.js?v=68';
             && Number.isFinite(Date.parse(message.sent_at))
             && message.read_at === null;
         if (!payload
-            || payload.schema_version !== 2
+            || payload.schema_version !== 3
             || !Array.isArray(payload.messages)
-            || payload.messages.length > 200
+            || payload.messages.length > 100
             || !payload.messages.every(validMessage)
+            || !Number.isInteger(payload.unread_count)
+            || payload.unread_count < payload.messages.length
+            || payload.unread_count > 1000000
+            || !(payload.next_cursor === null
+                || (typeof payload.next_cursor === 'string'
+                    && /^[A-Za-z0-9_-]{1,256}$/u.test(payload.next_cursor)))
             || !Array.isArray(payload.player_recipients)
             || payload.player_recipients.length > 200
             || !payload.player_recipients.every(validRecipient)) {
@@ -1421,17 +1495,23 @@ import { initializeDice } from './modules/dice.js?v=68';
         const summary = byId('message-notification-summary');
         const list = byId('message-notification-list');
         const messages = authenticatedMessageSnapshot?.messages || [];
+        const unreadCount = authenticatedMessageSnapshot?.unread_count || 0;
+        const nextButton = byId('messages-next');
         renderFreshness('messages-freshness', authenticatedAccount === null ? 0 : messagesUpdatedAt);
-        const showNotification = authenticatedAccount !== null && messages.length > 0;
+        const showNotification = authenticatedAccount !== null && unreadCount > 0;
 
         if (button instanceof HTMLButtonElement) {
             button.hidden = !showNotification;
             button.setAttribute(
                 'aria-label',
-                `${messages.length} unread message${messages.length === 1 ? '' : 's'}`);
+                `${unreadCount} unread message${unreadCount === 1 ? '' : 's'}`);
             button.title = button.getAttribute('aria-label') || 'Unread messages';
         }
-        if (count) count.textContent = messages.length > 99 ? '99+' : String(messages.length);
+        if (count) count.textContent = unreadCount > 99 ? '99+' : String(unreadCount);
+        if (nextButton instanceof HTMLButtonElement) {
+            nextButton.hidden = typeof authenticatedMessageSnapshot?.next_cursor !== 'string';
+            nextButton.disabled = messageLoading;
+        }
         if (!(dialog instanceof HTMLDialogElement) || list === null) return;
 
         list.replaceChildren();
@@ -1440,7 +1520,7 @@ import { initializeDice } from './modules/dice.js?v=68';
             return;
         }
         if (summary) {
-            summary.textContent = `${messages.length} unread message${messages.length === 1 ? '' : 's'}.`;
+            summary.textContent = `${unreadCount} unread message${unreadCount === 1 ? '' : 's'}.`;
         }
 
         const fragment = document.createDocumentFragment();
@@ -1475,7 +1555,7 @@ import { initializeDice } from './modules/dice.js?v=68';
         list.append(fragment);
     };
 
-    const loadMessages = async () => {
+    const loadMessages = async (cursor = null) => {
         const requestId = ++messageRequestId;
         if (authenticatedAccount === null) {
             authenticatedMessageSnapshot = null;
@@ -1488,15 +1568,21 @@ import { initializeDice } from './modules/dice.js?v=68';
         messageLoading = true;
         messageError = '';
         try {
-            const snapshot = validateMessageSnapshot(
-                await requestAuthenticationApi('/messages'));
+            const snapshot = validateMessageSnapshot(await requestAuthenticationApi(
+                cursor === null ? '/messages?limit=50' : `/messages?limit=50&cursor=${encodeURIComponent(cursor)}`));
             if (requestId !== messageRequestId || authenticatedAccount?.id !== accountId) return;
-            authenticatedMessageSnapshot = snapshot;
+            const mergedMessages = [...new Map([
+                ...(authenticatedMessageSnapshot?.messages || []),
+                ...snapshot.messages
+            ].map((message) => [message.id, message])).values()];
+            authenticatedMessageSnapshot = cursor === null || mergedMessages.length > snapshot.unread_count
+                ? snapshot
+                : { ...snapshot, messages: mergedMessages };
             messagesUpdatedAt = Date.now();
             updateAuthenticationUi();
         } catch (error) {
             if (requestId !== messageRequestId || authenticatedAccount?.id !== accountId) return;
-            authenticatedMessageSnapshot = null;
+            if (cursor === null) authenticatedMessageSnapshot = null;
             messageError = error.message;
         } finally {
             if (requestId === messageRequestId && authenticatedAccount?.id === accountId) {
@@ -2242,6 +2328,10 @@ import { initializeDice } from './modules/dice.js?v=68';
     });
     byId('messages-retry')?.addEventListener('click', () => {
         void loadMessages();
+    });
+    byId('messages-next')?.addEventListener('click', () => {
+        const cursor = authenticatedMessageSnapshot?.next_cursor;
+        if (typeof cursor === 'string') void loadMessages(cursor);
     });
     authDialog?.addEventListener('close', () => {
         void renderAuthenticatedHeroToken();

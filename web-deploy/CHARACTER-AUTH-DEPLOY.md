@@ -56,6 +56,8 @@ Merge the `auth` section from `player-assistant-broker/config.auth.example.php` 
 https://bryanmiller.us
 ```
 
+Optionally merge `player-assistant-broker/config.messages.example.php` to override the default 90-day and 500-read-message retention limits. Retention applies only to read messages; unread messages are paginated and retained until acknowledged.
+
 Merge the `xp` section from `player-assistant-broker/config.xp.example.php` into the same private `config.php`. Keep the XP and active-character source URLs in this private configuration; never place them in PWA JavaScript or accept them from a browser request. When `character_source_url` is omitted, the broker derives the `PCs/Player Characters Listing` page from the fixed XP source's Obsidian vault.
 
 Set the optional `word_counts` section to enable signed automatic word-count refresh:

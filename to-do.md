@@ -55,7 +55,7 @@
   - [x] Production security headers now include `object-src`, `frame-src`, and `upgrade-insecure-requests`; host-level HSTS remains enabled pending any future verified subdomain expansion.
   - [x] Static PWA verification validates generated data schemas, source URLs, record counts, token hashes, cache revisions, and deployment parity.
   - [x] Deployment verification and the scheduled monitor provide production coverage for anonymous API denial, asset parity, security/cache headers, and public runtime files; the live PWA deployment passed SHA-256 verification.
-  - [ ] Add explicit production detection for stale broker/source conditions and authorized protected-response shape.
+  - [x] Add explicit production detection for stale broker/source conditions and authorized protected-response shape.
     - [x] The scheduled monitor now authenticates, validates login/identity plus XP and word-count contracts, rejects stale XP/source/broker timestamps, and fails closed when monitor credentials are absent.
     - [x] Focused contract tests, canonical PWA verification, HTTP authentication tests, browser/service-worker smoke tests, parser and CI-policy checks, secret scanning, and an independent fail-closed review all pass.
     - [x] Configure `PWA_MONITOR_CHARACTER_NAME` and `PWA_MONITOR_PASSWORD` for a dedicated production monitor account, then verify the first authenticated live run.
@@ -67,8 +67,11 @@
 Cross-cutting reliability, concurrency, API, and identity corrections to implement as a coordinated backlog.
 
 - [x] Service worker: validate network responses before returning them, treat 404/503/wrong-MIME/captive-portal/corrupt-JSON responses as network failures when a valid cached copy exists, and add a bounded navigation timeout.
-- [ ] Offline party funds: place `party-funds.json` in the data cache or route its fallback through the cache where it is actually installed.
-- [ ] Messages: add server-side pagination, unread counts, cursor navigation, and retention so responses remain valid beyond 200 unread messages.
+- [x] Offline party funds: place `party-funds.json` in the data cache and route its fallback through the installed data-cache path.
+- [x] Messages: add server-side pagination, unread counts, cursor navigation, and retention so responses remain valid beyond 200 unread messages.
+  - [x] The broker returns stable keyset-cursor pages of up to 100 unread messages with a total unread count and bounded cursor validation.
+  - [x] The PWA displays the total count and lets users load older unread pages without discarding an already loaded page on continuation failure.
+  - [x] Read-message retention is bounded by age and per-recipient count; unread messages are never pruned.
 - [ ] Stale data: add an Activity/Inbox view and a lightweight revisions endpoint with visibility-aware polling or opt-in Web Push so open PWAs discover new messages and quest decisions.
 - [ ] PHP concurrency: resolve and copy the authenticated identity, call `session_write_close()`, then perform read-only XP, word-count, quest, and message work—or return one dashboard payload instead of serialized `Promise.all` requests.
 - [ ] Broker startup: move migrations to deployment and lazily instantiate only the requested service; keep `/health` free of unnecessary SQLite, schema, and subsystem startup work.

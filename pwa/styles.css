@@ -1478,6 +1478,12 @@ textarea[readonly] {
     text-transform: capitalize;
 }
 
+.xp-award-character-heading h2 .xp-award-progress-summary {
+    color: inherit;
+    font: inherit;
+    text-transform: none;
+}
+
 .xp-award-character table {
     width: 100%;
     min-width: 32rem;

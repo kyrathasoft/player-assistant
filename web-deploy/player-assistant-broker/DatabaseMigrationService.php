@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 final class DatabaseMigrationService
 {
-    public const LATEST_VERSION = 2;
+    public const LATEST_VERSION = 3;
 
     public function __construct(
         private readonly PDO $database,
@@ -68,6 +68,7 @@ final class DatabaseMigrationService
         match ($version) {
             1 => $this->migrationOne(),
             2 => $this->migrationTwo(),
+            3 => $this->migrationThree(),
             default => throw new RuntimeException("Unknown broker migration version: $version"),
         };
     }
@@ -227,5 +228,23 @@ final class DatabaseMigrationService
             );
             CREATE INDEX IF NOT EXISTS ix_broker_alert_events_type_time
                 ON broker_alert_events(alert_type, occurred_at);');
+    }
+
+    private function migrationThree(): void
+    {
+        $this->database->exec(
+            'CREATE TABLE IF NOT EXISTS message_notifications (
+                id TEXT PRIMARY KEY,
+                sender_account_id TEXT NOT NULL,
+                recipient_account_id TEXT NOT NULL,
+                message TEXT NOT NULL,
+                sent_at INTEGER NOT NULL,
+                read_at INTEGER NULL,
+                FOREIGN KEY (sender_account_id) REFERENCES character_accounts(id) ON DELETE CASCADE,
+                FOREIGN KEY (recipient_account_id) REFERENCES character_accounts(id) ON DELETE CASCADE
+            );
+            DROP INDEX IF EXISTS ix_message_notifications_recipient_read;
+            CREATE INDEX ix_message_notifications_recipient_read
+                ON message_notifications(recipient_account_id, read_at, sent_at DESC, id DESC);');
     }
 }
