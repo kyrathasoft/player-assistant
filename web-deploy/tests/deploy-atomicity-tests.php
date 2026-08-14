@@ -31,6 +31,10 @@ deployAtomicityAssert(
     !preg_match('/^\s+[.]Replace\(/m', $deploymentVerifier),
     'The production verifier must remain callable under inherited strict mode.');
 deployAtomicityAssert(
+    !str_contains($deploymentVerifier, '$health.word_count_refresh')
+        && !str_contains($deploymentVerifier, '$health.operations'),
+    'Optional health fields must be inspected safely under inherited strict mode.');
+deployAtomicityAssert(
     str_contains($deploymentScript, "if (\$PrivateDirectory -cne '/home/dh_4gg2za/player-assistant-broker')")
         && str_contains($deploymentScript, "if (\$PublicApiPath -cne '/home/dh_4gg2za/bryanmiller.us/scarlethorizons/api/index.php')"),
     'Deployment paths must be pinned to the approved private root and public API target.');
