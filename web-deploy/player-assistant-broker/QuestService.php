@@ -51,7 +51,6 @@ final class QuestService
         if (trim($dataPath) === '') {
             throw new RuntimeException('The quest data path is not configured.');
         }
-        $this->ensureSchema();
     }
 
     public function forAccount(array $account): array
@@ -601,40 +600,6 @@ final class QuestService
         ];
     }
 
-    private function ensureSchema(): void
-    {
-        $this->database->exec(
-            'CREATE TABLE IF NOT EXISTS quest_requests (
-                id TEXT PRIMARY KEY,
-                quest_id TEXT NOT NULL,
-                requester_account_id TEXT NOT NULL,
-                status TEXT NOT NULL CHECK(status IN (\'pending\', \'approved\', \'denied\')),
-                created_at INTEGER NOT NULL,
-                decided_at INTEGER NULL,
-                decided_by_account_id TEXT NULL,
-                requester_acknowledged_at INTEGER NULL,
-                FOREIGN KEY (requester_account_id)
-                    REFERENCES character_accounts(id) ON DELETE CASCADE,
-                FOREIGN KEY (decided_by_account_id)
-                    REFERENCES character_accounts(id) ON DELETE SET NULL
-            );
-            CREATE UNIQUE INDEX IF NOT EXISTS ux_quest_requests_pending
-                ON quest_requests(quest_id, requester_account_id)
-                WHERE status = \'pending\';
-            CREATE INDEX IF NOT EXISTS ix_quest_requests_status_time
-                ON quest_requests(status, created_at);
-            CREATE INDEX IF NOT EXISTS ix_quest_requests_requester_status
-                ON quest_requests(requester_account_id, status);
-            CREATE TABLE IF NOT EXISTS quest_state_overrides (
-                quest_id TEXT PRIMARY KEY,
-                base_state TEXT NOT NULL,
-                state TEXT NOT NULL CHECK(state = \'active\'),
-                updated_at INTEGER NOT NULL,
-                updated_by_account_id TEXT NOT NULL,
-                FOREIGN KEY (updated_by_account_id)
-                    REFERENCES character_accounts(id) ON DELETE RESTRICT
-            );');
-    }
 
     private function requireText(
         mixed $value,

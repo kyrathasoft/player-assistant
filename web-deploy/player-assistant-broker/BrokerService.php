@@ -11,14 +11,17 @@ final class BrokerService
 {
     private PDO $database;
     private array $apiConfig;
-    private CharacterAuthService $characterAuth;
-    private XpTrackingService $xpTracking;
-    private WordCountService $wordCounts;
-    private QuestService $quests;
-    private MessageService $messages;
-    private RevisionService $revisions;
-    private BrokerAlertService $alerts;
-    private BrokerOperations $operations;
+    private ?CharacterAuthService $characterAuth = null;
+    private ?XpTrackingService $xpTracking = null;
+    private ?WordCountService $wordCounts = null;
+    private ?QuestService $quests = null;
+    private ?MessageService $messages = null;
+    private ?RevisionService $revisions = null;
+    private ?BrokerAlertService $alerts = null;
+    private ?BrokerOperations $operations = null;
+    private $xpMarkdownFetcher;
+    private $wordCountFetcher;
+    private ?string $questDataPath = null;
 
     public function __construct(
         private readonly array $config,
@@ -36,6 +39,9 @@ final class BrokerService
             throw new RuntimeException('The PHP PDO SQLite extension is required.');
         }
 
+        $this->xpMarkdownFetcher = $xpMarkdownFetcher;
+        $this->wordCountFetcher = $wordCountFetcher;
+        $this->questDataPath = $questDataPath;
         $this->apiConfig = $config['api'];
         $databasePath = (string)$this->apiConfig['database_path'];
         $this->database = new PDO('sqlite:' . $databasePath, null, null, [
@@ -45,30 +51,7 @@ final class BrokerService
         ]);
         $this->database->exec('PRAGMA foreign_keys = ON');
         $this->database->exec('PRAGMA busy_timeout = 5000');
-        $migrationConfig = is_array($config['migrations'] ?? null) ? $config['migrations'] : [];
-        $migrationBackupDirectory = (string)($migrationConfig['backup_directory'] ?? dirname($databasePath) . '/migration-backups');
-        (new DatabaseMigrationService($this->database, $migrationBackupDirectory))->migrate();
-        $this->alerts = new BrokerAlertService(
-            $this->database,
-            is_array($config['observability'] ?? null) ? $config['observability'] : []);
-        $this->operations = new BrokerOperations($config);
-        $this->ensureSchema();
-        $this->characterAuth = new CharacterAuthService(
-            $this->database,
-            is_array($config['auth'] ?? null) ? $config['auth'] : []);
-        $this->xpTracking = new XpTrackingService(
-            $this->database,
-            is_array($config['xp'] ?? null) ? $config['xp'] : [],
-            $xpMarkdownFetcher);
-        $this->wordCounts = new WordCountService(
-            $this->database,
-            is_array($config['word_counts'] ?? null) ? $config['word_counts'] : [],
-            $wordCountFetcher);
-        $this->quests = new QuestService($this->database, (string)$questDataPath);
-        $this->messages = new MessageService(
-            $this->database,
-            is_array($config['messages'] ?? null) ? $config['messages'] : []);
-        $this->revisions = new RevisionService($this->database, (string)$questDataPath);
+        $this->verifySchemaVersion();
     }
 
     public function dispatch(
@@ -93,9 +76,9 @@ final class BrokerService
 
         if ($method === 'GET' && $route === '/v1/admin/health') {
             $this->requireAdminSignature($method, $route, $body, $headers);
-            $wordCountRefresh = $this->wordCounts->refreshStatus();
+            $wordCountRefresh = $this->wordCounts()->refreshStatus();
             if (($wordCountRefresh['healthy'] ?? null) === false) {
-                $this->alerts->recordHealthFailure(
+                $this->alerts()->recordHealthFailure(
                     (string)($wordCountRefresh['last_error_code'] ?? 'word_count_refresh_failed'),
                     'The word-count refresh health check is failing.');
             }
@@ -107,11 +90,11 @@ final class BrokerService
                 'rpol_credentials_configured' => $this->rpolCredentialsConfigured(),
                 'snapshot_signing_configured' => $this->snapshotSigningConfigured(),
                 'snapshot_count' => $this->snapshotCount(),
-                'character_account_count' => $this->characterAuth->accountCount(),
-                'xp_tracking_configured' => $this->xpTracking->isConfigured(),
-                'word_count_snapshot_available' => $this->wordCounts->hasSnapshot(),
+                'character_account_count' => $this->characterAuth()->accountCount(),
+                'xp_tracking_configured' => $this->xpTracking()->isConfigured(),
+                'word_count_snapshot_available' => $this->wordCounts()->hasSnapshot(),
                 'word_count_refresh' => $wordCountRefresh,
-                'operations' => $this->operations->healthStatus(),
+                'operations' => $this->operations()->healthStatus(),
                 'pwa_monitor' => (new PwaSyntheticMonitor(
                     is_array($this->config['pwa_monitor'] ?? null) ? $this->config['pwa_monitor'] : []))->healthStatus(),
                 'quest_request_workflow_configured' => true,
@@ -121,7 +104,7 @@ final class BrokerService
         if ($method === 'POST' && $route === '/v1/login') {
             return $this->response(
                 200,
-                $this->characterAuth->login(
+                $this->characterAuth()->login(
                     $body,
                     $remoteAddress,
                     (string)($headers['origin'] ?? ''),
@@ -130,60 +113,60 @@ final class BrokerService
         }
 
         if ($method === 'GET' && $route === '/v1/session') {
-            $response = $this->characterAuth->currentSession($session);
+            $response = $this->characterAuth()->currentSession($session);
             $this->releaseSessionLock($releaseSession);
             return $this->response(200, $response);
         }
 
         if ($method === 'GET' && $route === '/v1/me') {
-            $response = $this->characterAuth->requireCurrentAccount($session);
+            $response = $this->characterAuth()->requireCurrentAccount($session);
             $this->releaseSessionLock($releaseSession);
             return $this->response(200, $response);
         }
 
         if ($method === 'GET' && $route === '/v1/xp') {
-            $current = $this->characterAuth->requireCurrentAccount($session);
+            $current = $this->characterAuth()->requireCurrentAccount($session);
             $this->releaseSessionLock($releaseSession);
             return $this->response(
                 200,
-                $this->xpTracking->getForAccount($current['account']));
+                $this->xpTracking()->getForAccount($current['account']));
         }
 
         if ($method === 'GET' && $route === '/v1/xp-awards') {
-            $current = $this->characterAuth->requireCurrentAccount($session);
+            $current = $this->characterAuth()->requireCurrentAccount($session);
             $this->releaseSessionLock($releaseSession);
             return $this->response(
                 200,
-                $this->xpTracking->getAwardsForAccount($current['account']));
+                $this->xpTracking()->getAwardsForAccount($current['account']));
         }
 
         if ($method === 'GET' && $route === '/v1/word-counts') {
-            $current = $this->characterAuth->requireCurrentAccount($session);
+            $current = $this->characterAuth()->requireCurrentAccount($session);
             $this->releaseSessionLock($releaseSession);
-            return $this->response(200, $this->wordCounts->latest());
+            return $this->response(200, $this->wordCounts()->latest());
         }
 
         if ($method === 'GET' && $route === '/v1/presence') {
-            return $this->response(200, $this->characterAuth->presence($session));
+            return $this->response(200, $this->characterAuth()->presence($session));
         }
 
         if ($method === 'GET' && $route === '/v1/quests') {
-            $current = $this->characterAuth->requireCurrentAccount($session);
+            $current = $this->characterAuth()->requireCurrentAccount($session);
             $this->releaseSessionLock($releaseSession);
-            return $this->response(200, $this->quests->forAccount($current['account']));
+            return $this->response(200, $this->quests()->forAccount($current['account']));
         }
 
         if ($method === 'GET' && $route === '/v1/revisions') {
-            $current = $this->characterAuth->requireCurrentAccount($session);
+            $current = $this->characterAuth()->requireCurrentAccount($session);
             $this->releaseSessionLock($releaseSession);
-            return $this->response(200, $this->revisions->forAccount($current['account']));
+            return $this->response(200, $this->revisions()->forAccount($current['account']));
         }
 
         if ($method === 'POST' && $route === '/v1/quest-requests') {
-            $current = $this->characterAuth->requireMutationAccount($headers, $session);
+            $current = $this->characterAuth()->requireMutationAccount($headers, $session);
             return $this->response(
                 201,
-                $this->quests->requestInterest($current['account'], $body));
+                $this->quests()->requestInterest($current['account'], $body));
         }
 
         if ($method === 'POST'
@@ -191,10 +174,10 @@ final class BrokerService
                 '#^/v1/quest-requests/([a-f0-9]{32})/decision$#',
                 $route,
                 $matches) === 1) {
-            $current = $this->characterAuth->requireMutationAccount($headers, $session);
+            $current = $this->characterAuth()->requireMutationAccount($headers, $session);
             return $this->response(
                 200,
-                $this->quests->decide($current['account'], $matches[1], $body));
+                $this->quests()->decide($current['account'], $matches[1], $body));
         }
 
         if ($method === 'POST'
@@ -202,23 +185,23 @@ final class BrokerService
                 '#^/v1/quest-requests/([a-f0-9]{32})/acknowledge$#',
                 $route,
                 $matches) === 1) {
-            $current = $this->characterAuth->requireMutationAccount($headers, $session);
+            $current = $this->characterAuth()->requireMutationAccount($headers, $session);
             return $this->response(
                 200,
-                $this->quests->acknowledge($current['account'], $matches[1]));
+                $this->quests()->acknowledge($current['account'], $matches[1]));
         }
 
         if ($method === 'GET' && $route === '/v1/messages') {
-            $current = $this->characterAuth->requireCurrentAccount($session);
+            $current = $this->characterAuth()->requireCurrentAccount($session);
             $this->releaseSessionLock($releaseSession);
-            return $this->response(200, $this->messages->forAccount($current['account'], $query));
+            return $this->response(200, $this->messages()->forAccount($current['account'], $query));
         }
 
         if ($method === 'POST' && $route === '/v1/messages') {
-            $current = $this->characterAuth->requireMutationAccount($headers, $session);
+            $current = $this->characterAuth()->requireMutationAccount($headers, $session);
             return $this->response(
                 201,
-                $this->messages->sendForAccount($current['account'], $body));
+                $this->messages()->sendForAccount($current['account'], $body));
         }
 
         if ($method === 'POST'
@@ -226,16 +209,16 @@ final class BrokerService
                 '#^/v1/messages/([a-f0-9]{32})/read$#',
                 $route,
                 $matches) === 1) {
-            $current = $this->characterAuth->requireMutationAccount($headers, $session);
+            $current = $this->characterAuth()->requireMutationAccount($headers, $session);
             return $this->response(
                 200,
-                $this->messages->markRead($current['account'], $matches[1]));
+                $this->messages()->markRead($current['account'], $matches[1]));
         }
 
         if ($method === 'POST' && $route === '/v1/logout') {
             return $this->response(
                 200,
-                $this->characterAuth->logout(
+                $this->characterAuth()->logout(
                     $headers,
                     $remoteAddress,
                     $session,
@@ -244,22 +227,22 @@ final class BrokerService
 
         if ($route === '/v1/admin/character-accounts/import' && $method === 'POST') {
             $this->requireAdminSignature($method, $route, $body, $headers);
-            return $this->response(200, $this->characterAuth->importLegacyAccounts($body));
+            return $this->response(200, $this->characterAuth()->importLegacyAccounts($body));
         }
 
         if ($route === '/v1/admin/word-counts' && $method === 'PUT') {
             $this->requireAdminSignature($method, $route, $body, $headers);
-            return $this->response(201, $this->wordCounts->store($body));
+            return $this->response(201, $this->wordCounts()->store($body));
         }
 
         if ($route === '/v1/admin/character-accounts' && $method === 'GET') {
             $this->requireAdminSignature($method, $route, $body, $headers);
-            return $this->response(200, ['accounts' => $this->characterAuth->listAccounts()]);
+            return $this->response(200, ['accounts' => $this->characterAuth()->listAccounts()]);
         }
 
         if ($route === '/v1/admin/character-accounts' && $method === 'POST') {
             $this->requireAdminSignature($method, $route, $body, $headers);
-            return $this->response(201, $this->characterAuth->createAccount($body));
+            return $this->response(201, $this->characterAuth()->createAccount($body));
         }
 
         if ($method === 'PATCH'
@@ -267,7 +250,7 @@ final class BrokerService
             $this->requireAdminSignature($method, $route, $body, $headers);
             return $this->response(
                 200,
-                $this->characterAuth->updateAccount($matches[1], $body));
+                $this->characterAuth()->updateAccount($matches[1], $body));
         }
 
         if ($method === 'POST' && $route === '/v1/tokens') {
@@ -682,40 +665,67 @@ final class BrokerService
         return true;
     }
 
-    private function ensureSchema(): void
+    private function verifySchemaVersion(): void
     {
-        $this->database->exec(
-            'CREATE TABLE IF NOT EXISTS api_tokens (
-                id TEXT PRIMARY KEY,
-                label TEXT NOT NULL,
-                token_hash TEXT NOT NULL UNIQUE,
-                created_at INTEGER NOT NULL,
-                expires_at INTEGER NOT NULL,
-                revoked_at INTEGER NULL,
-                last_used_at INTEGER NULL
-            );
-            CREATE TABLE IF NOT EXISTS rate_limits (
-                token_id TEXT NOT NULL,
-                window_start INTEGER NOT NULL,
-                request_count INTEGER NOT NULL,
-                PRIMARY KEY (token_id, window_start),
-                FOREIGN KEY (token_id) REFERENCES api_tokens(id) ON DELETE CASCADE
-            );
-            CREATE TABLE IF NOT EXISTS admin_request_nonces (
-                nonce TEXT PRIMARY KEY,
-                used_at INTEGER NOT NULL
-            );
-            CREATE TABLE IF NOT EXISTS audit_events (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                token_id TEXT NOT NULL,
-                occurred_at INTEGER NOT NULL,
-                remote_address TEXT NOT NULL,
-                target_path TEXT NOT NULL,
-                outcome TEXT NOT NULL,
-                FOREIGN KEY (token_id) REFERENCES api_tokens(id) ON DELETE CASCADE
-            );
-            CREATE INDEX IF NOT EXISTS ix_audit_events_token_time
-                ON audit_events(token_id, occurred_at);');
+        $version = (int)$this->database->query('PRAGMA user_version')->fetchColumn();
+        if ($version !== DatabaseMigrationService::LATEST_VERSION) {
+            throw new RuntimeException(sprintf(
+                'The broker database schema is not deployment-ready (expected version %d, found %d).',
+                DatabaseMigrationService::LATEST_VERSION,
+                $version));
+        }
+    }
+
+    private function characterAuth(): CharacterAuthService
+    {
+        return $this->characterAuth ??= new CharacterAuthService(
+            $this->database,
+            is_array($this->config['auth'] ?? null) ? $this->config['auth'] : []);
+    }
+
+    private function xpTracking(): XpTrackingService
+    {
+        return $this->xpTracking ??= new XpTrackingService(
+            $this->database,
+            is_array($this->config['xp'] ?? null) ? $this->config['xp'] : [],
+            $this->xpMarkdownFetcher);
+    }
+
+    private function wordCounts(): WordCountService
+    {
+        return $this->wordCounts ??= new WordCountService(
+            $this->database,
+            is_array($this->config['word_counts'] ?? null) ? $this->config['word_counts'] : [],
+            $this->wordCountFetcher);
+    }
+
+    private function quests(): QuestService
+    {
+        return $this->quests ??= new QuestService($this->database, (string)$this->questDataPath);
+    }
+
+    private function messages(): MessageService
+    {
+        return $this->messages ??= new MessageService(
+            $this->database,
+            is_array($this->config['messages'] ?? null) ? $this->config['messages'] : []);
+    }
+
+    private function revisions(): RevisionService
+    {
+        return $this->revisions ??= new RevisionService($this->database, (string)$this->questDataPath);
+    }
+
+    private function alerts(): BrokerAlertService
+    {
+        return $this->alerts ??= new BrokerAlertService(
+            $this->database,
+            is_array($this->config['observability'] ?? null) ? $this->config['observability'] : []);
+    }
+
+    private function operations(): BrokerOperations
+    {
+        return $this->operations ??= new BrokerOperations($this->config);
     }
 
     private function base64UrlEncode(string $bytes): string

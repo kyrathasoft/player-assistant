@@ -81,7 +81,7 @@ if ([string]::IsNullOrWhiteSpace([string]$metadata.key_id) -or [string]::IsNullO
 }
 
 $deployId = [DateTime]::UtcNow.ToString('yyyyMMddTHHmmssfffZ')
-$deployFiles = @('RevisionService.php', 'BrokerService.php', 'BrokerAlertService.php', 'BrokerOperations.php', 'DatabaseMigrationService.php', 'QuestService.php', 'WordCountService.php', 'refresh-word-counts.php', 'broker-maintenance.php')
+$deployFiles = @('RevisionService.php', 'BrokerService.php', 'BrokerAlertService.php', 'BrokerOperations.php', 'DatabaseMigrationService.php', 'migrate-broker.php', 'QuestService.php', 'WordCountService.php', 'refresh-word-counts.php', 'broker-maintenance.php')
 $remoteStage = "$PrivateDirectory/.word-count-deploy-$deployId"
 $remoteArchive = "$PrivateDirectory/.word-count-deploy-$deployId.tar"
 $remotePublicIndex = "$remoteStage/public-index.php"
@@ -255,6 +255,12 @@ if ($oldConfig !== $newConfig) {
     $configChanged = true;
 }
 chmod($configPath, 0600);
+$migrationOutput = [];
+$migrationExit = 0;
+exec('/usr/bin/php ' . escapeshellarg($directory . '/migrate-broker.php') . ' 2>&1', $migrationOutput, $migrationExit);
+if ($migrationExit !== 0) {
+    throw new RuntimeException('Broker deployment migration failed: ' . implode("\n", $migrationOutput));
+}
 
 $configBackupPatterns = [
     'config.php.bak-deploy-*',
@@ -272,6 +278,7 @@ $patterns = [
     'BrokerService.php.bak-deploy-*',
     'BrokerAlertService.php.bak-deploy-*',
     'DatabaseMigrationService.php.bak-deploy-*',
+    'migrate-broker.php.bak-deploy-*',
     'QuestService.php.bak-deploy-*',
     'RevisionService.php.bak-deploy-*',
     'WordCountService.php.bak-deploy-*',
@@ -290,7 +297,7 @@ foreach ($patterns as $pattern) {
         }
     }
 }
-foreach (['.BrokerService.php.deploy-*', '.BrokerAlertService.php.deploy-*', '.BrokerOperations.php.deploy-*', '.DatabaseMigrationService.php.deploy-*', '.QuestService.php.deploy-*', '.RevisionService.php.deploy-*', '.WordCountService.php.deploy-*', '.refresh-word-counts.php.deploy-*', '.broker-maintenance.php.deploy-*'] as $pattern) {
+foreach (['.BrokerService.php.deploy-*', '.BrokerAlertService.php.deploy-*', '.BrokerOperations.php.deploy-*', '.DatabaseMigrationService.php.deploy-*', '.migrate-broker.php.deploy-*', '.QuestService.php.deploy-*', '.RevisionService.php.deploy-*', '.WordCountService.php.deploy-*', '.refresh-word-counts.php.deploy-*', '.broker-maintenance.php.deploy-*'] as $pattern) {
     foreach (glob($directory . '/' . $pattern) ?: [] as $abandonedTemporaryFile) {
         if (is_file($abandonedTemporaryFile)) {
             unlink($abandonedTemporaryFile);

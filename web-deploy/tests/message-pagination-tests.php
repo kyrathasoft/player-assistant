@@ -44,7 +44,17 @@ $database->exec("CREATE TABLE character_accounts (
     display_name TEXT NOT NULL,
     role TEXT NOT NULL,
     enabled INTEGER NOT NULL
-)");
+);
+CREATE TABLE message_notifications (
+    id TEXT PRIMARY KEY,
+    sender_account_id TEXT NOT NULL,
+    recipient_account_id TEXT NOT NULL,
+    message TEXT NOT NULL,
+    sent_at INTEGER NOT NULL,
+    read_at INTEGER NULL
+);
+CREATE INDEX ix_message_notifications_recipient_read
+    ON message_notifications(recipient_account_id, read_at, sent_at DESC, id DESC)");
 $senderId = str_repeat('a', 32);
 $recipientId = str_repeat('b', 32);
 $otherRecipientId = str_repeat('e', 32);
@@ -109,6 +119,7 @@ if ($concurrencyPath === false) {
 }
 try {
     $writer = new PDO('sqlite:' . $concurrencyPath, null, null, [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]);
+    $writer->exec("CREATE TABLE message_notifications (id TEXT PRIMARY KEY, sender_account_id TEXT NOT NULL, recipient_account_id TEXT NOT NULL, message TEXT NOT NULL, sent_at INTEGER NOT NULL, read_at INTEGER NULL)");
     $writer->exec('PRAGMA journal_mode = WAL');
     $writer->exec("CREATE TABLE character_accounts (
         id TEXT PRIMARY KEY,
