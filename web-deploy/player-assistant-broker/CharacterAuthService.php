@@ -10,32 +10,11 @@ final class CharacterAuthService
     private const LEGACY_HASH_BYTES = 32;
     private const LEGACY_MINIMUM_SALT_BYTES = 16;
     private const PRESENCE_WINDOW_SECONDS = 120;
-    private const DUNGEON_MASTER_LOGIN_NAME = 'dungeon master';
-    private const DUNGEON_MASTER_LOGIN_ALIASES = [
-        'dungeon master',
-        'dungeon',
-        'master',
-        'dm',
-    ];
-    private const MAXIMILIAN_LOGIN_NAME = 'maximilian';
-    private const MAXIMILIAN_LOGIN_ALIASES = [
-        'max',
-        'maximilian',
-        'maximilian yragerne',
-        'max yragerne',
-        'yragerne',
-    ];
-    private const NERIA_LOGIN_NAME = 'neria';
-    private const NERIA_LOGIN_ALIASES = [
-        'neria',
-        'neria silverdale',
-        'silverdale',
-    ];
-    private const KELPIE_LOGIN_NAME = 'kelpie';
-    private const KELPIE_LOGIN_ALIASES = [
-        'kelpie',
-        'kelpie lawfuller',
-        'lawfuller',
+    private const DEFAULT_LOGIN_ALIASES = [
+        'dungeon master' => ['dungeon', 'master', 'dm'],
+        'maximilian' => ['max', 'maximilian yragerne', 'max yragerne', 'yragerne'],
+        'neria' => ['neria silverdale', 'silverdale'],
+        'kelpie' => ['kelpie lawfuller', 'lawfuller'],
     ];
 
     private array $authConfig;
@@ -347,6 +326,13 @@ final class CharacterAuthService
                     $now,
                     $now,
                 ]);
+                $accountIdStatement = $this->database->prepare(
+                    'SELECT id FROM character_accounts WHERE normalized_name = ? LIMIT 1');
+                $accountIdStatement->execute([$record['normalized_name']]);
+                $accountId = $accountIdStatement->fetchColumn();
+                if (is_string($accountId) && $accountId !== '') {
+                    $this->ensureDefaultLoginAliases($accountId, $record['normalized_name']);
+                }
             }
             $this->database->commit();
         } catch (Throwable $exception) {
@@ -388,6 +374,7 @@ final class CharacterAuthService
                 $now,
                 $now,
             ]);
+            $this->ensureDefaultLoginAliases($id, $normalizedName);
         } catch (PDOException $exception) {
             throw new BrokerHttpException(
                 409,
@@ -842,22 +829,33 @@ final class CharacterAuthService
             : strtolower($value);
     }
 
+    private function ensureDefaultLoginAliases(string $accountId, string $normalizedName): void
+    {
+        foreach (self::DEFAULT_LOGIN_ALIASES[$normalizedName] ?? [] as $alias) {
+            $this->database->prepare(
+                'INSERT OR IGNORE INTO character_account_aliases
+                    (account_id, normalized_alias, display_alias, created_at)
+                 VALUES (?, ?, ?, ?)')->execute([
+                    $accountId,
+                    $alias,
+                    $alias,
+                    time(),
+                ]);
+        }
+    }
+
     private function resolveLoginNameAlias(string $normalizedName): string
     {
-        if (in_array($normalizedName, self::DUNGEON_MASTER_LOGIN_ALIASES, true)) {
-            return self::DUNGEON_MASTER_LOGIN_NAME;
-        }
-
-        if (in_array($normalizedName, self::MAXIMILIAN_LOGIN_ALIASES, true)) {
-            return self::MAXIMILIAN_LOGIN_NAME;
-        }
-
-        if (in_array($normalizedName, self::NERIA_LOGIN_ALIASES, true)) {
-            return self::NERIA_LOGIN_NAME;
-        }
-
-        return in_array($normalizedName, self::KELPIE_LOGIN_ALIASES, true)
-            ? self::KELPIE_LOGIN_NAME
+        $statement = $this->database->prepare(
+            'SELECT accounts.normalized_name
+               FROM character_account_aliases AS aliases
+               JOIN character_accounts AS accounts ON accounts.id = aliases.account_id
+              WHERE aliases.normalized_alias = ?
+              LIMIT 1');
+        $statement->execute([$normalizedName]);
+        $canonicalName = $statement->fetchColumn();
+        return is_string($canonicalName) && $canonicalName !== ''
+            ? $canonicalName
             : $normalizedName;
     }
 

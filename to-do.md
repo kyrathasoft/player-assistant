@@ -86,7 +86,10 @@ Cross-cutting reliability, concurrency, API, and identity corrections to impleme
   - [x] Account-source failures now use an exponentially increasing bounded delay; a different source can still authenticate the same account.
   - [x] A separate higher-threshold address scope limits distributed account-name attempts without being cleared by one successful login.
   - [x] Deterministic clock-driven coverage proves account isolation, progressive expiry, and address-throttle recovery.
-- [ ] Identity schema: audit existing data, add a unique `character_key` constraint, use opaque IDs for authorization, and retain aliases only as login convenience.
+- [x] Identity schema: audit existing data, add a unique `character_key` constraint, use opaque IDs for authorization, and retain aliases only as login convenience.
+  - [x] Production audit found 7 enabled accounts, no duplicate `character_key` values, and opaque 32-character account IDs.
+  - [x] Migration v4 adds the unique index, normalized alias table, collision triggers, and legacy alias backfill.
+  - [x] Authentication resolves aliases to canonical opaque account IDs; authorization continues from session account IDs rather than aliases.
 - [ ] API client: add an `AbortController`-based timeout/cancellation layer, typed structured errors, request IDs, centralized expired-session handling, idempotency keys, and generation guards.
 - [ ] Presence: restrict polling to the DM presence view, pause it while hidden or offline, and derive activity from useful requests where possible instead of polling every player every 30 seconds.
 

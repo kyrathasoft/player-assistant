@@ -210,6 +210,20 @@ try {
     };
     $migrationDatabase = new PDO('sqlite:' . $databasePath, null, null, [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]);
     (new DatabaseMigrationService($migrationDatabase, dirname($databasePath) . '/migration-backups'))->migrate();
+    routingAssert(
+        (int)$migrationDatabase->query('PRAGMA user_version')->fetchColumn() === 4,
+        'Identity schema migration did not reach version 4.');
+    routingAssert(
+        (int)$migrationDatabase->query(
+            "SELECT COUNT(*) FROM sqlite_master WHERE type = 'index' AND name = 'ux_character_accounts_character_key'")->fetchColumn() === 1,
+        'The character_key uniqueness constraint is missing.');
+    routingAssert(
+        (int)$migrationDatabase->query(
+            "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'character_account_aliases'")->fetchColumn() === 1,
+        'The character account alias table is missing.');
+    routingAssert(
+        (int)$migrationDatabase->query('SELECT COUNT(*) FROM character_account_aliases')->fetchColumn() === 0,
+        'The empty identity fixture unexpectedly received account aliases.');
     $migrationDatabase = null;
     $broker = new BrokerService(
         $config,
@@ -456,6 +470,50 @@ try {
         '192.0.2.30',
         $session);
     routingAssert($created['status'] === 201, 'The account administration route did not create an account.');
+    $aliasDatabase = new PDO('sqlite:' . $databasePath, null, null, [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]);
+    $aliasDatabase->prepare(
+        'INSERT INTO character_account_aliases (account_id, normalized_alias, display_alias, created_at)
+         VALUES (?, ?, ?, ?)')->execute([
+            $created['body']['id'],
+            'routing alias',
+            'Routing Alias',
+            time(),
+        ]);
+    $aliasDatabase = null;
+    $aliasSession = [];
+    $aliasLogin = $broker->dispatch(
+        'POST',
+        '/v1/login',
+        [],
+        ['character_name' => 'Routing Alias', 'password' => 'routing password'],
+        ['origin' => 'https://example.test'],
+        '192.0.2.31',
+        $aliasSession);
+    routingAssert(
+        $aliasLogin['status'] === 200
+            && $aliasLogin['body']['account']['id'] === $created['body']['id'],
+        'A declared login alias did not resolve to the opaque canonical account ID.');
+    $duplicateKeyBody = [
+        'character_name' => 'Duplicate Key Hero',
+        'password' => 'duplicate key password',
+        'character_key' => 'routing',
+        'role' => 'player',
+    ];
+    try {
+        $broker->dispatch(
+            'POST',
+            '/v1/admin/character-accounts',
+            [],
+            $duplicateKeyBody,
+            routingAdminHeaders('POST', '/v1/admin/character-accounts', $duplicateKeyBody, $config['api']['admin_key']),
+            '192.0.2.30',
+            $session);
+        throw new RuntimeException('The account administration route accepted a duplicate character_key.');
+    } catch (BrokerHttpException $exception) {
+        routingAssert(
+            $exception->status === 409 && $exception->errorName === 'account_conflict',
+            'A duplicate character_key was rejected with the wrong response.');
+    }
 
     $regenerated = false;
     $login = $broker->dispatch(
