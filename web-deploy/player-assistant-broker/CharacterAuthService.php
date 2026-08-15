@@ -39,11 +39,14 @@ final class CharacterAuthService
     ];
 
     private array $authConfig;
+    private readonly ?Closure $clock;
 
     public function __construct(
         private readonly PDO $database,
-        array $authConfig)
+        array $authConfig,
+        ?callable $clock = null)
     {
+        $legacyLockoutSeconds = (int)($authConfig['login_lockout_seconds'] ?? 900);
         $this->authConfig = array_replace([
             'expected_origin' => 'https://bryanmiller.us',
             'idle_timeout_seconds' => 1800,
@@ -51,10 +54,15 @@ final class CharacterAuthService
             'login_window_seconds' => 900,
             'login_max_failures' => 5,
             'login_lockout_seconds' => 900,
+            'login_progressive_delay_base_seconds' => 2,
+            'login_progressive_delay_max_seconds' => $legacyLockoutSeconds,
+            'login_address_max_failures' => 20,
+            'login_address_delay_seconds' => $legacyLockoutSeconds,
             'audit_retention_seconds' => 90 * 86400,
             'audit_address_mode' => 'hash',
             'audit_address_hash_key' => '',
         ], $authConfig);
+        $this->clock = $clock === null ? null : Closure::fromCallable($clock);
         $this->validateConfiguration();
     }
 
@@ -652,8 +660,8 @@ final class CharacterAuthService
     {
         $statement = $this->database->prepare(
             'SELECT blocked_until FROM auth_rate_limits WHERE scope_hash IN (?, ?)');
-        $statement->execute($this->loginScopeHashes($normalizedName, $remoteAddress));
-        $now = time();
+        $statement->execute(array_values($this->loginScopeHashes($normalizedName, $remoteAddress)));
+        $now = $this->now();
         foreach ($statement->fetchAll() as $row) {
             if ((int)$row['blocked_until'] > $now) {
                 return true;
@@ -664,10 +672,22 @@ final class CharacterAuthService
 
     private function recordLoginFailure(string $normalizedName, string $remoteAddress): void
     {
-        $now = time();
+        $now = $this->now();
         $windowSeconds = (int)$this->authConfig['login_window_seconds'];
-        $maximumFailures = (int)$this->authConfig['login_max_failures'];
-        $lockoutSeconds = (int)$this->authConfig['login_lockout_seconds'];
+        $scopePolicies = [
+            'account_source' => [
+                'maximum_failures' => (int)$this->authConfig['login_max_failures'],
+                'delay_base_seconds' => (int)$this->authConfig['login_progressive_delay_base_seconds'],
+                'delay_max_seconds' => (int)$this->authConfig['login_progressive_delay_max_seconds'],
+                'progressive' => true,
+            ],
+            'address' => [
+                'maximum_failures' => (int)$this->authConfig['login_address_max_failures'],
+                'delay_base_seconds' => (int)$this->authConfig['login_address_delay_seconds'],
+                'delay_max_seconds' => (int)$this->authConfig['login_address_delay_seconds'],
+                'progressive' => false,
+            ],
+        ];
         $this->database->beginTransaction();
         try {
             $select = $this->database->prepare(
@@ -679,7 +699,7 @@ final class CharacterAuthService
                     window_start = excluded.window_start,
                     failure_count = excluded.failure_count,
                     blocked_until = excluded.blocked_until');
-            foreach ($this->loginScopeHashes($normalizedName, $remoteAddress) as $scopeHash) {
+            foreach ($this->loginScopeHashes($normalizedName, $remoteAddress) as $scope => $scopeHash) {
                 $select->execute([$scopeHash]);
                 $row = $select->fetch();
                 $failureCount = 1;
@@ -690,8 +710,15 @@ final class CharacterAuthService
                     $failureCount = (int)$row['failure_count'] + 1;
                     $blockedUntil = max(0, (int)$row['blocked_until']);
                 }
-                if ($failureCount >= $maximumFailures) {
-                    $blockedUntil = max($blockedUntil, $now + $lockoutSeconds);
+                $policy = $scopePolicies[$scope];
+                if ($failureCount >= $policy['maximum_failures']) {
+                    $delay = $this->loginFailureDelaySeconds(
+                        $failureCount,
+                        $policy['maximum_failures'],
+                        $policy['delay_base_seconds'],
+                        $policy['delay_max_seconds'],
+                        $policy['progressive']);
+                    $blockedUntil = max($blockedUntil, $now + $delay);
                 }
                 $upsert->execute([$scopeHash, $windowStart, $failureCount, $blockedUntil]);
             }
@@ -704,19 +731,50 @@ final class CharacterAuthService
         }
     }
 
+    private function loginFailureDelaySeconds(
+        int $failureCount,
+        int $maximumFailures,
+        int $baseSeconds,
+        int $maximumSeconds,
+        bool $progressive): int
+    {
+        $delay = $baseSeconds;
+        if ($progressive) {
+            for ($step = $maximumFailures; $step < $failureCount && $delay < $maximumSeconds; $step++) {
+                $delay = min($maximumSeconds, $delay * 2);
+            }
+        }
+        return min($delay, $maximumSeconds);
+    }
+
     private function clearLoginFailures(string $normalizedName, string $remoteAddress): void
     {
+        $scopeHashes = $this->loginScopeHashes($normalizedName, $remoteAddress);
         $statement = $this->database->prepare(
-            'DELETE FROM auth_rate_limits WHERE scope_hash IN (?, ?)');
-        $statement->execute($this->loginScopeHashes($normalizedName, $remoteAddress));
+            'DELETE FROM auth_rate_limits WHERE scope_hash = ?');
+        $statement->execute([$scopeHashes['account_source']]);
     }
 
     private function loginScopeHashes(string $normalizedName, string $remoteAddress): array
     {
+        $addressScope = $this->canonicalAddressScope($remoteAddress);
         return [
-            hash('sha256', 'account:' . $normalizedName),
-            hash('sha256', 'address:' . $remoteAddress),
+            'account_source' => hash('sha256', 'account-source:' . $normalizedName . "\0" . $addressScope),
+            'address' => hash('sha256', 'address:' . $addressScope),
         ];
+    }
+
+    private function canonicalAddressScope(string $remoteAddress): string
+    {
+        $packedAddress = @inet_pton($remoteAddress);
+        return $packedAddress === false
+            ? $remoteAddress
+            : bin2hex($packedAddress);
+    }
+
+    private function now(): int
+    {
+        return $this->clock === null ? time() : (int)($this->clock)();
     }
 
     private function recordAuthAudit(?string $accountId, string $remoteAddress, string $event): void
@@ -868,6 +926,10 @@ final class CharacterAuthService
             'login_window_seconds',
             'login_max_failures',
             'login_lockout_seconds',
+            'login_progressive_delay_base_seconds',
+            'login_progressive_delay_max_seconds',
+            'login_address_max_failures',
+            'login_address_delay_seconds',
             'audit_retention_seconds',
         ] as $key) {
             if (!is_int($this->authConfig[$key]) || $this->authConfig[$key] <= 0) {
@@ -876,6 +938,13 @@ final class CharacterAuthService
         }
         if ($this->authConfig['absolute_timeout_seconds'] <= $this->authConfig['idle_timeout_seconds']) {
             throw new RuntimeException('The absolute session timeout must exceed the idle timeout.');
+        }
+        if ($this->authConfig['login_progressive_delay_max_seconds']
+            < $this->authConfig['login_progressive_delay_base_seconds']) {
+            throw new RuntimeException('The maximum progressive login delay must not be shorter than its base delay.');
+        }
+        if ($this->authConfig['login_address_max_failures'] <= $this->authConfig['login_max_failures']) {
+            throw new RuntimeException('The address login threshold must exceed the account-source threshold.');
         }
         if (!in_array($this->authConfig['audit_address_mode'], ['hash', 'raw'], true)) {
             throw new RuntimeException("Character authentication setting 'audit_address_mode' must be hash or raw.");
