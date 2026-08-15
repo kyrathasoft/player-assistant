@@ -81,7 +81,7 @@ if ([string]::IsNullOrWhiteSpace([string]$metadata.key_id) -or [string]::IsNullO
 }
 
 $deployId = [DateTime]::UtcNow.ToString('yyyyMMddTHHmmssfffZ')
-$deployFiles = @('RevisionService.php', 'BrokerService.php', 'BrokerAlertService.php', 'BrokerOperations.php', 'DatabaseMigrationService.php', 'migrate-broker.php', 'QuestService.php', 'WordCountService.php', 'refresh-word-counts.php', 'broker-maintenance.php')
+$deployFiles = @('RevisionService.php', 'BrokerService.php', 'BrokerAlertService.php', 'BrokerOperations.php', 'DatabaseMigrationService.php', 'migrate-broker.php', 'CharacterAuthService.php', 'MessageService.php', 'XpTrackingService.php', 'QuestService.php', 'WordCountService.php', 'refresh-word-counts.php', 'broker-maintenance.php')
 $remoteStage = "$PrivateDirectory/.word-count-deploy-$deployId"
 $remoteArchive = "$PrivateDirectory/.word-count-deploy-$deployId.tar"
 $remotePublicIndex = "$remoteStage/public-index.php"
@@ -255,6 +255,29 @@ if ($oldConfig !== $newConfig) {
     $configChanged = true;
 }
 chmod($configPath, 0600);
+$migrationConfig = is_array($config['api'] ?? null) ? $config['api'] : [];
+$databasePath = (string)($migrationConfig['database_path'] ?? '');
+if ($databasePath === '') {
+    throw new RuntimeException('The broker database path is not configured.');
+}
+$databaseOriginallyExisted = is_file($databasePath);
+$databaseBackupPath = $rollbackDirectory . '/broker.sqlite';
+$schemaVersionBeforeMigration = 0;
+if ($databaseOriginallyExisted) {
+    $migrationDatabase = new PDO('sqlite:' . $databasePath, null, null, [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]);
+    $schemaVersionBeforeMigration = (int)$migrationDatabase->query('PRAGMA user_version')->fetchColumn();
+    $quotedBackupPath = str_replace("'", "''", $databaseBackupPath);
+    $migrationDatabase->exec("VACUUM INTO '" . $quotedBackupPath . "'");
+    chmod($databaseBackupPath, 0600);
+}
+$rollbackManifest['database'] = [
+    'path' => $databasePath,
+    'originally_existed' => $databaseOriginallyExisted,
+    'backup' => $databaseBackupPath,
+    'schema_version' => $schemaVersionBeforeMigration,
+];
+file_put_contents($rollbackDirectory . '/manifest.json', json_encode($rollbackManifest, JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR), LOCK_EX);
+chmod($rollbackDirectory . '/manifest.json', 0600);
 $migrationOutput = [];
 $migrationExit = 0;
 exec('/usr/bin/php ' . escapeshellarg($directory . '/migrate-broker.php') . ' 2>&1', $migrationOutput, $migrationExit);
@@ -279,6 +302,9 @@ $patterns = [
     'BrokerAlertService.php.bak-deploy-*',
     'DatabaseMigrationService.php.bak-deploy-*',
     'migrate-broker.php.bak-deploy-*',
+    'CharacterAuthService.php.bak-deploy-*',
+    'MessageService.php.bak-deploy-*',
+    'XpTrackingService.php.bak-deploy-*',
     'QuestService.php.bak-deploy-*',
     'RevisionService.php.bak-deploy-*',
     'WordCountService.php.bak-deploy-*',
@@ -297,7 +323,7 @@ foreach ($patterns as $pattern) {
         }
     }
 }
-foreach (['.BrokerService.php.deploy-*', '.BrokerAlertService.php.deploy-*', '.BrokerOperations.php.deploy-*', '.DatabaseMigrationService.php.deploy-*', '.migrate-broker.php.deploy-*', '.QuestService.php.deploy-*', '.RevisionService.php.deploy-*', '.WordCountService.php.deploy-*', '.refresh-word-counts.php.deploy-*', '.broker-maintenance.php.deploy-*'] as $pattern) {
+foreach (['.BrokerService.php.deploy-*', '.BrokerAlertService.php.deploy-*', '.BrokerOperations.php.deploy-*', '.DatabaseMigrationService.php.deploy-*', '.migrate-broker.php.deploy-*', '.CharacterAuthService.php.deploy-*', '.MessageService.php.deploy-*', '.XpTrackingService.php.deploy-*', '.QuestService.php.deploy-*', '.RevisionService.php.deploy-*', '.WordCountService.php.deploy-*', '.refresh-word-counts.php.deploy-*', '.broker-maintenance.php.deploy-*'] as $pattern) {
     foreach (glob($directory . '/' . $pattern) ?: [] as $abandonedTemporaryFile) {
         if (is_file($abandonedTemporaryFile)) {
             unlink($abandonedTemporaryFile);
@@ -406,6 +432,19 @@ if ($manifest['config_originally_existed']) {
     $restore($rollbackDirectory . '/config.php', $configPath, 0600);
 } else {
     $remove($configPath);
+}
+if (isset($manifest['database']) && is_array($manifest['database'])) {
+    $database = $manifest['database'];
+    $databasePath = (string)$database['path'];
+    if ($database['originally_existed']) {
+        $restore((string)$database['backup'], $databasePath, 0600);
+        @unlink($databasePath . '-wal');
+        @unlink($databasePath . '-shm');
+    } else {
+        $remove($databasePath);
+        $remove($databasePath . '-wal');
+        $remove($databasePath . '-shm');
+    }
 }
 $publicStatePath = $rollbackDirectory . '/public-index-state.json';
 if (is_file($publicStatePath)) {
