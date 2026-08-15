@@ -27,8 +27,8 @@ const dungeonMasterAccount = Object.freeze({
 });
 const formerPlayerAccount = Object.freeze({
     id: 'cccccccccccccccccccccccccccccccc',
-    character_name: 'Urvon',
-    character_key: 'urvon',
+    character_name: 'Urvan',
+    character_key: 'urvan',
     role: 'player'
 });
 const contentTypes = new Map([
@@ -113,7 +113,18 @@ const xpProgression = (currentAccount, progressionKey = currentAccount.character
             xp_award_date: '7.31.2026'
         },
         ...(currentAccount === playerAccount && xpAwardsProjected ? [xpAwardEntry(currentAccount)] : [])
-    ]
+    ],
+    ...(currentAccount === formerPlayerAccount
+        ? {
+            current_character: {
+                character_name: 'Urvan',
+                character_class: 'paladin',
+                level: 2,
+                xp_total: 3735,
+                xp_to_next_level: 1265
+            }
+        }
+        : {})
 });
 
 const playerHirelingProgression = Object.freeze({
@@ -295,13 +306,7 @@ const serveApi = async (request, response, pathname) => {
                         xp_total: 10770,
                         xp_to_next_level: 5230
                     },
-                    xpCharacter(secondPlayerAccount),
-                    {
-                        ...xpCharacter(formerPlayerAccount),
-                        level: 3,
-                        xp_total: 4000,
-                        xp_to_next_level: 6000
-                    }
+                    xpCharacter(secondPlayerAccount)
                 ]
             }
             : {
@@ -334,7 +339,7 @@ const serveApi = async (request, response, pathname) => {
             progressions: [
                 ...accounts.map((account) => xpProgression(
                     account,
-                    account === formerPlayerAccount ? 'urvon-xp' : account.character_key)),
+                    account === formerPlayerAccount ? 'urvan-xp' : account.character_key)),
                 ...(currentAccount === playerAccount ? [playerHirelingProgression] : []),
                 ...(currentAccount === secondPlayerAccount ? [secondPlayerHirelingProgression] : [])
             ]
@@ -955,11 +960,11 @@ try {
     const dungeonMasterAwardHeadings = await page.locator('#xp-awards-list .xp-award-character h2').allTextContents();
     if (dungeonMasterAwardHeadings[0]?.trim() !== 'CI Hero - 10,770 XP (TNL: 5,230)'
         || dungeonMasterAwardHeadings[1]?.trim() !== 'Max - 1,200 XP (TNL: 3,000)'
-        || dungeonMasterAwardHeadings[2]?.trim() !== 'Urvon - 4,000 XP (TNL: 6,000)') {
+        || dungeonMasterAwardHeadings[2]?.trim() !== 'Urvan - 3,735 XP (TNL: 1,265)') {
         throw new Error(`Dungeon Master XP Awards headings did not include TNL values: ${JSON.stringify(dungeonMasterAwardHeadings)}`);
     }
     const dungeonMasterProgressItems = await page.locator('#xp-awards-list .xp-award-progress-list li').allTextContents();
-    if (dungeonMasterProgressItems.length !== 3
+    if (dungeonMasterProgressItems.length !== 2
         || dungeonMasterProgressItems[0] !== 'CI Hero is 67.3% of the way toward Fighter Level 5'
         || !dungeonMasterProgressItems[1].startsWith('Maximilian is ')
         || await page.locator('#xp-awards-list .xp-award-character .xp-award-progress-summary').count() !== 0) {
@@ -1016,7 +1021,7 @@ try {
     await page.waitForFunction(() => document.querySelector('#search-guidance')?.textContent?.includes('pack ready offline'));
     await page.locator('#campaign-search').fill('Kirkilston');
     await page.locator('#search-results .search-result').first().waitFor({ state: 'visible' });
-    if (![...workerUrls].some((url) => url.includes('/campaign-search-worker.js?v=86'))) {
+    if (![...workerUrls].some((url) => url.includes('/campaign-search-worker.js?v=87'))) {
         throw new Error(`Campaign search did not start its dedicated worker: ${JSON.stringify([...workerUrls])}.`);
     }
 
@@ -1047,7 +1052,7 @@ try {
             throw new Error(`Offline feature data was not cached: ${requiredPath}`);
         }
     }
-    if (!cachedUrls.some((url) => url.endsWith('/campaign-search-worker.js?v=86'))) {
+    if (!cachedUrls.some((url) => url.endsWith('/campaign-search-worker.js?v=87'))) {
         throw new Error('Campaign search worker was not present in the offline shell cache.');
     }
     await page.evaluate(async () => {

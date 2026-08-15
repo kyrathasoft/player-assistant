@@ -1,6 +1,6 @@
-import { initializeTranslator } from './modules/translator.js?v=86';
-import { initializeCampaignSearch } from './modules/search.js?v=86';
-import { initializeDice } from './modules/dice.js?v=86';
+import { initializeTranslator } from './modules/translator.js?v=87';
+import { initializeCampaignSearch } from './modules/search.js?v=87';
+import { initializeDice } from './modules/dice.js?v=87';
 
 (() => {
     'use strict';
@@ -476,7 +476,7 @@ import { initializeDice } from './modules/dice.js?v=86';
         }
         status.textContent = '';
         const fragment = document.createDocumentFragment();
-        authenticatedXpAwardsSnapshot.forEach(({ characterKey, entries }, progressionIndex) => {
+        authenticatedXpAwardsSnapshot.forEach(({ characterKey, currentCharacter, entries }, progressionIndex) => {
             const character = entries[0];
             const progressionCharacterKey = characterKey.endsWith('-xp')
                 ? characterKey.slice(0, -3)
@@ -494,9 +494,10 @@ import { initializeDice } from './modules/dice.js?v=86';
                             || authenticatedXpSnapshot.characters[progressionIndex])
                         : null)
                     : null;
+            const displayProgression = currentCharacter || currentProgression;
             const headingName = authenticatedAccount?.role === 'dm'
                 ? character.character_name
-                : currentProgression?.character_name || character.character_name;
+                : displayProgression?.character_name || character.character_name;
             const card = document.createElement('article');
             card.className = 'xp-award-character';
             const heading = document.createElement('div');
@@ -505,14 +506,14 @@ import { initializeDice } from './modules/dice.js?v=86';
             name.textContent = headingName;
             const characterClass = document.createElement('span');
             characterClass.textContent = character.character_class;
-            if (currentProgression) {
+            if (displayProgression) {
                 if (authenticatedAccount?.role === 'dm') {
-                    const xpTotal = Number.isSafeInteger(currentProgression.xp_total)
-                        ? Number(currentProgression.xp_total).toLocaleString('en-US')
+                    const xpTotal = Number.isSafeInteger(displayProgression.xp_total)
+                        ? Number(displayProgression.xp_total).toLocaleString('en-US')
                         : '';
-                    const tnl = currentProgression.xp_to_next_level === null
+                    const tnl = displayProgression.xp_to_next_level === null
                         ? ''
-                        : Number(currentProgression.xp_to_next_level).toLocaleString('en-US');
+                        : Number(displayProgression.xp_to_next_level).toLocaleString('en-US');
                     if (xpTotal !== '' || tnl !== '') {
                         const currentXp = document.createElement('span');
                         currentXp.className = 'xp-award-current-total';
@@ -524,7 +525,7 @@ import { initializeDice } from './modules/dice.js?v=86';
                         name.append(currentXp);
                     }
                 } else {
-                    const progressAmount = formatXpProgressAmount(currentProgression);
+                    const progressAmount = formatXpProgressAmount(displayProgression);
                     if (progressAmount !== '') {
                         const progress = document.createElement('span');
                         progress.className = 'xp-award-progress-summary';
@@ -631,9 +632,28 @@ import { initializeDice } from './modules/dice.js?v=86';
                 || (payload.scope === 'character' && typeof progression.is_account_character !== 'boolean')) {
                 throw new Error('The XP Awards response was invalid.');
             }
+            const currentCharacter = progression.current_character;
+            if (currentCharacter !== undefined
+                && (!currentCharacter
+                    || typeof currentCharacter.character_name !== 'string'
+                    || currentCharacter.character_name.length === 0
+                    || currentCharacter.character_name.length > 100
+                    || typeof currentCharacter.character_class !== 'string'
+                    || currentCharacter.character_class.length === 0
+                    || currentCharacter.character_class.length > 100
+                    || !Number.isSafeInteger(currentCharacter.level)
+                    || currentCharacter.level < 0
+                    || !Number.isSafeInteger(currentCharacter.xp_total)
+                    || currentCharacter.xp_total < 0
+                    || (currentCharacter.xp_to_next_level !== null
+                        && (!Number.isSafeInteger(currentCharacter.xp_to_next_level)
+                            || currentCharacter.xp_to_next_level < 0)))) {
+                throw new Error('The XP Awards response was invalid.');
+            }
             return {
                 characterKey: progression.character_key,
                 isAccountCharacter: progression.is_account_character === true,
+                currentCharacter: currentCharacter || null,
                 entries: validateXpAwardsEntries(progression.entries)
             };
         }).filter((progression, index, progressions) => {
