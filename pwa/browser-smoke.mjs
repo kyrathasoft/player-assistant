@@ -935,6 +935,11 @@ try {
     await page.locator('#auth-dialog-close').click();
     await page.locator('[data-view="xp-awards"]').click();
     await page.locator('#xp-awards-list').waitFor({ state: 'visible' });
+    const dungeonMasterAwardHeadings = await page.locator('#xp-awards-list .xp-award-character h2').allTextContents();
+    if (dungeonMasterAwardHeadings[0]?.trim() !== 'CI Hero - 5,230'
+        || dungeonMasterAwardHeadings[1]?.trim() !== 'Max - 3,000') {
+        throw new Error(`Dungeon Master XP Awards headings did not include TNL values: ${JSON.stringify(dungeonMasterAwardHeadings)}`);
+    }
     const dungeonMasterProgressItems = await page.locator('#xp-awards-list .xp-award-progress-list li').allTextContents();
     if (dungeonMasterProgressItems.length !== 2
         || dungeonMasterProgressItems[0] !== 'CI Hero is 67.3% of the way toward Fighter Level 5'

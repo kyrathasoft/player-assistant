@@ -476,13 +476,21 @@ import { initializeDice } from './modules/dice.js?v=83';
         }
         status.textContent = '';
         const fragment = document.createDocumentFragment();
-        authenticatedXpAwardsSnapshot.forEach(({ characterKey, entries }) => {
+        authenticatedXpAwardsSnapshot.forEach(({ characterKey, entries }, progressionIndex) => {
             const character = entries[0];
             const currentProgression = authenticatedXpSnapshot?.scope === 'character'
                 ? authenticatedXpSnapshot.authorized_characters.find(
                     (entry) => entry.character_key === characterKey)?.character
-                : null;
-            const headingName = currentProgression?.character_name || character.character_name;
+                : authenticatedXpSnapshot?.scope === 'party'
+                    ? (Array.isArray(authenticatedXpSnapshot.characters)
+                        ? (authenticatedXpSnapshot.characters.find(
+                            (entry) => entry.character_name === character.character_name)
+                            || authenticatedXpSnapshot.characters[progressionIndex])
+                        : null)
+                    : null;
+            const headingName = authenticatedAccount?.role === 'dm'
+                ? character.character_name
+                : currentProgression?.character_name || character.character_name;
             const card = document.createElement('article');
             card.className = 'xp-award-character';
             const heading = document.createElement('div');
@@ -491,13 +499,22 @@ import { initializeDice } from './modules/dice.js?v=83';
             name.textContent = headingName;
             const characterClass = document.createElement('span');
             characterClass.textContent = character.character_class;
-            if (currentProgression !== null) {
-                const progressAmount = formatXpProgressAmount(currentProgression);
-                if (progressAmount !== '') {
-                    const progress = document.createElement('span');
-                    progress.className = 'xp-award-progress-summary';
-                    progress.textContent = ` - Progress: ${progressAmount}`;
-                    name.append(progress);
+            if (currentProgression) {
+                if (authenticatedAccount?.role === 'dm') {
+                    if (currentProgression.xp_to_next_level !== null) {
+                        const tnl = document.createElement('span');
+                        tnl.className = 'xp-award-tnl';
+                        tnl.textContent = ` - ${Number(currentProgression.xp_to_next_level).toLocaleString('en-US')}`;
+                        name.append(tnl);
+                    }
+                } else {
+                    const progressAmount = formatXpProgressAmount(currentProgression);
+                    if (progressAmount !== '') {
+                        const progress = document.createElement('span');
+                        progress.className = 'xp-award-progress-summary';
+                        progress.textContent = ` - Progress: ${progressAmount}`;
+                        name.append(progress);
+                    }
                 }
             }
             heading.append(name, characterClass);
