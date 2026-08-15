@@ -25,6 +25,12 @@ const dungeonMasterAccount = Object.freeze({
     character_key: 'ci-dungeon-master',
     role: 'dm'
 });
+const formerPlayerAccount = Object.freeze({
+    id: 'cccccccccccccccccccccccccccccccc',
+    character_name: 'Urvon',
+    character_key: 'urvon',
+    role: 'player'
+});
 const contentTypes = new Map([
     ['.css', 'text/css; charset=utf-8'],
     ['.html', 'text/html; charset=utf-8'],
@@ -97,8 +103,8 @@ const xpAwardEntry = (currentAccount) => ({
     level_after_award: 1
 });
 
-const xpProgression = (currentAccount) => ({
-    character_key: currentAccount.character_key,
+const xpProgression = (currentAccount, progressionKey = currentAccount.character_key) => ({
+    character_key: progressionKey,
     is_account_character: true,
     entries: [
         {
@@ -289,7 +295,13 @@ const serveApi = async (request, response, pathname) => {
                         xp_total: 10770,
                         xp_to_next_level: 5230
                     },
-                    xpCharacter(secondPlayerAccount)
+                    xpCharacter(secondPlayerAccount),
+                    {
+                        ...xpCharacter(formerPlayerAccount),
+                        level: 3,
+                        xp_total: 4000,
+                        xp_to_next_level: 6000
+                    }
                 ]
             }
             : {
@@ -313,12 +325,16 @@ const serveApi = async (request, response, pathname) => {
         const currentAccount = requireSession(request, response);
         if (!currentAccount) return;
         if (currentAccount === playerAccount) xpAwardsProjected = true;
-        const accounts = currentAccount.role === 'dm' ? [playerAccount, secondPlayerAccount] : [currentAccount];
+        const accounts = currentAccount.role === 'dm'
+            ? [playerAccount, secondPlayerAccount, formerPlayerAccount]
+            : [currentAccount];
         jsonResponse(response, 200, {
             schema_version: 1,
             scope: currentAccount.role === 'dm' ? 'party' : 'character',
             progressions: [
-                ...accounts.map(xpProgression),
+                ...accounts.map((account) => xpProgression(
+                    account,
+                    account === formerPlayerAccount ? 'urvon-xp' : account.character_key)),
                 ...(currentAccount === playerAccount ? [playerHirelingProgression] : []),
                 ...(currentAccount === secondPlayerAccount ? [secondPlayerHirelingProgression] : [])
             ]
@@ -938,11 +954,12 @@ try {
     await page.locator('#xp-awards-list').waitFor({ state: 'visible' });
     const dungeonMasterAwardHeadings = await page.locator('#xp-awards-list .xp-award-character h2').allTextContents();
     if (dungeonMasterAwardHeadings[0]?.trim() !== 'CI Hero - 10,770 XP (TNL: 5,230)'
-        || dungeonMasterAwardHeadings[1]?.trim() !== 'Max - 1,200 XP (TNL: 3,000)') {
+        || dungeonMasterAwardHeadings[1]?.trim() !== 'Max - 1,200 XP (TNL: 3,000)'
+        || dungeonMasterAwardHeadings[2]?.trim() !== 'Urvon - 4,000 XP (TNL: 6,000)') {
         throw new Error(`Dungeon Master XP Awards headings did not include TNL values: ${JSON.stringify(dungeonMasterAwardHeadings)}`);
     }
     const dungeonMasterProgressItems = await page.locator('#xp-awards-list .xp-award-progress-list li').allTextContents();
-    if (dungeonMasterProgressItems.length !== 2
+    if (dungeonMasterProgressItems.length !== 3
         || dungeonMasterProgressItems[0] !== 'CI Hero is 67.3% of the way toward Fighter Level 5'
         || !dungeonMasterProgressItems[1].startsWith('Maximilian is ')
         || await page.locator('#xp-awards-list .xp-award-character .xp-award-progress-summary').count() !== 0) {
@@ -999,7 +1016,7 @@ try {
     await page.waitForFunction(() => document.querySelector('#search-guidance')?.textContent?.includes('pack ready offline'));
     await page.locator('#campaign-search').fill('Kirkilston');
     await page.locator('#search-results .search-result').first().waitFor({ state: 'visible' });
-    if (![...workerUrls].some((url) => url.includes('/campaign-search-worker.js?v=85'))) {
+    if (![...workerUrls].some((url) => url.includes('/campaign-search-worker.js?v=86'))) {
         throw new Error(`Campaign search did not start its dedicated worker: ${JSON.stringify([...workerUrls])}.`);
     }
 
@@ -1030,7 +1047,7 @@ try {
             throw new Error(`Offline feature data was not cached: ${requiredPath}`);
         }
     }
-    if (!cachedUrls.some((url) => url.endsWith('/campaign-search-worker.js?v=85'))) {
+    if (!cachedUrls.some((url) => url.endsWith('/campaign-search-worker.js?v=86'))) {
         throw new Error('Campaign search worker was not present in the offline shell cache.');
     }
     await page.evaluate(async () => {

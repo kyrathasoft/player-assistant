@@ -1,6 +1,6 @@
-import { initializeTranslator } from './modules/translator.js?v=85';
-import { initializeCampaignSearch } from './modules/search.js?v=85';
-import { initializeDice } from './modules/dice.js?v=85';
+import { initializeTranslator } from './modules/translator.js?v=86';
+import { initializeCampaignSearch } from './modules/search.js?v=86';
+import { initializeDice } from './modules/dice.js?v=86';
 
 (() => {
     'use strict';
@@ -478,13 +478,18 @@ import { initializeDice } from './modules/dice.js?v=85';
         const fragment = document.createDocumentFragment();
         authenticatedXpAwardsSnapshot.forEach(({ characterKey, entries }, progressionIndex) => {
             const character = entries[0];
+            const progressionCharacterKey = characterKey.endsWith('-xp')
+                ? characterKey.slice(0, -3)
+                : characterKey;
             const currentProgression = authenticatedXpSnapshot?.scope === 'character'
                 ? authenticatedXpSnapshot.authorized_characters.find(
-                    (entry) => entry.character_key === characterKey)?.character
+                    (entry) => entry.character_key === characterKey
+                        || entry.character_key === progressionCharacterKey)?.character
                 : authenticatedXpSnapshot?.scope === 'party'
                     ? (Array.isArray(authenticatedXpSnapshot.characters)
                         ? (authenticatedXpSnapshot.characters.find(
                             (entry) => entry.character_key === characterKey
+                                || entry.character_key === progressionCharacterKey
                                 || entry.character_name === character.character_name)
                             || authenticatedXpSnapshot.characters[progressionIndex])
                         : null)
