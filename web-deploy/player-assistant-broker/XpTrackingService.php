@@ -74,7 +74,13 @@ final class XpTrackingService
         if ($role === 'dm') {
             return $baseResponse + [
                 'scope' => 'party',
-                'characters' => $snapshot['characters'],
+                'characters' => array_map(
+                    function (array $character): array {
+                        $character['character_key'] = $this->characterKeyForName(
+                            (string)$character['character_name']);
+                        return $character;
+                    },
+                    $snapshot['characters']),
             ];
         }
 

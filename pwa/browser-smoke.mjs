@@ -75,6 +75,7 @@ const requireSession = (request, response) => {
 };
 
 const xpCharacter = (currentAccount) => ({
+    character_key: currentAccount.character_key,
     character_name: currentAccount === secondPlayerAccount ? 'Maximilian' : currentAccount.character_name,
     character_class: 'Fighter',
     level_before_award: 1,
@@ -936,8 +937,8 @@ try {
     await page.locator('[data-view="xp-awards"]').click();
     await page.locator('#xp-awards-list').waitFor({ state: 'visible' });
     const dungeonMasterAwardHeadings = await page.locator('#xp-awards-list .xp-award-character h2').allTextContents();
-    if (dungeonMasterAwardHeadings[0]?.trim() !== 'CI Hero - 5,230'
-        || dungeonMasterAwardHeadings[1]?.trim() !== 'Max - 3,000') {
+    if (dungeonMasterAwardHeadings[0]?.trim() !== 'CI Hero - 10,770 XP (TNL: 5,230)'
+        || dungeonMasterAwardHeadings[1]?.trim() !== 'Max - 1,200 XP (TNL: 3,000)') {
         throw new Error(`Dungeon Master XP Awards headings did not include TNL values: ${JSON.stringify(dungeonMasterAwardHeadings)}`);
     }
     const dungeonMasterProgressItems = await page.locator('#xp-awards-list .xp-award-progress-list li').allTextContents();
@@ -998,7 +999,7 @@ try {
     await page.waitForFunction(() => document.querySelector('#search-guidance')?.textContent?.includes('pack ready offline'));
     await page.locator('#campaign-search').fill('Kirkilston');
     await page.locator('#search-results .search-result').first().waitFor({ state: 'visible' });
-    if (![...workerUrls].some((url) => url.includes('/campaign-search-worker.js?v=83'))) {
+    if (![...workerUrls].some((url) => url.includes('/campaign-search-worker.js?v=85'))) {
         throw new Error(`Campaign search did not start its dedicated worker: ${JSON.stringify([...workerUrls])}.`);
     }
 
@@ -1029,7 +1030,7 @@ try {
             throw new Error(`Offline feature data was not cached: ${requiredPath}`);
         }
     }
-    if (!cachedUrls.some((url) => url.endsWith('/campaign-search-worker.js?v=83'))) {
+    if (!cachedUrls.some((url) => url.endsWith('/campaign-search-worker.js?v=85'))) {
         throw new Error('Campaign search worker was not present in the offline shell cache.');
     }
     await page.evaluate(async () => {

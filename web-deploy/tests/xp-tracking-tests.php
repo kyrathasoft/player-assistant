@@ -783,6 +783,11 @@ try {
     ]);
     xpAssert($dm['scope'] === 'party', 'The Dungeon Master did not receive party-scoped XP.');
     xpAssert(count($dm['characters']) === 5, 'The Dungeon Master did not receive every current XP row.');
+    xpAssert(
+        count(array_filter(
+            $dm['characters'],
+            static fn(array $character): bool => ($character['character_key'] ?? '') === 'borca')) === 1,
+        'The Dungeon Master XP rows did not expose stable character keys.');
     $borca = array_values(array_filter(
         $dm['characters'],
         static fn(array $character): bool => $character['character_name'] === 'Borca'));

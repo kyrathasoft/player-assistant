@@ -1,6 +1,6 @@
-import { initializeTranslator } from './modules/translator.js?v=83';
-import { initializeCampaignSearch } from './modules/search.js?v=83';
-import { initializeDice } from './modules/dice.js?v=83';
+import { initializeTranslator } from './modules/translator.js?v=85';
+import { initializeCampaignSearch } from './modules/search.js?v=85';
+import { initializeDice } from './modules/dice.js?v=85';
 
 (() => {
     'use strict';
@@ -484,7 +484,8 @@ import { initializeDice } from './modules/dice.js?v=83';
                 : authenticatedXpSnapshot?.scope === 'party'
                     ? (Array.isArray(authenticatedXpSnapshot.characters)
                         ? (authenticatedXpSnapshot.characters.find(
-                            (entry) => entry.character_name === character.character_name)
+                            (entry) => entry.character_key === characterKey
+                                || entry.character_name === character.character_name)
                             || authenticatedXpSnapshot.characters[progressionIndex])
                         : null)
                     : null;
@@ -501,11 +502,21 @@ import { initializeDice } from './modules/dice.js?v=83';
             characterClass.textContent = character.character_class;
             if (currentProgression) {
                 if (authenticatedAccount?.role === 'dm') {
-                    if (currentProgression.xp_to_next_level !== null) {
-                        const tnl = document.createElement('span');
-                        tnl.className = 'xp-award-tnl';
-                        tnl.textContent = ` - ${Number(currentProgression.xp_to_next_level).toLocaleString('en-US')}`;
-                        name.append(tnl);
+                    const xpTotal = Number.isSafeInteger(currentProgression.xp_total)
+                        ? Number(currentProgression.xp_total).toLocaleString('en-US')
+                        : '';
+                    const tnl = currentProgression.xp_to_next_level === null
+                        ? ''
+                        : Number(currentProgression.xp_to_next_level).toLocaleString('en-US');
+                    if (xpTotal !== '' || tnl !== '') {
+                        const currentXp = document.createElement('span');
+                        currentXp.className = 'xp-award-current-total';
+                        currentXp.textContent = xpTotal === ''
+                            ? ` - TNL: ${tnl}`
+                            : tnl === ''
+                                ? ` - ${xpTotal} XP`
+                                : ` - ${xpTotal} XP (TNL: ${tnl})`;
+                        name.append(currentXp);
                     }
                 } else {
                     const progressAmount = formatXpProgressAmount(currentProgression);
