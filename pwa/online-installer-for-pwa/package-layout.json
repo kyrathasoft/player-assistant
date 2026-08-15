@@ -1,0 +1,62 @@
+{
+  "schema_version": 1,
+  "fixed_url_layout": {
+    "pwa": "/scarlethorizons/pwa/",
+    "api": "/scarlethorizons/api/"
+  },
+  "public_pwa_files": [
+    ".htaccess",
+    "app.js",
+    "campaign-search-worker.js",
+    "campaign-search.json",
+    "data/elvish.json",
+    "data/ghukliak.json",
+    "data/heroes.json",
+    "data/orcish.json",
+    "data/party-funds.json",
+    "icons/dragon-mark.png",
+    "icons/icon-192.png",
+    "icons/icon-512.png",
+    "index.html",
+    "level-progression.json",
+    "magic-items.json",
+    "manifest.webmanifest",
+    "modules/dice.js",
+    "modules/search.js",
+    "modules/translator.js",
+    "offline.html",
+    "optional-pack-loader.js",
+    "optional-packs.json",
+    "quests.json",
+    "service-worker.js",
+    "styles.css",
+    "translator-worker.js",
+    "version.js"
+  ],
+  "public_pwa_directories": [
+    "data/hero-tokens"
+  ],
+  "public_api_files": [
+    ".htaccess"
+  ],
+  "private_runtime_files": [
+    "BrokerAlertService.php",
+    "BrokerHttpException.php",
+    "BrokerOperations.php",
+    "BrokerService.php",
+    "CharacterAuthService.php",
+    "DatabaseMigrationService.php",
+    "MessageService.php",
+    "PwaSyntheticMonitor.php",
+    "QuestService.php",
+    "RevisionService.php",
+    "RpolClient.php",
+    "WordCountService.php",
+    "XpTrackingService.php",
+    "broker-maintenance.php",
+    "broker-recovery.php",
+    "migrate-broker.php",
+    "refresh-word-counts.php",
+    "run-pwa-monitor.php"
+  ]
+}
