@@ -150,6 +150,8 @@ $postDb = null;
 $postBackupDb = new PDO('sqlite:' . $postDatabaseBackup, null, null, [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]);
 $postBackupDb->exec("PRAGMA user_version = 0; CREATE TABLE state (value TEXT); INSERT INTO state VALUES ('original')");
 $postBackupDb = null;
+file_put_contents($postDatabase . '-wal', 'stale wal sidecar');
+file_put_contents($postDatabase . '-shm', 'stale shm sidecar');
 file_put_contents($postRollback . DIRECTORY_SEPARATOR . 'manifest.json', json_encode([
     'files' => ['RevisionService.php' => true, 'BrokerService.php' => true],
     'config_originally_existed' => true,
@@ -185,6 +187,7 @@ try {
     $restoredDb = new PDO('sqlite:' . $postDatabase, null, null, [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]);
     deployAtomicityAssert((int)$restoredDb->query('PRAGMA user_version')->fetchColumn() === 0, 'Post-check rollback did not restore the database schema version.');
     deployAtomicityAssert((string)$restoredDb->query('SELECT value FROM state')->fetchColumn() === 'original', 'Post-check rollback did not restore database contents.');
+    deployAtomicityAssert(!is_file($postDatabase . '-wal') && !is_file($postDatabase . '-shm'), 'Post-check rollback left stale SQLite WAL/SHM sidecars.');
 } finally {
     removeDeploymentFixture($postRoot);
 }
@@ -214,6 +217,42 @@ try {
     deployAtomicityAssert(is_dir($removalRollback), 'Rollback evidence was removed after a failed target removal.');
 } finally {
     removeDeploymentFixture($removalRoot);
+}
+
+$missingDatabaseRoot = sys_get_temp_dir() . DIRECTORY_SEPARATOR . 'pa-deploy-missing-db-' . bin2hex(random_bytes(6));
+$missingDatabaseRollback = $missingDatabaseRoot . DIRECTORY_SEPARATOR . '.word-count-rollback-fixture';
+mkdir($missingDatabaseRollback, 0700, true);
+$missingDatabasePath = $missingDatabaseRoot . DIRECTORY_SEPARATOR . 'broker.sqlite';
+file_put_contents($missingDatabasePath, 'new database');
+file_put_contents($missingDatabasePath . '-wal', 'new wal');
+file_put_contents($missingDatabasePath . '-shm', 'new shm');
+file_put_contents($missingDatabaseRollback . DIRECTORY_SEPARATOR . 'manifest.json', json_encode([
+    'files' => [],
+    'config_originally_existed' => false,
+    'database' => [
+        'path' => $missingDatabasePath,
+        'originally_existed' => false,
+        'backup' => $missingDatabaseRollback . DIRECTORY_SEPARATOR . 'broker.sqlite',
+        'schema_version' => 0,
+    ],
+], JSON_THROW_ON_ERROR));
+$missingDatabaseData = base64_encode(json_encode([
+    'private_directory' => $missingDatabaseRoot,
+    'public_api_path' => $missingDatabaseRoot . DIRECTORY_SEPARATOR . 'public-index.php',
+    'rollback_directory' => $missingDatabaseRollback,
+    'files' => [],
+], JSON_THROW_ON_ERROR));
+$missingDatabaseInstaller = str_replace('__TRANSACTION_DATA__', $missingDatabaseData, $rollbackMatches[1]);
+$missingDatabaseInstallerPath = $missingDatabaseRoot . DIRECTORY_SEPARATOR . 'rollback.php';
+file_put_contents($missingDatabaseInstallerPath, "<?php\n" . $missingDatabaseInstaller);
+try {
+    $output = [];
+    $exitCode = 0;
+    exec(escapeshellarg(PHP_BINARY) . ' ' . escapeshellarg($missingDatabaseInstallerPath) . ' 2>&1', $output, $exitCode);
+    deployAtomicityAssert($exitCode === 0, 'Rollback of a previously nonexistent database failed: ' . implode("\n", $output));
+    deployAtomicityAssert(!is_file($missingDatabasePath) && !is_file($missingDatabasePath . '-wal') && !is_file($missingDatabasePath . '-shm'), 'Rollback did not remove a database that originally did not exist.');
+} finally {
+    removeDeploymentFixture($missingDatabaseRoot);
 }
 
 echo "Broker deployment atomicity tests passed.\n";
