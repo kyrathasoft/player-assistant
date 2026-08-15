@@ -82,7 +82,10 @@ Cross-cutting reliability, concurrency, API, and identity corrections to impleme
   - [x] Added deployment-time `migrate-broker.php`; request startup now verifies the schema version instead of applying migrations.
   - [x] Broker services are lazy factories, and public `/v1/health` exits before broker subsystem loading or database access.
   - [x] Removed request-time schema creation from broker service constructors and wired deployment migration execution into the release script.
-- [ ] Login hardening: rate-limit primarily by account-plus-source, retain a stronger address throttle, and use progressive delays instead of globally locking a known character name for everyone.
+- [x] Login hardening: rate-limit primarily by account-plus-source, retain a stronger address throttle, and use progressive delays instead of globally locking a known character name for everyone.
+  - [x] Account-source failures now use an exponentially increasing bounded delay; a different source can still authenticate the same account.
+  - [x] A separate higher-threshold address scope limits distributed account-name attempts without being cleared by one successful login.
+  - [x] Deterministic clock-driven coverage proves account isolation, progressive expiry, and address-throttle recovery.
 - [ ] Identity schema: audit existing data, add a unique `character_key` constraint, use opaque IDs for authorization, and retain aliases only as login convenience.
 - [ ] API client: add an `AbortController`-based timeout/cancellation layer, typed structured errors, request IDs, centralized expired-session handling, idempotency keys, and generation guards.
 - [ ] Presence: restrict polling to the DM presence view, pause it while hidden or offline, and derive activity from useful requests where possible instead of polling every player every 30 seconds.
