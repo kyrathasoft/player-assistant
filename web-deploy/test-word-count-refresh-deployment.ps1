@@ -84,7 +84,7 @@ $localPublicApiHash = (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $P
 $remoteCode = @'
 $directory = '__PRIVATE_DIRECTORY__';
 $publicApiPath = '__PUBLIC_API_PATH__';
-$files = ['BrokerService.php', 'BrokerAlertService.php', 'BrokerOperations.php', 'DatabaseMigrationService.php', 'migrate-broker.php', 'QuestService.php', 'RevisionService.php', 'WordCountService.php', 'refresh-word-counts.php', 'broker-maintenance.php'];
+$files = ['BrokerService.php', 'BrokerAlertService.php', 'BrokerOperations.php', 'DatabaseMigrationService.php', 'migrate-broker.php', 'CharacterAuthService.php', 'MessageService.php', 'XpTrackingService.php', 'QuestService.php', 'RevisionService.php', 'WordCountService.php', 'refresh-word-counts.php', 'broker-maintenance.php'];
 $result = ['files' => [], 'public_api' => [], 'config' => [], 'backups' => [], 'cron' => ''];
 foreach ($files as $file) {
     $path = $directory . '/' . $file;

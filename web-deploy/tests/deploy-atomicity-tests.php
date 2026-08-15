@@ -49,8 +49,11 @@ deployAtomicityAssert(
 deployAtomicityAssert(
     str_contains($deploymentScript, "'CharacterAuthService.php'")
         && str_contains($deploymentScript, "'MessageService.php'")
-        && str_contains($deploymentScript, "'XpTrackingService.php'"),
-    'The deployment manifest must include every runtime service changed by the startup refactor.');
+        && str_contains($deploymentScript, "'XpTrackingService.php'")
+        && str_contains($deploymentVerifier, "'CharacterAuthService.php'")
+        && str_contains($deploymentVerifier, "'MessageService.php'")
+        && str_contains($deploymentVerifier, "'XpTrackingService.php'"),
+    'The deployment and verifier manifests must include every runtime service changed by the startup refactor.');
 deployAtomicityAssert(
     str_contains($deploymentScript, 'VACUUM INTO')
         && str_contains($deploymentScript, "\$manifest['database']")
