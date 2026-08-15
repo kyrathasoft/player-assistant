@@ -46,6 +46,16 @@ deployAtomicityAssert(
 deployAtomicityAssert(
     str_contains($deploymentScript, "if (is_file(\$rollbackDirectory . '/manifest.json'))"),
     'The private installer must preserve a write-once rollback snapshot.');
+deployAtomicityAssert(
+    str_contains($deploymentScript, "'CharacterAuthService.php'")
+        && str_contains($deploymentScript, "'MessageService.php'")
+        && str_contains($deploymentScript, "'XpTrackingService.php'"),
+    'The deployment manifest must include every runtime service changed by the startup refactor.');
+deployAtomicityAssert(
+    str_contains($deploymentScript, 'VACUUM INTO')
+        && str_contains($deploymentScript, "\$manifest['database']")
+        && str_contains($deploymentScript, "\$database['backup']"),
+    'The deployment transaction must snapshot and restore the SQLite database during rollback.');
 $installerPattern = <<<'REGEX'
 ~\$installCode = @'\R(.*?)\R'@\.Replace\('__INSTALL_DATA__'~s
 REGEX;
@@ -132,9 +142,23 @@ file_put_contents($postRollback . DIRECTORY_SEPARATOR . 'RevisionService.php', "
 file_put_contents($postRollback . DIRECTORY_SEPARATOR . 'BrokerService.php', "<?php\n// original broker\n");
 file_put_contents($postRollback . DIRECTORY_SEPARATOR . 'config.php', "<?php\nreturn ['original' => true];\n");
 file_put_contents($postRollback . DIRECTORY_SEPARATOR . 'public-index.php', "<?php\n// original public entry\n");
+$postDatabase = $postRoot . DIRECTORY_SEPARATOR . 'broker.sqlite';
+$postDatabaseBackup = $postRollback . DIRECTORY_SEPARATOR . 'broker.sqlite';
+$postDb = new PDO('sqlite:' . $postDatabase, null, null, [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]);
+$postDb->exec("PRAGMA user_version = 3; CREATE TABLE state (value TEXT); INSERT INTO state VALUES ('candidate')");
+$postDb = null;
+$postBackupDb = new PDO('sqlite:' . $postDatabaseBackup, null, null, [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]);
+$postBackupDb->exec("PRAGMA user_version = 0; CREATE TABLE state (value TEXT); INSERT INTO state VALUES ('original')");
+$postBackupDb = null;
 file_put_contents($postRollback . DIRECTORY_SEPARATOR . 'manifest.json', json_encode([
     'files' => ['RevisionService.php' => true, 'BrokerService.php' => true],
     'config_originally_existed' => true,
+    'database' => [
+        'path' => $postDatabase,
+        'originally_existed' => true,
+        'backup' => $postDatabaseBackup,
+        'schema_version' => 0,
+    ],
 ], JSON_THROW_ON_ERROR));
 file_put_contents($postRollback . DIRECTORY_SEPARATOR . 'public-index-state.json', json_encode([
     'originally_existed' => true,
@@ -158,6 +182,9 @@ try {
     deployAtomicityAssert(str_contains((string)file_get_contents($postRoot . DIRECTORY_SEPARATOR . 'BrokerService.php'), 'original broker'), 'Post-check rollback did not restore BrokerService.');
     deployAtomicityAssert(str_contains((string)file_get_contents($postRoot . DIRECTORY_SEPARATOR . 'config.php'), "'original' => true"), 'Post-check rollback did not restore private config.');
     deployAtomicityAssert(str_contains((string)file_get_contents($postPublic), 'original public entry'), 'Post-check rollback did not restore the public API entry point.');
+    $restoredDb = new PDO('sqlite:' . $postDatabase, null, null, [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]);
+    deployAtomicityAssert((int)$restoredDb->query('PRAGMA user_version')->fetchColumn() === 0, 'Post-check rollback did not restore the database schema version.');
+    deployAtomicityAssert((string)$restoredDb->query('SELECT value FROM state')->fetchColumn() === 'original', 'Post-check rollback did not restore database contents.');
 } finally {
     removeDeploymentFixture($postRoot);
 }
