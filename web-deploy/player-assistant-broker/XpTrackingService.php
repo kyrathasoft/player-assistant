@@ -1285,7 +1285,7 @@ final class XpTrackingService
             }
 
             if (preg_match(
-                '/^As of (?<date>\d{1,2}\.\d{1,2}\.\d{4})(?:\s|:|$)/i',
+                '/^As of\s+(?<date>\d{1,2}\.\d{1,2}\.\d{4})(?:\s|:|$)/i',
                 $dateLabel,
                 $dateMatch) !== 1) {
                 throw new RuntimeException('The XP date label was invalid.');
