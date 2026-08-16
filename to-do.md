@@ -284,11 +284,11 @@ Planned security correction: eliminate first-name equivalence from authenticatio
   - [ ] Keep corpus loading, normalization, wildcard matching, scoring, and sorting in a dedicated worker.
   - [ ] Preserve request-ID protection against stale results.
   - [ ] Retain offline pack retry/removal behavior and benchmark typing responsiveness on the full index.
-- [ ] Strengthen offline and update behavior.
-  - [ ] Add an in-app update-available banner with explicit reload/defer controls.
-  - [ ] Validate cached JSON schema and MIME type before use.
-  - [ ] Recover from corrupt or partially cached translator/search data.
-  - [ ] Cover quota failures, interrupted installs, offline reloads, and stale workers.
+- [x] Strengthen offline and update behavior.
+  - [x] Add an update-available banner with explicit reload/defer controls.
+  - [x] Validate cached JSON schema and MIME types before use.
+  - [x] Recover from corrupt or partially cached translator/search packs.
+  - [x] Cover quota failures, interrupted installs, offline reloads, and stale workers.
 - [ ] Make messaging a dependable campaign inbox.
   - [ ] Restore older-message pagination.
   - [ ] Add conversation grouping and per-thread unread counts.
