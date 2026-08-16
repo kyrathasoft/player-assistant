@@ -107,9 +107,22 @@ namespace PlayerAssistant
                     throw new InvalidOperationException($"{FileName} contains a reused password salt.");
                 }
 
-                if (!hashes.TryAdd(entry.Name, new PasswordHashRecord(entry.Iterations, salt, hash)))
+                var hasCanonicalId = !string.IsNullOrWhiteSpace(entry.CanonicalId);
+                var canonicalId = hasCanonicalId ? entry.CanonicalId!.Trim() : entry.Name;
+                if (hasCanonicalId && !IsValidCanonicalId(canonicalId))
                 {
-                    throw new InvalidOperationException($"{FileName} contains duplicate PC name '{entry.Name}'.");
+                    throw new InvalidOperationException(
+                        $"{FileName} entry '{entry.Name}' has an invalid canonical ID.");
+                }
+
+                if (!hashes.TryAdd(canonicalId, new PasswordHashRecord(
+                    canonicalId,
+                    entry.Name,
+                    entry.Iterations,
+                    salt,
+                    hash)))
+                {
+                    throw new InvalidOperationException($"{FileName} contains duplicate canonical ID '{canonicalId}'.");
                 }
             }
 
@@ -121,17 +134,45 @@ namespace PlayerAssistant
             ArgumentException.ThrowIfNullOrWhiteSpace(pcName);
             ArgumentNullException.ThrowIfNull(password);
 
+            return ValidatePassword(null, pcName, password, runtimeDirectory);
+        }
+
+        public static bool ValidatePassword(
+            string? canonicalId,
+            string displayName,
+            string password,
+            string? runtimeDirectory = null)
+        {
+            ArgumentException.ThrowIfNullOrWhiteSpace(displayName);
+            ArgumentNullException.ThrowIfNull(password);
+
             var hashes = LoadPasswordHashes(runtimeDirectory);
-            foreach (var candidateName in GetCandidateNames(pcName, hashes.Keys))
+            if (!string.IsNullOrWhiteSpace(canonicalId))
             {
-                if (hashes.TryGetValue(candidateName, out var expectedHash)
-                    && VerifyPassword(password, expectedHash))
+                if (!hashes.TryGetValue(canonicalId.Trim(), out var expectedHash)
+                    || !string.Equals(expectedHash.Name, displayName.Trim(), StringComparison.OrdinalIgnoreCase))
                 {
-                    return true;
+                    return false;
                 }
+
+                return VerifyPassword(password, expectedHash);
             }
 
-            return false;
+            var exactMatches = hashes.Values
+                .Where(record => string.Equals(record.Name, displayName.Trim(), StringComparison.OrdinalIgnoreCase))
+                .ToArray();
+            if (exactMatches.Length == 1)
+            {
+                return VerifyPassword(password, exactMatches[0]);
+            }
+
+            var firstName = GetFirstName(displayName);
+            var aliasMatches = hashes.Values
+                .Where(record => !string.Equals(record.Name, DungeonMasterAccessName, StringComparison.OrdinalIgnoreCase)
+                    && string.Equals(GetFirstName(record.Name), firstName, StringComparison.OrdinalIgnoreCase))
+                .Take(2)
+                .ToArray();
+            return aliasMatches.Length == 1 && VerifyPassword(password, aliasMatches[0]);
         }
 
         internal static void SavePasswordHashes(
@@ -175,6 +216,7 @@ namespace PlayerAssistant
                 entries.Add(new PasswordHashEntry
                 {
                     Name = name,
+                    CanonicalId = CreateGeneratedCanonicalId(name),
                     Algorithm = Algorithm,
                     Iterations = MinimumIterations,
                     Salt = Convert.ToBase64String(salt),
@@ -258,38 +300,6 @@ namespace PlayerAssistant
             }
         }
 
-        private static IEnumerable<string> GetCandidateNames(
-            string pcName,
-            IEnumerable<string> storedNames)
-        {
-            var trimmedName = pcName.Trim();
-            yield return trimmedName;
-
-            if (string.Equals(trimmedName, DungeonMasterAccessName, StringComparison.OrdinalIgnoreCase))
-            {
-                yield break;
-            }
-
-            var firstName = GetFirstName(trimmedName);
-            if (!string.Equals(firstName, trimmedName, StringComparison.OrdinalIgnoreCase))
-            {
-                yield return firstName;
-            }
-
-            foreach (var storedName in storedNames)
-            {
-                if (string.Equals(storedName, DungeonMasterAccessName, StringComparison.OrdinalIgnoreCase))
-                {
-                    continue;
-                }
-
-                if (string.Equals(GetFirstName(storedName), firstName, StringComparison.OrdinalIgnoreCase))
-                {
-                    yield return storedName;
-                }
-            }
-        }
-
         private static string GetFirstName(string value)
         {
             var trimmedValue = value.Trim();
@@ -299,7 +309,24 @@ namespace PlayerAssistant
                 : trimmedValue[..spaceIndex];
         }
 
-        internal sealed record PasswordHashRecord(int Iterations, byte[] Salt, byte[] Hash);
+        private static bool IsValidCanonicalId(string value)
+        {
+            return value.Length is >= 3 and <= 128
+                && value.All(character => char.IsLetterOrDigit(character) || character is '-' or '_' or '.');
+        }
+
+        private static string CreateGeneratedCanonicalId(string name)
+        {
+            var digest = SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(name.Trim().ToUpperInvariant()));
+            return $"generated-{Convert.ToHexString(digest).ToLowerInvariant()}";
+        }
+
+        internal sealed record PasswordHashRecord(
+            string CanonicalId,
+            string Name,
+            int Iterations,
+            byte[] Salt,
+            byte[] Hash);
 
         private sealed class PasswordHashDocument
         {
@@ -315,6 +342,9 @@ namespace PlayerAssistant
 
         private sealed class PasswordHashEntry
         {
+            [JsonPropertyName("canonical_id")]
+            public string? CanonicalId { get; init; }
+
             [JsonPropertyName("name")]
             public string? Name { get; init; }
 
