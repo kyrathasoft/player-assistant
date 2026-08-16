@@ -642,7 +642,7 @@ try {
     routingAssert($quests['status'] === 200, 'The protected quest route failed.');
     $expectedQuestStatuses = [
         'find-jelenneth' => ['active', 'individual-or-party'],
-        'three-items-for-nuanda' => ['active', 'individual-or-party'],
+        'three-items-for-nuanda' => ['completed', 'individual-or-party'],
         'k-r-k-caravan-run' => ['completed', 'party-only'],
         'plumb-lost-caverns' => ['available', 'party-only'],
         'reclaim-keep-on-borderlands' => ['available', 'party-only'],
