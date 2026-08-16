@@ -1,6 +1,6 @@
-import { initializeTranslator } from './modules/translator.js?v=87';
-import { initializeCampaignSearch } from './modules/search.js?v=87';
-import { initializeDice } from './modules/dice.js?v=87';
+import { initializeTranslator } from './modules/translator.js?v=88';
+import { initializeCampaignSearch } from './modules/search.js?v=88';
+import { initializeDice } from './modules/dice.js?v=88';
 
 (() => {
     'use strict';
@@ -97,6 +97,9 @@ import { initializeDice } from './modules/dice.js?v=87';
     let revisionRequestId = 0;
     let revisionPollTimer = 0;
     let revisionsUpdatedAt = 0;
+    let authenticationGeneration = 0;
+    const activeAuthenticationControllers = new Set();
+    const AUTH_REQUEST_TIMEOUT_MS = 15000;
     let magicItemSnapshot = null;
     let magicItemLoading = null;
     let magicItemError = '';
@@ -2313,8 +2316,38 @@ import { initializeDice } from './modules/dice.js?v=87';
         setHeroTokenImage(byId('auth-account-token'), hero);
     };
 
+    class AuthenticationApiError extends Error {
+        constructor(message, details = {}) {
+            super(message);
+            this.name = 'AuthenticationApiError';
+            this.code = typeof details.code === 'string' ? details.code : 'api_error';
+            this.status = Number.isInteger(details.status) ? details.status : 0;
+            this.requestId = typeof details.requestId === 'string' ? details.requestId : '';
+            this.retryable = details.retryable === true;
+            this.expired = details.expired === true;
+        }
+    }
+
+    const createApiRequestId = () => {
+        if (globalThis.crypto?.randomUUID) return globalThis.crypto.randomUUID();
+        const bytes = new Uint8Array(16);
+        globalThis.crypto?.getRandomValues?.(bytes);
+        return [...bytes].map((value) => value.toString(16).padStart(2, '0')).join('');
+    };
+
+    const cancelAuthenticationRequests = () => {
+        for (const controller of activeAuthenticationControllers) controller.abort();
+        activeAuthenticationControllers.clear();
+    };
+
+    const beginAuthenticationGeneration = () => {
+        authenticationGeneration++;
+        cancelAuthenticationRequests();
+    };
+
     const clearExpiredAuthentication = () => {
         if (authenticatedAccount === null) return;
+        beginAuthenticationGeneration();
         authenticatedAccount = null;
         authenticationCsrfToken = '';
         clearProtectedFreshness();
@@ -2350,12 +2383,41 @@ import { initializeDice } from './modules/dice.js?v=87';
     };
 
     const requestAuthenticationApi = async (path, options = {}) => {
-        const method = options.method || 'GET';
-        const headers = new Headers({ Accept: 'application/json' });
+        const method = String(options.method || 'GET').toUpperCase();
+        const requestGeneration = authenticationGeneration;
+        const requestId = typeof options.requestId === 'string' && options.requestId !== ''
+            ? options.requestId
+            : createApiRequestId();
+        const headers = new Headers({
+            Accept: 'application/json',
+            'X-Request-Id': requestId
+        });
         if (options.body !== undefined) headers.set('Content-Type', 'application/json');
         if (options.csrf === true && authenticationCsrfToken) {
             headers.set('X-CSRF-Token', authenticationCsrfToken);
         }
+        if (!['GET', 'HEAD', 'OPTIONS'].includes(method)
+            && path !== '/login'
+            && path !== '/logout') {
+            headers.set(
+                'Idempotency-Key',
+                typeof options.idempotencyKey === 'string' && options.idempotencyKey !== ''
+                    ? options.idempotencyKey
+                    : createApiRequestId());
+        }
+        const controller = new AbortController();
+        let timedOut = false;
+        const timeoutId = window.setTimeout(() => {
+            timedOut = true;
+            controller.abort();
+        }, AUTH_REQUEST_TIMEOUT_MS);
+        let externalAbortHandler = null;
+        if (options.signal instanceof AbortSignal) {
+            externalAbortHandler = () => controller.abort();
+            if (options.signal.aborted) controller.abort();
+            else options.signal.addEventListener('abort', externalAbortHandler, { once: true });
+        }
+        activeAuthenticationControllers.add(controller);
         let response;
         try {
             response = await fetch(`${AUTH_API_ROOT}${path}`, {
@@ -2364,25 +2426,72 @@ import { initializeDice } from './modules/dice.js?v=87';
                 body: options.body === undefined ? undefined : JSON.stringify(options.body),
                 credentials: 'same-origin',
                 cache: 'no-store',
-                redirect: 'error'
+                redirect: 'error',
+                signal: controller.signal
             });
-        } catch {
-            throw new Error('The character login service is unavailable.');
+        } catch (error) {
+            const cancelled = controller.signal.aborted;
+            throw new AuthenticationApiError(
+                timedOut
+                    ? 'The character login request timed out.'
+                    : cancelled ? 'The character login request was cancelled.' : 'The character login service is unavailable.',
+                {
+                    code: timedOut ? 'request_timeout' : cancelled ? 'request_cancelled' : 'network_error',
+                    requestId,
+                    retryable: true
+                });
+        } finally {
+            window.clearTimeout(timeoutId);
+            activeAuthenticationControllers.delete(controller);
+            if (externalAbortHandler && options.signal instanceof AbortSignal) {
+                options.signal.removeEventListener('abort', externalAbortHandler);
+            }
         }
-        if (response.status === 401 && path !== '/login') clearExpiredAuthentication();
+        const responseRequestId = response.headers.get('X-Request-Id') || requestId;
+        if (requestGeneration !== authenticationGeneration && path !== '/login' && path !== '/session') {
+            throw new AuthenticationApiError(
+                'The character login response was superseded by an account change.',
+                { code: 'stale_generation', requestId: responseRequestId, retryable: true });
+        }
         let payload = {};
         try {
             payload = await response.json();
         } catch {
             if (!response.ok) {
-                throw new Error(response.status === 401
-                    ? 'Authentication required.'
-                    : 'The character login request failed.');
+                if (response.status === 401 && path !== '/login') clearExpiredAuthentication();
+                throw new AuthenticationApiError(
+                    response.status === 401 ? 'Authentication required.' : 'The character login request failed.',
+                    {
+                        code: response.status === 401 ? 'authentication_required' : 'invalid_response',
+                        status: response.status,
+                        requestId: responseRequestId,
+                        expired: response.status === 401,
+                        retryable: response.status >= 500
+                    });
             }
-            throw new Error('The character login service returned an invalid response.');
+            throw new AuthenticationApiError(
+                'The character login service returned an invalid response.',
+                { code: 'invalid_response', status: response.status, requestId: responseRequestId });
         }
         if (!response.ok) {
-            throw new Error(payload.message || 'The character login request failed.');
+            const expired = response.status === 401 && path !== '/login';
+            if (expired) clearExpiredAuthentication();
+            throw new AuthenticationApiError(
+                typeof payload.message === 'string' && payload.message !== ''
+                    ? payload.message
+                    : 'The character login request failed.',
+                {
+                    code: typeof payload.error === 'string' ? payload.error : 'api_error',
+                    status: response.status,
+                    requestId: typeof payload.request_id === 'string' ? payload.request_id : responseRequestId,
+                    expired,
+                    retryable: response.status >= 500 || response.status === 429
+                });
+        }
+        if (payload && typeof payload === 'object' && !Array.isArray(payload)) {
+            payload.request_id = typeof payload.request_id === 'string'
+                ? payload.request_id
+                : responseRequestId;
         }
         return payload;
     };
@@ -2605,6 +2714,7 @@ import { initializeDice } from './modules/dice.js?v=87';
                     password: password.value
                 }
             });
+            beginAuthenticationGeneration();
             authenticationCsrfToken = String(session.csrf_token || '');
             authenticatedAccount = session.account;
             clearProtectedFreshness();
@@ -2674,6 +2784,7 @@ import { initializeDice } from './modules/dice.js?v=87';
         setAuthenticationMessage('Signing out…', false, true);
         try {
             await requestAuthenticationApi('/logout', { method: 'POST', csrf: true });
+            beginAuthenticationGeneration();
             authenticatedAccount = null;
             authenticationCsrfToken = '';
             clearProtectedFreshness();

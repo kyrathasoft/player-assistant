@@ -492,6 +492,7 @@ try {
     const consoleErrors = [];
     const requestFailures = [];
     const requestUrls = [];
+    const apiRequestHeaders = [];
     const unexpectedResponses = [];
     let initialResponseBytes = 0;
     const workerUrls = new Set();
@@ -505,7 +506,16 @@ try {
             consoleErrors.push(text);
         }
     });
-    page.on('request', (request) => requestUrls.push(request.url()));
+    page.on('request', (request) => {
+        requestUrls.push(request.url());
+        if (request.url().includes('/scarlethorizons/api/v1/')) {
+            apiRequestHeaders.push({
+                method: request.method(),
+                url: request.url(),
+                headers: request.headers()
+            });
+        }
+    });
     page.on('requestfailed', (request) => {
         if (!offlineExpected) {
             requestFailures.push(`${request.method()} ${request.url()}: ${request.failure()?.errorText || 'failed'}`);
@@ -660,6 +670,13 @@ try {
     await page.locator('#auth-button-label').getByText('CI Hero', { exact: true }).waitFor();
     if (await page.locator('#auth-account-panel').isHidden()) {
         throw new Error('Authentication smoke failed: the signed-in account panel stayed hidden.');
+    }
+    const loginRequest = apiRequestHeaders.find((entry) => entry.method === 'POST'
+        && entry.url.endsWith('/v1/login'));
+    if (!loginRequest
+        || !/^[0-9a-f-]{16,}$/u.test(loginRequest.headers['x-request-id'] || '')
+        || loginRequest.headers['idempotency-key']) {
+        throw new Error(`Authentication request reliability headers were incorrect: ${JSON.stringify(loginRequest)}.`);
     }
     await page.locator('#auth-dialog-close').click();
     await page.locator('#auth-dialog').waitFor({ state: 'hidden' });
@@ -873,6 +890,13 @@ try {
     }
     await page.locator('#message-notification-list .message-notification').first().getByText('Mark as read', { exact: true }).click();
     await page.locator('#message-notification-button').waitFor({ state: 'hidden' });
+    const readMessageRequest = [...apiRequestHeaders].reverse().find((entry) => entry.method === 'POST'
+        && entry.url.includes('/v1/messages/') && entry.url.endsWith('/read'));
+    if (!readMessageRequest
+        || !/^[0-9a-f-]{16,}$/u.test(readMessageRequest.headers['x-request-id'] || '')
+        || !/^[0-9a-f-]{16,}$/u.test(readMessageRequest.headers['idempotency-key'] || '')) {
+        throw new Error(`Mutation reliability headers were incorrect: ${JSON.stringify(readMessageRequest)}.`);
+    }
 
     const playerPresenceStatus = await page.evaluate(async () =>
         (await fetch('/scarlethorizons/api/v1/presence')).status);
@@ -1021,7 +1045,7 @@ try {
     await page.waitForFunction(() => document.querySelector('#search-guidance')?.textContent?.includes('pack ready offline'));
     await page.locator('#campaign-search').fill('Kirkilston');
     await page.locator('#search-results .search-result').first().waitFor({ state: 'visible' });
-    if (![...workerUrls].some((url) => url.includes('/campaign-search-worker.js?v=87'))) {
+    if (![...workerUrls].some((url) => url.includes('/campaign-search-worker.js?v=88'))) {
         throw new Error(`Campaign search did not start its dedicated worker: ${JSON.stringify([...workerUrls])}.`);
     }
 
@@ -1052,7 +1076,7 @@ try {
             throw new Error(`Offline feature data was not cached: ${requiredPath}`);
         }
     }
-    if (!cachedUrls.some((url) => url.endsWith('/campaign-search-worker.js?v=87'))) {
+    if (!cachedUrls.some((url) => url.endsWith('/campaign-search-worker.js?v=88'))) {
         throw new Error('Campaign search worker was not present in the offline shell cache.');
     }
     await page.evaluate(async () => {
