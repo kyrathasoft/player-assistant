@@ -55,24 +55,25 @@ namespace PlayerAssistant
         public static IReadOnlyList<PartyHeroSheet> WithVisibleXpTotals(
             IReadOnlyList<PartyHeroSheet> heroes,
             IReadOnlyList<PcXpTotal> xpTotals,
-            string authenticatedCharacterName,
-            bool isDungeonMaster,
-            string? authenticatedCharacterId = null)
+            XpAuthenticatedIdentity authenticatedIdentity)
         {
             ArgumentNullException.ThrowIfNull(heroes);
             ArgumentNullException.ThrowIfNull(xpTotals);
-            ArgumentException.ThrowIfNullOrWhiteSpace(authenticatedCharacterName);
+            ArgumentNullException.ThrowIfNull(authenticatedIdentity);
 
             return heroes
                 .Select(hero =>
                 {
-                    var xpTotal = isDungeonMaster || IsSameHeroIdentity(
-                        heroes,
-                        hero,
-                        authenticatedCharacterName,
-                        authenticatedCharacterId)
+                    var xpTotal = authenticatedIdentity.IsDungeonMaster
                         ? FindXpTotalForCharacter(xpTotals, hero)
-                        : null;
+                        : string.Equals(
+                            hero.CanonicalId,
+                            authenticatedIdentity.CanonicalId,
+                            StringComparison.Ordinal)
+                            ? XpTrackingUtility.FindXpTotalForIdentity(
+                                xpTotals,
+                                authenticatedIdentity)
+                            : null;
                     return hero with { XpTotal = xpTotal?.XpTotal };
                 })
                 .ToArray();
@@ -374,30 +375,6 @@ namespace PlayerAssistant
                 : null;
         }
 
-        private static bool IsSameHeroIdentity(
-            IReadOnlyList<PartyHeroSheet> heroes,
-            PartyHeroSheet hero,
-            string authenticatedCharacterName,
-            string? authenticatedCharacterId)
-        {
-            if (!string.IsNullOrWhiteSpace(authenticatedCharacterId))
-            {
-                return string.Equals(hero.CanonicalId, authenticatedCharacterId.Trim(), StringComparison.OrdinalIgnoreCase);
-            }
-
-            if (string.Equals(hero.Name.Trim(), authenticatedCharacterName.Trim(), StringComparison.OrdinalIgnoreCase))
-            {
-                return true;
-            }
-
-            var firstName = GetFirstName(authenticatedCharacterName);
-            var firstNameMatches = heroes
-                .Where(candidate => string.Equals(GetFirstName(candidate.Name), firstName, StringComparison.OrdinalIgnoreCase))
-                .Take(2)
-                .ToArray();
-            return firstNameMatches.Length == 1
-                && ReferenceEquals(firstNameMatches[0], hero);
-        }
 
         private static string GetFirstName(string value)
         {

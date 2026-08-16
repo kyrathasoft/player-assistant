@@ -154,18 +154,22 @@ internal static partial class TestCases
             CanonicalId = null,
             XpTotal = null
         };
-        var leakedView = PartyHeroUtility.WithVisibleXpTotals(
+        var protectedView = PartyHeroUtility.WithVisibleXpTotals(
             [characterAWithoutIdentity],
             [new PcXpTotal(
                 SyntheticIdentityFixtures[1].FullName,
                 SyntheticIdentityFixtures[1].XpTotal,
                 SyntheticIdentityFixtures[1].CanonicalId)],
-            SyntheticIdentityFixtures[0].FullName,
-            isDungeonMaster: false);
+            new XpAuthenticatedIdentity(
+                SyntheticIdentityFixtures[0].CanonicalId,
+                SyntheticIdentityFixtures[0].FullName,
+                [],
+                false,
+                SyntheticIdentityFixtures[0].CanonicalId));
 
         Require(
-            leakedView[0].XpTotal == SyntheticIdentityFixtures[1].XpTotal,
-            "baseline must reproduce the name-based lookup leaking Character B data into Character A's view");
+            protectedView[0].XpTotal is null,
+            "an authenticated identity must not authorize XP for a different canonical ID");
     }
 
     internal static void AmbiguousFirstNameAliasesAreDenied()
@@ -217,9 +221,12 @@ internal static partial class TestCases
         var visible = PartyHeroUtility.WithVisibleXpTotals(
             SyntheticIdentityFixtures.Select(fixture => fixture.PartySheet with { XpTotal = null }).ToArray(),
             xpTotals,
-            "Ari",
-            false,
-            SyntheticIdentityFixtures[1].CanonicalId);
+            new XpAuthenticatedIdentity(
+                SyntheticIdentityFixtures[1].CanonicalId,
+                SyntheticIdentityFixtures[1].FullName,
+                [],
+                false,
+                SyntheticIdentityFixtures[1].CanonicalId));
         Require(visible[0].XpTotal is null && visible[1].XpTotal == SyntheticIdentityFixtures[1].XpTotal,
             "canonical XP authorization selected the wrong same-first-name character");
 

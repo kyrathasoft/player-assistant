@@ -233,12 +233,12 @@ Planned security correction: eliminate first-name equivalence from authenticatio
   - [x] Treat first names as ordinary text unless deliberately listed as an alias; never infer them automatically.
   - [x] Update password-generation, import, sidecar validation, installer, release-sidecar, and runtime-sidecar contracts together.
 
-- [ ] 4. Thread the returned identity through Form1 and XP retrieval.
-  - Replace the entered `characterName` as the source of authorization state with the returned immutable identity.
-  - Make XP snapshot filtering accept the authenticated identity/canonical ID and resolve the exact authorized record; do not perform a second lookup from the originally entered name.
-  - Determine Dungeon Master scope from the returned identity, not from a case-insensitive name comparison.
-  - Update the required XP, optional XP, publisher-task, login, and error/status paths so valid authentication always carries the same identity object forward.
-  - Clear the identity on cancellation, failed authentication, feature completion, and account transition.
+- [x] 4. Thread the returned identity through Form1 and XP retrieval.
+  - [x] Replace the entered `characterName` as the source of authorization state with the returned immutable identity.
+  - [x] Make XP snapshot filtering accept the authenticated identity/canonical ID and resolve the exact authorized record; do not perform a second lookup from the originally entered name.
+  - [x] Determine Dungeon Master scope from the returned identity, not from a case-insensitive name comparison.
+  - [x] Update the required XP, optional XP, publisher-task, login, and error/status paths so valid authentication always carries the same identity object forward.
+  - [x] Clear the identity on cancellation, failed authentication, feature completion, and account transition.
 
 - [ ] 5. Correct PartyHeroUtility identity handling.
   - Add stable identity data to `PartyHeroSheet` or its roster input and pass the authenticated identity rather than a display-name string to `WithVisibleXpTotals`.

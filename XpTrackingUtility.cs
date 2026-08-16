@@ -37,6 +37,23 @@ namespace PlayerAssistant
             return ParseCurrentXpSnapshot(markdown).Totals;
         }
 
+        internal static PcXpTotal? FindXpTotalForIdentity(
+            IReadOnlyList<PcXpTotal> totals,
+            XpAuthenticatedIdentity identity)
+        {
+            ArgumentNullException.ThrowIfNull(totals);
+            ArgumentNullException.ThrowIfNull(identity);
+
+            if (totals.Any(row => row.CanonicalId is not null))
+            {
+                return totals.FirstOrDefault(row =>
+                    string.Equals(row.CanonicalId, identity.CanonicalId, StringComparison.Ordinal));
+            }
+
+            return totals.FirstOrDefault(row =>
+                string.Equals(row.Name.Trim(), identity.CanonicalName.Trim(), StringComparison.OrdinalIgnoreCase));
+        }
+
         internal static XpTrackingSnapshot ParseCurrentXpSnapshot(string markdown)
         {
             ArgumentNullException.ThrowIfNull(markdown);

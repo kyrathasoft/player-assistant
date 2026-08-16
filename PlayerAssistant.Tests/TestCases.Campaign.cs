@@ -2345,8 +2345,8 @@ internal static partial class TestCases
     {
         var heroes = new PartyHeroSheet[]
         {
-            new("Kelpie Lawfuller", null, "3", "Fighter", "12", "Kelpie sheet"),
-            new("Jelb Garrick", null, "1", "Illusionist", "4", "Jelb sheet")
+            new("Kelpie Lawfuller", null, "3", "Fighter", "12", "Kelpie sheet", CanonicalId: "kelpie"),
+            new("Jelb Garrick", null, "1", "Illusionist", "4", "Jelb sheet", CanonicalId: "jelb")
         };
         var xpTotals = new PcXpTotal[]
         {
@@ -2357,13 +2357,11 @@ internal static partial class TestCases
         var kelpieView = PartyHeroUtility.WithVisibleXpTotals(
             heroes,
             xpTotals,
-            "Kelpie",
-            isDungeonMaster: false);
+            new XpAuthenticatedIdentity("kelpie", "Kelpie Lawfuller", [], false, "kelpie"));
         var dmView = PartyHeroUtility.WithVisibleXpTotals(
             heroes,
             xpTotals,
-            "Dungeon Master",
-            isDungeonMaster: true);
+            new XpAuthenticatedIdentity("dm", "Dungeon Master", [], true, "dm"));
 
         AssertEqual(7062, kelpieView[0].XpTotal ?? -1, "authenticated hero should see their own XP");
         AssertTrue(kelpieView[1].XpTotal is null, "authenticated hero should not see another hero's XP");
