@@ -273,6 +273,51 @@ Planned security correction: eliminate first-name equivalence from authenticatio
   - Verify production behavior through the authenticated deployment contract without exposing passwords or protected response bodies.
 
 
+## Next PWA robustness and usefulness backlog
+
+- [ ] Reconcile the current branch before adding features.
+  - [ ] Review the dirty worktree against the reviewed branch baseline.
+  - [ ] Confirm deleted PWA features, tests, installer tooling, and broker support are intentional.
+  - [ ] Restore or explicitly replace Activity / Inbox, message pagination, revision polling, search-worker support, optional-pack controls, and deployment/restore tooling.
+  - [ ] Re-run the full PWA and broker regression gates.
+- [ ] Restore responsive campaign-search performance.
+  - [ ] Keep corpus loading, normalization, wildcard matching, scoring, and sorting in a dedicated worker.
+  - [ ] Preserve request-ID protection against stale results.
+  - [ ] Retain offline pack retry/removal behavior and benchmark typing responsiveness on the full index.
+- [ ] Strengthen offline and update behavior.
+  - [ ] Add an in-app update-available banner with explicit reload/defer controls.
+  - [ ] Validate cached JSON schema and MIME type before use.
+  - [ ] Recover from corrupt or partially cached translator/search data.
+  - [ ] Cover quota failures, interrupted installs, offline reloads, and stale workers.
+- [ ] Make messaging a dependable campaign inbox.
+  - [ ] Restore older-message pagination.
+  - [ ] Add conversation grouping and per-thread unread counts.
+  - [ ] Add retry/error recovery and draft preservation.
+  - [ ] Add optional browser notifications for new messages.
+  - [ ] Verify account switching never leaks prior-user messages.
+- [ ] Add a campaign-session dashboard.
+  - [ ] Show current date/location, active quests, party members/HP, recent messages, and unresolved quest decisions.
+  - [ ] Add quick links between quests, characters, locations, and messages.
+  - [ ] Support authenticated session notes through the broker.
+- [ ] Improve quest usefulness.
+  - [ ] Add filters for assigned character, prerequisite state, source location, and reward type.
+  - [ ] Add a “What can I do next?” view for available, blocked, and active objectives.
+  - [ ] Notify users when quest decisions or availability change.
+- [ ] Improve party management.
+  - [ ] Restore and expand party-funds support with transaction history and arithmetic reconciliation.
+  - [ ] Add party inventory and magic-item ownership.
+  - [ ] Add explicit last-refreshed and retry state to XP/level-up summaries.
+- [ ] Make production health visible.
+  - [ ] Add a safe authenticated health panel for broker, XP, and word-count freshness.
+  - [ ] Add a credential-free “Report a problem” diagnostic export containing app revision, browser version, cache state, and failed endpoint names.
+
+## Implemented this pass
+
+- [x] Reconciled the reviewed PWA branch slice by restoring the previously removed search-worker, optional-pack, Activity / Inbox, revision-polling, message-pagination, installer, restore, and broker-support files without resetting unrelated worktree changes.
+- [x] Restored campaign-search worker loading, request-ID protection, offline pack controls, and the matching PWA test coverage.
+- [x] Restored Activity / Inbox, older-message pagination, revision polling, and protected account-transition coverage; browser smoke passes the player/DM, logout/session-expiry, navigation, and online/offline paths.
+- [x] Corrected service-worker coverage for query-versioned translator/search workers plus the optional-pack loader and manifest, and advanced the cache revision to 109.
+
 ## Completed
 
 - [x] Schedule fail-closed full wiki and local IC/OOC recounts at 4:00 AM and 8:30 PM Central with authenticated publication verification.
