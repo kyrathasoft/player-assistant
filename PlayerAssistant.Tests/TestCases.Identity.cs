@@ -1,0 +1,154 @@
+using System.Security.Cryptography;
+using System.Text;
+using System.Text.Json;
+using PlayerAssistant;
+
+namespace PlayerAssistant.Tests;
+
+internal static partial class TestCases
+{
+    private sealed record SyntheticCharacterFixture(
+        string FullName,
+        string CanonicalId,
+        string Password,
+        int XpTotal,
+        PartyHeroSheet PartySheet,
+        string HeroBriefingData);
+
+    private static readonly SyntheticCharacterFixture[] SyntheticIdentityFixtures =
+    [
+        new(
+            "Ari Stoneward",
+            "fixture-ari-stoneward-001",
+            "synthetic-ari-stoneward-password",
+            1_125,
+            new PartyHeroSheet("Ari Stoneward", null, "Level 4", "Ranger", "31", "Ari Stoneward\nParty sheet: Stoneward", 1_125, "fixture-ari-stoneward-001"),
+            "Briefing: Stoneward patrol at the north gate."),
+        new(
+            "Ari Valesong",
+            "fixture-ari-valesong-002",
+            "synthetic-ari-valesong-password",
+            2_375,
+            new PartyHeroSheet("Ari Valesong", null, "Level 7", "Bard", "48", "Ari Valesong\nParty sheet: Valesong", 2_375, "fixture-ari-valesong-002"),
+            "Briefing: Valesong negotiates with the river guild.")
+    ];
+
+    internal static void IdentityFixturesAreDistinctAndSynthetic()
+    {
+        Require(SyntheticIdentityFixtures.Length == 2, "exactly two fixtures are required");
+        Require(SyntheticIdentityFixtures.All(fixture => fixture.FullName.StartsWith("Ari ", StringComparison.Ordinal)), "fixtures must share a first name");
+        Require(SyntheticIdentityFixtures.Select(fixture => fixture.FullName).Distinct(StringComparer.Ordinal).Count() == 2, "full names must be distinct");
+        Require(SyntheticIdentityFixtures.Select(fixture => fixture.CanonicalId).Distinct(StringComparer.Ordinal).Count() == 2, "canonical IDs must be distinct");
+        Require(SyntheticIdentityFixtures.Select(fixture => fixture.Password).Distinct(StringComparer.Ordinal).Count() == 2, "passwords must be distinct");
+        Require(SyntheticIdentityFixtures[0].XpTotal != SyntheticIdentityFixtures[1].XpTotal, "XP totals must be distinct");
+        Require(SyntheticIdentityFixtures[0].PartySheet.CharacterSheetText != SyntheticIdentityFixtures[1].PartySheet.CharacterSheetText, "party sheets must be distinct");
+        Require(SyntheticIdentityFixtures[0].HeroBriefingData != SyntheticIdentityFixtures[1].HeroBriefingData, "hero briefings must be distinct");
+        Require(SyntheticIdentityFixtures.All(fixture => fixture.Password.StartsWith("synthetic-", StringComparison.Ordinal)), "fixtures must not use production credentials");
+    }
+
+    internal static void CrossAccountPasswordAccessIsDenied()
+    {
+        using var directory = CreateSyntheticPasswordSidecar();
+        Require(!XpPasswordStoreUtility.ValidatePassword(
+            SyntheticIdentityFixtures[1].CanonicalId,
+            SyntheticIdentityFixtures[1].FullName,
+            SyntheticIdentityFixtures[0].Password,
+            directory.Path), "one Ari password authenticated the other Ari account");
+    }
+
+    internal static void AmbiguousFirstNameAliasesAreDenied()
+    {
+        using var directory = CreateSyntheticPasswordSidecar();
+        Require(!XpPasswordStoreUtility.ValidatePassword(
+            null,
+            "Ari",
+            SyntheticIdentityFixtures[0].Password,
+            directory.Path), "an ambiguous first-name alias authenticated an account");
+    }
+
+    internal static void UnknownCanonicalIdsAreDenied()
+    {
+        using var directory = CreateSyntheticPasswordSidecar();
+        Require(!XpPasswordStoreUtility.ValidatePassword(
+            "fixture-ari-missing-999",
+            SyntheticIdentityFixtures[0].FullName,
+            SyntheticIdentityFixtures[0].Password,
+            directory.Path), "an unknown canonical ID authenticated an account");
+    }
+
+    internal static void MismatchedPasswordsAreDenied()
+    {
+        using var directory = CreateSyntheticPasswordSidecar();
+        Require(!XpPasswordStoreUtility.ValidatePassword(
+            SyntheticIdentityFixtures[0].CanonicalId,
+            SyntheticIdentityFixtures[0].FullName,
+            SyntheticIdentityFixtures[1].Password,
+            directory.Path), "a mismatched password authenticated an account");
+    }
+
+    internal static void CollidingHeroDisplayNamesAreDenied()
+    {
+        var colliding = new[]
+        {
+            SyntheticIdentityFixtures[0].PartySheet with { Name = "Ari" },
+            SyntheticIdentityFixtures[1].PartySheet with { Name = "Ari" }
+        };
+        var briefing = MyHeroBriefingUtility.Build(new MyHeroBriefingRequest(colliding, SelectedHeroName: "Ari"));
+        Require(briefing.Hero is null, "a colliding hero display name selected the wrong hero");
+    }
+
+    internal static void CanonicalIdsSelectMatchingXpAndBriefingData()
+    {
+        var xpTotals = SyntheticIdentityFixtures
+            .Select(fixture => new PcXpTotal(fixture.FullName, fixture.XpTotal, fixture.CanonicalId))
+            .ToArray();
+        var visible = PartyHeroUtility.WithVisibleXpTotals(
+            SyntheticIdentityFixtures.Select(fixture => fixture.PartySheet with { XpTotal = null }).ToArray(),
+            xpTotals,
+            "Ari",
+            false,
+            SyntheticIdentityFixtures[1].CanonicalId);
+        Require(visible[0].XpTotal is null && visible[1].XpTotal == SyntheticIdentityFixtures[1].XpTotal,
+            "canonical XP authorization selected the wrong same-first-name character");
+
+        var briefing = MyHeroBriefingUtility.Build(new MyHeroBriefingRequest(
+            visible,
+            AuthenticatedHeroCanonicalId: SyntheticIdentityFixtures[1].CanonicalId,
+            XpTotals: xpTotals));
+        Require(briefing.Hero?.Name == SyntheticIdentityFixtures[1].FullName
+            && briefing.Hero.XpTotal == SyntheticIdentityFixtures[1].XpTotal,
+            "canonical briefing authorization selected the wrong character data");
+    }
+
+    private static TemporaryDirectory CreateSyntheticPasswordSidecar()
+    {
+        var directory = TemporaryDirectory.Create();
+        var entries = SyntheticIdentityFixtures.Select((fixture, index) => new
+        {
+            name = fixture.FullName,
+            canonical_id = fixture.CanonicalId,
+            algorithm = XpPasswordStoreUtility.Algorithm,
+            iterations = XpPasswordStoreUtility.MinimumIterations,
+            salt = Convert.ToBase64String(Encoding.UTF8.GetBytes($"synthetic-salt-{index:00}-fixed")),
+            hash = Convert.ToBase64String(Rfc2898DeriveBytes.Pbkdf2(
+                fixture.Password,
+                Encoding.UTF8.GetBytes($"synthetic-salt-{index:00}-fixed"),
+                XpPasswordStoreUtility.MinimumIterations,
+                HashAlgorithmName.SHA256,
+                32))
+        }).ToArray();
+        var document = new { schema_version = 1, format = XpPasswordStoreUtility.Format, entries };
+        File.WriteAllText(
+            System.IO.Path.Combine(directory.Path, XpPasswordStoreUtility.FileName),
+            JsonSerializer.Serialize(document));
+        return directory;
+    }
+
+    private static void Require(bool condition, string message)
+    {
+        if (!condition)
+        {
+            throw new InvalidOperationException(message);
+        }
+    }
+}

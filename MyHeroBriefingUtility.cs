@@ -6,6 +6,8 @@ namespace PlayerAssistant
         IReadOnlyList<PartyHeroSheet> ActiveParty,
         string? SelectedHeroName = null,
         string? AuthenticatedHeroName = null,
+        string? SelectedHeroCanonicalId = null,
+        string? AuthenticatedHeroCanonicalId = null,
         bool IsDungeonMaster = false,
         IReadOnlyList<MyHeroBriefingThreadPosts>? ThreadPosts = null,
         IReadOnlyList<PcXpTotal>? XpTotals = null,
@@ -137,7 +139,10 @@ namespace PlayerAssistant
         {
             if (!request.IsDungeonMaster)
             {
-                var authenticatedHero = FindHeroByNameOrFirstName(request.ActiveParty, request.AuthenticatedHeroName);
+                var authenticatedHero = FindHeroByIdentity(
+                    request.ActiveParty,
+                    request.AuthenticatedHeroCanonicalId,
+                    request.AuthenticatedHeroName);
                 if (authenticatedHero is not null)
                 {
                     return new MyHeroBriefingResolvedHero(
@@ -146,27 +151,40 @@ namespace PlayerAssistant
                 }
             }
 
-            var selectedHero = FindHeroByNameOrFirstName(request.ActiveParty, request.SelectedHeroName);
+            var selectedHero = FindHeroByIdentity(
+                request.ActiveParty,
+                request.SelectedHeroCanonicalId,
+                request.SelectedHeroName);
             return selectedHero is not null
                 ? new MyHeroBriefingResolvedHero(selectedHero, MyHeroBriefingHeroIdentitySource.SelectedHero)
                 : new MyHeroBriefingResolvedHero(null, MyHeroBriefingHeroIdentitySource.None);
         }
 
-        private static PartyHeroSheet? FindHeroByNameOrFirstName(
+        private static PartyHeroSheet? FindHeroByIdentity(
             IReadOnlyList<PartyHeroSheet> activeParty,
+            string? canonicalId,
             string? heroName)
         {
+            if (!string.IsNullOrWhiteSpace(canonicalId))
+            {
+                var canonicalMatches = activeParty
+                    .Where(hero => string.Equals(hero.CanonicalId, canonicalId.Trim(), StringComparison.OrdinalIgnoreCase))
+                    .ToArray();
+                return canonicalMatches.Length == 1 ? canonicalMatches[0] : null;
+            }
+
             if (string.IsNullOrWhiteSpace(heroName))
             {
                 return null;
             }
 
             var trimmedName = heroName.Trim();
-            var exactMatch = activeParty.FirstOrDefault(hero =>
+            var exactMatches = activeParty.Where(hero =>
                 string.Equals(hero.Name, trimmedName, StringComparison.OrdinalIgnoreCase));
-            if (exactMatch is not null)
+            var exactMatch = exactMatches.Take(2).ToArray();
+            if (exactMatch.Length == 1)
             {
-                return exactMatch;
+                return exactMatch[0];
             }
 
             var firstNameMatches = activeParty
@@ -224,10 +242,27 @@ namespace PlayerAssistant
                 return null;
             }
 
-            return xpTotals.FirstOrDefault(total =>
-                    string.Equals(total.Name, hero.Name, StringComparison.OrdinalIgnoreCase)
-                    || string.Equals(GetFirstName(total.Name), GetFirstName(hero.Name), StringComparison.OrdinalIgnoreCase))
+            if (!string.IsNullOrWhiteSpace(hero.CanonicalId))
+            {
+                return xpTotals.FirstOrDefault(total =>
+                    string.Equals(total.CanonicalId, hero.CanonicalId, StringComparison.OrdinalIgnoreCase))
                     ?.XpTotal;
+            }
+
+            var exactMatches = xpTotals
+                .Where(total => string.Equals(total.Name, hero.Name, StringComparison.OrdinalIgnoreCase))
+                .Take(2)
+                .ToArray();
+            if (exactMatches.Length == 1)
+            {
+                return exactMatches[0].XpTotal;
+            }
+
+            var firstNameMatches = xpTotals
+                .Where(total => string.Equals(GetFirstName(total.Name), GetFirstName(hero.Name), StringComparison.OrdinalIgnoreCase))
+                .Take(2)
+                .ToArray();
+            return firstNameMatches.Length == 1 ? firstNameMatches[0].XpTotal : null;
         }
 
         private static IReadOnlyList<MyHeroBriefingQuickLink> CreateQuickLinks(MyHeroBriefingRequest request)

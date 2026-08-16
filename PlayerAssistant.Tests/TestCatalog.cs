@@ -443,6 +443,13 @@ internal static class TestCatalog
     ("release publish parity rejects mismatched sidecar", TestCases.ReleasePublishParityRejectsMismatchedSidecar),
     ("diagnostic bundle redacts sensitive values", TestCases.DiagnosticBundleRedactsSensitiveValues),
     ("diagnostic bundle verify only rejects forbidden auth state", TestCases.DiagnosticBundleVerifyOnlyRejectsForbiddenAuthState),
-    ("diagnostic retention cleanup removes old diagnostics and preserves unrelated scratch files", TestCases.DiagnosticRetentionCleanupRemovesOldDiagnosticsAndPreservesUnrelatedScratchFiles)
+    ("diagnostic retention cleanup removes old diagnostics and preserves unrelated scratch files", TestCases.DiagnosticRetentionCleanupRemovesOldDiagnosticsAndPreservesUnrelatedScratchFiles),
+    ("identity fixtures are distinct and synthetic", TestCases.IdentityFixturesAreDistinctAndSynthetic),
+    ("cross-account password access is denied", TestCases.CrossAccountPasswordAccessIsDenied),
+    ("ambiguous first-name aliases are denied", TestCases.AmbiguousFirstNameAliasesAreDenied),
+    ("unknown canonical IDs are denied", TestCases.UnknownCanonicalIdsAreDenied),
+    ("mismatched passwords are denied", TestCases.MismatchedPasswordsAreDenied),
+    ("colliding hero display names are denied", TestCases.CollidingHeroDisplayNamesAreDenied),
+    ("canonical IDs select matching XP and briefing data", TestCases.CanonicalIdsSelectMatchingXpAndBriefingData)
         };
 }

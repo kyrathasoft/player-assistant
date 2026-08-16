@@ -9,7 +9,8 @@ namespace PlayerAssistant
         string CharacterClass,
         string HitPoints,
         string CharacterSheetText,
-        int? XpTotal = null);
+        int? XpTotal = null,
+        string? CanonicalId = null);
 
     internal static class PartyHeroUtility
     {
@@ -55,7 +56,8 @@ namespace PlayerAssistant
             IReadOnlyList<PartyHeroSheet> heroes,
             IReadOnlyList<PcXpTotal> xpTotals,
             string authenticatedCharacterName,
-            bool isDungeonMaster)
+            bool isDungeonMaster,
+            string? authenticatedCharacterId = null)
         {
             ArgumentNullException.ThrowIfNull(heroes);
             ArgumentNullException.ThrowIfNull(xpTotals);
@@ -64,8 +66,12 @@ namespace PlayerAssistant
             return heroes
                 .Select(hero =>
                 {
-                    var xpTotal = isDungeonMaster || IsSameHeroName(hero.Name, authenticatedCharacterName)
-                        ? FindXpTotalForCharacter(xpTotals, hero.Name)
+                    var xpTotal = isDungeonMaster || IsSameHeroIdentity(
+                        heroes,
+                        hero,
+                        authenticatedCharacterName,
+                        authenticatedCharacterId)
+                        ? FindXpTotalForCharacter(xpTotals, hero)
                         : null;
                     return hero with { XpTotal = xpTotal?.XpTotal };
                 })
@@ -320,6 +326,37 @@ namespace PlayerAssistant
             IReadOnlyList<PcXpTotal> totals,
             string characterName)
         {
+            var firstMatch = totals.FirstOrDefault(row =>
+                string.Equals(row.Name, characterName.Trim(), StringComparison.OrdinalIgnoreCase));
+            if (firstMatch is not null)
+            {
+                return firstMatch;
+            }
+
+            return FindUniqueFirstNameMatch(totals, characterName);
+        }
+
+        private static PcXpTotal? FindXpTotalForCharacter(
+            IReadOnlyList<PcXpTotal> totals,
+            PartyHeroSheet hero)
+        {
+            if (!string.IsNullOrWhiteSpace(hero.CanonicalId))
+            {
+                var canonicalMatch = totals.FirstOrDefault(row =>
+                    string.Equals(row.CanonicalId, hero.CanonicalId, StringComparison.OrdinalIgnoreCase));
+                if (canonicalMatch is not null)
+                {
+                    return canonicalMatch;
+                }
+            }
+
+            return FindXpTotalForCharacter(totals, hero.Name);
+        }
+
+        private static PcXpTotal? FindUniqueFirstNameMatch(
+            IReadOnlyList<PcXpTotal> totals,
+            string characterName)
+        {
             var exactMatch = totals.FirstOrDefault(row =>
                 string.Equals(row.Name, characterName.Trim(), StringComparison.OrdinalIgnoreCase));
             if (exactMatch is not null)
@@ -337,10 +374,29 @@ namespace PlayerAssistant
                 : null;
         }
 
-        private static bool IsSameHeroName(string left, string right)
+        private static bool IsSameHeroIdentity(
+            IReadOnlyList<PartyHeroSheet> heroes,
+            PartyHeroSheet hero,
+            string authenticatedCharacterName,
+            string? authenticatedCharacterId)
         {
-            return string.Equals(left.Trim(), right.Trim(), StringComparison.OrdinalIgnoreCase)
-                || string.Equals(GetFirstName(left), GetFirstName(right), StringComparison.OrdinalIgnoreCase);
+            if (!string.IsNullOrWhiteSpace(authenticatedCharacterId))
+            {
+                return string.Equals(hero.CanonicalId, authenticatedCharacterId.Trim(), StringComparison.OrdinalIgnoreCase);
+            }
+
+            if (string.Equals(hero.Name.Trim(), authenticatedCharacterName.Trim(), StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+
+            var firstName = GetFirstName(authenticatedCharacterName);
+            var firstNameMatches = heroes
+                .Where(candidate => string.Equals(GetFirstName(candidate.Name), firstName, StringComparison.OrdinalIgnoreCase))
+                .Take(2)
+                .ToArray();
+            return firstNameMatches.Length == 1
+                && ReferenceEquals(firstNameMatches[0], hero);
         }
 
         private static string GetFirstName(string value)

@@ -780,10 +780,11 @@ function Assert-PublishedXpPasswordSidecar {
     }
 
     $names = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
+    $canonicalIds = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
     $salts = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::Ordinal)
     foreach ($entry in $entries) {
         $unexpectedEntryProperties = @($entry.PSObject.Properties.Name | Where-Object {
-            @('name', 'algorithm', 'iterations', 'salt', 'hash') -notcontains $_
+            @('name', 'canonical_id', 'algorithm', 'iterations', 'salt', 'hash') -notcontains $_
         })
         if ($unexpectedEntryProperties.Count -gt 0) {
             throw "Published $XpPasswordFileName contains unexpected entry property '$($unexpectedEntryProperties[0])'."
@@ -795,6 +796,11 @@ function Assert-PublishedXpPasswordSidecar {
 
         if (!$names.Add([string]$entry.name)) {
             throw "Published $XpPasswordFileName contains duplicate PC name '$($entry.name)'."
+        }
+
+        $canonicalId = if ($entry.PSObject.Properties['canonical_id']) { [string]$entry.canonical_id } else { [string]$entry.name }
+        if ([string]::IsNullOrWhiteSpace($canonicalId) -or !$canonicalIds.Add($canonicalId)) {
+            throw "Published $XpPasswordFileName contains a blank or duplicate canonical ID."
         }
 
         if ($entry.algorithm -ne $XpPasswordAlgorithm) {

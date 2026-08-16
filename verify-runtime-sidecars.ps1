@@ -147,10 +147,11 @@ function Assert-XpPasswordHashSidecar {
     }
 
     $names = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
+    $canonicalIds = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
     $salts = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::Ordinal)
     foreach ($entry in $entries) {
         $unexpectedEntryProperties = @($entry.PSObject.Properties.Name | Where-Object {
-            @('name', 'algorithm', 'iterations', 'salt', 'hash') -notcontains $_
+            @('name', 'canonical_id', 'algorithm', 'iterations', 'salt', 'hash') -notcontains $_
         })
         if ($unexpectedEntryProperties.Count -gt 0) {
             throw "Runtime sidecar $FileName contains unexpected entry property '$($unexpectedEntryProperties[0])'."
@@ -158,6 +159,11 @@ function Assert-XpPasswordHashSidecar {
 
         if ([string]::IsNullOrWhiteSpace([string]$entry.name) -or !$names.Add([string]$entry.name)) {
             throw "Runtime sidecar $FileName contains a blank or duplicate PC name."
+        }
+
+        $canonicalId = if ($entry.PSObject.Properties['canonical_id']) { [string]$entry.canonical_id } else { [string]$entry.name }
+        if ([string]::IsNullOrWhiteSpace($canonicalId) -or !$canonicalIds.Add($canonicalId)) {
+            throw "Runtime sidecar $FileName contains a blank or duplicate canonical ID."
         }
 
         if ($entry.algorithm -ne $XpPasswordAlgorithm -or [int64]$entry.iterations -lt $XpPasswordMinimumIterations) {
