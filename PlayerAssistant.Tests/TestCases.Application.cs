@@ -373,6 +373,7 @@ internal static partial class TestCases
         AssertFalse(
             XpPasswordStoreUtility.ValidatePassword("Kelpie", "wrong", directory.Path),
             "wrong XP password should be rejected");
+        RunCanonicalIdentityRegressionCases();
     }
 
     internal static void XpPasswordStoreUsesUniqueSaltsAndOmitsPlaintext()

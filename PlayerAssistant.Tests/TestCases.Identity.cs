@@ -120,6 +120,17 @@ internal static partial class TestCases
             "canonical briefing authorization selected the wrong character data");
     }
 
+    internal static void RunCanonicalIdentityRegressionCases()
+    {
+        IdentityFixturesAreDistinctAndSynthetic();
+        CrossAccountPasswordAccessIsDenied();
+        AmbiguousFirstNameAliasesAreDenied();
+        UnknownCanonicalIdsAreDenied();
+        MismatchedPasswordsAreDenied();
+        CollidingHeroDisplayNamesAreDenied();
+        CanonicalIdsSelectMatchingXpAndBriefingData();
+    }
+
     private static TemporaryDirectory CreateSyntheticPasswordSidecar()
     {
         var directory = TemporaryDirectory.Create();
