@@ -368,10 +368,10 @@ internal static partial class TestCases
 
         AssertEqual(2, hashes.Count, "unexpected XP password hash count");
         AssertTrue(
-            XpPasswordStoreUtility.ValidatePassword("Kelpie", "gemstone", directory.Path),
+            XpPasswordStoreUtility.ValidatePassword("Kelpie", "gemstone", directory.Path) is not null,
             "matching XP password should validate");
         AssertFalse(
-            XpPasswordStoreUtility.ValidatePassword("Kelpie", "wrong", directory.Path),
+            XpPasswordStoreUtility.ValidatePassword("Kelpie", "wrong", directory.Path) is not null,
             "wrong XP password should be rejected");
         RunCanonicalIdentityRegressionCases();
     }
@@ -403,7 +403,7 @@ internal static partial class TestCases
         AssertFalse(raw.Contains("shared-password", StringComparison.Ordinal), "XP hash sidecar must not contain plaintext password material");
     }
 
-    internal static void XpPasswordStoreAcceptsFirstAndFullCharacterNames()
+    internal static void XpPasswordStoreRejectsNonCanonicalCharacterNames()
     {
         using var directory = TemporaryDirectory.Create();
         var sidecarPath = Path.Combine(directory.Path, XpPasswordStoreUtility.FileName);
@@ -416,14 +416,14 @@ internal static partial class TestCases
                 ["Dungeon Master"] = "Lucian99!"
             });
 
-        AssertTrue(
-            XpPasswordStoreUtility.ValidatePassword("Kelpie Lawfuller", "gemstone", directory.Path),
-            "full Kelpie name should validate against first-name XP credential");
-        AssertTrue(
-            XpPasswordStoreUtility.ValidatePassword("Jelb", "spell-component", directory.Path),
-            "first Jelb name should validate against full-name XP credential");
         AssertFalse(
-            XpPasswordStoreUtility.ValidatePassword("Dungeon", "Lucian99!", directory.Path),
+            XpPasswordStoreUtility.ValidatePassword("Kelpie Lawfuller", "gemstone", directory.Path) is not null,
+            "a non-canonical full name must not resolve a first-name credential");
+        AssertFalse(
+            XpPasswordStoreUtility.ValidatePassword("Jelb", "spell-component", directory.Path) is not null,
+            "a first-name shortcut must not resolve a full-name credential");
+        AssertFalse(
+            XpPasswordStoreUtility.ValidatePassword("Dungeon", "Lucian99!", directory.Path) is not null,
             "Dungeon Master access should not allow a first-name shortcut");
     }
 
@@ -442,7 +442,7 @@ internal static partial class TestCases
         File.WriteAllBytes(sidecarPath, [0xEF, 0xBB, 0xBF, .. hashBytes]);
 
         AssertTrue(
-            XpPasswordStoreUtility.ValidatePassword("Kelpie Lawfuller", "gemstone", directory.Path),
+            XpPasswordStoreUtility.ValidatePassword("Kelpie Lawfuller", "gemstone", directory.Path) is not null,
             "matching XP password should validate when hash sidecar has a UTF-8 BOM");
     }
 
@@ -475,7 +475,7 @@ internal static partial class TestCases
         var entryCount = XpPasswordStoreUtility.ConvertEncryptedSidecarToPasswordHashes(sidecarPath);
 
         AssertEqual(2, entryCount, "unexpected migrated XP password count");
-        AssertTrue(XpPasswordStoreUtility.ValidatePassword("Kelpie", "gemstone", directory.Path), "migrated XP password should validate");
+        AssertTrue(XpPasswordStoreUtility.ValidatePassword("Kelpie", "gemstone", directory.Path) is not null, "migrated XP password should validate");
         var raw = File.ReadAllText(sidecarPath);
         AssertContains(raw, XpPasswordStoreUtility.Format);
         AssertFalse(raw.Contains("gemstone", StringComparison.Ordinal), "migration must remove plaintext password material");
