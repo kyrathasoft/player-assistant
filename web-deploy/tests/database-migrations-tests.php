@@ -54,7 +54,7 @@ try {
         str_contains($messageIndexSql, 'sent_at DESC, id DESC'),
         'The message pagination index was not upgraded for stable cursor ordering.');
     $backups = glob($backupDirectory . '/broker-migration-*.sqlite') ?: [];
-    migrationAssert(count($backups) === 2, 'The upgrade did not create one backup per migration step.');
+    migrationAssert(count($backups) === 3, 'The upgrade did not create one backup per migration step.');
     $versionOneBackups = glob($backupDirectory . '/broker-migration-v1-to-v2-*.sqlite') ?: [];
     migrationAssert(count($versionOneBackups) === 1, 'The version-one pre-migration backup is missing.');
     $backup = new PDO('sqlite:' . $versionOneBackups[0], null, null, [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]);

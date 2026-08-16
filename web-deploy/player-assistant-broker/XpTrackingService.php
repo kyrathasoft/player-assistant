@@ -74,7 +74,13 @@ final class XpTrackingService
         if ($role === 'dm') {
             return $baseResponse + [
                 'scope' => 'party',
-                'characters' => $snapshot['characters'],
+                'characters' => array_map(
+                    function (array $character): array {
+                        $character['character_key'] = $this->characterKeyForName(
+                            (string)$character['character_name']);
+                        return $character;
+                    },
+                    $snapshot['characters']),
             ];
         }
 
@@ -199,8 +205,60 @@ final class XpTrackingService
         return [
             'schema_version' => 1,
             'scope' => $scope,
-            'progressions' => $progressions,
+            'progressions' => $this->attachCurrentAwardProgressions($progressions),
         ];
+    }
+
+    private function attachCurrentAwardProgressions(array $progressions): array
+    {
+        try {
+            $state = $this->loadAwardState();
+            $classLinks = $this->parseClassProgressionLinks($this->fetchMarkdown(
+                (string)$this->xpConfig['class_progression_index_url']));
+        } catch (Throwable) {
+            return $progressions;
+        }
+
+        $progressionPages = [];
+        foreach ($progressions as &$progression) {
+            $progressionKey = (string)$progression['character_key'];
+            $entries = $progression['entries'] ?? [];
+            $lastEntry = $entries[array_key_last($entries)] ?? null;
+            $progressionState = $state['progressions'][$progressionKey] ?? null;
+            if (!is_array($lastEntry) || !is_array($progressionState)) {
+                continue;
+            }
+            $characterClass = (string)$lastEntry['character_class'];
+            $level = (int)$progressionState['level'];
+            $xpTotal = (int)$progressionState['xp_total'];
+            $tnl = null;
+            try {
+                $classLink = $this->resolveClassProgressionLink($characterClass, $classLinks);
+                $pageKey = $this->normalizeClassName($classLink);
+                if (!array_key_exists($pageKey, $progressionPages)) {
+                    $pageUrl = $this->deriveClassProgressionPageUrl(
+                        (string)$this->xpConfig['class_progression_index_url'],
+                        $classLink);
+                    $progressionPages[$pageKey] = $this->parseClassProgression(
+                        $this->fetchMarkdown($pageUrl));
+                }
+                $nextLevelXp = $progressionPages[$pageKey][$level + 1] ?? null;
+                if (is_int($nextLevelXp)) {
+                    $tnl = max(0, $nextLevelXp - $xpTotal);
+                }
+            } catch (Throwable) {
+                $tnl = null;
+            }
+            $progression['current_character'] = [
+                'character_name' => (string)$lastEntry['character_name'],
+                'character_class' => $characterClass,
+                'level' => $level,
+                'xp_total' => $xpTotal,
+                'xp_to_next_level' => $tnl,
+            ];
+        }
+        unset($progression);
+        return $progressions;
     }
 
     private function loadAwardProgressionsWithLock(array $progressionKeys): array

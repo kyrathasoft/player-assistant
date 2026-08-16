@@ -5,7 +5,7 @@
     <PlayerAssistantPwaVersion>0.9.8</PlayerAssistantPwaVersion>
     <PlayerAssistantPwaMetadataRevision>1</PlayerAssistantPwaMetadataRevision>
     <PlayerAssistantPwaStylesRevision>45</PlayerAssistantPwaStylesRevision>
-    <PlayerAssistantPwaAppRevision>83</PlayerAssistantPwaAppRevision>
-    <PlayerAssistantPwaCacheRevision>101</PlayerAssistantPwaCacheRevision>
+    <PlayerAssistantPwaAppRevision>87</PlayerAssistantPwaAppRevision>
+    <PlayerAssistantPwaCacheRevision>105</PlayerAssistantPwaCacheRevision>
   </PropertyGroup>
 </Project>
