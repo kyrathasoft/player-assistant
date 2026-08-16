@@ -265,6 +265,70 @@ try {
             return $progressionFixture($url) ?? $markdown;
         });
 
+    $levelRefreshMarkdown = implode("\n", [
+        'As of 8.16.2026',
+        '| Name | Class | Level | XP Total |',
+        '| --- | --- | ---: | ---: |',
+        '| Neria | Paladin | 1 | 2,400 |',
+        '| Shade | Ranger | 2 | 4,050 |',
+    ]);
+    $levelRefreshProgressionFixture = static function (string $url): ?string {
+        if (str_contains($url, 'Class+Level+Progression')) {
+            return implode("\n", [
+                '| Class | Link |',
+                '| --- | --- |',
+                '[[Paladin]]',
+                '[[Ranger]]',
+            ]);
+        }
+        if (str_contains($url, '/Classes/Paladin')) {
+            return implode("\n", [
+                '| 1 | 0 |', '| --- | --- |', '| 2 | 2,750 |', '| 3 | 5,500 |', '| 4 | 12,000 |',
+            ]);
+        }
+        if (str_contains($url, '/Classes/Ranger')) {
+            return implode("\n", [
+                '| 1 | 0 |', '| --- | --- |', '| 2 | 2,250 |', '| 3 | 4,500 |', '| 4 | 10,000 |',
+            ]);
+        }
+        return null;
+    };
+    file_put_contents($awardsDirectory . '/neria-xp.json', json_encode([[
+        'character_name' => 'Neria', 'character_class' => 'Paladin',
+        'level_before_award' => 1, 'xp_award' => 1000,
+        'xp_award_date' => '8.16.2026', 'level_after_award' => 2,
+    ]], JSON_THROW_ON_ERROR));
+    file_put_contents($awardsDirectory . '/shade-xp.json', json_encode([[
+        'character_name' => 'Shade', 'character_class' => 'Ranger',
+        'level_before_award' => 2, 'xp_award' => 1000,
+        'xp_award_date' => '8.16.2026', 'level_after_award' => 3,
+    ]], JSON_THROW_ON_ERROR));
+    $levelRefreshService = new XpTrackingService(
+        xpDatabase(':memory:'),
+        array_replace(xpConfiguration(), [
+            'awards_directory' => $awardsDirectory,
+            'awards_root' => $awardsRoot,
+            'award_groups' => ['dm' => ['neria-xp', 'shade-xp']],
+        ]),
+        static function (string $url) use ($levelRefreshMarkdown, $levelRefreshProgressionFixture): string {
+            if (str_contains($url, '/Classes/') || str_contains($url, 'Class+Level+Progression')) {
+                return $levelRefreshProgressionFixture($url) ?? '';
+            }
+            return $levelRefreshMarkdown;
+        });
+    $levelRefresh = $levelRefreshService->getForAccount([
+        'role' => 'dm',
+        'character_key' => 'dm',
+    ]);
+    $levelRefreshByName = [];
+    foreach ($levelRefresh['characters'] as $character) {
+        $levelRefreshByName[$character['character_name']] = $character;
+    }
+    xpAssert($levelRefreshByName['Neria']['level'] === 2, 'Neria current level was not taken from the latest award history.');
+    xpAssert($levelRefreshByName['Neria']['xp_to_next_level'] === 3100, 'Neria TNL was calculated from the stale level.');
+    xpAssert($levelRefreshByName['Shade']['level'] === 3, 'Shade current level was not taken from the latest award history.');
+    xpAssert($levelRefreshByName['Shade']['xp_to_next_level'] === 5950, 'Shade TNL was calculated from the stale level.');
+
     $awardEntry = [
         'character_name' => 'Limit Hero',
         'character_class' => 'Fighter',

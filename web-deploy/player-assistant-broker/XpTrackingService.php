@@ -1027,7 +1027,7 @@ final class XpTrackingService
     private function snapshotDate(array $snapshot): DateTimeImmutable
     {
         if (preg_match(
-            '/^As of (?<date>\d{1,2}\.\d{1,2}\.\d{4})(?:\s|:|$)/i',
+            '/^As of\s+(?<date>\d{1,2}\.\d{1,2}\.\d{4})(?:\s|:|$)/i',
             (string)($snapshot['date_label'] ?? ''),
             $dateMatch) !== 1) {
             throw new RuntimeException('The XP date label was invalid.');
@@ -1105,6 +1105,9 @@ final class XpTrackingService
             foreach ($parsed['characters'] as &$character) {
                 $characterKey = $this->characterKeyForName(
                     (string)$character['character_name']);
+                $character['level'] = $this->currentLevelFromAwardHistory(
+                    $characterKey,
+                    (int)$character['level']);
                 $hasLiveHitPoints = array_key_exists($characterKey, $hitPointsByCharacterKey);
                 $character['hit_points'] = $hitPointsByCharacterKey[$characterKey] ?? 0;
                 $character['xp_to_next_level'] = null;
@@ -1121,6 +1124,10 @@ final class XpTrackingService
                         $progressionByPage[$pageKey] = $this->parseClassProgression(
                             $this->fetchMarkdown($pageUrl));
                     }
+                    $character['level'] = $this->currentLevelForXp(
+                        $progressionByPage[$pageKey],
+                        (int)$character['xp_total'],
+                        (int)$character['level']);
                     $nextLevel = (int)$character['level'] + 1;
                     $nextLevelXp = $progressionByPage[$pageKey][$nextLevel] ?? null;
                     $character['xp_to_next_level'] = is_int($nextLevelXp)
@@ -1561,6 +1568,30 @@ final class XpTrackingService
                 'The class progression index did not unambiguously match an XP class.');
         }
         return $matches[0];
+    }
+
+    private function currentLevelFromAwardHistory(string $characterKey, int $fallbackLevel): int
+    {
+        try {
+            $entries = $this->loadAwardProgression($characterKey . '-xp');
+            $latest = $entries[array_key_last($entries)] ?? null;
+            $level = is_array($latest) ? ($latest['level_after_award'] ?? null) : null;
+            return is_int($level) && $level >= $fallbackLevel ? $level : $fallbackLevel;
+        } catch (Throwable) {
+            return $fallbackLevel;
+        }
+    }
+
+    private function currentLevelForXp(array $progression, int $xpTotal, int $fallbackLevel): int
+    {
+        $currentLevel = max(1, $fallbackLevel);
+        foreach ($progression as $level => $minimumXp) {
+            if ($xpTotal < (int)$minimumXp) {
+                break;
+            }
+            $currentLevel = max($currentLevel, (int)$level);
+        }
+        return $currentLevel;
     }
 
     private function parseClassProgression(string $markdown): array
