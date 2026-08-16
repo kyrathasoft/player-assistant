@@ -49,7 +49,7 @@ try {
     migrationAssert((int)$database->query("SELECT COUNT(*) FROM pragma_table_info('character_accounts') WHERE name = 'session_version'")->fetchColumn() === 1, 'The session-version upgrade did not run.');
     migrationAssert((int)$database->query("SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'character_account_aliases'")->fetchColumn() === 1, 'The account-alias migration did not run.');
     $backups = glob($backupDirectory . '/broker-migration-*.sqlite') ?: [];
-    migrationAssert(count($backups) === 2, 'The upgrade did not create one pre-migration backup per upgrade step.');
+    migrationAssert(count($backups) === 3, 'The upgrade did not create one pre-migration backup per upgrade step.');
     $backup = new PDO('sqlite:' . $backups[0], null, null, [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]);
     migrationAssert((int)$backup->query('PRAGMA user_version')->fetchColumn() === 1, 'The pre-migration backup was not from the old version.');
 

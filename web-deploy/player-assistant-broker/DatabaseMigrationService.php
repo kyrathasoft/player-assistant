@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 final class DatabaseMigrationService
 {
-    public const LATEST_VERSION = 3;
+    public const LATEST_VERSION = 4;
 
     public function __construct(
         private readonly PDO $database,
@@ -69,6 +69,7 @@ final class DatabaseMigrationService
             1 => $this->migrationOne(),
             2 => $this->migrationTwo(),
             3 => $this->migrationThree(),
+            4 => $this->migrationFour(),
             default => throw new RuntimeException("Unknown broker migration version: $version"),
         };
     }
@@ -243,5 +244,43 @@ final class DatabaseMigrationService
             );
             CREATE INDEX IF NOT EXISTS ix_character_account_aliases_account
                 ON character_account_aliases(account_id);');
+    }
+
+    private function migrationFour(): void
+    {
+        $this->database->exec(
+            'CREATE UNIQUE INDEX IF NOT EXISTS ux_character_accounts_character_key
+                    ON character_accounts(character_key);
+                 CREATE INDEX IF NOT EXISTS ix_character_account_aliases_account
+                    ON character_account_aliases(account_id);
+                 CREATE TRIGGER IF NOT EXISTS trg_character_accounts_alias_collision_insert
+                 BEFORE INSERT ON character_accounts
+                 WHEN EXISTS (SELECT 1 FROM character_account_aliases
+                              WHERE normalized_alias = NEW.normalized_name)
+                 BEGIN
+                    SELECT RAISE(ABORT, \'normalized account name is already an alias\');
+                 END;
+                 CREATE TRIGGER IF NOT EXISTS trg_character_accounts_alias_collision_update
+                 BEFORE UPDATE OF normalized_name ON character_accounts
+                 WHEN EXISTS (SELECT 1 FROM character_account_aliases
+                              WHERE normalized_alias = NEW.normalized_name
+                                AND account_id <> OLD.id)
+                 BEGIN
+                    SELECT RAISE(ABORT, \'normalized account name is already an alias\');
+                 END;
+                 CREATE TRIGGER IF NOT EXISTS trg_character_account_aliases_name_collision_insert
+                 BEFORE INSERT ON character_account_aliases
+                 WHEN EXISTS (SELECT 1 FROM character_accounts
+                              WHERE normalized_name = NEW.normalized_alias)
+                 BEGIN
+                    SELECT RAISE(ABORT, \'normalized alias is already an account name\');
+                 END;
+                 CREATE TRIGGER IF NOT EXISTS trg_character_account_aliases_name_collision_update
+                 BEFORE UPDATE OF normalized_alias ON character_account_aliases
+                 WHEN EXISTS (SELECT 1 FROM character_accounts
+                              WHERE normalized_name = NEW.normalized_alias)
+                 BEGIN
+                    SELECT RAISE(ABORT, \'normalized alias is already an account name\');
+                 END;');
     }
 }
