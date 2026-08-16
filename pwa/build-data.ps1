@@ -31,11 +31,6 @@ function Get-CanonicalLexiconSourcePath {
     return Join-Path $RepositoryRoot ([string]$sources[$Index].path).Replace('/', '\')
 }
 
-function Get-FileSha256 {
-    param([Parameter(Mandatory = $true)][string]$Path)
-    return (Get-FileHash -LiteralPath $Path -Algorithm SHA256).Hash.ToLowerInvariant()
-}
-
 function Write-CompactJson {
     param(
         [Parameter(Mandatory = $true)][object]$Value,
@@ -47,26 +42,6 @@ function Write-CompactJson {
     [System.IO.File]::WriteAllText($Path, $json, [System.Text.UTF8Encoding]::new($false))
 }
 
-function Get-TermsContentHash {
-    param([Parameter(Mandatory = $true)][System.Collections.Generic.Dictionary[string,string]]$Terms)
-
-    $canonicalTerms = [ordered]@{}
-    foreach ($english in ($Terms.get_Keys() | Sort-Object)) {
-        $canonicalTerms[$english] = $Terms[$english]
-    }
-    $options = [System.Text.Json.JsonSerializerOptions]::new()
-    $options.Encoder = [System.Text.Encodings.Web.JavaScriptEncoder]::UnsafeRelaxedJsonEscaping
-    $json = [System.Text.Json.JsonSerializer]::Serialize($canonicalTerms, $options)
-    $bytes = [System.Text.Encoding]::UTF8.GetBytes($json)
-    $hash = [System.Security.Cryptography.SHA256]::Create()
-    try {
-        return ([System.BitConverter]::ToString($hash.ComputeHash($bytes))).Replace('-', '').ToLowerInvariant()
-    }
-    finally {
-        $hash.Dispose()
-    }
-}
-
 function Get-MaxPhraseWords {
     param([Parameter(Mandatory = $true)][System.Collections.Generic.Dictionary[string,string]]$Terms)
     $maximum = 1
@@ -76,20 +51,6 @@ function Get-MaxPhraseWords {
         if ($count -gt $maximum) {
             $maximum = $count
         }
-    }
-    return $maximum
-}
-
-function Get-MaxTranslationPhraseWords {
-    param([Parameter(Mandatory = $true)][System.Collections.Generic.Dictionary[string,string]]$Terms)
-
-    $maximum = 1
-    foreach ($english in $Terms.get_Keys()) {
-        $translation = ([string]$Terms[$english]).Trim() -replace '\s+', ' '
-        if ($translation.Length -eq 0) {
-            continue
-        }
-        $maximum = [Math]::Max($maximum, @($translation -split '\s+' | Where-Object { $_.Length -gt 0 }).Count)
     }
     return $maximum
 }
@@ -168,8 +129,6 @@ $orcishPayload = [ordered]@{
     language = 'Orcish'
     entryCount = $orcishTerms.get_Count()
     maxPhraseWords = Get-MaxPhraseWords -Terms $orcishTerms
-    reverseMaxPhraseWords = Get-MaxTranslationPhraseWords -Terms $orcishTerms
-    contentHash = Get-TermsContentHash -Terms $orcishTerms
     terms = $orcishTerms
 }
 Write-CompactJson -Value $orcishPayload -Path (Join-Path $dataDirectory 'orcish.json')
@@ -202,8 +161,6 @@ $elvishPayload = [ordered]@{
     source = 'Eldamo 0.8.13, CC BY 4.0, plus project-generated reviewed forms.'
     entryCount = $elvishTerms.get_Count()
     maxPhraseWords = Get-MaxPhraseWords -Terms $elvishTerms
-    reverseMaxPhraseWords = Get-MaxTranslationPhraseWords -Terms $elvishTerms
-    contentHash = Get-TermsContentHash -Terms $elvishTerms
     terms = $elvishTerms
 }
 Write-CompactJson -Value $elvishPayload -Path (Join-Path $dataDirectory 'elvish.json')
@@ -231,8 +188,6 @@ $ghukliakPayload = [ordered]@{
     source = 'IssendaCampaign Meta/Ghukliak (Goblin Tongue).md + deterministic complete coverage'
     entryCount = $ghukliakTerms.get_Count()
     maxPhraseWords = Get-MaxPhraseWords -Terms $ghukliakTerms
-    reverseMaxPhraseWords = Get-MaxTranslationPhraseWords -Terms $ghukliakTerms
-    contentHash = Get-TermsContentHash -Terms $ghukliakTerms
     terms = $ghukliakTerms
 }
 Write-CompactJson -Value $ghukliakPayload -Path (Join-Path $dataDirectory 'ghukliak.json')
@@ -242,58 +197,12 @@ if ($RefreshCampaignSearch) {
     & (Join-Path $PSScriptRoot 'refresh-campaign-search.ps1') -OutputPath $campaignSearchDestination
 }
 $campaignSearch = Read-Json -Path $campaignSearchDestination
-if ([int]$campaignSearch.schemaVersion -ne 2 -or
-    [int]$campaignSearch.termIndexVersion -ne 1 -or
-    $null -eq $campaignSearch.termIndex -or
-    @($campaignSearch.pages).Count -eq 0) {
-    throw 'The PWA campaign search index is missing full-text page data or its exact-term index. Run pwa
-efresh-campaign-search.ps1.'
+if ([int]$campaignSearch.schemaVersion -ne 2 -or @($campaignSearch.pages).Count -eq 0) {
+    throw 'The PWA campaign search index is missing full-text page data. Run pwa\refresh-campaign-search.ps1.'
 }
 if (@($campaignSearch.pages | Where-Object { $_.title -eq 'XP Tracking' }).Count -gt 0) {
     throw 'The protected XP Tracking page must not be included in the public PWA campaign search index.'
 }
-
-$packDefinitions = @(
-    [ordered]@{ id = 'translator-orcish'; kind = 'translator'; language = 'orcish'; relativePath = 'data\orcish.json'; payload = $orcishPayload },
-    [ordered]@{ id = 'translator-elvish'; kind = 'translator'; language = 'elvish'; relativePath = 'data\elvish.json'; payload = $elvishPayload },
-    [ordered]@{ id = 'translator-ghukliak'; kind = 'translator'; language = 'ghukliak'; relativePath = 'data\ghukliak.json'; payload = $ghukliakPayload },
-    [ordered]@{ id = 'campaign-search'; kind = 'campaign-search'; language = $null; relativePath = 'campaign-search.json'; payload = $campaignSearch }
-)
-$optionalPacks = @(
-    foreach ($definition in $packDefinitions) {
-        $packPath = Join-Path $PSScriptRoot $definition.relativePath
-        $packPayload = $definition.payload
-        $validation = if ($definition.kind -eq 'translator') {
-            [ordered]@{
-                entryCount = [int]$packPayload.entryCount
-                maxPhraseWords = [int]$packPayload.maxPhraseWords
-                reverseMaxPhraseWords = [int]$packPayload.reverseMaxPhraseWords
-            }
-        } else {
-            [ordered]@{
-                pageCount = [int]$packPayload.pageCount
-                termIndexVersion = [int]$packPayload.termIndexVersion
-            }
-        }
-        [ordered]@{
-            id = $definition.id
-            kind = $definition.kind
-            language = $definition.language
-            url = $definition.relativePath.Replace('\', '/')
-            schemaVersion = [int]$packPayload.schemaVersion
-            contentHash = Get-FileSha256 -Path $packPath
-            byteSize = [int64](Get-Item -LiteralPath $packPath).Length
-            recordCount = if ($definition.kind -eq 'translator') { [int]$packPayload.entryCount } else { [int]$packPayload.pageCount }
-            validation = $validation
-        }
-    }
-)
-$optionalManifest = [ordered]@{
-    schemaVersion = 1
-    manifestVersion = 1
-    packs = $optionalPacks
-}
-Write-CompactJson -Value $optionalManifest -Path (Join-Path $PSScriptRoot 'optional-packs.json')
 
 if ($RefreshHeroTokens) {
     & (Join-Path $PSScriptRoot 'refresh-hero-tokens.ps1')

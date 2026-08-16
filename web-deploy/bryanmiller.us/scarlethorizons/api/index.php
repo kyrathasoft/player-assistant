@@ -19,6 +19,15 @@ try {
 
     $privateDirectory = dirname(__DIR__, 3) . '/player-assistant-broker';
     require_once $privateDirectory . '/BrokerHttpException.php';
+    require_once $privateDirectory . '/RpolClient.php';
+    require_once $privateDirectory . '/CharacterAuthService.php';
+    require_once $privateDirectory . '/XpTrackingService.php';
+    require_once $privateDirectory . '/WordCountService.php';
+    require_once $privateDirectory . '/BrokerOperations.php';
+    require_once $privateDirectory . '/QuestService.php';
+    require_once $privateDirectory . '/MessageService.php';
+    require_once $privateDirectory . '/BrokerService.php';
+    require_once $privateDirectory . '/BrokerAlertService.php';
     $configPathOverride = getenv('PLAYER_ASSISTANT_BROKER_CONFIG');
     $configPath = is_string($configPathOverride) && $configPathOverride !== ''
         ? $configPathOverride
@@ -27,6 +36,7 @@ try {
         throw new RuntimeException('The private broker configuration is unavailable.');
     }
     $config = require $configPath;
+    $operations = new BrokerOperations(is_array($config) ? $config : []);
     $config['xp'] = is_array($config['xp'] ?? null) ? $config['xp'] : [];
     $config['xp']['awards_root'] = $privateDirectory;
     $questDataPathOverride = getenv('PLAYER_ASSISTANT_QUESTS_PATH');
@@ -36,30 +46,11 @@ try {
 
     $method = strtoupper($_SERVER['REQUEST_METHOD'] ?? 'GET');
     $route = getRoutePath((string)($config['api']['base_path'] ?? ''));
-    if ($method === 'GET' && $route === '/v1/health') {
-        sendJson(200, [
-            'service' => 'player-assistant-broker',
-            'schema_version' => 7,
-            'status' => 'ok',
-        ]);
-    }
-    require_once $privateDirectory . '/RpolClient.php';
-    require_once $privateDirectory . '/CharacterAuthService.php';
-    require_once $privateDirectory . '/XpTrackingService.php';
-    require_once $privateDirectory . '/WordCountService.php';
-    require_once $privateDirectory . '/BrokerOperations.php';
-    require_once $privateDirectory . '/QuestService.php';
-    require_once $privateDirectory . '/MessageService.php';
-    require_once $privateDirectory . '/RevisionService.php';
-    require_once $privateDirectory . '/BrokerService.php';
-    require_once $privateDirectory . '/BrokerAlertService.php';
-    $operations = new BrokerOperations(is_array($config) ? $config : []);
     requireJsonContentType($method);
     $requestBody = readJsonRequestBody(8 * 1024 * 1024);
     $sessionState = [];
     $regenerateSession = null;
     $destroySession = null;
-    $releaseSession = null;
     if (isCharacterSessionRoute($route)) {
         startCharacterSession(is_array($config['auth'] ?? null) ? $config['auth'] : []);
         $sessionState =& $_SESSION;
@@ -70,11 +61,6 @@ try {
         };
         $destroySession = static function (): void {
             destroyCharacterSession();
-        };
-        $releaseSession = static function (): void {
-            if (session_status() === PHP_SESSION_ACTIVE) {
-                session_write_close();
-            }
         };
     }
 
@@ -93,8 +79,7 @@ try {
         (string)($_SERVER['REMOTE_ADDR'] ?? 'unknown'),
         $sessionState,
         $regenerateSession,
-        $destroySession,
-        $releaseSession);
+        $destroySession);
 
     sendJson($response['status'], $response['body']);
 } catch (BrokerHttpException $exception) {
@@ -250,7 +235,6 @@ function isCharacterSessionRoute(string $route): bool
             '/v1/word-counts',
             '/v1/presence',
             '/v1/quests',
-            '/v1/revisions',
             '/v1/quest-requests',
             '/v1/messages',
             '/v1/logout',

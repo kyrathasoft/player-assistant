@@ -49,41 +49,153 @@ internal static partial class TestCases
     internal static void CrossAccountPasswordAccessIsDenied()
     {
         using var directory = CreateSyntheticPasswordSidecar();
-        Require(!XpPasswordStoreUtility.ValidatePassword(
+        Require(XpPasswordStoreUtility.ValidatePassword(
             SyntheticIdentityFixtures[1].CanonicalId,
             SyntheticIdentityFixtures[1].FullName,
             SyntheticIdentityFixtures[0].Password,
-            directory.Path), "one Ari password authenticated the other Ari account");
+            directory.Path) is null, "one Ari password authenticated the other Ari account");
+    }
+
+    internal static void SuccessfulAuthenticationReturnsCanonicalIdentity()
+    {
+        using var directory = CreateSyntheticPasswordSidecar();
+        var identity = XpPasswordStoreUtility.ValidatePassword(
+            SyntheticIdentityFixtures[1].CanonicalId,
+            SyntheticIdentityFixtures[1].FullName,
+            SyntheticIdentityFixtures[1].Password,
+            directory.Path);
+
+        if (identity is null)
+        {
+            throw new InvalidOperationException("matching synthetic credentials should return an identity");
+        }
+
+        Require(identity.CanonicalId == SyntheticIdentityFixtures[1].CanonicalId, "authentication returned the wrong canonical ID");
+        Require(identity.CanonicalName == SyntheticIdentityFixtures[1].FullName, "authentication returned the wrong canonical name");
+        Require(identity.AccountScope == SyntheticIdentityFixtures[1].CanonicalId, "authentication returned the wrong account scope");
+        Require(!identity.IsDungeonMaster, "a player identity was incorrectly granted Dungeon Master scope");
+        Require(identity.Aliases.Count == 0, "a v2 sidecar unexpectedly inferred aliases");
+    }
+
+    internal static void ExplicitAliasesAuthenticateOnlyTheirOwner()
+    {
+        using var directory = TemporaryDirectory.Create();
+        XpPasswordStoreUtility.SavePasswordHashes(
+            Path.Combine(directory.Path, XpPasswordStoreUtility.FileName),
+            [
+                new XpPasswordStoreUtility.PasswordIdentityInput(
+                    SyntheticIdentityFixtures[0].CanonicalId,
+                    SyntheticIdentityFixtures[0].FullName,
+                    SyntheticIdentityFixtures[0].Password,
+                    ["Stonewarden"]),
+                new XpPasswordStoreUtility.PasswordIdentityInput(
+                    SyntheticIdentityFixtures[1].CanonicalId,
+                    SyntheticIdentityFixtures[1].FullName,
+                    SyntheticIdentityFixtures[1].Password,
+                    ["Valesong Bard"])
+            ]);
+
+        var identity = XpPasswordStoreUtility.ValidatePassword(
+            "Stonewarden",
+            SyntheticIdentityFixtures[0].Password,
+            directory.Path);
+        Require(identity?.CanonicalId == SyntheticIdentityFixtures[0].CanonicalId, "explicit alias resolved the wrong account");
+        Require(XpPasswordStoreUtility.ValidatePassword("Ari", SyntheticIdentityFixtures[0].Password, directory.Path) is null,
+            "an inferred first-name alias authenticated an account");
+    }
+
+    internal static void SidecarRejectsAmbiguousOrMalformedAliases()
+    {
+        foreach (var aliases in new[]
+        {
+            new[] { "Ari Valesong" },
+            new[] { "Shared", "shared" },
+            new[] { " Shared" },
+        })
+        {
+            using var directory = CreateSyntheticPasswordSidecar(aliases, aliasesForSecond: ["Shared"]);
+            var exception = AssertThrows<InvalidOperationException>(() => XpPasswordStoreUtility.LoadPasswordHashes(directory.Path));
+            Require(exception.Message.Contains("alias", StringComparison.OrdinalIgnoreCase), "invalid alias rejection was not explicit");
+        }
+    }
+
+    internal static void SidecarRejectsLegacySchemaAndDuplicateIdentities()
+    {
+        using (var legacyDirectory = CreateSyntheticPasswordSidecar(schemaVersion: 1, format: "xp-password-hashes-v1"))
+        {
+            var exception = AssertThrows<InvalidOperationException>(() => XpPasswordStoreUtility.LoadPasswordHashes(legacyDirectory.Path));
+            Require(exception.Message.Contains("schema_version 2", StringComparison.Ordinal), "legacy sidecar schema was accepted");
+        }
+
+        using (var duplicateIdDirectory = CreateSyntheticPasswordSidecar(canonicalIdForSecond: SyntheticIdentityFixtures[0].CanonicalId))
+        {
+            AssertThrows<InvalidOperationException>(() => XpPasswordStoreUtility.LoadPasswordHashes(duplicateIdDirectory.Path));
+        }
+
+        using (var duplicateNameDirectory = CreateSyntheticPasswordSidecar(canonicalNameForSecond: SyntheticIdentityFixtures[0].FullName))
+        {
+            AssertThrows<InvalidOperationException>(() => XpPasswordStoreUtility.LoadPasswordHashes(duplicateNameDirectory.Path));
+        }
+    }
+
+    internal static void LegacyNameLookupReproducesCrossIdentityLeak()
+    {
+        using var directory = CreateSyntheticPasswordSidecar();
+        Require(
+            XpPasswordStoreUtility.ValidatePassword(
+                null,
+                SyntheticIdentityFixtures[0].FullName,
+                SyntheticIdentityFixtures[0].Password,
+                directory.Path) is not null,
+            "synthetic Character A should authenticate for the baseline harness");
+
+        var characterAWithoutIdentity = SyntheticIdentityFixtures[0].PartySheet with
+        {
+            CanonicalId = null,
+            XpTotal = null
+        };
+        var leakedView = PartyHeroUtility.WithVisibleXpTotals(
+            [characterAWithoutIdentity],
+            [new PcXpTotal(
+                SyntheticIdentityFixtures[1].FullName,
+                SyntheticIdentityFixtures[1].XpTotal,
+                SyntheticIdentityFixtures[1].CanonicalId)],
+            SyntheticIdentityFixtures[0].FullName,
+            isDungeonMaster: false);
+
+        Require(
+            leakedView[0].XpTotal == SyntheticIdentityFixtures[1].XpTotal,
+            "baseline must reproduce the name-based lookup leaking Character B data into Character A's view");
     }
 
     internal static void AmbiguousFirstNameAliasesAreDenied()
     {
         using var directory = CreateSyntheticPasswordSidecar();
-        Require(!XpPasswordStoreUtility.ValidatePassword(
+        Require(XpPasswordStoreUtility.ValidatePassword(
             null,
             "Ari",
             SyntheticIdentityFixtures[0].Password,
-            directory.Path), "an ambiguous first-name alias authenticated an account");
+            directory.Path) is null, "an ambiguous first-name alias authenticated an account");
     }
 
     internal static void UnknownCanonicalIdsAreDenied()
     {
         using var directory = CreateSyntheticPasswordSidecar();
-        Require(!XpPasswordStoreUtility.ValidatePassword(
+        Require(XpPasswordStoreUtility.ValidatePassword(
             "fixture-ari-missing-999",
             SyntheticIdentityFixtures[0].FullName,
             SyntheticIdentityFixtures[0].Password,
-            directory.Path), "an unknown canonical ID authenticated an account");
+            directory.Path) is null, "an unknown canonical ID authenticated an account");
     }
 
     internal static void MismatchedPasswordsAreDenied()
     {
         using var directory = CreateSyntheticPasswordSidecar();
-        Require(!XpPasswordStoreUtility.ValidatePassword(
+        Require(XpPasswordStoreUtility.ValidatePassword(
             SyntheticIdentityFixtures[0].CanonicalId,
             SyntheticIdentityFixtures[0].FullName,
             SyntheticIdentityFixtures[1].Password,
-            directory.Path), "a mismatched password authenticated an account");
+            directory.Path) is null, "a mismatched password authenticated an account");
     }
 
     internal static void CollidingHeroDisplayNamesAreDenied()
@@ -123,6 +235,10 @@ internal static partial class TestCases
     internal static void RunCanonicalIdentityRegressionCases()
     {
         IdentityFixturesAreDistinctAndSynthetic();
+        SuccessfulAuthenticationReturnsCanonicalIdentity();
+        ExplicitAliasesAuthenticateOnlyTheirOwner();
+        SidecarRejectsAmbiguousOrMalformedAliases();
+        SidecarRejectsLegacySchemaAndDuplicateIdentities();
         CrossAccountPasswordAccessIsDenied();
         AmbiguousFirstNameAliasesAreDenied();
         UnknownCanonicalIdsAreDenied();
@@ -131,13 +247,20 @@ internal static partial class TestCases
         CanonicalIdsSelectMatchingXpAndBriefingData();
     }
 
-    private static TemporaryDirectory CreateSyntheticPasswordSidecar()
+    private static TemporaryDirectory CreateSyntheticPasswordSidecar(
+        IReadOnlyList<string>? aliasesForFirst = null,
+        IReadOnlyList<string>? aliasesForSecond = null,
+        int schemaVersion = XpPasswordStoreUtility.SchemaVersion,
+        string? format = null,
+        string? canonicalIdForSecond = null,
+        string? canonicalNameForSecond = null)
     {
         var directory = TemporaryDirectory.Create();
         var entries = SyntheticIdentityFixtures.Select((fixture, index) => new
         {
-            name = fixture.FullName,
-            canonical_id = fixture.CanonicalId,
+            canonical_name = index == 1 && canonicalNameForSecond is not null ? canonicalNameForSecond : fixture.FullName,
+            canonical_id = index == 1 && canonicalIdForSecond is not null ? canonicalIdForSecond : fixture.CanonicalId,
+            aliases = (index == 0 ? aliasesForFirst : aliasesForSecond) ?? [],
             algorithm = XpPasswordStoreUtility.Algorithm,
             iterations = XpPasswordStoreUtility.MinimumIterations,
             salt = Convert.ToBase64String(Encoding.UTF8.GetBytes($"synthetic-salt-{index:00}-fixed")),
@@ -148,7 +271,7 @@ internal static partial class TestCases
                 HashAlgorithmName.SHA256,
                 32))
         }).ToArray();
-        var document = new { schema_version = 1, format = XpPasswordStoreUtility.Format, entries };
+        var document = new { schema_version = schemaVersion, format = format ?? XpPasswordStoreUtility.Format, entries };
         File.WriteAllText(
             System.IO.Path.Combine(directory.Path, XpPasswordStoreUtility.FileName),
             JsonSerializer.Serialize(document));

@@ -212,26 +212,26 @@ Planned correction for the PWA's approximately 10.1 MB optional-data installatio
 
 Planned security correction: eliminate first-name equivalence from authentication and every authenticated character-data path. Authentication must return an immutable canonical account identity; a Boolean result is insufficient because later lookups can otherwise use the attacker's originally entered name.
 
-- [ ] 1. Create a deterministic regression harness before changing production code.
-  - Add two character fixtures with the same first name and distinct full names, canonical IDs, passwords, XP totals, party sheets, and hero-briefing data.
-  - Prove the current failure: entering Character B's full name with Character A's password authenticates, then the subsequent name-based XP lookup returns Character B.
-  - Add negative cases for an ambiguous first-name alias, an unknown canonical ID, a mismatched password, and a selected hero whose display name collides with another hero.
-  - Keep the fixture independent of real password hashes and never expose production credentials.
+- [x] 1. Create a deterministic regression harness before changing production code.
+  - [x] Add two character fixtures with the same first name, distinct full names, canonical IDs, passwords, XP totals, party sheets, and hero-briefing data.
+  - [x] Reproduce the current failure: Character A authenticates in the synthetic sidecar, then the legacy name-based XP lookup returns Character B's data.
+  - [x] Add negative cases for an ambiguous first-name alias, an unknown canonical ID, a mismatched password, and a selected hero whose display name collides with another hero.
+  - [x] Keep the fixture independent of real password hashes and never expose production credentials.
 
-- [ ] 2. Replace Boolean password validation with an immutable identity result.
-  - Introduce an immutable `XpAuthenticatedIdentity` containing a stable canonical account/character ID, canonical character name, explicit aliases, and the Dungeon Master/account scope needed by callers.
-  - Change `XpPasswordStoreUtility.ValidatePassword` to return that identity or a fail-closed invalid result, never `true`/`false` alone.
-  - Remove candidate enumeration across every stored account sharing a first name.
-  - Resolve only the exact canonical name or an explicitly declared alias.
-  - Preserve constant-time password verification and ensure failed authentication does not leak which identity or alias matched.
+- [x] 2. Replace Boolean password validation with an immutable identity result.
+  - [x] Introduce an immutable `XpAuthenticatedIdentity` containing a stable canonical account/character ID, canonical character name, explicit aliases, and the Dungeon Master/account scope needed by callers.
+  - [x] Change `XpPasswordStoreUtility.ValidatePassword` to return that identity or a fail-closed invalid result, never `true`/`false` alone.
+  - [x] Remove candidate enumeration across every stored account sharing a first name.
+  - [x] Resolve only the exact canonical name or an explicitly declared alias; aliases remain empty until the versioned sidecar work in Step 3.
+  - [x] Preserve constant-time password verification and ensure failed authentication does not leak which identity or alias matched.
 
-- [ ] 3. Make the password sidecar identity-addressable and reject ambiguous aliases at load time.
-  - Revise the sidecar schema with a migration/version step rather than silently interpreting the v1 name-only format.
-  - Store an immutable canonical ID, canonical name, password hash, and an explicit alias list per entry.
-  - Normalize names and aliases consistently for comparison while preserving display values.
-  - Reject duplicate canonical IDs, duplicate canonical names, aliases that collide across accounts, aliases that collide with another account's canonical name, blank/untrimmed aliases, and duplicate aliases within an entry.
-  - Treat first names as ordinary text unless deliberately listed as an alias; never infer them automatically.
-  - Update password-generation, import, sidecar validation, installer, release-sidecar, and runtime-sidecar contracts together.
+- [x] 3. Make the password sidecar identity-addressable and reject ambiguous aliases at load time.
+  - [x] Revise the sidecar schema to v2; v1 name-only sidecars are rejected, while explicit conversion paths emit v2.
+  - [x] Store an immutable canonical ID, canonical name, password hash, and an explicit alias list per entry.
+  - [x] Normalize names and aliases consistently for comparison while preserving display values.
+  - [x] Reject duplicate canonical IDs, duplicate canonical names, aliases that collide across accounts, aliases that collide with another account's canonical name, blank/untrimmed aliases, and duplicate aliases within an entry.
+  - [x] Treat first names as ordinary text unless deliberately listed as an alias; never infer them automatically.
+  - [x] Update password-generation, import, sidecar validation, installer, release-sidecar, and runtime-sidecar contracts together.
 
 - [ ] 4. Thread the returned identity through Form1 and XP retrieval.
   - Replace the entered `characterName` as the source of authorization state with the returned immutable identity.
@@ -284,11 +284,11 @@ Planned security correction: eliminate first-name equivalence from authenticatio
   - [ ] Keep corpus loading, normalization, wildcard matching, scoring, and sorting in a dedicated worker.
   - [ ] Preserve request-ID protection against stale results.
   - [ ] Retain offline pack retry/removal behavior and benchmark typing responsiveness on the full index.
-- [ ] Strengthen offline and update behavior.
-  - [ ] Add an in-app update-available banner with explicit reload/defer controls.
-  - [ ] Validate cached JSON schema and MIME type before use.
-  - [ ] Recover from corrupt or partially cached translator/search data.
-  - [ ] Cover quota failures, interrupted installs, offline reloads, and stale workers.
+- [x] Strengthen offline and update behavior.
+  - [x] Add an update-available banner with explicit reload/defer controls.
+  - [x] Validate cached JSON schema and MIME types before use.
+  - [x] Recover from corrupt or partially cached translator/search packs.
+  - [x] Cover quota failures, interrupted installs, offline reloads, and stale workers.
 - [ ] Make messaging a dependable campaign inbox.
   - [ ] Restore older-message pagination.
   - [ ] Add conversation grouping and per-thread unread counts.

@@ -55,42 +55,6 @@ function Get-PageTitle {
     return [uri]::UnescapeDataString($segment.Replace('+', ' ')).Trim()
 }
 
-function ConvertTo-SearchIndexText {
-    param([AllowEmptyString()][string]$Value)
-
-    $normalized = $Value.Normalize([System.Text.NormalizationForm]::FormKC).Replace([char]0x2019, [char]0x27).ToLowerInvariant()
-    $normalized = $normalized -replace "[^\p{L}\p{N}'-]+", ' '
-    return $normalized -replace '\s+', ' '
-}
-
-function New-CampaignSearchTermIndex {
-    param([Parameter(Mandatory = $true)][System.Collections.Generic.List[object]]$Pages)
-
-    $termIndex = [System.Collections.Generic.Dictionary[string, System.Collections.Generic.List[int]]]::new(
-        [System.StringComparer]::Ordinal)
-    for ($pageIndex = 0; $pageIndex -lt $Pages.Count; $pageIndex++) {
-        $page = $Pages[$pageIndex]
-        $normalized = ConvertTo-SearchIndexText -Value "$($page.title) $($page.content)"
-        $matches = [regex]::Matches($normalized, "[\p{L}\p{N}]+(?:['’-][\p{L}\p{N}]+)*")
-        foreach ($match in $matches) {
-            $candidates = @($match.Value) + @($match.Value -split "['’-]")
-            foreach ($candidate in $candidates) {
-                if ([string]::IsNullOrWhiteSpace($candidate)) {
-                    continue
-                }
-                if (!$termIndex.ContainsKey($candidate)) {
-                    $termIndex[$candidate] = [System.Collections.Generic.List[int]]::new()
-                }
-                if (!$termIndex[$candidate].Contains($pageIndex)) {
-                    $termIndex[$candidate].Add($pageIndex)
-                }
-            }
-        }
-    }
-
-    return $termIndex
-}
-
 $siteUri = [uri]$SiteUrl
 $siteSlug = $siteUri.AbsolutePath.Trim('/')
 if ([string]::IsNullOrWhiteSpace($siteSlug)) {
@@ -183,8 +147,6 @@ try {
         }
     }
 
-    $termIndex = New-CampaignSearchTermIndex -Pages $pages
-
     $payload = [ordered]@{
         schemaVersion = 2
         generatedAtUtc = [DateTimeOffset]::UtcNow.ToString('O')
@@ -193,8 +155,6 @@ try {
         contentPageCount = $contentPageCount
         failedPageCount = $failedCount
         wordCount = $wordCount
-        termIndexVersion = 1
-        termIndex = $termIndex
         pages = $pages
     }
 

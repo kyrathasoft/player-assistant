@@ -53,8 +53,8 @@ if (!(Test-Path -LiteralPath $PasswordHashPath -PathType Leaf)) {
 }
 
 $document = Get-Content -Raw -LiteralPath $PasswordHashPath | ConvertFrom-Json
-if ([int]$document.schema_version -ne 1 -or
-    [string]$document.format -ne 'xp-password-hashes-v1' -or
+if ([int]$document.schema_version -ne 2 -or
+    [string]$document.format -ne 'xp-password-hashes-v2' -or
     @($document.entries).Count -eq 0) {
     throw 'The password hash file does not use the expected XP password hash format.'
 }

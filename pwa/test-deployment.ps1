@@ -42,7 +42,7 @@ function Get-HeaderValue {
 function Get-Sha256 {
     param([Parameter(Mandatory = $true)][byte[]]$Bytes)
     return [Convert]::ToHexString(
-        ([System.Security.Cryptography.SHA256]::Create().ComputeHash($Bytes)))
+        [System.Security.Cryptography.SHA256]::HashData($Bytes))
 }
 
 function Get-ProductionStaticResponse {
@@ -98,16 +98,14 @@ function Invoke-ProductionMonitorLogout {
     try {
         $logoutResponse = $Client.SendAsync($logoutRequest).GetAwaiter().GetResult()
         $logoutPayload = $logoutResponse.Content.ReadAsStringAsync().GetAwaiter().GetResult() |
-            ConvertFrom-Json
-
+            ConvertFrom-Json -DateKind String
         Assert-Condition -Condition $logoutResponse.IsSuccessStatusCode -Message 'The production monitor session could not log out.'
         Assert-ProductionAnonymousSessionResponse -Payload $logoutPayload
         Assert-Condition -Condition ((Get-HeaderValue $logoutResponse 'Cache-Control') -match 'no-store') -Message 'Logout responses must use Cache-Control: no-store.'
 
         $postLogoutSessionResponse = $Client.GetAsync([uri]::new($ApiBaseUri, 'session')).GetAwaiter().GetResult()
         $postLogoutSessionPayload = $postLogoutSessionResponse.Content.ReadAsStringAsync().GetAwaiter().GetResult() |
-            ConvertFrom-Json
-
+            ConvertFrom-Json -DateKind String
         Assert-Condition -Condition $postLogoutSessionResponse.IsSuccessStatusCode -Message 'The post-logout session endpoint is unavailable.'
         Assert-ProductionAnonymousSessionResponse -Payload $postLogoutSessionPayload
         Assert-Condition -Condition ((Get-HeaderValue $postLogoutSessionResponse 'Cache-Control') -match 'no-store') -Message 'Post-logout session responses must use Cache-Control: no-store.'
@@ -132,12 +130,9 @@ $runtimeFiles = [ordered]@{
     'modules/search.js' = @('application/javascript', 'text/javascript')
     'modules/dice.js' = @('application/javascript', 'text/javascript')
     'translator-worker.js' = @('application/javascript', 'text/javascript')
-    'campaign-search-worker.js' = @('application/javascript', 'text/javascript')
-    'optional-pack-loader.js' = @('application/javascript', 'text/javascript')
     'service-worker.js' = @('application/javascript', 'text/javascript')
     'offline.html' = @('text/html')
     'manifest.webmanifest' = @('application/manifest+json', 'application/json')
-    'optional-packs.json' = @('application/json', 'text/json')
     'icons/icon-192.png' = @('image/png')
     'icons/icon-512.png' = @('image/png')
     'icons/dragon-mark.png' = @('image/png')
@@ -147,7 +142,7 @@ $runtimeFiles = [ordered]@{
     'data/heroes.json' = @('application/json', 'text/json')
     'level-progression.json' = @('application/json', 'text/json')
     'magic-items.json' = @('application/json', 'text/json')
-    'data/party-funds.json' = @('application/json', 'text/json')
+    'party-funds.json' = @('application/json', 'text/json')
     'quests.json' = @('application/json', 'text/json')
     'campaign-search.json' = @('application/json', 'text/json')
 }
@@ -155,8 +150,7 @@ if ($ExcludeQuests) {
     $runtimeFiles.Remove('quests.json')
 }
 
-$heroData = Get-Content -Raw -LiteralPath (Join-Path $PwaRoot 'data\heroes.json') | ConvertFrom-Json
-
+$heroData = Get-Content -Raw -LiteralPath (Join-Path $PwaRoot 'data\heroes.json') | ConvertFrom-Json -DateKind String
 $heroContentTypes = @{
     '.avif' = @('image/avif')
     '.gif' = @('image/gif')
@@ -192,7 +186,7 @@ try {
         $responses[$relativePath] = $response
         Assert-Condition -Condition $response.IsSuccessStatusCode -Message "$relativePath returned HTTP $([int]$response.StatusCode)."
 
-        $mediaType = (Get-HeaderValue $response 'Content-Type').Split(';')[0].Trim()
+        $mediaType = [string]$response.Content.Headers.ContentType.MediaType
         Assert-Condition -Condition ($entry.Value -contains $mediaType) -Message "$relativePath returned unexpected content type '$mediaType'."
 
         $remoteBytes = $response.Content.ReadAsByteArrayAsync().GetAwaiter().GetResult()
@@ -206,7 +200,7 @@ try {
     $contentSecurityPolicy = Get-HeaderValue $indexResponse 'Content-Security-Policy'
     Assert-Condition -Condition ($contentSecurityPolicy.Contains("default-src 'self'") -and $contentSecurityPolicy.Contains("frame-ancestors 'none'") -and $contentSecurityPolicy.Contains("frame-src 'none'") -and $contentSecurityPolicy.Contains("object-src 'none'") -and $contentSecurityPolicy.Contains('upgrade-insecure-requests') -and $contentSecurityPolicy.Contains("connect-src 'self' https://publish-01.obsidian.md")) -Message 'The PWA Content-Security-Policy is incomplete.'
 
-    $uncachedFiles = @('service-worker.js', 'manifest.webmanifest', 'level-progression.json', 'magic-items.json', 'data/party-funds.json', 'quests.json') |
+    $uncachedFiles = @('service-worker.js', 'manifest.webmanifest', 'level-progression.json', 'magic-items.json', 'party-funds.json', 'quests.json') |
         Where-Object { $responses.ContainsKey($_) }
     foreach ($uncachedFile in $uncachedFiles) {
         $cacheControl = Get-HeaderValue $responses[$uncachedFile] 'Cache-Control'
@@ -214,22 +208,19 @@ try {
     }
 
     $manifest = [System.Text.Encoding]::UTF8.GetString(
-        [System.IO.File]::ReadAllBytes((Join-Path $PwaRoot 'manifest.webmanifest'))) | ConvertFrom-Json
-
+        [System.IO.File]::ReadAllBytes((Join-Path $PwaRoot 'manifest.webmanifest'))) | ConvertFrom-Json -DateKind String
     $resolvedStart = [uri]::new($BaseUri, [string]$manifest.start_url)
     $resolvedScope = [uri]::new($BaseUri, [string]$manifest.scope)
     Assert-Condition -Condition ($resolvedStart.GetLeftPart([System.UriPartial]::Authority) -eq $BaseUri.GetLeftPart([System.UriPartial]::Authority)) -Message 'Manifest start_url escapes the deployment origin.'
     Assert-Condition -Condition ($resolvedStart.AbsolutePath.StartsWith($resolvedScope.AbsolutePath, [StringComparison]::Ordinal)) -Message 'Manifest start_url is outside its scope.'
 
     $campaignSearch = [System.Text.Encoding]::UTF8.GetString(
-        [System.IO.File]::ReadAllBytes((Join-Path $PwaRoot 'campaign-search.json'))) | ConvertFrom-Json
-
+        [System.IO.File]::ReadAllBytes((Join-Path $PwaRoot 'campaign-search.json'))) | ConvertFrom-Json -DateKind String
     Assert-Condition -Condition (@($campaignSearch.pages | Where-Object { $_.title -eq 'XP Tracking' }).Count -eq 0) -Message 'The deployed public search index contains the protected XP Tracking page.'
 
     $apiBaseUri = [uri]"$($BaseUri.GetLeftPart([System.UriPartial]::Authority))/scarlethorizons/api/v1/"
     $sessionResponse = $client.GetAsync([uri]::new($apiBaseUri, 'session')).GetAwaiter().GetResult()
-    $sessionPayload = $sessionResponse.Content.ReadAsStringAsync().GetAwaiter().GetResult() | ConvertFrom-Json
-
+    $sessionPayload = $sessionResponse.Content.ReadAsStringAsync().GetAwaiter().GetResult() | ConvertFrom-Json -DateKind String
     Assert-Condition -Condition $sessionResponse.IsSuccessStatusCode -Message 'The public session-status endpoint is unavailable.'
     Assert-ProductionAnonymousSessionResponse -Payload $sessionPayload
     Assert-Condition -Condition ((Get-HeaderValue $sessionResponse 'Cache-Control') -match 'no-store') -Message 'Session-status responses must use Cache-Control: no-store.'
@@ -239,8 +230,7 @@ try {
 
     if ($RequireCurrentXpApi -or $RequireProtectedApi) {
         $healthResponse = $client.GetAsync([uri]::new($apiBaseUri, 'health')).GetAwaiter().GetResult()
-        $healthPayload = $healthResponse.Content.ReadAsStringAsync().GetAwaiter().GetResult() | ConvertFrom-Json
-
+        $healthPayload = $healthResponse.Content.ReadAsStringAsync().GetAwaiter().GetResult() | ConvertFrom-Json -DateKind String
         Assert-Condition -Condition $healthResponse.IsSuccessStatusCode -Message 'The broker health endpoint is unavailable.'
         Assert-Condition -Condition ([int]$healthPayload.schema_version -eq 7) -Message 'The broker liveness schema is not version 7.'
         Assert-Condition -Condition ($healthPayload.status -eq 'ok') -Message 'The broker liveness endpoint is not healthy.'
@@ -248,29 +238,25 @@ try {
         Assert-Condition -Condition ($healthPayload.PSObject.Properties.Name -notcontains 'character_account_count') -Message 'The public broker health endpoint disclosed account counts.'
 
         $xpResponse = $client.GetAsync([uri]::new($apiBaseUri, 'xp')).GetAwaiter().GetResult()
-        $xpPayload = $xpResponse.Content.ReadAsStringAsync().GetAwaiter().GetResult() | ConvertFrom-Json
-
+        $xpPayload = $xpResponse.Content.ReadAsStringAsync().GetAwaiter().GetResult() | ConvertFrom-Json -DateKind String
         Assert-Condition -Condition ([int]$xpResponse.StatusCode -eq 401) -Message 'Anonymous XP access must return HTTP 401.'
         Assert-Condition -Condition ([string]$xpPayload.error -eq 'authentication_required') -Message 'Anonymous XP access failed with the wrong error.'
         Assert-Condition -Condition ((Get-HeaderValue $xpResponse 'Cache-Control') -match 'no-store') -Message 'XP responses must use Cache-Control: no-store.'
 
         $wordCountResponse = $client.GetAsync([uri]::new($apiBaseUri, 'word-counts')).GetAwaiter().GetResult()
-        $wordCountPayload = $wordCountResponse.Content.ReadAsStringAsync().GetAwaiter().GetResult() | ConvertFrom-Json
-
+        $wordCountPayload = $wordCountResponse.Content.ReadAsStringAsync().GetAwaiter().GetResult() | ConvertFrom-Json -DateKind String
         Assert-Condition -Condition ([int]$wordCountResponse.StatusCode -eq 401) -Message 'Anonymous word-count access must return HTTP 401.'
         Assert-Condition -Condition ([string]$wordCountPayload.error -eq 'authentication_required') -Message 'Anonymous word-count access failed with the wrong error.'
         Assert-Condition -Condition ((Get-HeaderValue $wordCountResponse 'Cache-Control') -match 'no-store') -Message 'Word-count responses must use Cache-Control: no-store.'
 
         $presenceResponse = $client.GetAsync([uri]::new($apiBaseUri, 'presence')).GetAwaiter().GetResult()
-        $presencePayload = $presenceResponse.Content.ReadAsStringAsync().GetAwaiter().GetResult() | ConvertFrom-Json
-
+        $presencePayload = $presenceResponse.Content.ReadAsStringAsync().GetAwaiter().GetResult() | ConvertFrom-Json -DateKind String
         Assert-Condition -Condition ([int]$presenceResponse.StatusCode -eq 401) -Message 'Anonymous presence access must return HTTP 401.'
         Assert-Condition -Condition ([string]$presencePayload.error -eq 'authentication_required') -Message 'Anonymous presence access failed with the wrong error.'
         Assert-Condition -Condition ((Get-HeaderValue $presenceResponse 'Cache-Control') -match 'no-store') -Message 'Presence responses must use Cache-Control: no-store.'
 
         $questsResponse = $client.GetAsync([uri]::new($apiBaseUri, 'quests')).GetAwaiter().GetResult()
-        $questsPayload = $questsResponse.Content.ReadAsStringAsync().GetAwaiter().GetResult() | ConvertFrom-Json
-
+        $questsPayload = $questsResponse.Content.ReadAsStringAsync().GetAwaiter().GetResult() | ConvertFrom-Json -DateKind String
         Assert-Condition -Condition ([int]$questsResponse.StatusCode -eq 401) -Message 'Anonymous quest access must return HTTP 401.'
         Assert-Condition -Condition ([string]$questsPayload.error -eq 'authentication_required') -Message 'Anonymous quest access failed with the wrong error.'
         Assert-Condition -Condition ((Get-HeaderValue $questsResponse 'Cache-Control') -match 'no-store') -Message 'Quest responses must use Cache-Control: no-store.'
@@ -305,8 +291,7 @@ try {
             $loginResponse = $client.SendAsync($loginRequest).GetAwaiter().GetResult()
             Assert-Condition -Condition $loginResponse.IsSuccessStatusCode -Message 'The production monitor account could not authenticate.'
             $authenticated = $true
-            $loginPayload = $loginResponse.Content.ReadAsStringAsync().GetAwaiter().GetResult() | ConvertFrom-Json
-
+            $loginPayload = $loginResponse.Content.ReadAsStringAsync().GetAwaiter().GetResult() | ConvertFrom-Json -DateKind String
             if ($loginPayload.csrf_token -is [string]) {
                 $monitorCsrfToken = $loginPayload.csrf_token
             }
@@ -314,22 +299,19 @@ try {
             Assert-Condition -Condition ((Get-HeaderValue $loginResponse 'Cache-Control') -match 'no-store') -Message 'Login responses must use Cache-Control: no-store.'
 
             $identityResponse = $client.GetAsync([uri]::new($apiBaseUri, 'me')).GetAwaiter().GetResult()
-            $identityPayload = $identityResponse.Content.ReadAsStringAsync().GetAwaiter().GetResult() | ConvertFrom-Json
-
+            $identityPayload = $identityResponse.Content.ReadAsStringAsync().GetAwaiter().GetResult() | ConvertFrom-Json -DateKind String
             Assert-Condition -Condition $identityResponse.IsSuccessStatusCode -Message 'The authorized identity endpoint is unavailable.'
             Assert-ProductionIdentityResponse -Payload $identityPayload -ExpectedAccountId $loginPayload.account.id
             Assert-Condition -Condition ((Get-HeaderValue $identityResponse 'Cache-Control') -match 'no-store') -Message 'Identity responses must use Cache-Control: no-store.'
 
             $protectedXpResponse = $client.GetAsync([uri]::new($apiBaseUri, 'xp')).GetAwaiter().GetResult()
-            $xpPayload = $protectedXpResponse.Content.ReadAsStringAsync().GetAwaiter().GetResult() | ConvertFrom-Json
-
+            $xpPayload = $protectedXpResponse.Content.ReadAsStringAsync().GetAwaiter().GetResult() | ConvertFrom-Json -DateKind String
             Assert-Condition -Condition $protectedXpResponse.IsSuccessStatusCode -Message 'The authorized XP endpoint is unavailable.'
             Assert-Condition -Condition ((Get-HeaderValue $protectedXpResponse 'Cache-Control') -match 'no-store') -Message 'Authorized XP responses must use Cache-Control: no-store.'
             Assert-ProductionXpResponse -Payload $xpPayload -MaximumAgeSeconds $MaximumXpAgeSeconds
 
             $protectedWordCountResponse = $client.GetAsync([uri]::new($apiBaseUri, 'word-counts')).GetAwaiter().GetResult()
-            $wordCountPayload = $protectedWordCountResponse.Content.ReadAsStringAsync().GetAwaiter().GetResult() | ConvertFrom-Json
-
+            $wordCountPayload = $protectedWordCountResponse.Content.ReadAsStringAsync().GetAwaiter().GetResult() | ConvertFrom-Json -DateKind String
             Assert-Condition -Condition $protectedWordCountResponse.IsSuccessStatusCode -Message 'The authorized word-count endpoint is unavailable.'
             Assert-Condition -Condition ((Get-HeaderValue $protectedWordCountResponse 'Cache-Control') -match 'no-store') -Message 'Authorized word-count responses must use Cache-Control: no-store.'
             Assert-ProductionWordCountResponse -Payload $wordCountPayload -MaximumAgeSeconds $MaximumWordCountAgeSeconds
