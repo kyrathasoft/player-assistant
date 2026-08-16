@@ -1,6 +1,6 @@
-import { initializeTranslator } from './modules/translator.js?v=88';
-import { initializeCampaignSearch } from './modules/search.js?v=88';
-import { initializeDice } from './modules/dice.js?v=88';
+import { initializeTranslator } from './modules/translator.js?v=89';
+import { initializeCampaignSearch } from './modules/search.js?v=89';
+import { initializeDice } from './modules/dice.js?v=89';
 
 (() => {
     'use strict';
@@ -1657,6 +1657,13 @@ import { initializeDice } from './modules/dice.js?v=88';
                 }));
             }
             await Promise.all(refreshes);
+            if (authenticatedAccount?.role === 'dm'
+                && activeView === 'dashboard'
+                && authenticatedPresenceSnapshot !== null
+                && !document.hidden
+                && navigator.onLine) {
+                await loadPresence();
+            }
             renderActivityUi();
         } catch (error) {
             if (requestId !== revisionRequestId || authenticatedAccount?.id !== accountId) return;
@@ -2604,11 +2611,11 @@ import { initializeDice } from './modules/dice.js?v=88';
         presenceRequestId++;
         authenticatedPresenceSnapshot = null;
         renderPresenceUi();
-        if (authenticatedAccount === null) return;
+        if (authenticatedAccount?.role !== 'dm'
+            || activeView !== 'dashboard'
+            || document.hidden
+            || !navigator.onLine) return;
         void loadPresence();
-        presencePollTimer = window.setInterval(() => {
-            void loadPresence();
-        }, 30000);
     };
 
     const restoreAuthentication = async () => {
