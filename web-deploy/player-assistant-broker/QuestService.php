@@ -509,10 +509,10 @@ final class QuestService
             throw new RuntimeException('A quest entry has an invalid identifier or shape.');
         }
         $actualFields = array_keys($quest);
-        $expectedFields = self::QUEST_FIELDS;
-        sort($actualFields);
-        sort($expectedFields);
-        if ($actualFields !== $expectedFields) {
+        $requiredFields = self::QUEST_FIELDS;
+        $allowedFields = array_merge($requiredFields, ['meta-date']);
+        if (array_diff($requiredFields, $actualFields) !== []
+            || array_diff($actualFields, $allowedFields) !== []) {
             throw new RuntimeException("Quest '$id' does not match the required schema.");
         }
 
@@ -536,11 +536,16 @@ final class QuestService
 
         $dates = $quest['dates'];
         if (!is_array($dates)
-            || array_keys($dates) !== ['accepted', 'expires']) {
+            || array_diff(['accepted', 'expires'], array_keys($dates)) !== []
+            || array_diff(array_keys($dates), ['accepted', 'expires', 'completed']) !== []) {
             throw new RuntimeException("Quest '$id' has invalid dates.");
         }
         $this->requireText($dates['accepted'], 100, "Quest '$id' accepted date", true);
         $this->requireText($dates['expires'], 100, "Quest '$id' expiration date", true);
+        $completedOn = $dates['completed'] ?? '';
+        $this->requireText($completedOn, 100, "Quest '$id' completed date", true);
+        $metaDate = $quest['meta-date'] ?? '';
+        $this->requireText($metaDate, 100, "Quest '$id' meta-date", true);
 
         $gatedBy = $quest['gated-by'];
         if (!is_array($gatedBy)
@@ -594,6 +599,8 @@ final class QuestService
             'reward' => $quest['reward'],
             'accepted_on' => $dates['accepted'],
             'expires_on' => $dates['expires'],
+            'completed_on' => $completedOn,
+            'completed_meta_date' => $metaDate,
             'wiki_url' => $wikiUrl,
             'gated_by' => $normalizedGates,
             'unlocked_by' => $normalizedUnlocks,

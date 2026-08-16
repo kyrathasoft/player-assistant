@@ -824,6 +824,8 @@ import { initializeDice } from './modules/dice.js?v=89';
             && validShortText(quest.reward, 500)
             && validShortText(quest.accepted_on, 100)
             && validShortText(quest.expires_on, 100)
+            && validShortText(quest.completed_on, 100)
+            && validShortText(quest.completed_meta_date, 100)
             && (quest.request_status === null
                 || QUEST_REQUEST_STATUS_VALUES.includes(quest.request_status))
             && /^https:\/\/publish\.obsidian\.md\/scarlethorizons\/(?:Locations|Meta|NPCs|Player-Contributed|Powers|Quests|Writings)\/[^?#]+$/u.test(quest.wiki_url);
@@ -1114,6 +1116,14 @@ import { initializeDice } from './modules/dice.js?v=89';
             appendQuestDetail(details, 'Quest giver', quest.quest_giver);
             appendQuestDetail(details, 'Accepted', quest.accepted_on);
             appendQuestDetail(details, 'Deadline', quest.expires_on);
+            if (quest.state === 'completed'
+                && quest.completed_on.trim() !== ''
+                && quest.completed_meta_date.trim() !== '') {
+                appendQuestDetail(
+                    details,
+                    'Achieved',
+                    `${quest.completed_on} (${quest.completed_meta_date})`);
+            }
             appendQuestDetail(details, 'Reward', quest.reward);
 
             const objectivesTitle = document.createElement('h3');
