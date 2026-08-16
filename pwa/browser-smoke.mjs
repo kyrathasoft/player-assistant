@@ -67,6 +67,7 @@ let messageRevisionGeneration = 0;
 let messageListFailuresRemaining = 0;
 let messageListRequests = 0;
 let expireSessionOnNextRevision = false;
+let presenceRequests = 0;
 
 const readJsonBody = async (request) => {
     let body = '';
@@ -273,6 +274,7 @@ const serveApi = async (request, response, pathname) => {
         return;
     }
     if (route === '/presence' && request.method === 'GET') {
+        presenceRequests++;
         if (!hasSession(request)) {
             jsonResponse(response, 401, { message: 'Authentication required.' }, expectedErrorResponse);
             return;
@@ -634,6 +636,7 @@ try {
         throw new Error(`Anonymous protected API returned ${anonymousPresenceStatus}.`);
     }
 
+    const presenceRequestsBeforePlayerLogin = presenceRequests;
     await page.locator('#auth-button').click();
     if (!await page.locator('#auth-dialog').evaluate((dialog) => dialog.open
         && dialog.contains(document.activeElement))) {
@@ -670,6 +673,9 @@ try {
     await page.locator('#auth-button-label').getByText('CI Hero', { exact: true }).waitFor();
     if (await page.locator('#auth-account-panel').isHidden()) {
         throw new Error('Authentication smoke failed: the signed-in account panel stayed hidden.');
+    }
+    if (presenceRequests !== presenceRequestsBeforePlayerLogin) {
+        throw new Error(`Player login started DM presence polling: ${presenceRequests}.`);
     }
     const loginRequest = apiRequestHeaders.find((entry) => entry.method === 'POST'
         && entry.url.endsWith('/v1/login'));
@@ -948,6 +954,7 @@ try {
     await page.locator('#auth-logout').click();
     await page.locator('#auth-button-label').getByText('Log in', { exact: true }).waitFor();
 
+    const presenceRequestsBeforeDmLogin = presenceRequests;
     await page.locator('#auth-button').click();
     await page.locator('#auth-character-name').fill('CI Dungeon Master');
     await page.locator('#auth-password').fill('ci-dm-password');
@@ -973,6 +980,22 @@ try {
         throw new Error(`Dungeon Master token did not render correctly: ${JSON.stringify(dungeonMasterToken)}.`);
     }
     await page.locator('#online-users-summary').waitFor({ state: 'visible' });
+    if (presenceRequests <= presenceRequestsBeforeDmLogin) {
+        throw new Error('Dungeon Master dashboard did not load presence data.');
+    }
+    const presenceRequestsBeforeHidden = presenceRequests;
+    await page.evaluate(() => {
+        Object.defineProperty(document, 'hidden', { configurable: true, value: true });
+        document.dispatchEvent(new Event('visibilitychange'));
+    });
+    await page.waitForTimeout(100);
+    if (presenceRequests !== presenceRequestsBeforeHidden) {
+        throw new Error('Presence requests continued while the document was hidden.');
+    }
+    await page.evaluate(() => {
+        Object.defineProperty(document, 'hidden', { configurable: true, value: false });
+        document.dispatchEvent(new Event('visibilitychange'));
+    });
     const dungeonMasterPresenceStatus = await page.evaluate(async () =>
         (await fetch('/scarlethorizons/api/v1/presence')).status);
     if (dungeonMasterPresenceStatus !== 200) {
@@ -1045,7 +1068,7 @@ try {
     await page.waitForFunction(() => document.querySelector('#search-guidance')?.textContent?.includes('pack ready offline'));
     await page.locator('#campaign-search').fill('Kirkilston');
     await page.locator('#search-results .search-result').first().waitFor({ state: 'visible' });
-    if (![...workerUrls].some((url) => url.includes('/campaign-search-worker.js?v=88'))) {
+    if (![...workerUrls].some((url) => url.includes('/campaign-search-worker.js?v=89'))) {
         throw new Error(`Campaign search did not start its dedicated worker: ${JSON.stringify([...workerUrls])}.`);
     }
 
@@ -1076,7 +1099,7 @@ try {
             throw new Error(`Offline feature data was not cached: ${requiredPath}`);
         }
     }
-    if (!cachedUrls.some((url) => url.endsWith('/campaign-search-worker.js?v=88'))) {
+    if (!cachedUrls.some((url) => url.endsWith('/campaign-search-worker.js?v=89'))) {
         throw new Error('Campaign search worker was not present in the offline shell cache.');
     }
     await page.evaluate(async () => {

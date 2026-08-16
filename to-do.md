@@ -94,7 +94,10 @@ Cross-cutting reliability, concurrency, API, and identity corrections to impleme
   - [x] Authenticated requests use bounded timeout/abort signals, request IDs, structured error codes, status, retryability, and server request-ID propagation.
   - [x] Identity transitions and expired 401 responses cancel in-flight requests and invalidate stale generations.
   - [x] Mutating authenticated requests send idempotency keys; browser smoke verifies request and mutation headers.
-- [ ] Presence: restrict polling to the DM presence view, pause it while hidden or offline, and derive activity from useful requests where possible instead of polling every player every 30 seconds.
+- [x] Presence: restrict polling to the DM presence view, pause it while hidden or offline, and derive activity from useful requests where possible instead of polling every player every 30 seconds.
+  - [x] Presence requests now run only for Dungeon Masters on the dashboard presence view.
+  - [x] Visibility and online-state changes cancel/clear presence refreshes; no background interval remains.
+  - [x] Existing revision requests refresh the DM presence snapshot, while browser smoke covers player suppression and hidden-state pause.
 
 ## PWA performance ordering
 
