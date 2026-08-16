@@ -112,11 +112,12 @@ internal static class TestCatalog
     ("app settings hosted settings failure logs unreachable fixture server", TestCases.AppSettingsHostedSettingsFailureLogsUnreachableFixtureServer),
     ("xp password store loads salted hash sidecar", TestCases.XpPasswordStoreLoadsSaltedHashSidecar),
     ("xp password store uses unique salts and omits plaintext", TestCases.XpPasswordStoreUsesUniqueSaltsAndOmitsPlaintext),
-    ("xp password store accepts first and full character names", TestCases.XpPasswordStoreAcceptsFirstAndFullCharacterNames),
+    ("xp password store rejects non-canonical character names", TestCases.XpPasswordStoreRejectsNonCanonicalCharacterNames),
     ("xp password store accepts hash sidecar with utf8 bom", TestCases.XpPasswordStoreAcceptsHashSidecarWithUtf8Bom),
     ("xp password store rejects legacy encrypted sidecar", TestCases.XpPasswordStoreRejectsLegacyEncryptedSidecar),
     ("xp password store migrates encrypted sidecar", TestCases.XpPasswordStoreMigratesEncryptedSidecar),
     ("xp password store reports missing sidecar by name", TestCases.XpPasswordStoreReportsMissingSidecarByName),
+
     ("app configuration validation reports missing url", TestCases.AppConfigurationValidationReportsMissingUrl),
     ("app configuration validation rejects disallowed network host", TestCases.AppConfigurationValidationRejectsDisallowedNetworkHost),
     ("app configuration validation writes repair guidance", TestCases.AppConfigurationValidationWritesRepairGuidance),

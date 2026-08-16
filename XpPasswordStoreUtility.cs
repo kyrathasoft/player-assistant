@@ -12,7 +12,6 @@ namespace PlayerAssistant
         public const int SchemaVersion = 1;
         public const int MinimumIterations = 600_000;
 
-        private const string DungeonMasterAccessName = "Dungeon Master";
         private const int SaltSize = 16;
         private const int HashSize = 32;
         private static readonly JsonSerializerOptions JsonOptions = new()
@@ -129,7 +128,7 @@ namespace PlayerAssistant
             return hashes;
         }
 
-        public static bool ValidatePassword(string pcName, string password, string? runtimeDirectory = null)
+        public static XpAuthenticatedIdentity? ValidatePassword(string pcName, string password, string? runtimeDirectory = null)
         {
             ArgumentException.ThrowIfNullOrWhiteSpace(pcName);
             ArgumentNullException.ThrowIfNull(password);
@@ -137,7 +136,7 @@ namespace PlayerAssistant
             return ValidatePassword(null, pcName, password, runtimeDirectory);
         }
 
-        public static bool ValidatePassword(
+        public static XpAuthenticatedIdentity? ValidatePassword(
             string? canonicalId,
             string displayName,
             string password,
@@ -152,27 +151,22 @@ namespace PlayerAssistant
                 if (!hashes.TryGetValue(canonicalId.Trim(), out var expectedHash)
                     || !string.Equals(expectedHash.Name, displayName.Trim(), StringComparison.OrdinalIgnoreCase))
                 {
-                    return false;
+                    return null;
                 }
 
-                return VerifyPassword(password, expectedHash);
+                return VerifyPassword(password, expectedHash)
+                    ? expectedHash.ToAuthenticatedIdentity()
+                    : null;
             }
 
-            var exactMatches = hashes.Values
-                .Where(record => string.Equals(record.Name, displayName.Trim(), StringComparison.OrdinalIgnoreCase))
-                .ToArray();
-            if (exactMatches.Length == 1)
+            var nameMatch = hashes.Values.FirstOrDefault(record =>
+                string.Equals(record.Name, displayName.Trim(), StringComparison.OrdinalIgnoreCase));
+            if (nameMatch is not null && VerifyPassword(password, nameMatch))
             {
-                return VerifyPassword(password, exactMatches[0]);
+                return nameMatch.ToAuthenticatedIdentity();
             }
 
-            var firstName = GetFirstName(displayName);
-            var aliasMatches = hashes.Values
-                .Where(record => !string.Equals(record.Name, DungeonMasterAccessName, StringComparison.OrdinalIgnoreCase)
-                    && string.Equals(GetFirstName(record.Name), firstName, StringComparison.OrdinalIgnoreCase))
-                .Take(2)
-                .ToArray();
-            return aliasMatches.Length == 1 && VerifyPassword(password, aliasMatches[0]);
+            return null;
         }
 
         internal static void SavePasswordHashes(
@@ -300,14 +294,6 @@ namespace PlayerAssistant
             }
         }
 
-        private static string GetFirstName(string value)
-        {
-            var trimmedValue = value.Trim();
-            var spaceIndex = trimmedValue.IndexOf(' ');
-            return spaceIndex < 0
-                ? trimmedValue
-                : trimmedValue[..spaceIndex];
-        }
 
         private static bool IsValidCanonicalId(string value)
         {
@@ -326,7 +312,16 @@ namespace PlayerAssistant
             string Name,
             int Iterations,
             byte[] Salt,
-            byte[] Hash);
+            byte[] Hash)
+        {
+            internal XpAuthenticatedIdentity ToAuthenticatedIdentity() =>
+                new(
+                    CanonicalId,
+                    Name,
+                    [],
+                    string.Equals(Name, "Dungeon Master", StringComparison.OrdinalIgnoreCase),
+                    CanonicalId);
+        }
 
         private sealed class PasswordHashDocument
         {

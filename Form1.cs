@@ -979,7 +979,7 @@ namespace PlayerAssistant
                     candidate => XpPasswordStoreUtility.ValidatePassword(
                         DungeonMasterXpAccessName,
                         candidate,
-                        AppContext.BaseDirectory),
+                        AppContext.BaseDirectory) is not null,
                     ScheduledTaskLaunchUtility.StartAsync,
                     _formLifetimeCancellation.Token);
                 if (!CanContinueManualPublisherUi())
@@ -1245,7 +1245,7 @@ namespace PlayerAssistant
                 return;
             }
 
-            if (!XpPasswordStoreUtility.ValidatePassword(characterName, password, AppContext.BaseDirectory))
+            if (XpPasswordStoreUtility.ValidatePassword(characterName, password, AppContext.BaseDirectory) is null)
             {
                 MessageBox.Show(
                     this,
@@ -1499,7 +1499,7 @@ namespace PlayerAssistant
         {
             try
             {
-                return XpPasswordStoreUtility.ValidatePassword(characterName, password, AppContext.BaseDirectory)
+                return XpPasswordStoreUtility.ValidatePassword(characterName, password, AppContext.BaseDirectory) is not null
                     ? OptionalXpPasswordValidation.Valid
                     : OptionalXpPasswordValidation.Invalid;
             }
