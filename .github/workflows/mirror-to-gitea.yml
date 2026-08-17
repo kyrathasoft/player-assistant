@@ -38,6 +38,6 @@ jobs:
             '+refs/heads/*:refs/heads/*' \
             '+refs/tags/*:refs/tags/*'
 
-          git push --prune "$DEST_REPO" \
+          git push "$DEST_REPO" \
             '+refs/heads/*:refs/heads/*' \
             '+refs/tags/*:refs/tags/*'
