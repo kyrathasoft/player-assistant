@@ -82,6 +82,12 @@ The production source is a public, data-only JSON file outside the PWA:
 https://bryanmiller.us/scarlethorizons/data/word-counts.json
 ```
 
+The private XP Tracking source must expose a `Canonical ID` column alongside
+`Name` and `XP Total`. The desktop parser rejects tables without that immutable
+identity column; it never falls back to first-name or display-name matching for
+protected XP retrieval. The canonical IDs must match the identity sidecar and
+active-character roster records exactly.
+
 Run `setup-word-count-signing-key.ps1` once to store the Ed25519 private key in
 Windows Credential Manager and create `word-count-signing-public.json`.
 `publish-word-counts.ps1` signs the source, stages it through the dedicated
@@ -149,7 +155,7 @@ After the updated API and private broker files are deployed, import the existing
 .\web-deploy\import-character-accounts.ps1
 ```
 
-The script prompts securely for the broker administrator key and sends only the salted password-hash document to the administrator-protected HTTPS endpoint. It does not upload the file into the public website directory.
+The script prompts securely for the broker administrator key and sends only the salted password-hash document to the administrator-protected HTTPS endpoint. The broker validates the complete document before opening one database transaction, preserves existing opaque account IDs on conflict, replaces the account's declared aliases atomically, and rolls the transaction back on any conflict. It does not upload the file into the public website directory.
 
 ## PWA files
 

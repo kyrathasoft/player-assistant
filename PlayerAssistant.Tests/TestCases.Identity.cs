@@ -240,6 +240,26 @@ internal static partial class TestCases
             "canonical briefing authorization selected the wrong character data");
     }
 
+    internal static void MyHeroBriefingRequiresCanonicalIdsForProtectedResolution()
+    {
+        var heroes = new[]
+        {
+            SyntheticIdentityFixtures[0].PartySheet,
+            SyntheticIdentityFixtures[1].PartySheet
+        };
+
+        var playerNameOnly = MyHeroBriefingUtility.Build(new MyHeroBriefingRequest(
+            heroes,
+            AuthenticatedHeroName: SyntheticIdentityFixtures[0].FullName));
+        var dmNameOnly = MyHeroBriefingUtility.Build(new MyHeroBriefingRequest(
+            heroes,
+            SelectedHeroName: SyntheticIdentityFixtures[0].FullName,
+            IsDungeonMaster: true));
+
+        Require(playerNameOnly.Hero is null, "a player name selected protected briefing data without a canonical ID");
+        Require(dmNameOnly.Hero is null, "a DM display name selected protected briefing data without a canonical ID");
+    }
+
     internal static void RunCanonicalIdentityRegressionCases()
     {
         IdentityFixturesAreDistinctAndSynthetic();
@@ -253,6 +273,7 @@ internal static partial class TestCases
         MismatchedPasswordsAreDenied();
         CollidingHeroDisplayNamesAreDenied();
         CanonicalIdsSelectMatchingXpAndBriefingData();
+        MyHeroBriefingRequiresCanonicalIdsForProtectedResolution();
     }
 
     private static TemporaryDirectory CreateSyntheticPasswordSidecar(

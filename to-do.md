@@ -247,31 +247,123 @@ Planned security correction: eliminate first-name equivalence from authenticatio
   - [x] Derive new hero markdown paths from canonical IDs or full names; retain first-name paths only through a collision-checked migration fallback.
   - [x] Keep display aliases separate from authorization identity and add regression coverage for same-first-name heroes.
 
-- [ ] 6. Correct My Hero Briefing identity handling.
-  - Extend `MyHeroBriefingRequest` with the authenticated canonical identity and use it to resolve the authenticated hero exactly.
-  - Replace `FindHeroByNameOrFirstName` with stable-ID resolution; make Dungeon Master hero selection return a stable ID rather than an ambiguous display name.
-  - Make XP totals, hero cards, recent activity, response detection, encrypted-note access, and quick-link generation use the resolved identity and its explicit aliases.
-  - Remove automatic first-name aliases from `GetHeroAliases`; only use aliases declared by the identity registry, with ambiguity rejected before runtime.
-  - Ensure a same-first-name hero cannot inherit another hero's briefing, XP, posts, or encrypted-note access.
+- [x] 6. Correct My Hero Briefing identity handling.
+  - [x] Extend `MyHeroBriefingRequest` with the authenticated canonical identity and use it to resolve the authenticated hero exactly.
+  - [x] Replace `FindHeroByNameOrFirstName` with stable-ID resolution; make Dungeon Master hero selection return a stable ID rather than an ambiguous display name.
+  - [x] Make XP totals, hero cards, recent activity, response detection, encrypted-note access, and quick-link generation use the resolved identity and its explicit aliases.
+  - [x] Remove automatic first-name aliases from `GetHeroAliases`; only use aliases declared by the identity registry, with ambiguity rejected before runtime.
+  - [x] Ensure a same-first-name hero cannot inherit another hero's briefing, XP, posts, or encrypted-note access.
 
-- [ ] 7. Audit all remaining name-based identity comparisons and boundaries.
-  - Review Form1, XpTrackingUtility, PartyHeroUtility, MyHeroBriefingUtility, TaggedNoteCipherUtility, hero roster loaders, import scripts, and generated manifests.
-  - Classify each name use as display/search text or authorization identity.
-  - Replace authorization comparisons that use first names, inferred aliases, or user-entered names; retain display/search behavior only where it cannot grant access.
-  - Document any intentional public search alias separately from protected account identity.
+- [x] 7. Audit all remaining name-based identity comparisons and boundaries.
+  - [x] Review Form1, XpTrackingUtility, PartyHeroUtility, MyHeroBriefingUtility, TaggedNoteCipherUtility, hero roster loaders, import scripts, and generated manifests.
+  - [x] Classify each name use as display/search text or authorization identity.
+  - [x] Replace authorization comparisons that use first names, inferred aliases, or user-entered names; retain display/search behavior only where it cannot grant access.
+  - [x] Document intentional public/login aliases separately from protected account identity.
 
-- [ ] 8. Update tests and release/deployment contracts.
-  - Add unit/regression coverage for exact-ID success, same-first-name cross-password denial, ambiguous-alias load rejection, explicit unique-alias success, DM scope, party XP visibility, hero selection, briefing activity, encrypted-note access, and account switching.
-  - Add negative fixtures proving that a first-name-only input cannot authenticate or select a protected hero when multiple identities share it.
-  - Update custom regression-harness catalogs, sidecar schema validators, installer/runtime checks, migration tests, and release checklists.
-  - Verify that no protected lookup receives the originally entered name after authentication.
+- [x] 8. Update tests and release/deployment contracts.
+  - [x] Add unit/regression coverage for exact-ID success, same-first-name cross-password denial, ambiguous-alias load rejection, explicit unique-alias success, DM scope, party XP visibility, hero selection, briefing activity, encrypted-note access, and account switching.
+  - [x] Add negative fixtures proving that a first-name-only input cannot authenticate or select a protected hero when multiple identities share it.
+  - [x] Update custom regression-harness catalogs, sidecar schema validators, installer/runtime checks, migration tests, and release checklists.
+  - [x] Verify that no protected lookup receives the originally entered name after authentication.
 
 - [ ] 9. Migrate, deploy, and verify the identity data atomically.
-  - Back up and migrate the password sidecar and any canonical identity/roster data with rollback support.
-  - Verify local hashes, release contents, and generated roster/hero paths before deployment.
-  - Run authorized positive tests for each identity plus anonymous, wrong-password, ambiguous-alias, cross-character, logout, and account-switch negative tests.
-  - Verify production behavior through the authenticated deployment contract without exposing passwords or protected response bodies.
+  - [x] Back up and migrate the password sidecar and any canonical identity/roster data with rollback support.
+  - [x] Verify local hashes, release contents, and generated roster/hero paths before deployment.
+  - [x] Run authorized positive tests for each identity plus anonymous, wrong-password, ambiguous-alias, cross-character, logout, and account-switch negative tests locally.
+  - [ ] Verify production behavior through the authenticated deployment contract; production import remains pending the broker admin credential and must not be attempted without it.
 
+
+## Code-review implementation backlog
+
+- [ ] Move restricted magic-item data behind canonical authenticated authorization.
+  - Stop publishing and precaching protected `viewable-by` records in the complete public `magic-items.json` payload.
+  - Filter restricted records in a broker endpoint by immutable account/character ID; never authorize with substring matches or inferred first-name aliases.
+  - Add direct-fetch, same-first-name, substring-collision, anonymous, account-switch, offline-cache, and authorized-owner regression coverage.
+- [ ] Restore migration-only ownership of the broker schema.
+  - Remove request-time `CREATE TABLE`, `CREATE INDEX`, and `ALTER TABLE` work from `BrokerService`, `CharacterAuthService`, `MessageService`, `QuestService`, and `XpTrackingService` constructors.
+  - Make service startup verify the expected `PRAGMA user_version` and required objects without mutating SQLite; keep all schema changes in ordered deployment migrations.
+  - Add regression coverage proving ordinary API requests cannot create or alter schema and fail closed with an actionable deployment error when migration is required.
+- [ ] Reinstate the PWA's shell-only optional-pack installation contract.
+  - Remove translator dictionaries and `campaign-search.json` from service-worker install-time caching so an unavailable optional pack cannot abort shell installation.
+  - Preserve content-addressed optional-pack caches across compatible shell revisions and retire only obsolete pack hashes.
+  - Add `optional-pack-tests.mjs` to the canonical `npm test`/CI path, replace its permissive source-regex assertion with an install-request/runtime assertion, and prove a fresh install makes zero optional-pack requests.
+- [ ] Restore validated stale-cache fallback and bounded navigation timeouts in the service worker.
+  - Treat non-OK, wrong-MIME, empty, and schema-invalid network responses as failures before returning them from navigation and data strategies.
+  - Fall back to the last valid cached response for 404/5xx/captive-portal/corrupt responses, and abort navigation fetches after a bounded timeout.
+  - Add service-worker fixtures for each invalid-response class plus timeout, cache preservation, and no-valid-cache failure behavior.
+- [ ] Make PWA remote promotion ambiguity-safe.
+  - Use one persistent SSH/SFTP transport and a single-attempt mutating install command; do not blindly retry promotion after an unknown remote result.
+  - Persist a transaction ID and expose an idempotent status/recovery command so a dropped connection can distinguish not-started, promoted-pending-verification, verified, and rollback-required states.
+  - Hold one remote per-target lock across install, verification, finalize, rollback, and cleanup so concurrent CI/manual releases cannot interleave.
+  - Test connection loss after promotion, duplicate invocation, lock contention, verification failure, rollback, finalization failure, and cleanup recovery.
+- [ ] Scope desktop network resilience by operation instead of blocking an entire host.
+  - Key circuit-breaker state by request purpose and bounded endpoint class so two failures on one GET path cannot suppress unrelated features on the same origin for five minutes.
+  - Honor bounded `Retry-After` guidance for 429/503 responses and add capped exponential backoff with jitter for transient transport failures.
+  - Add deterministic clock/delay tests for endpoint isolation, half-open recovery, retry limits, cancellation, and diagnostics redaction.
+- [ ] Make desktop update checks obey form lifetime and shutdown cancellation.
+  - Pass the form-lifetime cancellation token through manifest fetch and installer download, and re-check lifetime after every await before prompting, touching controls, or launching the installer.
+  - Ensure closing the form cancels verification/download and cannot launch an installer or report through disposed UI.
+  - Add deterministic close-during-check, close-during-download, post-verification-close, and cancellation-cleanup tests.
+- [ ] Make background-task shutdown awaitable and race-safe.
+  - Cancel and drain supervised tasks before disposing cancellation sources or allowing the WinForms shutdown path to complete.
+  - Prevent post-disposal logging, file writes, or UI callbacks while preserving duplicate-phase suppression and bounded shutdown behavior.
+  - Add tests with non-cooperative, faulting, and cancellation-aware tasks to prove shutdown completes predictably without unobserved failures.
+
+- [ ] Make Authenticode inspection genuinely bounded and deadlock-safe.
+  - Drain PowerShell stdout and stderr concurrently instead of synchronously reading both streams before the timed wait.
+  - Apply cancellation and the advertised timeout to the whole process lifetime; kill and await exit on timeout.
+  - Add high-stderr, hung-process, cancellation, malformed-output, and cleanup regressions.
+- [ ] Restore runtime backups atomically.
+  - Copy and validate a selected backup through a same-directory temporary file, then promote it with `AtomicFileUtility` rather than overwriting the destination directly.
+  - Revalidate the promoted artifact and add interruption, locked-destination, and failed-validation tests proving prior bytes remain recoverable.
+- [ ] Let optional XP consumers fail closed without disabling their whole feature.
+  - Classify malformed, schema-invalid, and unreadable XP sidecars as logged store-unavailable results for optional Party/My Hero Briefing enrichment.
+  - Continue without protected XP while preserving strict failure for required authentication paths; add malformed and partial-deployment regressions.
+- [x] Prevent startup session restoration from overwriting a newer login.
+  - Capture the authentication generation before `/session`; ignore stale success and cancellation/error completion before changing account or protected snapshots.
+  - Browser regression delays the anonymous startup session across a successful login and a failed `/me` refresh, proving the login remains active; the full smoke suite retains logout and account-switch coverage.
+- [ ] Make optional-pack manifest retries recover after transient failure.
+  - Evict rejected memoized manifest promises so explicit retry performs a fresh bounded fetch.
+  - Add fail-then-success translator and campaign-search tests without recreating the page or worker.
+- [ ] Recover the translator and campaign-search UI from worker failures.
+  - Handle Worker `error` and `messageerror`, invalidate pending request IDs, clear loading state, and announce an actionable retry state.
+  - Support bounded worker recreation and add load-failure, runtime-crash, serialization-failure, and successful-retry fixtures.
+- [ ] Correct the party-funds offline cache key contract.
+  - Make the service worker install/cache the same `data/party-funds.json` URL requested by the app, with one canonical generated source.
+  - Add offline-first-load, update, corrupt-cache, and stale-copy parity tests.
+- [ ] Make broker operations health freshness-aware.
+  - Degrade health when maintenance, backup, integrity-check, or restore-test timestamps exceed configured maximum ages rather than trusting any historical success indefinitely.
+  - Add disabled-cron, stale-backup, stale-restore-test, recent-success, and recovery tests.
+- [ ] Apply broker alert cooldown only after confirmed delivery.
+  - Record failed delivery attempts separately and do not update `alert_last_sent_unix` when `mail()` fails.
+  - Add immediate-retry-after-failure, successful cooldown, repeated failure, and recovery-notification tests.
+- [ ] Harden the private broker backup credential-file boundary.
+  - Reject symlinks, canonicalize against the approved private path, and require owner-only permissions before loading FTPS credentials or encryption keys.
+  - Add symlink, permissive-mode, wrong-owner/path, missing-file, and valid-private-file tests.
+- [ ] Make focused desktop test filters fail when they select zero tests.
+  - Return nonzero for a non-empty unmatched filter and report the filter plus selected count; preserve unfiltered behavior.
+  - Add typo, exact-one-match, multi-match, and no-filter harness tests.
+- [ ] Build and behaviorally test `PlayerAssistantLauncher` in required CI.
+  - Build/publish the release solution project with locked restore and verify argument forwarding round-trips empty arguments, spaces, quotes, Windows paths, and trailing backslashes.
+  - Smoke-test missing-app, missing-runtime, and successful-launch branches without opening real UI or uncontrolled child processes.
+- [ ] Put restored installer and recovery suites on required CI paths.
+  - Run the online-installer PHP suite and DreamHost restore Python suite in isolated temporary directories.
+  - Prove checksum rejection, transaction-path rejection, rollback failure, unsafe archive handling, and remote-upload hash mismatch fail the job.
+- [ ] Eliminate the unchecked stale-capable Orcish compiled fallback.
+  - Either fail closed on missing/invalid canonical embedded data or generate the C# fallback deterministically from the canonical lexicon.
+  - Verify exact ordered parity and prove corrupting/removing the embedded resource cannot silently load divergent vocabulary.
+- [ ] Replace the placeholder root README with verified contributor documentation.
+  - Document supported Windows/.NET/PHP/Node prerequisites, locked restore, Release build/publish, canonical test commands, local sidecars, architecture entry points, and deployment/recovery links.
+  - Add a documentation contract check for referenced repository paths and executable commands.
+
+- [ ] Make the desktop test catalog guard detect silent test loss.
+  - Include `TestCases.Identity.cs` in the required domain list and derive the expected domain-file count instead of reporting six while seven `TestCases.*` files exist.
+  - Reject duplicate targets and unregistered discoverable test methods in addition to duplicate display names; replace the stale 435-test floor with catalog/declaration parity.
+  - Add verifier self-tests that remove a registration, duplicate a target, and add an unregistered test method, and require each fixture to fail for the intended reason.
+- [ ] Make required CI deterministic and independent of mutable production content.
+  - Replace required-PR sitemap/runtime artifact generation from the live Obsidian endpoint with checked-in fixtures carrying known hashes and counts.
+  - Keep live-source verification in scheduled or deployment monitoring rather than making unrelated changes depend on network availability and changing production content.
+  - Add an offline CI-contract test proving all local build and regression gates are reachable with outbound access blocked.
 
 ## Next PWA robustness and usefulness backlog
 

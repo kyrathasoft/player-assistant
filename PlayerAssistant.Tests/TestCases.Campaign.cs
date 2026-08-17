@@ -1854,14 +1854,15 @@ internal static partial class TestCases
     {
         var heroes = new PartyHeroSheet[]
         {
-            new("Kelpie Lawfuller", "kelpie-token.webp", "3", "Fighter", "12", "Kelpie sheet"),
-            new("Jelb Garrick", "jelb-token.webp", "3", "Illusionist", "8", "Jelb sheet")
+            new("Kelpie Lawfuller", "kelpie-token.webp", "3", "Fighter", "12", "Kelpie sheet", CanonicalId: "kelpie"),
+            new("Jelb Garrick", "jelb-token.webp", "3", "Illusionist", "8", "Jelb sheet", CanonicalId: "jelb")
         };
         var request = new MyHeroBriefingRequest(
             heroes,
             SelectedHeroName: "Jelb Garrick",
             AuthenticatedHeroName: "Jelb",
-            XpTotals: [new PcXpTotal("Jelb", 8575)],
+            AuthenticatedHeroCanonicalId: "jelb",
+            XpTotals: [new PcXpTotal("Jelb", 8575, "jelb")],
             ThreadPosts:
             [
                 new MyHeroBriefingThreadPosts(
@@ -1919,14 +1920,15 @@ internal static partial class TestCases
     {
         var heroes = new PartyHeroSheet[]
         {
-            new("Kelpie Lawfuller", null, "3", "Fighter", "12", "Kelpie sheet"),
-            new("Jelb Garrick", null, "3", "Illusionist", "8", "Jelb sheet")
+            new("Kelpie Lawfuller", null, "3", "Fighter", "12", "Kelpie sheet", CanonicalId: "kelpie"),
+            new("Jelb Garrick", null, "3", "Illusionist", "8", "Jelb sheet", CanonicalId: "jelb")
         };
 
         var briefing = MyHeroBriefingUtility.Build(new MyHeroBriefingRequest(
             heroes,
             SelectedHeroName: "Kelpie Lawfuller",
-            AuthenticatedHeroName: "Jelb"));
+            AuthenticatedHeroName: "Jelb",
+            AuthenticatedHeroCanonicalId: "jelb"));
 
         AssertTrue(briefing.Hero is not null, "authenticated hero should resolve a briefing hero");
         AssertEqual("Jelb Garrick", briefing.Hero!.Name, "authenticated first-name identity should select Jelb");
@@ -1938,8 +1940,8 @@ internal static partial class TestCases
     {
         var heroes = new PartyHeroSheet[]
         {
-            new("Kelpie Lawfuller", null, "3", "Fighter", "12", "Kelpie sheet"),
-            new("Jelb Garrick", null, "3", "Illusionist", "8", "Jelb sheet")
+            new("Kelpie Lawfuller", null, "3", "Fighter", "12", "Kelpie sheet", CanonicalId: "kelpie"),
+            new("Jelb Garrick", null, "3", "Illusionist", "8", "Jelb sheet", CanonicalId: "jelb")
         };
         var unresolved = MyHeroBriefingUtility.Build(new MyHeroBriefingRequest(
             heroes,
@@ -1948,6 +1950,7 @@ internal static partial class TestCases
         var selected = MyHeroBriefingUtility.Build(new MyHeroBriefingRequest(
             heroes,
             SelectedHeroName: "Kelpie",
+            SelectedHeroCanonicalId: "kelpie",
             AuthenticatedHeroName: "Dungeon Master",
             IsDungeonMaster: true));
 
@@ -1981,14 +1984,15 @@ internal static partial class TestCases
     {
         var heroes = new PartyHeroSheet[]
         {
-            new("Kelpie Lawfuller", null, "3", "Fighter", "12", "Kelpie sheet"),
-            new("Jelb Garrick", null, "3", "Illusionist", "8", "Jelb sheet")
+            new("Kelpie Lawfuller", null, "3", "Fighter", "12", "Kelpie sheet", CanonicalId: "kelpie"),
+            new("Jelb Garrick", null, "3", "Illusionist", "8", "Jelb sheet", CanonicalId: "jelb")
         };
 
         var briefing = MyHeroBriefingUtility.Build(new MyHeroBriefingRequest(
             heroes,
             SelectedHeroName: "Kelpie Lawfuller",
-            XpTotals: [new PcXpTotal("Kelpie Lawfuller", 7062)]));
+            SelectedHeroCanonicalId: "kelpie",
+            XpTotals: [new PcXpTotal("Kelpie Lawfuller", 7062, "kelpie")]));
 
         AssertTrue(briefing.HeroCard is not null, "selected hero should build a current hero card");
         AssertTrue(briefing.HeroCard!.XpTotal is null, "unauthenticated selected hero should not receive raw XP totals");
@@ -2000,7 +2004,7 @@ internal static partial class TestCases
     {
         var heroes = new PartyHeroSheet[]
         {
-            new("Jelb Garrick", null, "3", "Illusionist", "8", "Jelb sheet")
+            new("Jelb Garrick", null, "3", "Illusionist", "8", "Jelb sheet", CanonicalId: "jelb")
         };
         var matchingPosts = Enumerable.Range(1, 12)
             .Select(index => new RpolThreadPost(
@@ -2052,6 +2056,8 @@ internal static partial class TestCases
         var briefing = MyHeroBriefingUtility.Build(new MyHeroBriefingRequest(
             heroes,
             AuthenticatedHeroName: "Jelb",
+            AuthenticatedHeroCanonicalId: "jelb",
+            AuthenticatedHeroAliases: ["Jelb"],
             ThreadPosts:
             [
                 new MyHeroBriefingThreadPosts(
@@ -2079,7 +2085,7 @@ internal static partial class TestCases
     {
         var heroes = new PartyHeroSheet[]
         {
-            new("Jelb Garrick", null, "3", "Illusionist", "8", "Jelb sheet")
+            new("Jelb Garrick", null, "3", "Illusionist", "8", "Jelb sheet", CanonicalId: "jelb")
         };
         var chapterPosts = new RpolThreadPost[]
         {
@@ -2101,6 +2107,8 @@ internal static partial class TestCases
         var briefing = MyHeroBriefingUtility.Build(new MyHeroBriefingRequest(
             heroes,
             AuthenticatedHeroName: "Jelb",
+            AuthenticatedHeroCanonicalId: "jelb",
+            AuthenticatedHeroAliases: ["Jelb"],
             ThreadPosts:
             [
                 new MyHeroBriefingThreadPosts(
@@ -2142,7 +2150,7 @@ internal static partial class TestCases
     {
         var heroes = new PartyHeroSheet[]
         {
-            new("Jelb Garrick", null, "3", "Illusionist", "8", "Jelb sheet")
+            new("Jelb Garrick", null, "3", "Illusionist", "8", "Jelb sheet", CanonicalId: "jelb")
         };
         var encryptedIndex = new EncryptedTextIndexEntry[]
         {
@@ -2171,6 +2179,8 @@ internal static partial class TestCases
         var briefing = MyHeroBriefingUtility.Build(new MyHeroBriefingRequest(
             heroes,
             AuthenticatedHeroName: "Jelb",
+            AuthenticatedHeroCanonicalId: "jelb",
+            AuthenticatedHeroAliases: ["Jelb"],
             EncryptedTextIndex: encryptedIndex));
 
         AssertEqual(2, briefing.UnlockedNotes.Count, "only notes unlocked by hero tags should be surfaced");
@@ -2194,8 +2204,8 @@ internal static partial class TestCases
     {
         var heroes = new PartyHeroSheet[]
         {
-            new("Kelpie Lawfuller", null, "3", "Fighter", "12", "Kelpie sheet"),
-            new("Jelb Garrick", null, "3", "Illusionist", "8", "Jelb sheet")
+            new("Kelpie Lawfuller", null, "3", "Fighter", "12", "Kelpie sheet", CanonicalId: "kelpie"),
+            new("Jelb Garrick", null, "3", "Illusionist", "8", "Jelb sheet", CanonicalId: "jelb")
         };
 
         var briefing = MyHeroBriefingUtility.Build(new MyHeroBriefingRequest(heroes));
@@ -2255,7 +2265,7 @@ internal static partial class TestCases
     {
         var heroes = new PartyHeroSheet[]
         {
-            new("Jelb Garrick", "jelb-token.webp", "3", "Illusionist", "8", "Jelb sheet")
+            new("Jelb Garrick", "jelb-token.webp", "3", "Illusionist", "8", "Jelb sheet", CanonicalId: "jelb")
         };
         var posts = new[]
         {
@@ -2277,8 +2287,10 @@ internal static partial class TestCases
         return MyHeroBriefingUtility.Build(new MyHeroBriefingRequest(
             heroes,
             AuthenticatedHeroName: "Jelb",
+            AuthenticatedHeroCanonicalId: "jelb",
+            AuthenticatedHeroAliases: ["Jelb"],
             ThreadPosts: posts,
-            XpTotals: [new PcXpTotal("Jelb Garrick", 1234)],
+            XpTotals: [new PcXpTotal("Jelb Garrick", 1234, "jelb")],
             EncryptedTextIndex: encryptedIndex));
     }
 
@@ -2434,7 +2446,8 @@ internal static partial class TestCases
             Level: "3",
             CharacterClass: "Fighter",
             HitPoints: "20",
-            CharacterSheetText: "Name: Jelb Stonehand"));
+            CharacterSheetText: "Name: Jelb Stonehand"),
+            characterAliases: ["Jelb"]);
         var otherHero = HeroAccessContext.FromPartyHeroSheet(new PartyHeroSheet(
             Name: "Kelpie Lawfuller",
             TokenImagePath: null,
@@ -2635,37 +2648,30 @@ internal static partial class TestCases
             "ordinary PCs should not unlock all XP totals");
     }
 
-    internal static void XpDisplayFindsTotalsByFirstAndFullCharacterNames()
+    internal static void XpDisplayFindsTotalsByCanonicalIdentity()
     {
         var totals = new PcXpTotal[]
         {
-            new("Kelpie Lawfuller", 7062),
-            new("Jelb", 8575)
+            new("Kelpie Lawfuller", 7062, "kelpie"),
+            new("Jelb", 8575, "jelb")
         };
 
         var kelpieTotal = (PcXpTotal?)InvokeStaticMethod(
             typeof(Form1),
             "FindXpTotalForCharacter",
             totals,
-            "Kelpie");
+            "kelpie");
         var jelbTotal = (PcXpTotal?)InvokeStaticMethod(
             typeof(Form1),
             "FindXpTotalForCharacter",
             totals,
-            "Jelb Garrick");
+            "jelb");
 
-        if (kelpieTotal is null)
-        {
-            throw new InvalidOperationException("first-name Kelpie lookup should find full-name XP row");
-        }
-
-        if (jelbTotal is null)
-        {
-            throw new InvalidOperationException("full-name Jelb lookup should find first-name XP row");
-        }
-
-        AssertEqual(new PcXpTotal("Kelpie Lawfuller", 7062), kelpieTotal!, "unexpected Kelpie XP row");
-        AssertEqual(new PcXpTotal("Jelb", 8575), jelbTotal!, "unexpected Jelb XP row");
+        AssertEqual(new PcXpTotal("Kelpie Lawfuller", 7062, "kelpie"), kelpieTotal!, "unexpected Kelpie XP row");
+        AssertEqual(new PcXpTotal("Jelb", 8575, "jelb"), jelbTotal!, "unexpected Jelb XP row");
+        AssertTrue(
+            InvokeStaticMethod(typeof(Form1), "FindXpTotalForCharacter", totals, "Kelpie") is null,
+            "display names must not authorize XP lookup");
     }
 
     internal static void XpDisplayStoresMultipleTotalsForDungeonMaster()
@@ -2698,28 +2704,28 @@ internal static partial class TestCases
             ---
             As of 7.04.2026
 
-            | Name     | Class       | Level | XP Total |
-            | -------- | ----------- | ----- | -------- |
-            | Kelpie   | Fighter     | 3     | 7,062    |
-            | Jelb     | Illusionist | 2     | 8,575    |
-            | Max      | Theurge     | 1     | 3,175    |
-            | Geoffroy | Cleric      | 2     | 2,950    |
+            | Name     | Canonical ID | Class       | Level | XP Total |
+            | -------- | ------------ | ----------- | ----- | -------- |
+            | Kelpie   | kelpie       | Fighter     | 3     | 7,062    |
+            | Jelb     | jelb         | Illusionist | 2     | 8,575    |
+            | Max      | max          | Theurge     | 1     | 3,175    |
+            | Geoffroy | geoffroy     | Cleric      | 2     | 2,950    |
 
             As of 7.01.2026
 
-            | Name     | Class       | Level | XP Total |
-            | -------- | ----------- | ----- | -------- |
-            | Kelpie   | Fighter     | 3     | 6,562    |
-            | Jelb     | Illusionist | 2     | 8,075    |
+            | Name     | Canonical ID | Class       | Level | XP Total |
+            | -------- | ------------ | ----------- | ----- | -------- |
+            | Kelpie   | kelpie       | Fighter     | 3     | 6,562    |
+            | Jelb     | jelb         | Illusionist | 2     | 8,075    |
             """;
 
         var totals = XpTrackingUtility.ParseCurrentXpTotals(markdown).ToArray();
 
         AssertEqual(4, totals.Length, "expected latest XP table to contain four current PCs");
-        AssertEqual(new PcXpTotal("Kelpie", 7062), totals[0], "unexpected Kelpie XP total");
-        AssertEqual(new PcXpTotal("Jelb", 8575), totals[1], "unexpected Jelb XP total");
-        AssertEqual(new PcXpTotal("Max", 3175), totals[2], "unexpected Max XP total");
-        AssertEqual(new PcXpTotal("Geoffroy", 2950), totals[3], "unexpected Geoffroy XP total");
+        AssertEqual(new PcXpTotal("Kelpie", 7062, "kelpie"), totals[0], "unexpected Kelpie XP total");
+        AssertEqual(new PcXpTotal("Jelb", 8575, "jelb"), totals[1], "unexpected Jelb XP total");
+        AssertEqual(new PcXpTotal("Max", 3175, "max"), totals[2], "unexpected Max XP total");
+        AssertEqual(new PcXpTotal("Geoffroy", 2950, "geoffroy"), totals[3], "unexpected Geoffroy XP total");
     }
 
     internal static void XpTrackingParserRejectsMissingLatestTable()
@@ -2733,6 +2739,21 @@ internal static partial class TestCases
                 """));
 
         AssertContains(exception.Message, "latest XP tracking date does not have a markdown table");
+    }
+
+    internal static void XpTrackingParserRejectsMissingCanonicalIdentityColumn()
+    {
+        var exception = AssertThrows<InvalidOperationException>(() =>
+            XpTrackingUtility.ParseCurrentXpTotals(
+                """
+                As of 7.04.2026
+
+                | Name | XP Total |
+                | ---- | -------- |
+                | Kelpie | 7,062 |
+                """));
+
+        AssertContains(exception.Message, "Canonical ID");
     }
 
     internal static void XpTrackingFailureMessageHidesUrlAndDirectsPlayersToDm()

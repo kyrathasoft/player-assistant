@@ -1434,6 +1434,7 @@ namespace PlayerAssistant
                     partyHeroes,
                     AuthenticatedHeroName: authenticatedIdentity?.CanonicalName,
                     AuthenticatedHeroCanonicalId: authenticatedIdentity?.CanonicalId,
+                    AuthenticatedHeroAliases: authenticatedIdentity?.Aliases,
                     IsDungeonMaster: authenticatedIdentity?.IsDungeonMaster ?? false,
                     ThreadPosts: threadPosts,
                     XpTotals: xpTotals,
@@ -1442,6 +1443,13 @@ namespace PlayerAssistant
                 if (briefing.NeedsHeroSelection)
                 {
                     var selectedHeroName = PromptForMyHeroBriefingHeroSelection(briefing.HeroChoices);
+                    var selectedHeroCanonicalId = ResolveMyHeroBriefingSelectionCanonicalId(partyHeroes, selectedHeroName);
+                    if (string.IsNullOrWhiteSpace(selectedHeroCanonicalId))
+                    {
+                        myHeroBriefingToolStripMenuItem.Enabled = true;
+                        SetStatusBarMessage("My Hero Briefing canceled because the selected hero has no unique canonical identity.");
+                        return;
+                    }
                     if (string.IsNullOrWhiteSpace(selectedHeroName))
                     {
                         myHeroBriefingToolStripMenuItem.Enabled = true;
@@ -1452,8 +1460,9 @@ namespace PlayerAssistant
                     briefing = MyHeroBriefingUtility.Build(new MyHeroBriefingRequest(
                         partyHeroes,
                         SelectedHeroName: selectedHeroName,
-                        AuthenticatedHeroName: authenticatedIdentity?.CanonicalName,
+                        SelectedHeroCanonicalId: selectedHeroCanonicalId,
                         AuthenticatedHeroCanonicalId: authenticatedIdentity?.CanonicalId,
+                        AuthenticatedHeroAliases: authenticatedIdentity?.Aliases,
                         IsDungeonMaster: authenticatedIdentity?.IsDungeonMaster ?? false,
                         ThreadPosts: threadPosts,
                         XpTotals: xpTotals,
@@ -1594,24 +1603,18 @@ namespace PlayerAssistant
 
         private static PcXpTotal? FindXpTotalForCharacter(
             IReadOnlyList<PcXpTotal> totals,
-            string characterName)
+            string canonicalId)
         {
-            var trimmedName = characterName.Trim();
-            var exactMatch = totals.FirstOrDefault(row =>
-                string.Equals(row.Name, trimmedName, StringComparison.OrdinalIgnoreCase));
-            if (exactMatch is not null)
+            if (string.IsNullOrWhiteSpace(canonicalId))
             {
-                return exactMatch;
+                return null;
             }
 
-            var firstName = GetFirstName(trimmedName);
-            var firstNameMatches = totals
-                .Where(row => string.Equals(GetFirstName(row.Name), firstName, StringComparison.OrdinalIgnoreCase))
+            var matches = totals
+                .Where(row => string.Equals(row.CanonicalId, canonicalId.Trim(), StringComparison.Ordinal))
                 .Take(2)
                 .ToArray();
-            return firstNameMatches.Length == 1
-                ? firstNameMatches[0]
-                : null;
+            return matches.Length == 1 ? matches[0] : null;
         }
 
         private bool TryPromptForXpCredentials(out string characterName, out string password)
@@ -1769,6 +1772,23 @@ namespace PlayerAssistant
             }
 
             return passwordTextBox.Text;
+        }
+
+        private static string? ResolveMyHeroBriefingSelectionCanonicalId(
+            IReadOnlyList<PartyHeroSheet> heroes,
+            string? selectedHeroName)
+        {
+            if (string.IsNullOrWhiteSpace(selectedHeroName))
+            {
+                return null;
+            }
+
+            var matches = heroes
+                .Where(hero => string.Equals(hero.Name, selectedHeroName.Trim(), StringComparison.OrdinalIgnoreCase))
+                .Where(hero => !string.IsNullOrWhiteSpace(hero.CanonicalId))
+                .Take(2)
+                .ToArray();
+            return matches.Length == 1 ? matches[0].CanonicalId : null;
         }
 
         private string? PromptForMyHeroBriefingHeroSelection(IReadOnlyList<string> heroChoices)
