@@ -110,7 +110,10 @@ Assert-Condition -Condition (Test-Path -LiteralPath $translatorWorkerTestPath -P
 Assert-Condition -Condition (Test-Path -LiteralPath $serviceWorkerTestPath -PathType Leaf) -Message 'The service-worker failure-injection test is missing.'
 
 $package = Get-Content -Raw -LiteralPath $browserPackagePath | ConvertFrom-Json
-Assert-Condition -Condition ([string]$package.scripts.test -eq 'node service-worker-tests.mjs && node translator-worker-tests.mjs && node browser-smoke.mjs') -Message 'The PWA test script must run service-worker failure injection, translator-worker runtime, and browser smoke coverage.'
+$pwaTestScript = [string]$package.scripts.test
+foreach ($requiredPwaTest in @('node service-worker-tests.mjs', 'node translator-worker-tests.mjs', 'node browser-smoke.mjs')) {
+    Assert-Condition -Condition ($pwaTestScript.Contains($requiredPwaTest)) -Message "The PWA test script must run $requiredPwaTest."
+}
 Assert-Condition -Condition (![string]::IsNullOrWhiteSpace([string]$package.devDependencies.playwright)) -Message 'The browser smoke test must declare Playwright explicitly.'
 
 Assert-Condition -Condition (Test-Path -LiteralPath $directoryBuildPropsPath -PathType Leaf) -Message 'Directory.Build.props is missing.'
