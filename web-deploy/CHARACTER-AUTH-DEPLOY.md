@@ -152,7 +152,7 @@ After the updated API and private broker files are deployed, import the existing
 .\web-deploy\import-character-accounts.ps1
 ```
 
-The script prompts securely for the broker administrator key and sends only the salted password-hash document to the administrator-protected HTTPS endpoint. It does not upload the file into the public website directory.
+The script prompts securely for the broker administrator key and sends only the salted password-hash document to the administrator-protected HTTPS endpoint. It does not upload the file into the public website directory. Identity-addressable v2 documents preserve the existing opaque `account_id`, canonical name, explicit aliases, and Dungeon Master role; do not invent IDs when converting a v1 sidecar. Resolve the live account IDs through the protected administrator account listing first, then import the v2 document. The broker validates the complete document before opening a transaction and rolls back the entire import if any ID, canonical name, alias, or database constraint conflicts.
 
 ## PWA files
 

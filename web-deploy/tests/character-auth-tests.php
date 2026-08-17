@@ -449,8 +449,91 @@ try {
         429,
         'login_failed');
 
+    $identityPasswordA = 'identity alpha password';
+    $identityPasswordB = 'identity beta password';
+    $identitySaltA = random_bytes(16);
+    $identitySaltB = random_bytes(16);
+    $identityIdA = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
+    $identityIdB = 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb';
+    $identityImport = $service->importLegacyAccounts([
+        'schema_version' => 2,
+        'format' => 'xp-password-hashes-v2',
+        'entries' => [
+            [
+                'account_id' => $identityIdA,
+                'canonical_name' => 'Alice North',
+                'aliases' => ['North Alice'],
+                'is_dungeon_master' => false,
+                'algorithm' => 'PBKDF2-HMAC-SHA256',
+                'iterations' => 600000,
+                'salt' => base64_encode($identitySaltA),
+                'hash' => base64_encode(hash_pbkdf2('sha256', $identityPasswordA, $identitySaltA, 600000, 32, true)),
+            ],
+            [
+                'account_id' => $identityIdB,
+                'canonical_name' => 'Alice South',
+                'aliases' => ['South Alice'],
+                'is_dungeon_master' => true,
+                'algorithm' => 'PBKDF2-HMAC-SHA256',
+                'iterations' => 600000,
+                'salt' => base64_encode($identitySaltB),
+                'hash' => base64_encode(hash_pbkdf2('sha256', $identityPasswordB, $identitySaltB, 600000, 32, true)),
+            ],
+        ],
+    ]);
+    assertTrue($identityImport['imported'] === 2, 'Canonical identity import count was incorrect.');
+    $identityRows = $database->query(
+        "SELECT id, role FROM character_accounts WHERE normalized_name IN ('alice north', 'alice south') ORDER BY normalized_name")->fetchAll();
+    assertTrue(
+        $identityRows[0]['id'] === $identityIdA && $identityRows[1]['id'] === $identityIdB
+            && $identityRows[1]['role'] === 'dm',
+        'Canonical account IDs or roles were not preserved during import.');
+    $identitySession = [];
+    $identityLogin = $service->login(
+        ['character_name' => 'North Alice', 'password' => $identityPasswordA],
+        '192.0.2.60',
+        'https://example.test',
+        $identitySession);
+    assertTrue($identityLogin['account']['id'] === $identityIdA, 'The explicit identity alias resolved to the wrong account.');
+    $identitySecondSession = [];
+    $identitySecondLogin = $service->login(
+        ['character_name' => 'Alice South', 'password' => $identityPasswordB],
+        '192.0.2.62',
+        'https://example.test',
+        $identitySecondSession);
+    assertTrue($identitySecondLogin['account']['id'] === $identityIdB, 'The same-first-name canonical account resolved incorrectly.');
+    $beforeConflictCount = $service->accountCount();
+    $conflictSession = [];
+    expectBrokerError(
+        fn() => $service->importLegacyAccounts([
+            'schema_version' => 2,
+            'format' => 'xp-password-hashes-v2',
+            'entries' => [[
+                'account_id' => $identityIdA,
+                'canonical_name' => 'Conflicting Identity',
+                'aliases' => [],
+                'is_dungeon_master' => false,
+                'algorithm' => 'PBKDF2-HMAC-SHA256',
+                'iterations' => 600000,
+                'salt' => base64_encode(random_bytes(16)),
+                'hash' => base64_encode(hash_pbkdf2('sha256', 'conflict password', random_bytes(16), 600000, 32, true)),
+            ]],
+        ]),
+        409,
+        'account_import_conflict');
+    assertTrue($service->accountCount() === $beforeConflictCount, 'A conflicting identity import was not rolled back.');
+    $wrongIdentitySession = [];
+    expectBrokerError(
+        fn() => $service->login(
+            ['character_name' => 'South Alice', 'password' => $identityPasswordA],
+            '192.0.2.61',
+            'https://example.test',
+            $wrongIdentitySession),
+        401,
+        'login_failed');
+
     $accounts = $service->listAccounts();
-    assertTrue(count($accounts) === 6, 'The account listing count was incorrect.');
+    assertTrue(count($accounts) === 8, 'The account listing count was incorrect.');
     foreach ($accounts as $account) {
         assertTrue(!array_key_exists('password_hash', $account), 'An account listing exposed a password hash.');
         assertTrue(!array_key_exists('legacy_hash', $account), 'An account listing exposed a legacy hash.');

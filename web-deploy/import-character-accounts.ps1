@@ -52,11 +52,14 @@ if (!(Test-Path -LiteralPath $PasswordHashPath -PathType Leaf)) {
     throw "Password hash file was not found: $PasswordHashPath"
 }
 
-$document = Get-Content -Raw -LiteralPath $PasswordHashPath | ConvertFrom-Json
-if ([int]$document.schema_version -ne 1 -or
-    [string]$document.format -ne 'xp-password-hashes-v1' -or
-    @($document.entries).Count -eq 0) {
-    throw 'The password hash file does not use the expected XP password hash format.'
+$rawDocument = Get-Content -Raw -LiteralPath $PasswordHashPath
+$document = $rawDocument | ConvertFrom-Json
+$isIdentityDocument = [int]$document.schema_version -eq 2 -and
+    [string]$document.format -eq 'xp-password-hashes-v2'
+$isLegacyDocument = [int]$document.schema_version -eq 1 -and
+    [string]$document.format -eq 'xp-password-hashes-v1'
+if ((!$isIdentityDocument -and !$isLegacyDocument) -or @($document.entries).Count -eq 0) {
+    throw 'The password hash file does not use a supported XP password identity format.'
 }
 
 if ($null -eq $AdminKey) {
@@ -70,7 +73,7 @@ try {
         throw 'The broker administrator key is required.'
     }
 
-    $requestBody = (Get-Content -Raw -LiteralPath $PasswordHashPath | ConvertFrom-Json | ConvertTo-Json -Depth 32 -Compress)
+    $requestBody = ($rawDocument | ConvertFrom-Json | ConvertTo-Json -Depth 32 -Compress)
     $response = Invoke-RestMethod `
         -Method Post `
         -Uri $ApiUrl `
