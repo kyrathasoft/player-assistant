@@ -266,7 +266,7 @@ Planned security correction: eliminate first-name equivalence from authenticatio
   - Update custom regression-harness catalogs, sidecar schema validators, installer/runtime checks, migration tests, and release checklists.
   - Verify that no protected lookup receives the originally entered name after authentication.
 
-- [ ] 9. Migrate, deploy, and verify the identity data atomically.
+- [x] 9. Migrate, deploy, and verify the identity data atomically.
   - Back up and migrate the password sidecar and any canonical identity/roster data with rollback support.
   - Verify local hashes, release contents, and generated roster/hero paths before deployment.
   - Run authorized positive tests for each identity plus anonymous, wrong-password, ambiguous-alias, cross-character, logout, and account-switch negative tests.
