@@ -130,8 +130,10 @@ function Assert-XpPasswordHashSidecar {
         throw "Runtime sidecar $FileName is not valid JSON: $($_.Exception.Message)"
     }
 
-    if ($json.schema_version -ne 1 -or $json.format -ne $XpPasswordFormat) {
-        throw "Runtime sidecar $FileName must use salted password hash format '$XpPasswordFormat' with schema_version 1."
+    $isIdentityFormat = $json.schema_version -eq 2 -and $json.format -eq 'xp-password-hashes-v2'
+    $isLegacyFormat = $json.schema_version -eq 1 -and $json.format -eq $XpPasswordFormat
+    if (!$isIdentityFormat -and !$isLegacyFormat) {
+        throw "Runtime sidecar $FileName must use supported salted password identity format."
     }
 
     $unexpectedDocumentProperties = @($json.PSObject.Properties.Name | Where-Object {
@@ -147,17 +149,31 @@ function Assert-XpPasswordHashSidecar {
     }
 
     $names = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
+    $accountIds = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::Ordinal)
+    $aliases = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
     $salts = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::Ordinal)
     foreach ($entry in $entries) {
+        $allowedEntryProperties = if ($isIdentityFormat) { @('account_id', 'canonical_name', 'aliases', 'is_dungeon_master', 'algorithm', 'iterations', 'salt', 'hash') } else { @('name', 'algorithm', 'iterations', 'salt', 'hash') }
         $unexpectedEntryProperties = @($entry.PSObject.Properties.Name | Where-Object {
-            @('name', 'algorithm', 'iterations', 'salt', 'hash') -notcontains $_
+            $allowedEntryProperties -notcontains $_
         })
         if ($unexpectedEntryProperties.Count -gt 0) {
             throw "Runtime sidecar $FileName contains unexpected entry property '$($unexpectedEntryProperties[0])'."
         }
 
-        if ([string]::IsNullOrWhiteSpace([string]$entry.name) -or !$names.Add([string]$entry.name)) {
-            throw "Runtime sidecar $FileName contains a blank or duplicate PC name."
+        $entryName = if ($isIdentityFormat) { [string]$entry.canonical_name } else { [string]$entry.name }
+        if ([string]::IsNullOrWhiteSpace($entryName) -or !$names.Add($entryName)) {
+            throw "Runtime sidecar $FileName contains a blank or duplicate canonical name."
+        }
+        if ($isIdentityFormat) {
+            if ([string]::IsNullOrWhiteSpace([string]$entry.account_id) -or !$accountIds.Add([string]$entry.account_id)) {
+                throw "Runtime sidecar $FileName contains a blank or duplicate account ID."
+            }
+            foreach ($alias in @($entry.aliases)) {
+                if ([string]::IsNullOrWhiteSpace([string]$alias) -or [string]$alias -cne ([string]$alias).Trim() -or $names.Contains([string]$alias) -or !$aliases.Add([string]$alias)) {
+                    throw "Runtime sidecar $FileName contains a blank, untrimmed, or duplicate alias."
+                }
+            }
         }
 
         if ($entry.algorithm -ne $XpPasswordAlgorithm -or [int64]$entry.iterations -lt $XpPasswordMinimumIterations) {

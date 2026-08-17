@@ -1245,7 +1245,11 @@ namespace PlayerAssistant
                 return;
             }
 
-            if (!XpPasswordStoreUtility.ValidatePassword(characterName, password, AppContext.BaseDirectory))
+            var authenticatedIdentity = XpPasswordStoreUtility.AuthenticatePassword(
+                characterName,
+                password,
+                AppContext.BaseDirectory);
+            if (!authenticatedIdentity.IsValid)
             {
                 MessageBox.Show(
                     this,
@@ -1263,13 +1267,13 @@ namespace PlayerAssistant
                 SetStatusBarMessage("Loading XP total...");
                 using var activity = BeginStatusBarActivity();
                 var snapshot = await XpTrackingUtility.GetCurrentXpSnapshotAsync();
-                if (IsDungeonMasterXpAccess(characterName))
+                if (authenticatedIdentity.IsDungeonMaster)
                 {
                     ShowXpTotals(snapshot.DateLabel, snapshot.Totals);
                     return;
                 }
 
-                var total = FindXpTotalForCharacter(snapshot.Totals, characterName);
+                var total = FindXpTotalForCharacter(snapshot.Totals, authenticatedIdentity.CanonicalCharacterName);
                 if (total is null)
                 {
                     xpToolStripMenuItem.Enabled = true;
@@ -1311,11 +1315,14 @@ namespace PlayerAssistant
                 var partyHeroes = PartyHeroUtility.LoadActiveParty(EnsurePlayerCharacterDirectories());
                 if (TryPromptForXpCredentials(out var characterName, out var password))
                 {
-                    var passwordValidation = await ValidateOptionalXpPasswordAsync(
+                    var authenticatedIdentity = XpPasswordStoreUtility.AuthenticatePassword(
                         characterName,
                         password,
-                        "party XP authentication");
-                    if (passwordValidation == OptionalXpPasswordValidation.Valid)
+                        AppContext.BaseDirectory);
+                    var passwordValidation = authenticatedIdentity.IsValid
+                        ? OptionalXpPasswordValidation.Valid
+                        : OptionalXpPasswordValidation.Invalid;
+                    if (authenticatedIdentity.IsValid)
                     {
                         try
                         {
@@ -1325,8 +1332,8 @@ namespace PlayerAssistant
                             partyHeroes = PartyHeroUtility.WithVisibleXpTotals(
                                 partyHeroes,
                                 snapshot.Totals,
-                                characterName,
-                                IsDungeonMasterXpAccess(characterName));
+                                authenticatedIdentity,
+                                authenticatedIdentity.IsDungeonMaster);
                         }
                         catch (Exception ex)
                         {
@@ -1384,19 +1391,24 @@ namespace PlayerAssistant
                 using var activity = BeginStatusBarActivity();
                 var partyHeroes = PartyHeroUtility.LoadActiveParty(EnsurePlayerCharacterDirectories());
                 string? authenticatedHeroName = null;
+                XpAuthenticatedIdentity? authenticatedIdentity = null;
                 var isDungeonMaster = false;
                 IReadOnlyList<PcXpTotal> xpTotals = [];
 
                 if (TryPromptForXpCredentials(out var characterName, out var password))
                 {
-                    var passwordValidation = await ValidateOptionalXpPasswordAsync(
+                    var identity = XpPasswordStoreUtility.AuthenticatePassword(
                         characterName,
                         password,
-                        "my hero briefing XP authentication");
-                    if (passwordValidation == OptionalXpPasswordValidation.Valid)
+                        AppContext.BaseDirectory);
+                    var passwordValidation = identity.IsValid
+                        ? OptionalXpPasswordValidation.Valid
+                        : OptionalXpPasswordValidation.Invalid;
+                    if (identity.IsValid)
                     {
-                        authenticatedHeroName = characterName;
-                        isDungeonMaster = IsDungeonMasterXpAccess(characterName);
+                        authenticatedIdentity = identity;
+                        authenticatedHeroName = identity.CanonicalCharacterName;
+                        isDungeonMaster = identity.IsDungeonMaster;
                         try
                         {
                             var snapshot = await XpTrackingUtility.GetCurrentXpSnapshotAsync();
@@ -1430,6 +1442,7 @@ namespace PlayerAssistant
                 var briefing = MyHeroBriefingUtility.Build(new MyHeroBriefingRequest(
                     partyHeroes,
                     AuthenticatedHeroName: authenticatedHeroName,
+                    AuthenticatedIdentity: authenticatedIdentity,
                     IsDungeonMaster: isDungeonMaster,
                     ThreadPosts: threadPosts,
                     XpTotals: xpTotals,
@@ -1445,10 +1458,15 @@ namespace PlayerAssistant
                         return;
                     }
 
+                    var selectedHeroAccountId = partyHeroes
+                        .FirstOrDefault(hero => string.Equals(hero.Name, selectedHeroName, StringComparison.OrdinalIgnoreCase))
+                        ?.AccountId;
                     briefing = MyHeroBriefingUtility.Build(new MyHeroBriefingRequest(
                         partyHeroes,
                         SelectedHeroName: selectedHeroName,
                         AuthenticatedHeroName: authenticatedHeroName,
+                        SelectedHeroAccountId: selectedHeroAccountId,
+                        AuthenticatedIdentity: authenticatedIdentity,
                         IsDungeonMaster: isDungeonMaster,
                         ThreadPosts: threadPosts,
                         XpTotals: xpTotals,
@@ -1586,14 +1604,7 @@ namespace PlayerAssistant
                 return exactMatch;
             }
 
-            var firstName = GetFirstName(trimmedName);
-            var firstNameMatches = totals
-                .Where(row => string.Equals(GetFirstName(row.Name), firstName, StringComparison.OrdinalIgnoreCase))
-                .Take(2)
-                .ToArray();
-            return firstNameMatches.Length == 1
-                ? firstNameMatches[0]
-                : null;
+            return exactMatch;
         }
 
         private bool TryPromptForXpCredentials(out string characterName, out string password)

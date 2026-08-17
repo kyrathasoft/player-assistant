@@ -1860,8 +1860,8 @@ internal static partial class TestCases
         var request = new MyHeroBriefingRequest(
             heroes,
             SelectedHeroName: "Jelb Garrick",
-            AuthenticatedHeroName: "Jelb",
-            XpTotals: [new PcXpTotal("Jelb", 8575)],
+            AuthenticatedHeroName: "Jelb Garrick",
+            XpTotals: [new PcXpTotal("Jelb Garrick", 8575)],
             ThreadPosts:
             [
                 new MyHeroBriefingThreadPosts(
@@ -1926,7 +1926,7 @@ internal static partial class TestCases
         var briefing = MyHeroBriefingUtility.Build(new MyHeroBriefingRequest(
             heroes,
             SelectedHeroName: "Kelpie Lawfuller",
-            AuthenticatedHeroName: "Jelb"));
+            AuthenticatedHeroName: "Jelb Garrick"));
 
         AssertTrue(briefing.Hero is not null, "authenticated hero should resolve a briefing hero");
         AssertEqual("Jelb Garrick", briefing.Hero!.Name, "authenticated first-name identity should select Jelb");
@@ -1947,7 +1947,7 @@ internal static partial class TestCases
             IsDungeonMaster: true));
         var selected = MyHeroBriefingUtility.Build(new MyHeroBriefingRequest(
             heroes,
-            SelectedHeroName: "Kelpie",
+            SelectedHeroName: "Kelpie Lawfuller",
             AuthenticatedHeroName: "Dungeon Master",
             IsDungeonMaster: true));
 
@@ -2039,7 +2039,7 @@ internal static partial class TestCases
                     "Kelpie studies the same clue."),
                 new RpolThreadPost(
                     15,
-                    "Jelb",
+                    "Jelb Garrick",
                     string.Empty,
                     "Mon 1 Jan 2026",
                     "15:00",
@@ -2051,7 +2051,7 @@ internal static partial class TestCases
             .ToArray();
         var briefing = MyHeroBriefingUtility.Build(new MyHeroBriefingRequest(
             heroes,
-            AuthenticatedHeroName: "Jelb",
+            AuthenticatedHeroName: "Jelb Garrick",
             ThreadPosts:
             [
                 new MyHeroBriefingThreadPosts(
@@ -2060,9 +2060,9 @@ internal static partial class TestCases
                     matchingPosts)
             ]));
 
-        AssertEqual(10, briefing.RecentActivity.Count, "recent activity should be capped at ten matching posts");
+        AssertEqual(2, briefing.RecentActivity.Count, "only exact hero authors or full-name mentions should count as recent activity");
         AssertEqual(15, briefing.RecentActivity[0].MessageNumber, "latest hero-authored post should appear first");
-        AssertEqual(4, briefing.RecentActivity[^1].MessageNumber, "oldest retained matching post should be message 4");
+        AssertEqual(12, briefing.RecentActivity[^1].MessageNumber, "the exact full-name mention should be retained");
         AssertTrue(
             briefing.RecentActivity.All(item => item.ThreadTitle == "Chapter 1"
                 && item.ThreadUrl == "https://rpol.net/display.cgi?gi=80170&ti=7"),
@@ -2084,13 +2084,13 @@ internal static partial class TestCases
         var chapterPosts = new RpolThreadPost[]
         {
             CreateRpolThreadPost(1, "Dungeon Master", "Before Jelb posts."),
-            CreateRpolThreadPost(2, "Jelb", "Jelb watches the door."),
+            CreateRpolThreadPost(2, "Jelb Garrick", "Jelb watches the door."),
             CreateRpolThreadPost(3, "Kelpie", "Should we open it?"),
             CreateRpolThreadPost(4, "Dungeon Master", "Jelb hears a faint click."),
             CreateRpolThreadPost(5, "Nuanda", "The corridor stays quiet."),
-            CreateRpolThreadPost(6, "Jelb", "Jelb studies the lock."),
+            CreateRpolThreadPost(6, "Jelb Garrick", "Jelb studies the lock."),
             CreateRpolThreadPost(7, "Dungeon Master", "The lock gives way."),
-            CreateRpolThreadPost(8, "Kelpie", "Jelb, do you want the lantern?")
+            CreateRpolThreadPost(8, "Kelpie", "Jelb Garrick, do you want the lantern?")
         };
         var noHeroPostThread = new RpolThreadPost[]
         {
@@ -2100,7 +2100,7 @@ internal static partial class TestCases
 
         var briefing = MyHeroBriefingUtility.Build(new MyHeroBriefingRequest(
             heroes,
-            AuthenticatedHeroName: "Jelb",
+            AuthenticatedHeroName: "Jelb Garrick",
             ThreadPosts:
             [
                 new MyHeroBriefingThreadPosts(
@@ -2153,7 +2153,7 @@ internal static partial class TestCases
             new(
                 "https://publish.obsidian.md/scarlethorizons/Secrets/Jelb+Only",
                 1,
-                ["Hero Jelb"]),
+                ["Hero Jelb Garrick"]),
             new(
                 "https://publish.obsidian.md/scarlethorizons/Secrets/High+Level",
                 1,
@@ -2170,7 +2170,7 @@ internal static partial class TestCases
 
         var briefing = MyHeroBriefingUtility.Build(new MyHeroBriefingRequest(
             heroes,
-            AuthenticatedHeroName: "Jelb",
+            AuthenticatedHeroName: "Jelb Garrick",
             EncryptedTextIndex: encryptedIndex));
 
         AssertEqual(2, briefing.UnlockedNotes.Count, "only notes unlocked by hero tags should be surfaced");
@@ -2263,8 +2263,8 @@ internal static partial class TestCases
                 "Chapter 2",
                 "https://rpol.net/display.cgi?gi=80170&ti=8",
                 [
-                    CreateRpolThreadPost(1, "Jelb", "Jelb checks the suspicious door."),
-                    CreateRpolThreadPost(2, "Dungeon Master", "Jelb hears a lock click. What do you do?")
+                    CreateRpolThreadPost(1, "Jelb Garrick", "Jelb Garrick checks the suspicious door."),
+                    CreateRpolThreadPost(2, "Dungeon Master", "Jelb Garrick hears a lock click. What do you do?")
                 ])
         };
         var encryptedIndex = new[]
@@ -2272,11 +2272,11 @@ internal static partial class TestCases
             new EncryptedTextIndexEntry(
                 "https://publish.obsidian.md/scarlethorizons/Secrets/Jelb+Only",
                 1,
-                ["Hero Jelb"])
+                ["Hero Jelb Garrick"])
         };
         return MyHeroBriefingUtility.Build(new MyHeroBriefingRequest(
             heroes,
-            AuthenticatedHeroName: "Jelb",
+            AuthenticatedHeroName: "Jelb Garrick",
             ThreadPosts: posts,
             XpTotals: [new PcXpTotal("Jelb Garrick", 1234)],
             EncryptedTextIndex: encryptedIndex));
@@ -2345,8 +2345,8 @@ internal static partial class TestCases
     {
         var heroes = new PartyHeroSheet[]
         {
-            new("Kelpie Lawfuller", null, "3", "Fighter", "12", "Kelpie sheet"),
-            new("Jelb Garrick", null, "1", "Illusionist", "4", "Jelb sheet")
+            new("Kelpie Lawfuller", null, "3", "Fighter", "12", "Kelpie sheet", AccountId: "kelpie-account"),
+            new("Jelb Garrick", null, "1", "Illusionist", "4", "Jelb sheet", AccountId: "jelb-account")
         };
         var xpTotals = new PcXpTotal[]
         {
@@ -2357,12 +2357,12 @@ internal static partial class TestCases
         var kelpieView = PartyHeroUtility.WithVisibleXpTotals(
             heroes,
             xpTotals,
-            "Kelpie",
+            new XpAuthenticatedIdentity("kelpie-account", "Kelpie Lawfuller", [], false),
             isDungeonMaster: false);
         var dmView = PartyHeroUtility.WithVisibleXpTotals(
             heroes,
             xpTotals,
-            "Dungeon Master",
+            new XpAuthenticatedIdentity("dm-account", "Dungeon Master", [], true),
             isDungeonMaster: true);
 
         AssertEqual(7062, kelpieView[0].XpTotal ?? -1, "authenticated hero should see their own XP");
@@ -2412,7 +2412,7 @@ internal static partial class TestCases
             HitPoints: "42",
             CharacterSheetText: "Name: Kelpie Lawfuller"));
         var encrypted = TaggedNoteCipherUtility.TransformTaggedText(
-            "{Character Jelb}sample text{Character Jelb}",
+            "{Character Jelb Stonehand}sample text{Character Jelb Stonehand}",
             TaggedNoteCipherMode.Encrypt);
 
         var decrypted = TaggedNoteCipherUtility.TransformTaggedText(
@@ -2420,7 +2420,7 @@ internal static partial class TestCases
             TaggedNoteCipherMode.Decrypt,
             hero: jelbHero);
 
-        AssertEqual("{Character Jelb}sample text{Character Jelb}", decrypted, "matching character tag should decrypt note text");
+        AssertEqual("{Character Jelb Stonehand}sample text{Character Jelb Stonehand}", decrypted, "matching character tag should decrypt note text");
         AssertThrows<UnauthorizedAccessException>(
             () => TaggedNoteCipherUtility.TransformTaggedText(encrypted, TaggedNoteCipherMode.Decrypt, hero: otherHero));
     }
@@ -2609,32 +2609,22 @@ internal static partial class TestCases
         var totals = new PcXpTotal[]
         {
             new("Kelpie Lawfuller", 7062),
-            new("Jelb", 8575)
+            new("Jelb Garrick", 8575)
         };
 
-        var kelpieTotal = (PcXpTotal?)InvokeStaticMethod(
+        var firstNameTotal = (PcXpTotal?)InvokeStaticMethod(
             typeof(Form1),
             "FindXpTotalForCharacter",
             totals,
             "Kelpie");
-        var jelbTotal = (PcXpTotal?)InvokeStaticMethod(
+        var exactTotal = (PcXpTotal?)InvokeStaticMethod(
             typeof(Form1),
             "FindXpTotalForCharacter",
             totals,
             "Jelb Garrick");
 
-        if (kelpieTotal is null)
-        {
-            throw new InvalidOperationException("first-name Kelpie lookup should find full-name XP row");
-        }
-
-        if (jelbTotal is null)
-        {
-            throw new InvalidOperationException("full-name Jelb lookup should find first-name XP row");
-        }
-
-        AssertEqual(new PcXpTotal("Kelpie Lawfuller", 7062), kelpieTotal!, "unexpected Kelpie XP row");
-        AssertEqual(new PcXpTotal("Jelb", 8575), jelbTotal!, "unexpected Jelb XP row");
+        AssertTrue(firstNameTotal is null, "first-name-only lookup must not select a protected XP row");
+        AssertEqual(new PcXpTotal("Jelb Garrick", 8575), exactTotal!, "exact canonical lookup should find the XP row");
     }
 
     internal static void XpDisplayStoresMultipleTotalsForDungeonMaster()

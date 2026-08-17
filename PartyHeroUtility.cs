@@ -9,7 +9,9 @@ namespace PlayerAssistant
         string CharacterClass,
         string HitPoints,
         string CharacterSheetText,
-        int? XpTotal = null);
+        int? XpTotal = null,
+        string? AccountId = null,
+        IReadOnlyList<string>? Aliases = null);
 
     internal static class PartyHeroUtility
     {
@@ -54,19 +56,20 @@ namespace PlayerAssistant
         public static IReadOnlyList<PartyHeroSheet> WithVisibleXpTotals(
             IReadOnlyList<PartyHeroSheet> heroes,
             IReadOnlyList<PcXpTotal> xpTotals,
-            string authenticatedCharacterName,
+            XpAuthenticatedIdentity authenticatedIdentity,
             bool isDungeonMaster)
         {
             ArgumentNullException.ThrowIfNull(heroes);
             ArgumentNullException.ThrowIfNull(xpTotals);
-            ArgumentException.ThrowIfNullOrWhiteSpace(authenticatedCharacterName);
+            ArgumentNullException.ThrowIfNull(authenticatedIdentity);
 
             return heroes
                 .Select(hero =>
                 {
-                    var xpTotal = isDungeonMaster || IsSameHeroName(hero.Name, authenticatedCharacterName)
-                        ? FindXpTotalForCharacter(xpTotals, hero.Name)
-                        : null;
+                    var authorized = isDungeonMaster
+                        || (!string.IsNullOrWhiteSpace(hero.AccountId)
+                            && string.Equals(hero.AccountId, authenticatedIdentity.AccountId, StringComparison.Ordinal));
+                    var xpTotal = authorized ? FindXpTotalForCharacter(xpTotals, hero) : null;
                     return hero with { XpTotal = xpTotal?.XpTotal };
                 })
                 .ToArray();
@@ -103,7 +106,7 @@ namespace PlayerAssistant
 
         private static PartyHeroSheet LoadHeroFromListingRow(string activeDirectory, PlayerCharacterHeroRow hero)
         {
-            var markdownPath = Path.Combine(activeDirectory, $"{GetHeroMarkdownFileName(hero.Name)}.md");
+            var markdownPath = GetHeroMarkdownPath(activeDirectory, hero.Name);
             var tokenImagePath = !string.IsNullOrWhiteSpace(hero.TokenFileName)
                 ? Path.Combine(activeDirectory, hero.TokenFileName)
                 : null;
@@ -312,44 +315,32 @@ namespace PlayerAssistant
 
         private static string GetHeroMarkdownFileName(string heroName)
         {
-            var firstName = GetFirstName(heroName);
-            return Regex.Replace(firstName.ToLowerInvariant(), @"[^a-z0-9_-]+", "-").Trim('-');
+            return Regex.Replace(heroName.Trim().ToLowerInvariant(), @"[^a-z0-9_-]+", "-").Trim('-');
+        }
+
+        private static string GetHeroMarkdownPath(string activeDirectory, string heroName)
+        {
+            var canonicalPath = Path.Combine(activeDirectory, $"{GetHeroMarkdownFileName(heroName)}.md");
+            if (File.Exists(canonicalPath)) return canonicalPath;
+
+            // Migration adapter for existing first-name files. New downloads use the
+            // canonical full-name path, so same-first-name heroes cannot overwrite it.
+            var firstName = heroName.Trim().Split(' ', 2)[0];
+            var legacyStem = Regex.Replace(firstName.ToLowerInvariant(), @"[^a-z0-9_-]+", "-").Trim('-');
+            var legacyPath = Path.Combine(activeDirectory, $"{legacyStem}.md");
+            return File.Exists(legacyPath) ? legacyPath : canonicalPath;
         }
 
         private static PcXpTotal? FindXpTotalForCharacter(
             IReadOnlyList<PcXpTotal> totals,
-            string characterName)
+            PartyHeroSheet hero)
         {
-            var exactMatch = totals.FirstOrDefault(row =>
-                string.Equals(row.Name, characterName.Trim(), StringComparison.OrdinalIgnoreCase));
-            if (exactMatch is not null)
-            {
-                return exactMatch;
-            }
-
-            var firstName = GetFirstName(characterName);
-            var firstNameMatches = totals
-                .Where(row => string.Equals(GetFirstName(row.Name), firstName, StringComparison.OrdinalIgnoreCase))
-                .Take(2)
-                .ToArray();
-            return firstNameMatches.Length == 1
-                ? firstNameMatches[0]
-                : null;
-        }
-
-        private static bool IsSameHeroName(string left, string right)
-        {
-            return string.Equals(left.Trim(), right.Trim(), StringComparison.OrdinalIgnoreCase)
-                || string.Equals(GetFirstName(left), GetFirstName(right), StringComparison.OrdinalIgnoreCase);
-        }
-
-        private static string GetFirstName(string value)
-        {
-            var trimmedValue = value.Trim();
-            var spaceIndex = trimmedValue.IndexOf(' ');
-            return spaceIndex < 0
-                ? trimmedValue
-                : trimmedValue[..spaceIndex];
+            return totals.FirstOrDefault(row =>
+                (!string.IsNullOrWhiteSpace(hero.AccountId)
+                    && !string.IsNullOrWhiteSpace(row.AccountId)
+                    && string.Equals(row.AccountId, hero.AccountId, StringComparison.Ordinal))
+                || (string.IsNullOrWhiteSpace(row.AccountId)
+                    && string.Equals(row.Name, hero.Name.Trim(), StringComparison.OrdinalIgnoreCase)));
         }
     }
 }

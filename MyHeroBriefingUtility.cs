@@ -6,6 +6,8 @@ namespace PlayerAssistant
         IReadOnlyList<PartyHeroSheet> ActiveParty,
         string? SelectedHeroName = null,
         string? AuthenticatedHeroName = null,
+        string? SelectedHeroAccountId = null,
+        XpAuthenticatedIdentity? AuthenticatedIdentity = null,
         bool IsDungeonMaster = false,
         IReadOnlyList<MyHeroBriefingThreadPosts>? ThreadPosts = null,
         IReadOnlyList<PcXpTotal>? XpTotals = null,
@@ -32,7 +34,8 @@ namespace PlayerAssistant
         int? XpTotal,
         string? TokenImagePath,
         string CharacterSheetText,
-        HeroAccessContext AccessContext);
+        HeroAccessContext AccessContext,
+        IReadOnlyList<string>? Aliases = null);
 
     internal sealed record MyHeroBriefingHeroCard(
         string Name,
@@ -137,7 +140,13 @@ namespace PlayerAssistant
         {
             if (!request.IsDungeonMaster)
             {
-                var authenticatedHero = FindHeroByNameOrFirstName(request.ActiveParty, request.AuthenticatedHeroName);
+                var authenticatedHero = request.AuthenticatedIdentity is not null
+                    ? request.ActiveParty.FirstOrDefault(hero =>
+                        (!string.IsNullOrWhiteSpace(hero.AccountId)
+                            && string.Equals(hero.AccountId, request.AuthenticatedIdentity.AccountId, StringComparison.Ordinal))
+                        || (string.IsNullOrWhiteSpace(hero.AccountId)
+                            && string.Equals(hero.Name, request.AuthenticatedIdentity.CanonicalCharacterName, StringComparison.OrdinalIgnoreCase)))
+                    : FindHeroByCanonicalName(request.ActiveParty, request.AuthenticatedHeroName);
                 if (authenticatedHero is not null)
                 {
                     return new MyHeroBriefingResolvedHero(
@@ -146,13 +155,16 @@ namespace PlayerAssistant
                 }
             }
 
-            var selectedHero = FindHeroByNameOrFirstName(request.ActiveParty, request.SelectedHeroName);
+            var selectedHero = !string.IsNullOrWhiteSpace(request.SelectedHeroAccountId)
+                ? request.ActiveParty.FirstOrDefault(hero =>
+                    string.Equals(hero.AccountId, request.SelectedHeroAccountId, StringComparison.Ordinal))
+                : FindHeroByCanonicalName(request.ActiveParty, request.SelectedHeroName);
             return selectedHero is not null
                 ? new MyHeroBriefingResolvedHero(selectedHero, MyHeroBriefingHeroIdentitySource.SelectedHero)
                 : new MyHeroBriefingResolvedHero(null, MyHeroBriefingHeroIdentitySource.None);
         }
 
-        private static PartyHeroSheet? FindHeroByNameOrFirstName(
+        private static PartyHeroSheet? FindHeroByCanonicalName(
             IReadOnlyList<PartyHeroSheet> activeParty,
             string? heroName)
         {
@@ -162,17 +174,8 @@ namespace PlayerAssistant
             }
 
             var trimmedName = heroName.Trim();
-            var exactMatch = activeParty.FirstOrDefault(hero =>
+            return activeParty.FirstOrDefault(hero =>
                 string.Equals(hero.Name, trimmedName, StringComparison.OrdinalIgnoreCase));
-            if (exactMatch is not null)
-            {
-                return exactMatch;
-            }
-
-            var firstNameMatches = activeParty
-                .Where(hero => string.Equals(GetFirstName(hero.Name), trimmedName, StringComparison.OrdinalIgnoreCase))
-                .ToArray();
-            return firstNameMatches.Length == 1 ? firstNameMatches[0] : null;
         }
 
         private static MyHeroBriefingHeroSummary CreateHeroSummary(
@@ -189,7 +192,8 @@ namespace PlayerAssistant
                 FindVisibleXpTotal(hero, xpTotals, isDungeonMaster, identitySource),
                 hero.TokenImagePath,
                 hero.CharacterSheetText,
-                HeroAccessContext.FromPartyHeroSheet(hero));
+                HeroAccessContext.FromPartyHeroSheet(hero),
+                hero.Aliases);
         }
 
         private static MyHeroBriefingHeroCard CreateHeroCard(
@@ -225,8 +229,7 @@ namespace PlayerAssistant
             }
 
             return xpTotals.FirstOrDefault(total =>
-                    string.Equals(total.Name, hero.Name, StringComparison.OrdinalIgnoreCase)
-                    || string.Equals(GetFirstName(total.Name), GetFirstName(hero.Name), StringComparison.OrdinalIgnoreCase))
+                    string.Equals(total.Name, hero.Name, StringComparison.OrdinalIgnoreCase))
                     ?.XpTotal;
         }
 
@@ -256,7 +259,7 @@ namespace PlayerAssistant
             MyHeroBriefingHeroSummary hero,
             IReadOnlyList<MyHeroBriefingThreadPosts> threadPosts)
         {
-            var aliases = GetHeroAliases(hero.Name);
+            var aliases = GetHeroAliases(hero);
             return threadPosts
                 .SelectMany(thread => (thread.Posts ?? [])
                     .Where(post => IsHeroAuthor(post.Author, aliases) || MentionsAnyAlias(post.BodyText, aliases))
@@ -277,7 +280,7 @@ namespace PlayerAssistant
             MyHeroBriefingHeroSummary hero,
             IReadOnlyList<MyHeroBriefingThreadPosts> threadPosts)
         {
-            var aliases = GetHeroAliases(hero.Name);
+            var aliases = GetHeroAliases(hero);
             return threadPosts
                 .SelectMany(thread => BuildLikelyResponseItemsForThread(thread, aliases))
                 .OrderBy(item => GetResponsePriority(item.Reason))
@@ -384,10 +387,12 @@ namespace PlayerAssistant
                 .Trim();
         }
 
-        private static string[] GetHeroAliases(string heroName)
+        private static string[] GetHeroAliases(MyHeroBriefingHeroSummary hero)
         {
-            return new[] { heroName, GetFirstName(heroName) }
+            return new[] { hero.Name }
+                .Concat(hero.Aliases ?? [])
                 .Where(alias => !string.IsNullOrWhiteSpace(alias))
+                .Select(alias => alias.Trim())
                 .Distinct(StringComparer.OrdinalIgnoreCase)
                 .ToArray();
         }

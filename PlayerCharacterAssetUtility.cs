@@ -536,13 +536,10 @@ namespace PlayerAssistant
 
         private static string GetHeroMarkdownFileName(string heroName)
         {
-            var firstName = heroName
+            var canonicalName = heroName
                 .Split(',', 2)[0]
-                .Split(' ', StringSplitOptions.RemoveEmptyEntries)
-                .FirstOrDefault() ?? string.Empty;
-            var fileName = InvalidFileNameCharacterRegex.Replace(firstName.ToLowerInvariant(), "-").Trim('-');
-
-            return fileName;
+                .Trim();
+            return InvalidFileNameCharacterRegex.Replace(canonicalName.ToLowerInvariant(), "-").Trim('-');
         }
 
         private static bool ShouldDownloadHeroMarkdown(string markdownPath)

@@ -1,6 +1,6 @@
 namespace PlayerAssistant
 {
-    internal sealed record PcXpTotal(string Name, int XpTotal);
+    internal sealed record PcXpTotal(string Name, int XpTotal, string? AccountId = null);
 
     internal sealed record XpTrackingSnapshot(string DateLabel, IReadOnlyList<PcXpTotal> Totals);
 

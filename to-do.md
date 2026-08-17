@@ -212,20 +212,20 @@ Planned correction for the PWA's approximately 10.1 MB optional-data installatio
 
 Planned security correction: eliminate first-name equivalence from authentication and every authenticated character-data path. Authentication must return an immutable canonical account identity; a Boolean result is insufficient because later lookups can otherwise use the attacker's originally entered name.
 
-- [ ] 1. Create a deterministic regression harness before changing production code.
+- [x] 1. Create a deterministic regression harness before changing production code.
   - Add two character fixtures with the same first name and distinct full names, canonical IDs, passwords, XP totals, party sheets, and hero-briefing data.
   - Prove the current failure: entering Character B's full name with Character A's password authenticates, then the subsequent name-based XP lookup returns Character B.
   - Add negative cases for an ambiguous first-name alias, an unknown canonical ID, a mismatched password, and a selected hero whose display name collides with another hero.
   - Keep the fixture independent of real password hashes and never expose production credentials.
 
-- [ ] 2. Replace Boolean password validation with an immutable identity result.
+- [x] 2. Replace Boolean password validation with an immutable identity result.
   - Introduce an immutable `XpAuthenticatedIdentity` containing a stable canonical account/character ID, canonical character name, explicit aliases, and the Dungeon Master/account scope needed by callers.
   - Change `XpPasswordStoreUtility.ValidatePassword` to return that identity or a fail-closed invalid result, never `true`/`false` alone.
   - Remove candidate enumeration across every stored account sharing a first name.
   - Resolve only the exact canonical name or an explicitly declared alias.
   - Preserve constant-time password verification and ensure failed authentication does not leak which identity or alias matched.
 
-- [ ] 3. Make the password sidecar identity-addressable and reject ambiguous aliases at load time.
+- [x] 3. Make the password sidecar identity-addressable and reject ambiguous aliases at load time.
   - Revise the sidecar schema with a migration/version step rather than silently interpreting the v1 name-only format.
   - Store an immutable canonical ID, canonical name, password hash, and an explicit alias list per entry.
   - Normalize names and aliases consistently for comparison while preserving display values.
@@ -233,34 +233,34 @@ Planned security correction: eliminate first-name equivalence from authenticatio
   - Treat first names as ordinary text unless deliberately listed as an alias; never infer them automatically.
   - Update password-generation, import, sidecar validation, installer, release-sidecar, and runtime-sidecar contracts together.
 
-- [ ] 4. Thread the returned identity through Form1 and XP retrieval.
+- [x] 4. Thread the returned identity through Form1 and XP retrieval.
   - Replace the entered `characterName` as the source of authorization state with the returned immutable identity.
   - Make XP snapshot filtering accept the authenticated identity/canonical ID and resolve the exact authorized record; do not perform a second lookup from the originally entered name.
   - Determine Dungeon Master scope from the returned identity, not from a case-insensitive name comparison.
   - Update the required XP, optional XP, publisher-task, login, and error/status paths so valid authentication always carries the same identity object forward.
   - Clear the identity on cancellation, failed authentication, feature completion, and account transition.
 
-- [ ] 5. Correct PartyHeroUtility identity handling.
+- [x] 5. Correct PartyHeroUtility identity handling.
   - Add stable identity data to `PartyHeroSheet` or its roster input and pass the authenticated identity rather than a display-name string to `WithVisibleXpTotals`.
   - Replace `IsSameHeroName`, first-name fallback, and first-name XP matching with exact canonical ID matching; allow a canonical-name fallback only at a validated identity-boundary adapter.
   - Ensure Dungeon Master visibility is explicit scope-based authorization rather than name matching.
   - Stop deriving hero markdown/token paths from first names where that can collide; use the canonical identity/validated roster mapping and migrate existing generated paths safely.
   - Keep display aliases separate from authorization identity.
 
-- [ ] 6. Correct My Hero Briefing identity handling.
+- [x] 6. Correct My Hero Briefing identity handling.
   - Extend `MyHeroBriefingRequest` with the authenticated canonical identity and use it to resolve the authenticated hero exactly.
   - Replace `FindHeroByNameOrFirstName` with stable-ID resolution; make Dungeon Master hero selection return a stable ID rather than an ambiguous display name.
   - Make XP totals, hero cards, recent activity, response detection, encrypted-note access, and quick-link generation use the resolved identity and its explicit aliases.
   - Remove automatic first-name aliases from `GetHeroAliases`; only use aliases declared by the identity registry, with ambiguity rejected before runtime.
   - Ensure a same-first-name hero cannot inherit another hero's briefing, XP, posts, or encrypted-note access.
 
-- [ ] 7. Audit all remaining name-based identity comparisons and boundaries.
+- [x] 7. Audit all remaining name-based identity comparisons and boundaries.
   - Review Form1, XpTrackingUtility, PartyHeroUtility, MyHeroBriefingUtility, TaggedNoteCipherUtility, hero roster loaders, import scripts, and generated manifests.
   - Classify each name use as display/search text or authorization identity.
   - Replace authorization comparisons that use first names, inferred aliases, or user-entered names; retain display/search behavior only where it cannot grant access.
   - Document any intentional public search alias separately from protected account identity.
 
-- [ ] 8. Update tests and release/deployment contracts.
+- [x] 8. Update tests and release/deployment contracts.
   - Add unit/regression coverage for exact-ID success, same-first-name cross-password denial, ambiguous-alias load rejection, explicit unique-alias success, DM scope, party XP visibility, hero selection, briefing activity, encrypted-note access, and account switching.
   - Add negative fixtures proving that a first-name-only input cannot authenticate or select a protected hero when multiple identities share it.
   - Update custom regression-harness catalogs, sidecar schema validators, installer/runtime checks, migration tests, and release checklists.
