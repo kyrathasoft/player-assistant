@@ -104,6 +104,23 @@ internal static partial class TestCases
             "an inferred first-name alias authenticated an account");
     }
 
+    internal static void IdentityRegistryLoadsCanonicalAliases()
+    {
+        using var directory = CreateSyntheticPasswordSidecar(
+            aliasesForFirst: ["Stonewarden"],
+            aliasesForSecond: ["Valesong Bard"]);
+
+        var registry = XpPasswordStoreUtility.LoadIdentityRegistry(directory.Path);
+
+        Require(registry.Count == 2, "identity registry returned the wrong account count");
+        Require(
+            registry.Any(identity =>
+                identity.CanonicalId == SyntheticIdentityFixtures[0].CanonicalId
+                && identity.CanonicalName == SyntheticIdentityFixtures[0].FullName
+                && identity.Aliases.SequenceEqual(["Stonewarden"], StringComparer.Ordinal)),
+            "identity registry did not preserve the first account's canonical identity and aliases");
+    }
+
     internal static void SidecarRejectsAmbiguousOrMalformedAliases()
     {
         foreach (var aliases in new[]
@@ -203,22 +220,39 @@ internal static partial class TestCases
             directory.Path) is null, "a mismatched password authenticated an account");
     }
 
-    internal static void CollidingHeroDisplayNamesAreDenied()
+    internal static void CollidingHeroDisplayNamesResolveOnlyByCanonicalId()
     {
         var colliding = new[]
         {
             SyntheticIdentityFixtures[0].PartySheet with { Name = "Ari" },
             SyntheticIdentityFixtures[1].PartySheet with { Name = "Ari" }
         };
-        var briefing = MyHeroBriefingUtility.Build(new MyHeroBriefingRequest(colliding, SelectedHeroName: "Ari"));
-        Require(briefing.Hero is null, "a colliding hero display name selected the wrong hero");
+        var dungeonMasterIdentity = new XpAuthenticatedIdentity("dm", "Dungeon Master", [], true, "dm");
+        var briefing = MyHeroBriefingUtility.Build(new MyHeroBriefingRequest(
+            colliding,
+            SelectedHeroName: "Ari",
+            SelectedHeroCanonicalId: SyntheticIdentityFixtures[1].CanonicalId,
+            AuthenticatedIdentity: dungeonMasterIdentity));
+
+        Require(
+            briefing.Hero?.CharacterClass == SyntheticIdentityFixtures[1].PartySheet.CharacterClass
+                && briefing.Hero.Level == SyntheticIdentityFixtures[1].PartySheet.Level,
+            "a colliding display name overrode the selected stable identity");
     }
 
     internal static void CanonicalIdsSelectMatchingXpAndBriefingData()
     {
-        var xpTotals = SyntheticIdentityFixtures
-            .Select(fixture => new PcXpTotal(fixture.FullName, fixture.XpTotal, fixture.CanonicalId))
-            .ToArray();
+        var xpTotals = new[]
+        {
+            new PcXpTotal(
+                SyntheticIdentityFixtures[1].FullName,
+                SyntheticIdentityFixtures[0].XpTotal,
+                SyntheticIdentityFixtures[0].CanonicalId),
+            new PcXpTotal(
+                SyntheticIdentityFixtures[0].FullName,
+                SyntheticIdentityFixtures[1].XpTotal,
+                SyntheticIdentityFixtures[1].CanonicalId)
+        };
         var visible = PartyHeroUtility.WithVisibleXpTotals(
             SyntheticIdentityFixtures.Select(fixture => fixture.PartySheet with { XpTotal = null }).ToArray(),
             xpTotals,
@@ -232,12 +266,248 @@ internal static partial class TestCases
             "canonical XP authorization selected the wrong same-first-name character");
 
         var briefing = MyHeroBriefingUtility.Build(new MyHeroBriefingRequest(
-            visible,
-            AuthenticatedHeroCanonicalId: SyntheticIdentityFixtures[1].CanonicalId,
-            XpTotals: xpTotals));
+            SyntheticIdentityFixtures.Select(fixture => fixture.PartySheet with { XpTotal = null }).ToArray(),
+            XpTotals: xpTotals,
+            AuthenticatedIdentity: new XpAuthenticatedIdentity(
+                SyntheticIdentityFixtures[1].CanonicalId,
+                SyntheticIdentityFixtures[1].FullName,
+                [],
+                false,
+                SyntheticIdentityFixtures[1].CanonicalId)));
         Require(briefing.Hero?.Name == SyntheticIdentityFixtures[1].FullName
             && briefing.Hero.XpTotal == SyntheticIdentityFixtures[1].XpTotal,
             "canonical briefing authorization selected the wrong character data");
+    }
+
+    internal static void MyHeroBriefingRejectsNameOnlyProtectedIdentity()
+    {
+        var briefing = MyHeroBriefingUtility.Build(new MyHeroBriefingRequest(
+            SyntheticIdentityFixtures.Select(fixture => fixture.PartySheet).ToArray(),
+            AuthenticatedHeroName: SyntheticIdentityFixtures[0].FullName,
+            XpTotals:
+            [
+                new PcXpTotal(
+                    SyntheticIdentityFixtures[0].FullName,
+                    SyntheticIdentityFixtures[0].XpTotal,
+                    SyntheticIdentityFixtures[0].CanonicalId)
+            ],
+            ThreadPosts:
+            [
+                new MyHeroBriefingThreadPosts(
+                    "Synthetic thread",
+                    "https://example.invalid/thread",
+                    [CreateRpolThreadPost(1, SyntheticIdentityFixtures[0].FullName, SyntheticIdentityFixtures[0].HeroBriefingData)])
+            ],
+            EncryptedTextIndex:
+            [
+                new EncryptedTextIndexEntry(
+                    "https://example.invalid/secret",
+                    1,
+                    [$"Hero {SyntheticIdentityFixtures[0].FullName}"])
+            ]));
+
+        Require(briefing.Hero is null, "a display name without canonical identity resolved protected briefing data");
+        Require(briefing.HeroCard is null, "a display name without canonical identity produced a protected hero card");
+        Require(briefing.RecentActivity.Count == 0, "a display name without canonical identity exposed activity");
+        Require(briefing.LikelyResponseItems.Count == 0, "a display name without canonical identity exposed response data");
+        Require(briefing.UnlockedNotes.Count == 0, "a display name without canonical identity exposed encrypted-note metadata");
+    }
+
+    internal static void MyHeroBriefingRejectsUnauthenticatedCanonicalId()
+    {
+        var hero = SyntheticIdentityFixtures[0];
+        var briefing = MyHeroBriefingUtility.Build(new MyHeroBriefingRequest(
+            [hero.PartySheet],
+            AuthenticatedHeroCanonicalId: hero.CanonicalId,
+            XpTotals: [new PcXpTotal(hero.FullName, hero.XpTotal, hero.CanonicalId)]));
+
+        Require(briefing.Hero is null, "an unauthenticated canonical ID resolved protected briefing data");
+        Require(briefing.HeroCard is null, "an unauthenticated canonical ID produced a protected hero card");
+    }
+
+    internal static void MyHeroBriefingDoesNotInferFirstNameAliases()
+    {
+        var hero = SyntheticIdentityFixtures[0];
+        var briefing = MyHeroBriefingUtility.Build(new MyHeroBriefingRequest(
+            [hero.PartySheet],
+            ThreadPosts:
+            [
+                new MyHeroBriefingThreadPosts(
+                    "Synthetic thread",
+                    "https://example.invalid/thread",
+                    [
+                        CreateRpolThreadPost(1, "Ari", "Ari examines the gate."),
+                        CreateRpolThreadPost(2, SyntheticIdentityFixtures[1].FullName, "Ari, what did you find?")
+                    ])
+            ],
+            EncryptedTextIndex:
+            [
+                new EncryptedTextIndexEntry(
+                    "https://example.invalid/ari-only",
+                    1,
+                    ["Hero Ari"])
+            ],
+            AuthenticatedIdentity: new XpAuthenticatedIdentity(
+                hero.CanonicalId,
+                hero.FullName,
+                [],
+                false,
+                hero.CanonicalId)));
+
+        Require(briefing.Hero?.Name == hero.FullName, "canonical identity did not resolve the intended hero");
+        Require(briefing.RecentActivity.Count == 0, "an inferred first-name alias exposed another hero's activity");
+        Require(briefing.LikelyResponseItems.Count == 0, "an inferred first-name alias exposed another hero's response items");
+        Require(briefing.UnlockedNotes.Count == 0, "an inferred first-name alias exposed encrypted-note metadata");
+    }
+
+    internal static void MyHeroBriefingUsesExplicitIdentityAliases()
+    {
+        var hero = SyntheticIdentityFixtures[0];
+        var rival = SyntheticIdentityFixtures[1];
+        var identity = new XpAuthenticatedIdentity(
+            hero.CanonicalId,
+            hero.FullName,
+            ["Stonewarden"],
+            false,
+            hero.CanonicalId);
+        var briefing = MyHeroBriefingUtility.Build(new MyHeroBriefingRequest(
+            [hero.PartySheet with { XpTotal = null }, rival.PartySheet with { XpTotal = null }],
+            AuthenticatedIdentity: identity,
+            XpTotals: [new PcXpTotal(hero.FullName, hero.XpTotal, hero.CanonicalId)],
+            ThreadPosts:
+            [
+                new MyHeroBriefingThreadPosts(
+                    "Synthetic thread",
+                    "https://example.invalid/thread",
+                    [
+                        CreateRpolThreadPost(0, "Valesong Bard", "I sing about another road."),
+                        CreateRpolThreadPost(1, "Stonewarden", "I examine the gate."),
+                        CreateRpolThreadPost(2, rival.FullName, "Stonewarden, what did you find?")
+                    ])
+            ],
+            EncryptedTextIndex:
+            [
+                new EncryptedTextIndexEntry(
+                    "https://example.invalid/stonewarden-only",
+                    1,
+                    ["Hero Stonewarden"]),
+                new EncryptedTextIndexEntry(
+                    "https://example.invalid/valesong-only",
+                    1,
+                    ["Hero Valesong Bard"])
+            ]));
+
+        Require(briefing.Hero?.Name == hero.FullName, "explicit identity did not resolve the canonical hero");
+        Require(briefing.Hero?.XpTotal == hero.XpTotal, "explicit identity did not resolve canonical XP");
+        Require(briefing.RecentActivity.Count == 2, "explicit identity alias did not match hero activity");
+        Require(briefing.LikelyResponseItems.Count == 1, "explicit identity alias did not detect a response");
+        Require(briefing.UnlockedNotes.Count == 1, "explicit identity alias did not authorize encrypted-note metadata");
+        Require(
+            briefing.UnlockedNotes[0].Url == "https://example.invalid/stonewarden-only",
+            "explicit identity inherited a rival hero's encrypted-note metadata");
+        Require(
+            briefing.RecentActivity.All(item => !item.Excerpt.Contains("another road", StringComparison.OrdinalIgnoreCase)),
+            "explicit identity inherited a rival hero's activity");
+    }
+
+    internal static void MyHeroBriefingDungeonMasterChoicesCarryCanonicalIds()
+    {
+        var dungeonMasterIdentity = new XpAuthenticatedIdentity(
+            "fixture-dungeon-master-001",
+            "Dungeon Master",
+            [],
+            true,
+            "fixture-dungeon-master-001");
+        var briefing = MyHeroBriefingUtility.Build(new MyHeroBriefingRequest(
+            SyntheticIdentityFixtures.Select(fixture => fixture.PartySheet).ToArray(),
+            AuthenticatedIdentity: dungeonMasterIdentity));
+
+        Require(briefing.NeedsHeroSelection, "Dungeon Master briefing did not request a hero selection");
+        Require(briefing.HeroChoices.Count == 2, "Dungeon Master briefing returned the wrong choice count");
+        Require(
+            briefing.HeroChoices.Any(choice =>
+                choice.CanonicalId == SyntheticIdentityFixtures[0].CanonicalId
+                && choice.DisplayName == SyntheticIdentityFixtures[0].FullName),
+            "Dungeon Master choice did not carry the first hero's stable identity");
+        Require(
+            briefing.HeroChoices.Any(choice =>
+                choice.CanonicalId == SyntheticIdentityFixtures[1].CanonicalId
+                && choice.DisplayName == SyntheticIdentityFixtures[1].FullName),
+            "Dungeon Master choice did not carry the second hero's stable identity");
+    }
+
+    internal static void MyHeroBriefingDungeonMasterSelectionUsesSelectedIdentityAliases()
+    {
+        var selectedHero = SyntheticIdentityFixtures[0];
+        var selectedIdentity = new XpAuthenticatedIdentity(
+            selectedHero.CanonicalId,
+            selectedHero.FullName,
+            ["Stonewarden"],
+            false,
+            selectedHero.CanonicalId);
+        var dungeonMasterIdentity = new XpAuthenticatedIdentity(
+            "fixture-dungeon-master-001",
+            "Dungeon Master",
+            [],
+            true,
+            "fixture-dungeon-master-001");
+        var briefing = MyHeroBriefingUtility.Build(new MyHeroBriefingRequest(
+            SyntheticIdentityFixtures.Select(fixture => fixture.PartySheet with { XpTotal = null }).ToArray(),
+            SelectedHeroCanonicalId: selectedHero.CanonicalId,
+            XpTotals: [new PcXpTotal(selectedHero.FullName, selectedHero.XpTotal, selectedHero.CanonicalId)],
+            ThreadPosts:
+            [
+                new MyHeroBriefingThreadPosts(
+                    "Synthetic thread",
+                    "https://example.invalid/thread",
+                    [CreateRpolThreadPost(1, "Stonewarden", "I examine the gate.")])
+            ],
+            EncryptedTextIndex:
+            [
+                new EncryptedTextIndexEntry(
+                    "https://example.invalid/stonewarden-only",
+                    1,
+                    ["Hero Stonewarden"])
+            ],
+            AuthenticatedIdentity: dungeonMasterIdentity,
+            IdentityRegistry: [selectedIdentity, dungeonMasterIdentity]));
+
+        Require(briefing.Hero?.Name == selectedHero.FullName, "Dungeon Master stable-ID selection resolved the wrong hero");
+        Require(briefing.Hero?.XpTotal == selectedHero.XpTotal, "Dungeon Master selection resolved the wrong XP total");
+        Require(briefing.RecentActivity.Count == 1, "selected identity alias did not match hero activity");
+        Require(briefing.UnlockedNotes.Count == 1, "selected identity alias did not authorize encrypted-note metadata");
+    }
+
+    internal static void MyHeroBriefingQuickLinksFollowResolvedIdentity()
+    {
+        var hero = SyntheticIdentityFixtures[0];
+        var identity = new XpAuthenticatedIdentity(
+            hero.CanonicalId,
+            hero.FullName,
+            ["Stonewarden"],
+            false,
+            hero.CanonicalId);
+        var briefing = MyHeroBriefingUtility.Build(new MyHeroBriefingRequest(
+            [hero.PartySheet],
+            ThreadPosts:
+            [
+                new MyHeroBriefingThreadPosts(
+                    "Stoneward patrol",
+                    "https://example.invalid/relevant",
+                    [CreateRpolThreadPost(1, "Stonewarden", "I inspect the road.")]),
+                new MyHeroBriefingThreadPosts(
+                    "Valesong council",
+                    "https://example.invalid/unrelated",
+                    [CreateRpolThreadPost(1, SyntheticIdentityFixtures[1].FullName, "The council convenes.")])
+            ],
+            AuthenticatedIdentity: identity));
+
+        Require(
+            briefing.QuickLinks.Any(link => link.Target == "https://example.invalid/relevant"),
+            "resolved identity did not retain its relevant thread quick link");
+        Require(
+            briefing.QuickLinks.All(link => link.Target != "https://example.invalid/unrelated"),
+            "resolved identity inherited another hero's thread quick link");
     }
 
     internal static void RunCanonicalIdentityRegressionCases()
@@ -245,14 +515,22 @@ internal static partial class TestCases
         IdentityFixturesAreDistinctAndSynthetic();
         SuccessfulAuthenticationReturnsCanonicalIdentity();
         ExplicitAliasesAuthenticateOnlyTheirOwner();
+        IdentityRegistryLoadsCanonicalAliases();
         SidecarRejectsAmbiguousOrMalformedAliases();
         SidecarRejectsLegacySchemaAndDuplicateIdentities();
         CrossAccountPasswordAccessIsDenied();
         AmbiguousFirstNameAliasesAreDenied();
         UnknownCanonicalIdsAreDenied();
         MismatchedPasswordsAreDenied();
-        CollidingHeroDisplayNamesAreDenied();
+        CollidingHeroDisplayNamesResolveOnlyByCanonicalId();
         CanonicalIdsSelectMatchingXpAndBriefingData();
+        MyHeroBriefingRejectsNameOnlyProtectedIdentity();
+        MyHeroBriefingRejectsUnauthenticatedCanonicalId();
+        MyHeroBriefingDoesNotInferFirstNameAliases();
+        MyHeroBriefingUsesExplicitIdentityAliases();
+        MyHeroBriefingDungeonMasterChoicesCarryCanonicalIds();
+        MyHeroBriefingDungeonMasterSelectionUsesSelectedIdentityAliases();
+        MyHeroBriefingQuickLinksFollowResolvedIdentity();
     }
 
     private static TemporaryDirectory CreateSyntheticPasswordSidecar(

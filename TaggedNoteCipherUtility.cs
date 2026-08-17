@@ -24,11 +24,13 @@ namespace PlayerAssistant
         IReadOnlyDictionary<string, int> AbilityScores,
         IReadOnlyDictionary<string, string>? Attributes = null,
         IReadOnlyDictionary<string, int>? RankedMemberships = null,
-        string? CharacterName = null)
+        string? CharacterName = null,
+        IReadOnlyList<string>? CharacterAliases = null)
     {
         public static HeroAccessContext FromPartyHeroSheet(
             PartyHeroSheet hero,
-            IReadOnlyDictionary<string, int>? abilityScores = null)
+            IReadOnlyDictionary<string, int>? abilityScores = null,
+            IReadOnlyList<string>? characterAliases = null)
         {
             ArgumentNullException.ThrowIfNull(hero);
 
@@ -36,7 +38,8 @@ namespace PlayerAssistant
                 TryParseFirstInteger(hero.Level, out var level) ? level : null,
                 hero.CharacterClass,
                 abilityScores ?? new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase),
-                CharacterName: hero.Name);
+                CharacterName: hero.Name,
+                CharacterAliases: characterAliases);
         }
 
         private static bool TryParseFirstInteger(string value, out int result)
@@ -858,7 +861,7 @@ namespace PlayerAssistant
 
             if (IsCharacterNameTag(requirement.Name))
             {
-                return CharacterNameMatches(hero.CharacterName, requirement.Value);
+                return CharacterNameMatches(hero, requirement.Value);
             }
 
             var valueIsNumeric = int.TryParse(requirement.Value, out var numericValue);
@@ -899,17 +902,24 @@ namespace PlayerAssistant
                 || string.Equals(name, "Name", StringComparison.OrdinalIgnoreCase);
         }
 
-        private static bool CharacterNameMatches(string? heroName, string requiredName)
+        private static bool CharacterNameMatches(HeroAccessContext hero, string requiredName)
         {
-            if (string.IsNullOrWhiteSpace(heroName) || string.IsNullOrWhiteSpace(requiredName))
+            if (string.IsNullOrWhiteSpace(hero.CharacterName) || string.IsNullOrWhiteSpace(requiredName))
             {
                 return false;
             }
 
-            var trimmedHeroName = heroName.Trim();
+            var trimmedHeroName = hero.CharacterName.Trim();
             var trimmedRequiredName = requiredName.Trim();
-            return string.Equals(trimmedHeroName, trimmedRequiredName, StringComparison.OrdinalIgnoreCase)
-                || string.Equals(GetFirstName(trimmedHeroName), trimmedRequiredName, StringComparison.OrdinalIgnoreCase);
+            if (string.Equals(trimmedHeroName, trimmedRequiredName, StringComparison.OrdinalIgnoreCase)
+                || (hero.CharacterAliases?.Any(alias =>
+                    string.Equals(alias?.Trim(), trimmedRequiredName, StringComparison.OrdinalIgnoreCase)) ?? false))
+            {
+                return true;
+            }
+
+            return hero.CharacterAliases is null
+                && string.Equals(GetFirstName(trimmedHeroName), trimmedRequiredName, StringComparison.OrdinalIgnoreCase);
         }
 
         private static string GetFirstName(string value)

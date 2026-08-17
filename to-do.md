@@ -247,7 +247,7 @@ Planned security correction: eliminate first-name equivalence from authenticatio
   - [x] Derive new hero markdown paths from canonical IDs or full names; retain first-name paths only through a collision-checked migration fallback.
   - [x] Keep display aliases separate from authorization identity and add regression coverage for same-first-name heroes.
 
-- [ ] 6. Correct My Hero Briefing identity handling.
+- [x] 6. Correct My Hero Briefing identity handling.
   - Extend `MyHeroBriefingRequest` with the authenticated canonical identity and use it to resolve the authenticated hero exactly.
   - Replace `FindHeroByNameOrFirstName` with stable-ID resolution; make Dungeon Master hero selection return a stable ID rather than an ambiguous display name.
   - Make XP totals, hero cards, recent activity, response detection, encrypted-note access, and quick-link generation use the resolved identity and its explicit aliases.

@@ -42,7 +42,7 @@ namespace PlayerAssistant
             "*First, the app finds the hero's latest authored post in each thread.*",
             "*Then it looks at later posts in that same thread by other authors.*",
             "*Those later posts are ranked as:*",
-            "*- Direct mention after your last post when the post mentions the hero by name or first name.*",
+            "*- Direct mention after your last post when the post mentions the hero by canonical name or explicit alias.*",
             "*- Question-like post after your last post when the post contains a ?.*",
             "*- Recent post after your last post when it is simply a later post in that thread.*"
         ];
@@ -1388,6 +1388,7 @@ namespace PlayerAssistant
                 using var activity = BeginStatusBarActivity();
                 var partyHeroes = PartyHeroUtility.LoadActiveParty(EnsurePlayerCharacterDirectories());
                 XpAuthenticatedIdentity? authenticatedIdentity = null;
+                IReadOnlyList<XpAuthenticatedIdentity> identityRegistry = [];
                 IReadOnlyList<PcXpTotal> xpTotals = [];
 
                 if (TryPromptForXpCredentials(out var characterName, out var password))
@@ -1400,6 +1401,7 @@ namespace PlayerAssistant
                         && passwordValidation.Identity is not null)
                     {
                         authenticatedIdentity = passwordValidation.Identity;
+                        identityRegistry = XpPasswordStoreUtility.LoadIdentityRegistry(AppContext.BaseDirectory);
                         try
                         {
                             var snapshot = await XpTrackingUtility.GetCurrentXpSnapshotAsync();
@@ -1432,17 +1434,16 @@ namespace PlayerAssistant
                 var encryptedTextIndex = LoadMyHeroBriefingEncryptedTextIndex();
                 var briefing = MyHeroBriefingUtility.Build(new MyHeroBriefingRequest(
                     partyHeroes,
-                    AuthenticatedHeroName: authenticatedIdentity?.CanonicalName,
-                    AuthenticatedHeroCanonicalId: authenticatedIdentity?.CanonicalId,
-                    IsDungeonMaster: authenticatedIdentity?.IsDungeonMaster ?? false,
                     ThreadPosts: threadPosts,
                     XpTotals: xpTotals,
-                    EncryptedTextIndex: encryptedTextIndex));
+                    EncryptedTextIndex: encryptedTextIndex,
+                    AuthenticatedIdentity: authenticatedIdentity,
+                    IdentityRegistry: identityRegistry));
 
                 if (briefing.NeedsHeroSelection)
                 {
-                    var selectedHeroName = PromptForMyHeroBriefingHeroSelection(briefing.HeroChoices);
-                    if (string.IsNullOrWhiteSpace(selectedHeroName))
+                    var selectedHeroCanonicalId = PromptForMyHeroBriefingHeroSelection(briefing.HeroChoices);
+                    if (string.IsNullOrWhiteSpace(selectedHeroCanonicalId))
                     {
                         myHeroBriefingToolStripMenuItem.Enabled = true;
                         SetStatusBarMessage("My Hero Briefing canceled.");
@@ -1451,13 +1452,12 @@ namespace PlayerAssistant
 
                     briefing = MyHeroBriefingUtility.Build(new MyHeroBriefingRequest(
                         partyHeroes,
-                        SelectedHeroName: selectedHeroName,
-                        AuthenticatedHeroName: authenticatedIdentity?.CanonicalName,
-                        AuthenticatedHeroCanonicalId: authenticatedIdentity?.CanonicalId,
-                        IsDungeonMaster: authenticatedIdentity?.IsDungeonMaster ?? false,
+                        SelectedHeroCanonicalId: selectedHeroCanonicalId,
+                        AuthenticatedIdentity: authenticatedIdentity,
                         ThreadPosts: threadPosts,
                         XpTotals: xpTotals,
-                        EncryptedTextIndex: encryptedTextIndex));
+                        EncryptedTextIndex: encryptedTextIndex,
+                        IdentityRegistry: identityRegistry));
                 }
 
                 ShowMyHeroBriefing(briefing);
@@ -1771,12 +1771,13 @@ namespace PlayerAssistant
             return passwordTextBox.Text;
         }
 
-        private string? PromptForMyHeroBriefingHeroSelection(IReadOnlyList<string> heroChoices)
+        private string? PromptForMyHeroBriefingHeroSelection(IReadOnlyList<MyHeroBriefingHeroChoice> heroChoices)
         {
             var choices = heroChoices
-                .Where(choice => !string.IsNullOrWhiteSpace(choice))
-                .Distinct(StringComparer.OrdinalIgnoreCase)
-                .OrderBy(choice => choice, StringComparer.OrdinalIgnoreCase)
+                .Where(choice => !string.IsNullOrWhiteSpace(choice.CanonicalId)
+                    && !string.IsNullOrWhiteSpace(choice.DisplayName))
+                .DistinctBy(choice => choice.CanonicalId, StringComparer.Ordinal)
+                .OrderBy(choice => choice.DisplayName, StringComparer.OrdinalIgnoreCase)
                 .ToArray();
 
             if (choices.Length == 0)
@@ -1792,7 +1793,7 @@ namespace PlayerAssistant
 
             if (choices.Length == 1)
             {
-                return choices[0];
+                return choices[0].CanonicalId;
             }
 
             using var dialog = new Form
@@ -1815,10 +1816,12 @@ namespace PlayerAssistant
             using var comboBox = new ComboBox
             {
                 DropDownStyle = ComboBoxStyle.DropDownList,
+                DisplayMember = nameof(MyHeroBriefingHeroChoice.DisplayName),
+                ValueMember = nameof(MyHeroBriefingHeroChoice.CanonicalId),
                 Location = new Point(82, 18),
                 Size = new Size(274, 23)
             };
-            comboBox.Items.AddRange(choices.Cast<object>().ToArray());
+            comboBox.DataSource = choices;
             comboBox.SelectedIndex = 0;
 
             using var okButton = new Button
@@ -1841,7 +1844,7 @@ namespace PlayerAssistant
             dialog.CancelButton = cancelButton;
 
             return dialog.ShowDialog(this) == DialogResult.OK
-                ? comboBox.SelectedItem?.ToString()
+                ? (comboBox.SelectedItem as MyHeroBriefingHeroChoice)?.CanonicalId
                 : null;
         }
 
