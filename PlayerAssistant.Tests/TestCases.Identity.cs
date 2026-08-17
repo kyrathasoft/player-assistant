@@ -136,6 +136,7 @@ internal static partial class TestCases
         {
             AssertThrows<InvalidOperationException>(() => XpPasswordStoreUtility.LoadPasswordHashes(duplicateNameDirectory.Path));
         }
+
     }
 
     internal static void LegacyNameLookupReproducesCrossIdentityLeak()

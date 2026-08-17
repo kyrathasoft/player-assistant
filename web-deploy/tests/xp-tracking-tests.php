@@ -371,7 +371,7 @@ try {
         'level_after_award' => 1,
     ]], JSON_THROW_ON_ERROR));
     $dynamicMarkdown = implode("\n", [
-        'As of 8.04.2026',
+        'As of  8.04.2026',
         '',
         '| Name | Class | Level | XP Total |',
         '| --- | --- | ---: | ---: |',
