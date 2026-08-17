@@ -1861,6 +1861,21 @@ internal static partial class TestCases
         AssertContains(rows[0].CharacterPageUrl ?? string.Empty, "Urvan+Hall");
     }
 
+    internal static void ActiveHeroListingCarriesCanonicalIdentity()
+    {
+        var rows = PlayerCharacterAssetUtility.GetHeroRows("""
+            | Name | Canonical ID | Class | Level | HP |
+            | --- | --- | --- | --- | --- |
+            | [[Ari Stoneward]] | fixture-ari-stoneward-001 | Ranger | 4 | 31 |
+            """);
+
+        AssertEqual(1, rows.Length, "canonical identity listing should produce one hero row");
+        AssertEqual(
+            "fixture-ari-stoneward-001",
+            rows[0].CanonicalId ?? string.Empty,
+            "hero listing should preserve the canonical identity column");
+    }
+
     internal static void ActiveHeroMarkdownCancellationWritesNoFiles()
     {
         using var directory = TemporaryDirectory.Create();

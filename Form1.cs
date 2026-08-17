@@ -1584,6 +1584,14 @@ namespace PlayerAssistant
             }
         }
 
+        private static bool IsDungeonMasterXpAccess(string? characterName)
+        {
+            return string.Equals(
+                characterName?.Trim(),
+                DungeonMasterXpAccessName,
+                StringComparison.OrdinalIgnoreCase);
+        }
+
         private static PcXpTotal? FindXpTotalForCharacter(
             IReadOnlyList<PcXpTotal> totals,
             string characterName)

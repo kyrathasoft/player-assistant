@@ -423,7 +423,9 @@ function Get-SettingsSchemaVersion {
         [object]$Settings,
 
         [Parameter(Mandatory = $true)]
-        [string]$Description
+        [string]$Description,
+
+        [int]$MaxSupportedSchemaVersion = $SettingsSchemaVersion
     )
 
     $property = $Settings.PSObject.Properties[$SettingsSchemaVersionPropertyName]
@@ -448,8 +450,8 @@ function Get-SettingsSchemaVersion {
         throw "$Description has an invalid '$SettingsSchemaVersionPropertyName' value."
     }
 
-    if ($schemaVersion -gt $SettingsSchemaVersion) {
-        throw "$Description uses unsupported schema version $schemaVersion. This verifier supports schema version $SettingsSchemaVersion."
+    if ($schemaVersion -gt $MaxSupportedSchemaVersion) {
+        throw "$Description uses unsupported schema version $schemaVersion. This verifier supports schema version $MaxSupportedSchemaVersion."
     }
 
     return $schemaVersion
@@ -762,13 +764,16 @@ function Assert-PublishedXpPasswordSidecar {
     Assert-RequiredFile -Path $Path -Description "published $XpPasswordFileName"
 
     $envelope = Read-JsonFile -Path $Path -Description "published $XpPasswordFileName"
-    $schemaVersion = Get-SettingsSchemaVersion -Settings $envelope -Description "published $XpPasswordFileName"
-    if ($schemaVersion -ne $XpPasswordSchemaVersion) {
-        throw "Published $XpPasswordFileName must declare schema_version $XpPasswordSchemaVersion."
-    }
-
     if ($envelope.format -ne $XpPasswordFormat) {
         throw "Published $XpPasswordFileName must use salted password hash format '$XpPasswordFormat'."
+    }
+
+    $schemaVersion = Get-SettingsSchemaVersion `
+        -Settings $envelope `
+        -Description "published $XpPasswordFileName" `
+        -MaxSupportedSchemaVersion $XpPasswordSchemaVersion
+    if ($schemaVersion -ne $XpPasswordSchemaVersion) {
+        throw "Published $XpPasswordFileName must declare schema_version $XpPasswordSchemaVersion."
     }
 
     $unexpectedDocumentProperties = @($envelope.PSObject.Properties.Name | Where-Object {

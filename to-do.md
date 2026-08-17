@@ -240,12 +240,12 @@ Planned security correction: eliminate first-name equivalence from authenticatio
   - [x] Update the required XP, optional XP, publisher-task, login, and error/status paths so valid authentication always carries the same identity object forward.
   - [x] Clear the identity on cancellation, failed authentication, feature completion, and account transition.
 
-- [ ] 5. Correct PartyHeroUtility identity handling.
-  - Add stable identity data to `PartyHeroSheet` or its roster input and pass the authenticated identity rather than a display-name string to `WithVisibleXpTotals`.
-  - Replace `IsSameHeroName`, first-name fallback, and first-name XP matching with exact canonical ID matching; allow a canonical-name fallback only at a validated identity-boundary adapter.
-  - Ensure Dungeon Master visibility is explicit scope-based authorization rather than name matching.
-  - Stop deriving hero markdown/token paths from first names where that can collide; use the canonical identity/validated roster mapping and migrate existing generated paths safely.
-  - Keep display aliases separate from authorization identity.
+- [x] 5. Correct PartyHeroUtility identity handling.
+  - [x] Add canonical identity data to the roster input and carry it into `PartyHeroSheet`; pass the authenticated identity to `WithVisibleXpTotals`.
+  - [x] Replace first-name XP matching with exact, unique canonical-ID matching; missing or duplicate identities fail closed.
+  - [x] Keep Dungeon Master XP visibility explicitly scope-based while still requiring canonical roster-to-XP matches.
+  - [x] Derive new hero markdown paths from canonical IDs or full names; retain first-name paths only through a collision-checked migration fallback.
+  - [x] Keep display aliases separate from authorization identity and add regression coverage for same-first-name heroes.
 
 - [ ] 6. Correct My Hero Briefing identity handling.
   - Extend `MyHeroBriefingRequest` with the authenticated canonical identity and use it to resolve the authenticated hero exactly.
