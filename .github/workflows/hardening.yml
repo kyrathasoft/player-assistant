@@ -220,7 +220,10 @@ jobs:
           }
 
           if (-not (Test-Path -LiteralPath .\xp-passwords.json -PathType Leaf)) {
-            $entries = foreach ($name in @('Dungeon Master', 'Kelpie')) {
+            $entries = foreach ($identity in @(
+              @{ Name = 'Dungeon Master'; Id = 'ci-dungeon-master' },
+              @{ Name = 'Kelpie'; Id = 'ci-kelpie' }
+            )) {
               $salt = [Security.Cryptography.RandomNumberGenerator]::GetBytes(16)
               $hash = [Security.Cryptography.Rfc2898DeriveBytes]::Pbkdf2(
                 'ci-fixture-password',
@@ -229,7 +232,9 @@ jobs:
                 [Security.Cryptography.HashAlgorithmName]::SHA256,
                 32)
               [ordered]@{
-                name = $name
+                canonical_name = $identity.Name
+                canonical_id = $identity.Id
+                aliases = @()
                 algorithm = 'PBKDF2-HMAC-SHA256'
                 iterations = 600000
                 salt = [Convert]::ToBase64String($salt)
@@ -239,8 +244,8 @@ jobs:
             }
 
             [ordered]@{
-              schema_version = 1
-              format = 'xp-password-hashes-v1'
+              schema_version = 2
+              format = 'xp-password-hashes-v2'
               entries = @($entries)
             } |
               ConvertTo-Json -Depth 5 |
