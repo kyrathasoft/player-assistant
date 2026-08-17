@@ -7,7 +7,7 @@ Status: character authentication and protected current-XP dashboard implemented.
 - PWA character-name/password dialog, session restoration, authenticated identity display, and explicit logout.
 - `POST /v1/login`, `GET /v1/session`, protected `GET /v1/me`, and CSRF-protected `POST /v1/logout`.
 - Private SQLite character accounts with random IDs, normalized names, stable character authorization keys, player/DM roles, enabled state, and password timestamps.
-- Existing `xp-password-hashes-v1` PBKDF2-HMAC-SHA256 hashes accepted through an administrator-only import endpoint.
+- Existing `xp-password-hashes-v2` PBKDF2-HMAC-SHA256 hashes accepted through an administrator-only import endpoint.
 - Automatic migration to PHP `password_hash()` storage after the first successful legacy-password login.
 - Strict server sessions with `Secure`, `HttpOnly`, `SameSite=Strict`, path-restricted cookies, session-ID regeneration, idle expiry, and absolute expiry.
 - Generic authentication failures, account-and-address throttling, bounded lockout, and redacted authentication auditing.

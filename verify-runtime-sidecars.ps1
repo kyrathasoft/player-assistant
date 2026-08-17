@@ -9,7 +9,8 @@ $ErrorActionPreference = 'Stop'
 
 $SettingsLocalFileName = 'settings.local.json'
 $XpPasswordFileName = 'xp-passwords.json'
-$XpPasswordFormat = 'xp-password-hashes-v1'
+$XpPasswordFormat = 'xp-password-hashes-v2'
+$XpPasswordSchemaVersion = 2
 $XpPasswordAlgorithm = 'PBKDF2-HMAC-SHA256'
 $XpPasswordMinimumIterations = 600000
 $RequiredSidecarFileNames = @(
@@ -130,8 +131,8 @@ function Assert-XpPasswordHashSidecar {
         throw "Runtime sidecar $FileName is not valid JSON: $($_.Exception.Message)"
     }
 
-    if ($json.schema_version -ne 1 -or $json.format -ne $XpPasswordFormat) {
-        throw "Runtime sidecar $FileName must use salted password hash format '$XpPasswordFormat' with schema_version 1."
+    if ($json.schema_version -ne $XpPasswordSchemaVersion -or $json.format -ne $XpPasswordFormat) {
+        throw "Runtime sidecar $FileName must use salted password hash format '$XpPasswordFormat' with schema_version $XpPasswordSchemaVersion."
     }
 
     $unexpectedDocumentProperties = @($json.PSObject.Properties.Name | Where-Object {
@@ -146,24 +147,46 @@ function Assert-XpPasswordHashSidecar {
         throw "Runtime sidecar $FileName does not contain any password hash entries."
     }
 
-    $names = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
+    $names = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::Ordinal)
     $canonicalIds = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
+    $aliases = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::Ordinal)
     $salts = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::Ordinal)
     foreach ($entry in $entries) {
+        $canonicalName = [string]$entry.canonical_name
+        if ([string]::IsNullOrWhiteSpace($canonicalName) -or $canonicalName -cne $canonicalName.Trim()) {
+            throw "Runtime sidecar $FileName contains a blank or untrimmed canonical name."
+        }
+        if (!$names.Add(([regex]::Replace($canonicalName.Trim(), '\s+', ' ')).ToUpperInvariant())) {
+            throw "Runtime sidecar $FileName contains duplicate canonical name '$canonicalName'."
+        }
+    }
+    foreach ($entry in $entries) {
         $unexpectedEntryProperties = @($entry.PSObject.Properties.Name | Where-Object {
-            @('name', 'canonical_id', 'algorithm', 'iterations', 'salt', 'hash') -notcontains $_
+            @('canonical_name', 'canonical_id', 'aliases', 'algorithm', 'iterations', 'salt', 'hash') -notcontains $_
         })
         if ($unexpectedEntryProperties.Count -gt 0) {
             throw "Runtime sidecar $FileName contains unexpected entry property '$($unexpectedEntryProperties[0])'."
         }
 
-        if ([string]::IsNullOrWhiteSpace([string]$entry.name) -or !$names.Add([string]$entry.name)) {
-            throw "Runtime sidecar $FileName contains a blank or duplicate PC name."
+        $canonicalName = [string]$entry.canonical_name
+        $canonicalId = [string]$entry.canonical_id
+        if ([string]::IsNullOrWhiteSpace($canonicalId) -or $canonicalId -cne $canonicalId.Trim() -or !$canonicalIds.Add($canonicalId)) {
+            throw "Runtime sidecar $FileName contains a blank or duplicate canonical ID."
         }
 
-        $canonicalId = if ($entry.PSObject.Properties['canonical_id']) { [string]$entry.canonical_id } else { [string]$entry.name }
-        if ([string]::IsNullOrWhiteSpace($canonicalId) -or !$canonicalIds.Add($canonicalId)) {
-            throw "Runtime sidecar $FileName contains a blank or duplicate canonical ID."
+        if (!$entry.PSObject.Properties['aliases'] -or $null -eq $entry.aliases) {
+            throw "Runtime sidecar $FileName entry '$canonicalName' must declare an aliases array."
+        }
+        $entryAliasNames = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::Ordinal)
+        foreach ($alias in @($entry.aliases)) {
+            $aliasText = [string]$alias
+            if ([string]::IsNullOrWhiteSpace($aliasText) -or $aliasText -cne $aliasText.Trim()) {
+                throw "Runtime sidecar $FileName entry '$canonicalName' contains a blank or untrimmed alias."
+            }
+            $normalizedAlias = ([regex]::Replace($aliasText.Trim(), '\s+', ' ')).ToUpperInvariant()
+            if ($names.Contains($normalizedAlias) -or !$entryAliasNames.Add($normalizedAlias) -or !$aliases.Add($normalizedAlias)) {
+                throw "Runtime sidecar $FileName entry '$canonicalName' contains a duplicate or colliding alias '$aliasText'."
+            }
         }
 
         if ($entry.algorithm -ne $XpPasswordAlgorithm -or [int64]$entry.iterations -lt $XpPasswordMinimumIterations) {

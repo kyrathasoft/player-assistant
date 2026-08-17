@@ -2345,30 +2345,61 @@ internal static partial class TestCases
     {
         var heroes = new PartyHeroSheet[]
         {
-            new("Kelpie Lawfuller", null, "3", "Fighter", "12", "Kelpie sheet"),
-            new("Jelb Garrick", null, "1", "Illusionist", "4", "Jelb sheet")
+            new("Kelpie Lawfuller", null, "3", "Fighter", "12", "Kelpie sheet", CanonicalId: "kelpie"),
+            new("Jelb Garrick", null, "1", "Illusionist", "4", "Jelb sheet", CanonicalId: "jelb")
         };
         var xpTotals = new PcXpTotal[]
         {
-            new("Kelpie Lawfuller", 7062),
-            new("Jelb Garrick", 8575)
+            new("Kelpie Lawfuller", 7062, "kelpie"),
+            new("Jelb Garrick", 8575, "jelb")
         };
 
         var kelpieView = PartyHeroUtility.WithVisibleXpTotals(
             heroes,
             xpTotals,
-            "Kelpie",
-            isDungeonMaster: false);
+            new XpAuthenticatedIdentity("kelpie", "Kelpie Lawfuller", [], false, "kelpie"));
         var dmView = PartyHeroUtility.WithVisibleXpTotals(
             heroes,
             xpTotals,
-            "Dungeon Master",
-            isDungeonMaster: true);
+            new XpAuthenticatedIdentity("dm", "Dungeon Master", [], true, "dm"));
 
         AssertEqual(7062, kelpieView[0].XpTotal ?? -1, "authenticated hero should see their own XP");
         AssertTrue(kelpieView[1].XpTotal is null, "authenticated hero should not see another hero's XP");
         AssertEqual(7062, dmView[0].XpTotal ?? -1, "DM should see Kelpie XP");
         AssertEqual(8575, dmView[1].XpTotal ?? -1, "DM should see Jelb XP");
+    }
+
+    internal static void PartyHeroXpVisibilityRequiresUniqueCanonicalIdentity()
+    {
+        var heroes = new PartyHeroSheet[]
+        {
+            new("Ari Stoneward", null, "4", "Ranger", "31", "Ari sheet", CanonicalId: "ari-stoneward"),
+            new("Ari Valesong", null, "7", "Bard", "48", "Ari sheet", CanonicalId: "ari-valesong")
+        };
+        var totals = new PcXpTotal[]
+        {
+            new("Ari Stoneward", 1125, "ari-stoneward"),
+            new("Ari Valesong", 2375, "ari-valesong")
+        };
+
+        var player = PartyHeroUtility.WithVisibleXpTotals(
+            heroes,
+            totals,
+            new XpAuthenticatedIdentity("ari-valesong", "Ari Valesong", [], false, "ari-valesong"));
+        AssertTrue(player[0].XpTotal is null, "a player must not receive another same-first-name hero's XP");
+        AssertEqual(2375, player[1].XpTotal ?? -1, "player XP should resolve by canonical ID");
+
+        var duplicateHeroIds = PartyHeroUtility.WithVisibleXpTotals(
+            [heroes[0], heroes[0] with { Name = "Ari Valesong" }],
+            totals,
+            new XpAuthenticatedIdentity("ari-stoneward", "Ari Stoneward", [], false, "ari-stoneward"));
+        AssertTrue(duplicateHeroIds.All(hero => hero.XpTotal is null), "duplicate roster identities must fail closed");
+
+        var missingHeroIdentity = PartyHeroUtility.WithVisibleXpTotals(
+            [heroes[0] with { CanonicalId = null }],
+            totals,
+            new XpAuthenticatedIdentity("ari-stoneward", "Ari Stoneward", [], false, "ari-stoneward"));
+        AssertTrue(missingHeroIdentity[0].XpTotal is null, "a hero without canonical identity must not receive protected XP");
     }
 
     internal static void TaggedNoteCipherDecryptsForMatchingLevelTag()

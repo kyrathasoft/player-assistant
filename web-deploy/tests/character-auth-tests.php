@@ -3,7 +3,6 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/../player-assistant-broker/BrokerHttpException.php';
-require_once __DIR__ . '/../player-assistant-broker/DatabaseMigrationService.php';
 require_once __DIR__ . '/../player-assistant-broker/CharacterAuthService.php';
 
 function assertTrue(bool $condition, string $message): void
@@ -37,7 +36,6 @@ try {
         PDO::ATTR_EMULATE_PREPARES => false,
     ]);
     $database->exec('PRAGMA foreign_keys = ON');
-    (new DatabaseMigrationService($database, dirname($databasePath) . '/migration-backups'))->migrate();
     $service = new CharacterAuthService($database, [
         'expected_origin' => 'https://example.test',
         'idle_timeout_seconds' => 60,
@@ -54,10 +52,12 @@ try {
     $legacySalt = random_bytes(16);
     $legacyHash = hash_pbkdf2('sha256', $legacyPassword, $legacySalt, 600000, 32, true);
     $import = $service->importLegacyAccounts([
-        'schema_version' => 1,
-        'format' => 'xp-password-hashes-v1',
+        'schema_version' => 2,
+        'format' => 'xp-password-hashes-v2',
         'entries' => [[
-            'name' => 'Test Hero',
+            'canonical_name' => 'Test Hero',
+            'canonical_id' => 'test-hero',
+            'aliases' => ['Hero Test'],
             'algorithm' => 'PBKDF2-HMAC-SHA256',
             'iterations' => 600000,
             'salt' => base64_encode($legacySalt),
@@ -79,7 +79,7 @@ try {
     assertTrue($regenerated, 'The session ID was not regenerated after login.');
     assertTrue($login['authenticated'] === true, 'The valid character login failed.');
     assertTrue($login['account']['character_name'] === 'Test Hero', 'The authenticated character was incorrect.');
-    assertTrue($login['account']['character_key'] === 'test', 'The server authorization key was incorrect.');
+    assertTrue($login['account']['character_key'] === 'test-hero', 'The server authorization key was incorrect.');
     assertTrue(isset($login['csrf_token']) && strlen($login['csrf_token']) >= 43, 'The CSRF token was not issued.');
 
     $stored = $database->query(
@@ -91,7 +91,7 @@ try {
     $current = $service->currentSession($session);
     assertTrue($current['authenticated'] === true, 'The active session was not restored.');
     $identity = $service->requireCurrentAccount($session);
-    assertTrue($identity['account']['character_key'] === 'test', 'Protected identity did not come from the session.');
+    assertTrue($identity['account']['character_key'] === 'test-hero', 'Protected identity did not come from the session.');
 
     expectBrokerError(
         fn() => $service->logout(

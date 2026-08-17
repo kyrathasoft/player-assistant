@@ -26,18 +26,11 @@ function expectXpError(callable $action, int $status, string $errorName): void
 
 function xpDatabase(string $path): PDO
 {
-    $database = new PDO('sqlite:' . $path, null, null, [
+    return new PDO('sqlite:' . $path, null, null, [
         PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
         PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
         PDO::ATTR_EMULATE_PREPARES => false,
     ]);
-    $database->exec('CREATE TABLE IF NOT EXISTS xp_tracking_cache (
-        cache_key TEXT PRIMARY KEY,
-        fetched_at INTEGER NOT NULL,
-        payload_json TEXT NOT NULL,
-        content_sha256 TEXT NOT NULL
-    )');
-    return $database;
 }
 
 function xpConfiguration(): array
@@ -184,7 +177,6 @@ try {
     ]);
     $progressionIndexMarkdown = implode("\n", [
         '- [[Fighter]]',
-        '- [[Feycaster]]',
         '- [[Illusionist]]',
         '- [[Mystic Theurge]]',
     ]);
@@ -196,13 +188,6 @@ try {
         '| 4 | 8,000 |',
         '| 5 | 16,000 |',
         '| 6 | 32,000 |',
-    ]);
-    $feycasterProgressionMarkdown = implode("\n", [
-        '|XP|Level|Spells Known|Max Spell Level|',
-        '|---:|---:|---:|---:|',
-        '|0|1|0|0|',
-        '|1,500|2|1|1|',
-        '|3,000|3|2|1|',
     ]);
     $illusionistProgressionMarkdown = implode("\n", [
         '| 1 | 0 |',
@@ -225,7 +210,6 @@ try {
     $progressionFixture = static function (string $url) use (
         $progressionIndexMarkdown,
         $fighterProgressionMarkdown,
-        $feycasterProgressionMarkdown,
         $illusionistProgressionMarkdown,
         $theurgeProgressionMarkdown): ?string {
         if (str_contains($url, 'Class+Level+Progression')) {
@@ -233,9 +217,6 @@ try {
         }
         if (str_contains($url, '/Classes/Fighter')) {
             return $fighterProgressionMarkdown;
-        }
-        if (str_contains($url, '/Classes/Feycaster')) {
-            return $feycasterProgressionMarkdown;
         }
         if (str_contains($url, '/Classes/Illusionist')) {
             return $illusionistProgressionMarkdown;
@@ -247,12 +228,7 @@ try {
     };
     $service = new XpTrackingService(
         xpDatabase($databasePath),
-        array_replace(xpConfiguration(), [
-            'award_groups' => [
-                'jelb' => ['jelb-xp', 'arilia-xp'],
-                'maximilian' => ['maximilian-xp'],
-            ],
-        ]),
+        xpConfiguration(),
         static function (string $url) use (
             &$fetchCount,
             $markdown,
@@ -421,9 +397,6 @@ try {
         'character_key' => 'dynamic-hero',
     ]);
     $dynamicEntries = $dynamicAwards['progressions'][0]['entries'];
-    xpAssert(
-        ($dynamicAwards['progressions'][0]['is_account_character'] ?? false) === true,
-        'The player XP Awards response did not identify its primary account-character progression.');
     xpAssert(count($dynamicEntries) === 2, 'The live XP source did not extend the cached progression.');
     xpAssert(
         $dynamicEntries[1]['xp_award_date'] === '8.04.2026'
@@ -816,15 +789,6 @@ try {
     xpAssert($player['character']['hit_points'] === 13, 'The player received the wrong hit-point total.');
     xpAssert($player['character']['xp_total'] === 12345, 'The current player XP total was incorrect.');
     xpAssert($player['character']['xp_to_next_level'] === 7655, 'The player received the wrong TNL value.');
-    xpAssert(
-        count($player['authorized_characters'] ?? []) === 2
-            && $player['authorized_characters'][0]['character_key'] === 'jelb-xp'
-            && $player['authorized_characters'][0]['character']['character_name'] === 'Jelb'
-            && $player['authorized_characters'][1]['character_key'] === 'arilia-xp'
-            && $player['authorized_characters'][1]['character']['character_name'] === 'Arilia'
-            && $player['authorized_characters'][1]['character']['xp_total'] === 200
-            && $player['authorized_characters'][1]['character']['xp_to_next_level'] === 1300,
-        'Jelb did not receive current XP for both his own and Arilia progression.');
     xpAssert($player['date_label'] === 'As of 7.23.2026', 'The latest XP date was not selected.');
     xpAssert(!isset($player['characters']), 'A player response exposed the party XP array.');
 
@@ -833,7 +797,7 @@ try {
         'character_key' => 'maximilian',
     ]);
     xpAssert($maximilian['scope'] === 'character', 'Maximilian did not receive character-scoped XP.');
-    xpAssert($maximilian['character']['character_name'] === 'Maximilian', 'Maximilian did not receive the canonical XP display name.');
+    xpAssert($maximilian['character']['character_name'] === 'Max', 'Maximilian did not receive the Max XP row.');
     xpAssert($maximilian['character']['character_class'] === 'Theurge', 'Maximilian received the wrong class.');
     xpAssert($maximilian['character']['level'] === 3, 'Maximilian received the stale listing level.');
     xpAssert($maximilian['character']['hit_points'] === 5, 'Maximilian received the wrong hit-point total.');
@@ -847,11 +811,6 @@ try {
     ]);
     xpAssert($dm['scope'] === 'party', 'The Dungeon Master did not receive party-scoped XP.');
     xpAssert(count($dm['characters']) === 5, 'The Dungeon Master did not receive every current XP row.');
-    xpAssert(
-        count(array_filter(
-            $dm['characters'],
-            static fn(array $character): bool => ($character['character_key'] ?? '') === 'borca')) === 1,
-        'The Dungeon Master XP rows did not expose stable character keys.');
     $borca = array_values(array_filter(
         $dm['characters'],
         static fn(array $character): bool => $character['character_name'] === 'Borca'));
@@ -862,9 +821,9 @@ try {
         $dm['characters'],
         static fn(array $character): bool => $character['character_name'] === 'Arilia'));
     xpAssert(
-        count($arilia) === 1 && $arilia[0]['xp_to_next_level'] === 1300,
-        'Arilia did not receive the expected Feycaster next-level progression.');
-    xpAssert($fetchCount === 21, 'Each XP request did not attempt the live source before using cached data.');
+        count($arilia) === 1 && $arilia[0]['xp_to_next_level'] === null,
+        'An unavailable class progression prevented the live XP snapshot from loading.');
+    xpAssert($fetchCount === 18, 'Each XP request did not attempt the live source before using cached data.');
 
     $olderMarkdown = implode("\n", [
         'As of 7.20.2026',

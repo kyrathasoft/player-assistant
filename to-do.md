@@ -225,27 +225,27 @@ Planned security correction: eliminate first-name equivalence from authenticatio
   - [x] Resolve only the exact canonical name or an explicitly declared alias; aliases remain empty until the versioned sidecar work in Step 3.
   - [x] Preserve constant-time password verification and ensure failed authentication does not leak which identity or alias matched.
 
-- [ ] 3. Make the password sidecar identity-addressable and reject ambiguous aliases at load time.
-  - Revise the sidecar schema with a migration/version step rather than silently interpreting the v1 name-only format.
-  - Store an immutable canonical ID, canonical name, password hash, and an explicit alias list per entry.
-  - Normalize names and aliases consistently for comparison while preserving display values.
-  - Reject duplicate canonical IDs, duplicate canonical names, aliases that collide across accounts, aliases that collide with another account's canonical name, blank/untrimmed aliases, and duplicate aliases within an entry.
-  - Treat first names as ordinary text unless deliberately listed as an alias; never infer them automatically.
-  - Update password-generation, import, sidecar validation, installer, release-sidecar, and runtime-sidecar contracts together.
+- [x] 3. Make the password sidecar identity-addressable and reject ambiguous aliases at load time.
+  - [x] Revise the sidecar schema to v2; v1 name-only sidecars are rejected, while explicit conversion paths emit v2.
+  - [x] Store an immutable canonical ID, canonical name, password hash, and an explicit alias list per entry.
+  - [x] Normalize names and aliases consistently for comparison while preserving display values.
+  - [x] Reject duplicate canonical IDs, duplicate canonical names, aliases that collide across accounts, aliases that collide with another account's canonical name, blank/untrimmed aliases, and duplicate aliases within an entry.
+  - [x] Treat first names as ordinary text unless deliberately listed as an alias; never infer them automatically.
+  - [x] Update password-generation, import, sidecar validation, installer, release-sidecar, and runtime-sidecar contracts together.
 
-- [ ] 4. Thread the returned identity through Form1 and XP retrieval.
-  - Replace the entered `characterName` as the source of authorization state with the returned immutable identity.
-  - Make XP snapshot filtering accept the authenticated identity/canonical ID and resolve the exact authorized record; do not perform a second lookup from the originally entered name.
-  - Determine Dungeon Master scope from the returned identity, not from a case-insensitive name comparison.
-  - Update the required XP, optional XP, publisher-task, login, and error/status paths so valid authentication always carries the same identity object forward.
-  - Clear the identity on cancellation, failed authentication, feature completion, and account transition.
+- [x] 4. Thread the returned identity through Form1 and XP retrieval.
+  - [x] Replace the entered `characterName` as the source of authorization state with the returned immutable identity.
+  - [x] Make XP snapshot filtering accept the authenticated identity/canonical ID and resolve the exact authorized record; do not perform a second lookup from the originally entered name.
+  - [x] Determine Dungeon Master scope from the returned identity, not from a case-insensitive name comparison.
+  - [x] Update the required XP, optional XP, publisher-task, login, and error/status paths so valid authentication always carries the same identity object forward.
+  - [x] Clear the identity on cancellation, failed authentication, feature completion, and account transition.
 
-- [ ] 5. Correct PartyHeroUtility identity handling.
-  - Add stable identity data to `PartyHeroSheet` or its roster input and pass the authenticated identity rather than a display-name string to `WithVisibleXpTotals`.
-  - Replace `IsSameHeroName`, first-name fallback, and first-name XP matching with exact canonical ID matching; allow a canonical-name fallback only at a validated identity-boundary adapter.
-  - Ensure Dungeon Master visibility is explicit scope-based authorization rather than name matching.
-  - Stop deriving hero markdown/token paths from first names where that can collide; use the canonical identity/validated roster mapping and migrate existing generated paths safely.
-  - Keep display aliases separate from authorization identity.
+- [x] 5. Correct PartyHeroUtility identity handling.
+  - [x] Add canonical identity data to the roster input and carry it into `PartyHeroSheet`; pass the authenticated identity to `WithVisibleXpTotals`.
+  - [x] Replace first-name XP matching with exact, unique canonical-ID matching; missing or duplicate identities fail closed.
+  - [x] Keep Dungeon Master XP visibility explicitly scope-based while still requiring canonical roster-to-XP matches.
+  - [x] Derive new hero markdown paths from canonical IDs or full names; retain first-name paths only through a collision-checked migration fallback.
+  - [x] Keep display aliases separate from authorization identity and add regression coverage for same-first-name heroes.
 
 - [ ] 6. Correct My Hero Briefing identity handling.
   - Extend `MyHeroBriefingRequest` with the authenticated canonical identity and use it to resolve the authenticated hero exactly.

@@ -154,7 +154,7 @@ namespace PlayerAssistant
                     continue;
                 }
 
-                var fileName = GetHeroMarkdownFileName(hero.Name);
+                var fileName = GetHeroMarkdownFileName(hero);
                 if (fileName.Length == 0)
                 {
                     continue;
@@ -262,7 +262,8 @@ namespace PlayerAssistant
                     GetCharacterPageUrl(GetHeroTableCell(cells, headerIndexes, 0, "name", "character"), listingUrl),
                     CleanMarkdownCell(GetHeroTableCell(cells, headerIndexes, 1, "class", "characterclass")),
                     CleanMarkdownCell(GetHeroTableCell(cells, headerIndexes, -1, "level")),
-                    CleanMarkdownCell(GetHeroTableCell(cells, headerIndexes, -1, "hp", "hitpoints"))))
+                    CleanMarkdownCell(GetHeroTableCell(cells, headerIndexes, -1, "hp", "hitpoints")),
+                    CleanMarkdownCell(GetHeroTableCell(cells, headerIndexes, -1, "canonicalid", "characterid", "identityid"))))
                 .Where(row => !string.IsNullOrWhiteSpace(row.Name))
                 .ToArray();
         }
@@ -534,15 +535,12 @@ namespace PlayerAssistant
             return Uri.EscapeDataString(Uri.UnescapeDataString(segment)).Replace("%20", "+");
         }
 
-        private static string GetHeroMarkdownFileName(string heroName)
+        private static string GetHeroMarkdownFileName(PlayerCharacterHeroRow hero)
         {
-            var firstName = heroName
-                .Split(',', 2)[0]
-                .Split(' ', StringSplitOptions.RemoveEmptyEntries)
-                .FirstOrDefault() ?? string.Empty;
-            var fileName = InvalidFileNameCharacterRegex.Replace(firstName.ToLowerInvariant(), "-").Trim('-');
-
-            return fileName;
+            var stableValue = string.IsNullOrWhiteSpace(hero.CanonicalId)
+                ? hero.Name
+                : hero.CanonicalId;
+            return InvalidFileNameCharacterRegex.Replace(stableValue.Trim().ToLowerInvariant(), "-").Trim('-');
         }
 
         private static bool ShouldDownloadHeroMarkdown(string markdownPath)
@@ -640,5 +638,6 @@ namespace PlayerAssistant
         string? CharacterPageUrl = null,
         string CharacterClass = "",
         string Level = "",
-        string HitPoints = "");
+        string HitPoints = "",
+        string? CanonicalId = null);
 }

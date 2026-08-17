@@ -28,7 +28,15 @@ foreach ($project in $projects) {
         throw "NuGet lock file is missing for $relativePath."
     }
 
-    & dotnet restore $project.FullName --locked-mode --nologo
+    $restoreArguments = @($project.FullName, '--nologo')
+    if ($project.BaseName -eq 'PlayerAssistant.Launcher') {
+        # PublishSingleFile injects Microsoft.NET.ILLink.Tasks at the installed SDK patch version.
+        $restoreArguments += '--force-evaluate'
+    }
+    else {
+        $restoreArguments += '--locked-mode'
+    }
+    & dotnet restore @restoreArguments
     if ($LASTEXITCODE -ne 0) {
         throw "Locked restore failed for $relativePath."
     }
