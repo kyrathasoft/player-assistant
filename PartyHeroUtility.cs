@@ -182,11 +182,12 @@ namespace PlayerAssistant
                         }
                     }
 
-                    var parsed = ParseHeroSheet(File.ReadAllText(path), hero.Name);
-                    if (!string.Equals(parsed.Name, hero.Name, StringComparison.OrdinalIgnoreCase))
-                    {
-                        continue;
-                    }
+                }
+
+                var parsed = ParseHeroSheet(File.ReadAllText(path), hero.Name);
+                if (!string.Equals(parsed.Name, hero.Name, StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
                 }
 
                 return path;
