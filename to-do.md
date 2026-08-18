@@ -270,7 +270,7 @@ Planned security correction: eliminate first-name equivalence from authenticatio
   - Back up and migrate the password sidecar and any canonical identity/roster data with rollback support.
   - Verify local hashes, release contents, and generated roster/hero paths before deployment.
   - Run authorized positive tests for each identity plus anonymous, wrong-password, ambiguous-alias, cross-character, logout, and account-switch negative tests.
-  - Verify production behavior through the authenticated deployment contract without exposing passwords or protected response bodies.
+  - [x] Verify production behavior through the authenticated deployment contract; production's existing seven-account identity data is authoritative, so the mismatched local six-entry sidecar was not imported.
 
 
 ## Next PWA robustness and usefulness backlog
