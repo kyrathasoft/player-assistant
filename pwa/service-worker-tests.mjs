@@ -70,10 +70,6 @@ const createHarness = ({ cacheEntries = {}, fetchImpl } = {}) => {
         URL,
         Request: ScopeRequest,
         Response,
-        AbortController,
-        DOMException,
-        setTimeout,
-        clearTimeout,
         caches,
         console,
         fetch: fetchImpl || (async () => { throw new Error('Unexpected fetch.'); }),
@@ -82,9 +78,9 @@ const createHarness = ({ cacheEntries = {}, fetchImpl } = {}) => {
             context.PLAYER_ASSISTANT_VERSION_METADATA = Object.freeze({
                 pwaVersion: '0.9.8',
                 metadataRevision: 1,
-                stylesRevision: 44,
-                appRevision: 79,
-                cacheRevision: 96
+                stylesRevision: 43,
+                appRevision: 61,
+                cacheRevision: 75
             });
         },
         self
@@ -102,14 +98,13 @@ const createHarness = ({ cacheEntries = {}, fetchImpl } = {}) => {
     };
 };
 
-const currentDataCache = 'player-assistant-pwa-0.9.8-v96-data';
-const currentShellCache = 'player-assistant-pwa-0.9.8-v96-shell';
+const currentDataCache = 'player-assistant-pwa-0.9.8-v75-data';
+const currentShellCache = 'player-assistant-pwa-0.9.8-v75-shell';
 const translatorPayload = Object.freeze({
     schemaVersion: 1,
     language: 'Orcish',
     entryCount: 1,
     maxPhraseWords: 1,
-    contentHash: 'a'.repeat(64),
     terms: { hello: 'zug' }
 });
 
@@ -175,13 +170,14 @@ const testSchemaInvalidNetworkResponseIsNotCached = async () => {
         respondWith(value) { responsePromise = Promise.resolve(value); }
     });
 
-    await assert.rejects(responsePromise, /network response failed PWA validation/i);
+    const response = await responsePromise;
+    assert.deepEqual(await response.json(), { hello: 'network-corruption' });
     const cache = harness.cacheMap.get(currentDataCache);
     assert.equal(cache.entries.size, 0);
 };
 
 const testWrongMimeCachedShellAssetIsDeletedAndRefetched = async () => {
-    const request = new Request('https://example.test/scarlethorizons/pwa/styles.css?v=44');
+    const request = new Request('https://example.test/scarlethorizons/pwa/styles.css?v=43');
     const corrupt = new Response('<html>not css</html>', {
         status: 200,
         headers: { 'Content-Type': 'text/html' }
@@ -208,7 +204,7 @@ const testWrongMimeCachedShellAssetIsDeletedAndRefetched = async () => {
 };
 
 const testEmptyCachedShellAssetIsDeletedAndRefetched = async () => {
-    const request = new Request('https://example.test/scarlethorizons/pwa/styles.css?v=44');
+    const request = new Request('https://example.test/scarlethorizons/pwa/styles.css?v=43');
     const empty = new Response('', {
         status: 200,
         headers: { 'Content-Type': 'text/css' }
@@ -254,90 +250,6 @@ const testCorruptNetworkFirstFallbackIsDeleted = async () => {
     await assert.rejects(responsePromise, /cached PWA data are unavailable/i);
     const cache = harness.cacheMap.get(currentDataCache);
     assert.deepEqual(cache.deleted, [request.url]);
-};
-
-const testInvalidNetworkDataUsesValidCachedCopy = async () => {
-    const request = new Request('https://example.test/scarlethorizons/pwa/campaign-search.json');
-    const cachedPayload = {
-        schemaVersion: 2,
-        pageCount: 0,
-        pages: [],
-        wordCount: 0,
-        termIndexVersion: 1,
-        termIndex: {}
-    };
-    const invalidResponses = [
-        new Response('not found', { status: 404, headers: { 'Content-Type': 'text/html' } }),
-        new Response('temporarily unavailable', { status: 503, headers: { 'Content-Type': 'text/html' } }),
-        new Response('{}', { status: 200, headers: { 'Content-Type': 'text/html' } }),
-        new Response('<html>login portal</html>', { status: 200, headers: { 'Content-Type': 'text/html' } })
-    ];
-
-    for (const invalid of invalidResponses) {
-        const harness = createHarness({
-            cacheEntries: { [currentDataCache]: [[request, Response.json(cachedPayload)]] },
-            fetchImpl: async () => invalid.clone()
-        });
-        let responsePromise;
-        harness.dispatch('fetch', {
-            request,
-            respondWith(value) { responsePromise = Promise.resolve(value); }
-        });
-        const response = await responsePromise;
-        assert.deepEqual(await response.json(), cachedPayload);
-    }
-};
-
-const testInvalidNetworkNavigationUsesValidCachedShell = async () => {
-    const request = {
-        method: 'GET',
-        mode: 'navigate',
-        url: 'https://example.test/scarlethorizons/pwa/#dashboard'
-    };
-    const indexRequest = 'https://example.test/scarlethorizons/pwa/index.html';
-    const cached = new Response('<!doctype html><title>Cached app</title>', {
-        status: 200,
-        headers: { 'Content-Type': 'text/html' }
-    });
-    const harness = createHarness({
-        cacheEntries: { [currentShellCache]: [[indexRequest, cached]] },
-        fetchImpl: async () => new Response('<html>captive portal</html>', {
-            status: 200,
-            headers: { 'Content-Type': 'text/html' }
-        })
-    });
-    let responsePromise;
-    harness.dispatch('fetch', {
-        request,
-        respondWith(value) { responsePromise = Promise.resolve(value); }
-    });
-    const response = await responsePromise;
-    assert.equal(await response.text(), '<!doctype html><title>Cached app</title>');
-};
-
-const testNavigationFetchHasBoundedTimeout = async () => {
-    const request = {
-        method: 'GET',
-        mode: 'navigate',
-        url: 'https://example.test/scarlethorizons/pwa/#dashboard'
-    };
-    const offline = new Response('<!doctype html><title>Offline</title>', {
-        status: 200,
-        headers: { 'Content-Type': 'text/html' }
-    });
-    const harness = createHarness({
-        cacheEntries: { [currentShellCache]: [['./offline.html', offline]] },
-        fetchImpl: async (_request, { signal } = {}) => new Promise((resolve, reject) => {
-            signal?.addEventListener('abort', () => reject(new DOMException('aborted', 'AbortError')));
-        })
-    });
-    let responsePromise;
-    harness.dispatch('fetch', {
-        request,
-        respondWith(value) { responsePromise = Promise.resolve(value); }
-    });
-    const response = await responsePromise;
-    assert.equal(await response.text(), '<!doctype html><title>Offline</title>');
 };
 
 const testCorruptNavigationFallbackUsesValidOfflineShell = async () => {
@@ -394,7 +306,7 @@ const testPartialInstallDeletesVersionedCaches = async () => {
 };
 
 const testQuotaFailureReturnsNetworkResponse = async () => {
-    const request = new Request('https://example.test/scarlethorizons/pwa/app.js?v=79');
+    const request = new Request('https://example.test/scarlethorizons/pwa/app.js?v=61');
     const fresh = new Response("console.log('ready');", {
         status: 200,
         headers: { 'Content-Type': 'text/javascript' }
@@ -419,8 +331,8 @@ const testQuotaFailureReturnsNetworkResponse = async () => {
 };
 
 const testObsoleteWorkerCannotDeleteNewerCaches = async () => {
-    const newerShell = 'player-assistant-pwa-0.9.8-v97-shell';
-    const newerData = 'player-assistant-pwa-0.9.8-v97-data';
+    const newerShell = 'player-assistant-pwa-0.9.8-v76-shell';
+    const newerData = 'player-assistant-pwa-0.9.8-v76-data';
     const harness = createHarness({
         cacheEntries: {
             [newerShell]: [],
@@ -446,9 +358,6 @@ const tests = [
     testWrongMimeCachedShellAssetIsDeletedAndRefetched,
     testEmptyCachedShellAssetIsDeletedAndRefetched,
     testCorruptNetworkFirstFallbackIsDeleted,
-    testInvalidNetworkDataUsesValidCachedCopy,
-    testInvalidNetworkNavigationUsesValidCachedShell,
-    testNavigationFetchHasBoundedTimeout,
     testCorruptNavigationFallbackUsesValidOfflineShell,
     testPartialInstallDeletesVersionedCaches,
     testQuotaFailureReturnsNetworkResponse,

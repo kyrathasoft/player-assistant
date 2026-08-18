@@ -1,6 +1,6 @@
 namespace PlayerAssistant
 {
-    internal sealed record PcXpTotal(string Name, int XpTotal, string? AccountId = null);
+    internal sealed record PcXpTotal(string Name, int XpTotal, string? CanonicalId = null);
 
     internal sealed record XpTrackingSnapshot(string DateLabel, IReadOnlyList<PcXpTotal> Totals);
 
@@ -35,6 +35,23 @@ namespace PlayerAssistant
         internal static IReadOnlyList<PcXpTotal> ParseCurrentXpTotals(string markdown)
         {
             return ParseCurrentXpSnapshot(markdown).Totals;
+        }
+
+        internal static PcXpTotal? FindXpTotalForIdentity(
+            IReadOnlyList<PcXpTotal> totals,
+            XpAuthenticatedIdentity identity)
+        {
+            ArgumentNullException.ThrowIfNull(totals);
+            ArgumentNullException.ThrowIfNull(identity);
+
+            if (totals.Any(row => row.CanonicalId is not null))
+            {
+                return totals.FirstOrDefault(row =>
+                    string.Equals(row.CanonicalId, identity.CanonicalId, StringComparison.Ordinal));
+            }
+
+            return totals.FirstOrDefault(row =>
+                string.Equals(row.Name.Trim(), identity.CanonicalName.Trim(), StringComparison.OrdinalIgnoreCase));
         }
 
         internal static XpTrackingSnapshot ParseCurrentXpSnapshot(string markdown)

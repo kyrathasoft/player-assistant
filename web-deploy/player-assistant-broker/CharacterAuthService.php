@@ -18,14 +18,12 @@ final class CharacterAuthService
     ];
 
     private array $authConfig;
-    private readonly ?Closure $clock;
+
 
     public function __construct(
         private readonly PDO $database,
-        array $authConfig,
-        ?callable $clock = null)
+        array $authConfig)
     {
-        $legacyLockoutSeconds = (int)($authConfig['login_lockout_seconds'] ?? 900);
         $this->authConfig = array_replace([
             'expected_origin' => 'https://bryanmiller.us',
             'idle_timeout_seconds' => 1800,
@@ -33,16 +31,12 @@ final class CharacterAuthService
             'login_window_seconds' => 900,
             'login_max_failures' => 5,
             'login_lockout_seconds' => 900,
-            'login_progressive_delay_base_seconds' => 2,
-            'login_progressive_delay_max_seconds' => $legacyLockoutSeconds,
-            'login_address_max_failures' => 20,
-            'login_address_delay_seconds' => $legacyLockoutSeconds,
             'audit_retention_seconds' => 90 * 86400,
             'audit_address_mode' => 'hash',
             'audit_address_hash_key' => '',
         ], $authConfig);
-        $this->clock = $clock === null ? null : Closure::fromCallable($clock);
         $this->validateConfiguration();
+        $this->ensureSchema();
     }
 
     public function accountCount(): int
@@ -239,11 +233,8 @@ final class CharacterAuthService
 
     public function importLegacyAccounts(array $document): array
     {
-        $schemaVersion = (int)($document['schema_version'] ?? 0);
-        $format = (string)($document['format'] ?? '');
-        $isIdentityDocument = $schemaVersion === 2 && $format === 'xp-password-hashes-v2';
-        $isLegacyDocument = $schemaVersion === 1 && $format === 'xp-password-hashes-v1';
-        if ((!$isIdentityDocument && !$isLegacyDocument)
+        if ((int)($document['schema_version'] ?? 0) !== 2
+            || (string)($document['format'] ?? '') !== 'xp-password-hashes-v2'
             || !is_array($document['entries'] ?? null)
             || count($document['entries']) === 0) {
             throw new BrokerHttpException(
@@ -254,20 +245,41 @@ final class CharacterAuthService
 
         $records = [];
         $names = [];
-        $accountIds = [];
+        $canonicalIds = [];
         $aliases = [];
-        $salts = [];
         foreach ($document['entries'] as $entry) {
             if (!is_array($entry)) {
                 throw new BrokerHttpException(400, 'invalid_password_import', 'A password entry is invalid.');
             }
-            $displayName = $this->validateDisplayName((string)($entry[$isIdentityDocument ? 'canonical_name' : 'name'] ?? ''));
-            $normalizedName = $this->normalizeName($displayName);
-            if (isset($names[$normalizedName]) || isset($aliases[$normalizedName])) {
-                throw new BrokerHttpException(400, 'invalid_password_import', 'The password import contains duplicate names.');
+            $canonicalName = $this->validateDisplayName((string)($entry['canonical_name'] ?? ''));
+            $normalizedName = $this->normalizeName($canonicalName);
+            if (isset($names[$normalizedName])) {
+                throw new BrokerHttpException(400, 'invalid_password_import', 'The password import contains duplicate canonical names.');
             }
             $names[$normalizedName] = true;
-
+        }
+        $salts = [];
+        foreach ($document['entries'] as $entry) {
+            $displayName = $this->validateDisplayName((string)($entry['canonical_name'] ?? ''));
+            $normalizedName = $this->normalizeName($displayName);
+            $canonicalId = $this->validateCharacterKey((string)($entry['canonical_id'] ?? ''));
+            if (isset($canonicalIds[$canonicalId])) {
+                throw new BrokerHttpException(400, 'invalid_password_import', 'The password import contains duplicate canonical IDs.');
+            }
+            $canonicalIds[$canonicalId] = true;
+            if (!is_array($entry['aliases'] ?? null)) {
+                throw new BrokerHttpException(400, 'invalid_password_import', 'A password entry must declare an aliases array.');
+            }
+            $entryAliases = [];
+            foreach ($entry['aliases'] as $alias) {
+                $displayAlias = $this->validateDisplayName((string)$alias);
+                $normalizedAlias = $this->normalizeName($displayAlias);
+                if (isset($names[$normalizedAlias]) || isset($aliases[$normalizedAlias])) {
+                    throw new BrokerHttpException(400, 'invalid_password_import', 'The password import contains colliding aliases.');
+                }
+                $aliases[$normalizedAlias] = true;
+                $entryAliases[] = [$normalizedAlias, $displayAlias];
+            }
             $iterations = filter_var(
                 $entry['iterations'] ?? null,
                 FILTER_VALIDATE_INT,
@@ -282,62 +294,21 @@ final class CharacterAuthService
                 throw new BrokerHttpException(400, 'invalid_password_import', 'The password import reuses a salt.');
             }
             $salts[$saltKey] = true;
-
-            $accountId = $isIdentityDocument ? (string)($entry['account_id'] ?? '') : bin2hex(random_bytes(16));
-            if ($isIdentityDocument && preg_match('/^[a-f0-9]{32}$/', $accountId) !== 1) {
-                throw new BrokerHttpException(400, 'invalid_password_import', 'A canonical account ID is invalid.');
-            }
-            if (isset($accountIds[$accountId])) {
-                throw new BrokerHttpException(400, 'invalid_password_import', 'The password import contains duplicate account IDs.');
-            }
-            $accountIds[$accountId] = true;
-
-            $role = $isIdentityDocument
-                ? (($entry['is_dungeon_master'] ?? null) === true ? 'dm' : (($entry['is_dungeon_master'] ?? null) === false ? 'player' : null))
-                : (strcasecmp($displayName, 'Dungeon Master') === 0 ? 'dm' : 'player');
-            if ($role === null) {
-                throw new BrokerHttpException(400, 'invalid_password_import', 'A Dungeon Master flag is invalid.');
-            }
-
-            $recordAliases = [];
-            if ($isIdentityDocument) {
-                if (!is_array($entry['aliases'] ?? null)) {
-                    throw new BrokerHttpException(400, 'invalid_password_import', 'A canonical account alias list is invalid.');
-                }
-                foreach ($entry['aliases'] as $aliasValue) {
-                    if (!is_string($aliasValue)) {
-                        throw new BrokerHttpException(400, 'invalid_password_import', 'A canonical account alias is invalid.');
-                    }
-                    $alias = $this->validateDisplayName($aliasValue);
-                    $normalizedAlias = $this->normalizeName($alias);
-                    if (isset($names[$normalizedAlias]) || isset($aliases[$normalizedAlias])) {
-                        throw new BrokerHttpException(400, 'invalid_password_import', 'The password import contains an ambiguous alias.');
-                    }
-                    $aliases[$normalizedAlias] = true;
-                    $recordAliases[] = ['normalized' => $normalizedAlias, 'display' => $alias];
-                }
-            }
-
             $records[] = [
-                'id' => $accountId,
+                'id' => bin2hex(random_bytes(16)),
                 'normalized_name' => $normalizedName,
                 'display_name' => $displayName,
-                'character_key' => $this->defaultCharacterKey($displayName),
-                'role' => $role,
+                'character_key' => $canonicalId,
+                'role' => strcasecmp($displayName, 'Dungeon Master') === 0 ? 'dm' : 'player',
+                'aliases' => $entryAliases,
                 'iterations' => (int)$iterations,
                 'salt' => base64_encode($salt),
                 'hash' => base64_encode($hash),
-                'aliases' => $recordAliases,
-                'identity_document' => $isIdentityDocument,
             ];
         }
 
         $this->database->beginTransaction();
         try {
-            $existingById = $this->database->prepare(
-                'SELECT id, normalized_name, character_key FROM character_accounts WHERE id = ? LIMIT 1');
-            $existingByName = $this->database->prepare(
-                'SELECT id, character_key FROM character_accounts WHERE normalized_name = ? LIMIT 1');
             $statement = $this->database->prepare(
                 'INSERT INTO character_accounts (
                     id, normalized_name, display_name, character_key, role, enabled,
@@ -356,61 +327,45 @@ final class CharacterAuthService
                     legacy_hash = excluded.legacy_hash,
                     password_changed_at = excluded.password_changed_at,
                     session_version = character_accounts.session_version + 1');
-            $deleteAliases = $this->database->prepare(
-                'DELETE FROM character_account_aliases WHERE account_id = ?');
-            $insertAlias = $this->database->prepare(
-                'INSERT INTO character_account_aliases (account_id, normalized_alias, display_alias, created_at)
-                 VALUES (?, ?, ?, ?)');
             $now = time();
             foreach ($records as $record) {
-                $existingById->execute([$record['id']]);
-                $idRow = $existingById->fetch();
-                if (is_array($idRow) && (string)$idRow['normalized_name'] !== $record['normalized_name']) {
-                    throw new RuntimeException('The canonical account ID belongs to another character.');
-                }
-                $existingByName->execute([$record['normalized_name']]);
-                $nameRow = $existingByName->fetch();
-                if ($record['identity_document'] && is_array($nameRow) && (string)$nameRow['id'] !== $record['id']) {
-                    throw new RuntimeException('The canonical character name belongs to another account ID.');
-                }
-                $characterKey = is_array($nameRow) && (string)$nameRow['character_key'] !== ''
-                    ? (string)$nameRow['character_key']
-                    : $record['character_key'];
-                if (!is_array($nameRow)) {
-                    $keyCheck = $this->database->prepare(
-                        'SELECT id FROM character_accounts WHERE character_key = ? LIMIT 1');
-                    $keyCheck->execute([$characterKey]);
-                    $keyOwner = $keyCheck->fetchColumn();
-                    if (is_string($keyOwner) && $keyOwner !== '' && $keyOwner !== $record['id']) {
-                        $characterKey .= '-' . substr($record['id'], 0, 8);
-                    }
-                }
                 $statement->execute([
-                    $record['id'], $record['normalized_name'], $record['display_name'], $characterKey,
-                    $record['role'], self::LEGACY_ALGORITHM, $record['iterations'], $record['salt'],
-                    $record['hash'], $now, $now,
+                    $record['id'],
+                    $record['normalized_name'],
+                    $record['display_name'],
+                    $record['character_key'],
+                    $record['role'],
+                    self::LEGACY_ALGORITHM,
+                    $record['iterations'],
+                    $record['salt'],
+                    $record['hash'],
+                    $now,
+                    $now,
                 ]);
                 $accountIdStatement = $this->database->prepare(
                     'SELECT id FROM character_accounts WHERE normalized_name = ? LIMIT 1');
                 $accountIdStatement->execute([$record['normalized_name']]);
-                $resolvedId = $accountIdStatement->fetchColumn();
-                if (!is_string($resolvedId) || $resolvedId === '') {
-                    throw new RuntimeException('The imported account could not be resolved.');
-                }
-                if ($record['identity_document']) {
-                    $deleteAliases->execute([$resolvedId]);
-                    foreach ($record['aliases'] as $alias) {
-                        $insertAlias->execute([$resolvedId, $alias['normalized'], $alias['display'], $now]);
+                $accountId = $accountIdStatement->fetchColumn();
+                if (is_string($accountId) && $accountId !== '') {
+                    $this->database->prepare(
+                        'DELETE FROM character_account_aliases WHERE account_id = ?')->execute([$accountId]);
+                    foreach ($record['aliases'] as [$normalizedAlias, $displayAlias]) {
+                        $this->database->prepare(
+                            'INSERT INTO character_account_aliases
+                                (account_id, normalized_alias, display_alias, created_at)
+                             VALUES (?, ?, ?, ?)')->execute([
+                                $accountId,
+                                $normalizedAlias,
+                                $displayAlias,
+                                $now,
+                            ]);
                     }
-                } else {
-                    $this->ensureDefaultLoginAliases($resolvedId, $record['normalized_name']);
+                    $this->ensureDefaultLoginAliases($accountId, $record['normalized_name']);
                 }
             }
             $this->database->commit();
         } catch (Throwable $exception) {
-            if ($this->database->inTransaction()) {
-                $this->database->rollBack();
-            }
+            $this->database->rollBack();
             throw new BrokerHttpException(
                 409,
                 'account_import_conflict',
@@ -721,8 +676,8 @@ final class CharacterAuthService
     {
         $statement = $this->database->prepare(
             'SELECT blocked_until FROM auth_rate_limits WHERE scope_hash IN (?, ?)');
-        $statement->execute(array_values($this->loginScopeHashes($normalizedName, $remoteAddress)));
-        $now = $this->now();
+        $statement->execute($this->loginScopeHashes($normalizedName, $remoteAddress));
+        $now = time();
         foreach ($statement->fetchAll() as $row) {
             if ((int)$row['blocked_until'] > $now) {
                 return true;
@@ -733,22 +688,10 @@ final class CharacterAuthService
 
     private function recordLoginFailure(string $normalizedName, string $remoteAddress): void
     {
-        $now = $this->now();
+        $now = time();
         $windowSeconds = (int)$this->authConfig['login_window_seconds'];
-        $scopePolicies = [
-            'account_source' => [
-                'maximum_failures' => (int)$this->authConfig['login_max_failures'],
-                'delay_base_seconds' => (int)$this->authConfig['login_progressive_delay_base_seconds'],
-                'delay_max_seconds' => (int)$this->authConfig['login_progressive_delay_max_seconds'],
-                'progressive' => true,
-            ],
-            'address' => [
-                'maximum_failures' => (int)$this->authConfig['login_address_max_failures'],
-                'delay_base_seconds' => (int)$this->authConfig['login_address_delay_seconds'],
-                'delay_max_seconds' => (int)$this->authConfig['login_address_delay_seconds'],
-                'progressive' => false,
-            ],
-        ];
+        $maximumFailures = (int)$this->authConfig['login_max_failures'];
+        $lockoutSeconds = (int)$this->authConfig['login_lockout_seconds'];
         $this->database->beginTransaction();
         try {
             $select = $this->database->prepare(
@@ -760,7 +703,7 @@ final class CharacterAuthService
                     window_start = excluded.window_start,
                     failure_count = excluded.failure_count,
                     blocked_until = excluded.blocked_until');
-            foreach ($this->loginScopeHashes($normalizedName, $remoteAddress) as $scope => $scopeHash) {
+            foreach ($this->loginScopeHashes($normalizedName, $remoteAddress) as $scopeHash) {
                 $select->execute([$scopeHash]);
                 $row = $select->fetch();
                 $failureCount = 1;
@@ -771,15 +714,8 @@ final class CharacterAuthService
                     $failureCount = (int)$row['failure_count'] + 1;
                     $blockedUntil = max(0, (int)$row['blocked_until']);
                 }
-                $policy = $scopePolicies[$scope];
-                if ($failureCount >= $policy['maximum_failures']) {
-                    $delay = $this->loginFailureDelaySeconds(
-                        $failureCount,
-                        $policy['maximum_failures'],
-                        $policy['delay_base_seconds'],
-                        $policy['delay_max_seconds'],
-                        $policy['progressive']);
-                    $blockedUntil = max($blockedUntil, $now + $delay);
+                if ($failureCount >= $maximumFailures) {
+                    $blockedUntil = max($blockedUntil, $now + $lockoutSeconds);
                 }
                 $upsert->execute([$scopeHash, $windowStart, $failureCount, $blockedUntil]);
             }
@@ -792,50 +728,19 @@ final class CharacterAuthService
         }
     }
 
-    private function loginFailureDelaySeconds(
-        int $failureCount,
-        int $maximumFailures,
-        int $baseSeconds,
-        int $maximumSeconds,
-        bool $progressive): int
-    {
-        $delay = $baseSeconds;
-        if ($progressive) {
-            for ($step = $maximumFailures; $step < $failureCount && $delay < $maximumSeconds; $step++) {
-                $delay = min($maximumSeconds, $delay * 2);
-            }
-        }
-        return min($delay, $maximumSeconds);
-    }
-
     private function clearLoginFailures(string $normalizedName, string $remoteAddress): void
     {
-        $scopeHashes = $this->loginScopeHashes($normalizedName, $remoteAddress);
         $statement = $this->database->prepare(
-            'DELETE FROM auth_rate_limits WHERE scope_hash = ?');
-        $statement->execute([$scopeHashes['account_source']]);
+            'DELETE FROM auth_rate_limits WHERE scope_hash IN (?, ?)');
+        $statement->execute($this->loginScopeHashes($normalizedName, $remoteAddress));
     }
 
     private function loginScopeHashes(string $normalizedName, string $remoteAddress): array
     {
-        $addressScope = $this->canonicalAddressScope($remoteAddress);
         return [
-            'account_source' => hash('sha256', 'account-source:' . $normalizedName . "\0" . $addressScope),
-            'address' => hash('sha256', 'address:' . $addressScope),
+            hash('sha256', 'account:' . $normalizedName),
+            hash('sha256', 'address:' . $remoteAddress),
         ];
-    }
-
-    private function canonicalAddressScope(string $remoteAddress): string
-    {
-        $packedAddress = @inet_pton($remoteAddress);
-        return $packedAddress === false
-            ? $remoteAddress
-            : bin2hex($packedAddress);
-    }
-
-    private function now(): int
-    {
-        return $this->clock === null ? time() : (int)($this->clock)();
     }
 
     private function recordAuthAudit(?string $accountId, string $remoteAddress, string $event): void
@@ -998,10 +903,6 @@ final class CharacterAuthService
             'login_window_seconds',
             'login_max_failures',
             'login_lockout_seconds',
-            'login_progressive_delay_base_seconds',
-            'login_progressive_delay_max_seconds',
-            'login_address_max_failures',
-            'login_address_delay_seconds',
             'audit_retention_seconds',
         ] as $key) {
             if (!is_int($this->authConfig[$key]) || $this->authConfig[$key] <= 0) {
@@ -1011,18 +912,75 @@ final class CharacterAuthService
         if ($this->authConfig['absolute_timeout_seconds'] <= $this->authConfig['idle_timeout_seconds']) {
             throw new RuntimeException('The absolute session timeout must exceed the idle timeout.');
         }
-        if ($this->authConfig['login_progressive_delay_max_seconds']
-            < $this->authConfig['login_progressive_delay_base_seconds']) {
-            throw new RuntimeException('The maximum progressive login delay must not be shorter than its base delay.');
-        }
-        if ($this->authConfig['login_address_max_failures'] <= $this->authConfig['login_max_failures']) {
-            throw new RuntimeException('The address login threshold must exceed the account-source threshold.');
-        }
         if (!in_array($this->authConfig['audit_address_mode'], ['hash', 'raw'], true)) {
             throw new RuntimeException("Character authentication setting 'audit_address_mode' must be hash or raw.");
         }
     }
 
+    private function ensureSchema(): void
+    {
+        $this->database->exec(
+            'CREATE TABLE IF NOT EXISTS character_accounts (
+                id TEXT PRIMARY KEY,
+                normalized_name TEXT NOT NULL UNIQUE,
+                display_name TEXT NOT NULL,
+                character_key TEXT NOT NULL,
+                role TEXT NOT NULL CHECK(role IN (\'player\', \'dm\')),
+                enabled INTEGER NOT NULL CHECK(enabled IN (0, 1)),
+                password_hash TEXT NULL,
+                legacy_algorithm TEXT NULL,
+                legacy_iterations INTEGER NULL,
+                legacy_salt TEXT NULL,
+                legacy_hash TEXT NULL,
+                created_at INTEGER NOT NULL,
+                password_changed_at INTEGER NOT NULL,
+                last_login_at INTEGER NULL,
+                session_version INTEGER NOT NULL DEFAULT 1,
+                CHECK(password_hash IS NOT NULL OR legacy_hash IS NOT NULL)
+            );
+            CREATE TABLE IF NOT EXISTS character_account_aliases (
+                account_id TEXT NOT NULL,
+                normalized_alias TEXT NOT NULL UNIQUE,
+                display_alias TEXT NOT NULL,
+                created_at INTEGER NOT NULL,
+                PRIMARY KEY (account_id, normalized_alias),
+                FOREIGN KEY (account_id) REFERENCES character_accounts(id) ON DELETE CASCADE
+            );
+            CREATE INDEX IF NOT EXISTS ix_character_account_aliases_account
+                ON character_account_aliases(account_id);
+            CREATE TABLE IF NOT EXISTS auth_rate_limits (
+                scope_hash TEXT PRIMARY KEY,
+                window_start INTEGER NOT NULL,
+                failure_count INTEGER NOT NULL,
+                blocked_until INTEGER NOT NULL
+            );
+            CREATE TABLE IF NOT EXISTS auth_audit_events (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                account_id TEXT NULL,
+                occurred_at INTEGER NOT NULL,
+                remote_address TEXT NOT NULL,
+                event TEXT NOT NULL,
+                FOREIGN KEY (account_id) REFERENCES character_accounts(id) ON DELETE SET NULL
+            );
+            CREATE TABLE IF NOT EXISTS character_session_presence (
+                presence_id TEXT PRIMARY KEY,
+                account_id TEXT NOT NULL,
+                last_seen_at INTEGER NOT NULL,
+                absolute_expires_at INTEGER NOT NULL,
+                FOREIGN KEY (account_id) REFERENCES character_accounts(id) ON DELETE CASCADE
+            );
+            CREATE INDEX IF NOT EXISTS ix_auth_audit_account_time
+                ON auth_audit_events(account_id, occurred_at);
+            CREATE INDEX IF NOT EXISTS ix_character_presence_activity
+                ON character_session_presence(last_seen_at, absolute_expires_at);');
+
+        $columns = $this->database->query('PRAGMA table_info(character_accounts)')->fetchAll();
+        $columnNames = array_map(static fn(array $column): string => (string)$column['name'], $columns);
+        if (!in_array('session_version', $columnNames, true)) {
+            $this->database->exec(
+                'ALTER TABLE character_accounts ADD COLUMN session_version INTEGER NOT NULL DEFAULT 1');
+        }
+    }
 
     private function base64UrlEncode(string $bytes): string
     {

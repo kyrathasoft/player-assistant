@@ -234,19 +234,16 @@ final class DatabaseMigrationService
     private function migrationThree(): void
     {
         $this->database->exec(
-            'CREATE TABLE IF NOT EXISTS message_notifications (
-                id TEXT PRIMARY KEY,
-                sender_account_id TEXT NOT NULL,
-                recipient_account_id TEXT NOT NULL,
-                message TEXT NOT NULL,
-                sent_at INTEGER NOT NULL,
-                read_at INTEGER NULL,
-                FOREIGN KEY (sender_account_id) REFERENCES character_accounts(id) ON DELETE CASCADE,
-                FOREIGN KEY (recipient_account_id) REFERENCES character_accounts(id) ON DELETE CASCADE
+            'CREATE TABLE IF NOT EXISTS character_account_aliases (
+                account_id TEXT NOT NULL,
+                normalized_alias TEXT NOT NULL UNIQUE,
+                display_alias TEXT NOT NULL,
+                created_at INTEGER NOT NULL,
+                PRIMARY KEY (account_id, normalized_alias),
+                FOREIGN KEY (account_id) REFERENCES character_accounts(id) ON DELETE CASCADE
             );
-            DROP INDEX IF EXISTS ix_message_notifications_recipient_read;
-            CREATE INDEX ix_message_notifications_recipient_read
-                ON message_notifications(recipient_account_id, read_at, sent_at DESC, id DESC);');
+            CREATE INDEX IF NOT EXISTS ix_character_account_aliases_account
+                ON character_account_aliases(account_id);');
     }
 
     private function migrationFour(): void
@@ -254,60 +251,8 @@ final class DatabaseMigrationService
         $this->database->exec(
             'CREATE UNIQUE INDEX IF NOT EXISTS ux_character_accounts_character_key
                     ON character_accounts(character_key);
-                 CREATE TABLE IF NOT EXISTS character_account_aliases (
-                    account_id TEXT NOT NULL,
-                    normalized_alias TEXT NOT NULL UNIQUE,
-                    display_alias TEXT NOT NULL,
-                    created_at INTEGER NOT NULL,
-                    PRIMARY KEY (account_id, normalized_alias),
-                    FOREIGN KEY (account_id) REFERENCES character_accounts(id) ON DELETE CASCADE
-                 );
                  CREATE INDEX IF NOT EXISTS ix_character_account_aliases_account
                     ON character_account_aliases(account_id);
-                 INSERT OR IGNORE INTO character_account_aliases
-                    (account_id, normalized_alias, display_alias, created_at)
-                 SELECT id, \'dungeon\', \'Dungeon\', strftime(\'%s\', \'now\')
-                   FROM character_accounts WHERE normalized_name = \'dungeon master\';
-                 INSERT OR IGNORE INTO character_account_aliases
-                    (account_id, normalized_alias, display_alias, created_at)
-                 SELECT id, \'master\', \'Master\', strftime(\'%s\', \'now\')
-                   FROM character_accounts WHERE normalized_name = \'dungeon master\';
-                 INSERT OR IGNORE INTO character_account_aliases
-                    (account_id, normalized_alias, display_alias, created_at)
-                 SELECT id, \'dm\', \'DM\', strftime(\'%s\', \'now\')
-                   FROM character_accounts WHERE normalized_name = \'dungeon master\';
-                 INSERT OR IGNORE INTO character_account_aliases
-                    (account_id, normalized_alias, display_alias, created_at)
-                 SELECT id, \'max\', \'Max\', strftime(\'%s\', \'now\')
-                   FROM character_accounts WHERE normalized_name = \'maximilian\';
-                 INSERT OR IGNORE INTO character_account_aliases
-                    (account_id, normalized_alias, display_alias, created_at)
-                 SELECT id, \'maximilian yragerne\', \'Maximilian Yragerne\', strftime(\'%s\', \'now\')
-                   FROM character_accounts WHERE normalized_name = \'maximilian\';
-                 INSERT OR IGNORE INTO character_account_aliases
-                    (account_id, normalized_alias, display_alias, created_at)
-                 SELECT id, \'max yragerne\', \'Max Yragerne\', strftime(\'%s\', \'now\')
-                   FROM character_accounts WHERE normalized_name = \'maximilian\';
-                 INSERT OR IGNORE INTO character_account_aliases
-                    (account_id, normalized_alias, display_alias, created_at)
-                 SELECT id, \'yragerne\', \'Yragerne\', strftime(\'%s\', \'now\')
-                   FROM character_accounts WHERE normalized_name = \'maximilian\';
-                 INSERT OR IGNORE INTO character_account_aliases
-                    (account_id, normalized_alias, display_alias, created_at)
-                 SELECT id, \'neria silverdale\', \'Neria Silverdale\', strftime(\'%s\', \'now\')
-                   FROM character_accounts WHERE normalized_name = \'neria\';
-                 INSERT OR IGNORE INTO character_account_aliases
-                    (account_id, normalized_alias, display_alias, created_at)
-                 SELECT id, \'silverdale\', \'Silverdale\', strftime(\'%s\', \'now\')
-                   FROM character_accounts WHERE normalized_name = \'neria\';
-                 INSERT OR IGNORE INTO character_account_aliases
-                    (account_id, normalized_alias, display_alias, created_at)
-                 SELECT id, \'kelpie lawfuller\', \'Kelpie Lawfuller\', strftime(\'%s\', \'now\')
-                   FROM character_accounts WHERE normalized_name = \'kelpie\';
-                 INSERT OR IGNORE INTO character_account_aliases
-                    (account_id, normalized_alias, display_alias, created_at)
-                 SELECT id, \'lawfuller\', \'Lawfuller\', strftime(\'%s\', \'now\')
-                   FROM character_accounts WHERE normalized_name = \'kelpie\';
                  CREATE TRIGGER IF NOT EXISTS trg_character_accounts_alias_collision_insert
                  BEFORE INSERT ON character_accounts
                  WHEN EXISTS (SELECT 1 FROM character_account_aliases

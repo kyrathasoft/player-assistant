@@ -4,33 +4,14 @@ using System.Text.Json.Serialization;
 
 namespace PlayerAssistant
 {
-    internal sealed record XpAuthenticatedIdentity(
-        string AccountId,
-        string CanonicalCharacterName,
-        IReadOnlyList<string> Aliases,
-        bool IsDungeonMaster)
-    {
-        public bool IsValid => !string.IsNullOrWhiteSpace(AccountId);
-        public static XpAuthenticatedIdentity Invalid { get; } = new("", "", [], false);
-    }
-
-    internal sealed record XpPasswordIdentityDefinition(
-        string AccountId,
-        string CanonicalCharacterName,
-        IReadOnlyList<string> Aliases,
-        string Password,
-        bool IsDungeonMaster = false);
-
     internal static class XpPasswordStoreUtility
     {
         public const string FileName = "xp-passwords.json";
-        public const string Format = "xp-password-hashes-v1";
-        public const string IdentityFormat = "xp-password-hashes-v2";
+        public const string Format = "xp-password-hashes-v2";
         public const string Algorithm = "PBKDF2-HMAC-SHA256";
-        public const int SchemaVersion = 1;
+        public const int SchemaVersion = 2;
         public const int MinimumIterations = 600_000;
 
-        private const string DungeonMasterAccessName = "Dungeon Master";
         private const int SaltSize = 16;
         private const int HashSize = 32;
         private static readonly JsonSerializerOptions JsonOptions = new()
@@ -85,39 +66,53 @@ namespace PlayerAssistant
                 throw new InvalidOperationException($"{FileName} does not contain any PC password hash entries.");
             }
 
-            var hashes = new Dictionary<string, PasswordHashRecord>(StringComparer.OrdinalIgnoreCase);
-            var salts = new HashSet<string>(StringComparer.Ordinal);
+            var canonicalNames = new HashSet<string>(StringComparer.Ordinal);
             foreach (var entry in document.Entries)
             {
-                if (string.IsNullOrWhiteSpace(entry.Name) || !string.Equals(entry.Name, entry.Name.Trim(), StringComparison.Ordinal))
+                var canonicalName = ValidateCanonicalName(entry.CanonicalName);
+                if (!canonicalNames.Add(NormalizeIdentityKey(canonicalName)))
                 {
-                    throw new InvalidOperationException($"{FileName} contains a blank or untrimmed PC name.");
+                    throw new InvalidOperationException($"{FileName} contains duplicate canonical name '{canonicalName}'.");
+                }
+            }
+
+            var hashes = new Dictionary<string, PasswordHashRecord>(StringComparer.OrdinalIgnoreCase);
+            var salts = new HashSet<string>(StringComparer.Ordinal);
+            var allAliases = new HashSet<string>(StringComparer.Ordinal);
+            foreach (var entry in document.Entries)
+            {
+                var canonicalName = ValidateCanonicalName(entry.CanonicalName);
+                if (string.IsNullOrWhiteSpace(entry.CanonicalId)
+                    || !string.Equals(entry.CanonicalId, entry.CanonicalId.Trim(), StringComparison.Ordinal)
+                    || !IsValidCanonicalId(entry.CanonicalId))
+                {
+                    throw new InvalidOperationException($"{FileName} entry '{canonicalName}' has an invalid canonical ID.");
                 }
 
                 if (!string.Equals(entry.Algorithm, Algorithm, StringComparison.Ordinal))
                 {
                     throw new InvalidOperationException(
-                        $"{FileName} entry '{entry.Name}' must use algorithm '{Algorithm}'.");
+                        $"{FileName} entry '{canonicalName}' must use algorithm '{Algorithm}'.");
                 }
 
                 if (entry.Iterations < MinimumIterations)
                 {
                     throw new InvalidOperationException(
-                        $"{FileName} entry '{entry.Name}' must use at least {MinimumIterations:N0} iterations.");
+                        $"{FileName} entry '{canonicalName}' must use at least {MinimumIterations:N0} iterations.");
                 }
 
-                var salt = DecodeBase64(entry.Salt, "salt", entry.Name);
-                var hash = DecodeBase64(entry.Hash, "hash", entry.Name);
+                var salt = DecodeBase64(entry.Salt, "salt", canonicalName);
+                var hash = DecodeBase64(entry.Hash, "hash", canonicalName);
                 if (salt.Length < SaltSize)
                 {
                     throw new InvalidOperationException(
-                        $"{FileName} entry '{entry.Name}' must use a salt of at least {SaltSize} bytes.");
+                        $"{FileName} entry '{canonicalName}' must use a salt of at least {SaltSize} bytes.");
                 }
 
                 if (hash.Length != HashSize)
                 {
                     throw new InvalidOperationException(
-                        $"{FileName} entry '{entry.Name}' must use a {HashSize}-byte hash.");
+                        $"{FileName} entry '{canonicalName}' must use a {HashSize}-byte hash.");
                 }
 
                 if (!salts.Add(entry.Salt!))
@@ -125,234 +120,119 @@ namespace PlayerAssistant
                     throw new InvalidOperationException($"{FileName} contains a reused password salt.");
                 }
 
-                if (!hashes.TryAdd(entry.Name, new PasswordHashRecord(entry.Iterations, salt, hash)))
+                var aliases = ValidateAliases(entry.Aliases, canonicalName, canonicalNames, allAliases);
+                if (!hashes.TryAdd(entry.CanonicalId, new PasswordHashRecord(
+                    entry.CanonicalId,
+                    canonicalName,
+                    aliases,
+                    entry.Iterations,
+                    salt,
+                    hash)))
                 {
-                    throw new InvalidOperationException($"{FileName} contains duplicate PC name '{entry.Name}'.");
+                    throw new InvalidOperationException($"{FileName} contains duplicate canonical ID '{entry.CanonicalId}'.");
                 }
             }
 
             return hashes;
         }
 
-        public static bool ValidatePassword(string pcName, string password, string? runtimeDirectory = null)
+        internal static IReadOnlyList<XpAuthenticatedIdentity> LoadIdentityRegistry(
+            string? runtimeDirectory = null)
         {
-            return AuthenticatePassword(pcName, password, runtimeDirectory).IsValid;
+            return LoadPasswordHashes(runtimeDirectory)
+                .Values
+                .Select(record => record.ToAuthenticatedIdentity())
+                .OrderBy(identity => identity.CanonicalName, StringComparer.OrdinalIgnoreCase)
+                .ToArray();
         }
 
-        internal static XpAuthenticatedIdentity AuthenticatePassword(
-            string enteredName,
+        public static XpAuthenticatedIdentity? ValidatePassword(string pcName, string password, string? runtimeDirectory = null)
+        {
+            ArgumentException.ThrowIfNullOrWhiteSpace(pcName);
+            ArgumentNullException.ThrowIfNull(password);
+
+            return ValidatePassword(null, pcName, password, runtimeDirectory);
+        }
+
+        public static XpAuthenticatedIdentity? ValidatePassword(
+            string? canonicalId,
+            string displayName,
             string password,
             string? runtimeDirectory = null)
         {
-            ArgumentException.ThrowIfNullOrWhiteSpace(enteredName);
+            ArgumentException.ThrowIfNullOrWhiteSpace(displayName);
             ArgumentNullException.ThrowIfNull(password);
-            var resolvedRuntimeDirectory = string.IsNullOrWhiteSpace(runtimeDirectory)
-                ? AppContext.BaseDirectory
-                : runtimeDirectory;
-            var sidecarPath = RuntimePathUtility.CombineUnderBase(resolvedRuntimeDirectory, FileName);
-            using var document = JsonDocument.Parse(File.ReadAllText(sidecarPath));
-            var format = document.RootElement.TryGetProperty("format", out var formatElement)
-                ? formatElement.GetString()
-                : null;
-            if (string.Equals(format, IdentityFormat, StringComparison.Ordinal))
-            {
-                return AuthenticateIdentityDocument(document.RootElement, enteredName.Trim(), password);
-            }
 
-            var hashes = LoadPasswordHashes(resolvedRuntimeDirectory);
-            var exactName = enteredName.Trim();
-            return hashes.TryGetValue(exactName, out var expectedHash) && VerifyPassword(password, expectedHash)
-                ? new XpAuthenticatedIdentity(IdentityKey(exactName), exactName, [], string.Equals(exactName, DungeonMasterAccessName, StringComparison.OrdinalIgnoreCase))
-                : XpAuthenticatedIdentity.Invalid;
-        }
-
-        internal static void SavePasswordIdentities(string path, IReadOnlyList<XpPasswordIdentityDefinition> identities)
-        {
-            ArgumentException.ThrowIfNullOrWhiteSpace(path);
-            ArgumentNullException.ThrowIfNull(identities);
-            if (identities.Count == 0) throw new InvalidOperationException("At least one XP password identity is required.");
-            var canonicalIds = new HashSet<string>(StringComparer.Ordinal);
-            var names = new HashSet<string>(identities.Select(identity => identity.CanonicalCharacterName?.Trim() ?? ""), StringComparer.OrdinalIgnoreCase);
-            if (names.Any(string.IsNullOrWhiteSpace) || names.Count != identities.Count)
-                throw new InvalidOperationException("XP identities contain a blank or duplicate canonical name.");
-            var aliases = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-            var entries = new List<PasswordIdentityEntry>(identities.Count);
-            foreach (var identity in identities)
+            var hashes = LoadPasswordHashes(runtimeDirectory);
+            if (!string.IsNullOrWhiteSpace(canonicalId))
             {
-                var accountId = identity.AccountId?.Trim();
-                var name = identity.CanonicalCharacterName?.Trim();
-                if (string.IsNullOrWhiteSpace(accountId) || string.IsNullOrWhiteSpace(name) || !canonicalIds.Add(accountId))
-                    throw new InvalidOperationException("XP identities contain a blank or duplicate canonical account ID.");
-                if ((identity.Aliases ?? []).Any(alias => string.IsNullOrWhiteSpace(alias) || !string.Equals(alias, alias.Trim(), StringComparison.Ordinal)))
-                    throw new InvalidOperationException($"XP identity '{name}' contains a blank or untrimmed alias.");
-                var normalizedAliases = (identity.Aliases ?? [])
-                    .Where(alias => !string.IsNullOrWhiteSpace(alias))
-                    .Select(alias => alias.Trim())
-                    .ToArray();
-                foreach (var alias in normalizedAliases)
+                if (!hashes.TryGetValue(canonicalId.Trim(), out var expectedHash)
+                    || !expectedHash.MatchesName(NormalizeIdentityKey(displayName)))
                 {
-                    if (string.Equals(alias, name, StringComparison.OrdinalIgnoreCase) || names.Contains(alias) || !aliases.TryAdd(alias, accountId))
-                        throw new InvalidOperationException($"XP identities contain an ambiguous alias '{alias}'.");
-                }
-                if (string.IsNullOrWhiteSpace(identity.Password)) throw new InvalidOperationException($"XP identity '{name}' has a blank password.");
-                var salt = RandomNumberGenerator.GetBytes(SaltSize);
-                var hash = Rfc2898DeriveBytes.Pbkdf2(identity.Password, salt, MinimumIterations, HashAlgorithmName.SHA256, HashSize);
-                entries.Add(new PasswordIdentityEntry
-                {
-                    AccountId = accountId, Name = name, Aliases = normalizedAliases,
-                    IsDungeonMaster = identity.IsDungeonMaster, Algorithm = Algorithm,
-                    Iterations = MinimumIterations, Salt = Convert.ToBase64String(salt), Hash = Convert.ToBase64String(hash)
-                });
-                CryptographicOperations.ZeroMemory(hash);
-            }
-            var serialized = JsonSerializer.Serialize(new PasswordIdentityDocument { SchemaVersion = 2, Format = IdentityFormat, Entries = entries }, JsonOptions) + Environment.NewLine;
-            AtomicFileUtility.WriteAllText(Path.GetFullPath(path), serialized);
-        }
-
-        private static XpAuthenticatedIdentity AuthenticateIdentityDocument(JsonElement root, string enteredName, string password)
-        {
-            if (!root.TryGetProperty("schema_version", out var schema)
-                || schema.GetInt32() != 2
-                || !root.TryGetProperty("format", out var format)
-                || !string.Equals(format.GetString(), IdentityFormat, StringComparison.Ordinal)
-                || !root.TryGetProperty("entries", out var entries)
-                || entries.ValueKind != JsonValueKind.Array
-                || entries.GetArrayLength() == 0)
-            {
-                throw new InvalidOperationException($"{FileName} must declare the validated identity schema '{IdentityFormat}'.");
-            }
-
-            var accountIds = new HashSet<string>(StringComparer.Ordinal);
-            var names = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-            var aliases = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-            var salts = new HashSet<string>(StringComparer.Ordinal);
-            var matches = new List<(JsonElement Entry, string Name, string[] Aliases)>();
-            foreach (var entry in entries.EnumerateArray())
-            {
-                var accountId = entry.GetProperty("account_id").GetString();
-                var name = entry.GetProperty("canonical_name").GetString();
-                if (string.IsNullOrWhiteSpace(accountId) || !string.Equals(accountId, accountId.Trim(), StringComparison.Ordinal)
-                    || string.IsNullOrWhiteSpace(name) || !string.Equals(name, name.Trim(), StringComparison.Ordinal)
-                    || !accountIds.Add(accountId!) || !names.Add(name!))
-                {
-                    throw new InvalidOperationException($"{FileName} contains a blank, untrimmed, or duplicate canonical identity.");
+                    return null;
                 }
 
-                var entryAliases = entry.TryGetProperty("aliases", out var aliasElement)
-                    && aliasElement.ValueKind == JsonValueKind.Array
-                    ? aliasElement.EnumerateArray().Select(value => value.GetString() ?? string.Empty).ToArray()
-                    : [];
-                var entryAliasSet = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-                foreach (var alias in entryAliases)
-                {
-                    if (string.IsNullOrWhiteSpace(alias)
-                        || !string.Equals(alias, alias.Trim(), StringComparison.Ordinal)
-                        || !entryAliasSet.Add(alias)
-                        || names.Contains(alias)
-                        || !aliases.Add(alias))
-                    {
-                        throw new InvalidOperationException($"{FileName} contains an ambiguous alias.");
-                    }
-                }
-
-                var algorithm = entry.GetProperty("algorithm").GetString();
-                var iterations = entry.GetProperty("iterations").GetInt32();
-                var salt = entry.GetProperty("salt").GetString();
-                var hash = entry.GetProperty("hash").GetString();
-                if (!string.Equals(algorithm, Algorithm, StringComparison.Ordinal)
-                    || iterations < MinimumIterations
-                    || string.IsNullOrWhiteSpace(salt)
-                    || string.IsNullOrWhiteSpace(hash)
-                    || !salts.Add(salt!))
-                {
-                    throw new InvalidOperationException($"{FileName} contains an invalid password hash entry.");
-                }
-                if (DecodeBase64(salt, "salt", name!).Length < SaltSize
-                    || DecodeBase64(hash, "hash", name!).Length != HashSize)
-                {
-                    throw new InvalidOperationException($"{FileName} contains an invalid password hash entry.");
-                }
-
-                matches.Add((entry, name!, entryAliases));
+                return VerifyPassword(password, expectedHash)
+                    ? expectedHash.ToAuthenticatedIdentity()
+                    : null;
             }
 
-            // Canonical names must also reserve the alias namespace, regardless of entry order.
-            if (matches.Any(match => match.Aliases.Any(alias => names.Contains(alias))))
+            var normalizedDisplayName = NormalizeIdentityKey(displayName);
+            var nameMatches = hashes.Values
+                .Where(record => record.MatchesName(normalizedDisplayName))
+                .Take(2)
+                .ToArray();
+            var nameMatch = nameMatches.Length == 1 ? nameMatches[0] : null;
+            if (nameMatch is not null && VerifyPassword(password, nameMatch))
             {
-                throw new InvalidOperationException($"{FileName} contains an alias matching another canonical name.");
+                return nameMatch.ToAuthenticatedIdentity();
             }
 
-            var match = matches.FirstOrDefault(candidate =>
-                string.Equals(candidate.Name, enteredName, StringComparison.OrdinalIgnoreCase)
-                || candidate.Aliases.Any(alias => string.Equals(alias, enteredName, StringComparison.OrdinalIgnoreCase)));
-            if (match.Entry.ValueKind == JsonValueKind.Undefined)
-            {
-                return XpAuthenticatedIdentity.Invalid;
-            }
-
-            var record = new PasswordHashRecord(
-                match.Entry.GetProperty("iterations").GetInt32(),
-                DecodeBase64(match.Entry.GetProperty("salt").GetString(), "salt", match.Name),
-                DecodeBase64(match.Entry.GetProperty("hash").GetString(), "hash", match.Name));
-            if (!VerifyPassword(password, record))
-            {
-                return XpAuthenticatedIdentity.Invalid;
-            }
-
-            return new XpAuthenticatedIdentity(
-                match.Entry.GetProperty("account_id").GetString() ?? string.Empty,
-                match.Name,
-                match.Aliases,
-                match.Entry.TryGetProperty("is_dungeon_master", out var dm) && dm.GetBoolean());
-        }
-
-        private static string IdentityKey(string value)
-        {
-            var bytes = SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(value.Trim().ToUpperInvariant()));
-            return Convert.ToHexString(bytes[..16]).ToLowerInvariant();
+            return null;
         }
 
         internal static void SavePasswordHashes(
             string path,
             IReadOnlyDictionary<string, string> passwords)
         {
+            var identities = passwords.Select(pair => new PasswordIdentityInput(
+                CreateGeneratedCanonicalId(pair.Key),
+                pair.Key,
+                pair.Value,
+                [])).ToArray();
+            SavePasswordHashes(path, identities);
+        }
+
+        internal static void SavePasswordHashes(
+            string path,
+            IReadOnlyList<PasswordIdentityInput> identities)
+        {
             ArgumentException.ThrowIfNullOrWhiteSpace(path);
-            ArgumentNullException.ThrowIfNull(passwords);
-            if (passwords.Count == 0)
+            ArgumentNullException.ThrowIfNull(identities);
+            if (identities.Count == 0)
             {
                 throw new InvalidOperationException("At least one XP password is required.");
             }
 
-            var names = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-            var entries = new List<PasswordHashEntry>(passwords.Count);
-            foreach (var pair in passwords)
+            var entries = new List<PasswordHashEntry>(identities.Count);
+            foreach (var identity in identities)
             {
-                var name = pair.Key?.Trim();
-                if (string.IsNullOrWhiteSpace(name))
-                {
-                    throw new InvalidOperationException("XP passwords contain a blank PC name.");
-                }
-
-                if (!names.Add(name))
-                {
-                    throw new InvalidOperationException($"XP passwords contain duplicate PC name '{name}'.");
-                }
-
-                if (string.IsNullOrWhiteSpace(pair.Value))
-                {
-                    throw new InvalidOperationException($"XP passwords contain a blank password for '{name}'.");
-                }
+                var name = ValidateCanonicalName(identity.CanonicalName);
+                if (!IsValidCanonicalId(identity.CanonicalId)) throw new InvalidOperationException($"XP passwords contain invalid canonical ID '{identity.CanonicalId}'.");
+                if (string.IsNullOrEmpty(identity.Password)) throw new InvalidOperationException($"XP passwords contain a blank password for '{name}'.");
 
                 var salt = RandomNumberGenerator.GetBytes(SaltSize);
                 var hash = Rfc2898DeriveBytes.Pbkdf2(
-                    pair.Value,
+                    identity.Password,
                     salt,
                     MinimumIterations,
                     HashAlgorithmName.SHA256,
                     HashSize);
                 entries.Add(new PasswordHashEntry
                 {
-                    Name = name,
+                    CanonicalName = name,
+                    CanonicalId = identity.CanonicalId,
+                    Aliases = identity.Aliases.ToList(),
                     Algorithm = Algorithm,
                     Iterations = MinimumIterations,
                     Salt = Convert.ToBase64String(salt),
@@ -382,14 +262,7 @@ namespace PlayerAssistant
             var resolvedDestinationPath = Path.GetFullPath(destinationPath ?? sourcePath);
             AssertLegacyEncryptedEnvelope(resolvedSourcePath);
             var passwords = LocalSettingsUtility.LoadSettingsWithoutMigration(resolvedSourcePath);
-            SavePasswordIdentities(
-                resolvedDestinationPath,
-                passwords.Select(pair => new XpPasswordIdentityDefinition(
-                    IdentityKey(pair.Key),
-                    pair.Key.Trim(),
-                    [],
-                    pair.Value,
-                    string.Equals(pair.Key.Trim(), DungeonMasterAccessName, StringComparison.OrdinalIgnoreCase))).ToArray());
+            SavePasswordHashes(resolvedDestinationPath, passwords);
             return passwords.Count;
         }
 
@@ -443,67 +316,98 @@ namespace PlayerAssistant
             }
         }
 
-        private static IEnumerable<string> GetCandidateNames(
-            string pcName,
-            IEnumerable<string> storedNames)
+        internal static string NormalizeIdentityKey(string value)
         {
-            var trimmedName = pcName.Trim();
-            yield return trimmedName;
+            ArgumentNullException.ThrowIfNull(value);
+            return string.Join(' ', value.Trim().Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries))
+                .ToUpperInvariant();
+        }
 
-            if (string.Equals(trimmedName, DungeonMasterAccessName, StringComparison.OrdinalIgnoreCase))
+        private static string ValidateCanonicalName(string? value)
+        {
+            if (string.IsNullOrWhiteSpace(value)
+                || !string.Equals(value, value.Trim(), StringComparison.Ordinal))
             {
-                yield break;
+                throw new InvalidOperationException($"{FileName} contains a blank or untrimmed canonical name.");
             }
 
-            var firstName = GetFirstName(trimmedName);
-            if (!string.Equals(firstName, trimmedName, StringComparison.OrdinalIgnoreCase))
+            return value;
+        }
+
+        private static IReadOnlyList<string> ValidateAliases(
+            IReadOnlyList<string>? aliases,
+            string canonicalName,
+            IReadOnlySet<string> canonicalNames,
+            ISet<string> allAliases)
+        {
+            if (aliases is null)
             {
-                yield return firstName;
+                throw new InvalidOperationException($"{FileName} entry '{canonicalName}' must declare an aliases array.");
             }
 
-            foreach (var storedName in storedNames)
+            var seen = new HashSet<string>(StringComparer.Ordinal);
+            var validated = new List<string>(aliases.Count);
+            foreach (var alias in aliases)
             {
-                if (string.Equals(storedName, DungeonMasterAccessName, StringComparison.OrdinalIgnoreCase))
+                if (string.IsNullOrWhiteSpace(alias)
+                    || !string.Equals(alias, alias.Trim(), StringComparison.Ordinal))
                 {
-                    continue;
+                    throw new InvalidOperationException($"{FileName} entry '{canonicalName}' contains a blank or untrimmed alias.");
                 }
 
-                if (string.Equals(GetFirstName(storedName), firstName, StringComparison.OrdinalIgnoreCase))
+                var normalizedAlias = NormalizeIdentityKey(alias);
+                if (canonicalNames.Contains(normalizedAlias)
+                    || !seen.Add(normalizedAlias)
+                    || !allAliases.Add(normalizedAlias))
                 {
-                    yield return storedName;
+                    throw new InvalidOperationException($"{FileName} entry '{canonicalName}' contains a duplicate or colliding alias '{alias}'.");
                 }
+
+                validated.Add(alias);
             }
+
+            return validated;
         }
 
-        private static string GetFirstName(string value)
+
+        private static bool IsValidCanonicalId(string value)
         {
-            var trimmedValue = value.Trim();
-            var spaceIndex = trimmedValue.IndexOf(' ');
-            return spaceIndex < 0
-                ? trimmedValue
-                : trimmedValue[..spaceIndex];
+            return value.Length is >= 3 and <= 128
+                && value.All(character => char.IsLetterOrDigit(character) || character is '-' or '_' or '.');
         }
 
-        internal sealed record PasswordHashRecord(int Iterations, byte[] Salt, byte[] Hash);
-
-        private sealed class PasswordIdentityDocument
+        private static string CreateGeneratedCanonicalId(string name)
         {
-            [JsonPropertyName("schema_version")] public int SchemaVersion { get; init; }
-            [JsonPropertyName("format")] public string? Format { get; init; }
-            [JsonPropertyName("entries")] public List<PasswordIdentityEntry>? Entries { get; init; }
+            var digest = SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(name.Trim().ToUpperInvariant()));
+            return $"generated-{Convert.ToHexString(digest).ToLowerInvariant()}";
         }
 
-        private sealed class PasswordIdentityEntry
+        internal sealed record PasswordHashRecord(
+            string CanonicalId,
+            string CanonicalName,
+            IReadOnlyList<string> Aliases,
+            int Iterations,
+            byte[] Salt,
+            byte[] Hash)
         {
-            [JsonPropertyName("account_id")] public string? AccountId { get; init; }
-            [JsonPropertyName("canonical_name")] public string? Name { get; init; }
-            [JsonPropertyName("aliases")] public IReadOnlyList<string> Aliases { get; init; } = [];
-            [JsonPropertyName("is_dungeon_master")] public bool IsDungeonMaster { get; init; }
-            [JsonPropertyName("algorithm")] public string? Algorithm { get; init; }
-            [JsonPropertyName("iterations")] public int Iterations { get; init; }
-            [JsonPropertyName("salt")] public string? Salt { get; init; }
-            [JsonPropertyName("hash")] public string? Hash { get; init; }
+            internal bool MatchesName(string normalizedName) =>
+                string.Equals(NormalizeIdentityKey(CanonicalName), normalizedName, StringComparison.Ordinal)
+                || Aliases.Any(alias => string.Equals(NormalizeIdentityKey(alias), normalizedName, StringComparison.Ordinal));
+
+            internal XpAuthenticatedIdentity ToAuthenticatedIdentity() =>
+                new(
+                    CanonicalId,
+                    CanonicalName,
+                    Aliases,
+                    string.Equals(CanonicalName, "Dungeon Master", StringComparison.OrdinalIgnoreCase),
+                    CanonicalId);
         }
+
+        internal sealed record PasswordIdentityInput(
+            string CanonicalId,
+            string CanonicalName,
+            string Password,
+            IReadOnlyList<string> Aliases);
 
         private sealed class PasswordHashDocument
         {
@@ -519,8 +423,14 @@ namespace PlayerAssistant
 
         private sealed class PasswordHashEntry
         {
-            [JsonPropertyName("name")]
-            public string? Name { get; init; }
+            [JsonPropertyName("canonical_id")]
+            public string? CanonicalId { get; init; }
+
+            [JsonPropertyName("canonical_name")]
+            public string? CanonicalName { get; init; }
+
+            [JsonPropertyName("aliases")]
+            public List<string>? Aliases { get; init; }
 
             [JsonPropertyName("algorithm")]
             public string? Algorithm { get; init; }

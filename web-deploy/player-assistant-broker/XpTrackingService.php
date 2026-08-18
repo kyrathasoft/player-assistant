@@ -10,9 +10,6 @@ final class XpTrackingService
     private const CHARACTER_KEY_ALIASES = [
         'max' => 'maximilian',
     ];
-    private const CHARACTER_DISPLAY_NAME_ALIASES = [
-        'maximilian' => 'Maximilian',
-    ];
 
     private array $xpConfig;
     private $markdownFetcher;
@@ -49,6 +46,7 @@ final class XpTrackingService
         $this->markdownFetcher = $markdownFetcher;
         $this->awardFilePromoter = $awardFilePromoter;
         $this->validateConfiguration();
+        $this->ensureSchema();
     }
 
     public function getForAccount(array $account): array
@@ -74,13 +72,7 @@ final class XpTrackingService
         if ($role === 'dm') {
             return $baseResponse + [
                 'scope' => 'party',
-                'characters' => array_map(
-                    function (array $character): array {
-                        $character['character_key'] = $this->characterKeyForName(
-                            (string)$character['character_name']);
-                        return $character;
-                    },
-                    $snapshot['characters']),
+                'characters' => $snapshot['characters'],
             ];
         }
 
@@ -96,37 +88,9 @@ final class XpTrackingService
                 'No unambiguous XP total is authorized for this account.');
         }
 
-        $character = $matches[0];
-        $character['character_name'] = $this->canonicalCharacterDisplayName(
-            (string)$character['character_name']);
-        $authorizedCharacters = [];
-        $configuredGroups = $this->xpConfig['award_groups'] ?? [];
-        $progressionKeys = is_array($configuredGroups)
-            && is_array($configuredGroups[$characterKey] ?? null)
-            ? $this->validatedAwardGroups()[$characterKey]
-            : [$characterKey . '-xp'];
-        foreach ($progressionKeys as $progressionKey) {
-            $progressionCharacterKey = $this->characterKeyForProgression($progressionKey);
-            $progressionMatches = array_values(array_filter(
-                $snapshot['characters'],
-                fn(array $candidate): bool => hash_equals(
-                    $progressionCharacterKey,
-                    $this->characterKeyForName((string)$candidate['character_name']))));
-            if (count($progressionMatches) !== 1) {
-                continue;
-            }
-            $authorizedCharacter = $progressionMatches[0];
-            $authorizedCharacter['character_name'] = $this->canonicalCharacterDisplayName(
-                (string)$authorizedCharacter['character_name']);
-            $authorizedCharacters[] = [
-                'character_key' => $progressionKey,
-                'character' => $authorizedCharacter,
-            ];
-        }
         return $baseResponse + [
             'scope' => 'character',
-            'character' => $character,
-            'authorized_characters' => $authorizedCharacters,
+            'character' => $matches[0],
         ];
     }
 
@@ -195,70 +159,38 @@ final class XpTrackingService
             $progressions = $this->loadAwardProgressionsWithLock($progressionKeys);
         }
 
-        if ($scope === 'character') {
-            foreach ($progressions as $index => &$progression) {
-                $progression['is_account_character'] = $index === 0;
-            }
-            unset($progression);
-        }
-
         return [
             'schema_version' => 1,
             'scope' => $scope,
-            'progressions' => $this->attachCurrentAwardProgressions($progressions),
+            'progressions' => $this->withCurrentTnl($progressions),
         ];
     }
 
-    private function attachCurrentAwardProgressions(array $progressions): array
+    private function withCurrentTnl(array $progressions): array
     {
+        $tnlByCharacterKey = [];
         try {
-            $state = $this->loadAwardState();
-            $classLinks = $this->parseClassProgressionLinks($this->fetchMarkdown(
-                (string)$this->xpConfig['class_progression_index_url']));
+            $snapshot = $this->loadCurrentSnapshot();
+            foreach ($snapshot['characters'] ?? [] as $character) {
+                if (!is_array($character) || !isset($character['character_name'])) {
+                    continue;
+                }
+                $characterKey = $this->characterKeyForName((string)$character['character_name']);
+                $tnl = $character['xp_to_next_level'] ?? null;
+                $tnlByCharacterKey[$characterKey] = is_int($tnl) && $tnl >= 0 ? $tnl : null;
+            }
         } catch (Throwable) {
-            return $progressions;
+            // XP award history remains available when optional TNL enrichment fails.
         }
 
-        $progressionPages = [];
-        foreach ($progressions as &$progression) {
-            $progressionKey = (string)$progression['character_key'];
-            $entries = $progression['entries'] ?? [];
-            $lastEntry = $entries[array_key_last($entries)] ?? null;
-            $progressionState = $state['progressions'][$progressionKey] ?? null;
-            if (!is_array($lastEntry) || !is_array($progressionState)) {
-                continue;
-            }
-            $characterClass = (string)$lastEntry['character_class'];
-            $level = (int)$progressionState['level'];
-            $xpTotal = (int)$progressionState['xp_total'];
-            $tnl = null;
-            try {
-                $classLink = $this->resolveClassProgressionLink($characterClass, $classLinks);
-                $pageKey = $this->normalizeClassName($classLink);
-                if (!array_key_exists($pageKey, $progressionPages)) {
-                    $pageUrl = $this->deriveClassProgressionPageUrl(
-                        (string)$this->xpConfig['class_progression_index_url'],
-                        $classLink);
-                    $progressionPages[$pageKey] = $this->parseClassProgression(
-                        $this->fetchMarkdown($pageUrl));
-                }
-                $nextLevelXp = $progressionPages[$pageKey][$level + 1] ?? null;
-                if (is_int($nextLevelXp)) {
-                    $tnl = max(0, $nextLevelXp - $xpTotal);
-                }
-            } catch (Throwable) {
-                $tnl = null;
-            }
-            $progression['current_character'] = [
-                'character_name' => (string)$lastEntry['character_name'],
-                'character_class' => $characterClass,
-                'level' => $level,
-                'xp_total' => $xpTotal,
-                'xp_to_next_level' => $tnl,
-            ];
-        }
-        unset($progression);
-        return $progressions;
+        return array_map(
+            function (array $progression) use ($tnlByCharacterKey): array {
+                $characterName = $progression['entries'][0]['character_name'] ?? '';
+                $characterKey = $this->characterKeyForName((string)$characterName);
+                $progression['xp_to_next_level'] = $tnlByCharacterKey[$characterKey] ?? null;
+                return $progression;
+            },
+            $progressions);
     }
 
     private function loadAwardProgressionsWithLock(array $progressionKeys): array
@@ -1027,7 +959,7 @@ final class XpTrackingService
     private function snapshotDate(array $snapshot): DateTimeImmutable
     {
         if (preg_match(
-            '/^As of (?<date>\d{1,2}\.\d{1,2}\.\d{4})(?:\s|:|$)/i',
+            '/^As of\s+(?<date>\d{1,2}\.\d{1,2}\.\d{4})(?:\s|:|$)/i',
             (string)($snapshot['date_label'] ?? ''),
             $dateMatch) !== 1) {
             throw new RuntimeException('The XP date label was invalid.');
@@ -1105,6 +1037,9 @@ final class XpTrackingService
             foreach ($parsed['characters'] as &$character) {
                 $characterKey = $this->characterKeyForName(
                     (string)$character['character_name']);
+                $character['level'] = $this->currentLevelFromAwardHistory(
+                    $characterKey,
+                    (int)$character['level']);
                 $hasLiveHitPoints = array_key_exists($characterKey, $hitPointsByCharacterKey);
                 $character['hit_points'] = $hitPointsByCharacterKey[$characterKey] ?? 0;
                 $character['xp_to_next_level'] = null;
@@ -1121,6 +1056,10 @@ final class XpTrackingService
                         $progressionByPage[$pageKey] = $this->parseClassProgression(
                             $this->fetchMarkdown($pageUrl));
                     }
+                    $character['level'] = $this->currentLevelForXp(
+                        $progressionByPage[$pageKey],
+                        (int)$character['xp_total'],
+                        (int)$character['level']);
                     $nextLevel = (int)$character['level'] + 1;
                     $nextLevelXp = $progressionByPage[$pageKey][$nextLevel] ?? null;
                     $character['xp_to_next_level'] = is_int($nextLevelXp)
@@ -1285,7 +1224,7 @@ final class XpTrackingService
             }
 
             if (preg_match(
-                '/^As of (?<date>\d{1,2}\.\d{1,2}\.\d{4})(?:\s|:|$)/i',
+                '/^As of\s+(?<date>\d{1,2}\.\d{1,2}\.\d{4})(?:\s|:|$)/i',
                 $dateLabel,
                 $dateMatch) !== 1) {
                 throw new RuntimeException('The XP date label was invalid.');
@@ -1563,6 +1502,30 @@ final class XpTrackingService
         return $matches[0];
     }
 
+    private function currentLevelFromAwardHistory(string $characterKey, int $fallbackLevel): int
+    {
+        try {
+            $entries = $this->loadAwardProgression($characterKey . '-xp');
+            $latest = $entries[array_key_last($entries)] ?? null;
+            $level = is_array($latest) ? ($latest['level_after_award'] ?? null) : null;
+            return is_int($level) && $level >= $fallbackLevel ? $level : $fallbackLevel;
+        } catch (Throwable) {
+            return $fallbackLevel;
+        }
+    }
+
+    private function currentLevelForXp(array $progression, int $xpTotal, int $fallbackLevel): int
+    {
+        $currentLevel = max(1, $fallbackLevel);
+        foreach ($progression as $level => $minimumXp) {
+            if ($xpTotal < (int)$minimumXp) {
+                break;
+            }
+            $currentLevel = max($currentLevel, (int)$level);
+        }
+        return $currentLevel;
+    }
+
     private function parseClassProgression(string $markdown): array
     {
         $lines = preg_split('/\r\n|\r|\n/', $markdown);
@@ -1582,40 +1545,6 @@ final class XpTrackingService
                 $progression,
                 (string)$matches['level'],
                 (string)$matches['xp']);
-        }
-        if ($progression !== []) {
-            return $this->validateClassProgression($progression);
-        }
-
-        $xpColumn = null;
-        $levelColumn = null;
-        foreach ($lines as $line) {
-            $cells = $this->splitTableRow((string)$line);
-            if ($cells === []) {
-                continue;
-            }
-            $normalizedCells = array_map(
-                fn(string $cell): string => $this->normalizeClassName($cell),
-                $cells);
-            if ($levelColumn === null || $xpColumn === null) {
-                $levelIndex = array_search('level', $normalizedCells, true);
-                $xpIndex = array_search('xp', $normalizedCells, true);
-                if ($levelIndex !== false && $xpIndex !== false && $levelIndex !== $xpIndex) {
-                    $levelColumn = $levelIndex;
-                    $xpColumn = $xpIndex;
-                }
-                continue;
-            }
-            if (!array_key_exists($levelColumn, $cells)
-                || !array_key_exists($xpColumn, $cells)
-                || preg_match('/^\d{1,3}$/', trim($cells[$levelColumn])) !== 1
-                || preg_match('/^\d[\d,]*$/', trim($cells[$xpColumn])) !== 1) {
-                continue;
-            }
-            $this->addClassProgressionEntry(
-                $progression,
-                trim($cells[$levelColumn]),
-                trim($cells[$xpColumn]));
         }
         if ($progression !== []) {
             return $this->validateClassProgression($progression);
@@ -1780,25 +1709,12 @@ final class XpTrackingService
         return trim($cleaned);
     }
 
-    private function canonicalCharacterDisplayName(string $name): string
-    {
-        $characterKey = $this->characterKeyForName($name);
-        return self::CHARACTER_DISPLAY_NAME_ALIASES[$characterKey] ?? $name;
-    }
-
     private function characterKeyForName(string $name): string
     {
         $firstName = explode(' ', trim($name), 2)[0];
         $key = strtolower((string)preg_replace('/[^A-Za-z0-9]+/', '-', $firstName));
         $key = trim($key, '-');
         return self::CHARACTER_KEY_ALIASES[$key] ?? $key;
-    }
-
-    private function characterKeyForProgression(string $progressionKey): string
-    {
-        return str_ends_with($progressionKey, '-xp')
-            ? substr($progressionKey, 0, -3)
-            : $progressionKey;
     }
 
     private function loadCachedSnapshot(): ?array
@@ -2005,4 +1921,14 @@ final class XpTrackingService
         }
     }
 
+    private function ensureSchema(): void
+    {
+        $this->database->exec(
+            'CREATE TABLE IF NOT EXISTS xp_tracking_cache (
+                cache_key TEXT PRIMARY KEY,
+                fetched_at INTEGER NOT NULL,
+                payload_json TEXT NOT NULL,
+                content_sha256 TEXT NOT NULL
+            )');
+    }
 }

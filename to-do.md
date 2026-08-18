@@ -213,39 +213,39 @@ Planned correction for the PWA's approximately 10.1 MB optional-data installatio
 Planned security correction: eliminate first-name equivalence from authentication and every authenticated character-data path. Authentication must return an immutable canonical account identity; a Boolean result is insufficient because later lookups can otherwise use the attacker's originally entered name.
 
 - [x] 1. Create a deterministic regression harness before changing production code.
-  - Add two character fixtures with the same first name and distinct full names, canonical IDs, passwords, XP totals, party sheets, and hero-briefing data.
-  - Prove the current failure: entering Character B's full name with Character A's password authenticates, then the subsequent name-based XP lookup returns Character B.
-  - Add negative cases for an ambiguous first-name alias, an unknown canonical ID, a mismatched password, and a selected hero whose display name collides with another hero.
-  - Keep the fixture independent of real password hashes and never expose production credentials.
+  - [x] Add two character fixtures with the same first name, distinct full names, canonical IDs, passwords, XP totals, party sheets, and hero-briefing data.
+  - [x] Reproduce the current failure: Character A authenticates in the synthetic sidecar, then the legacy name-based XP lookup returns Character B's data.
+  - [x] Add negative cases for an ambiguous first-name alias, an unknown canonical ID, a mismatched password, and a selected hero whose display name collides with another hero.
+  - [x] Keep the fixture independent of real password hashes and never expose production credentials.
 
 - [x] 2. Replace Boolean password validation with an immutable identity result.
-  - Introduce an immutable `XpAuthenticatedIdentity` containing a stable canonical account/character ID, canonical character name, explicit aliases, and the Dungeon Master/account scope needed by callers.
-  - Change `XpPasswordStoreUtility.ValidatePassword` to return that identity or a fail-closed invalid result, never `true`/`false` alone.
-  - Remove candidate enumeration across every stored account sharing a first name.
-  - Resolve only the exact canonical name or an explicitly declared alias.
-  - Preserve constant-time password verification and ensure failed authentication does not leak which identity or alias matched.
+  - [x] Introduce an immutable `XpAuthenticatedIdentity` containing a stable canonical account/character ID, canonical character name, explicit aliases, and the Dungeon Master/account scope needed by callers.
+  - [x] Change `XpPasswordStoreUtility.ValidatePassword` to return that identity or a fail-closed invalid result, never `true`/`false` alone.
+  - [x] Remove candidate enumeration across every stored account sharing a first name.
+  - [x] Resolve only the exact canonical name or an explicitly declared alias; aliases remain empty until the versioned sidecar work in Step 3.
+  - [x] Preserve constant-time password verification and ensure failed authentication does not leak which identity or alias matched.
 
 - [x] 3. Make the password sidecar identity-addressable and reject ambiguous aliases at load time.
-  - Revise the sidecar schema with a migration/version step rather than silently interpreting the v1 name-only format.
-  - Store an immutable canonical ID, canonical name, password hash, and an explicit alias list per entry.
-  - Normalize names and aliases consistently for comparison while preserving display values.
-  - Reject duplicate canonical IDs, duplicate canonical names, aliases that collide across accounts, aliases that collide with another account's canonical name, blank/untrimmed aliases, and duplicate aliases within an entry.
-  - Treat first names as ordinary text unless deliberately listed as an alias; never infer them automatically.
-  - Update password-generation, import, sidecar validation, installer, release-sidecar, and runtime-sidecar contracts together.
+  - [x] Revise the sidecar schema to v2; v1 name-only sidecars are rejected, while explicit conversion paths emit v2.
+  - [x] Store an immutable canonical ID, canonical name, password hash, and an explicit alias list per entry.
+  - [x] Normalize names and aliases consistently for comparison while preserving display values.
+  - [x] Reject duplicate canonical IDs, duplicate canonical names, aliases that collide across accounts, aliases that collide with another account's canonical name, blank/untrimmed aliases, and duplicate aliases within an entry.
+  - [x] Treat first names as ordinary text unless deliberately listed as an alias; never infer them automatically.
+  - [x] Update password-generation, import, sidecar validation, installer, release-sidecar, and runtime-sidecar contracts together.
 
 - [x] 4. Thread the returned identity through Form1 and XP retrieval.
-  - Replace the entered `characterName` as the source of authorization state with the returned immutable identity.
-  - Make XP snapshot filtering accept the authenticated identity/canonical ID and resolve the exact authorized record; do not perform a second lookup from the originally entered name.
-  - Determine Dungeon Master scope from the returned identity, not from a case-insensitive name comparison.
-  - Update the required XP, optional XP, publisher-task, login, and error/status paths so valid authentication always carries the same identity object forward.
-  - Clear the identity on cancellation, failed authentication, feature completion, and account transition.
+  - [x] Replace the entered `characterName` as the source of authorization state with the returned immutable identity.
+  - [x] Make XP snapshot filtering accept the authenticated identity/canonical ID and resolve the exact authorized record; do not perform a second lookup from the originally entered name.
+  - [x] Determine Dungeon Master scope from the returned identity, not from a case-insensitive name comparison.
+  - [x] Update the required XP, optional XP, publisher-task, login, and error/status paths so valid authentication always carries the same identity object forward.
+  - [x] Clear the identity on cancellation, failed authentication, feature completion, and account transition.
 
 - [x] 5. Correct PartyHeroUtility identity handling.
-  - Add stable identity data to `PartyHeroSheet` or its roster input and pass the authenticated identity rather than a display-name string to `WithVisibleXpTotals`.
-  - Replace `IsSameHeroName`, first-name fallback, and first-name XP matching with exact canonical ID matching; allow a canonical-name fallback only at a validated identity-boundary adapter.
-  - Ensure Dungeon Master visibility is explicit scope-based authorization rather than name matching.
-  - Stop deriving hero markdown/token paths from first names where that can collide; use the canonical identity/validated roster mapping and migrate existing generated paths safely.
-  - Keep display aliases separate from authorization identity.
+  - [x] Add canonical identity data to the roster input and carry it into `PartyHeroSheet`; pass the authenticated identity to `WithVisibleXpTotals`.
+  - [x] Replace first-name XP matching with exact, unique canonical-ID matching; missing or duplicate identities fail closed.
+  - [x] Keep Dungeon Master XP visibility explicitly scope-based while still requiring canonical roster-to-XP matches.
+  - [x] Derive new hero markdown paths from canonical IDs or full names; retain first-name paths only through a collision-checked migration fallback.
+  - [x] Keep display aliases separate from authorization identity and add regression coverage for same-first-name heroes.
 
 - [x] 6. Correct My Hero Briefing identity handling.
   - Extend `MyHeroBriefingRequest` with the authenticated canonical identity and use it to resolve the authenticated hero exactly.
@@ -254,24 +254,69 @@ Planned security correction: eliminate first-name equivalence from authenticatio
   - Remove automatic first-name aliases from `GetHeroAliases`; only use aliases declared by the identity registry, with ambiguity rejected before runtime.
   - Ensure a same-first-name hero cannot inherit another hero's briefing, XP, posts, or encrypted-note access.
 
-- [x] 7. Audit all remaining name-based identity comparisons and boundaries.
+- [ ] 7. Audit all remaining name-based identity comparisons and boundaries.
   - Review Form1, XpTrackingUtility, PartyHeroUtility, MyHeroBriefingUtility, TaggedNoteCipherUtility, hero roster loaders, import scripts, and generated manifests.
   - Classify each name use as display/search text or authorization identity.
   - Replace authorization comparisons that use first names, inferred aliases, or user-entered names; retain display/search behavior only where it cannot grant access.
   - Document any intentional public search alias separately from protected account identity.
 
-- [x] 8. Update tests and release/deployment contracts.
+- [ ] 8. Update tests and release/deployment contracts.
   - Add unit/regression coverage for exact-ID success, same-first-name cross-password denial, ambiguous-alias load rejection, explicit unique-alias success, DM scope, party XP visibility, hero selection, briefing activity, encrypted-note access, and account switching.
   - Add negative fixtures proving that a first-name-only input cannot authenticate or select a protected hero when multiple identities share it.
   - Update custom regression-harness catalogs, sidecar schema validators, installer/runtime checks, migration tests, and release checklists.
   - Verify that no protected lookup receives the originally entered name after authentication.
 
-- [x] 9. Migrate, deploy, and verify the identity data atomically.
+- [ ] 9. Migrate, deploy, and verify the identity data atomically.
   - Back up and migrate the password sidecar and any canonical identity/roster data with rollback support.
   - Verify local hashes, release contents, and generated roster/hero paths before deployment.
   - Run authorized positive tests for each identity plus anonymous, wrong-password, ambiguous-alias, cross-character, logout, and account-switch negative tests.
   - Verify production behavior through the authenticated deployment contract without exposing passwords or protected response bodies.
 
+
+## Next PWA robustness and usefulness backlog
+
+- [ ] Reconcile the current branch before adding features.
+  - [ ] Review the dirty worktree against the reviewed branch baseline.
+  - [ ] Confirm deleted PWA features, tests, installer tooling, and broker support are intentional.
+  - [ ] Restore or explicitly replace Activity / Inbox, message pagination, revision polling, search-worker support, optional-pack controls, and deployment/restore tooling.
+  - [ ] Re-run the full PWA and broker regression gates.
+- [ ] Restore responsive campaign-search performance.
+  - [ ] Keep corpus loading, normalization, wildcard matching, scoring, and sorting in a dedicated worker.
+  - [ ] Preserve request-ID protection against stale results.
+  - [ ] Retain offline pack retry/removal behavior and benchmark typing responsiveness on the full index.
+- [x] Strengthen offline and update behavior.
+  - [x] Add an update-available banner with explicit reload/defer controls.
+  - [x] Validate cached JSON schema and MIME types before use.
+  - [x] Recover from corrupt or partially cached translator/search packs.
+  - [x] Cover quota failures, interrupted installs, offline reloads, and stale workers.
+- [ ] Make messaging a dependable campaign inbox.
+  - [ ] Restore older-message pagination.
+  - [ ] Add conversation grouping and per-thread unread counts.
+  - [ ] Add retry/error recovery and draft preservation.
+  - [ ] Add optional browser notifications for new messages.
+  - [ ] Verify account switching never leaks prior-user messages.
+- [ ] Add a campaign-session dashboard.
+  - [ ] Show current date/location, active quests, party members/HP, recent messages, and unresolved quest decisions.
+  - [ ] Add quick links between quests, characters, locations, and messages.
+  - [ ] Support authenticated session notes through the broker.
+- [ ] Improve quest usefulness.
+  - [ ] Add filters for assigned character, prerequisite state, source location, and reward type.
+  - [ ] Add a “What can I do next?” view for available, blocked, and active objectives.
+  - [ ] Notify users when quest decisions or availability change.
+- [ ] Improve party management.
+  - [ ] Restore and expand party-funds support with transaction history and arithmetic reconciliation.
+  - [ ] Add party inventory and magic-item ownership.
+  - [ ] Add explicit last-refreshed and retry state to XP/level-up summaries.
+- [ ] Make production health visible.
+  - [ ] Add a safe authenticated health panel for broker, XP, and word-count freshness.
+  - [ ] Add a credential-free “Report a problem” diagnostic export containing app revision, browser version, cache state, and failed endpoint names.
+
+## Implemented this pass
+
+- [x] Reconciled the reviewed PWA branch slice by restoring the previously removed search-worker, optional-pack, Activity / Inbox, revision-polling, message-pagination, installer, restore, and broker-support files without resetting unrelated worktree changes.
+- [x] Restored campaign-search worker loading, request-ID protection, offline pack controls, and the matching PWA test coverage.
+- [x] Restored Activity / Inbox, older-message pagination, revision polling, and protected account-transition coverage; browser smoke passes the player/DM, logout/session-expiry, navigation, and online/offline paths.
+- [x] Corrected service-worker coverage for query-versioned translator/search workers plus the optional-pack loader and manifest, and advanced the cache revision to 109.
 
 ## Completed
 

@@ -42,7 +42,7 @@ namespace PlayerAssistant
             "*First, the app finds the hero's latest authored post in each thread.*",
             "*Then it looks at later posts in that same thread by other authors.*",
             "*Those later posts are ranked as:*",
-            "*- Direct mention after your last post when the post mentions the hero by name or first name.*",
+            "*- Direct mention after your last post when the post mentions the hero by canonical name or explicit alias.*",
             "*- Question-like post after your last post when the post contains a ?.*",
             "*- Recent post after your last post when it is simply a later post in that thread.*"
         ];
@@ -979,7 +979,7 @@ namespace PlayerAssistant
                     candidate => XpPasswordStoreUtility.ValidatePassword(
                         DungeonMasterXpAccessName,
                         candidate,
-                        AppContext.BaseDirectory),
+                        AppContext.BaseDirectory)?.IsDungeonMaster == true,
                     ScheduledTaskLaunchUtility.StartAsync,
                     _formLifetimeCancellation.Token);
                 if (!CanContinueManualPublisherUi())
@@ -1245,11 +1245,11 @@ namespace PlayerAssistant
                 return;
             }
 
-            var authenticatedIdentity = XpPasswordStoreUtility.AuthenticatePassword(
+            var authenticatedIdentity = XpPasswordStoreUtility.ValidatePassword(
                 characterName,
                 password,
                 AppContext.BaseDirectory);
-            if (!authenticatedIdentity.IsValid)
+            if (authenticatedIdentity is null)
             {
                 MessageBox.Show(
                     this,
@@ -1273,17 +1273,17 @@ namespace PlayerAssistant
                     return;
                 }
 
-                var total = FindXpTotalForCharacter(snapshot.Totals, authenticatedIdentity.CanonicalCharacterName);
+                var total = XpTrackingUtility.FindXpTotalForIdentity(snapshot.Totals, authenticatedIdentity);
                 if (total is null)
                 {
                     xpToolStripMenuItem.Enabled = true;
                     MessageBox.Show(
                         this,
-                        XpTrackingUtility.FormatMissingPcFailureMessage(characterName),
+                        XpTrackingUtility.FormatMissingPcFailureMessage(authenticatedIdentity.CanonicalName),
                         "XP",
                         MessageBoxButtons.OK,
                         MessageBoxIcon.Warning);
-                    SetStatusBarMessage($"XP total unavailable for {characterName}. Contact the DM.");
+                    SetStatusBarMessage($"XP total unavailable for {authenticatedIdentity.CanonicalName}. Contact the DM.");
                     return;
                 }
 
@@ -1315,14 +1315,12 @@ namespace PlayerAssistant
                 var partyHeroes = PartyHeroUtility.LoadActiveParty(EnsurePlayerCharacterDirectories());
                 if (TryPromptForXpCredentials(out var characterName, out var password))
                 {
-                    var authenticatedIdentity = XpPasswordStoreUtility.AuthenticatePassword(
+                    var passwordValidation = await ValidateOptionalXpPasswordAsync(
                         characterName,
                         password,
-                        AppContext.BaseDirectory);
-                    var passwordValidation = authenticatedIdentity.IsValid
-                        ? OptionalXpPasswordValidation.Valid
-                        : OptionalXpPasswordValidation.Invalid;
-                    if (authenticatedIdentity.IsValid)
+                        "party XP authentication");
+                    if (passwordValidation.Status == OptionalXpPasswordValidation.Valid
+                        && passwordValidation.Identity is not null)
                     {
                         try
                         {
@@ -1332,8 +1330,7 @@ namespace PlayerAssistant
                             partyHeroes = PartyHeroUtility.WithVisibleXpTotals(
                                 partyHeroes,
                                 snapshot.Totals,
-                                authenticatedIdentity,
-                                authenticatedIdentity.IsDungeonMaster);
+                                passwordValidation.Identity);
                         }
                         catch (Exception ex)
                         {
@@ -1341,7 +1338,7 @@ namespace PlayerAssistant
                             SetStatusBarMessage("Party loaded without XP totals. Contact the DM if XP should be visible.");
                         }
                     }
-                    else if (passwordValidation == OptionalXpPasswordValidation.Invalid)
+                    else if (passwordValidation.Status == OptionalXpPasswordValidation.Invalid)
                     {
                         MessageBox.Show(
                             this,
@@ -1390,25 +1387,21 @@ namespace PlayerAssistant
                 SetStatusBarMessage("Loading My Hero Briefing...");
                 using var activity = BeginStatusBarActivity();
                 var partyHeroes = PartyHeroUtility.LoadActiveParty(EnsurePlayerCharacterDirectories());
-                string? authenticatedHeroName = null;
                 XpAuthenticatedIdentity? authenticatedIdentity = null;
-                var isDungeonMaster = false;
+                IReadOnlyList<XpAuthenticatedIdentity> identityRegistry = [];
                 IReadOnlyList<PcXpTotal> xpTotals = [];
 
                 if (TryPromptForXpCredentials(out var characterName, out var password))
                 {
-                    var identity = XpPasswordStoreUtility.AuthenticatePassword(
+                    var passwordValidation = await ValidateOptionalXpPasswordAsync(
                         characterName,
                         password,
-                        AppContext.BaseDirectory);
-                    var passwordValidation = identity.IsValid
-                        ? OptionalXpPasswordValidation.Valid
-                        : OptionalXpPasswordValidation.Invalid;
-                    if (identity.IsValid)
+                        "my hero briefing XP authentication");
+                    if (passwordValidation.Status == OptionalXpPasswordValidation.Valid
+                        && passwordValidation.Identity is not null)
                     {
-                        authenticatedIdentity = identity;
-                        authenticatedHeroName = identity.CanonicalCharacterName;
-                        isDungeonMaster = identity.IsDungeonMaster;
+                        authenticatedIdentity = passwordValidation.Identity;
+                        identityRegistry = XpPasswordStoreUtility.LoadIdentityRegistry(AppContext.BaseDirectory);
                         try
                         {
                             var snapshot = await XpTrackingUtility.GetCurrentXpSnapshotAsync();
@@ -1420,7 +1413,7 @@ namespace PlayerAssistant
                             SetStatusBarMessage("My Hero Briefing loaded without XP totals. Contact the DM if XP should be visible.");
                         }
                     }
-                    else if (passwordValidation == OptionalXpPasswordValidation.Invalid)
+                    else if (passwordValidation.Status == OptionalXpPasswordValidation.Invalid)
                     {
                         MessageBox.Show(
                             this,
@@ -1441,36 +1434,30 @@ namespace PlayerAssistant
                 var encryptedTextIndex = LoadMyHeroBriefingEncryptedTextIndex();
                 var briefing = MyHeroBriefingUtility.Build(new MyHeroBriefingRequest(
                     partyHeroes,
-                    AuthenticatedHeroName: authenticatedHeroName,
-                    AuthenticatedIdentity: authenticatedIdentity,
-                    IsDungeonMaster: isDungeonMaster,
                     ThreadPosts: threadPosts,
                     XpTotals: xpTotals,
-                    EncryptedTextIndex: encryptedTextIndex));
+                    EncryptedTextIndex: encryptedTextIndex,
+                    AuthenticatedIdentity: authenticatedIdentity,
+                    IdentityRegistry: identityRegistry));
 
                 if (briefing.NeedsHeroSelection)
                 {
-                    var selectedHeroName = PromptForMyHeroBriefingHeroSelection(briefing.HeroChoices);
-                    if (string.IsNullOrWhiteSpace(selectedHeroName))
+                    var selectedHeroCanonicalId = PromptForMyHeroBriefingHeroSelection(briefing.HeroChoices);
+                    if (string.IsNullOrWhiteSpace(selectedHeroCanonicalId))
                     {
                         myHeroBriefingToolStripMenuItem.Enabled = true;
                         SetStatusBarMessage("My Hero Briefing canceled.");
                         return;
                     }
 
-                    var selectedHeroAccountId = partyHeroes
-                        .FirstOrDefault(hero => string.Equals(hero.Name, selectedHeroName, StringComparison.OrdinalIgnoreCase))
-                        ?.AccountId;
                     briefing = MyHeroBriefingUtility.Build(new MyHeroBriefingRequest(
                         partyHeroes,
-                        SelectedHeroName: selectedHeroName,
-                        AuthenticatedHeroName: authenticatedHeroName,
-                        SelectedHeroAccountId: selectedHeroAccountId,
+                        SelectedHeroCanonicalId: selectedHeroCanonicalId,
                         AuthenticatedIdentity: authenticatedIdentity,
-                        IsDungeonMaster: isDungeonMaster,
                         ThreadPosts: threadPosts,
                         XpTotals: xpTotals,
-                        EncryptedTextIndex: encryptedTextIndex));
+                        EncryptedTextIndex: encryptedTextIndex,
+                        IdentityRegistry: identityRegistry));
                 }
 
                 ShowMyHeroBriefing(briefing);
@@ -1510,16 +1497,17 @@ namespace PlayerAssistant
             }
         }
 
-        private async Task<OptionalXpPasswordValidation> ValidateOptionalXpPasswordAsync(
+        private async Task<OptionalXpPasswordResult> ValidateOptionalXpPasswordAsync(
             string characterName,
             string password,
             string logPhase)
         {
             try
             {
-                return XpPasswordStoreUtility.ValidatePassword(characterName, password, AppContext.BaseDirectory)
-                    ? OptionalXpPasswordValidation.Valid
-                    : OptionalXpPasswordValidation.Invalid;
+                var identity = XpPasswordStoreUtility.ValidatePassword(characterName, password, AppContext.BaseDirectory);
+                return identity is not null
+                    ? new OptionalXpPasswordResult(OptionalXpPasswordValidation.Valid, identity)
+                    : new OptionalXpPasswordResult(OptionalXpPasswordValidation.Invalid, null);
             }
             catch (FileNotFoundException ex) when (string.Equals(
                 Path.GetFileName(ex.FileName),
@@ -1527,7 +1515,7 @@ namespace PlayerAssistant
                 StringComparison.OrdinalIgnoreCase))
             {
                 await AppendStartupErrorLogAsync(logPhase, ex);
-                return OptionalXpPasswordValidation.StoreUnavailable;
+                return new OptionalXpPasswordResult(OptionalXpPasswordValidation.StoreUnavailable, null);
             }
         }
 
@@ -1547,6 +1535,10 @@ namespace PlayerAssistant
             Invalid,
             StoreUnavailable
         }
+
+        private sealed record OptionalXpPasswordResult(
+            OptionalXpPasswordValidation Status,
+            XpAuthenticatedIdentity? Identity);
 
         private async void AdventureOutlineToolStripMenuItem_Click(object? sender, EventArgs e)
         {
@@ -1592,6 +1584,14 @@ namespace PlayerAssistant
             }
         }
 
+        private static bool IsDungeonMasterXpAccess(string? characterName)
+        {
+            return string.Equals(
+                characterName?.Trim(),
+                DungeonMasterXpAccessName,
+                StringComparison.OrdinalIgnoreCase);
+        }
+
         private static PcXpTotal? FindXpTotalForCharacter(
             IReadOnlyList<PcXpTotal> totals,
             string characterName)
@@ -1604,7 +1604,14 @@ namespace PlayerAssistant
                 return exactMatch;
             }
 
-            return exactMatch;
+            var firstName = GetFirstName(trimmedName);
+            var firstNameMatches = totals
+                .Where(row => string.Equals(GetFirstName(row.Name), firstName, StringComparison.OrdinalIgnoreCase))
+                .Take(2)
+                .ToArray();
+            return firstNameMatches.Length == 1
+                ? firstNameMatches[0]
+                : null;
         }
 
         private bool TryPromptForXpCredentials(out string characterName, out string password)
@@ -1764,12 +1771,13 @@ namespace PlayerAssistant
             return passwordTextBox.Text;
         }
 
-        private string? PromptForMyHeroBriefingHeroSelection(IReadOnlyList<string> heroChoices)
+        private string? PromptForMyHeroBriefingHeroSelection(IReadOnlyList<MyHeroBriefingHeroChoice> heroChoices)
         {
             var choices = heroChoices
-                .Where(choice => !string.IsNullOrWhiteSpace(choice))
-                .Distinct(StringComparer.OrdinalIgnoreCase)
-                .OrderBy(choice => choice, StringComparer.OrdinalIgnoreCase)
+                .Where(choice => !string.IsNullOrWhiteSpace(choice.CanonicalId)
+                    && !string.IsNullOrWhiteSpace(choice.DisplayName))
+                .DistinctBy(choice => choice.CanonicalId, StringComparer.Ordinal)
+                .OrderBy(choice => choice.DisplayName, StringComparer.OrdinalIgnoreCase)
                 .ToArray();
 
             if (choices.Length == 0)
@@ -1785,7 +1793,7 @@ namespace PlayerAssistant
 
             if (choices.Length == 1)
             {
-                return choices[0];
+                return choices[0].CanonicalId;
             }
 
             using var dialog = new Form
@@ -1808,10 +1816,12 @@ namespace PlayerAssistant
             using var comboBox = new ComboBox
             {
                 DropDownStyle = ComboBoxStyle.DropDownList,
+                DisplayMember = nameof(MyHeroBriefingHeroChoice.DisplayName),
+                ValueMember = nameof(MyHeroBriefingHeroChoice.CanonicalId),
                 Location = new Point(82, 18),
                 Size = new Size(274, 23)
             };
-            comboBox.Items.AddRange(choices.Cast<object>().ToArray());
+            comboBox.DataSource = choices;
             comboBox.SelectedIndex = 0;
 
             using var okButton = new Button
@@ -1834,7 +1844,7 @@ namespace PlayerAssistant
             dialog.CancelButton = cancelButton;
 
             return dialog.ShowDialog(this) == DialogResult.OK
-                ? comboBox.SelectedItem?.ToString()
+                ? (comboBox.SelectedItem as MyHeroBriefingHeroChoice)?.CanonicalId
                 : null;
         }
 
@@ -6597,10 +6607,6 @@ namespace PlayerAssistant
             }
         }
 
-        private static bool IsDungeonMasterXpAccess(string characterName)
-        {
-            return string.Equals(characterName, DungeonMasterXpAccessName, StringComparison.OrdinalIgnoreCase);
-        }
 
         private static string GetFirstName(string value)
         {

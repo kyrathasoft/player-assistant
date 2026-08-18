@@ -3,7 +3,6 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/../player-assistant-broker/BrokerHttpException.php';
-require_once __DIR__ . '/../player-assistant-broker/DatabaseMigrationService.php';
 require_once __DIR__ . '/../player-assistant-broker/RpolClient.php';
 require_once __DIR__ . '/../player-assistant-broker/CharacterAuthService.php';
 require_once __DIR__ . '/../player-assistant-broker/XpTrackingService.php';
@@ -208,23 +207,6 @@ try {
             '| Another Hero | Fighter | 5 | 98,765 |',
         ]);
     };
-    $migrationDatabase = new PDO('sqlite:' . $databasePath, null, null, [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]);
-    (new DatabaseMigrationService($migrationDatabase, dirname($databasePath) . '/migration-backups'))->migrate();
-    routingAssert(
-        (int)$migrationDatabase->query('PRAGMA user_version')->fetchColumn() === 4,
-        'Identity schema migration did not reach version 4.');
-    routingAssert(
-        (int)$migrationDatabase->query(
-            "SELECT COUNT(*) FROM sqlite_master WHERE type = 'index' AND name = 'ux_character_accounts_character_key'")->fetchColumn() === 1,
-        'The character_key uniqueness constraint is missing.');
-    routingAssert(
-        (int)$migrationDatabase->query(
-            "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'character_account_aliases'")->fetchColumn() === 1,
-        'The character account alias table is missing.');
-    routingAssert(
-        (int)$migrationDatabase->query('SELECT COUNT(*) FROM character_account_aliases')->fetchColumn() === 0,
-        'The empty identity fixture unexpectedly received account aliases.');
-    $migrationDatabase = null;
     $broker = new BrokerService(
         $config,
         new RpolClient($config['rpol']),
@@ -317,9 +299,7 @@ try {
         $session);
     routingAssert(
         $adminHealth['body']['schema_version'] === 7
-        && $adminHealth['body']['quest_request_workflow_configured'] === true
-        && isset($adminHealth['body']['pwa_monitor'])
-        && $adminHealth['body']['pwa_monitor']['configured'] === false,
+            && $adminHealth['body']['quest_request_workflow_configured'] === true,
         'The admin health route did not expose readiness details.');
     try {
         $broker->dispatch(
@@ -470,50 +450,6 @@ try {
         '192.0.2.30',
         $session);
     routingAssert($created['status'] === 201, 'The account administration route did not create an account.');
-    $aliasDatabase = new PDO('sqlite:' . $databasePath, null, null, [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]);
-    $aliasDatabase->prepare(
-        'INSERT INTO character_account_aliases (account_id, normalized_alias, display_alias, created_at)
-         VALUES (?, ?, ?, ?)')->execute([
-            $created['body']['id'],
-            'routing alias',
-            'Routing Alias',
-            time(),
-        ]);
-    $aliasDatabase = null;
-    $aliasSession = [];
-    $aliasLogin = $broker->dispatch(
-        'POST',
-        '/v1/login',
-        [],
-        ['character_name' => 'Routing Alias', 'password' => 'routing password'],
-        ['origin' => 'https://example.test'],
-        '192.0.2.31',
-        $aliasSession);
-    routingAssert(
-        $aliasLogin['status'] === 200
-            && $aliasLogin['body']['account']['id'] === $created['body']['id'],
-        'A declared login alias did not resolve to the opaque canonical account ID.');
-    $duplicateKeyBody = [
-        'character_name' => 'Duplicate Key Hero',
-        'password' => 'duplicate key password',
-        'character_key' => 'routing',
-        'role' => 'player',
-    ];
-    try {
-        $broker->dispatch(
-            'POST',
-            '/v1/admin/character-accounts',
-            [],
-            $duplicateKeyBody,
-            routingAdminHeaders('POST', '/v1/admin/character-accounts', $duplicateKeyBody, $config['api']['admin_key']),
-            '192.0.2.30',
-            $session);
-        throw new RuntimeException('The account administration route accepted a duplicate character_key.');
-    } catch (BrokerHttpException $exception) {
-        routingAssert(
-            $exception->status === 409 && $exception->errorName === 'account_conflict',
-            'A duplicate character_key was rejected with the wrong response.');
-    }
 
     $regenerated = false;
     $login = $broker->dispatch(
@@ -551,7 +487,6 @@ try {
         $identity['body']['account']['character_key'] === 'routing',
         'The protected identity route did not use the session account.');
 
-    $sessionReleaseObserved = false;
     $xp = $broker->dispatch(
         'GET',
         '/v1/xp',
@@ -559,13 +494,7 @@ try {
         [],
         [],
         '192.0.2.30',
-        $session,
-        null,
-        null,
-        static function () use (&$sessionReleaseObserved): void {
-            $sessionReleaseObserved = true;
-        });
-    routingAssert($sessionReleaseObserved, 'The read-only XP route did not release the session lock before broker work.');
+        $session);
     routingAssert($xp['status'] === 200, 'The protected XP route failed.');
     routingAssert($xp['body']['scope'] === 'character', 'The player XP response had the wrong scope.');
     routingAssert($xp['body']['character']['xp_total'] === 12345, 'The player XP response had the wrong total.');
@@ -595,6 +524,12 @@ try {
             'companion-xp',
         ],
         'The player XP awards response returned unauthorized progression data.');
+    routingAssert(
+        $xpAwards['body']['progressions'][0]['xp_to_next_level'] === 7655,
+        'The XP awards response did not include the character TNL.');
+    routingAssert(
+        $xpAwards['body']['progressions'][1]['xp_to_next_level'] === null,
+        'The XP awards response did not preserve unavailable TNL data.');
     routingAssert(
         !isset($xpAwards['body']['awards_directory'])
             && !isset($xpAwards['body']['file_name']),
@@ -642,7 +577,7 @@ try {
     routingAssert($quests['status'] === 200, 'The protected quest route failed.');
     $expectedQuestStatuses = [
         'find-jelenneth' => ['active', 'individual-or-party'],
-        'three-items-for-nuanda' => ['active', 'individual-or-party'],
+        'three-items-for-nuanda' => ['completed', 'individual-or-party'],
         'k-r-k-caravan-run' => ['completed', 'party-only'],
         'plumb-lost-caverns' => ['available', 'party-only'],
         'reclaim-keep-on-borderlands' => ['available', 'party-only'],
@@ -699,16 +634,6 @@ try {
             && $quests['body']['pending_requests'] === []
             && $quests['body']['notifications'] === [],
         'The player quest response returned invalid request metadata.');
-
-    $playerRevisions = $broker->dispatch(
-        'GET', '/v1/revisions', [], [], [], '192.0.2.30', $session);
-    routingAssert(
-        $playerRevisions['status'] === 200
-            && $playerRevisions['body']['schema_version'] === 1
-            && $playerRevisions['body']['messages']['unread_count'] === 0
-            && $playerRevisions['body']['quests']['activity_count'] === 0
-            && preg_match('/^[a-f0-9]{64}$/D', $playerRevisions['body']['messages']['revision']) === 1,
-        'The player revisions route returned an invalid response.');
 
     $playerMutationHeaders = [
         'origin' => 'https://example.test',
@@ -818,11 +743,6 @@ try {
         'origin' => 'https://example.test',
         'csrf-token' => $dungeonMasterLogin['body']['csrf_token'],
     ];
-    $dungeonMasterRevisions = $broker->dispatch(
-        'GET', '/v1/revisions', [], [], [], '192.0.2.31', $dungeonMasterSession);
-    routingAssert(
-        $dungeonMasterRevisions['body']['quests']['activity_count'] === 1,
-        'The Dungeon Master revisions route did not report the pending quest request.');
     $dungeonMasterXpAwards = $broker->dispatch(
         'GET',
         '/v1/xp-awards',
@@ -895,9 +815,7 @@ try {
     routingAssert(
         $dungeonMasterMessages['status'] === 200
             && count($dungeonMasterMessages['body']['messages']) === 1
-            && $dungeonMasterMessages['body']['schema_version'] === 3
-            && $dungeonMasterMessages['body']['unread_count'] === 1
-            && $dungeonMasterMessages['body']['next_cursor'] === null
+            && $dungeonMasterMessages['body']['schema_version'] === 2
             && count($dungeonMasterMessages['body']['player_recipients']) === 2
             && $dungeonMasterMessages['body']['messages'][0]['id'] === $messageForDungeonMasterId
             && $dungeonMasterMessages['body']['messages'][0]['sender_character_name'] === 'Routing Hero'

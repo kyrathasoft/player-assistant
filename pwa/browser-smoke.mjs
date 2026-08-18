@@ -198,6 +198,8 @@ const questPayload = (currentAccount) => ({
         reward: 'Confidence',
         accepted_on: '',
         expires_on: '',
+        completed_on: '',
+        completed_meta_date: '',
         request_status: null,
         wiki_url: 'https://publish.obsidian.md/scarlethorizons/Quests/CI+Quest'
     }],
