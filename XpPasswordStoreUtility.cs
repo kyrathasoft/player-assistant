@@ -136,6 +136,16 @@ namespace PlayerAssistant
             return hashes;
         }
 
+        internal static IReadOnlyList<XpAuthenticatedIdentity> LoadIdentityRegistry(
+            string? runtimeDirectory = null)
+        {
+            return LoadPasswordHashes(runtimeDirectory)
+                .Values
+                .Select(record => record.ToAuthenticatedIdentity())
+                .OrderBy(identity => identity.CanonicalName, StringComparer.OrdinalIgnoreCase)
+                .ToArray();
+        }
+
         public static XpAuthenticatedIdentity? ValidatePassword(string pcName, string password, string? runtimeDirectory = null)
         {
             ArgumentException.ThrowIfNullOrWhiteSpace(pcName);

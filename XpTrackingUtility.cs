@@ -44,11 +44,14 @@ namespace PlayerAssistant
             ArgumentNullException.ThrowIfNull(totals);
             ArgumentNullException.ThrowIfNull(identity);
 
-            var matches = totals
-                .Where(row => string.Equals(row.CanonicalId, identity.CanonicalId, StringComparison.Ordinal))
-                .Take(2)
-                .ToArray();
-            return matches.Length == 1 ? matches[0] : null;
+            if (totals.Any(row => row.CanonicalId is not null))
+            {
+                return totals.FirstOrDefault(row =>
+                    string.Equals(row.CanonicalId, identity.CanonicalId, StringComparison.Ordinal));
+            }
+
+            return totals.FirstOrDefault(row =>
+                string.Equals(row.Name.Trim(), identity.CanonicalName.Trim(), StringComparison.OrdinalIgnoreCase));
         }
 
         internal static XpTrackingSnapshot ParseCurrentXpSnapshot(string markdown)
@@ -152,13 +155,9 @@ namespace PlayerAssistant
             var xpIndex = Array.FindIndex(
                 headerCells,
                 cell => string.Equals(cell, "XP Total", StringComparison.OrdinalIgnoreCase));
-            var canonicalIdIndex = Array.FindIndex(
-                headerCells,
-                cell => string.Equals(cell, "Canonical ID", StringComparison.OrdinalIgnoreCase)
-                    || string.Equals(cell, "CanonicalId", StringComparison.OrdinalIgnoreCase));
-            if (nameIndex < 0 || xpIndex < 0 || canonicalIdIndex < 0)
+            if (nameIndex < 0 || xpIndex < 0)
             {
-                throw new InvalidOperationException("The latest XP tracking table must contain Name, Canonical ID, and XP Total columns.");
+                throw new InvalidOperationException("The latest XP tracking table must contain Name and XP Total columns.");
             }
 
             var results = new List<PcXpTotal>();
@@ -176,17 +175,16 @@ namespace PlayerAssistant
                     continue;
                 }
 
-                if (cells.Length <= Math.Max(Math.Max(nameIndex, xpIndex), canonicalIdIndex))
+                if (cells.Length <= Math.Max(nameIndex, xpIndex))
                 {
                     break;
                 }
 
                 var name = CleanMarkdownCell(cells[nameIndex]);
-                var canonicalId = CleanMarkdownCell(cells[canonicalIdIndex]);
                 var xpTotal = ParseXpTotal(cells[xpIndex]);
-                if (name.Length > 0 && canonicalId.Length > 0)
+                if (name.Length > 0)
                 {
-                    results.Add(new PcXpTotal(name, xpTotal, canonicalId));
+                    results.Add(new PcXpTotal(name, xpTotal));
                 }
             }
 
