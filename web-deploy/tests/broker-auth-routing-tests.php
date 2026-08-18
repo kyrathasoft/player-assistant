@@ -10,6 +10,7 @@ require_once __DIR__ . '/../player-assistant-broker/WordCountService.php';
 require_once __DIR__ . '/../player-assistant-broker/BrokerOperations.php';
 require_once __DIR__ . '/../player-assistant-broker/QuestService.php';
 require_once __DIR__ . '/../player-assistant-broker/MessageService.php';
+require_once __DIR__ . '/../player-assistant-broker/MagicItemService.php';
 require_once __DIR__ . '/../player-assistant-broker/BrokerService.php';
 
 function routingAssert(bool $condition, string $message): void
@@ -48,9 +49,24 @@ $wordCountSigningKeypair = sodium_crypto_sign_keypair();
 $wordCountSigningSecretKey = sodium_crypto_sign_secretkey($wordCountSigningKeypair);
 $wordCountSigningPublicKey = sodium_crypto_sign_publickey($wordCountSigningKeypair);
 $xpAwardsDirectory = sys_get_temp_dir() . '/pa-xp-awards-' . bin2hex(random_bytes(6));
-if ($databasePath === false) {
-    throw new RuntimeException('Unable to create the broker routing test database.');
+$magicItemsPath = tempnam(sys_get_temp_dir(), 'pa-magic-items-');
+if ($databasePath === false || $magicItemsPath === false) {
+    throw new RuntimeException('Unable to create the broker routing fixtures.');
 }
+file_put_contents($magicItemsPath, json_encode([
+    'schema_version' => 2,
+    'source' => 'routing-test-source',
+    'items' => [[
+        'name' => 'Public Routing Item',
+        'description' => 'Public fixture.',
+        'date-acquired' => '7.31.2026',
+        'meta-date-acquired' => '07/31/2026',
+        'longevity' => 'permanent',
+        'provenance' => 'Synthetic fixture.',
+        'whereabouts' => 'Fixture',
+        'viewable-by' => 'all',
+    ]],
+], JSON_THROW_ON_ERROR));
 if ($wordCountStatusPath === false) {
     throw new RuntimeException('Unable to create the word-count status test path.');
 }
@@ -133,6 +149,9 @@ try {
             'status_path' => $wordCountStatusPath,
             'signature_key_id' => 'test-word-count-key',
             'signature_public_key' => base64_encode($wordCountSigningPublicKey),
+        ],
+        'magic_items' => [
+            'source_path' => $magicItemsPath,
         ],
         'rpol' => [
             'username' => 'unused',
@@ -389,6 +408,15 @@ try {
     }
 
     try {
+        $broker->dispatch('GET', '/v1/magic-items', [], [], [], '192.0.2.30', $session);
+        throw new RuntimeException('The protected magic-item route accepted an unauthenticated request.');
+    } catch (BrokerHttpException $exception) {
+        routingAssert(
+            $exception->status === 401 && $exception->errorName === 'authentication_required',
+            'The protected magic-item route failed with the wrong unauthenticated response.');
+    }
+
+    try {
         $broker->dispatch('GET', '/v1/messages', [], [], [], '192.0.2.30', $session);
         throw new RuntimeException('The protected message route accepted an unauthenticated request.');
     } catch (BrokerHttpException $exception) {
@@ -450,6 +478,32 @@ try {
         '192.0.2.30',
         $session);
     routingAssert($created['status'] === 201, 'The account administration route did not create an account.');
+    file_put_contents($magicItemsPath, json_encode([
+        'schema_version' => 2,
+        'source' => 'routing-test-source',
+        'items' => [
+            [
+                'name' => 'Owned Routing Item',
+                'description' => 'Private fixture.',
+                'date-acquired' => '7.31.2026',
+                'meta-date-acquired' => '07/31/2026',
+                'longevity' => 'permanent',
+                'provenance' => 'Synthetic fixture.',
+                'whereabouts' => 'Routing Hero',
+                'viewable-by' => $created['body']['id'],
+            ],
+            [
+                'name' => 'Collision Routing Item',
+                'description' => 'Private fixture.',
+                'date-acquired' => '7.31.2026',
+                'meta-date-acquired' => '07/31/2026',
+                'longevity' => 'permanent',
+                'provenance' => 'Synthetic fixture.',
+                'whereabouts' => 'Other Hero',
+                'viewable-by' => substr((string)$created['body']['id'], 0, 31) . '0',
+            ],
+        ],
+    ], JSON_THROW_ON_ERROR));
 
     $regenerated = false;
     $login = $broker->dispatch(
@@ -486,6 +540,22 @@ try {
     routingAssert(
         $identity['body']['account']['character_key'] === 'routing',
         'The protected identity route did not use the session account.');
+
+    $magicItems = $broker->dispatch(
+        'GET',
+        '/v1/magic-items',
+        [],
+        [],
+        [],
+        '192.0.2.30',
+        $session);
+    routingAssert($magicItems['status'] === 200, 'The protected magic-item route failed.');
+    $magicItemNames = array_column($magicItems['body']['items'], 'name');
+    routingAssert(in_array('Owned Routing Item', $magicItemNames, true), 'The authorized magic item was not returned.');
+    routingAssert(!in_array('Collision Routing Item', $magicItemNames, true), 'The magic-item route used substring authorization.');
+    routingAssert(
+        ($magicItems['body']['items'][0]['viewable-by'] ?? null) === 'all',
+        'The magic-item route leaked private viewer metadata.');
 
     $xp = $broker->dispatch(
         'GET',
@@ -1197,6 +1267,7 @@ try {
     fwrite(STDOUT, "Broker authentication routing tests passed.\n");
 } finally {
     @unlink($databasePath);
+    @unlink($magicItemsPath);
     @unlink($wordCountStatusPath);
     foreach (glob($wordCountStatusPath . '.tmp-*') ?: [] as $statusTemporaryFile) {
         @unlink($statusTemporaryFile);

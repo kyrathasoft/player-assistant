@@ -275,10 +275,10 @@ Planned security correction: eliminate first-name equivalence from authenticatio
 
 ## Code-review implementation backlog
 
-- [ ] Move restricted magic-item data behind canonical authenticated authorization.
-  - Stop publishing and precaching protected `viewable-by` records in the complete public `magic-items.json` payload.
-  - Filter restricted records in a broker endpoint by immutable account/character ID; never authorize with substring matches or inferred first-name aliases.
-  - Add direct-fetch, same-first-name, substring-collision, anonymous, account-switch, offline-cache, and authorized-owner regression coverage.
+- [x] Move restricted magic-item data behind canonical authenticated authorization.
+  - [x] Stop publishing and precaching protected `viewable-by` records in the complete public `magic-items.json` payload.
+  - [x] Filter restricted records in `/v1/magic-items` by immutable account ID; authorization rejects substring matches, names, and inferred first-name aliases.
+  - [x] Add direct-fetch, same-first-name/sub-string-collision, anonymous, account-switch, offline-fallback, and authorized-owner regression coverage.
 - [ ] Restore migration-only ownership of the broker schema.
   - Remove request-time `CREATE TABLE`, `CREATE INDEX`, and `ALTER TABLE` work from `BrokerService`, `CharacterAuthService`, `MessageService`, `QuestService`, and `XpTrackingService` constructors.
   - Make service startup verify the expected `PRAGMA user_version` and required objects without mutating SQLite; keep all schema changes in ordered deployment migrations.

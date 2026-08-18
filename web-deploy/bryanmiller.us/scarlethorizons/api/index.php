@@ -26,6 +26,7 @@ try {
     require_once $privateDirectory . '/BrokerOperations.php';
     require_once $privateDirectory . '/QuestService.php';
     require_once $privateDirectory . '/MessageService.php';
+    require_once $privateDirectory . '/MagicItemService.php';
     require_once $privateDirectory . '/BrokerService.php';
     require_once $privateDirectory . '/BrokerAlertService.php';
     $configPathOverride = getenv('PLAYER_ASSISTANT_BROKER_CONFIG');

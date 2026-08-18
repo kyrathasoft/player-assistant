@@ -21,4 +21,8 @@ return [
         // Optional stable secret for audit-address pseudonymization.
         'audit_address_hash_key' => 'CHANGE_ME_TO_A_RANDOM_SECRET',
     ],
+    'magic_items' => [
+        // Keep this schema-v2 file outside the public document root.
+        'source_path' => '/home/dh_4gg2za/player-assistant-broker/magic-items.json',
+    ],
 ];
