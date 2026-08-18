@@ -370,6 +370,20 @@ const serveApi = async (request, response, pathname) => {
         });
         return;
     }
+    if (route === '/magic-items' && request.method === 'GET') {
+        const currentAccount = requireSession(request, response);
+        if (!currentAccount) return;
+        const authorizedItems = magicItemFixture.items
+            .filter((item) => item['viewable-by'] === 'all'
+                || item['viewable-by'] === currentAccount.character_key)
+            .map((item) => ({ ...item, 'viewable-by': 'all' }));
+        jsonResponse(response, 200, {
+            ...magicItemFixture,
+            source: 'broker',
+            items: authorizedItems
+        });
+        return;
+    }
     if (route === '/quests' && request.method === 'GET') {
         const currentAccount = requireSession(request, response);
         if (!currentAccount) return;
