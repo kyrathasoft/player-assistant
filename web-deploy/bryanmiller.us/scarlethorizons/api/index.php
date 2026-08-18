@@ -236,6 +236,7 @@ function isCharacterSessionRoute(string $route): bool
             '/v1/word-counts',
             '/v1/presence',
             '/v1/quests',
+            '/v1/magic-items',
             '/v1/quest-requests',
             '/v1/messages',
             '/v1/logout',
