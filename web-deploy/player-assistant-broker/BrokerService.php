@@ -16,6 +16,7 @@ final class BrokerService
     private MessageService $messages;
     private BrokerAlertService $alerts;
     private BrokerOperations $operations;
+    private ?MagicItemService $magicItems = null;
 
     public function __construct(
         private readonly array $config,
@@ -154,6 +155,11 @@ final class BrokerService
         if ($method === 'GET' && $route === '/v1/quests') {
             $current = $this->characterAuth->requireCurrentAccount($session);
             return $this->response(200, $this->quests->forAccount($current['account']));
+        }
+
+        if ($method === 'GET' && $route === '/v1/magic-items') {
+            $current = $this->characterAuth->requireCurrentAccount($session);
+            return $this->response(200, $this->magicItems()->forAccount($current['account']));
         }
 
         if ($method === 'POST' && $route === '/v1/quest-requests') {
@@ -690,6 +696,15 @@ final class BrokerService
     private function base64UrlEncode(string $bytes): string
     {
         return rtrim(strtr(base64_encode($bytes), '+/', '-_'), '=');
+    }
+
+    private function magicItems(): MagicItemService
+    {
+        if (!$this->magicItems instanceof MagicItemService) {
+            $this->magicItems = new MagicItemService(
+                (string)($this->config['magic_items']['source_path'] ?? __DIR__ . '/magic-items.json'));
+        }
+        return $this->magicItems;
     }
 
     private function response(int $status, array $body): array

@@ -30,6 +30,7 @@ Upload these beside the existing private `config.php` and `broker.sqlite`:
 ```text
 BrokerHttpException.php
 CharacterAuthService.php
+MagicItemService.php
 BrokerService.php
 MessageService.php
 QuestService.php
@@ -58,6 +59,8 @@ https://bryanmiller.us
 
 Merge the `xp` section from `player-assistant-broker/config.xp.example.php` into the same private `config.php`. Keep the XP and active-character source URLs in this private configuration; never place them in PWA JavaScript or accept them from a browser request. When `character_source_url` is omitted, the broker derives the `PCs/Player Characters Listing` page from the fixed XP source's Obsidian vault.
 
+Merge the `magic_items` section from `player-assistant-broker/config.auth.example.php` into the same private `config.php`. The configured schema-v2 `magic-items.json` must remain outside the document root; its `viewable-by` values may contain only `all` or exact 32-character canonical account IDs. The public `pwa/magic-items.json` is an all-public fallback and must never contain restricted records.
+
 Set the optional `word_counts` section to enable signed automatic word-count refresh:
 
 ```php
@@ -81,6 +84,12 @@ The production source is a public, data-only JSON file outside the PWA:
 ```text
 https://bryanmiller.us/scarlethorizons/data/word-counts.json
 ```
+
+The private XP Tracking source must expose a `Canonical ID` column alongside
+`Name` and `XP Total`. The desktop parser rejects tables without that immutable
+identity column; it never falls back to first-name or display-name matching for
+protected XP retrieval. The canonical IDs must match the identity sidecar and
+active-character roster records exactly.
 
 Run `setup-word-count-signing-key.ps1` once to store the Ed25519 private key in
 Windows Credential Manager and create `word-count-signing-public.json`.
@@ -149,7 +158,7 @@ After the updated API and private broker files are deployed, import the existing
 .\web-deploy\import-character-accounts.ps1
 ```
 
-The script prompts securely for the broker administrator key and sends only the salted password-hash document to the administrator-protected HTTPS endpoint. It does not upload the file into the public website directory.
+The script prompts securely for the broker administrator key and sends only the salted password-hash document to the administrator-protected HTTPS endpoint. The broker validates the complete document before opening one database transaction, preserves existing opaque account IDs on conflict, replaces the account's declared aliases atomically, and rolls the transaction back on any conflict. It does not upload the file into the public website directory.
 
 ## PWA files
 
@@ -212,6 +221,7 @@ POST /scarlethorizons/api/v1/login
 GET  /scarlethorizons/api/v1/session
 GET  /scarlethorizons/api/v1/me
 GET  /scarlethorizons/api/v1/xp
+GET  /scarlethorizons/api/v1/magic-items
 GET  /scarlethorizons/api/v1/word-counts
 GET  /scarlethorizons/api/v1/presence
 GET  /scarlethorizons/api/v1/quests
