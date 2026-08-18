@@ -68,6 +68,17 @@ let messageListFailuresRemaining = 0;
 let messageListRequests = 0;
 let expireSessionOnNextRevision = false;
 let presenceRequests = 0;
+let releaseStartupSessionResponse;
+const startupSessionResponseGate = new Promise((resolve) => {
+    releaseStartupSessionResponse = resolve;
+});
+let confirmStartupSessionResponseSent;
+const startupSessionResponseSent = new Promise((resolve) => {
+    confirmStartupSessionResponseSent = resolve;
+});
+let delayStartupSessionResponse = true;
+let startupSessionRequestStarted = false;
+let failNextIdentityRequest = false;
 
 const readJsonBody = async (request) => {
     let body = '';
@@ -232,9 +243,16 @@ const serveApi = async (request, response, pathname) => {
     const route = pathname.slice(apiPrefix.length) || '/';
     if (route === '/session' && request.method === 'GET') {
         const authenticated = hasSession(request);
+        const account = sessionAccount(request);
+        if (delayStartupSessionResponse) {
+            delayStartupSessionResponse = false;
+            startupSessionRequestStarted = true;
+            await startupSessionResponseGate;
+        }
         jsonResponse(response, 200, authenticated
-            ? { authenticated: true, account: sessionAccount(request), csrf_token: 'ci-csrf-token' }
+            ? { authenticated: true, account, csrf_token: 'ci-csrf-token' }
             : { authenticated: false, account: null, csrf_token: '' });
+        confirmStartupSessionResponseSent();
         return;
     }
     if (route === '/login' && request.method === 'POST') {
@@ -258,6 +276,12 @@ const serveApi = async (request, response, pathname) => {
         return;
     }
     if (route === '/me' && request.method === 'GET' && hasSession(request)) {
+        if (failNextIdentityRequest) {
+            failNextIdentityRequest = false;
+            await new Promise((resolve) => setTimeout(resolve, 50));
+            jsonResponse(response, 503, { message: 'Identity lookup temporarily unavailable.' }, expectedErrorResponse);
+            return;
+        }
         jsonResponse(response, 200, { account: sessionAccount(request) });
         return;
     }
@@ -501,6 +525,7 @@ try {
     let initialResponseBytes = 0;
     const workerUrls = new Set();
     let offlineExpected = false;
+    let startupSessionAbortExpected = false;
     page.on('pageerror', (error) => pageErrors.push(error));
     context.on('console', (message) => {
         const text = message.text();
@@ -521,7 +546,10 @@ try {
         }
     });
     page.on('requestfailed', (request) => {
-        if (!offlineExpected) {
+        const expectedStartupSessionAbort = startupSessionAbortExpected
+            && request.url().endsWith('/v1/session')
+            && request.failure()?.errorText === 'net::ERR_ABORTED';
+        if (!offlineExpected && !expectedStartupSessionAbort) {
             requestFailures.push(`${request.method()} ${request.url()}: ${request.failure()?.errorText || 'failed'}`);
         }
     });
@@ -637,6 +665,12 @@ try {
     if (anonymousPresenceStatus !== 401) {
         throw new Error(`Anonymous protected API returned ${anonymousPresenceStatus}.`);
     }
+    for (let attempt = 0; attempt < 100 && !startupSessionRequestStarted; attempt++) {
+        await page.waitForTimeout(10);
+    }
+    if (!startupSessionRequestStarted) {
+        throw new Error('The startup authentication session request did not begin.');
+    }
 
     const presenceRequestsBeforePlayerLogin = presenceRequests;
     await page.locator('#auth-button').click();
@@ -665,14 +699,23 @@ try {
     }
     await page.locator('#auth-character-name').fill('CI Hero');
     await page.locator('#auth-password').fill('ci-password');
+    startupSessionAbortExpected = true;
+    failNextIdentityRequest = true;
     messageListFailuresRemaining = 2;
     const initialMessageRequestsBeforeLogin = messageListRequests;
-    await Promise.all([
-        page.waitForResponse((response) => response.url().includes('/v1/messages?limit=50')
-            && response.status() === 503),
-        page.locator('#auth-submit').click()
-    ]);
-    await page.locator('#auth-button-label').getByText('CI Hero', { exact: true }).waitFor();
+    await page.locator('#auth-submit').click();
+    await page.waitForFunction(() =>
+        document.querySelector('#auth-account-message')?.textContent === 'Character login succeeded.');
+    releaseStartupSessionResponse();
+    await startupSessionResponseSent;
+    startupSessionAbortExpected = false;
+    await page.waitForTimeout(50);
+    const accountLabelAfterStartupSession = await page.locator('#auth-button-label').textContent();
+    if (accountLabelAfterStartupSession?.trim() !== 'CI Hero'
+        || await page.locator('#auth-account-panel').isHidden()) {
+        throw new Error(
+            `A delayed startup session response overwrote the newer login: ${accountLabelAfterStartupSession}`);
+    }
     if (await page.locator('#auth-account-panel').isHidden()) {
         throw new Error('Authentication smoke failed: the signed-in account panel stayed hidden.');
     }
@@ -1070,7 +1113,7 @@ try {
     await page.waitForFunction(() => document.querySelector('#search-guidance')?.textContent?.includes('pack ready offline'));
     await page.locator('#campaign-search').fill('Kirkilston');
     await page.locator('#search-results .search-result').first().waitFor({ state: 'visible' });
-    if (![...workerUrls].some((url) => url.includes('/campaign-search-worker.js?v=89'))) {
+    if (![...workerUrls].some((url) => url.includes('/campaign-search-worker.js?v=90'))) {
         throw new Error(`Campaign search did not start its dedicated worker: ${JSON.stringify([...workerUrls])}.`);
     }
 
@@ -1101,7 +1144,7 @@ try {
             throw new Error(`Offline feature data was not cached: ${requiredPath}`);
         }
     }
-    if (!cachedUrls.some((url) => url.endsWith('/campaign-search-worker.js?v=89'))) {
+    if (!cachedUrls.some((url) => url.endsWith('/campaign-search-worker.js?v=90'))) {
         throw new Error('Campaign search worker was not present in the offline shell cache.');
     }
     await page.evaluate(async () => {
