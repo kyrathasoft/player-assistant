@@ -146,9 +146,10 @@ namespace PlayerAssistant
             PlayerCharacterHeroRow hero,
             IReadOnlyList<PlayerCharacterHeroRow> roster)
         {
+            var canonicalFileName = GetStableHeroFileName(hero.CanonicalId);
             var candidates = new[]
             {
-                GetStableHeroFileName(hero.CanonicalId),
+                canonicalFileName,
                 GetStableHeroFileName(hero.Name),
                 GetLegacyHeroFileName(hero.Name)
             }
@@ -163,17 +164,26 @@ namespace PlayerAssistant
                     continue;
                 }
 
-                if (string.Equals(fileName, GetLegacyHeroFileName(hero.Name), StringComparison.OrdinalIgnoreCase))
+                if (!string.Equals(fileName, canonicalFileName, StringComparison.OrdinalIgnoreCase))
                 {
-                    var sameFirstNameCount = roster.Count(candidate =>
-                        string.Equals(GetFirstName(candidate.Name), GetFirstName(hero.Name), StringComparison.OrdinalIgnoreCase));
-                    if (sameFirstNameCount != 1)
+                    if (string.Equals(
+                            fileName,
+                            GetLegacyHeroFileName(hero.Name),
+                            StringComparison.OrdinalIgnoreCase))
                     {
-                        continue;
+                        var sameFirstNameCount = roster.Count(candidate =>
+                            string.Equals(
+                                GetFirstName(candidate.Name),
+                                GetFirstName(hero.Name),
+                                StringComparison.OrdinalIgnoreCase));
+                        if (sameFirstNameCount != 1)
+                        {
+                            continue;
+                        }
                     }
 
                     var parsed = ParseHeroSheet(File.ReadAllText(path), hero.Name);
-                    if (!string.Equals(GetFirstName(parsed.Name), GetFirstName(hero.Name), StringComparison.OrdinalIgnoreCase))
+                    if (!string.Equals(parsed.Name, hero.Name, StringComparison.OrdinalIgnoreCase))
                     {
                         continue;
                     }

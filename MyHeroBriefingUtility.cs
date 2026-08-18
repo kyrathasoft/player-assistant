@@ -117,6 +117,7 @@ namespace PlayerAssistant
                     request.XpTotals ?? [],
                     isDungeonMaster,
                     identity.Source,
+                    identity.CanonicalName,
                     identity.Aliases);
             var quickLinks = CreateQuickLinks(request, heroSummary);
             var heroCard = heroSummary is null
@@ -165,13 +166,14 @@ namespace PlayerAssistant
                     return new MyHeroBriefingResolvedHero(
                         authenticatedHero,
                         MyHeroBriefingHeroIdentitySource.AuthenticatedHero,
+                        request.AuthenticatedIdentity?.CanonicalName,
                         aliases);
                 }
             }
 
             if (request.AuthenticatedIdentity?.IsDungeonMaster != true)
             {
-                return new MyHeroBriefingResolvedHero(null, MyHeroBriefingHeroIdentitySource.None, []);
+                return new MyHeroBriefingResolvedHero(null, MyHeroBriefingHeroIdentitySource.None, null, []);
             }
 
             var selectedHero = FindHeroByIdentity(
@@ -184,8 +186,9 @@ namespace PlayerAssistant
                 ? new MyHeroBriefingResolvedHero(
                     selectedHero,
                     MyHeroBriefingHeroIdentitySource.SelectedHero,
+                    selectedIdentity?.CanonicalName,
                     selectedIdentity?.Aliases ?? [])
-                : new MyHeroBriefingResolvedHero(null, MyHeroBriefingHeroIdentitySource.None, []);
+                : new MyHeroBriefingResolvedHero(null, MyHeroBriefingHeroIdentitySource.None, null, []);
         }
 
         private static XpAuthenticatedIdentity? FindRegistryIdentity(
@@ -226,6 +229,7 @@ namespace PlayerAssistant
             IReadOnlyList<PcXpTotal> xpTotals,
             bool isDungeonMaster,
             MyHeroBriefingHeroIdentitySource identitySource,
+            string? canonicalName,
             IReadOnlyList<string> aliases)
         {
             return new MyHeroBriefingHeroSummary(
@@ -236,7 +240,9 @@ namespace PlayerAssistant
                 FindVisibleXpTotal(hero, xpTotals, isDungeonMaster, identitySource),
                 hero.TokenImagePath,
                 hero.CharacterSheetText,
-                HeroAccessContext.FromPartyHeroSheet(hero, characterAliases: aliases),
+                HeroAccessContext.FromPartyHeroSheet(
+                    hero with { Name = canonicalName ?? string.Empty },
+                    characterAliases: aliases),
                 aliases);
         }
 
@@ -503,6 +509,7 @@ namespace PlayerAssistant
         private sealed record MyHeroBriefingResolvedHero(
             PartyHeroSheet? Hero,
             MyHeroBriefingHeroIdentitySource Source,
+            string? CanonicalName,
             IReadOnlyList<string> Aliases);
     }
 }

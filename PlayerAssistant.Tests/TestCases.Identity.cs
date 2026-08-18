@@ -104,6 +104,38 @@ internal static partial class TestCases
             "an inferred first-name alias authenticated an account");
     }
 
+    internal static void DungeonMasterScopeUsesStableCanonicalId()
+    {
+        using var directory = TemporaryDirectory.Create();
+        var path = Path.Combine(directory.Path, XpPasswordStoreUtility.FileName);
+        XpPasswordStoreUtility.SavePasswordHashes(
+            path,
+            [
+                new XpPasswordStoreUtility.PasswordIdentityInput(
+                    "ordinary-player",
+                    "Dungeon Master",
+                    "ordinary player password",
+                    []),
+                new XpPasswordStoreUtility.PasswordIdentityInput(
+                    "dungeon-master",
+                    "Game Referee",
+                    "game referee password",
+                    [])
+            ]);
+
+        var displayOnly = XpPasswordStoreUtility.ValidatePassword(
+            "Dungeon Master",
+            "ordinary player password",
+            directory.Path);
+        var stableIdentity = XpPasswordStoreUtility.ValidatePassword(
+            "Game Referee",
+            "game referee password",
+            directory.Path);
+
+        Require(displayOnly?.IsDungeonMaster == false, "Dungeon Master display text granted DM scope");
+        Require(stableIdentity?.IsDungeonMaster == true, "stable Dungeon Master identity did not grant DM scope");
+    }
+
     internal static void IdentityRegistryLoadsCanonicalAliases()
     {
         using var directory = CreateSyntheticPasswordSidecar(
@@ -360,6 +392,30 @@ internal static partial class TestCases
         Require(briefing.UnlockedNotes.Count == 0, "an inferred first-name alias exposed encrypted-note metadata");
     }
 
+    internal static void MyHeroBriefingIgnoresStalePartyDisplayNameForNoteAccess()
+    {
+        var hero = SyntheticIdentityFixtures[0];
+        var rival = SyntheticIdentityFixtures[1];
+        var briefing = MyHeroBriefingUtility.Build(new MyHeroBriefingRequest(
+            [hero.PartySheet with { Name = rival.FullName }],
+            EncryptedTextIndex:
+            [
+                new EncryptedTextIndexEntry(
+                    "https://example.invalid/rival-only",
+                    1,
+                    [$"Hero {rival.FullName}"])
+            ],
+            AuthenticatedIdentity: new XpAuthenticatedIdentity(
+                hero.CanonicalId,
+                hero.FullName,
+                [],
+                false,
+                hero.CanonicalId)));
+
+        Require(briefing.Hero is not null, "canonical identity did not resolve the stale party row");
+        Require(briefing.UnlockedNotes.Count == 0, "stale party display name granted rival note access");
+    }
+
     internal static void MyHeroBriefingUsesExplicitIdentityAliases()
     {
         var hero = SyntheticIdentityFixtures[0];
@@ -515,6 +571,7 @@ internal static partial class TestCases
         IdentityFixturesAreDistinctAndSynthetic();
         SuccessfulAuthenticationReturnsCanonicalIdentity();
         ExplicitAliasesAuthenticateOnlyTheirOwner();
+        DungeonMasterScopeUsesStableCanonicalId();
         IdentityRegistryLoadsCanonicalAliases();
         SidecarRejectsAmbiguousOrMalformedAliases();
         SidecarRejectsLegacySchemaAndDuplicateIdentities();
@@ -527,6 +584,7 @@ internal static partial class TestCases
         MyHeroBriefingRejectsNameOnlyProtectedIdentity();
         MyHeroBriefingRejectsUnauthenticatedCanonicalId();
         MyHeroBriefingDoesNotInferFirstNameAliases();
+        MyHeroBriefingIgnoresStalePartyDisplayNameForNoteAccess();
         MyHeroBriefingUsesExplicitIdentityAliases();
         MyHeroBriefingDungeonMasterChoicesCarryCanonicalIds();
         MyHeroBriefingDungeonMasterSelectionUsesSelectedIdentityAliases();

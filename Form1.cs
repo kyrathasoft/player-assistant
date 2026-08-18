@@ -1584,36 +1584,6 @@ namespace PlayerAssistant
             }
         }
 
-        private static bool IsDungeonMasterXpAccess(string? characterName)
-        {
-            return string.Equals(
-                characterName?.Trim(),
-                DungeonMasterXpAccessName,
-                StringComparison.OrdinalIgnoreCase);
-        }
-
-        private static PcXpTotal? FindXpTotalForCharacter(
-            IReadOnlyList<PcXpTotal> totals,
-            string characterName)
-        {
-            var trimmedName = characterName.Trim();
-            var exactMatch = totals.FirstOrDefault(row =>
-                string.Equals(row.Name, trimmedName, StringComparison.OrdinalIgnoreCase));
-            if (exactMatch is not null)
-            {
-                return exactMatch;
-            }
-
-            var firstName = GetFirstName(trimmedName);
-            var firstNameMatches = totals
-                .Where(row => string.Equals(GetFirstName(row.Name), firstName, StringComparison.OrdinalIgnoreCase))
-                .Take(2)
-                .ToArray();
-            return firstNameMatches.Length == 1
-                ? firstNameMatches[0]
-                : null;
-        }
-
         private bool TryPromptForXpCredentials(out string characterName, out string password)
         {
             using var dialog = new Form
@@ -2790,6 +2760,8 @@ namespace PlayerAssistant
 
         private string[] GetHeroSearchTermAliases(string term)
         {
+            // Public corpus search aliases affect discovery only. They never authorize
+            // account access or select protected character data.
             if (string.IsNullOrWhiteSpace(term))
             {
                 return [];

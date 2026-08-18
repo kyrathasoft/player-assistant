@@ -399,7 +399,7 @@ namespace PlayerAssistant
                     CanonicalId,
                     CanonicalName,
                     Aliases,
-                    string.Equals(CanonicalName, "Dungeon Master", StringComparison.OrdinalIgnoreCase),
+                    string.Equals(CanonicalId, "dungeon-master", StringComparison.Ordinal),
                     CanonicalId);
         }
 
