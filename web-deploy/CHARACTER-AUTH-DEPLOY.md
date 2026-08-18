@@ -57,7 +57,7 @@ Merge the `auth` section from `player-assistant-broker/config.auth.example.php` 
 https://bryanmiller.us
 ```
 
-Merge the `xp` section from `player-assistant-broker/config.xp.example.php` into the same private `config.php`. Keep the XP and active-character source URLs in this private configuration; never place them in PWA JavaScript or accept them from a browser request. When `character_source_url` is omitted, the broker derives the `PCs/Player Characters Listing` page from the fixed XP source's Obsidian vault.
+Merge the `xp` section from `player-assistant-broker/config.xp.example.php` into the same private `config.php`. Keep the XP and active-character source URLs in this private configuration; never place them in PWA JavaScript or accept them from a browser request. When `character_source_url` is omitted, the broker derives the `PCs/Player Characters Listing` page from the fixed XP source's Obsidian vault. Review `character_key_aliases` against the live XP table and character listing before deployment: every source label used for protected XP or award joins must map explicitly to its stable account key, and unmapped labels fail closed.
 
 Merge the `magic_items` section from `player-assistant-broker/config.auth.example.php` into the same private `config.php`. The configured schema-v2 `magic-items.json` must remain outside the document root; its `viewable-by` values may contain only `all` or exact 32-character canonical account IDs. The public `pwa/magic-items.json` is an all-public fallback and must never contain restricted records.
 

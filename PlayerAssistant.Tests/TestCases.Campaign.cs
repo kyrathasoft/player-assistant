@@ -2336,7 +2336,7 @@ internal static partial class TestCases
             """
             | Name | Class | Level | Token | HP | Race | AC |
             | ---- | ----- | ----- | ----- | -- | ---- | -- |
-            | [[Jelb Garrick, Illusionist\|Jelb]] | Illusionist | 3 | ![[jelb-token.webp\|70]] | 8 | Human | 7[12] |
+            | [[Jelb Garrick]] | Illusionist | 3 | ![[jelb-token.webp\|70]] | 8 | Human | 7[12] |
             """);
         File.WriteAllText(
             Path.Combine(activeDirectory, "jelb.md"),
@@ -2356,6 +2356,37 @@ internal static partial class TestCases
         AssertEqual("3", heroes[0].Level, "listing level should override stale sheet level");
         AssertEqual("8", heroes[0].HitPoints, "listing HP should override stale sheet HP");
         AssertContains(heroes[0].CharacterSheetText, "HP: 4");
+    }
+
+    internal static void PartyHeroLegacyFileRejectsDifferentFullName()
+    {
+        using var directory = TemporaryDirectory.Create();
+        var activeDirectory = Path.Combine(directory.Path, "active");
+        Directory.CreateDirectory(activeDirectory);
+        File.WriteAllText(
+            PlayerCharacterAssetUtility.GetPlayerCharactersListingMarkdownCachePath(directory.Path),
+            """
+            | Name | Canonical ID | Class | Level | Token | HP |
+            | ---- | ------------ | ----- | ----- | ----- | -- |
+            | [[Ari Stoneward]] | ari-stoneward | Ranger | 4 | | 31 |
+            """);
+        const string rivalSheet = """
+            Class: Bard
+            HP: 48
+            Level: 7
+
+            Name: Ari Valesong
+            """;
+        File.WriteAllText(Path.Combine(activeDirectory, "ari-stoneward.md"), rivalSheet);
+        File.WriteAllText(Path.Combine(activeDirectory, "ari.md"), rivalSheet);
+
+        var hero = PartyHeroUtility.LoadActiveParty(directory.Path).Single();
+
+        AssertEqual("Ari Stoneward", hero.Name, "legacy first-name file supplied another hero's display identity");
+        AssertEqual(
+            "Character sheet markdown is not available.",
+            hero.CharacterSheetText,
+            "legacy first-name file supplied another hero's protected sheet");
     }
 
     internal static void PartyHeroXpVisibilityFollowsAuthenticatedCharacter()
@@ -2451,7 +2482,8 @@ internal static partial class TestCases
             Level: "3",
             CharacterClass: "Fighter",
             HitPoints: "20",
-            CharacterSheetText: "Name: Jelb Stonehand"));
+            CharacterSheetText: "Name: Jelb Stonehand"),
+            characterAliases: ["Jelb"]);
         var otherHero = HeroAccessContext.FromPartyHeroSheet(new PartyHeroSheet(
             Name: "Kelpie Lawfuller",
             TokenImagePath: null,
@@ -2471,6 +2503,26 @@ internal static partial class TestCases
         AssertEqual("{Character Jelb}sample text{Character Jelb}", decrypted, "matching character tag should decrypt note text");
         AssertThrows<UnauthorizedAccessException>(
             () => TaggedNoteCipherUtility.TransformTaggedText(encrypted, TaggedNoteCipherMode.Decrypt, hero: otherHero));
+    }
+
+    internal static void TaggedNoteCipherRejectsInferredFirstNameAlias()
+    {
+        var hero = HeroAccessContext.FromPartyHeroSheet(new PartyHeroSheet(
+            Name: "Ari Stoneward",
+            TokenImagePath: null,
+            Level: "8",
+            CharacterClass: "Fighter",
+            HitPoints: "40",
+            CharacterSheetText: "Name: Ari Stoneward"));
+        var encrypted = TaggedNoteCipherUtility.TransformTaggedText(
+            "{Character Ari}The rival's ward answers Ari alone.{Character Ari}",
+            TaggedNoteCipherMode.Encrypt);
+
+        AssertThrows<UnauthorizedAccessException>(
+            () => TaggedNoteCipherUtility.TransformTaggedText(
+                encrypted,
+                TaggedNoteCipherMode.Decrypt,
+                hero: hero));
     }
 
     internal static void TaggedNoteCipherRejectsUnmetClassTag()
@@ -2639,50 +2691,31 @@ internal static partial class TestCases
             () => TaggedNoteCipherUtility.TransformTaggedText(tampered, TaggedNoteCipherMode.Decrypt, hero: lowerLevelHero));
     }
 
-    internal static void XpDisplayRecognizesDungeonMasterAccess()
+    internal static void XpIdentityLookupRejectsDuplicateCanonicalNames()
     {
-        AssertTrue(
-            (bool)(InvokeStaticMethod(typeof(Form1), "IsDungeonMasterXpAccess", "Dungeon Master") ?? false),
-            "Dungeon Master should unlock all XP totals");
-        AssertTrue(
-            (bool)(InvokeStaticMethod(typeof(Form1), "IsDungeonMasterXpAccess", "dungeon master") ?? false),
-            "Dungeon Master XP access should be case-insensitive");
-        AssertFalse(
-            (bool)(InvokeStaticMethod(typeof(Form1), "IsDungeonMasterXpAccess", "Kelpie") ?? true),
-            "ordinary PCs should not unlock all XP totals");
-    }
-
-    internal static void XpDisplayFindsTotalsByFirstAndFullCharacterNames()
-    {
-        var totals = new PcXpTotal[]
+        var identity = new XpAuthenticatedIdentity(
+            "ari-stoneward",
+            "Ari Stoneward",
+            [],
+            false,
+            "ari-stoneward");
+        var duplicateCanonicalIds = new PcXpTotal[]
         {
-            new("Kelpie Lawfuller", 7062),
-            new("Jelb", 8575)
+            new("Ari Stoneward", 1200, "ari-stoneward"),
+            new("Ari Valesong", 2400, "ari-stoneward")
+        };
+        var duplicateCanonicalNames = new PcXpTotal[]
+        {
+            new("Ari Stoneward", 1200),
+            new("Ari Stoneward", 2400)
         };
 
-        var kelpieTotal = (PcXpTotal?)InvokeStaticMethod(
-            typeof(Form1),
-            "FindXpTotalForCharacter",
-            totals,
-            "Kelpie");
-        var jelbTotal = (PcXpTotal?)InvokeStaticMethod(
-            typeof(Form1),
-            "FindXpTotalForCharacter",
-            totals,
-            "Jelb Garrick");
-
-        if (kelpieTotal is null)
-        {
-            throw new InvalidOperationException("first-name Kelpie lookup should find full-name XP row");
-        }
-
-        if (jelbTotal is null)
-        {
-            throw new InvalidOperationException("full-name Jelb lookup should find first-name XP row");
-        }
-
-        AssertEqual(new PcXpTotal("Kelpie Lawfuller", 7062), kelpieTotal!, "unexpected Kelpie XP row");
-        AssertEqual(new PcXpTotal("Jelb", 8575), jelbTotal!, "unexpected Jelb XP row");
+        AssertTrue(
+            XpTrackingUtility.FindXpTotalForIdentity(duplicateCanonicalIds, identity) is null,
+            "duplicate canonical XP IDs must fail closed");
+        AssertTrue(
+            XpTrackingUtility.FindXpTotalForIdentity(duplicateCanonicalNames, identity) is null,
+            "duplicate canonical XP names must fail closed during migration fallback");
     }
 
     internal static void XpDisplayStoresMultipleTotalsForDungeonMaster()
@@ -2715,28 +2748,28 @@ internal static partial class TestCases
             ---
             As of 7.04.2026
 
-            | Name     | Class       | Level | XP Total |
-            | -------- | ----------- | ----- | -------- |
-            | Kelpie   | Fighter     | 3     | 7,062    |
-            | Jelb     | Illusionist | 2     | 8,575    |
-            | Max      | Theurge     | 1     | 3,175    |
-            | Geoffroy | Cleric      | 2     | 2,950    |
+            | Name     | Canonical ID | Class       | Level | XP Total |
+            | -------- | ------------ | ----------- | ----- | -------- |
+            | Kelpie   | kelpie       | Fighter     | 3     | 7,062    |
+            | Jelb     | jelb         | Illusionist | 2     | 8,575    |
+            | Max      | maximilian   | Theurge     | 1     | 3,175    |
+            | Geoffroy | geoffroy     | Cleric      | 2     | 2,950    |
 
             As of 7.01.2026
 
-            | Name     | Class       | Level | XP Total |
-            | -------- | ----------- | ----- | -------- |
-            | Kelpie   | Fighter     | 3     | 6,562    |
-            | Jelb     | Illusionist | 2     | 8,075    |
+            | Name     | Canonical ID | Class       | Level | XP Total |
+            | -------- | ------------ | ----------- | ----- | -------- |
+            | Kelpie   | kelpie       | Fighter     | 3     | 6,562    |
+            | Jelb     | jelb         | Illusionist | 2     | 8,075    |
             """;
 
         var totals = XpTrackingUtility.ParseCurrentXpTotals(markdown).ToArray();
 
         AssertEqual(4, totals.Length, "expected latest XP table to contain four current PCs");
-        AssertEqual(new PcXpTotal("Kelpie", 7062), totals[0], "unexpected Kelpie XP total");
-        AssertEqual(new PcXpTotal("Jelb", 8575), totals[1], "unexpected Jelb XP total");
-        AssertEqual(new PcXpTotal("Max", 3175), totals[2], "unexpected Max XP total");
-        AssertEqual(new PcXpTotal("Geoffroy", 2950), totals[3], "unexpected Geoffroy XP total");
+        AssertEqual(new PcXpTotal("Kelpie", 7062, "kelpie"), totals[0], "unexpected Kelpie XP total");
+        AssertEqual(new PcXpTotal("Jelb", 8575, "jelb"), totals[1], "unexpected Jelb XP total");
+        AssertEqual(new PcXpTotal("Max", 3175, "maximilian"), totals[2], "unexpected Max XP total");
+        AssertEqual(new PcXpTotal("Geoffroy", 2950, "geoffroy"), totals[3], "unexpected Geoffroy XP total");
     }
 
     internal static void XpTrackingParserRejectsMissingLatestTable()
@@ -2750,6 +2783,46 @@ internal static partial class TestCases
                 """));
 
         AssertContains(exception.Message, "latest XP tracking date does not have a markdown table");
+    }
+
+    internal static void XpTrackingParserRejectsMissingOrDuplicateCanonicalIds()
+    {
+        var missing = AssertThrows<InvalidOperationException>(() =>
+            XpTrackingUtility.ParseCurrentXpTotals(
+                """
+                As of 8.17.2026
+
+                | Name | Class | XP Total |
+                | ---- | ----- | -------- |
+                | Ari Stoneward | Ranger | 2,000 |
+                """));
+        AssertContains(missing.Message, "latest XP tracking date does not have a markdown table");
+
+        foreach (var invalidCanonicalId in new[] { "", "Ari-Stoneward", "ari stoneward" })
+        {
+            var invalid = AssertThrows<InvalidOperationException>(() =>
+                XpTrackingUtility.ParseCurrentXpTotals(
+                    $"""
+                    As of 8.17.2026
+
+                    | Name | Canonical ID | Class | XP Total |
+                    | ---- | ------------ | ----- | -------- |
+                    | Ari Stoneward | {invalidCanonicalId} | Ranger | 2,000 |
+                    """));
+            AssertContains(invalid.Message, "blank, invalid, or duplicate Canonical ID");
+        }
+
+        var duplicate = AssertThrows<InvalidOperationException>(() =>
+            XpTrackingUtility.ParseCurrentXpTotals(
+                """
+                As of 8.17.2026
+
+                | Name | Canonical ID | Class | XP Total |
+                | ---- | ------------ | ----- | -------- |
+                | Ari Stoneward | ari-stoneward | Ranger | 2,000 |
+                | Ari Valesong | ari-stoneward | Bard | 4,000 |
+                """));
+        AssertContains(duplicate.Message, "blank, invalid, or duplicate Canonical ID");
     }
 
     internal static void XpTrackingFailureMessageHidesUrlAndDirectsPlayersToDm()

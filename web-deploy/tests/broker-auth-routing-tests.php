@@ -135,6 +135,11 @@ try {
             'timeout_seconds' => 2,
             'maximum_response_bytes' => 65536,
             'maximum_stale_seconds' => 600,
+            'character_key_aliases' => [
+                'routing-hero' => 'routing',
+                'another-hero' => 'another',
+                'companion-hero' => 'companion',
+            ],
             'awards_directory' => $xpAwardsDirectory,
             'awards_root' => dirname($xpAwardsDirectory),
             'award_groups' => [

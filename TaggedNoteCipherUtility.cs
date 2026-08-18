@@ -911,20 +911,9 @@ namespace PlayerAssistant
 
             var trimmedHeroName = hero.CharacterName.Trim();
             var trimmedRequiredName = requiredName.Trim();
-            if (string.Equals(trimmedHeroName, trimmedRequiredName, StringComparison.OrdinalIgnoreCase)
+            return string.Equals(trimmedHeroName, trimmedRequiredName, StringComparison.OrdinalIgnoreCase)
                 || (hero.CharacterAliases?.Any(alias =>
-                    string.Equals(alias?.Trim(), trimmedRequiredName, StringComparison.OrdinalIgnoreCase)) ?? false))
-            {
-                return true;
-            }
-
-            return hero.CharacterAliases is null
-                && string.Equals(GetFirstName(trimmedHeroName), trimmedRequiredName, StringComparison.OrdinalIgnoreCase);
-        }
-
-        private static string GetFirstName(string value)
-        {
-            return value.Trim().Split(' ', StringSplitOptions.RemoveEmptyEntries).FirstOrDefault() ?? string.Empty;
+                    string.Equals(alias?.Trim(), trimmedRequiredName, StringComparison.OrdinalIgnoreCase)) ?? false);
         }
 
         private static bool ClassMatches(string? heroClass, string requiredClass)

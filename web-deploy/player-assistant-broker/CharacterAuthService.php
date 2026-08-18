@@ -10,12 +10,7 @@ final class CharacterAuthService
     private const LEGACY_HASH_BYTES = 32;
     private const LEGACY_MINIMUM_SALT_BYTES = 16;
     private const PRESENCE_WINDOW_SECONDS = 120;
-    private const DEFAULT_LOGIN_ALIASES = [
-        'dungeon master' => ['dungeon', 'master', 'dm'],
-        'maximilian' => ['max', 'maximilian yragerne', 'max yragerne', 'yragerne'],
-        'neria' => ['neria silverdale', 'silverdale'],
-        'kelpie' => ['kelpie lawfuller', 'lawfuller'],
-    ];
+
 
     private array $authConfig;
 
@@ -299,7 +294,9 @@ final class CharacterAuthService
                 'normalized_name' => $normalizedName,
                 'display_name' => $displayName,
                 'character_key' => $canonicalId,
-                'role' => strcasecmp($displayName, 'Dungeon Master') === 0 ? 'dm' : 'player',
+                'role' => array_key_exists('role', $entry)
+                    ? $this->validateRole((string)$entry['role'])
+                    : null,
                 'aliases' => $entryAliases,
                 'iterations' => (int)$iterations,
                 'salt' => base64_encode($salt),
@@ -309,58 +306,76 @@ final class CharacterAuthService
 
         $this->database->beginTransaction();
         try {
-            $statement = $this->database->prepare(
-                'INSERT INTO character_accounts (
-                    id, normalized_name, display_name, character_key, role, enabled,
-                    password_hash, legacy_algorithm, legacy_iterations, legacy_salt, legacy_hash,
-                    created_at, password_changed_at
-                 ) VALUES (?, ?, ?, ?, ?, 1, NULL, ?, ?, ?, ?, ?, ?)
-                 ON CONFLICT(normalized_name) DO UPDATE SET
-                    display_name = excluded.display_name,
-                    character_key = excluded.character_key,
-                    role = excluded.role,
-                    enabled = 1,
-                    password_hash = NULL,
-                    legacy_algorithm = excluded.legacy_algorithm,
-                    legacy_iterations = excluded.legacy_iterations,
-                    legacy_salt = excluded.legacy_salt,
-                    legacy_hash = excluded.legacy_hash,
-                    password_changed_at = excluded.password_changed_at,
-                    session_version = character_accounts.session_version + 1');
             $now = time();
             foreach ($records as $record) {
-                $statement->execute([
-                    $record['id'],
-                    $record['normalized_name'],
-                    $record['display_name'],
-                    $record['character_key'],
-                    $record['role'],
-                    self::LEGACY_ALGORITHM,
-                    $record['iterations'],
-                    $record['salt'],
-                    $record['hash'],
-                    $now,
-                    $now,
-                ]);
                 $accountIdStatement = $this->database->prepare(
-                    'SELECT id FROM character_accounts WHERE normalized_name = ? LIMIT 1');
-                $accountIdStatement->execute([$record['normalized_name']]);
-                $accountId = $accountIdStatement->fetchColumn();
-                if (is_string($accountId) && $accountId !== '') {
+                    'SELECT * FROM character_accounts WHERE character_key = ?');
+                $accountIdStatement->execute([$record['character_key']]);
+                $accountMatches = $accountIdStatement->fetchAll();
+                if (count($accountMatches) > 1) {
+                    throw new RuntimeException('The existing character key is ambiguous.');
+                }
+                $existingAccount = $accountMatches[0] ?? null;
+                $accountId = is_array($existingAccount)
+                    ? (string)$existingAccount['id']
+                    : $record['id'];
+                $this->assertIdentityNamespaceAvailable(
+                    $record['normalized_name'],
+                    $record['aliases'],
+                    is_array($existingAccount) ? $accountId : null);
+                if (is_array($existingAccount)) {
                     $this->database->prepare(
-                        'DELETE FROM character_account_aliases WHERE account_id = ?')->execute([$accountId]);
-                    foreach ($record['aliases'] as [$normalizedAlias, $displayAlias]) {
-                        $this->database->prepare(
-                            'INSERT INTO character_account_aliases
-                                (account_id, normalized_alias, display_alias, created_at)
-                             VALUES (?, ?, ?, ?)')->execute([
-                                $accountId,
-                                $normalizedAlias,
-                                $displayAlias,
-                                $now,
-                            ]);
+                        'UPDATE character_accounts SET
+                            normalized_name = ?, display_name = ?, role = ?, enabled = 1,
+                            password_hash = NULL, legacy_algorithm = ?, legacy_iterations = ?,
+                            legacy_salt = ?, legacy_hash = ?, password_changed_at = ?,
+                            session_version = session_version + 1
+                         WHERE id = ?')->execute([
+                            $record['normalized_name'],
+                            $record['display_name'],
+                            $record['role'] ?? (string)$existingAccount['role'],
+                            self::LEGACY_ALGORITHM,
+                            $record['iterations'],
+                            $record['salt'],
+                            $record['hash'],
+                            $now,
+                            $accountId,
+                        ]);
+                } else {
+                    if ($record['role'] === null) {
+                        throw new RuntimeException('A new imported account must declare its role.');
                     }
-                    $this->ensureDefaultLoginAliases($accountId, $record['normalized_name']);
+                    $this->database->prepare(
+                        'INSERT INTO character_accounts (
+                            id, normalized_name, display_name, character_key, role, enabled,
+                            password_hash, legacy_algorithm, legacy_iterations, legacy_salt, legacy_hash,
+                            created_at, password_changed_at
+                         ) VALUES (?, ?, ?, ?, ?, 1, NULL, ?, ?, ?, ?, ?, ?)')->execute([
+                            $accountId,
+                            $record['normalized_name'],
+                            $record['display_name'],
+                            $record['character_key'],
+                            $record['role'],
+                            self::LEGACY_ALGORITHM,
+                            $record['iterations'],
+                            $record['salt'],
+                            $record['hash'],
+                            $now,
+                            $now,
+                        ]);
+                }
+                $this->database->prepare(
+                    'DELETE FROM character_account_aliases WHERE account_id = ?')->execute([$accountId]);
+                foreach ($record['aliases'] as [$normalizedAlias, $displayAlias]) {
+                    $this->database->prepare(
+                        'INSERT INTO character_account_aliases
+                            (account_id, normalized_alias, display_alias, created_at)
+                         VALUES (?, ?, ?, ?)')->execute([
+                            $accountId,
+                            $normalizedAlias,
+                            $displayAlias,
+                            $now,
+                        ]);
                 }
             }
             $this->database->commit();
@@ -382,12 +397,14 @@ final class CharacterAuthService
         $normalizedName = $this->normalizeName($displayName);
         $password = $this->validateNewPassword((string)($body['password'] ?? ''));
         $role = $this->validateRole((string)($body['role'] ?? 'player'));
-        $characterKey = $this->validateCharacterKey(
-            (string)($body['character_key'] ?? $this->defaultCharacterKey($displayName)));
+        $characterKey = $this->validateCharacterKey((string)($body['character_key'] ?? ''));
+        $aliases = $this->validateExplicitAliases($body['aliases'] ?? [], $normalizedName);
         $now = time();
         $id = bin2hex(random_bytes(16));
 
+        $this->database->beginTransaction();
         try {
+            $this->assertIdentityNamespaceAvailable($normalizedName, $aliases, null);
             $statement = $this->database->prepare(
                 'INSERT INTO character_accounts (
                     id, normalized_name, display_name, character_key, role, enabled,
@@ -403,8 +420,25 @@ final class CharacterAuthService
                 $now,
                 $now,
             ]);
-            $this->ensureDefaultLoginAliases($id, $normalizedName);
-        } catch (PDOException $exception) {
+            foreach ($aliases as [$normalizedAlias, $displayAlias]) {
+                $this->database->prepare(
+                    'INSERT INTO character_account_aliases
+                        (account_id, normalized_alias, display_alias, created_at)
+                     VALUES (?, ?, ?, ?)')->execute([
+                        $id,
+                        $normalizedAlias,
+                        $displayAlias,
+                        $now,
+                    ]);
+            }
+            $this->database->commit();
+        } catch (Throwable $exception) {
+            if ($this->database->inTransaction()) {
+                $this->database->rollBack();
+            }
+            if ($exception instanceof BrokerHttpException) {
+                throw $exception;
+            }
             throw new BrokerHttpException(
                 409,
                 'account_conflict',
@@ -423,10 +457,12 @@ final class CharacterAuthService
 
         if (array_key_exists('character_name', $body)) {
             $displayName = $this->validateDisplayName((string)$body['character_name']);
+            $normalizedName = $this->normalizeName($displayName);
+            $this->assertIdentityNamespaceAvailable($normalizedName, [], (string)$account['id']);
             $updates[] = 'display_name = ?';
             $parameters[] = $displayName;
             $updates[] = 'normalized_name = ?';
-            $parameters[] = $this->normalizeName($displayName);
+            $parameters[] = $normalizedName;
         }
         if (array_key_exists('character_key', $body)) {
             $updates[] = 'character_key = ?';
@@ -808,23 +844,14 @@ final class CharacterAuthService
             : strtolower($value);
     }
 
-    private function ensureDefaultLoginAliases(string $accountId, string $normalizedName): void
-    {
-        foreach (self::DEFAULT_LOGIN_ALIASES[$normalizedName] ?? [] as $alias) {
-            $this->database->prepare(
-                'INSERT OR IGNORE INTO character_account_aliases
-                    (account_id, normalized_alias, display_alias, created_at)
-                 VALUES (?, ?, ?, ?)')->execute([
-                    $accountId,
-                    $alias,
-                    $alias,
-                    time(),
-                ]);
-        }
-    }
-
     private function resolveLoginNameAlias(string $normalizedName): string
     {
+        $canonicalStatement = $this->database->prepare(
+            'SELECT normalized_name FROM character_accounts WHERE normalized_name = ? LIMIT 1');
+        $canonicalStatement->execute([$normalizedName]);
+        if ($canonicalStatement->fetchColumn() !== false) {
+            return $normalizedName;
+        }
         $statement = $this->database->prepare(
             'SELECT accounts.normalized_name
                FROM character_account_aliases AS aliases
@@ -836,6 +863,61 @@ final class CharacterAuthService
         return is_string($canonicalName) && $canonicalName !== ''
             ? $canonicalName
             : $normalizedName;
+    }
+
+    private function validateExplicitAliases(mixed $value, string $normalizedName): array
+    {
+        if (!is_array($value)) {
+            throw new BrokerHttpException(400, 'invalid_account', 'Account aliases must be an array.');
+        }
+        $aliases = [];
+        $seen = [];
+        foreach ($value as $alias) {
+            $displayAlias = $this->validateDisplayName((string)$alias);
+            $normalizedAlias = $this->normalizeName($displayAlias);
+            if ($normalizedAlias === $normalizedName || isset($seen[$normalizedAlias])) {
+                throw new BrokerHttpException(400, 'invalid_account', 'Account aliases must be distinct from the canonical name and each other.');
+            }
+            $seen[$normalizedAlias] = true;
+            $aliases[] = [$normalizedAlias, $displayAlias];
+        }
+        return $aliases;
+    }
+
+    private function assertIdentityNamespaceAvailable(
+        string $normalizedName,
+        array $aliases,
+        ?string $accountId): void
+    {
+        $canonicalAliasStatement = $this->database->prepare(
+            $accountId === null
+                ? 'SELECT 1 FROM character_account_aliases WHERE normalized_alias = ? LIMIT 1'
+                : 'SELECT 1 FROM character_account_aliases
+                    WHERE normalized_alias = ? AND account_id <> ? LIMIT 1');
+        $canonicalAliasStatement->execute(
+            $accountId === null ? [$normalizedName] : [$normalizedName, $accountId]);
+        if ($canonicalAliasStatement->fetchColumn() !== false) {
+            throw new BrokerHttpException(
+                409,
+                'account_conflict',
+                'A canonical name collides with an existing account alias.');
+        }
+
+        $aliasNameStatement = $this->database->prepare(
+            $accountId === null
+                ? 'SELECT 1 FROM character_accounts WHERE normalized_name = ? LIMIT 1'
+                : 'SELECT 1 FROM character_accounts
+                    WHERE normalized_name = ? AND id <> ? LIMIT 1');
+        foreach ($aliases as [$normalizedAlias]) {
+            $aliasNameStatement->execute(
+                $accountId === null ? [$normalizedAlias] : [$normalizedAlias, $accountId]);
+            if ($aliasNameStatement->fetchColumn() !== false) {
+                throw new BrokerHttpException(
+                    409,
+                    'account_conflict',
+                    'An account alias collides with an existing canonical name.');
+            }
+        }
     }
 
     private function validateNewPassword(string $password): string
@@ -863,14 +945,6 @@ final class CharacterAuthService
         return strtolower($characterKey);
     }
 
-    private function defaultCharacterKey(string $displayName): string
-    {
-        $keySource = strcasecmp($displayName, 'Dungeon Master') === 0
-            ? $displayName
-            : explode(' ', $displayName, 2)[0];
-        $key = strtolower((string)preg_replace('/[^A-Za-z0-9]+/', '-', $keySource));
-        return trim($key, '-') ?: bin2hex(random_bytes(8));
-    }
 
     private function decodeLegacyValue(string $value, int $minimumBytes, ?int $exactBytes): string
     {
