@@ -811,8 +811,9 @@ function Assert-PublishedXpPasswordSidecar {
 
         $canonicalName = [string]$entry.canonical_name
         $canonicalId = [string]$entry.canonical_id
-        if ([string]::IsNullOrWhiteSpace($canonicalId) -or $canonicalId -cne $canonicalId.Trim() -or !$canonicalIds.Add($canonicalId)) {
-            throw "Published $XpPasswordFileName contains a blank or duplicate canonical ID."
+        $isCanonicalIdValid = ![string]::IsNullOrWhiteSpace($canonicalId) -and $canonicalId -ceq $canonicalId.Trim() -and $canonicalId.Length -ge 3 -and $canonicalId.Length -le 128 -and $canonicalId -cmatch "^[A-Za-z0-9._-]+$"
+        if (!$isCanonicalIdValid -or !$canonicalIds.Add($canonicalId)) {
+            throw "Published $XpPasswordFileName contains a blank, malformed, or duplicate canonical ID."
         }
 
         if (!$entry.PSObject.Properties['aliases'] -or $null -eq $entry.aliases) {

@@ -600,6 +600,50 @@ internal static partial class TestCases
             "resolved identity inherited another hero's thread quick link");
     }
 
+    internal static void FirstNameOnlyInputsCannotAuthenticateOrSelectProtectedHero()
+    {
+        using var directory = CreateSyntheticPasswordSidecar();
+        Require(
+            XpPasswordStoreUtility.ValidatePassword("Ari", SyntheticIdentityFixtures[0].Password, directory.Path) is null,
+            "a first-name-only login input authenticated an ambiguous identity");
+
+        var briefing = MyHeroBriefingUtility.Build(new MyHeroBriefingRequest(
+            SyntheticIdentityFixtures.Select(fixture => fixture.PartySheet).ToArray(),
+            SelectedHeroName: "Ari",
+            AuthenticatedIdentity: new XpAuthenticatedIdentity(
+                SyntheticIdentityFixtures[0].CanonicalId,
+                SyntheticIdentityFixtures[0].FullName,
+                [],
+                false,
+                SyntheticIdentityFixtures[0].CanonicalId)));
+
+        Require(briefing.Hero?.Name == SyntheticIdentityFixtures[0].FullName,
+            "an authenticated canonical identity was incorrectly replaced by a first-name selection");
+        Require(briefing.Hero!.Name != "Ari Valesong",
+            "a first-name-only selection crossed into the other same-first-name hero");
+    }
+
+    internal static void AccountSwitchingDoesNotRetainPreviousIdentity()
+    {
+        var first = SyntheticIdentityFixtures[0];
+        var second = SyntheticIdentityFixtures[1];
+        var firstBriefing = MyHeroBriefingUtility.Build(new MyHeroBriefingRequest(
+            SyntheticIdentityFixtures.Select(fixture => fixture.PartySheet with { XpTotal = null }).ToArray(),
+            XpTotals: [new PcXpTotal(first.FullName, first.XpTotal, first.CanonicalId)],
+            AuthenticatedIdentity: new XpAuthenticatedIdentity(first.CanonicalId, first.FullName, [], false, first.CanonicalId)));
+        var secondBriefing = MyHeroBriefingUtility.Build(new MyHeroBriefingRequest(
+            SyntheticIdentityFixtures.Select(fixture => fixture.PartySheet with { XpTotal = null }).ToArray(),
+            XpTotals: [new PcXpTotal(second.FullName, second.XpTotal, second.CanonicalId)],
+            AuthenticatedIdentity: new XpAuthenticatedIdentity(second.CanonicalId, second.FullName, [], false, second.CanonicalId)));
+
+        Require(firstBriefing.Hero?.Name == first.FullName && firstBriefing.Hero!.XpTotal == first.XpTotal,
+            "the first account did not receive its own canonical briefing data");
+        Require(secondBriefing.Hero?.Name == second.FullName && secondBriefing.Hero!.XpTotal == second.XpTotal,
+            "the switched account did not receive its own canonical briefing data");
+        Require(secondBriefing.Hero!.Name != first.FullName,
+            "account switching retained the previous account's hero identity");
+    }
+
     internal static void RunCanonicalIdentityRegressionCases()
     {
         IdentityFixturesAreDistinctAndSynthetic();
@@ -624,6 +668,8 @@ internal static partial class TestCases
         MyHeroBriefingDungeonMasterSelectionUsesSelectedIdentityAliases();
         MyHeroBriefingDungeonMasterSelectionUsesCanonicalIdAfterRosterRename();
         MyHeroBriefingQuickLinksFollowResolvedIdentity();
+        FirstNameOnlyInputsCannotAuthenticateOrSelectProtectedHero();
+        AccountSwitchingDoesNotRetainPreviousIdentity();
     }
 
     private static TemporaryDirectory CreateSyntheticPasswordSidecar(

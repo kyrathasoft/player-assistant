@@ -40,3 +40,5 @@ The remaining name-bearing paths were reviewed against the canonical-ID boundary
 | XP source-label mapping | Published labels must resolve through the explicit `xp.character_key_aliases` map; unmapped or ambiguous values fail closed. | Labels remain source presentation text and never become implicit account aliases. |
 
 Adventure-outline author matching and public RPOL/Obsidian search continue to use names because they summarize or discover public campaign prose; those results never grant protected access.
+
+Release contract: `identity-release-checklist.md` is required for desktop identity releases. The publish validator and runtime loader must reject blank, malformed, duplicate, or colliding canonical IDs/names/aliases before an installer is produced.
