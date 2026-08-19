@@ -534,6 +534,40 @@ internal static partial class TestCases
         Require(briefing.UnlockedNotes.Count == 1, "selected identity alias did not authorize encrypted-note metadata");
     }
 
+    internal static void MyHeroBriefingDungeonMasterSelectionUsesCanonicalIdAfterRosterRename()
+    {
+        var selectedHero = SyntheticIdentityFixtures[0];
+        var selectedIdentity = new XpAuthenticatedIdentity(
+            selectedHero.CanonicalId,
+            selectedHero.FullName,
+            ["Stonewarden"],
+            false,
+            selectedHero.CanonicalId);
+        var dungeonMasterIdentity = new XpAuthenticatedIdentity(
+            "fixture-dungeon-master-001",
+            "Dungeon Master",
+            [],
+            true,
+            "fixture-dungeon-master-001");
+        var briefing = MyHeroBriefingUtility.Build(new MyHeroBriefingRequest(
+            [selectedHero.PartySheet with { Name = "Ari Renamed" }],
+            SelectedHeroCanonicalId: selectedHero.CanonicalId,
+            EncryptedTextIndex:
+            [
+                new EncryptedTextIndexEntry(
+                    "https://example.invalid/stonewarden-only",
+                    1,
+                    ["Hero Stonewarden"])
+            ],
+            AuthenticatedIdentity: dungeonMasterIdentity,
+            IdentityRegistry: [selectedIdentity, dungeonMasterIdentity]));
+
+        Require(briefing.Hero is not null, "stable-ID selection did not resolve the renamed roster hero");
+        Require(
+            briefing.UnlockedNotes.Count == 1,
+            "a mutable roster display name blocked the selected stable identity's explicit alias");
+    }
+
     internal static void MyHeroBriefingQuickLinksFollowResolvedIdentity()
     {
         var hero = SyntheticIdentityFixtures[0];
@@ -588,6 +622,7 @@ internal static partial class TestCases
         MyHeroBriefingUsesExplicitIdentityAliases();
         MyHeroBriefingDungeonMasterChoicesCarryCanonicalIds();
         MyHeroBriefingDungeonMasterSelectionUsesSelectedIdentityAliases();
+        MyHeroBriefingDungeonMasterSelectionUsesCanonicalIdAfterRosterRename();
         MyHeroBriefingQuickLinksFollowResolvedIdentity();
     }
 
