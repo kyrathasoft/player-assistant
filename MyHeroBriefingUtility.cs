@@ -201,9 +201,10 @@ namespace PlayerAssistant
             }
 
             var matches = registry
-                .Where(identity =>
-                    string.Equals(identity.CanonicalId, hero.CanonicalId, StringComparison.Ordinal)
-                    && string.Equals(identity.CanonicalName, hero.Name, StringComparison.OrdinalIgnoreCase))
+                .Where(identity => string.Equals(
+                    identity.CanonicalId,
+                    hero.CanonicalId,
+                    StringComparison.Ordinal))
                 .Take(2)
                 .ToArray();
             return matches.Length == 1 ? matches[0] : null;

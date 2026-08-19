@@ -135,6 +135,7 @@ internal static class TestCatalog
     ("my hero briefing uses explicit identity aliases", TestCases.MyHeroBriefingUsesExplicitIdentityAliases),
     ("my hero briefing dungeon master choices carry canonical IDs", TestCases.MyHeroBriefingDungeonMasterChoicesCarryCanonicalIds),
     ("my hero briefing dungeon master selection uses selected identity aliases", TestCases.MyHeroBriefingDungeonMasterSelectionUsesSelectedIdentityAliases),
+    ("my hero briefing dungeon master selection uses canonical ID after roster rename", TestCases.MyHeroBriefingDungeonMasterSelectionUsesCanonicalIdAfterRosterRename),
     ("my hero briefing quick links follow resolved identity", TestCases.MyHeroBriefingQuickLinksFollowResolvedIdentity),
     ("app configuration validation reports missing url", TestCases.AppConfigurationValidationReportsMissingUrl),
     ("app configuration validation rejects disallowed network host", TestCases.AppConfigurationValidationRejectsDisallowedNetworkHost),
