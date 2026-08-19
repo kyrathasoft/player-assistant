@@ -1,6 +1,6 @@
-import { initializeTranslator } from './modules/translator.js?v=89';
-import { initializeCampaignSearch } from './modules/search.js?v=89';
-import { initializeDice } from './modules/dice.js?v=89';
+import { initializeTranslator } from './modules/translator.js?v=90';
+import { initializeCampaignSearch } from './modules/search.js?v=90';
+import { initializeDice } from './modules/dice.js?v=90';
 
 (() => {
     'use strict';
@@ -11,8 +11,6 @@ import { initializeDice } from './modules/dice.js?v=89';
         throw new Error('Player Assistant version metadata is unavailable.');
     }
     const AUTH_API_ROOT = '/scarlethorizons/api/v1';
-    const MAGIC_ITEMS_WIKI_URL = 'https://publish.obsidian.md/scarlethorizons/Magic+Items/Kirkilston+Crew+Magic+Items';
-    const MAGIC_ITEMS_MARKDOWN_ROOT = 'https://publish-01.obsidian.md/access/1113217a28a5bfdcc9fbe8e6d82b27ac/Magic%20Items/';
     const MAGIC_ITEM_LONGEVITY_VALUES = Object.freeze(['one-shot', 'limited-use', 'permanent']);
     const PARTY_FUNDS_GEMSTONE_VALUE_PATTERN = /^\s*(\d+(?:\.\d+)?)\s+gp$/i;
     const MAXIMUM_XP_AWARD_PROGRESSION_ENTRIES = 1000;
@@ -824,6 +822,8 @@ import { initializeDice } from './modules/dice.js?v=89';
             && validShortText(quest.reward, 500)
             && validShortText(quest.accepted_on, 100)
             && validShortText(quest.expires_on, 100)
+            && validShortText(quest.completed_on, 100)
+            && validShortText(quest.completed_meta_date, 100)
             && (quest.request_status === null
                 || QUEST_REQUEST_STATUS_VALUES.includes(quest.request_status))
             && /^https:\/\/publish\.obsidian\.md\/scarlethorizons\/(?:Locations|Meta|NPCs|Player-Contributed|Powers|Quests|Writings)\/[^?#]+$/u.test(quest.wiki_url);
@@ -1114,6 +1114,14 @@ import { initializeDice } from './modules/dice.js?v=89';
             appendQuestDetail(details, 'Quest giver', quest.quest_giver);
             appendQuestDetail(details, 'Accepted', quest.accepted_on);
             appendQuestDetail(details, 'Deadline', quest.expires_on);
+            if (quest.state === 'completed'
+                && quest.completed_on.trim() !== ''
+                && quest.completed_meta_date.trim() !== '') {
+                appendQuestDetail(
+                    details,
+                    'Achieved',
+                    `${quest.completed_on} (${quest.completed_meta_date})`);
+            }
             appendQuestDetail(details, 'Reward', quest.reward);
 
             const objectivesTitle = document.createElement('h3');
@@ -1199,19 +1207,7 @@ import { initializeDice } from './modules/dice.js?v=89';
         .map((viewer) => viewer.trim().toLowerCase())
         .filter((viewer) => viewer !== '');
 
-    const isMagicItemVisible = (item) => {
-        const viewableBy = String(item?.['viewable-by'] || '').toLocaleLowerCase('en-US');
-        if (getMagicItemViewers(viewableBy).includes('all')) return true;
-        if (authenticatedAccount === null) return false;
-        const characterNames = [
-            authenticatedAccount.character_name,
-            authenticatedAccount.character_key,
-            String(authenticatedAccount.character_name || '').split(/\s+/u)[0]
-        ]
-            .map((name) => String(name || '').normalize('NFKC').trim().toLocaleLowerCase('en-US'))
-            .filter((name) => name !== '');
-        return characterNames.some((name) => viewableBy.includes(name));
-    };
+    const isMagicItemVisible = (item) => getMagicItemViewers(item?.['viewable-by']).includes('all');
 
     const validateMagicItems = (payload) => {
         const validItem = (item) => item
@@ -1226,7 +1222,7 @@ import { initializeDice } from './modules/dice.js?v=89';
             && getMagicItemViewers(item['viewable-by']).length > 0;
         if (!payload
             || payload.schema_version !== 1
-            || payload.source !== MAGIC_ITEMS_WIKI_URL
+            || !['broker', 'fallback'].includes(payload.source)
             || !Array.isArray(payload.items)
             || payload.items.length > 100
             || !payload.items.every(validItem)) {
@@ -1235,76 +1231,18 @@ import { initializeDice } from './modules/dice.js?v=89';
         return payload;
     };
 
-    const parseMarkdownFrontmatter = (markdown) => {
-        const normalized = String(markdown || '').replace(/\r\n?/gu, '\n');
-        const match = /^---\s*\n([\s\S]*?)\n---\s*\n?([\s\S]*)$/u.exec(normalized);
-        if (!match) throw new Error('A wiki magic-item page has no frontmatter.');
-        const metadata = {};
-        for (const line of match[1].split('\n')) {
-            const property = /^([a-z0-9-]+):\s*(.*?)\s*$/iu.exec(line);
-            if (!property) continue;
-            let value = property[2];
-            if ((value.startsWith('"') && value.endsWith('"'))
-                || (value.startsWith("'") && value.endsWith("'"))) {
-                value = value.slice(1, -1);
-            }
-            metadata[property[1].toLowerCase()] = value;
-        }
-        const description = match[2]
-            .replace(/\[\[([^\]|]+)\|([^\]]+)\]\]/gu, '$2')
-            .replace(/\[\[([^\]]+)\]\]/gu, '$1')
-            .replace(/[_*]+/gu, '')
-            .trim();
-        return { metadata, description };
-    };
-
-    const getMagicItemMarkdownUrl = (pageName) => {
-        if (!/^[^/\\?#]{1,200}$/u.test(pageName)) {
-            throw new Error('The wiki magic-item index contains an invalid link.');
-        }
-        return `${MAGIC_ITEMS_MARKDOWN_ROOT}${encodeURIComponent(pageName)}.md`;
-    };
-
-    const fetchWikiMagicItems = async () => {
-        const indexResponse = await fetch(
-            `${MAGIC_ITEMS_MARKDOWN_ROOT}Kirkilston%20Crew%20Magic%20Items.md`,
-            { cache: 'no-store', mode: 'cors', credentials: 'omit' });
-        if (!indexResponse.ok) throw new Error('The magic-item wiki index is unavailable.');
-        const indexMarkdown = await indexResponse.text();
-        const pageNames = [...indexMarkdown.matchAll(/\[\[([^\]|#]+)(?:#[^\]|]*)?(?:\|[^\]]+)?\]\]/gu)]
-            .map((match) => match[1].trim())
-            .filter((name, index, names) => name !== '' && names.indexOf(name) === index);
-        if (pageNames.length === 0 || pageNames.length > 100) {
-            throw new Error('The magic-item wiki index contains no usable item links.');
-        }
-        const items = await Promise.all(pageNames.map(async (pageName) => {
-            const response = await fetch(
-                getMagicItemMarkdownUrl(pageName),
-                { cache: 'no-store', mode: 'cors', credentials: 'omit' });
-            if (!response.ok) throw new Error(`The wiki page for ${pageName} is unavailable.`);
-            const { metadata, description } = parseMarkdownFrontmatter(await response.text());
-            return {
-                name: metadata.name || pageName,
-                description,
-                'date-acquired': metadata['date-acquired'] || '',
-                'meta-date-acquired': metadata['meta-date-acquired'] || '',
-                longevity: metadata.longevity || '',
-                provenance: metadata.provenance || '',
-                whereabouts: metadata.whereabouts || '',
-                'viewable-by': metadata['viewable-by'] || 'all'
-            };
-        }));
-        return validateMagicItems({
-            schema_version: 1,
-            source: MAGIC_ITEMS_WIKI_URL,
-            items
-        });
-    };
+    const fetchBrokerMagicItems = async () => validateMagicItems(
+        await requestAuthenticationApi('/magic-items'));
 
     const fetchFallbackMagicItems = async () => {
         const response = await fetch('magic-items.json', { cache: 'no-cache' });
-        if (!response.ok) throw new Error('The bundled magic-item fallback is unavailable.');
-        return validateMagicItems(await response.json());
+        if (!response.ok) throw new Error('The bundled public magic-item fallback is unavailable.');
+        const payload = await response.json();
+        const normalized = validateMagicItems({ ...payload, source: 'fallback' });
+        if (normalized.items.some((item) => !isMagicItemVisible(item))) {
+            throw new Error('The bundled magic-item fallback contains protected records.');
+        }
+        return normalized;
     };
 
     const appendMagicItemDetail = (list, label, value) => {
@@ -1336,9 +1274,9 @@ import { initializeDice } from './modules/dice.js?v=89';
             return;
         }
         if (status) {
-            status.textContent = magicItemSnapshot.data_source === 'wiki'
-                ? 'Current information loaded from the campaign wiki.'
-                : 'The campaign wiki is unavailable; showing the bundled offline fallback.';
+            status.textContent = magicItemSnapshot.data_source === 'broker'
+                ? 'Authorized magic items loaded from the private campaign service.'
+                : 'The private campaign service is unavailable; showing the public fallback.';
         }
         if (!list) return;
         const visibleItems = magicItemSnapshot.items.filter(isMagicItemVisible);
@@ -2086,8 +2024,8 @@ import { initializeDice } from './modules/dice.js?v=89';
         magicItemLoading = (async () => {
             try {
                 magicItemSnapshot = {
-                    ...(await fetchWikiMagicItems()),
-                    data_source: 'wiki'
+                    ...(await fetchBrokerMagicItems()),
+                    data_source: 'broker'
                 };
             } catch {
                 try {
@@ -2455,7 +2393,7 @@ import { initializeDice } from './modules/dice.js?v=89';
             }
         }
         const responseRequestId = response.headers.get('X-Request-Id') || requestId;
-        if (requestGeneration !== authenticationGeneration && path !== '/login' && path !== '/session') {
+        if (requestGeneration !== authenticationGeneration && path !== '/login') {
             throw new AuthenticationApiError(
                 'The character login response was superseded by an account change.',
                 { code: 'stale_generation', requestId: responseRequestId, retryable: true });
@@ -2619,11 +2557,14 @@ import { initializeDice } from './modules/dice.js?v=89';
     };
 
     const restoreAuthentication = async () => {
+        const restoreGeneration = authenticationGeneration;
         try {
             const session = await requestAuthenticationApi('/session');
+            if (restoreGeneration !== authenticationGeneration) return;
             authenticatedAccount = session.authenticated ? session.account : null;
             authenticationCsrfToken = session.authenticated ? String(session.csrf_token || '') : '';
         } catch {
+            if (restoreGeneration !== authenticationGeneration) return;
             authenticatedAccount = null;
             authenticationCsrfToken = '';
         }

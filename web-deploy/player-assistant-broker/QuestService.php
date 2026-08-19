@@ -51,6 +51,7 @@ final class QuestService
         if (trim($dataPath) === '') {
             throw new RuntimeException('The quest data path is not configured.');
         }
+        $this->ensureSchema();
     }
 
     public function forAccount(array $account): array
@@ -509,10 +510,10 @@ final class QuestService
             throw new RuntimeException('A quest entry has an invalid identifier or shape.');
         }
         $actualFields = array_keys($quest);
-        $expectedFields = self::QUEST_FIELDS;
-        sort($actualFields);
-        sort($expectedFields);
-        if ($actualFields !== $expectedFields) {
+        $requiredFields = self::QUEST_FIELDS;
+        $allowedFields = array_merge($requiredFields, ['meta-date']);
+        if (array_diff($requiredFields, $actualFields) !== []
+            || array_diff($actualFields, $allowedFields) !== []) {
             throw new RuntimeException("Quest '$id' does not match the required schema.");
         }
 
@@ -536,11 +537,17 @@ final class QuestService
 
         $dates = $quest['dates'];
         if (!is_array($dates)
-            || array_keys($dates) !== ['accepted', 'expires']) {
+            || array_diff(['accepted', 'expires'], array_keys($dates)) !== []
+            || array_diff(array_keys($dates), ['accepted', 'expires', 'completed']) !== []) {
             throw new RuntimeException("Quest '$id' has invalid dates.");
         }
         $this->requireText($dates['accepted'], 100, "Quest '$id' accepted date", true);
         $this->requireText($dates['expires'], 100, "Quest '$id' expiration date", true);
+        $completedOn = $dates['completed'] ?? '';
+        $this->requireText($completedOn, 100, "Quest '$id' completed date", true);
+        $metaDate = $quest['meta-date'] ?? '';
+        $this->requireText($metaDate, 100, "Quest '$id' meta-date", true);
+
 
         $gatedBy = $quest['gated-by'];
         if (!is_array($gatedBy)
@@ -594,12 +601,48 @@ final class QuestService
             'reward' => $quest['reward'],
             'accepted_on' => $dates['accepted'],
             'expires_on' => $dates['expires'],
+            'completed_on' => $completedOn,
+            'completed_meta_date' => $metaDate,
             'wiki_url' => $wikiUrl,
             'gated_by' => $normalizedGates,
             'unlocked_by' => $normalizedUnlocks,
         ];
     }
 
+    private function ensureSchema(): void
+    {
+        $this->database->exec(
+            'CREATE TABLE IF NOT EXISTS quest_requests (
+                id TEXT PRIMARY KEY,
+                quest_id TEXT NOT NULL,
+                requester_account_id TEXT NOT NULL,
+                status TEXT NOT NULL CHECK(status IN (\'pending\', \'approved\', \'denied\')),
+                created_at INTEGER NOT NULL,
+                decided_at INTEGER NULL,
+                decided_by_account_id TEXT NULL,
+                requester_acknowledged_at INTEGER NULL,
+                FOREIGN KEY (requester_account_id)
+                    REFERENCES character_accounts(id) ON DELETE CASCADE,
+                FOREIGN KEY (decided_by_account_id)
+                    REFERENCES character_accounts(id) ON DELETE SET NULL
+            );
+            CREATE UNIQUE INDEX IF NOT EXISTS ux_quest_requests_pending
+                ON quest_requests(quest_id, requester_account_id)
+                WHERE status = \'pending\';
+            CREATE INDEX IF NOT EXISTS ix_quest_requests_status_time
+                ON quest_requests(status, created_at);
+            CREATE INDEX IF NOT EXISTS ix_quest_requests_requester_status
+                ON quest_requests(requester_account_id, status);
+            CREATE TABLE IF NOT EXISTS quest_state_overrides (
+                quest_id TEXT PRIMARY KEY,
+                base_state TEXT NOT NULL,
+                state TEXT NOT NULL CHECK(state = \'active\'),
+                updated_at INTEGER NOT NULL,
+                updated_by_account_id TEXT NOT NULL,
+                FOREIGN KEY (updated_by_account_id)
+                    REFERENCES character_accounts(id) ON DELETE RESTRICT
+            );');
+    }
 
     private function requireText(
         mixed $value,

@@ -3,7 +3,6 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/../player-assistant-broker/BrokerHttpException.php';
-require_once __DIR__ . '/../player-assistant-broker/DatabaseMigrationService.php';
 require_once __DIR__ . '/../player-assistant-broker/CharacterAuthService.php';
 
 function assertTrue(bool $condition, string $message): void
@@ -37,7 +36,6 @@ try {
         PDO::ATTR_EMULATE_PREPARES => false,
     ]);
     $database->exec('PRAGMA foreign_keys = ON');
-    (new DatabaseMigrationService($database, dirname($databasePath) . '/migration-backups'))->migrate();
     $service = new CharacterAuthService($database, [
         'expected_origin' => 'https://example.test',
         'idle_timeout_seconds' => 60,
@@ -53,18 +51,65 @@ try {
     $legacyPassword = 'correct horse battery staple';
     $legacySalt = random_bytes(16);
     $legacyHash = hash_pbkdf2('sha256', $legacyPassword, $legacySalt, 600000, 32, true);
-    $import = $service->importLegacyAccounts([
-        'schema_version' => 1,
-        'format' => 'xp-password-hashes-v1',
+    $legacyDocument = [
+        'schema_version' => 2,
+        'format' => 'xp-password-hashes-v2',
         'entries' => [[
-            'name' => 'Test Hero',
+            'canonical_name' => 'Test Hero',
+            'canonical_id' => 'test-hero',
+            'role' => 'player',
+            'aliases' => ['Hero Test'],
             'algorithm' => 'PBKDF2-HMAC-SHA256',
             'iterations' => 600000,
             'salt' => base64_encode($legacySalt),
             'hash' => base64_encode($legacyHash),
         ]],
-    ]);
+    ];
+    $import = $service->importLegacyAccounts($legacyDocument);
     assertTrue($import['imported'] === 1, 'Legacy account import count was incorrect.');
+    $originalAccount = $service->listAccounts()[0];
+    $renamedDocument = $legacyDocument;
+    $renamedDocument['entries'][0]['canonical_name'] = 'Renamed Test Hero';
+    $service->importLegacyAccounts($renamedDocument);
+    $renamedAccount = $service->listAccounts()[0];
+    assertTrue(
+        $renamedAccount['id'] === $originalAccount['id']
+            && $renamedAccount['character_key'] === 'test-hero'
+            && $renamedAccount['character_name'] === 'Renamed Test Hero',
+        'stable character-key import did not preserve identity through a display-name change.');
+    $conflictingDocument = $legacyDocument;
+    $conflictingDocument['entries'][0]['canonical_id'] = 'different-hero';
+    $conflictingDocument['entries'][0]['canonical_name'] = 'Renamed Test Hero';
+    expectBrokerError(
+        fn() => $service->importLegacyAccounts($conflictingDocument),
+        409,
+        'account_import_conflict');
+    assertTrue(
+        $service->listAccounts()[0]['character_key'] === 'test-hero',
+        'same-name conflicting import mutated the stable account identity.');
+    $service->importLegacyAccounts($legacyDocument);
+    $changedAliasDocument = $legacyDocument;
+    $changedAliasDocument['entries'][0]['aliases'] = ['Test Champion'];
+    $service->importLegacyAccounts($changedAliasDocument);
+    $changedAliasSession = [];
+    $changedAliasLogin = $service->login(
+        ['character_name' => 'Test Champion', 'password' => $legacyPassword],
+        '192.0.2.9',
+        'https://example.test',
+        $changedAliasSession);
+    assertTrue(
+        $changedAliasLogin['account']['character_key'] === 'test-hero',
+        'changed imported alias did not resolve the stable account.');
+    $removedAliasSession = [];
+    expectBrokerError(
+        fn() => $service->login(
+            ['character_name' => 'Hero Test', 'password' => $legacyPassword],
+            '192.0.2.8',
+            'https://example.test',
+            $removedAliasSession),
+        401,
+        'login_failed');
+    $service->importLegacyAccounts($legacyDocument);
 
     $session = [];
     $regenerated = false;
@@ -79,7 +124,7 @@ try {
     assertTrue($regenerated, 'The session ID was not regenerated after login.');
     assertTrue($login['authenticated'] === true, 'The valid character login failed.');
     assertTrue($login['account']['character_name'] === 'Test Hero', 'The authenticated character was incorrect.');
-    assertTrue($login['account']['character_key'] === 'test', 'The server authorization key was incorrect.');
+    assertTrue($login['account']['character_key'] === 'test-hero', 'The server authorization key was incorrect.');
     assertTrue(isset($login['csrf_token']) && strlen($login['csrf_token']) >= 43, 'The CSRF token was not issued.');
 
     $stored = $database->query(
@@ -91,7 +136,7 @@ try {
     $current = $service->currentSession($session);
     assertTrue($current['authenticated'] === true, 'The active session was not restored.');
     $identity = $service->requireCurrentAccount($session);
-    assertTrue($identity['account']['character_key'] === 'test', 'Protected identity did not come from the session.');
+    assertTrue($identity['account']['character_key'] === 'test-hero', 'Protected identity did not come from the session.');
 
     expectBrokerError(
         fn() => $service->logout(
@@ -126,11 +171,72 @@ try {
         'password' => 'another long password',
         'character_key' => 'second-hero',
         'role' => 'player',
+        'aliases' => ['Second'],
     ]);
     assertTrue($native['enabled'] === true, 'The native character account was not enabled.');
+    expectBrokerError(
+        fn() => $service->createAccount([
+            'character_name' => 'Ari Unkeyed',
+            'password' => 'ari unkeyed password',
+            'role' => 'player',
+        ]),
+        400,
+        'invalid_account');
+    $sameFirstA = $service->createAccount([
+        'character_name' => 'Ari Stoneward',
+        'password' => 'ari stoneward password',
+        'character_key' => 'ari-stoneward',
+        'role' => 'player',
+    ]);
+    $sameFirstB = $service->createAccount([
+        'character_name' => 'Ari Valesong',
+        'password' => 'ari valesong password',
+        'character_key' => 'ari-valesong',
+        'role' => 'player',
+    ]);
+    assertTrue(
+        $sameFirstA['character_key'] === 'ari-stoneward'
+            && $sameFirstB['character_key'] === 'ari-valesong',
+        'explicit canonical character keys collapsed heroes that share a first name.');
+    $alpha = $service->createAccount([
+        'character_name' => 'Alpha',
+        'password' => 'alpha account password',
+        'character_key' => 'alpha',
+        'role' => 'player',
+    ]);
+    expectBrokerError(
+        fn() => $service->createAccount([
+            'character_name' => 'Beta',
+            'password' => 'beta account password',
+            'character_key' => 'beta',
+            'role' => 'player',
+            'aliases' => ['Alpha'],
+        ]),
+        409,
+        'account_conflict');
+    $gamma = $service->createAccount([
+        'character_name' => 'Gamma',
+        'password' => 'gamma account password',
+        'character_key' => 'gamma',
+        'role' => 'player',
+        'aliases' => ['Delta'],
+    ]);
+    expectBrokerError(
+        fn() => $service->createAccount([
+            'character_name' => 'Delta',
+            'password' => 'delta account password',
+            'character_key' => 'delta',
+            'role' => 'player',
+        ]),
+        409,
+        'account_conflict');
+    expectBrokerError(
+        fn() => $service->updateAccount($alpha['id'], ['character_name' => 'Delta']),
+        409,
+        'account_conflict');
     $nativeSession = [];
     $nativeLogin = $service->login(
-        ['character_name' => 'Second Hero', 'password' => 'another long password'],
+        ['character_name' => 'Second', 'password' => 'another long password'],
         '192.0.2.12',
         'https://example.test',
         $nativeSession);
@@ -141,7 +247,35 @@ try {
         'password' => $dungeonMasterPassword,
         'character_key' => 'dungeon-master',
         'role' => 'dm',
+        'aliases' => ['dungeon', 'master', 'DM'],
     ]);
+    $dungeonMasterSalt = random_bytes(16);
+    $dungeonMasterLegacyHash = hash_pbkdf2(
+        'sha256',
+        $dungeonMasterPassword,
+        $dungeonMasterSalt,
+        600000,
+        32,
+        true);
+    $service->importLegacyAccounts([
+        'schema_version' => 2,
+        'format' => 'xp-password-hashes-v2',
+        'entries' => [[
+            'canonical_name' => 'Dungeon Master',
+            'canonical_id' => 'dungeon-master',
+            'aliases' => ['dungeon', 'master', 'DM'],
+            'algorithm' => 'PBKDF2-HMAC-SHA256',
+            'iterations' => 600000,
+            'salt' => base64_encode($dungeonMasterSalt),
+            'hash' => base64_encode($dungeonMasterLegacyHash),
+        ]],
+    ]);
+    $dungeonMasterAccount = array_values(array_filter(
+        $service->listAccounts(),
+        static fn(array $account): bool => $account['character_key'] === 'dungeon-master'))[0] ?? null;
+    assertTrue(
+        is_array($dungeonMasterAccount) && $dungeonMasterAccount['role'] === 'dm',
+        'role-less legacy reimport downgraded the stable Dungeon Master account.');
     foreach ([
         'dungeon master',
         'DUNGEON MASTER',
@@ -233,6 +367,7 @@ try {
         'password' => $maximilianPassword,
         'character_key' => 'maximilian',
         'role' => 'player',
+        'aliases' => ['max', 'Maximilian Yragerne', 'Max Yragerne', 'Yragerne'],
     ]);
     foreach ([
         'max',
@@ -289,6 +424,7 @@ try {
         'password' => $neriaPassword,
         'character_key' => 'neria',
         'role' => 'player',
+        'aliases' => ['Neria Silverdale', 'Silverdale'],
     ]);
     foreach ([
         'Neria',
@@ -341,6 +477,7 @@ try {
         'password' => $kelpiePassword,
         'character_key' => 'kelpie',
         'role' => 'player',
+        'aliases' => ['Kelpie Lawfuller', 'Lawfuller'],
     ]);
     foreach ([
         'Kelpie',
@@ -449,91 +586,8 @@ try {
         429,
         'login_failed');
 
-    $identityPasswordA = 'identity alpha password';
-    $identityPasswordB = 'identity beta password';
-    $identitySaltA = random_bytes(16);
-    $identitySaltB = random_bytes(16);
-    $identityIdA = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
-    $identityIdB = 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb';
-    $identityImport = $service->importLegacyAccounts([
-        'schema_version' => 2,
-        'format' => 'xp-password-hashes-v2',
-        'entries' => [
-            [
-                'account_id' => $identityIdA,
-                'canonical_name' => 'Alice North',
-                'aliases' => ['North Alice'],
-                'is_dungeon_master' => false,
-                'algorithm' => 'PBKDF2-HMAC-SHA256',
-                'iterations' => 600000,
-                'salt' => base64_encode($identitySaltA),
-                'hash' => base64_encode(hash_pbkdf2('sha256', $identityPasswordA, $identitySaltA, 600000, 32, true)),
-            ],
-            [
-                'account_id' => $identityIdB,
-                'canonical_name' => 'Alice South',
-                'aliases' => ['South Alice'],
-                'is_dungeon_master' => true,
-                'algorithm' => 'PBKDF2-HMAC-SHA256',
-                'iterations' => 600000,
-                'salt' => base64_encode($identitySaltB),
-                'hash' => base64_encode(hash_pbkdf2('sha256', $identityPasswordB, $identitySaltB, 600000, 32, true)),
-            ],
-        ],
-    ]);
-    assertTrue($identityImport['imported'] === 2, 'Canonical identity import count was incorrect.');
-    $identityRows = $database->query(
-        "SELECT id, role FROM character_accounts WHERE normalized_name IN ('alice north', 'alice south') ORDER BY normalized_name")->fetchAll();
-    assertTrue(
-        $identityRows[0]['id'] === $identityIdA && $identityRows[1]['id'] === $identityIdB
-            && $identityRows[1]['role'] === 'dm',
-        'Canonical account IDs or roles were not preserved during import.');
-    $identitySession = [];
-    $identityLogin = $service->login(
-        ['character_name' => 'North Alice', 'password' => $identityPasswordA],
-        '192.0.2.60',
-        'https://example.test',
-        $identitySession);
-    assertTrue($identityLogin['account']['id'] === $identityIdA, 'The explicit identity alias resolved to the wrong account.');
-    $identitySecondSession = [];
-    $identitySecondLogin = $service->login(
-        ['character_name' => 'Alice South', 'password' => $identityPasswordB],
-        '192.0.2.62',
-        'https://example.test',
-        $identitySecondSession);
-    assertTrue($identitySecondLogin['account']['id'] === $identityIdB, 'The same-first-name canonical account resolved incorrectly.');
-    $beforeConflictCount = $service->accountCount();
-    $conflictSession = [];
-    expectBrokerError(
-        fn() => $service->importLegacyAccounts([
-            'schema_version' => 2,
-            'format' => 'xp-password-hashes-v2',
-            'entries' => [[
-                'account_id' => $identityIdA,
-                'canonical_name' => 'Conflicting Identity',
-                'aliases' => [],
-                'is_dungeon_master' => false,
-                'algorithm' => 'PBKDF2-HMAC-SHA256',
-                'iterations' => 600000,
-                'salt' => base64_encode(random_bytes(16)),
-                'hash' => base64_encode(hash_pbkdf2('sha256', 'conflict password', random_bytes(16), 600000, 32, true)),
-            ]],
-        ]),
-        409,
-        'account_import_conflict');
-    assertTrue($service->accountCount() === $beforeConflictCount, 'A conflicting identity import was not rolled back.');
-    $wrongIdentitySession = [];
-    expectBrokerError(
-        fn() => $service->login(
-            ['character_name' => 'South Alice', 'password' => $identityPasswordA],
-            '192.0.2.61',
-            'https://example.test',
-            $wrongIdentitySession),
-        401,
-        'login_failed');
-
     $accounts = $service->listAccounts();
-    assertTrue(count($accounts) === 8, 'The account listing count was incorrect.');
+    assertTrue(count($accounts) === 10, 'The account listing count was incorrect.');
     foreach ($accounts as $account) {
         assertTrue(!array_key_exists('password_hash', $account), 'An account listing exposed a password hash.');
         assertTrue(!array_key_exists('legacy_hash', $account), 'An account listing exposed a legacy hash.');

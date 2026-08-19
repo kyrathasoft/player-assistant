@@ -9,7 +9,8 @@ $ErrorActionPreference = 'Stop'
 
 $SettingsLocalFileName = 'settings.local.json'
 $XpPasswordFileName = 'xp-passwords.json'
-$XpPasswordFormat = 'xp-password-hashes-v1'
+$XpPasswordFormat = 'xp-password-hashes-v2'
+$XpPasswordSchemaVersion = 2
 $XpPasswordAlgorithm = 'PBKDF2-HMAC-SHA256'
 $XpPasswordMinimumIterations = 600000
 $RequiredSidecarFileNames = @(
@@ -130,10 +131,8 @@ function Assert-XpPasswordHashSidecar {
         throw "Runtime sidecar $FileName is not valid JSON: $($_.Exception.Message)"
     }
 
-    $isIdentityFormat = $json.schema_version -eq 2 -and $json.format -eq 'xp-password-hashes-v2'
-    $isLegacyFormat = $json.schema_version -eq 1 -and $json.format -eq $XpPasswordFormat
-    if (!$isIdentityFormat -and !$isLegacyFormat) {
-        throw "Runtime sidecar $FileName must use supported salted password identity format."
+    if ($json.schema_version -ne $XpPasswordSchemaVersion -or $json.format -ne $XpPasswordFormat) {
+        throw "Runtime sidecar $FileName must use salted password hash format '$XpPasswordFormat' with schema_version $XpPasswordSchemaVersion."
     }
 
     $unexpectedDocumentProperties = @($json.PSObject.Properties.Name | Where-Object {
@@ -148,31 +147,49 @@ function Assert-XpPasswordHashSidecar {
         throw "Runtime sidecar $FileName does not contain any password hash entries."
     }
 
-    $names = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
-    $accountIds = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::Ordinal)
-    $aliases = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
+    $names = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::Ordinal)
+    $canonicalIds = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
+    $aliases = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::Ordinal)
     $salts = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::Ordinal)
     foreach ($entry in $entries) {
-        $allowedEntryProperties = if ($isIdentityFormat) { @('account_id', 'canonical_name', 'aliases', 'is_dungeon_master', 'algorithm', 'iterations', 'salt', 'hash') } else { @('name', 'algorithm', 'iterations', 'salt', 'hash') }
+        $canonicalName = [string]$entry.canonical_name
+        if ([string]::IsNullOrWhiteSpace($canonicalName) -or $canonicalName -cne $canonicalName.Trim()) {
+            throw "Runtime sidecar $FileName contains a blank or untrimmed canonical name."
+        }
+        if (!$names.Add(([regex]::Replace($canonicalName.Trim(), '\s+', ' ')).ToUpperInvariant())) {
+            throw "Runtime sidecar $FileName contains duplicate canonical name '$canonicalName'."
+        }
+    }
+    foreach ($entry in $entries) {
         $unexpectedEntryProperties = @($entry.PSObject.Properties.Name | Where-Object {
-            $allowedEntryProperties -notcontains $_
+            @('canonical_name', 'canonical_id', 'aliases', 'is_dungeon_master', 'algorithm', 'iterations', 'salt', 'hash') -notcontains $_
         })
         if ($unexpectedEntryProperties.Count -gt 0) {
             throw "Runtime sidecar $FileName contains unexpected entry property '$($unexpectedEntryProperties[0])'."
         }
 
-        $entryName = if ($isIdentityFormat) { [string]$entry.canonical_name } else { [string]$entry.name }
-        if ([string]::IsNullOrWhiteSpace($entryName) -or !$names.Add($entryName)) {
-            throw "Runtime sidecar $FileName contains a blank or duplicate canonical name."
+        $canonicalName = [string]$entry.canonical_name
+        if (!$entry.PSObject.Properties['is_dungeon_master'] -or $entry.is_dungeon_master -isnot [bool]) {
+            throw "Runtime sidecar $FileName entry '$canonicalName' must declare a Boolean Dungeon Master scope."
         }
-        if ($isIdentityFormat) {
-            if ([string]::IsNullOrWhiteSpace([string]$entry.account_id) -or !$accountIds.Add([string]$entry.account_id)) {
-                throw "Runtime sidecar $FileName contains a blank or duplicate account ID."
+        $canonicalId = [string]$entry.canonical_id
+        $isCanonicalIdValid = ![string]::IsNullOrWhiteSpace($canonicalId) -and $canonicalId -ceq $canonicalId.Trim() -and $canonicalId.Length -ge 3 -and $canonicalId.Length -le 128 -and $canonicalId -cmatch "^[A-Za-z0-9._-]+$"
+        if (!$isCanonicalIdValid -or !$canonicalIds.Add($canonicalId)) {
+            throw "Runtime sidecar $FileName contains a blank, malformed, or duplicate canonical ID."
+        }
+
+        if (!$entry.PSObject.Properties['aliases'] -or $null -eq $entry.aliases) {
+            throw "Runtime sidecar $FileName entry '$canonicalName' must declare an aliases array."
+        }
+        $entryAliasNames = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::Ordinal)
+        foreach ($alias in @($entry.aliases)) {
+            $aliasText = [string]$alias
+            if ([string]::IsNullOrWhiteSpace($aliasText) -or $aliasText -cne $aliasText.Trim()) {
+                throw "Runtime sidecar $FileName entry '$canonicalName' contains a blank or untrimmed alias."
             }
-            foreach ($alias in @($entry.aliases)) {
-                if ([string]::IsNullOrWhiteSpace([string]$alias) -or [string]$alias -cne ([string]$alias).Trim() -or $names.Contains([string]$alias) -or !$aliases.Add([string]$alias)) {
-                    throw "Runtime sidecar $FileName contains a blank, untrimmed, or duplicate alias."
-                }
+            $normalizedAlias = ([regex]::Replace($aliasText.Trim(), '\s+', ' ')).ToUpperInvariant()
+            if ($names.Contains($normalizedAlias) -or !$entryAliasNames.Add($normalizedAlias) -or !$aliases.Add($normalizedAlias)) {
+                throw "Runtime sidecar $FileName entry '$canonicalName' contains a duplicate or colliding alias '$aliasText'."
             }
         }
 

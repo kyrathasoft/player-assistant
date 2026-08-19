@@ -368,43 +368,12 @@ internal static partial class TestCases
 
         AssertEqual(2, hashes.Count, "unexpected XP password hash count");
         AssertTrue(
-            XpPasswordStoreUtility.ValidatePassword("Kelpie", "gemstone", directory.Path),
+            XpPasswordStoreUtility.ValidatePassword("Kelpie", "gemstone", directory.Path) is not null,
             "matching XP password should validate");
         AssertFalse(
-            XpPasswordStoreUtility.ValidatePassword("Kelpie", "wrong", directory.Path),
+            XpPasswordStoreUtility.ValidatePassword("Kelpie", "wrong", directory.Path) is not null,
             "wrong XP password should be rejected");
-    }
-
-    internal static void XpIdentityRejectsSameFirstNameCrossAccountPassword()
-    {
-        using var directory = TemporaryDirectory.Create();
-        var sidecarPath = Path.Combine(directory.Path, XpPasswordStoreUtility.FileName);
-        XpPasswordStoreUtility.SavePasswordIdentities(
-            sidecarPath,
-            [
-                new("acct-a", "Alex Stone", [], "alpha-password"),
-                new("acct-b", "Alex Rivers", [], "beta-password")
-            ]);
-
-        AssertFalse(XpPasswordStoreUtility.AuthenticatePassword("Alex Rivers", "alpha-password", directory.Path).IsValid,
-            "a password from another same-first-name account must be rejected");
-        AssertEqual("acct-b", XpPasswordStoreUtility.AuthenticatePassword("Alex Rivers", "beta-password", directory.Path).AccountId,
-            "the exact canonical account must authenticate");
-        AssertFalse(XpPasswordStoreUtility.AuthenticatePassword("Alex", "beta-password", directory.Path).IsValid,
-            "an inferred first-name alias must not authenticate");
-    }
-
-    internal static void XpIdentityAcceptsExplicitUniqueAlias()
-    {
-        using var directory = TemporaryDirectory.Create();
-        var sidecarPath = Path.Combine(directory.Path, XpPasswordStoreUtility.FileName);
-        XpPasswordStoreUtility.SavePasswordIdentities(
-            sidecarPath,
-            [new("acct-a", "Alex Stone", ["Stone Captain"], "alpha-password")]);
-
-        var identity = XpPasswordStoreUtility.AuthenticatePassword("Stone Captain", "alpha-password", directory.Path);
-        AssertTrue(identity.IsValid, "an explicitly declared alias should authenticate");
-        AssertEqual("acct-a", identity.AccountId, "alias authentication must return the canonical account ID");
+        RunCanonicalIdentityRegressionCases();
     }
 
     internal static void XpPasswordStoreUsesUniqueSaltsAndOmitsPlaintext()
@@ -434,7 +403,7 @@ internal static partial class TestCases
         AssertFalse(raw.Contains("shared-password", StringComparison.Ordinal), "XP hash sidecar must not contain plaintext password material");
     }
 
-    internal static void XpPasswordStoreAcceptsFirstAndFullCharacterNames()
+    internal static void XpPasswordStoreRejectsNonCanonicalCharacterNames()
     {
         using var directory = TemporaryDirectory.Create();
         var sidecarPath = Path.Combine(directory.Path, XpPasswordStoreUtility.FileName);
@@ -448,19 +417,13 @@ internal static partial class TestCases
             });
 
         AssertFalse(
-            XpPasswordStoreUtility.ValidatePassword("Kelpie Lawfuller", "gemstone", directory.Path),
-            "a full name must not validate against a different first-name credential");
+            XpPasswordStoreUtility.ValidatePassword("Kelpie Lawfuller", "gemstone", directory.Path) is not null,
+            "a non-canonical full name must not resolve a first-name credential");
         AssertFalse(
-            XpPasswordStoreUtility.ValidatePassword("Jelb", "spell-component", directory.Path),
-            "a first name must not validate against a full-name credential");
-        AssertTrue(
-            XpPasswordStoreUtility.ValidatePassword("Kelpie", "gemstone", directory.Path),
-            "the exact canonical name should validate");
-        AssertTrue(
-            XpPasswordStoreUtility.ValidatePassword("Jelb Garrick", "spell-component", directory.Path),
-            "the exact canonical full name should validate");
+            XpPasswordStoreUtility.ValidatePassword("Jelb", "spell-component", directory.Path) is not null,
+            "a first-name shortcut must not resolve a full-name credential");
         AssertFalse(
-            XpPasswordStoreUtility.ValidatePassword("Dungeon", "Lucian99!", directory.Path),
+            XpPasswordStoreUtility.ValidatePassword("Dungeon", "Lucian99!", directory.Path) is not null,
             "Dungeon Master access should not allow a first-name shortcut");
     }
 
@@ -479,7 +442,7 @@ internal static partial class TestCases
         File.WriteAllBytes(sidecarPath, [0xEF, 0xBB, 0xBF, .. hashBytes]);
 
         AssertTrue(
-            XpPasswordStoreUtility.ValidatePassword("Kelpie Lawfuller", "gemstone", directory.Path),
+            XpPasswordStoreUtility.ValidatePassword("Kelpie Lawfuller", "gemstone", directory.Path) is not null,
             "matching XP password should validate when hash sidecar has a UTF-8 BOM");
     }
 
@@ -512,9 +475,9 @@ internal static partial class TestCases
         var entryCount = XpPasswordStoreUtility.ConvertEncryptedSidecarToPasswordHashes(sidecarPath);
 
         AssertEqual(2, entryCount, "unexpected migrated XP password count");
-        AssertTrue(XpPasswordStoreUtility.ValidatePassword("Kelpie", "gemstone", directory.Path), "migrated XP password should validate");
+        AssertTrue(XpPasswordStoreUtility.ValidatePassword("Kelpie", "gemstone", directory.Path) is not null, "migrated XP password should validate");
         var raw = File.ReadAllText(sidecarPath);
-        AssertContains(raw, XpPasswordStoreUtility.IdentityFormat);
+        AssertContains(raw, XpPasswordStoreUtility.Format);
         AssertFalse(raw.Contains("gemstone", StringComparison.Ordinal), "migration must remove plaintext password material");
         AssertFalse(raw.Contains("app-protected", StringComparison.Ordinal), "migration must remove the reversible encrypted envelope");
     }
@@ -1896,6 +1859,21 @@ internal static partial class TestCases
             rows[0].TokenFileName ?? string.Empty,
             "former PC token should parse from the Token column");
         AssertContains(rows[0].CharacterPageUrl ?? string.Empty, "Urvan+Hall");
+    }
+
+    internal static void ActiveHeroListingCarriesCanonicalIdentity()
+    {
+        var rows = PlayerCharacterAssetUtility.GetHeroRows("""
+            | Name | Canonical ID | Class | Level | HP |
+            | --- | --- | --- | --- | --- |
+            | [[Ari Stoneward]] | fixture-ari-stoneward-001 | Ranger | 4 | 31 |
+            """);
+
+        AssertEqual(1, rows.Length, "canonical identity listing should produce one hero row");
+        AssertEqual(
+            "fixture-ari-stoneward-001",
+            rows[0].CanonicalId ?? string.Empty,
+            "hero listing should preserve the canonical identity column");
     }
 
     internal static void ActiveHeroMarkdownCancellationWritesNoFiles()

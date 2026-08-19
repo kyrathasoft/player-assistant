@@ -1,6 +1,6 @@
 namespace PlayerAssistant
 {
-    internal sealed record PcXpTotal(string Name, int XpTotal, string? AccountId = null);
+    internal sealed record PcXpTotal(string Name, int XpTotal, string? CanonicalId = null);
 
     internal sealed record XpTrackingSnapshot(string DateLabel, IReadOnlyList<PcXpTotal> Totals);
 
@@ -35,6 +35,18 @@ namespace PlayerAssistant
         internal static IReadOnlyList<PcXpTotal> ParseCurrentXpTotals(string markdown)
         {
             return ParseCurrentXpSnapshot(markdown).Totals;
+        }
+
+        internal static PcXpTotal? FindXpTotalForIdentity(
+            IReadOnlyList<PcXpTotal> totals,
+            XpAuthenticatedIdentity identity)
+        {
+            ArgumentNullException.ThrowIfNull(totals);
+            ArgumentNullException.ThrowIfNull(identity);
+
+            var matches = totals.Where(row =>
+                string.Equals(row.CanonicalId, identity.CanonicalId, StringComparison.Ordinal)).ToArray();
+            return matches.Length == 1 ? matches[0] : null;
         }
 
         internal static XpTrackingSnapshot ParseCurrentXpSnapshot(string markdown)
@@ -115,6 +127,7 @@ namespace PlayerAssistant
                 }
 
                 if (cells.Any(cell => string.Equals(cell, "Name", StringComparison.OrdinalIgnoreCase))
+                    && cells.Any(cell => string.Equals(cell, "Canonical ID", StringComparison.OrdinalIgnoreCase))
                     && cells.Any(cell => string.Equals(cell, "XP Total", StringComparison.OrdinalIgnoreCase)))
                 {
                     return index;
@@ -135,15 +148,20 @@ namespace PlayerAssistant
             var nameIndex = Array.FindIndex(
                 headerCells,
                 cell => string.Equals(cell, "Name", StringComparison.OrdinalIgnoreCase));
+            var canonicalIdIndex = Array.FindIndex(
+                headerCells,
+                cell => string.Equals(cell, "Canonical ID", StringComparison.OrdinalIgnoreCase));
             var xpIndex = Array.FindIndex(
                 headerCells,
                 cell => string.Equals(cell, "XP Total", StringComparison.OrdinalIgnoreCase));
-            if (nameIndex < 0 || xpIndex < 0)
+            if (nameIndex < 0 || canonicalIdIndex < 0 || xpIndex < 0)
             {
-                throw new InvalidOperationException("The latest XP tracking table must contain Name and XP Total columns.");
+                throw new InvalidOperationException(
+                    "The latest XP tracking table must contain Name, Canonical ID, and XP Total columns.");
             }
 
             var results = new List<PcXpTotal>();
+            var canonicalIds = new HashSet<string>(StringComparer.Ordinal);
             for (var index = headerIndex + 1; index < lines.Length; index++)
             {
                 var line = lines[index];
@@ -158,16 +176,22 @@ namespace PlayerAssistant
                     continue;
                 }
 
-                if (cells.Length <= Math.Max(nameIndex, xpIndex))
+                if (cells.Length <= Math.Max(Math.Max(nameIndex, canonicalIdIndex), xpIndex))
                 {
                     break;
                 }
 
                 var name = CleanMarkdownCell(cells[nameIndex]);
+                var canonicalId = CleanMarkdownCell(cells[canonicalIdIndex]);
                 var xpTotal = ParseXpTotal(cells[xpIndex]);
-                if (name.Length > 0)
+                if (name.Length > 0 && IsValidCanonicalId(canonicalId) && canonicalIds.Add(canonicalId))
                 {
-                    results.Add(new PcXpTotal(name, xpTotal));
+                    results.Add(new PcXpTotal(name, xpTotal, canonicalId));
+                }
+                else
+                {
+                    throw new InvalidOperationException(
+                        "The latest XP tracking table contains a blank, invalid, or duplicate Canonical ID.");
                 }
             }
 
@@ -226,6 +250,18 @@ namespace PlayerAssistant
             }
 
             return xpTotal;
+        }
+
+        private static bool IsValidCanonicalId(string value)
+        {
+            return value.Length is >= 3 and <= 100
+                && value[0] is >= 'a' and <= 'z' or >= '0' and <= '9'
+                && value.All(character => character is >= 'a' and <= 'z'
+                    or >= '0' and <= '9'
+                    or '-'
+                    or '_'
+                    or '.'
+                    or ':');
         }
     }
 }

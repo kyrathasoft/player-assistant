@@ -30,9 +30,9 @@ Upload these beside the existing private `config.php` and `broker.sqlite`:
 ```text
 BrokerHttpException.php
 CharacterAuthService.php
+MagicItemService.php
 BrokerService.php
 MessageService.php
-RevisionService.php
 QuestService.php
 RpolClient.php
 WordCountService.php
@@ -57,9 +57,9 @@ Merge the `auth` section from `player-assistant-broker/config.auth.example.php` 
 https://bryanmiller.us
 ```
 
-Optionally merge `player-assistant-broker/config.messages.example.php` to override the default 90-day and 500-read-message retention limits. Retention applies only to read messages; unread messages are paginated and retained until acknowledged.
+Merge the `xp` section from `player-assistant-broker/config.xp.example.php` into the same private `config.php`. Keep the XP and active-character source URLs in this private configuration; never place them in PWA JavaScript or accept them from a browser request. When `character_source_url` is omitted, the broker derives the `PCs/Player Characters Listing` page from the fixed XP source's Obsidian vault. Review `character_key_aliases` against the live XP table and character listing before deployment: every source label used for protected XP or award joins must map explicitly to its stable account key, and unmapped labels fail closed.
 
-Merge the `xp` section from `player-assistant-broker/config.xp.example.php` into the same private `config.php`. Keep the XP and active-character source URLs in this private configuration; never place them in PWA JavaScript or accept them from a browser request. When `character_source_url` is omitted, the broker derives the `PCs/Player Characters Listing` page from the fixed XP source's Obsidian vault.
+Merge the `magic_items` section from `player-assistant-broker/config.auth.example.php` into the same private `config.php`. The configured schema-v2 `magic-items.json` must remain outside the document root; its `viewable-by` values may contain only `all` or exact 32-character canonical account IDs. The public `pwa/magic-items.json` is an all-public fallback and must never contain restricted records.
 
 Set the optional `word_counts` section to enable signed automatic word-count refresh:
 
@@ -84,6 +84,12 @@ The production source is a public, data-only JSON file outside the PWA:
 ```text
 https://bryanmiller.us/scarlethorizons/data/word-counts.json
 ```
+
+The private XP Tracking source must expose a `Canonical ID` column alongside
+`Name` and `XP Total`. The desktop parser rejects tables without that immutable
+identity column; it never falls back to first-name or display-name matching for
+protected XP retrieval. The canonical IDs must match the identity sidecar and
+active-character roster records exactly.
 
 Run `setup-word-count-signing-key.ps1` once to store the Ed25519 private key in
 Windows Credential Manager and create `word-count-signing-public.json`.
@@ -152,7 +158,7 @@ After the updated API and private broker files are deployed, import the existing
 .\web-deploy\import-character-accounts.ps1
 ```
 
-The script prompts securely for the broker administrator key and sends only the salted password-hash document to the administrator-protected HTTPS endpoint. It does not upload the file into the public website directory. Identity-addressable v2 documents preserve the existing opaque `account_id`, canonical name, explicit aliases, and Dungeon Master role; do not invent IDs when converting a v1 sidecar. Resolve the live account IDs through the protected administrator account listing first, then import the v2 document. The broker validates the complete document before opening a transaction and rolls back the entire import if any ID, canonical name, alias, or database constraint conflicts.
+The script prompts securely for the broker administrator key and sends only the salted password-hash document to the administrator-protected HTTPS endpoint. The broker validates the complete document before opening one database transaction, preserves existing opaque account IDs on conflict, replaces the account's declared aliases atomically, and rolls the transaction back on any conflict. It does not upload the file into the public website directory.
 
 ## PWA files
 
@@ -215,10 +221,10 @@ POST /scarlethorizons/api/v1/login
 GET  /scarlethorizons/api/v1/session
 GET  /scarlethorizons/api/v1/me
 GET  /scarlethorizons/api/v1/xp
+GET  /scarlethorizons/api/v1/magic-items
 GET  /scarlethorizons/api/v1/word-counts
 GET  /scarlethorizons/api/v1/presence
 GET  /scarlethorizons/api/v1/quests
-GET  /scarlethorizons/api/v1/revisions
 POST /scarlethorizons/api/v1/quest-requests
 POST /scarlethorizons/api/v1/quest-requests/{request-id}/decision
 POST /scarlethorizons/api/v1/quest-requests/{request-id}/acknowledge
@@ -247,9 +253,6 @@ broker returns the exact uploaded totals and observation time.
 - Health response reports schema version `7`, a nonzero `character_account_count`, `xp_tracking_configured: true`, the word-count snapshot availability state, `quest_request_workflow_configured: true`, and configured broker operations.
 - Configure a dedicated, enabled player monitor account whose `character_key` maps to a current XP character. Store only its login name and password in the `PWA_MONITOR_CHARACTER_NAME` and `PWA_MONITOR_PASSWORD` GitHub repository secrets.
 - The scheduled PWA monitor fails closed when either secret is absent. Its authenticated checks require the login and identity response contracts, `Cache-Control: no-store`, a non-stale XP snapshot fetched within 24 hours, and a source-observed and broker-uploaded word-count snapshot no older than seven days. It never prints protected response bodies or credentials.
-- DreamHost denies GitHub-hosted Azure runners at Apache before authentication, so `.github/workflows/pwa-synthetic-monitor.yml` is a manual deployment/verification workflow rather than the recurring monitor. It installs `PwaSyntheticMonitor.php` and `run-pwa-monitor.php` in the private broker directory and idempotently schedules the runner every 15 minutes through DreamHost cron.
-- The cron monitor stores credentials only in mode-600 private `config.php`, writes atomic mode-600 `pwa-monitor-status.json`, verifies logout and the subsequent anonymous session, and sends cooldown-limited email only for failure/recovery transitions. `/v1/admin/health` exposes only `configured`, `healthy`, run/success/failure timestamps, and the safe error code; the public health route remains unchanged.
-- The deployment workflow uses a transient mode-600 credential JSON solely to move repository secret values over SSH. The remote installer deletes it immediately, backs up replaced runtime/config/crontab state under `/home/dh_4gg2za/deploy-backups`, atomically promotes the private files, preserves unrelated cron entries, runs the monitor once, and verifies permissions and cron installation.
 
 ## Broker database recovery and observability
 

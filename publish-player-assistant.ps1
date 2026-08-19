@@ -20,7 +20,8 @@ $SettingsSchemaVersionPropertyName = 'schema_version'
 $SettingsSchemaVersion = 1
 $SettingsEncryptionSeed = 'PlayerAssistant.LocalSettings.v1'
 $XpPasswordFileName = 'xp-passwords.json'
-$XpPasswordFormat = 'xp-password-hashes-v1'
+$XpPasswordFormat = 'xp-password-hashes-v2'
+$XpPasswordSchemaVersion = 2
 $XpPasswordAlgorithm = 'PBKDF2-HMAC-SHA256'
 $XpPasswordMinimumIterations = 600000
 $KeywordIndexFileName = 'keyword-index.json'
@@ -422,7 +423,9 @@ function Get-SettingsSchemaVersion {
         [object]$Settings,
 
         [Parameter(Mandatory = $true)]
-        [string]$Description
+        [string]$Description,
+
+        [int]$MaxSupportedSchemaVersion = $SettingsSchemaVersion
     )
 
     $property = $Settings.PSObject.Properties[$SettingsSchemaVersionPropertyName]
@@ -447,8 +450,8 @@ function Get-SettingsSchemaVersion {
         throw "$Description has an invalid '$SettingsSchemaVersionPropertyName' value."
     }
 
-    if ($schemaVersion -gt $SettingsSchemaVersion) {
-        throw "$Description uses unsupported schema version $schemaVersion. This verifier supports schema version $SettingsSchemaVersion."
+    if ($schemaVersion -gt $MaxSupportedSchemaVersion) {
+        throw "$Description uses unsupported schema version $schemaVersion. This verifier supports schema version $MaxSupportedSchemaVersion."
     }
 
     return $schemaVersion
@@ -761,12 +764,16 @@ function Assert-PublishedXpPasswordSidecar {
     Assert-RequiredFile -Path $Path -Description "published $XpPasswordFileName"
 
     $envelope = Read-JsonFile -Path $Path -Description "published $XpPasswordFileName"
-    [void](Get-SettingsSchemaVersion -Settings $envelope -Description "published $XpPasswordFileName")
+    if ($envelope.format -ne $XpPasswordFormat) {
+        throw "Published $XpPasswordFileName must use salted password hash format '$XpPasswordFormat'."
+    }
 
-    $isIdentityFormat = $envelope.schema_version -eq 2 -and $envelope.format -eq 'xp-password-hashes-v2'
-    $isLegacyFormat = $envelope.schema_version -eq 1 -and $envelope.format -eq $XpPasswordFormat
-    if (!$isIdentityFormat -and !$isLegacyFormat) {
-        throw "Published $XpPasswordFileName must use a supported salted password identity format (xp-password-hashes-v1 or xp-password-hashes-v2)."
+    $schemaVersion = Get-SettingsSchemaVersion `
+        -Settings $envelope `
+        -Description "published $XpPasswordFileName" `
+        -MaxSupportedSchemaVersion $XpPasswordSchemaVersion
+    if ($schemaVersion -ne $XpPasswordSchemaVersion) {
+        throw "Published $XpPasswordFileName must declare schema_version $XpPasswordSchemaVersion."
     }
 
     $unexpectedDocumentProperties = @($envelope.PSObject.Properties.Name | Where-Object {
@@ -781,44 +788,59 @@ function Assert-PublishedXpPasswordSidecar {
         throw "Published $XpPasswordFileName does not contain any password hash entries."
     }
 
-    $names = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
-    $accountIds = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::Ordinal)
-    $aliases = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
+    $names = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::Ordinal)
+    $canonicalIds = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
+    $aliases = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::Ordinal)
     $salts = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::Ordinal)
     foreach ($entry in $entries) {
-        $allowedEntryProperties = if ($isIdentityFormat) { @('account_id', 'canonical_name', 'aliases', 'is_dungeon_master', 'algorithm', 'iterations', 'salt', 'hash') } else { @('name', 'algorithm', 'iterations', 'salt', 'hash') }
+        $canonicalName = [string]$entry.canonical_name
+        if ([string]::IsNullOrWhiteSpace($canonicalName) -or $canonicalName -cne $canonicalName.Trim()) {
+            throw "Published $XpPasswordFileName contains a blank or untrimmed canonical name."
+        }
+        if (!$names.Add(([regex]::Replace($canonicalName.Trim(), '\s+', ' ')).ToUpperInvariant())) {
+            throw "Published $XpPasswordFileName contains duplicate canonical name '$canonicalName'."
+        }
+    }
+    foreach ($entry in $entries) {
         $unexpectedEntryProperties = @($entry.PSObject.Properties.Name | Where-Object {
-            $allowedEntryProperties -notcontains $_
+            @('canonical_name', 'canonical_id', 'aliases', 'is_dungeon_master', 'algorithm', 'iterations', 'salt', 'hash') -notcontains $_
         })
         if ($unexpectedEntryProperties.Count -gt 0) {
             throw "Published $XpPasswordFileName contains unexpected entry property '$($unexpectedEntryProperties[0])'."
         }
 
-        $entryName = if ($isIdentityFormat) { [string]$entry.canonical_name } else { [string]$entry.name }
-        if ([string]::IsNullOrWhiteSpace($entryName)) {
-            throw "Published $XpPasswordFileName contains a blank canonical name."
+        $canonicalName = [string]$entry.canonical_name
+        if (!$entry.PSObject.Properties['is_dungeon_master'] -or $entry.is_dungeon_master -isnot [bool]) {
+            throw "Published $XpPasswordFileName entry '$canonicalName' must declare a Boolean Dungeon Master scope."
+        }
+        $canonicalId = [string]$entry.canonical_id
+        $isCanonicalIdValid = ![string]::IsNullOrWhiteSpace($canonicalId) -and $canonicalId -ceq $canonicalId.Trim() -and $canonicalId.Length -ge 3 -and $canonicalId.Length -le 128 -and $canonicalId -cmatch "^[A-Za-z0-9._-]+$"
+        if (!$isCanonicalIdValid -or !$canonicalIds.Add($canonicalId)) {
+            throw "Published $XpPasswordFileName contains a blank, malformed, or duplicate canonical ID."
         }
 
-        if (!$names.Add($entryName)) {
-            throw "Published $XpPasswordFileName contains duplicate canonical name '$entryName'."
+        if (!$entry.PSObject.Properties['aliases'] -or $null -eq $entry.aliases) {
+            throw "Published $XpPasswordFileName entry '$canonicalName' must declare an aliases array."
         }
-        if ($isIdentityFormat) {
-            if ([string]::IsNullOrWhiteSpace([string]$entry.account_id) -or !$accountIds.Add([string]$entry.account_id)) {
-                throw "Published $XpPasswordFileName contains a blank or duplicate account ID."
+        $entryAliases = @($entry.aliases)
+        $entryAliasNames = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::Ordinal)
+        foreach ($alias in $entryAliases) {
+            $aliasText = [string]$alias
+            if ([string]::IsNullOrWhiteSpace($aliasText) -or $aliasText -cne $aliasText.Trim()) {
+                throw "Published $XpPasswordFileName entry '$canonicalName' contains a blank or untrimmed alias."
             }
-            foreach ($alias in @($entry.aliases)) {
-                if ([string]::IsNullOrWhiteSpace([string]$alias) -or [string]$alias -cne ([string]$alias).Trim() -or $names.Contains([string]$alias) -or !$aliases.Add([string]$alias)) {
-                    throw "Published $XpPasswordFileName contains a blank, untrimmed, or ambiguous alias."
-                }
+            $normalizedAlias = ([regex]::Replace($aliasText.Trim(), '\s+', ' ')).ToUpperInvariant()
+            if ($names.Contains($normalizedAlias) -or !$entryAliasNames.Add($normalizedAlias) -or !$aliases.Add($normalizedAlias)) {
+                throw "Published $XpPasswordFileName entry '$canonicalName' contains a duplicate or colliding alias '$aliasText'."
             }
         }
 
         if ($entry.algorithm -ne $XpPasswordAlgorithm) {
-            throw "Published $XpPasswordFileName entry '$($entry.name)' must use algorithm '$XpPasswordAlgorithm'."
+            throw "Published $XpPasswordFileName entry '$canonicalName' must use algorithm '$XpPasswordAlgorithm'."
         }
 
         if ([int64]$entry.iterations -lt $XpPasswordMinimumIterations) {
-            throw "Published $XpPasswordFileName entry '$($entry.name)' must use at least $XpPasswordMinimumIterations iterations."
+            throw "Published $XpPasswordFileName entry '$canonicalName' must use at least $XpPasswordMinimumIterations iterations."
         }
 
         try {
@@ -826,15 +848,15 @@ function Assert-PublishedXpPasswordSidecar {
             $hashBytes = [Convert]::FromBase64String([string]$entry.hash)
         }
         catch {
-            throw "Published $XpPasswordFileName entry '$($entry.name)' contains invalid base64 hash data."
+            throw "Published $XpPasswordFileName entry '$canonicalName' contains invalid base64 hash data."
         }
 
         if ($saltBytes.Length -lt 16) {
-            throw "Published $XpPasswordFileName entry '$($entry.name)' must use a salt of at least 16 bytes."
+            throw "Published $XpPasswordFileName entry '$canonicalName' must use a salt of at least 16 bytes."
         }
 
         if ($hashBytes.Length -ne 32) {
-            throw "Published $XpPasswordFileName entry '$($entry.name)' must use a 32-byte hash."
+            throw "Published $XpPasswordFileName entry '$canonicalName' must use a 32-byte hash."
         }
 
         if (!$salts.Add([string]$entry.salt)) {
