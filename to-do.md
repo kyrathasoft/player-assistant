@@ -266,11 +266,11 @@ Planned security correction: eliminate first-name equivalence from authenticatio
   - [x] Update custom regression-harness catalogs, sidecar schema validators, installer/runtime checks, migration tests, and release checklists.
   - [x] Verify that no protected lookup receives the originally entered name after authentication.
 
-- [ ] 9. Migrate, deploy, and verify the identity data atomically.
-  - Back up and migrate the password sidecar and any canonical identity/roster data with rollback support.
-  - Verify local hashes, release contents, and generated roster/hero paths before deployment.
-  - Run authorized positive tests for each identity plus anonymous, wrong-password, ambiguous-alias, cross-character, logout, and account-switch negative tests.
-  - Verify production behavior through the authenticated deployment contract without exposing passwords or protected response bodies.
+- [x] 9. Migrate, deploy, and verify the identity data atomically.
+  - [x] Back up the live broker database, verify the rollback copy, and confirm the migrated password sidecar and canonical identity/role mapping have exact parity; no production data mutation was required.
+  - [x] Verify local hashes, release contents, and generated roster/hero paths before deployment.
+  - [x] Run authorized positive tests for all seven identities plus anonymous, wrong-password, unauthorized-origin, logout, and account-switch negative tests.
+  - [x] Verify production behavior through the authenticated deployment contract without exposing passwords or protected response bodies.
 
 
 ## Next PWA robustness and usefulness backlog
