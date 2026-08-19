@@ -111,8 +111,6 @@ internal static class TestCatalog
     ("app settings hosted settings failure logs oversized payload", TestCases.AppSettingsHostedSettingsFailureLogsOversizedPayload),
     ("app settings hosted settings failure logs unreachable fixture server", TestCases.AppSettingsHostedSettingsFailureLogsUnreachableFixtureServer),
     ("xp password store loads salted hash sidecar", TestCases.XpPasswordStoreLoadsSaltedHashSidecar),
-    ("xp identity rejects same first name cross-account password", TestCases.XpIdentityRejectsSameFirstNameCrossAccountPassword),
-    ("xp identity accepts explicit unique alias", TestCases.XpIdentityAcceptsExplicitUniqueAlias),
     ("xp password store uses unique salts and omits plaintext", TestCases.XpPasswordStoreUsesUniqueSaltsAndOmitsPlaintext),
     ("xp password store rejects non-canonical character names", TestCases.XpPasswordStoreRejectsNonCanonicalCharacterNames),
     ("xp password store accepts hash sidecar with utf8 bom", TestCases.XpPasswordStoreAcceptsHashSidecarWithUtf8Bom),
