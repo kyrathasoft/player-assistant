@@ -803,13 +803,16 @@ function Assert-PublishedXpPasswordSidecar {
     }
     foreach ($entry in $entries) {
         $unexpectedEntryProperties = @($entry.PSObject.Properties.Name | Where-Object {
-            @('canonical_name', 'canonical_id', 'aliases', 'algorithm', 'iterations', 'salt', 'hash') -notcontains $_
+            @('canonical_name', 'canonical_id', 'aliases', 'is_dungeon_master', 'algorithm', 'iterations', 'salt', 'hash') -notcontains $_
         })
         if ($unexpectedEntryProperties.Count -gt 0) {
             throw "Published $XpPasswordFileName contains unexpected entry property '$($unexpectedEntryProperties[0])'."
         }
 
         $canonicalName = [string]$entry.canonical_name
+        if (!$entry.PSObject.Properties['is_dungeon_master'] -or $entry.is_dungeon_master -isnot [bool]) {
+            throw "Published $XpPasswordFileName entry '$canonicalName' must declare a Boolean Dungeon Master scope."
+        }
         $canonicalId = [string]$entry.canonical_id
         $isCanonicalIdValid = ![string]::IsNullOrWhiteSpace($canonicalId) -and $canonicalId -ceq $canonicalId.Trim() -and $canonicalId.Length -ge 3 -and $canonicalId.Length -le 128 -and $canonicalId -cmatch "^[A-Za-z0-9._-]+$"
         if (!$isCanonicalIdValid -or !$canonicalIds.Add($canonicalId)) {

@@ -120,6 +120,7 @@ internal static class TestCatalog
     ("identity fixtures are distinct and synthetic", TestCases.IdentityFixturesAreDistinctAndSynthetic),
     ("successful authentication returns canonical identity", TestCases.SuccessfulAuthenticationReturnsCanonicalIdentity),
     ("dungeon master scope uses stable canonical ID", TestCases.DungeonMasterScopeUsesStableCanonicalId),
+    ("opaque Dungeon Master canonical ID preserves scope", TestCases.OpaqueDungeonMasterCanonicalIdPreservesScope),
     ("identity registry loads canonical aliases", TestCases.IdentityRegistryLoadsCanonicalAliases),
     ("legacy name lookup reproduces cross-identity leak", TestCases.LegacyNameLookupReproducesCrossIdentityLeak),
     ("cross-account password access is denied", TestCases.CrossAccountPasswordAccessIsDenied),

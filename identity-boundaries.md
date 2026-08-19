@@ -6,7 +6,7 @@ Protected data must use the authenticated stable canonical ID or character key w
 
 - Desktop XP rows require a unique `Canonical ID` and are matched only to `XpAuthenticatedIdentity.CanonicalId`.
 - Party and My Hero Briefing resolution use canonical IDs. Character-tagged notes use the authenticated registry's canonical name plus explicitly declared aliases.
-- Dungeon Master scope is assigned only to canonical ID `dungeon-master`; the display text `Dungeon Master` does not grant scope.
+- Dungeon Master scope is an explicit role field in the password sidecar, bound to the unique canonical account ID; display text never grants scope.
 - Broker accounts require explicit `character_key` and aliases. New imported accounts also require an explicit role; role-less legacy reimports preserve the existing stable account role. Imports update by an unambiguous `character_key`; display-name and alias namespace collisions fail closed.
 - Broker XP source labels resolve only through the explicit `xp.character_key_aliases` mapping. Unmapped labels fail closed.
 - PWA magic-item viewer tokens are exact canonical character keys. Substring and inferred-first-name matching are forbidden.

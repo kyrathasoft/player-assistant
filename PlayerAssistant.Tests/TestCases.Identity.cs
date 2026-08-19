@@ -120,7 +120,8 @@ internal static partial class TestCases
                     "dungeon-master",
                     "Game Referee",
                     "game referee password",
-                    [])
+                    [],
+                    true)
             ]);
 
         var displayOnly = XpPasswordStoreUtility.ValidatePassword(
@@ -151,6 +152,41 @@ internal static partial class TestCases
                 && identity.CanonicalName == SyntheticIdentityFixtures[0].FullName
                 && identity.Aliases.SequenceEqual(["Stonewarden"], StringComparer.Ordinal)),
             "identity registry did not preserve the first account's canonical identity and aliases");
+    }
+
+    internal static void OpaqueDungeonMasterCanonicalIdPreservesScope()
+    {
+        using var directory = TemporaryDirectory.Create();
+        var password = "opaque dungeon master password";
+        var salt = Encoding.UTF8.GetBytes("synthetic-opaque-dm-salt-16");
+        var hash = Rfc2898DeriveBytes.Pbkdf2(
+            password, salt, XpPasswordStoreUtility.MinimumIterations,
+            HashAlgorithmName.SHA256, 32);
+        File.WriteAllText(
+            Path.Combine(directory.Path, XpPasswordStoreUtility.FileName),
+            JsonSerializer.Serialize(new
+            {
+                schema_version = XpPasswordStoreUtility.SchemaVersion,
+                format = XpPasswordStoreUtility.Format,
+                entries = new[]
+                {
+                    new
+                    {
+                        canonical_id = "d722dd35dd775c91a5d55339b62c45bc",
+                        canonical_name = "Dungeon Master",
+                        aliases = Array.Empty<string>(),
+                        is_dungeon_master = true,
+                        algorithm = XpPasswordStoreUtility.Algorithm,
+                        iterations = XpPasswordStoreUtility.MinimumIterations,
+                        salt = Convert.ToBase64String(salt),
+                        hash = Convert.ToBase64String(hash)
+                    }
+                }
+            }));
+
+        var identity = XpPasswordStoreUtility.ValidatePassword("Dungeon Master", password, directory.Path);
+        Require(identity?.CanonicalId == "d722dd35dd775c91a5d55339b62c45bc", "opaque Dungeon Master canonical ID did not authenticate");
+        Require(identity?.IsDungeonMaster == true, "Dungeon Master scope was inferred from a retired literal ID instead of migrated identity data");
     }
 
     internal static void SidecarRejectsAmbiguousOrMalformedAliases()
@@ -650,6 +686,7 @@ internal static partial class TestCases
         SuccessfulAuthenticationReturnsCanonicalIdentity();
         ExplicitAliasesAuthenticateOnlyTheirOwner();
         DungeonMasterScopeUsesStableCanonicalId();
+        OpaqueDungeonMasterCanonicalIdPreservesScope();
         IdentityRegistryLoadsCanonicalAliases();
         SidecarRejectsAmbiguousOrMalformedAliases();
         SidecarRejectsLegacySchemaAndDuplicateIdentities();
@@ -686,6 +723,7 @@ internal static partial class TestCases
             canonical_name = index == 1 && canonicalNameForSecond is not null ? canonicalNameForSecond : fixture.FullName,
             canonical_id = index == 1 && canonicalIdForSecond is not null ? canonicalIdForSecond : fixture.CanonicalId,
             aliases = (index == 0 ? aliasesForFirst : aliasesForSecond) ?? [],
+            is_dungeon_master = false,
             algorithm = XpPasswordStoreUtility.Algorithm,
             iterations = XpPasswordStoreUtility.MinimumIterations,
             salt = Convert.ToBase64String(Encoding.UTF8.GetBytes($"synthetic-salt-{index:00}-fixed")),

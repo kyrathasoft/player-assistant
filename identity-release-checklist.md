@@ -15,6 +15,7 @@ Use this checklist for every desktop release that contains identity, XP, party, 
 - [ ] Validate `xp-passwords.json` schema version 2, salted PBKDF2-HMAC-SHA256 hashes, unique canonical IDs, unique canonical names, and collision-free explicit aliases.
 - [ ] If migrating a legacy encrypted sidecar, create and retain a rollback copy until the migrated sidecar has passed validation and an authenticated smoke test.
 - [ ] Never infer a canonical ID, role, or authorization scope from a display name, first name, filename, or generated slug.
+- [ ] Verify the explicit `is_dungeon_master` scope field matches the canonical account mapping; never infer scope from display names or a literal ID.
 
 ## Release and installer verification
 
