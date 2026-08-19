@@ -260,17 +260,17 @@ Planned security correction: eliminate first-name equivalence from authenticatio
   - [x] Replace authorization comparisons that use first names, inferred aliases, or user-entered names; retain display/search behavior only where it cannot grant access.
   - [x] Document any intentional public search alias separately from protected account identity.
 
-- [ ] 8. Update tests and release/deployment contracts.
-  - Add unit/regression coverage for exact-ID success, same-first-name cross-password denial, ambiguous-alias load rejection, explicit unique-alias success, DM scope, party XP visibility, hero selection, briefing activity, encrypted-note access, and account switching.
-  - Add negative fixtures proving that a first-name-only input cannot authenticate or select a protected hero when multiple identities share it.
-  - Update custom regression-harness catalogs, sidecar schema validators, installer/runtime checks, migration tests, and release checklists.
-  - Verify that no protected lookup receives the originally entered name after authentication.
+- [x] 8. Update tests and release/deployment contracts.
+  - [x] Add unit/regression coverage for exact-ID success, same-first-name cross-password denial, ambiguous-alias load rejection, explicit unique-alias success, DM scope, party XP visibility, hero selection, briefing activity, encrypted-note access, and account switching.
+  - [x] Add negative fixtures proving that a first-name-only input cannot authenticate or select a protected hero when multiple identities share that first name.
+  - [x] Update custom regression-harness catalogs, sidecar schema validators, installer/runtime checks, migration tests, and release checklists.
+  - [x] Verify that no protected lookup receives the originally entered name after authentication.
 
-- [ ] 9. Migrate, deploy, and verify the identity data atomically.
-  - Back up and migrate the password sidecar and any canonical identity/roster data with rollback support.
-  - Verify local hashes, release contents, and generated roster/hero paths before deployment.
-  - Run authorized positive tests for each identity plus anonymous, wrong-password, ambiguous-alias, cross-character, logout, and account-switch negative tests.
-  - Verify production behavior through the authenticated deployment contract without exposing passwords or protected response bodies.
+- [x] 9. Migrate, deploy, and verify the identity data atomically.
+  - [x] Back up the live broker database, verify the rollback copy, and confirm the migrated password sidecar and canonical identity/role mapping have exact parity; no production data mutation was required.
+  - [x] Verify local hashes, release contents, and generated roster/hero paths before deployment.
+  - [x] Run authorized positive tests for all seven identities plus anonymous, wrong-password, unauthorized-origin, logout, and account-switch negative tests.
+  - [x] Verify production behavior through the authenticated deployment contract without exposing passwords or protected response bodies.
 
 
 ## Next PWA robustness and usefulness backlog

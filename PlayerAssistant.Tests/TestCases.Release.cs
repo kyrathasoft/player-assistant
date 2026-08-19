@@ -12,6 +12,7 @@ using System.Security.Cryptography.X509Certificates;
 using System.Net.Security;
 using System.Diagnostics.CodeAnalysis;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using System.Windows.Forms;
 using System.Xml.Linq;
 
@@ -837,6 +838,22 @@ internal static partial class TestCases
 
             AssertFalse(output.ExitCode == 0, "publish verification should fail when xp-passwords.json is plaintext");
             AssertContains(output.Output, XpPasswordStoreUtility.Format);
+        });
+    }
+
+    internal static void PublishVerificationRejectsMalformedCanonicalId()
+    {
+        WithCopiedPublishDirectory(directoryPath =>
+        {
+            var sidecarPath = Path.Combine(directoryPath, XpPasswordStoreUtility.FileName);
+            var document = JsonNode.Parse(File.ReadAllText(sidecarPath))!.AsObject();
+            document["entries"]!.AsArray()[0]!.AsObject()["canonical_id"] = "invalid/canonical-id";
+            File.WriteAllText(sidecarPath, document.ToJsonString(new JsonSerializerOptions { WriteIndented = true }));
+
+            var output = RunPublishVerification(directoryPath);
+
+            AssertFalse(output.ExitCode == 0, "publish verification should reject malformed canonical IDs");
+            AssertContains(output.Output, "malformed");
         });
     }
 
