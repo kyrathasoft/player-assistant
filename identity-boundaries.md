@@ -39,3 +39,15 @@ The remaining name-based operations were audited and classified as follows:
 | `Form1`, `PartyHeroUtility`, `XpTrackingUtility`, and `MyHeroBriefingUtility` | Protected XP, hero, and briefing selection | Uses `XpAuthenticatedIdentity.CanonicalId` and exact canonical-ID joins; user-entered or display names are not carried into protected lookups. |
 
 No remaining authorization boundary uses a first name, fuzzy name, generated slug, or unvalidated display name. The regression catalog includes same-first-name fixtures, name-only rejection, ambiguous-alias rejection, canonical-ID joins, stale-display-name protection, and name-only Dungeon Master selection rejection.
+
+## Step 8 identity contract
+
+The identity regression and release contract must remain green before deployment:
+
+- Authentication returns an immutable canonical ID and account scope.
+- Switching from one synthetic same-first-name account to another returns the new canonical identity and scope.
+- Wrong-password, unknown-ID, ambiguous-alias, inferred-first-name, unauthenticated-ID, and name-only selection cases fail closed.
+- Protected XP, hero selection, briefing activity, encrypted-note metadata, and account transitions use canonical IDs or explicit post-resolution aliases only.
+- Sidecar schema, alias validation, runtime/installer validation, migration coverage, release-manifest checks, and the custom test catalog remain synchronized.
+
+These checks are test/release-contract coverage. They do not require deployment unless protected runtime, sidecar, broker, or PWA artifacts change.

@@ -261,11 +261,11 @@ Planned security correction: eliminate first-name equivalence from authenticatio
   - [x] Document any intentional public search alias separately from protected account identity in `identity-boundaries.md`.
   - [x] Add regression coverage proving name-only Dungeon Master selection cannot resolve protected hero data.
 
-- [ ] 8. Update tests and release/deployment contracts.
-  - Add unit/regression coverage for exact-ID success, same-first-name cross-password denial, ambiguous-alias load rejection, explicit unique-alias success, DM scope, party XP visibility, hero selection, briefing activity, encrypted-note access, and account switching.
-  - Add negative fixtures proving that a first-name-only input cannot authenticate or select a protected hero when multiple identities share it.
-  - Update custom regression-harness catalogs, sidecar schema validators, installer/runtime checks, migration tests, and release checklists.
-  - Verify that no protected lookup receives the originally entered name after authentication.
+- [x] 8. Update tests and release/deployment contracts.
+  - [x] Add unit/regression coverage for exact-ID success, same-first-name cross-password denial, ambiguous-alias load rejection, explicit unique-alias success, DM scope, party XP visibility, hero selection, briefing activity, encrypted-note access, and account switching.
+  - [x] Add negative fixtures proving that a first-name-only input cannot authenticate or select a protected hero when multiple identities share it.
+  - [x] Update the custom regression-harness catalog and document the sidecar schema, installer/runtime checks, migration tests, release-manifest checks, and release contract in `identity-boundaries.md`.
+  - [x] Verify that no protected lookup receives the originally entered name after authentication.
 
 - [ ] 9. Migrate, deploy, and verify the identity data atomically.
   - Back up and migrate the password sidecar and any canonical identity/roster data with rollback support.

@@ -77,6 +77,28 @@ internal static partial class TestCases
         Require(identity.Aliases.Count == 0, "a v2 sidecar unexpectedly inferred aliases");
     }
 
+    internal static void AccountSwitchingReturnsNewCanonicalIdentity()
+    {
+        using var directory = CreateSyntheticPasswordSidecar();
+        var firstIdentity = XpPasswordStoreUtility.ValidatePassword(
+            SyntheticIdentityFixtures[0].FullName,
+            SyntheticIdentityFixtures[0].Password,
+            directory.Path);
+        var secondIdentity = XpPasswordStoreUtility.ValidatePassword(
+            SyntheticIdentityFixtures[1].FullName,
+            SyntheticIdentityFixtures[1].Password,
+            directory.Path);
+
+        Require(firstIdentity?.CanonicalId == SyntheticIdentityFixtures[0].CanonicalId,
+            "the first account did not authenticate to its canonical identity");
+        Require(secondIdentity?.CanonicalId == SyntheticIdentityFixtures[1].CanonicalId,
+            "account switching did not return the new canonical identity");
+        Require(firstIdentity?.CanonicalId != secondIdentity?.CanonicalId,
+            "account switching retained the previous canonical identity");
+        Require(secondIdentity?.AccountScope == SyntheticIdentityFixtures[1].CanonicalId,
+            "account switching retained the previous account scope");
+    }
+
     internal static void ExplicitAliasesAuthenticateOnlyTheirOwner()
     {
         using var directory = TemporaryDirectory.Create();
@@ -586,6 +608,7 @@ internal static partial class TestCases
     {
         IdentityFixturesAreDistinctAndSynthetic();
         SuccessfulAuthenticationReturnsCanonicalIdentity();
+        AccountSwitchingReturnsNewCanonicalIdentity();
         ExplicitAliasesAuthenticateOnlyTheirOwner();
         DungeonMasterScopeUsesStableCanonicalId();
         IdentityRegistryLoadsCanonicalAliases();

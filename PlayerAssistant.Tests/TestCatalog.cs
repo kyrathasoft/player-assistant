@@ -119,6 +119,7 @@ internal static class TestCatalog
     ("xp password store reports missing sidecar by name", TestCases.XpPasswordStoreReportsMissingSidecarByName),
     ("identity fixtures are distinct and synthetic", TestCases.IdentityFixturesAreDistinctAndSynthetic),
     ("successful authentication returns canonical identity", TestCases.SuccessfulAuthenticationReturnsCanonicalIdentity),
+    ("account switching returns the new canonical identity", TestCases.AccountSwitchingReturnsNewCanonicalIdentity),
     ("dungeon master scope uses stable canonical ID", TestCases.DungeonMasterScopeUsesStableCanonicalId),
     ("identity registry loads canonical aliases", TestCases.IdentityRegistryLoadsCanonicalAliases),
     ("legacy name lookup reproduces cross-identity leak", TestCases.LegacyNameLookupReproducesCrossIdentityLeak),
