@@ -101,6 +101,7 @@ import { initializeDice } from './modules/dice.js?v=90';
     let magicItemSnapshot = null;
     let magicItemLoading = null;
     let magicItemError = '';
+    let magicItemRequestId = 0;
     let partyFundsSnapshot = null;
     let partyFundsLoading = null;
     let partyFundsError = '';
@@ -131,6 +132,14 @@ import { initializeDice } from './modules/dice.js?v=90';
         partyFundsUpdatedAt = 0;
         messagesUpdatedAt = 0;
         revisionsUpdatedAt = 0;
+    };
+
+    const resetMagicItemState = () => {
+        magicItemRequestId++;
+        magicItemSnapshot = null;
+        magicItemLoading = null;
+        magicItemError = '';
+        magicItemsUpdatedAt = 0;
     };
 
     const setView = (viewName, updateHistory = true) => {
@@ -2016,33 +2025,54 @@ import { initializeDice } from './modules/dice.js?v=90';
 
     const loadMagicItems = async (force = false) => {
         if (magicItemLoading && !force) return magicItemLoading;
+        const requestId = ++magicItemRequestId;
+        const requestGeneration = authenticationGeneration;
+        const accountId = authenticatedAccount?.id || '';
+        if (accountId === '') {
+            resetMagicItemState();
+            renderMagicItems();
+            return null;
+        }
         magicItemSnapshot = null;
         magicItemError = '';
         renderMagicItems();
         const refreshButton = byId('magic-items-refresh');
         if (refreshButton instanceof HTMLButtonElement) refreshButton.disabled = true;
-        magicItemLoading = (async () => {
+        let loadingPromise;
+        const isCurrentRequest = () => requestId === magicItemRequestId
+            && requestGeneration === authenticationGeneration
+            && authenticatedAccount?.id === accountId;
+        loadingPromise = (async () => {
             try {
+                if (!isCurrentRequest()) return;
                 magicItemSnapshot = {
                     ...(await fetchBrokerMagicItems()),
                     data_source: 'broker'
                 };
+                if (!isCurrentRequest()) return;
             } catch {
+                if (!isCurrentRequest()) return;
                 try {
                     magicItemSnapshot = {
                         ...(await fetchFallbackMagicItems()),
                         data_source: 'fallback'
                     };
+                    if (!isCurrentRequest()) return;
                 } catch {
-                    magicItemError = 'Magic-item information is unavailable from both the campaign wiki and the bundled fallback.';
+                    if (isCurrentRequest()) {
+                        magicItemError = 'Magic-item information is unavailable from both the campaign wiki and the bundled fallback.';
+                    }
                 }
             } finally {
-                if (magicItemSnapshot !== null) magicItemsUpdatedAt = Date.now();
-                magicItemLoading = null;
-                if (refreshButton instanceof HTMLButtonElement) refreshButton.disabled = false;
-                renderMagicItems();
+                if (isCurrentRequest() && magicItemLoading === loadingPromise) {
+                    if (magicItemSnapshot !== null) magicItemsUpdatedAt = Date.now();
+                    magicItemLoading = null;
+                    if (refreshButton instanceof HTMLButtonElement) refreshButton.disabled = false;
+                    renderMagicItems();
+                }
             }
         })();
+        magicItemLoading = loadingPromise;
         renderMagicItems();
         return magicItemLoading;
     };
@@ -2296,6 +2326,7 @@ import { initializeDice } from './modules/dice.js?v=90';
         authenticatedAccount = null;
         authenticationCsrfToken = '';
         clearProtectedFreshness();
+        resetMagicItemState();
         authenticatedXpSnapshot = null;
         xpRequestId++;
         authenticatedXpAwardsSnapshot = null;
@@ -2569,6 +2600,7 @@ import { initializeDice } from './modules/dice.js?v=90';
             authenticationCsrfToken = '';
         }
         clearProtectedFreshness();
+        resetMagicItemState();
         authenticatedXpSnapshot = null;
         authenticatedXpAwardsSnapshot = null;
         xpAwardsLoading = null;
@@ -2666,6 +2698,7 @@ import { initializeDice } from './modules/dice.js?v=90';
             authenticationCsrfToken = String(session.csrf_token || '');
             authenticatedAccount = session.account;
             clearProtectedFreshness();
+            resetMagicItemState();
             authenticatedXpSnapshot = null;
             authenticatedXpAwardsSnapshot = null;
             xpAwardsLoading = null;
@@ -2699,6 +2732,7 @@ import { initializeDice } from './modules/dice.js?v=90';
             authenticatedAccount = null;
             authenticationCsrfToken = '';
             clearProtectedFreshness();
+            resetMagicItemState();
             authenticatedXpSnapshot = null;
             authenticatedXpAwardsSnapshot = null;
             xpAwardsLoading = null;
@@ -2736,6 +2770,7 @@ import { initializeDice } from './modules/dice.js?v=90';
             authenticatedAccount = null;
             authenticationCsrfToken = '';
             clearProtectedFreshness();
+            resetMagicItemState();
             authenticatedXpSnapshot = null;
             xpRequestId++;
             authenticatedXpAwardsSnapshot = null;
