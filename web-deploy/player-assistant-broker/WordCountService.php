@@ -24,21 +24,6 @@ final class WordCountService
         ], $wordCountConfig);
         $this->wordCountFetcher = $wordCountFetcher;
 
-        $this->database->exec(
-            'CREATE TABLE IF NOT EXISTS word_count_snapshots (
-                id INTEGER PRIMARY KEY CHECK (id = 1),
-                schema_version INTEGER NOT NULL,
-                observed_at TEXT NOT NULL,
-                counting_rule_version TEXT NOT NULL,
-                wiki_pages INTEGER NOT NULL,
-                wiki_words INTEGER NOT NULL,
-                ic_files INTEGER NOT NULL,
-                ic_words INTEGER NOT NULL,
-                ooc_files INTEGER NOT NULL,
-                ooc_words INTEGER NOT NULL,
-                uploaded_at INTEGER NOT NULL
-            )');
-
         $this->validateConfiguration();
     }
 

@@ -37,7 +37,6 @@ try {
         throw new RuntimeException('The private broker configuration is unavailable.');
     }
     $config = require $configPath;
-    $operations = new BrokerOperations(is_array($config) ? $config : []);
     $config['xp'] = is_array($config['xp'] ?? null) ? $config['xp'] : [];
     $config['xp']['awards_root'] = $privateDirectory;
     $questDataPathOverride = getenv('PLAYER_ASSISTANT_QUESTS_PATH');
@@ -47,6 +46,14 @@ try {
 
     $method = strtoupper($_SERVER['REQUEST_METHOD'] ?? 'GET');
     $route = getRoutePath((string)($config['api']['base_path'] ?? ''));
+    if ($method === 'GET' && $route === '/v1/health') {
+        sendJson(200, [
+            'service' => 'player-assistant-broker',
+            'schema_version' => 7,
+            'status' => 'ok',
+        ]);
+        return;
+    }
     requireJsonContentType($method);
     $requestBody = readJsonRequestBody(8 * 1024 * 1024);
     $sessionState = [];
@@ -124,15 +131,6 @@ function recordBrokerServerError(array $config, Throwable $exception): void
         }
         $database = new PDO('sqlite:' . $databasePath, null, null, [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]);
         $database->exec('PRAGMA busy_timeout = 5000');
-        $database->exec(
-            'CREATE TABLE IF NOT EXISTS broker_alert_events (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                alert_type TEXT NOT NULL,
-                occurred_at INTEGER NOT NULL,
-                error_code TEXT NOT NULL,
-                message TEXT NOT NULL,
-                alert_sent_at INTEGER NULL
-            )');
         (new BrokerAlertService(
             $database,
             is_array($config['observability'] ?? null) ? $config['observability'] : []))

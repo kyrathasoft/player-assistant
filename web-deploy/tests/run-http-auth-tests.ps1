@@ -132,6 +132,16 @@ $env:PLAYER_ASSISTANT_TEST_DATABASE = $databasePath
 $env:PLAYER_ASSISTANT_TEST_SNAPSHOTS = $snapshotPath
 $env:PLAYER_ASSISTANT_QUESTS_PATH = Join-Path $repositoryRoot 'pwa\quests.json'
 
+$migrationPath = Join-Path $repositoryRoot 'web-deploy\player-assistant-broker\migrate-broker.php'
+$migrationOutput = & $resolvedPhpPath `
+    '-n' `
+    '-d' "extension_dir=$(Join-Path $phpRoot 'ext')" `
+    '-d' 'extension=pdo_sqlite' `
+    $migrationPath 2>&1
+if ($LASTEXITCODE -ne 0) {
+    throw "The HTTP test broker migration failed: $migrationOutput"
+}
+
 $process = $null
 try {
     $process = Start-Process `
