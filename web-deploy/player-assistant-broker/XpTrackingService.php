@@ -161,16 +161,12 @@ final class XpTrackingService
         }
 
         $currentCharacters = [];
-        try {
-            $currentSnapshot = $this->loadCurrentSnapshot();
-            foreach ($currentSnapshot['characters'] ?? [] as $character) {
-                if (!is_array($character) || !isset($character['character_name'])) {
-                    continue;
-                }
-                $currentCharacters[$this->characterKeyForName((string)$character['character_name'])] = $character;
+        $cachedSnapshot = $this->loadCachedSnapshot();
+        foreach ($cachedSnapshot['characters'] ?? [] as $character) {
+            if (!is_array($character) || !isset($character['character_name'])) {
+                continue;
             }
-        } catch (Throwable) {
-            // Award history remains available when current XP enrichment fails.
+            $currentCharacters[$this->characterKeyForName((string)$character['character_name'])] = $character;
         }
         $progressions = array_map(
             function (array $progression) use ($currentCharacters, $characterKey, $scope): array {
@@ -231,18 +227,14 @@ final class XpTrackingService
     private function withCurrentTnl(array $progressions): array
     {
         $tnlByCharacterKey = [];
-        try {
-            $snapshot = $this->loadCurrentSnapshot();
-            foreach ($snapshot['characters'] ?? [] as $character) {
-                if (!is_array($character) || !isset($character['character_name'])) {
-                    continue;
-                }
-                $characterKey = $this->characterKeyForName((string)$character['character_name']);
-                $tnl = $character['xp_to_next_level'] ?? null;
-                $tnlByCharacterKey[$characterKey] = is_int($tnl) && $tnl >= 0 ? $tnl : null;
+        $snapshot = $this->loadCachedSnapshot();
+        foreach ($snapshot['characters'] ?? [] as $character) {
+            if (!is_array($character) || !isset($character['character_name'])) {
+                continue;
             }
-        } catch (Throwable) {
-            // XP award history remains available when optional TNL enrichment fails.
+            $characterKey = $this->characterKeyForName((string)$character['character_name']);
+            $tnl = $character['xp_to_next_level'] ?? null;
+            $tnlByCharacterKey[$characterKey] = is_int($tnl) && $tnl >= 0 ? $tnl : null;
         }
 
         return array_map(
@@ -325,8 +317,10 @@ final class XpTrackingService
         }
         foreach ($state['progressions'] as $progressionKey => $progressionState) {
             if (!is_string($progressionKey)
-                || preg_match('/^[a-z0-9]+(?:-[a-z0-9]+)*$/', $progressionKey) !== 1
-                || !isset($configuredProgressionKeys[$progressionKey])
+                || !isset($configuredProgressionKeys[$progressionKey])) {
+                continue;
+            }
+            if (preg_match('/^[a-z0-9]+(?:-[a-z0-9]+)*$/', $progressionKey) !== 1
                 || !is_array($progressionState)
                 || array_keys($progressionState) !== [
                     'source_date',

@@ -426,6 +426,42 @@ try {
         503,
         'xp_awards_unavailable');
 
+    $cachedAwardPath = $awardsDirectory . '/jelb-xp.json';
+    file_put_contents($cachedAwardPath, json_encode([[
+        'character_name' => 'Jelb',
+        'character_class' => 'Illusionist',
+        'level_before_award' => 3,
+        'xp_award' => 500,
+        'xp_award_date' => '7.23.2026',
+        'level_after_award' => 4,
+    ]], JSON_THROW_ON_ERROR));
+    $cachedAwardFetchCount = 0;
+    $cachedAwardService = new XpTrackingService(
+        xpDatabase(':memory:'),
+        array_replace(xpConfiguration(), [
+            'awards_directory' => $awardsDirectory,
+            'awards_root' => $awardsRoot,
+            'award_groups' => ['jelb' => ['jelb-xp']],
+        ]),
+        static function (string $url) use (&$cachedAwardFetchCount, $markdown): string {
+            if (str_ends_with($url, '/XP')) {
+                $cachedAwardFetchCount++;
+                return $markdown;
+            }
+            throw new RuntimeException('Optional XP enrichment should not be fetched by XP Awards.');
+        });
+    $cachedAwardService->getForAccount([
+        'role' => 'player',
+        'character_key' => 'jelb',
+    ]);
+    $cachedAwardService->getAwardsForAccount([
+        'role' => 'player',
+        'character_key' => 'jelb',
+    ]);
+    xpAssert(
+        $cachedAwardFetchCount === 2,
+        'XP Awards performed an unnecessary second live XP/enrichment fetch.');
+
     $reservedKeyService = new XpTrackingService(
         xpDatabase(':memory:'),
         array_replace(xpConfiguration(), [
