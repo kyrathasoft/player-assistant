@@ -357,6 +357,22 @@ internal static partial class TestCases
         Require(briefing.HeroCard is null, "an unauthenticated canonical ID produced a protected hero card");
     }
 
+    internal static void MyHeroBriefingRejectsNameOnlyDungeonMasterSelection()
+    {
+        var briefing = MyHeroBriefingUtility.Build(new MyHeroBriefingRequest(
+            SyntheticIdentityFixtures.Select(fixture => fixture.PartySheet).ToArray(),
+            SelectedHeroName: SyntheticIdentityFixtures[0].FullName,
+            AuthenticatedIdentity: new XpAuthenticatedIdentity(
+                "dungeon-master",
+                "Game Referee",
+                [],
+                true,
+                "dungeon-master")));
+
+        Require(briefing.Hero is null, "a Dungeon Master display-name selection resolved protected briefing data");
+        Require(briefing.HeroCard is null, "a Dungeon Master display-name selection produced a protected hero card");
+    }
+
     internal static void MyHeroBriefingDoesNotInferFirstNameAliases()
     {
         var hero = SyntheticIdentityFixtures[0];

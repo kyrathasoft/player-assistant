@@ -254,11 +254,12 @@ Planned security correction: eliminate first-name equivalence from authenticatio
   - Remove automatic first-name aliases from `GetHeroAliases`; only use aliases declared by the identity registry, with ambiguity rejected before runtime.
   - Ensure a same-first-name hero cannot inherit another hero's briefing, XP, posts, or encrypted-note access.
 
-- [ ] 7. Audit all remaining name-based identity comparisons and boundaries.
-  - Review Form1, XpTrackingUtility, PartyHeroUtility, MyHeroBriefingUtility, TaggedNoteCipherUtility, hero roster loaders, import scripts, and generated manifests.
-  - Classify each name use as display/search text or authorization identity.
-  - Replace authorization comparisons that use first names, inferred aliases, or user-entered names; retain display/search behavior only where it cannot grant access.
-  - Document any intentional public search alias separately from protected account identity.
+- [x] 7. Audit all remaining name-based identity comparisons and boundaries.
+  - [x] Review Form1, XpTrackingUtility, PartyHeroUtility, MyHeroBriefingUtility, TaggedNoteCipherUtility, hero roster loaders, import scripts, and generated manifests.
+  - [x] Classify each name use as display/search text or authorization identity.
+  - [x] Replace authorization comparisons that use first names, inferred aliases, or user-entered names; retain display/search behavior only where it cannot grant access.
+  - [x] Document any intentional public search alias separately from protected account identity in `identity-boundaries.md`.
+  - [x] Add regression coverage proving name-only Dungeon Master selection cannot resolve protected hero data.
 
 - [ ] 8. Update tests and release/deployment contracts.
   - Add unit/regression coverage for exact-ID success, same-first-name cross-password denial, ambiguous-alias load rejection, explicit unique-alias success, DM scope, party XP visibility, hero selection, briefing activity, encrypted-note access, and account switching.

@@ -129,6 +129,7 @@ internal static class TestCatalog
     ("colliding hero display names resolve only by canonical ID", TestCases.CollidingHeroDisplayNamesResolveOnlyByCanonicalId),
     ("canonical IDs select matching XP and briefing data", TestCases.CanonicalIdsSelectMatchingXpAndBriefingData),
     ("my hero briefing rejects name-only protected identity", TestCases.MyHeroBriefingRejectsNameOnlyProtectedIdentity),
+    ("my hero briefing rejects name-only Dungeon Master selection", TestCases.MyHeroBriefingRejectsNameOnlyDungeonMasterSelection),
     ("my hero briefing rejects unauthenticated canonical ID", TestCases.MyHeroBriefingRejectsUnauthenticatedCanonicalId),
     ("my hero briefing does not infer first-name aliases", TestCases.MyHeroBriefingDoesNotInferFirstNameAliases),
     ("my hero briefing ignores stale party display name for note access", TestCases.MyHeroBriefingIgnoresStalePartyDisplayNameForNoteAccess),
