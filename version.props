@@ -6,6 +6,6 @@
     <PlayerAssistantPwaMetadataRevision>1</PlayerAssistantPwaMetadataRevision>
     <PlayerAssistantPwaStylesRevision>45</PlayerAssistantPwaStylesRevision>
     <PlayerAssistantPwaAppRevision>90</PlayerAssistantPwaAppRevision>
-    <PlayerAssistantPwaCacheRevision>110</PlayerAssistantPwaCacheRevision>
+    <PlayerAssistantPwaCacheRevision>111</PlayerAssistantPwaCacheRevision>
   </PropertyGroup>
 </Project>

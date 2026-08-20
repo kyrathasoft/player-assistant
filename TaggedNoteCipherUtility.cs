@@ -39,7 +39,7 @@ namespace PlayerAssistant
                 hero.CharacterClass,
                 abilityScores ?? new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase),
                 CharacterName: hero.Name,
-                CharacterAliases: characterAliases ?? []);
+                CharacterAliases: characterAliases);
         }
 
         private static bool TryParseFirstInteger(string value, out int result)
@@ -909,10 +909,11 @@ namespace PlayerAssistant
                 return false;
             }
 
+            var trimmedHeroName = hero.CharacterName.Trim();
             var trimmedRequiredName = requiredName.Trim();
-            return string.Equals(hero.CharacterName.Trim(), trimmedRequiredName, StringComparison.OrdinalIgnoreCase)
-                || (hero.CharacterAliases ?? []).Any(alias =>
-                    string.Equals(alias, trimmedRequiredName, StringComparison.OrdinalIgnoreCase));
+            return string.Equals(trimmedHeroName, trimmedRequiredName, StringComparison.OrdinalIgnoreCase)
+                || (hero.CharacterAliases?.Any(alias =>
+                    string.Equals(alias?.Trim(), trimmedRequiredName, StringComparison.OrdinalIgnoreCase)) ?? false);
         }
 
         private static bool ClassMatches(string? heroClass, string requiredClass)

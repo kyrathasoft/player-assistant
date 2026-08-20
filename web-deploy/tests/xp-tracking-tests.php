@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/../player-assistant-broker/BrokerHttpException.php';
+require_once __DIR__ . '/../player-assistant-broker/DatabaseMigrationService.php';
 require_once __DIR__ . '/../player-assistant-broker/XpTrackingService.php';
 
 function xpAssert(bool $condition, string $message): void
@@ -26,11 +27,13 @@ function expectXpError(callable $action, int $status, string $errorName): void
 
 function xpDatabase(string $path): PDO
 {
-    return new PDO('sqlite:' . $path, null, null, [
+    $database = new PDO('sqlite:' . $path, null, null, [
         PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
         PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
         PDO::ATTR_EMULATE_PREPARES => false,
     ]);
+    (new DatabaseMigrationService($database, sys_get_temp_dir() . '/pa-xp-migration-backups-' . bin2hex(random_bytes(4))))->migrate();
+    return $database;
 }
 
 function xpConfiguration(): array
@@ -43,6 +46,23 @@ function xpConfiguration(): array
         'timeout_seconds' => 2,
         'maximum_response_bytes' => 65536,
         'maximum_stale_seconds' => 300,
+        'character_key_aliases' => [
+            'jelb' => 'jelb',
+            'jelb-garrick' => 'jelb',
+            'max' => 'maximilian',
+            'maximilian' => 'maximilian',
+            'dorn' => 'dorn',
+            'borca' => 'borca',
+            'arilia' => 'arilia',
+            'neria' => 'neria',
+            'shade' => 'shade',
+            'ari-stoneward' => 'ari-stoneward',
+            'ari-valesong' => 'ari-valesong',
+            'limit-hero' => 'limit',
+            'dynamic-hero' => 'dynamic',
+            'alpha-hero' => 'alpha',
+            'beta-hero' => 'beta',
+        ],
     ];
 }
 
@@ -241,6 +261,63 @@ try {
             return $progressionFixture($url) ?? $markdown;
         });
 
+    $sameFirstMarkdown = implode("\n", [
+        'As of 8.17.2026',
+        '| Name | Class | Level | XP Total |',
+        '| --- | --- | ---: | ---: |',
+        '| Ari Stoneward | Fighter | 2 | 2,000 |',
+        '| Ari Valesong | Fighter | 3 | 4,000 |',
+    ]);
+    $sameFirstCharacters = implode("\n", [
+        '| Name | Class | Level | Token | HP |',
+        '| --- | --- | ---: | --- | ---: |',
+        '| [[Ari Stoneward]] | Fighter | 2 | ![[ari-stoneward.webp]] | 20 |',
+        '| [[Ari Valesong]] | Fighter | 3 | ![[ari-valesong.webp]] | 24 |',
+    ]);
+    $sameFirstService = new XpTrackingService(
+        xpDatabase(':memory:'),
+        xpConfiguration(),
+        static function (string $url) use (
+            $sameFirstMarkdown,
+            $sameFirstCharacters,
+            $progressionFixture): string {
+            if (str_contains($url, 'Player+Characters+Listing')) {
+                return $sameFirstCharacters;
+            }
+            return $progressionFixture($url) ?? $sameFirstMarkdown;
+        });
+    $ariStoneward = $sameFirstService->getForAccount([
+        'role' => 'player',
+        'character_key' => 'ari-stoneward',
+    ]);
+    $ariValesong = $sameFirstService->getForAccount([
+        'role' => 'player',
+        'character_key' => 'ari-valesong',
+    ]);
+    xpAssert(
+        $ariStoneward['character']['character_name'] === 'Ari Stoneward'
+            && $ariValesong['character']['character_name'] === 'Ari Valesong',
+        'same-first-name XP authorization did not remain scoped to the full canonical character key.');
+    $unmappedSameFirstService = new XpTrackingService(
+        xpDatabase(':memory:'),
+        array_replace(xpConfiguration(), ['character_key_aliases' => ['jelb' => 'jelb']]),
+        static function (string $url) use (
+            $sameFirstMarkdown,
+            $sameFirstCharacters,
+            $progressionFixture): string {
+            if (str_contains($url, 'Player+Characters+Listing')) {
+                return $sameFirstCharacters;
+            }
+            return $progressionFixture($url) ?? $sameFirstMarkdown;
+        });
+    expectXpError(
+        fn() => $unmappedSameFirstService->getForAccount([
+            'role' => 'player',
+            'character_key' => 'ari-stoneward',
+        ]),
+        403,
+        'xp_not_authorized');
+
     $levelRefreshMarkdown = implode("\n", [
         'As of 8.16.2026',
         '| Name | Class | Level | XP Total |',
@@ -333,6 +410,9 @@ try {
     xpAssert(
         count($maximumAwards['progressions'][0]['entries']) === $serverProgressionEntryLimit,
         'The server rejected the shared XP award progression entry limit.');
+    xpAssert(
+        $maximumAwards['progressions'][0]['is_account_character'] === true,
+        'The XP awards response omitted the player identity marker.');
     file_put_contents(
         $awardPath,
         json_encode(
@@ -790,6 +870,11 @@ try {
     xpAssert($player['character']['xp_total'] === 12345, 'The current player XP total was incorrect.');
     xpAssert($player['character']['xp_to_next_level'] === 7655, 'The player received the wrong TNL value.');
     xpAssert($player['date_label'] === 'As of 7.23.2026', 'The latest XP date was not selected.');
+    xpAssert(
+        count($player['authorized_characters']) === 1
+            && $player['authorized_characters'][0]['character_key'] === 'jelb'
+            && $player['authorized_characters'][0]['character']['character_name'] === 'Jelb',
+        'The player current-XP response omitted its authorized character collection.');
     xpAssert(!isset($player['characters']), 'A player response exposed the party XP array.');
 
     $maximilian = $service->getForAccount([

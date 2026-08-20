@@ -652,25 +652,23 @@ final class BrokerService
                 $version,
                 DatabaseMigrationService::LATEST_VERSION));
         }
-
         $required = [
             'api_tokens', 'rate_limits', 'admin_request_nonces', 'audit_events',
             'character_accounts', 'character_account_aliases', 'auth_rate_limits',
             'auth_audit_events', 'character_session_presence', 'message_notifications',
             'quest_requests', 'quest_state_overrides', 'word_count_snapshots',
-            'xp_tracking_cache', 'broker_alert_events',
-            'ix_audit_events_token_time', 'ix_auth_audit_account_time',
-            'ix_character_presence_activity', 'ix_message_notifications_recipient_read',
-            'ux_quest_requests_pending', 'ix_quest_requests_status_time',
-            'ix_quest_requests_requester_status', 'ix_broker_alert_events_type_time',
-            'ux_character_accounts_character_key', 'ix_character_account_aliases_account',
+            'xp_tracking_cache', 'broker_alert_events', 'ix_audit_events_token_time',
+            'ix_auth_audit_account_time', 'ix_character_presence_activity',
+            'ix_message_notifications_recipient_read', 'ux_quest_requests_pending',
+            'ix_quest_requests_status_time', 'ix_quest_requests_requester_status',
+            'ix_broker_alert_events_type_time', 'ux_character_accounts_character_key',
+            'ix_character_account_aliases_account',
             'trg_character_accounts_alias_collision_insert',
             'trg_character_accounts_alias_collision_update',
             'trg_character_account_aliases_name_collision_insert',
             'trg_character_account_aliases_name_collision_update',
         ];
-        $statement = $this->database->prepare(
-            "SELECT 1 FROM sqlite_master WHERE (type = 'table' OR type = 'index' OR type = 'trigger') AND name = ?");
+        $statement = $this->database->prepare("SELECT 1 FROM sqlite_master WHERE (type = 'table' OR type = 'index' OR type = 'trigger') AND name = ?");
         foreach ($required as $object) {
             $statement->execute([$object]);
             if ($statement->fetchColumn() === false) {
@@ -681,44 +679,28 @@ final class BrokerService
 
     private function characterAuth(): CharacterAuthService
     {
-        return $this->characterAuth ??= new CharacterAuthService(
-            $this->database,
-            is_array($this->config['auth'] ?? null) ? $this->config['auth'] : []);
+        return $this->characterAuth ??= new CharacterAuthService($this->database, is_array($this->config['auth'] ?? null) ? $this->config['auth'] : []);
     }
-
     private function xpTracking(): XpTrackingService
     {
-        return $this->xpTracking ??= new XpTrackingService(
-            $this->database,
-            is_array($this->config['xp'] ?? null) ? $this->config['xp'] : [],
-            $this->xpMarkdownFetcher);
+        return $this->xpTracking ??= new XpTrackingService($this->database, is_array($this->config['xp'] ?? null) ? $this->config['xp'] : [], $this->xpMarkdownFetcher);
     }
-
     private function wordCounts(): WordCountService
     {
-        return $this->wordCounts ??= new WordCountService(
-            $this->database,
-            is_array($this->config['word_counts'] ?? null) ? $this->config['word_counts'] : [],
-            $this->wordCountFetcher);
+        return $this->wordCounts ??= new WordCountService($this->database, is_array($this->config['word_counts'] ?? null) ? $this->config['word_counts'] : [], $this->wordCountFetcher);
     }
-
     private function quests(): QuestService
     {
         return $this->quests ??= new QuestService($this->database, (string)$this->questDataPath);
     }
-
     private function messages(): MessageService
     {
         return $this->messages ??= new MessageService($this->database);
     }
-
     private function alerts(): BrokerAlertService
     {
-        return $this->alerts ??= new BrokerAlertService(
-            $this->database,
-            is_array($this->config['observability'] ?? null) ? $this->config['observability'] : []);
+        return $this->alerts ??= new BrokerAlertService($this->database, is_array($this->config['observability'] ?? null) ? $this->config['observability'] : []);
     }
-
     private function operations(): BrokerOperations
     {
         return $this->operations ??= new BrokerOperations($this->config);

@@ -121,10 +121,15 @@ namespace PlayerAssistant
                 }
 
                 var aliases = ValidateAliases(entry.Aliases, canonicalName, canonicalNames, allAliases);
+                if (entry.IsDungeonMaster is null)
+                {
+                    throw new InvalidOperationException($"{FileName} entry '{canonicalName}' must declare Dungeon Master scope explicitly.");
+                }
                 if (!hashes.TryAdd(entry.CanonicalId, new PasswordHashRecord(
                     entry.CanonicalId,
                     canonicalName,
                     aliases,
+                    entry.IsDungeonMaster.Value,
                     entry.Iterations,
                     salt,
                     hash)))
@@ -134,6 +139,16 @@ namespace PlayerAssistant
             }
 
             return hashes;
+        }
+
+        internal static IReadOnlyList<XpAuthenticatedIdentity> LoadIdentityRegistry(
+            string? runtimeDirectory = null)
+        {
+            return LoadPasswordHashes(runtimeDirectory)
+                .Values
+                .Select(record => record.ToAuthenticatedIdentity())
+                .OrderBy(identity => identity.CanonicalName, StringComparer.OrdinalIgnoreCase)
+                .ToArray();
         }
 
         public static XpAuthenticatedIdentity? ValidatePassword(string pcName, string password, string? runtimeDirectory = null)
@@ -223,6 +238,7 @@ namespace PlayerAssistant
                     CanonicalName = name,
                     CanonicalId = identity.CanonicalId,
                     Aliases = identity.Aliases.ToList(),
+                    IsDungeonMaster = identity.IsDungeonMaster,
                     Algorithm = Algorithm,
                     Iterations = MinimumIterations,
                     Salt = Convert.ToBase64String(salt),
@@ -376,6 +392,7 @@ namespace PlayerAssistant
             string CanonicalId,
             string CanonicalName,
             IReadOnlyList<string> Aliases,
+            bool IsDungeonMaster,
             int Iterations,
             byte[] Salt,
             byte[] Hash)
@@ -389,7 +406,7 @@ namespace PlayerAssistant
                     CanonicalId,
                     CanonicalName,
                     Aliases,
-                    string.Equals(CanonicalName, "Dungeon Master", StringComparison.OrdinalIgnoreCase),
+                    IsDungeonMaster,
                     CanonicalId);
         }
 
@@ -397,7 +414,8 @@ namespace PlayerAssistant
             string CanonicalId,
             string CanonicalName,
             string Password,
-            IReadOnlyList<string> Aliases);
+            IReadOnlyList<string> Aliases,
+            bool IsDungeonMaster = false);
 
         private sealed class PasswordHashDocument
         {
@@ -421,6 +439,9 @@ namespace PlayerAssistant
 
             [JsonPropertyName("aliases")]
             public List<string>? Aliases { get; init; }
+
+            [JsonPropertyName("is_dungeon_master")]
+            public bool? IsDungeonMaster { get; init; }
 
             [JsonPropertyName("algorithm")]
             public string? Algorithm { get; init; }

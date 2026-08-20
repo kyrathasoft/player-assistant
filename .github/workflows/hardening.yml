@@ -221,8 +221,8 @@ jobs:
 
           if (-not (Test-Path -LiteralPath .\xp-passwords.json -PathType Leaf)) {
             $entries = foreach ($identity in @(
-              @{ Name = 'Dungeon Master'; Id = 'ci-dungeon-master' },
-              @{ Name = 'Kelpie'; Id = 'ci-kelpie' }
+              @{ Name = 'Dungeon Master'; Id = 'ci-dungeon-master'; IsDungeonMaster = $true },
+              @{ Name = 'Kelpie'; Id = 'ci-kelpie'; IsDungeonMaster = $false }
             )) {
               $salt = [Security.Cryptography.RandomNumberGenerator]::GetBytes(16)
               $hash = [Security.Cryptography.Rfc2898DeriveBytes]::Pbkdf2(
@@ -235,6 +235,7 @@ jobs:
                 canonical_name = $identity.Name
                 canonical_id = $identity.Id
                 aliases = @()
+                is_dungeon_master = [bool]$identity.IsDungeonMaster
                 algorithm = 'PBKDF2-HMAC-SHA256'
                 iterations = 600000
                 salt = [Convert]::ToBase64String($salt)

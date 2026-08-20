@@ -1,0 +1,43 @@
+name: Mirror to Gitea
+
+on:
+  push:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  mirror:
+    name: Mirror repository to Gitea
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Configure SSH
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.GITEA_SSH_KEY }}
+          SSH_KNOWN_HOSTS: ${{ secrets.GITEA_KNOWN_HOSTS }}
+        run: |
+          install -m 700 -d ~/.ssh
+
+          printf '%s\n' "$SSH_PRIVATE_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+
+          printf '%s\n' "$SSH_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 644 ~/.ssh/known_hosts
+
+      - name: Mirror branches and tags to Gitea
+        env:
+          SOURCE_REPO: https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git
+          DEST_REPO: ${{ vars.GITEA_REPO }}
+        run: |
+          git init --bare mirror.git
+          cd mirror.git
+
+          git fetch --prune "$SOURCE_REPO" \
+            '+refs/heads/*:refs/heads/*' \
+            '+refs/tags/*:refs/tags/*'
+
+          git push --prune "$DEST_REPO" \
+            '+refs/heads/*:refs/heads/*' \
+            '+refs/tags/*:refs/tags/*'

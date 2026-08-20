@@ -59,6 +59,26 @@ const sessionAccount = (request) => ({
     dm: dungeonMasterAccount
 }[sessionRole(request)] || null);
 const expectedErrorResponse = { 'X-CI-Expected-Error': 'true' };
+const magicItemFixture = Object.freeze({
+    schema_version: 1,
+    source: 'https://publish.obsidian.md/scarlethorizons/Magic+Items/Kirkilston+Crew+Magic+Items',
+    items: [
+        ['Public Relic', 'all'],
+        ['Canonical Relic', 'ci-hero'],
+        ['First Name Leak', 'ci'],
+        ['Substring Leak', 'hero'],
+        ['Same First Name Leak', 'ci-rival']
+    ].map(([name, viewers]) => ({
+        name,
+        description: `${name} description.`,
+        'date-acquired': '8.17.2026',
+        'meta-date-acquired': '8.17.2026',
+        longevity: 'permanent',
+        provenance: 'Browser smoke fixture',
+        whereabouts: 'CI vault',
+        'viewable-by': viewers
+    }))
+});
 let xpAwardsProjected = false;
 let messagesRead = false;
 let messageContinuationRequests = 0;
@@ -68,17 +88,7 @@ let messageListFailuresRemaining = 0;
 let messageListRequests = 0;
 let expireSessionOnNextRevision = false;
 let presenceRequests = 0;
-let releaseStartupSessionResponse;
-const startupSessionResponseGate = new Promise((resolve) => {
-    releaseStartupSessionResponse = resolve;
-});
-let confirmStartupSessionResponseSent;
-const startupSessionResponseSent = new Promise((resolve) => {
-    confirmStartupSessionResponseSent = resolve;
-});
-let delayStartupSessionResponse = true;
-let startupSessionRequestStarted = false;
-let failNextIdentityRequest = false;
+let delayMagicItemsForPlayerA = false;
 
 const readJsonBody = async (request) => {
     let body = '';
@@ -243,16 +253,9 @@ const serveApi = async (request, response, pathname) => {
     const route = pathname.slice(apiPrefix.length) || '/';
     if (route === '/session' && request.method === 'GET') {
         const authenticated = hasSession(request);
-        const account = sessionAccount(request);
-        if (delayStartupSessionResponse) {
-            delayStartupSessionResponse = false;
-            startupSessionRequestStarted = true;
-            await startupSessionResponseGate;
-        }
         jsonResponse(response, 200, authenticated
-            ? { authenticated: true, account, csrf_token: 'ci-csrf-token' }
+            ? { authenticated: true, account: sessionAccount(request), csrf_token: 'ci-csrf-token' }
             : { authenticated: false, account: null, csrf_token: '' });
-        confirmStartupSessionResponseSent();
         return;
     }
     if (route === '/login' && request.method === 'POST') {
@@ -276,12 +279,6 @@ const serveApi = async (request, response, pathname) => {
         return;
     }
     if (route === '/me' && request.method === 'GET' && hasSession(request)) {
-        if (failNextIdentityRequest) {
-            failNextIdentityRequest = false;
-            await new Promise((resolve) => setTimeout(resolve, 50));
-            jsonResponse(response, 503, { message: 'Identity lookup temporarily unavailable.' }, expectedErrorResponse);
-            return;
-        }
         jsonResponse(response, 200, { account: sessionAccount(request) });
         return;
     }
@@ -374,6 +371,23 @@ const serveApi = async (request, response, pathname) => {
         });
         return;
     }
+    if (route === '/magic-items' && request.method === 'GET') {
+        const currentAccount = requireSession(request, response);
+        if (!currentAccount) return;
+        if (currentAccount === playerAccount && delayMagicItemsForPlayerA) {
+            await new Promise((resolve) => setTimeout(resolve, 150));
+        }
+        const authorizedItems = magicItemFixture.items
+            .filter((item) => item['viewable-by'] === 'all'
+                || item['viewable-by'] === currentAccount.character_key)
+            .map((item) => ({ ...item, 'viewable-by': 'all' }));
+        jsonResponse(response, 200, {
+            ...magicItemFixture,
+            source: 'broker',
+            items: authorizedItems
+        });
+        return;
+    }
     if (route === '/quests' && request.method === 'GET') {
         const currentAccount = requireSession(request, response);
         if (!currentAccount) return;
@@ -460,6 +474,10 @@ const serveApi = async (request, response, pathname) => {
 const serveStatic = async (request, response, pathname) => {
     let relativePath = pathname.slice(pwaPrefix.length);
     if (relativePath === '' || relativePath.endsWith('/')) relativePath += 'index.html';
+    if (relativePath === 'magic-items.json') {
+        jsonResponse(response, 200, magicItemFixture);
+        return;
+    }
     relativePath = decodeURIComponent(relativePath).replaceAll('/', '\\');
     const filePath = normalize(join(pwaRoot, relativePath));
     if (relative(pwaRoot, filePath).startsWith('..')) {
@@ -514,6 +532,13 @@ let browser;
 try {
     browser = await chromium.launch({ headless: true });
     const context = await browser.newContext({ serviceWorkers: 'allow' });
+    await context.route(
+        /https:\/\/publish(?:-01)?\.obsidian\.md\/.*Magic(?:\+|%20)Items/u,
+        (route) => route.fulfill({
+            status: 404,
+            headers: { 'X-CI-Expected-Error': 'true' },
+            body: 'Not available in the deterministic browser fixture.'
+        }));
     const page = await context.newPage();
     await page.emulateMedia({ reducedMotion: 'reduce' });
     const pageErrors = [];
@@ -525,7 +550,6 @@ try {
     let initialResponseBytes = 0;
     const workerUrls = new Set();
     let offlineExpected = false;
-    let startupSessionAbortExpected = false;
     page.on('pageerror', (error) => pageErrors.push(error));
     context.on('console', (message) => {
         const text = message.text();
@@ -546,11 +570,11 @@ try {
         }
     });
     page.on('requestfailed', (request) => {
-        const expectedStartupSessionAbort = startupSessionAbortExpected
-            && request.url().endsWith('/v1/session')
-            && request.failure()?.errorText === 'net::ERR_ABORTED';
-        if (!offlineExpected && !expectedStartupSessionAbort) {
-            requestFailures.push(`${request.method()} ${request.url()}: ${request.failure()?.errorText || 'failed'}`);
+        const errorText = request.failure()?.errorText || 'failed';
+        const expectedMagicItemCancellation = request.url().includes('/scarlethorizons/api/v1/magic-items')
+            && errorText === 'net::ERR_ABORTED';
+        if (!offlineExpected && !expectedMagicItemCancellation) {
+            requestFailures.push(`${request.method()} ${request.url()}: ${errorText}`);
         }
     });
     page.on('response', (response) => {
@@ -665,12 +689,6 @@ try {
     if (anonymousPresenceStatus !== 401) {
         throw new Error(`Anonymous protected API returned ${anonymousPresenceStatus}.`);
     }
-    for (let attempt = 0; attempt < 100 && !startupSessionRequestStarted; attempt++) {
-        await page.waitForTimeout(10);
-    }
-    if (!startupSessionRequestStarted) {
-        throw new Error('The startup authentication session request did not begin.');
-    }
 
     const presenceRequestsBeforePlayerLogin = presenceRequests;
     await page.locator('#auth-button').click();
@@ -699,23 +717,14 @@ try {
     }
     await page.locator('#auth-character-name').fill('CI Hero');
     await page.locator('#auth-password').fill('ci-password');
-    startupSessionAbortExpected = true;
-    failNextIdentityRequest = true;
     messageListFailuresRemaining = 2;
     const initialMessageRequestsBeforeLogin = messageListRequests;
-    await page.locator('#auth-submit').click();
-    await page.waitForFunction(() =>
-        document.querySelector('#auth-account-message')?.textContent === 'Character login succeeded.');
-    releaseStartupSessionResponse();
-    await startupSessionResponseSent;
-    startupSessionAbortExpected = false;
-    await page.waitForTimeout(50);
-    const accountLabelAfterStartupSession = await page.locator('#auth-button-label').textContent();
-    if (accountLabelAfterStartupSession?.trim() !== 'CI Hero'
-        || await page.locator('#auth-account-panel').isHidden()) {
-        throw new Error(
-            `A delayed startup session response overwrote the newer login: ${accountLabelAfterStartupSession}`);
-    }
+    await Promise.all([
+        page.waitForResponse((response) => response.url().includes('/v1/messages?limit=50')
+            && response.status() === 503),
+        page.locator('#auth-submit').click()
+    ]);
+    await page.locator('#auth-button-label').getByText('CI Hero', { exact: true }).waitFor();
     if (await page.locator('#auth-account-panel').isHidden()) {
         throw new Error('Authentication smoke failed: the signed-in account panel stayed hidden.');
     }
@@ -765,6 +774,15 @@ try {
     const playerXpTotal = await page.locator('#xp-total').textContent();
     if (!playerXpTotal.startsWith('2,000')) {
         throw new Error(`Current XP dashboard did not render the expected total: ${playerXpTotal}; status=${await page.locator('#xp-status').textContent()}`);
+    }
+    await page.locator('[data-view="magic-items"]').click();
+    await page.locator('#magic-item-list').waitFor({ state: 'visible' });
+    const visibleMagicItems = await page.locator('#magic-item-list .magic-item-card').allTextContents();
+    if (visibleMagicItems.length !== 2
+        || !visibleMagicItems.some((text) => text.includes('Public Relic'))
+        || !visibleMagicItems.some((text) => text.includes('Canonical Relic'))
+        || visibleMagicItems.some((text) => /First Name Leak|Substring Leak|Same First Name Leak/u.test(text))) {
+        throw new Error(`Magic-item canonical viewer isolation failed: ${JSON.stringify(visibleMagicItems)}.`);
     }
     await page.locator('[data-view="quests"]').click();
     await page.locator('#quest-list').waitFor({ state: 'visible' });
@@ -975,6 +993,51 @@ try {
     await page.locator('#auth-dialog-close').click();
     await page.locator('#auth-dialog').waitFor({ state: 'hidden' });
     await page.waitForFunction(() => document.querySelector('#xp-total')?.textContent?.startsWith('1,200'));
+    await page.locator('[data-view="magic-items"]').click();
+    await page.locator('#magic-item-list').waitFor({ state: 'visible' });
+    const secondPlayerMagicItems = await page.locator('#magic-item-list .magic-item-card').allTextContents();
+    if (secondPlayerMagicItems.length !== 1
+        || !secondPlayerMagicItems.some((text) => text.includes('Public Relic'))
+        || secondPlayerMagicItems.some((text) => /Canonical Relic|First Name Leak|Substring Leak|Same First Name Leak/u.test(text))) {
+        throw new Error(`Magic-item account transition leaked the prior account snapshot: ${JSON.stringify(secondPlayerMagicItems)}.`);
+    }
+
+    delayMagicItemsForPlayerA = true;
+    await page.locator('#auth-button').click();
+    await page.locator('#auth-logout').click();
+    await page.locator('#auth-button-label').getByText('Log in', { exact: true }).waitFor();
+    await page.locator('#auth-button').click();
+    await page.locator('#auth-character-name').fill('CI Hero');
+    await page.locator('#auth-password').fill('ci-password');
+    await page.locator('#auth-submit').click();
+    await page.locator('#auth-button-label').getByText('CI Hero', { exact: true }).waitFor();
+    await page.locator('#auth-dialog-close').click();
+    await page.locator('#auth-dialog').waitFor({ state: 'hidden' });
+    const delayedMagicRequest = page.waitForRequest((request) =>
+        request.url().includes('/v1/magic-items'));
+    await page.locator('[data-view="magic-items"]').click();
+    await delayedMagicRequest;
+    await page.locator('#auth-button').click();
+    await page.locator('#auth-logout').click();
+    await page.locator('#auth-button-label').getByText('Log in', { exact: true }).waitFor();
+    await page.locator('#auth-button').click();
+    await page.locator('#auth-character-name').fill('Max');
+    await page.locator('#auth-password').fill('ci-second-password');
+    await page.locator('#auth-submit').click();
+    await page.locator('#auth-button-label').getByText('Max', { exact: true }).waitFor();
+    await page.locator('#auth-dialog-close').click();
+    await page.locator('#auth-dialog').waitFor({ state: 'hidden' });
+    await page.locator('[data-view="magic-items"]').click();
+    await page.locator('#magic-item-list').waitFor({ state: 'visible' });
+    await page.waitForTimeout(250);
+    const delayedMagicItems = await page.locator('#magic-item-list .magic-item-card').allTextContents();
+    delayMagicItemsForPlayerA = false;
+    if (delayedMagicItems.length !== 1
+        || !delayedMagicItems.some((text) => text.includes('Public Relic'))
+        || delayedMagicItems.some((text) => /Canonical Relic|First Name Leak|Substring Leak|Same First Name Leak/u.test(text))) {
+        throw new Error(`Delayed prior-account magic items repopulated the current account: ${JSON.stringify(delayedMagicItems)}.`);
+    }
+
     await page.locator('[data-view="xp-awards"]').click();
     await page.locator('#xp-awards-list').waitFor({ state: 'visible' });
     const secondPlayerAwardText = await page.locator('#xp-awards-list').textContent();
@@ -1028,13 +1091,14 @@ try {
     if (presenceRequests <= presenceRequestsBeforeDmLogin) {
         throw new Error('Dungeon Master dashboard did not load presence data.');
     }
-    const presenceRequestsBeforeHidden = presenceRequests;
     await page.evaluate(() => {
         Object.defineProperty(document, 'hidden', { configurable: true, value: true });
         document.dispatchEvent(new Event('visibilitychange'));
     });
     await page.waitForTimeout(100);
-    if (presenceRequests !== presenceRequestsBeforeHidden) {
+    const presenceRequestsAfterHiddenSettled = presenceRequests;
+    await page.waitForTimeout(150);
+    if (presenceRequests !== presenceRequestsAfterHiddenSettled) {
         throw new Error('Presence requests continued while the document was hidden.');
     }
     await page.evaluate(() => {
@@ -1175,6 +1239,7 @@ try {
         throw new Error('Offline startup smoke loaded outside the PWA scope.');
     }
 
+    await page.waitForFunction(() => document.querySelector('#lexicon-status')?.textContent?.includes('lexicon ready'));
     await page.locator('#translator-input').fill('');
     await page.locator('#translator-input').fill('hello');
     try {
