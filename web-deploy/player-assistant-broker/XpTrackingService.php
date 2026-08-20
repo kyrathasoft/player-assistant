@@ -317,8 +317,10 @@ final class XpTrackingService
         }
         foreach ($state['progressions'] as $progressionKey => $progressionState) {
             if (!is_string($progressionKey)
-                || preg_match('/^[a-z0-9]+(?:-[a-z0-9]+)*$/', $progressionKey) !== 1
-                || !isset($configuredProgressionKeys[$progressionKey])
+                || !isset($configuredProgressionKeys[$progressionKey])) {
+                continue;
+            }
+            if (preg_match('/^[a-z0-9]+(?:-[a-z0-9]+)*$/', $progressionKey) !== 1
                 || !is_array($progressionState)
                 || array_keys($progressionState) !== [
                     'source_date',

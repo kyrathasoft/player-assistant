@@ -42,7 +42,7 @@ function Invoke-RemotePhp {
     $scriptId = [Guid]::NewGuid().ToString('N')
     $localScript = Join-Path ([IO.Path]::GetTempPath()) "player-assistant-remote-$scriptId.php"
     $remoteScript = "$PrivateDirectory/.player-assistant-remote-$scriptId.php"
-    [IO.File]::WriteAllText($localScript, $Code, [Text.UTF8Encoding]::new($false))
+    [IO.File]::WriteAllText($localScript, "<?php`n" + $Code, [Text.UTF8Encoding]::new($false))
     try {
         Invoke-CheckedNative {
             & scp -q -i $SshKeyPath -o BatchMode=yes -o IdentitiesOnly=yes -o ConnectTimeout=15 `
