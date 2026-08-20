@@ -281,9 +281,9 @@ Planned security correction: eliminate first-name equivalence from authenticatio
   - [x] Clear `magicItemSnapshot`, loading state, and errors on logout, session expiry, login, restore, and every account-generation transition.
   - [x] Bind Magic Item requests and decoded responses to the initiating account generation so a delayed prior-account response cannot repopulate current state.
   - [x] Add browser regressions that load an account-private item for player A, switch to player B, and prove neither cached nor delayed A data can render for B.
-- [ ] Make PWA deployment finalization durable before rollback evidence is removed.
-  - [ ] Persist a rollback-forbidden/finalized transaction state before deleting backups; recover a lost SSH response by querying transaction status rather than invoking rollback blindly.
-  - [ ] Fault-inject a disconnect after remote finalization succeeds and prove the live release remains intact and restartable cleanup is safe.
+- [x] Make PWA deployment finalization durable before rollback evidence is removed.
+  - [x] Persist a rollback-forbidden/finalized transaction state before deleting backups; recover a lost SSH response by querying transaction status rather than invoking rollback blindly.
+  - [x] Fault-inject a disconnect after remote finalization succeeds and prove the live release remains intact and restartable cleanup is safe.
 - [ ] Restore executable remote PHP controllers for word-count deployment and verification.
   - [ ] Prepend the PHP opening tag in both `Invoke-RemotePhp` writers and reject placeholder or non-PHP payloads before upload.
   - [ ] Require a structured semantic success response and expected state mutation, not merely process exit zero.

@@ -1016,24 +1016,32 @@ function directoryHashes(string $root): array
 
 function cleanupFinalizedTransaction(string $transactionDirectory, array $transaction): void
 {
+    $manifestPath = $transactionDirectory . '/manifest.json';
+    $transaction['status'] = 'finalized';
+    $transaction['rollback_forbidden'] = true;
+    $transaction['cleanup_complete'] = false;
+    writeJson($manifestPath, $transaction);
+    if (getenv('PLAYER_ASSISTANT_TEST_FINALIZE_AFTER_DURABLE_STATE') === '1') {
+        throw new RuntimeException('Finalization interrupted after durable rollback-forbidden state.');
+    }
     foreach (scandir($transactionDirectory) ?: [] as $entry) {
         if ($entry === '.' || $entry === '..' || $entry === 'manifest.json') {
             continue;
         }
         removeTree($transactionDirectory . '/' . $entry);
     }
-    $manifestPath = $transactionDirectory . '/manifest.json';
-    if (is_file($manifestPath) && !unlink($manifestPath)) {
-        throw new RuntimeException('Unable to remove the finalized transaction manifest.');
-    }
     if (getenv('PLAYER_ASSISTANT_TEST_FINALIZE_CLEANUP_FAILURE_AFTER_MANIFEST') === '1') {
         file_put_contents($transactionDirectory . '/.cleanup-race-fixture', 'fault', LOCK_EX);
     }
-    if (is_dir($transactionDirectory) && !rmdir($transactionDirectory)) {
+    if (is_dir($transactionDirectory) && count(scandir($transactionDirectory) ?: []) > 3) {
         $transaction['status'] = 'finalize_cleanup';
         writeJson($manifestPath, $transaction);
-        throw new RuntimeException('Unable to remove the finalized transaction directory.');
+        throw new RuntimeException('Unable to remove the finalized transaction evidence.');
     }
+    $transaction['status'] = 'finalized';
+    $transaction['rollback_forbidden'] = true;
+    $transaction['cleanup_complete'] = true;
+    writeJson($manifestPath, $transaction);
 }
 
 function rollbackTransaction(string $transactionDirectory, array $transaction): void
@@ -1302,10 +1310,11 @@ function assertNoPendingTransactions(string $accountHome): void
             reject('An installer transaction manifest is invalid: ' . $manifestPath);
         }
         $status = $manifest['status'] ?? null;
-        if (in_array($status, ['preparing', 'promoted', 'pending_https_verification', 'rollback_cleanup', 'finalize_cleanup'], true)) {
+        if (in_array($status, ['preparing', 'promoted', 'pending_https_verification', 'rollback_cleanup', 'finalize_cleanup'], true)
+            || ($status === 'finalized' && ($manifest['cleanup_complete'] ?? false) !== true)) {
             reject('An unresolved installer transaction already exists: ' . (string)($manifest['transaction_id'] ?? 'unknown'));
         }
-        if (!in_array($status, ['verified', 'rolled_back'], true)) {
+        if (!in_array($status, ['verified', 'rolled_back', 'finalized'], true)) {
             reject('An installer transaction has an unknown state: ' . (string)($manifest['transaction_id'] ?? 'unknown'));
         }
     }
@@ -1587,8 +1596,13 @@ function runInstall(array $options): array
         if ($verification === 'https') {
             verifyHttpsInstall($packageManifest, $origin);
             $rollbackRetained = isset($options['retain-backup']);
-            $transaction['status'] = $rollbackRetained ? 'verified' : 'finalize_cleanup';
-            if (!$rollbackRetained) {
+            if ($rollbackRetained) {
+                $transaction['status'] = 'verified';
+                $transaction['cleanup_complete'] = false;
+            } else {
+                $transaction['status'] = 'finalized';
+                $transaction['rollback_forbidden'] = true;
+                $transaction['cleanup_complete'] = false;
                 $transaction['package_manifest'] = $packageManifest;
             }
             writeJson($transactionDirectory . '/manifest.json', $transaction);
@@ -1644,7 +1658,7 @@ function runInstall(array $options): array
             'cron_installed' => !isset($options['skip-cron']),
         ];
     } catch (Throwable $error) {
-        if (in_array(($transaction['status'] ?? null), ['verified', 'finalize_cleanup'], true)) {
+        if (in_array(($transaction['status'] ?? null), ['verified', 'finalized', 'finalize_cleanup'], true)) {
             try {
                 writeInstallationReport(
                     $transaction,
@@ -1717,7 +1731,7 @@ function validateTransactionManifest(array $transaction, string $expectedId): vo
     foreach ([
         'pwa_rollback_restored', 'api_rollback_restored', 'private_rollback_restored',
         'config_rollback_restored', 'database_rollback_restored', 'cron_rollback_restored',
-        'cleanup_complete',
+        'cleanup_complete', 'rollback_forbidden',
     ] as $optionalBooleanState) {
         if (array_key_exists($optionalBooleanState, $transaction)
             && !is_bool($transaction[$optionalBooleanState])) {
@@ -1812,11 +1826,16 @@ function transactionAction(array $options, string $action): array
     }
     $transactionStatus = (string)($transaction['status'] ?? '');
     if ($action === 'rollback'
+        && (($transaction['rollback_forbidden'] ?? false) === true
+            || in_array($transactionStatus, ['finalized'], true))) {
+        reject('The installer transaction is finalized and rollback is forbidden.');
+    }
+    if ($action === 'rollback'
         && !in_array($transactionStatus, ['preparing', 'promoted', 'pending_https_verification', 'rollback_cleanup'], true)) {
         reject('The installer transaction is not in a recoverable state.');
     }
     if ($action === 'finalize'
-        && !in_array($transactionStatus, ['pending_https_verification', 'finalize_cleanup'], true)) {
+        && !in_array($transactionStatus, ['pending_https_verification', 'finalize_cleanup', 'finalized'], true)) {
         reject('The installer transaction is not pending HTTPS verification.');
     }
     if ($action === 'rollback') {
