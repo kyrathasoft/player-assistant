@@ -266,11 +266,11 @@ Planned security correction: eliminate first-name equivalence from authenticatio
   - [x] Update custom regression-harness catalogs, sidecar schema validators, installer/runtime checks, migration tests, and release checklists.
   - [x] Verify that no protected lookup receives the originally entered name after authentication.
 
-- [ ] 9. Migrate, deploy, and verify the identity data atomically.
+- [x] 9. Migrate, deploy, and verify the identity data atomically.
   - [x] Back up and migrate the password sidecar and any canonical identity/roster data with rollback support.
   - [x] Verify local hashes, release contents, and generated roster/hero paths before deployment.
   - [x] Run authorized positive tests for each identity plus anonymous, wrong-password, ambiguous-alias, cross-character, logout, and account-switch negative tests locally.
-  - [ ] Verify production behavior through the authenticated deployment contract; production import remains pending the broker admin credential and must not be attempted without it.
+  - [x] Verify production behavior through the authenticated deployment contract: the authoritative seven-entry v2 sidecar was reconciled to production opaque account IDs, imported transactionally, and read back with exact IDs, canonical names, character keys, and enabled state.
 
 
 ## Code-review implementation backlog
