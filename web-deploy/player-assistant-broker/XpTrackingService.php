@@ -46,7 +46,6 @@ final class XpTrackingService
         $this->markdownFetcher = $markdownFetcher;
         $this->awardFilePromoter = $awardFilePromoter;
         $this->validateConfiguration();
-        $this->ensureSchema();
     }
 
     public function getForAccount(array $account): array
@@ -1921,14 +1920,4 @@ final class XpTrackingService
         }
     }
 
-    private function ensureSchema(): void
-    {
-        $this->database->exec(
-            'CREATE TABLE IF NOT EXISTS xp_tracking_cache (
-                cache_key TEXT PRIMARY KEY,
-                fetched_at INTEGER NOT NULL,
-                payload_json TEXT NOT NULL,
-                content_sha256 TEXT NOT NULL
-            )');
-    }
 }

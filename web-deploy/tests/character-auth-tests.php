@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/../player-assistant-broker/BrokerHttpException.php';
+require_once __DIR__ . '/../player-assistant-broker/DatabaseMigrationService.php';
 require_once __DIR__ . '/../player-assistant-broker/CharacterAuthService.php';
 
 function assertTrue(bool $condition, string $message): void
@@ -36,6 +37,9 @@ try {
         PDO::ATTR_EMULATE_PREPARES => false,
     ]);
     $database->exec('PRAGMA foreign_keys = ON');
+    (new DatabaseMigrationService(
+        $database,
+        sys_get_temp_dir() . '/pa-auth-migration-backups-' . bin2hex(random_bytes(4))))->migrate();
     $service = new CharacterAuthService($database, [
         'expected_origin' => 'https://example.test',
         'idle_timeout_seconds' => 60,

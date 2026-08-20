@@ -279,10 +279,10 @@ Planned security correction: eliminate first-name equivalence from authenticatio
   - [x] Stop publishing and precaching protected `viewable-by` records in the complete public `magic-items.json` payload.
   - [x] Filter restricted records in `/v1/magic-items` by immutable account ID; authorization rejects substring matches, names, and inferred first-name aliases.
   - [x] Add direct-fetch, same-first-name/sub-string-collision, anonymous, account-switch, offline-fallback, and authorized-owner regression coverage.
-- [ ] Restore migration-only ownership of the broker schema.
-  - Remove request-time `CREATE TABLE`, `CREATE INDEX`, and `ALTER TABLE` work from `BrokerService`, `CharacterAuthService`, `MessageService`, `QuestService`, and `XpTrackingService` constructors.
-  - Make service startup verify the expected `PRAGMA user_version` and required objects without mutating SQLite; keep all schema changes in ordered deployment migrations.
-  - Add regression coverage proving ordinary API requests cannot create or alter schema and fail closed with an actionable deployment error when migration is required.
+- [x] Restore migration-only ownership of the broker schema.
+  - [x] Remove request-time `CREATE TABLE`, `CREATE INDEX`, and `ALTER TABLE` work from `BrokerService`, `CharacterAuthService`, `MessageService`, `QuestService`, and `XpTrackingService` constructors.
+  - [x] Make service startup verify the expected `PRAGMA user_version` and required objects without mutating SQLite; keep all schema changes in ordered deployment migrations.
+  - [x] Add regression coverage proving ordinary API requests cannot create or alter schema and fail closed with an actionable deployment error when migration is required.
 - [ ] Reinstate the PWA's shell-only optional-pack installation contract.
   - Remove translator dictionaries and `campaign-search.json` from service-worker install-time caching so an unavailable optional pack cannot abort shell installation.
   - Preserve content-addressed optional-pack caches across compatible shell revisions and retire only obsolete pack hashes.
