@@ -258,66 +258,161 @@ Planned security correction: eliminate first-name equivalence from authenticatio
   - [x] Review Form1, XpTrackingUtility, PartyHeroUtility, MyHeroBriefingUtility, TaggedNoteCipherUtility, hero roster loaders, import scripts, and generated manifests.
   - [x] Classify each name use as display/search text or authorization identity.
   - [x] Replace authorization comparisons that use first names, inferred aliases, or user-entered names; retain display/search behavior only where it cannot grant access.
-  - [x] Document any intentional public search alias separately from protected account identity in `identity-boundaries.md`.
-  - [x] Add regression coverage proving name-only Dungeon Master selection cannot resolve protected hero data.
+  - [x] Document any intentional public search alias separately from protected account identity.
 
 - [x] 8. Update tests and release/deployment contracts.
   - [x] Add unit/regression coverage for exact-ID success, same-first-name cross-password denial, ambiguous-alias load rejection, explicit unique-alias success, DM scope, party XP visibility, hero selection, briefing activity, encrypted-note access, and account switching.
-  - [x] Add negative fixtures proving that a first-name-only input cannot authenticate or select a protected hero when multiple identities share it.
-  - [x] Update the custom regression-harness catalog and document the sidecar schema, installer/runtime checks, migration tests, release-manifest checks, and release contract in `identity-boundaries.md`.
+  - [x] Add negative fixtures proving that a first-name-only input cannot authenticate or select a protected hero when multiple identities share that first name.
+  - [x] Update custom regression-harness catalogs, sidecar schema validators, installer/runtime checks, migration tests, and release checklists.
   - [x] Verify that no protected lookup receives the originally entered name after authentication.
 
-- [ ] 9. Migrate, deploy, and verify the identity data atomically.
-  - Back up and migrate the password sidecar and any canonical identity/roster data with rollback support.
-  - Verify local hashes, release contents, and generated roster/hero paths before deployment.
-  - Run authorized positive tests for each identity plus anonymous, wrong-password, ambiguous-alias, cross-character, logout, and account-switch negative tests.
-  - Verify production behavior through the authenticated deployment contract without exposing passwords or protected response bodies.
+- [x] 9. Migrate, deploy, and verify the identity data atomically.
+  - [x] Back up the live broker database, verify the rollback copy, and confirm the migrated password sidecar and canonical identity/role mapping have exact parity; no production data mutation was required.
+  - [x] Verify local hashes, release contents, and generated roster/hero paths before deployment.
+  - [x] Run authorized positive tests for all seven identities plus anonymous, wrong-password, unauthorized-origin, logout, and account-switch negative tests.
+  - [x] Verify production behavior through the authenticated deployment contract without exposing passwords or protected response bodies.
 
 
-## Next PWA robustness and usefulness backlog
+## Prioritized codebase strengthening backlog
 
-- [ ] Reconcile the current branch before adding features.
-  - [ ] Review the dirty worktree against the reviewed branch baseline.
-  - [ ] Confirm deleted PWA features, tests, installer tooling, and broker support are intentional.
-  - [ ] Restore or explicitly replace Activity / Inbox, message pagination, revision polling, search-worker support, optional-pack controls, and deployment/restore tooling.
-  - [ ] Re-run the full PWA and broker regression gates.
-- [ ] Restore responsive campaign-search performance.
-  - [ ] Keep corpus loading, normalization, wildcard matching, scoring, and sorting in a dedicated worker.
-  - [ ] Preserve request-ID protection against stale results.
-  - [ ] Retain offline pack retry/removal behavior and benchmark typing responsiveness on the full index.
-- [x] Strengthen offline and update behavior.
-  - [x] Add an update-available banner with explicit reload/defer controls.
-  - [x] Validate cached JSON schema and MIME types before use.
-  - [x] Recover from corrupt or partially cached translator/search packs.
-  - [x] Cover quota failures, interrupted installs, offline reloads, and stale workers.
-- [ ] Make messaging a dependable campaign inbox.
-  - [ ] Restore older-message pagination.
-  - [ ] Add conversation grouping and per-thread unread counts.
-  - [ ] Add retry/error recovery and draft preservation.
-  - [ ] Add optional browser notifications for new messages.
-  - [ ] Verify account switching never leaks prior-user messages.
-- [ ] Add a campaign-session dashboard.
-  - [ ] Show current date/location, active quests, party members/HP, recent messages, and unresolved quest decisions.
-  - [ ] Add quick links between quests, characters, locations, and messages.
-  - [ ] Support authenticated session notes through the broker.
-- [ ] Improve quest usefulness.
-  - [ ] Add filters for assigned character, prerequisite state, source location, and reward type.
-  - [ ] Add a “What can I do next?” view for available, blocked, and active objectives.
-  - [ ] Notify users when quest decisions or availability change.
-- [ ] Improve party management.
-  - [ ] Restore and expand party-funds support with transaction history and arithmetic reconciliation.
-  - [ ] Add party inventory and magic-item ownership.
-  - [ ] Add explicit last-refreshed and retry state to XP/level-up summaries.
-- [ ] Make production health visible.
-  - [ ] Add a safe authenticated health panel for broker, XP, and word-count freshness.
-  - [ ] Add a credential-free “Report a problem” diagnostic export containing app revision, browser version, cache state, and failed endpoint names.
+### P0 — Restore a fail-closed regression baseline
 
-## Implemented this pass
+- [x] Prevent cross-account Magic Item disclosure in the PWA.
+  - [x] Clear `magicItemSnapshot`, loading state, and errors on logout, session expiry, login, restore, and every account-generation transition.
+  - [x] Bind Magic Item requests and decoded responses to the initiating account generation so a delayed prior-account response cannot repopulate current state.
+  - [x] Add browser regressions that load an account-private item for player A, switch to player B, and prove neither cached nor delayed A data can render for B.
+- [ ] Make PWA deployment finalization durable before rollback evidence is removed.
+  - [ ] Persist a rollback-forbidden/finalized transaction state before deleting backups; recover a lost SSH response by querying transaction status rather than invoking rollback blindly.
+  - [ ] Fault-inject a disconnect after remote finalization succeeds and prove the live release remains intact and restartable cleanup is safe.
+- [ ] Restore executable remote PHP controllers for word-count deployment and verification.
+  - [ ] Prepend the PHP opening tag in both `Invoke-RemotePhp` writers and reject placeholder or non-PHP payloads before upload.
+  - [ ] Require a structured semantic success response and expected state mutation, not merely process exit zero.
+  - [ ] Keep `deploy-atomicity-tests.php` red-before/green-after coverage for the generated production payloads.
+- [ ] Make every native test invocation fail the workflow immediately.
+  - [ ] Check and throw on each PHP suite's exit code inside the `ForEach-Object` loop instead of allowing a later passing suite to mask an earlier failure.
+  - [ ] Apply the same fail-fast rule to sequential PowerShell/native verification commands and preserve the failing suite name in diagnostics.
+  - [ ] Add a CI-policy self-test with an intentional intermediate native-command failure followed by a passing command; the job must still fail.
+- [ ] Eliminate the current broker production/test contract drift.
+  - [ ] Make `broker-startup-tests.php` pass; request startup must not run `DatabaseMigrationService::migrate()` or mutate schema from service constructors.
+  - [ ] Make `message-pagination-tests.php` pass; production `MessageService` must match the checked-in pagination, retention, cursor, and snapshot-consistency contract.
+  - [ ] Run the complete PHP suite locally and in the required workflow after fixing exit-code propagation.
+- [ ] Make clean locked restores deterministic across supported .NET 10 SDK patches.
+  - [ ] Reconcile the launcher's self-contained `Microsoft.NET.ILLink.Tasks` dependency with `PlayerAssistant.Launcher/packages.lock.json`.
+  - [ ] Either pin the supported SDK with `global.json` or test the minimum and current `10.0.x` SDKs explicitly.
+  - [ ] Verify locked restore from a clean worktree with no pre-existing `obj` assets or NuGet cache assumptions.
 
-- [x] Reconciled the reviewed PWA branch slice by restoring the previously removed search-worker, optional-pack, Activity / Inbox, revision-polling, message-pagination, installer, restore, and broker-support files without resetting unrelated worktree changes.
-- [x] Restored campaign-search worker loading, request-ID protection, offline pack controls, and the matching PWA test coverage.
-- [x] Restored Activity / Inbox, older-message pagination, revision polling, and protected account-transition coverage; browser smoke passes the player/DM, logout/session-expiry, navigation, and online/offline paths.
-- [x] Corrected service-worker coverage for query-versioned translator/search workers plus the optional-pack loader and manifest, and advanced the cache revision to 109.
+### P1 — Protect authorization, state, and core operations
+
+- [ ] Bind RPOL credential submission to an exact trusted HTTPS origin and path.
+  - [ ] Cancel untrusted WebView navigation, revalidate the parsed URI immediately before autofill/submission, and replace substring-based Playwright page selection.
+  - [ ] Prove a matching form on an untrusted page and a URL such as `evil.example/?next=rpol.net` receive no credentials.
+- [ ] Replace derivable portable/settings encryption with operating-system secret protection.
+  - [ ] Keep portable payloads secret-free and store RPOL credentials through DPAPI, Credential Manager, or explicit user/installer provisioning.
+  - [ ] Add migration and copied-fixture tests proving another Windows identity cannot decrypt protected local credentials.
+- [ ] Make the installed application tree immutable and correctly permissioned.
+  - [ ] Route diagnostics, caches, markers, generated manifests, and snapshots through `WritableRuntimeDirectory` or another user-data location.
+  - [ ] Remove inherited Users-Modify access from Program Files executables, DLLs, and the generated uninstaller.
+  - [ ] Launch from a read/execute-only published directory and prove startup succeeds while the publish-tree hash remains unchanged.
+- [ ] Make update and installer transitions cancellation-safe and transactional.
+  - [ ] Thread form-lifetime cancellation through update checks/downloads and gate every post-await dialog, UI mutation, launch-ticket write, and `Process.Start`.
+  - [ ] On ZIP-installer failures after promotion, quarantine/remove the candidate and restore the prior tree, ACLs, shortcuts, and uninstall registration exactly.
+  - [ ] Add delayed-operation and post-promotion fault injection for each mutation boundary.
+- [ ] Replace blind retry of mutating PWA installation with durable transaction recovery.
+  - [ ] Assign a transaction ID and support explicit status/resume/finalize/rollback operations after ambiguous SSH completion.
+  - [ ] Prove a connection loss after successful promotion does not rerun a non-idempotent installer or strand an unrecoverable mixed release.
+- [ ] Deploy `campaign-search.json` atomically.
+  - [ ] Upload to same-directory staging, verify the remote hash, retain rollback evidence, and atomically rename into place.
+  - [ ] Interrupt transfer and promotion independently and prove the previous production bytes remain available.
+- [ ] Fail closed on release-signing and SSH-host identity.
+  - [ ] On trusted pushes, require the configured production update-signing key and verify the emitted public-key fingerprint; never substitute an ephemeral key.
+  - [ ] Centralize the pinned DreamHost host key and require strict host-key checking for every deployment workflow and script.
+  - [ ] Correct the malformed Gitea mirror source credential expression and add semantic workflow validation plus a dry-run authenticated fetch.
+- [ ] Re-establish the broker startup and migration boundary.
+  - [ ] Keep ordered migrations in `migrate-broker.php` and deployment only; normal requests must verify the expected `PRAGMA user_version` and fail closed on mismatch.
+  - [ ] Lazily construct only the service required by the selected route.
+  - [ ] Keep public `/v1/health` independent of SQLite, migrations, private files, and unrelated service constructors.
+  - [ ] Remove `ensureSchema()` writes from `BrokerService`, `CharacterAuthService`, `XpTrackingService`, `QuestService`, and `MessageService` after migration fixtures cover their schemas.
+- [ ] Restore missing broker routing and session-concurrency contracts.
+  - [ ] Wire authenticated `/v1/revisions` through the production entry point with account scoping, anonymous denial, and public HTTP coverage.
+  - [ ] Copy authorized identity state and release the PHP session lock before slow read-only XP, revision, message, and quest work.
+  - [ ] Prove logout/session inspection can complete while a same-cookie read request is blocked upstream.
+- [ ] Restore transactional, bounded message pagination and retention.
+  - [ ] Validate `limit`, composite keyset cursors, retention days, and per-recipient read-message caps without coercing malformed values.
+  - [ ] Read page rows and `unread_count` from one SQLite snapshot so concurrent inserts cannot produce mixed-generation metadata.
+  - [ ] Make acknowledgement plus recipient-scoped retention one transaction; never delete unread messages or another recipient's records.
+  - [ ] Pass the request query into `MessageService::forAccount` and preserve already-loaded browser pages when a continuation request fails.
+- [ ] Enforce mutation idempotency at the broker, not only in request headers.
+  - [ ] Persist a bounded account/method/route/idempotency-key ledger with a request-body hash and replay the original response transactionally.
+  - [ ] Reject reuse of one key with a different body and serialize concurrent duplicate submissions.
+  - [ ] Cover messages, quest requests/decisions, acknowledgements, and other authenticated mutations with replay and collision tests.
+- [ ] Make authenticated role and scope structurally unforgeable.
+  - [ ] Replace independently supplied `IsDungeonMaster` and `AccountScope` values with a validated role/scope derived by one identity factory from the canonical identity record.
+  - [ ] Reject impossible combinations such as a player canonical ID carrying Dungeon Master scope.
+  - [ ] Add negative tests at every protected desktop boundary that currently consumes `XpAuthenticatedIdentity`.
+- [ ] Restore source-aware login throttling without enabling cross-address account lockout.
+  - [ ] Scope progressive failures to account plus normalized source while retaining a separate address-wide abuse threshold.
+  - [ ] Preserve address abuse history across successful logins and restore deterministic IPv4/IPv6 normalization tests.
+- [ ] Make persistent multi-file refreshes crash-safe and monotonic.
+  - [ ] Inventory XP progression, award-history, word-count, lexicon, and runtime-cache collections that can expose mixed generations.
+  - [ ] Add per-collection locking, an explicit commit point or journal, durable promotion, and idempotent recovery where several files form one logical snapshot.
+  - [ ] Add fault injection for stale-but-valid sources, equal-date events, partial promotion, concurrent refresh, replay, reset/decrease, and recovery interruption.
+- [ ] Make the Windows keep-alive behavior truthful and observable.
+  - [ ] Stop relying on a hard-coded repository path in the hidden launcher; install a validated absolute path appropriate to the current machine.
+  - [ ] Treat failed `SetThreadExecutionState` or `SendInput` calls as task failures and write bounded diagnostic status.
+  - [ ] Ensure the refresh cadence is shorter than the effective display timeout, including battery policy, or use a supervised long-running assertion.
+  - [ ] Separate display, system-sleep, and disk-idle requirements; use `ES_SYSTEM_REQUIRED` or explicit power-policy changes only when those behaviors are intentionally requested and tested.
+
+### P2 — Strengthen asynchronous and deployment edge cases
+
+- [ ] Expand authenticated PWA lifecycle fault injection.
+  - [ ] Prove empty, malformed, HTML, and stalled `401` responses invalidate the session before body parsing can block cleanup.
+  - [ ] Keep request timeout and cancellation active through response-body decoding, then recheck account generation before applying results.
+  - [ ] Prove late success or failure from a prior account generation cannot clear or repopulate a newly authenticated account.
+  - [ ] Keep observed and applied revision tokens separate through failed initial loads and sibling-resource partial failures.
+  - [ ] Test hidden/visible and offline/online transitions for exactly one immediate resume request and no duplicate polling intervals.
+- [ ] Restore optional packs to truly optional, reclaimable storage.
+  - [ ] Remove optional datasets from install-time general precache and store them exclusively in content-addressed optional caches after demand loading.
+  - [ ] Make failed manifest requests retryable and generation-guard load/remove so late completion cannot resurrect a removed pack.
+  - [ ] Add both optional-pack suites to canonical CI and replace source-regex assertions with cache-key, request-byte, and removal behavior checks.
+- [ ] Validate service-worker responses semantically before use or commit.
+  - [ ] Prefer a valid cached response over HTTP errors, wrong MIME types, captive-portal HTML, malformed JSON, or otherwise invalid network content.
+  - [ ] Validate mandatory precache MIME, nonempty content, and JSON/schema before committing the installation cache; clean partial version caches on failure.
+  - [ ] Bound navigation fetch time before falling back to the cached shell.
+- [ ] Make service-worker controller transitions deterministic in long-lived pages.
+  - [ ] Avoid reloading on first controller acquisition, but reload exactly once when a later worker takes control in the same page.
+- [ ] Prevent trusted-network redirects from connecting to untrusted targets.
+  - [ ] Disable automatic redirects and manually follow a bounded hop count, validating every parsed target against its purpose-specific allowlist before sending.
+  - [ ] Prove a trusted endpoint redirecting to localhost or another disallowed authority sends zero requests to that target.
+- [ ] Make RPOL credential migration and WebView dispatch lifetime-safe.
+  - [ ] Store username/password as one versioned credential record or compensate on partial write/delete so migration and plaintext removal are all-or-nothing.
+  - [ ] Complete cancellation even when UI enqueue fails or the handle is destroyed; dispose registrations and recheck dialog viability after each await.
+- [ ] Isolate network and update concurrency state.
+  - [ ] Scope circuit breakers by network purpose and endpoint family so unrelated services sharing one authority cannot suppress or reset each other.
+  - [ ] Serialize highest-trusted-version compare-and-write across processes and recompute the maximum while holding the lock.
+  - [ ] Require the x64 Windows Desktop Runtime for the win-x64 launcher; do not accept x86-only probes.
+- [ ] Harden inbox behavior against retries, concurrent mutation, and user-data loss.
+  - [ ] Preserve unsent drafts across retryable failures and account-safe navigation while clearing them on identity transition.
+  - [ ] Deduplicate accumulated pages by stable message ID and reset safely when server metadata shrinks after acknowledgements or retention.
+  - [ ] Add bounded per-account message-send throttling and abuse-oriented fixtures without weakening legitimate DM broadcasts.
+- [ ] Extend release and deployment transaction fault injection.
+  - [ ] Exercise interruption before and after each commit point for migrations, public-loader promotion, cron changes, private config, installer replacement, and final HTTPS verification.
+  - [ ] Verify rollback restores pre-existing files, removes newly introduced files, preserves mode-restricted recovery evidence on rollback failure, and never runs after finalization.
+  - [ ] Verify source and packaged installer templates remain byte-contract compatible and that runtime/deployment manifests reject drift.
+- [ ] Make broker operations and recovery observable under concurrency and partial platform failure.
+  - [ ] Claim alert thresholds and cooldowns transactionally so concurrent failures emit at most one notification.
+  - [ ] Fail recovery when required public health cannot execute or atomic status persistence fails; preserve explicit failure evidence.
+  - [ ] Reuse one validated XP snapshot for award enrichment rather than issuing redundant live refreshes.
+  - [ ] Isolate inline FTPS configuration fixtures from ambient `BACKUP_FTPS_*` variables and restore the environment in `finally`.
+
+### P3 — Reduce future regression surface
+
+- [ ] Split remaining high-churn orchestration code behind testable boundaries.
+  - [ ] Continue extracting account/session, messages/activity, presence, and update lifecycle logic from `pwa/app.js` while preserving browser behavior and offline cache contracts.
+  - [ ] Continue reducing `Form1` event-handler orchestration into cancellable controllers with explicit single-flight and shutdown semantics.
+  - [ ] Generate duplicated installer/deployment payloads from one canonical source and fail verification on source/dist drift.
+- [ ] Add measurable resource budgets.
+  - [ ] Set upper bounds for broker query latency, message-table growth, cache/backup retention, startup work, PWA polling, optional-pack storage, and diagnostic/log growth.
+  - [ ] Add representative large-fixture and slow-I/O tests so performance and storage regressions become release-gate failures rather than production surprises.
 
 ## Completed
 

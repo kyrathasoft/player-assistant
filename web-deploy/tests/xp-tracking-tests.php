@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/../player-assistant-broker/BrokerHttpException.php';
+require_once __DIR__ . '/../player-assistant-broker/DatabaseMigrationService.php';
 require_once __DIR__ . '/../player-assistant-broker/XpTrackingService.php';
 
 function xpAssert(bool $condition, string $message): void
@@ -26,11 +27,13 @@ function expectXpError(callable $action, int $status, string $errorName): void
 
 function xpDatabase(string $path): PDO
 {
-    return new PDO('sqlite:' . $path, null, null, [
+    $database = new PDO('sqlite:' . $path, null, null, [
         PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
         PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
         PDO::ATTR_EMULATE_PREPARES => false,
     ]);
+    (new DatabaseMigrationService($database, sys_get_temp_dir() . '/pa-xp-migration-backups-' . bin2hex(random_bytes(4))))->migrate();
+    return $database;
 }
 
 function xpConfiguration(): array

@@ -6,7 +6,7 @@ Protected data must use the authenticated stable canonical ID or character key w
 
 - Desktop XP rows require a unique `Canonical ID` and are matched only to `XpAuthenticatedIdentity.CanonicalId`.
 - Party and My Hero Briefing resolution use canonical IDs. Character-tagged notes use the authenticated registry's canonical name plus explicitly declared aliases.
-- Dungeon Master scope is assigned only to canonical ID `dungeon-master`; the display text `Dungeon Master` does not grant scope.
+- Dungeon Master scope is an explicit role field in the password sidecar, bound to the unique canonical account ID; display text never grants scope.
 - Broker accounts require explicit `character_key` and aliases. New imported accounts also require an explicit role; role-less legacy reimports preserve the existing stable account role. Imports update by an unambiguous `character_key`; display-name and alias namespace collisions fail closed.
 - Broker XP source labels resolve only through the explicit `xp.character_key_aliases` mapping. Unmapped labels fail closed.
 - PWA magic-item viewer tokens are exact canonical character keys. Substring and inferred-first-name matching are forbidden.
@@ -24,30 +24,21 @@ These aliases affect only public presentation or search results and must never b
 
 `PartyHeroUtility` may inspect full-name or collision-free legacy first-name markdown filenames only when the parsed full character name equals the roster's full name. Canonical-ID filenames take precedence. Legacy encrypted-sidecar conversion creates generated IDs only as migration input; production migration must replace those with reviewed stable IDs before deployment.
 
-## Step 7 audit — remaining name uses
+## Audited identity-use classification
 
-The remaining name-based operations were audited and classified as follows:
+The remaining name-bearing paths were reviewed against the canonical-ID boundary:
 
-| Location | Name-based operation | Classification and boundary |
-|---|---|---|
-| `Form1.GetHeroSearchTermAliases` | Expands full-name and first-name search terms | Public search only; it does not select protected records or grant access. |
-| `AdventureOutlineUtility` | Uses author full names and first names while generating campaign summaries | Public campaign-prose summarization only; no authorization or protected-data selection. |
-| `PostTotalsUtility` | Groups saved post counts and login rows by display name | Reporting/presentation only; it does not authorize XP, notes, briefing data, or account access. |
-| `PartyHeroUtility.FindHeroMarkdownPath` | Checks canonical, full-name, and legacy first-name filenames | Migration-only compatibility; canonical IDs take precedence, legacy paths are collision-checked and parsed-name validated. |
-| `MyHeroBriefingUtility` | Uses resolved hero names and explicit aliases for thread activity, response detection, and tagged-note metadata | Runs only after canonical identity resolution; aliases classify already-authorized public activity and note metadata. Name-only authenticated or Dungeon Master selection is rejected. |
-| `TaggedNoteCipherUtility` | Matches `Character`/`Hero`/`Name` tags against the resolved hero name and explicit aliases | Post-resolution authorization context only; inferred first-name aliases are not created. |
-| `Form1`, `PartyHeroUtility`, `XpTrackingUtility`, and `MyHeroBriefingUtility` | Protected XP, hero, and briefing selection | Uses `XpAuthenticatedIdentity.CanonicalId` and exact canonical-ID joins; user-entered or display names are not carried into protected lookups. |
+| Area | Protected identity rule | Permitted name use |
+| --- | --- | --- |
+| `Form1` | Authentication returns `XpAuthenticatedIdentity`; XP, party, and briefing calls carry that result or a canonical hero selection ID. Dungeon Master scope is checked on the returned identity. | Credential text is accepted only at the login boundary. `GetHeroSearchTermAliases` expands public corpus searches only. |
+| `XpTrackingUtility` | Protected XP selection requires exactly one ordinal canonical-ID match. Missing or duplicate IDs fail closed. | Names are display text and user-facing error context only. |
+| `PartyHeroUtility` | Player and Dungeon Master XP joins require unique ordinal canonical IDs. | Names render party sheets. Full-name and collision-free first-name filenames are migration-only fallbacks whose parsed full name must match the roster. |
+| `MyHeroBriefingUtility` | Authenticated and Dungeon Master-selected heroes, XP totals, and identity-registry aliases resolve only by unique ordinal canonical ID. Mutable roster display names do not participate in the registry join. | Canonical names and explicitly declared aliases classify already-authorized public activity, quick links, and character-tagged note metadata. |
+| `TaggedNoteCipherUtility` | Character-tag access receives only the canonical name and explicit aliases attached after canonical-ID resolution. It does not infer first names or authorize from raw login text. | Exact character-name and explicit-alias comparisons interpret authored note tags after authorization. |
+| Hero roster and generated assets | New roster-backed markdown paths prefer canonical IDs; protected consumers reject missing IDs. | Full names, token names, and `pwa/data/heroes.json` aliases are presentation/search data. A full-name path is a non-authorizing compatibility fallback when no ID exists. |
+| Account import and broker services | Schema-v2 imports carry explicit canonical IDs/`character_key` values and aliases unchanged; broker upserts and protected service joins use the stable account ID or exact character key. | Canonical names and aliases are login/display namespace entries only. The import script does not derive authorization IDs from names. |
+| XP source-label mapping | Published labels must resolve through the explicit `xp.character_key_aliases` map; unmapped or ambiguous values fail closed. | Labels remain source presentation text and never become implicit account aliases. |
 
-No remaining authorization boundary uses a first name, fuzzy name, generated slug, or unvalidated display name. The regression catalog includes same-first-name fixtures, name-only rejection, ambiguous-alias rejection, canonical-ID joins, stale-display-name protection, and name-only Dungeon Master selection rejection.
+Adventure-outline author matching and public RPOL/Obsidian search continue to use names because they summarize or discover public campaign prose; those results never grant protected access.
 
-## Step 8 identity contract
-
-The identity regression and release contract must remain green before deployment:
-
-- Authentication returns an immutable canonical ID and account scope.
-- Switching from one synthetic same-first-name account to another returns the new canonical identity and scope.
-- Wrong-password, unknown-ID, ambiguous-alias, inferred-first-name, unauthenticated-ID, and name-only selection cases fail closed.
-- Protected XP, hero selection, briefing activity, encrypted-note metadata, and account transitions use canonical IDs or explicit post-resolution aliases only.
-- Sidecar schema, alias validation, runtime/installer validation, migration coverage, release-manifest checks, and the custom test catalog remain synchronized.
-
-These checks are test/release-contract coverage. They do not require deployment unless protected runtime, sidecar, broker, or PWA artifacts change.
+Release contract: `identity-release-checklist.md` is required for desktop identity releases. The publish validator and runtime loader must reject blank, malformed, duplicate, or colliding canonical IDs/names/aliases before an installer is produced.
