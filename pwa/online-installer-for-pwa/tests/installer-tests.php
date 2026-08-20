@@ -485,7 +485,7 @@ file_put_contents(
     LOCK_EX);
 $cleanupFaultOutput = [];
 $cleanupFaultExit = 0;
-putenv('PLAYER_ASSISTANT_TEST_FINALIZE_CLEANUP_FAILURE_AFTER_MANIFEST=1');
+putenv('PLAYER_ASSISTANT_TEST_FINALIZE_AFTER_DURABLE_STATE=1');
 exec(
     escapeshellarg(PHP_BINARY) . ' ' . escapeshellarg($installer)
         . ' --finalize-transaction=' . escapeshellarg($baselineResult['transaction_id'])
@@ -495,11 +495,12 @@ exec(
         . ' 2>&1',
     $cleanupFaultOutput,
     $cleanupFaultExit);
-putenv('PLAYER_ASSISTANT_TEST_FINALIZE_CLEANUP_FAILURE_AFTER_MANIFEST');
-installerAssert($cleanupFaultExit !== 0, 'The finalization cleanup fault fixture did not fail.');
-installerAssert(is_file($baselineManifestPath), 'Finalization cleanup failure did not preserve its transaction manifest.');
+putenv('PLAYER_ASSISTANT_TEST_FINALIZE_AFTER_DURABLE_STATE');
+installerAssert($cleanupFaultExit !== 0, 'The finalization durable-state interruption fixture did not fail.');
+installerAssert(is_file($baselineManifestPath), 'The durable finalized-state interruption did not preserve its transaction manifest.');
 $cleanupFaultManifest = json_decode((string)file_get_contents($baselineManifestPath), true, 32, JSON_THROW_ON_ERROR);
-installerAssert($cleanupFaultManifest['status'] === 'finalize_cleanup', 'Finalization cleanup failure lost its retryable state.');
+installerAssert($cleanupFaultManifest['status'] === 'finalized', 'The durable finalized-state interruption lost its finalized state.');
+installerAssert($cleanupFaultManifest['rollback_forbidden'] === true && $cleanupFaultManifest['cleanup_complete'] === false, 'The durable finalized-state interruption did not preserve rollback-forbidden cleanup state.');
 $finalizeCleanupOutput = [];
 $finalizeCleanupExit = 0;
 exec(
@@ -512,7 +513,23 @@ exec(
     $finalizeCleanupOutput,
     $finalizeCleanupExit);
 installerAssert($finalizeCleanupExit === 0, 'Finalization cleanup was not restartable: ' . implode("\n", $finalizeCleanupOutput));
-installerAssert(!is_dir($baselineResult['transaction_directory']), 'Finalization cleanup left its transaction directory behind.');
+installerAssert(is_file($baselineManifestPath), 'Finalization cleanup removed the durable finalized-state manifest.');
+$finalizedManifest = json_decode((string)file_get_contents($baselineManifestPath), true, 32, JSON_THROW_ON_ERROR);
+installerAssert($finalizedManifest['status'] === 'finalized', 'Finalization cleanup did not persist finalized state.');
+installerAssert($finalizedManifest['rollback_forbidden'] === true && $finalizedManifest['cleanup_complete'] === true, 'Finalization cleanup did not persist rollback-forbidden completion.');
+$rollbackFinalizedOutput = [];
+$rollbackFinalizedExit = 0;
+exec(
+    escapeshellarg(PHP_BINARY) . ' ' . escapeshellarg($installer)
+        . ' --rollback-transaction=' . escapeshellarg($baselineResult['transaction_id'])
+        . ' --origin=https://example.test'
+        . ' --public-root=' . escapeshellarg($publicRoot)
+        . ' --private-root=' . escapeshellarg($privateRoot)
+        . ' 2>&1',
+    $rollbackFinalizedOutput,
+    $rollbackFinalizedExit);
+installerAssert($rollbackFinalizedExit !== 0, 'A finalized transaction accepted rollback.');
+installerAssert(str_contains(implode("\n", $rollbackFinalizedOutput), 'rollback is forbidden'), 'Finalized rollback rejection was not explicit.');
 $finalizedReport = json_decode((string)file_get_contents($baselineResult['report_path']), true, 32, JSON_THROW_ON_ERROR);
 installerAssert($finalizedReport['status'] === 'finalized', 'Retried finalization cleanup did not update its report.');
 
