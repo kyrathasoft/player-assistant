@@ -88,6 +88,7 @@ let messageListFailuresRemaining = 0;
 let messageListRequests = 0;
 let expireSessionOnNextRevision = false;
 let presenceRequests = 0;
+let delayMagicItemsForPlayerA = false;
 
 const readJsonBody = async (request) => {
     let body = '';
@@ -373,6 +374,9 @@ const serveApi = async (request, response, pathname) => {
     if (route === '/magic-items' && request.method === 'GET') {
         const currentAccount = requireSession(request, response);
         if (!currentAccount) return;
+        if (currentAccount === playerAccount && delayMagicItemsForPlayerA) {
+            await new Promise((resolve) => setTimeout(resolve, 150));
+        }
         const authorizedItems = magicItemFixture.items
             .filter((item) => item['viewable-by'] === 'all'
                 || item['viewable-by'] === currentAccount.character_key)
@@ -566,8 +570,11 @@ try {
         }
     });
     page.on('requestfailed', (request) => {
-        if (!offlineExpected) {
-            requestFailures.push(`${request.method()} ${request.url()}: ${request.failure()?.errorText || 'failed'}`);
+        const errorText = request.failure()?.errorText || 'failed';
+        const expectedMagicItemCancellation = request.url().includes('/scarlethorizons/api/v1/magic-items')
+            && errorText === 'net::ERR_ABORTED';
+        if (!offlineExpected && !expectedMagicItemCancellation) {
+            requestFailures.push(`${request.method()} ${request.url()}: ${errorText}`);
         }
     });
     page.on('response', (response) => {
@@ -986,6 +993,51 @@ try {
     await page.locator('#auth-dialog-close').click();
     await page.locator('#auth-dialog').waitFor({ state: 'hidden' });
     await page.waitForFunction(() => document.querySelector('#xp-total')?.textContent?.startsWith('1,200'));
+    await page.locator('[data-view="magic-items"]').click();
+    await page.locator('#magic-item-list').waitFor({ state: 'visible' });
+    const secondPlayerMagicItems = await page.locator('#magic-item-list .magic-item-card').allTextContents();
+    if (secondPlayerMagicItems.length !== 1
+        || !secondPlayerMagicItems.some((text) => text.includes('Public Relic'))
+        || secondPlayerMagicItems.some((text) => /Canonical Relic|First Name Leak|Substring Leak|Same First Name Leak/u.test(text))) {
+        throw new Error(`Magic-item account transition leaked the prior account snapshot: ${JSON.stringify(secondPlayerMagicItems)}.`);
+    }
+
+    delayMagicItemsForPlayerA = true;
+    await page.locator('#auth-button').click();
+    await page.locator('#auth-logout').click();
+    await page.locator('#auth-button-label').getByText('Log in', { exact: true }).waitFor();
+    await page.locator('#auth-button').click();
+    await page.locator('#auth-character-name').fill('CI Hero');
+    await page.locator('#auth-password').fill('ci-password');
+    await page.locator('#auth-submit').click();
+    await page.locator('#auth-button-label').getByText('CI Hero', { exact: true }).waitFor();
+    await page.locator('#auth-dialog-close').click();
+    await page.locator('#auth-dialog').waitFor({ state: 'hidden' });
+    const delayedMagicRequest = page.waitForRequest((request) =>
+        request.url().includes('/v1/magic-items'));
+    await page.locator('[data-view="magic-items"]').click();
+    await delayedMagicRequest;
+    await page.locator('#auth-button').click();
+    await page.locator('#auth-logout').click();
+    await page.locator('#auth-button-label').getByText('Log in', { exact: true }).waitFor();
+    await page.locator('#auth-button').click();
+    await page.locator('#auth-character-name').fill('Max');
+    await page.locator('#auth-password').fill('ci-second-password');
+    await page.locator('#auth-submit').click();
+    await page.locator('#auth-button-label').getByText('Max', { exact: true }).waitFor();
+    await page.locator('#auth-dialog-close').click();
+    await page.locator('#auth-dialog').waitFor({ state: 'hidden' });
+    await page.locator('[data-view="magic-items"]').click();
+    await page.locator('#magic-item-list').waitFor({ state: 'visible' });
+    await page.waitForTimeout(250);
+    const delayedMagicItems = await page.locator('#magic-item-list .magic-item-card').allTextContents();
+    delayMagicItemsForPlayerA = false;
+    if (delayedMagicItems.length !== 1
+        || !delayedMagicItems.some((text) => text.includes('Public Relic'))
+        || delayedMagicItems.some((text) => /Canonical Relic|First Name Leak|Substring Leak|Same First Name Leak/u.test(text))) {
+        throw new Error(`Delayed prior-account magic items repopulated the current account: ${JSON.stringify(delayedMagicItems)}.`);
+    }
+
     await page.locator('[data-view="xp-awards"]').click();
     await page.locator('#xp-awards-list').waitFor({ state: 'visible' });
     const secondPlayerAwardText = await page.locator('#xp-awards-list').textContent();
