@@ -292,10 +292,10 @@ Planned security correction: eliminate first-name equivalence from authenticatio
   - [x] Check and throw on each PHP suite's exit code inside the `ForEach-Object` loop instead of allowing a later passing suite to mask an earlier failure.
   - [x] Apply the same fail-fast rule to sequential PowerShell/native verification commands and preserve the failing suite name in diagnostics.
   - [x] Add a CI-policy self-test with an intentional intermediate native-command failure followed by a passing command; the job must still fail.
-- [ ] Eliminate the current broker production/test contract drift.
-  - [ ] Make `broker-startup-tests.php` pass; request startup must not run `DatabaseMigrationService::migrate()` or mutate schema from service constructors.
-  - [ ] Make `message-pagination-tests.php` pass; production `MessageService` must match the checked-in pagination, retention, cursor, and snapshot-consistency contract.
-  - [ ] Run the complete PHP suite locally and in the required workflow after fixing exit-code propagation.
+- [x] Eliminate the current broker production/test contract drift.
+  - [x] Make `broker-startup-tests.php` pass; request startup must not run `DatabaseMigrationService::migrate()` or mutate schema from service constructors.
+  - [x] Make `message-pagination-tests.php` pass; production `MessageService` must match the checked-in pagination, retention, cursor, and snapshot-consistency contract.
+  - [x] Run the complete PHP suite locally and in the required workflow after fixing exit-code propagation.
 - [ ] Make clean locked restores deterministic across supported .NET 10 SDK patches.
   - [ ] Reconcile the launcher's self-contained `Microsoft.NET.ILLink.Tasks` dependency with `PlayerAssistant.Launcher/packages.lock.json`.
   - [ ] Either pin the supported SDK with `global.json` or test the minimum and current `10.0.x` SDKs explicitly.
