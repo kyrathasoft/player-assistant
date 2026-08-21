@@ -172,7 +172,7 @@ jobs:
       - name: Setup .NET 10 SDK
         uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6
         with:
-          dotnet-version: 10.0.x
+          dotnet-version: 10.0.301
 
       - name: Cache .NET dependencies
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
@@ -199,7 +199,12 @@ jobs:
 
       - name: Verify locked .NET dependencies
         shell: pwsh
-        run: .\verify-dotnet-dependencies.ps1
+        run: |
+          Get-ChildItem -LiteralPath $env:GITHUB_WORKSPACE -Recurse -Directory -Force |
+            Where-Object { $_.Name -eq 'obj' } |
+            Remove-Item -Recurse -Force
+          dotnet nuget locals all --clear
+          .\verify-dotnet-dependencies.ps1
 
       - name: Verify test harness structure
         shell: pwsh

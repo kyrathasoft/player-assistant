@@ -296,10 +296,10 @@ Planned security correction: eliminate first-name equivalence from authenticatio
   - [x] Make `broker-startup-tests.php` pass; request startup must not run `DatabaseMigrationService::migrate()` or mutate schema from service constructors.
   - [x] Make `message-pagination-tests.php` pass; production `MessageService` must match the checked-in pagination, retention, cursor, and snapshot-consistency contract.
   - [x] Run the complete PHP suite locally and in the required workflow after fixing exit-code propagation.
-- [ ] Make clean locked restores deterministic across supported .NET 10 SDK patches.
-  - [ ] Reconcile the launcher's self-contained `Microsoft.NET.ILLink.Tasks` dependency with `PlayerAssistant.Launcher/packages.lock.json`.
-  - [ ] Either pin the supported SDK with `global.json` or test the minimum and current `10.0.x` SDKs explicitly.
-  - [ ] Verify locked restore from a clean worktree with no pre-existing `obj` assets or NuGet cache assumptions.
+- [x] Make clean locked restores deterministic across supported .NET 10 SDK patches.
+  - [x] Reconcile the launcher's self-contained `Microsoft.NET.ILLink.Tasks` dependency with `PlayerAssistant.Launcher/packages.lock.json`.
+  - [x] Either pin the supported SDK with `global.json` or test the minimum and current `10.0.x` SDKs explicitly.
+  - [x] Verify locked restore from a clean worktree with no pre-existing `obj` assets or NuGet cache assumptions.
 
 ### P1 — Protect authorization, state, and core operations
 

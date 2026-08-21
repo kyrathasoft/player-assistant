@@ -46,6 +46,8 @@ $operationsConfigExamplePath = Join-Path $RepoRoot 'web-deploy\player-assistant-
 $wordCountDeploymentPath = Join-Path $RepoRoot 'web-deploy\deploy-word-count-refresh.ps1'
 $directoryBuildPropsPath = Join-Path $RepoRoot 'Directory.Build.props'
 $dotnetDependencyVerifierPath = Join-Path $RepoRoot 'verify-dotnet-dependencies.ps1'
+$globalJsonPath = Join-Path $RepoRoot 'global.json'
+$launcherLockPath = Join-Path $RepoRoot 'PlayerAssistant.Launcher\packages.lock.json'
 $dependencyReviewWorkflowPath = Join-Path $RepoRoot '.github\workflows\dependency-review.yml'
 $dependabotPath = Join-Path $RepoRoot '.github\dependabot.yml'
 $hygieneVerifierPath = Join-Path $RepoRoot 'verify-repository-hygiene.ps1'
@@ -127,6 +129,14 @@ Assert-Condition -Condition ($directoryBuildProps.Contains('<RestorePackagesWith
 Assert-Condition -Condition (Test-Path -LiteralPath $dotnetDependencyVerifierPath -PathType Leaf) -Message 'The .NET locked-restore and vulnerability verifier is missing.'
 Assert-Condition -Condition ($workflow.Contains('.\verify-dotnet-dependencies.ps1')) -Message 'The required job must run locked restores and transitive vulnerability scans.'
 $dotnetDependencyVerifier = Get-Content -Raw -LiteralPath $dotnetDependencyVerifierPath
+Assert-Condition -Condition (Test-Path -LiteralPath $globalJsonPath -PathType Leaf) -Message 'The repository SDK pinning file is missing.'
+$globalJson = Get-Content -Raw -LiteralPath $globalJsonPath | ConvertFrom-Json
+Assert-Condition -Condition ([string]$globalJson.sdk.version -eq '10.0.301' -and [string]$globalJson.sdk.rollForward -eq 'latestPatch') -Message 'The repository must pin the supported .NET SDK feature band and patch roll-forward policy.'
+Assert-Condition -Condition (Test-Path -LiteralPath $launcherLockPath -PathType Leaf) -Message 'The launcher NuGet lock file is missing.'
+$launcherLock = Get-Content -Raw -LiteralPath $launcherLockPath | ConvertFrom-Json
+Assert-Condition -Condition ($null -ne $launcherLock.dependencies.'net10.0-windows7.0'.'Microsoft.NET.ILLink.Tasks' -and [string]$launcherLock.dependencies.'net10.0-windows7.0'.'Microsoft.NET.ILLink.Tasks'.resolved -eq '10.0.9') -Message 'The launcher lock file must pin the SDK-injected ILLink task dependency.'
+Assert-Condition -Condition ($dotnetDependencyVerifier.Contains("'--locked-mode'")) -Message 'Every project restore must run in locked mode, including the self-contained launcher.'
+Assert-Condition -Condition ($workflow.Contains('dotnet-version: 10.0.301') -and $workflow.Contains('dotnet nuget locals all --clear')) -Message 'The required job must use the pinned SDK and clear NuGet state before locked restore verification.'
 Assert-Condition -Condition ($dotnetDependencyVerifier.Contains('package --vulnerable --include-transitive --format json --no-restore')) -Message 'Vulnerability scans must not perform an unlocked implicit restore after locked restore verification.'
 Assert-Condition -Condition ($workflow.Contains("hashFiles('**/packages.lock.json')")) -Message 'The NuGet cache must be keyed from lock files.'
 foreach ($relativeLockFile in $requiredLockFiles) {
