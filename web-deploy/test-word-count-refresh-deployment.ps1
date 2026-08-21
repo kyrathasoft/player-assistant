@@ -39,20 +39,52 @@ function Invoke-CheckedNative {
 }
 
 function Invoke-RemotePhp {
-    param([Parameter(Mandatory = $true)][string]$Code)
+    param(
+        [Parameter(Mandatory = $true)][string]$Code,
+        [Parameter(Mandatory = $true)][string]$ExpectedOperation,
+        [ValidateRange(1, 5)][int]$Attempts = 3
+    )
+    if ([string]::IsNullOrWhiteSpace($Code)) {
+        throw 'Remote PHP code cannot be empty.'
+    }
+    $body = $Code.TrimStart([char]0xFEFF, [char]0x00A0, [char]0x20, [char]0x09, [char]0x0D, [char]0x0A)
+    if ($body -match '^<\?php\b') {
+        throw 'Remote PHP code must be supplied without an opening PHP tag.'
+    }
+    if ($body -match '(?i)__[A-Z0-9_]+__|\b(?:placeholder|todo)\b') {
+        throw 'Remote PHP code contains an unresolved placeholder.'
+    }
     $scriptId = [Guid]::NewGuid().ToString('N')
     $localScript = Join-Path ([IO.Path]::GetTempPath()) "player-assistant-verify-$scriptId.php"
     $remoteScript = "$PrivateDirectory/.player-assistant-verify-$scriptId.php"
-    [IO.File]::WriteAllText($localScript, "<?php`n" + $Code, [Text.UTF8Encoding]::new($false))
+    $payload = "<?php`n" + $Code
+    if ($payload -notmatch '^<\?php\b') {
+        throw 'Remote PHP payload did not receive an opening PHP tag.'
+    }
+    [IO.File]::WriteAllText($localScript, $payload, [Text.UTF8Encoding]::new($false))
     try {
-        Invoke-CheckedNative {
+        Invoke-CheckedNative -Attempts $Attempts {
             & scp -q -i $SshKeyPath -o BatchMode=yes -o IdentitiesOnly=yes -o ConnectTimeout=15 `
                 -- $localScript "${DreamHostTarget}:$remoteScript"
         } | Out-Null
-        return Invoke-CheckedNative {
+        $rawOutput = Invoke-CheckedNative -Attempts $Attempts {
             & ssh -i $SshKeyPath -o BatchMode=yes -o IdentitiesOnly=yes -o ConnectTimeout=15 `
                 $DreamHostTarget "/usr/bin/php '$remoteScript'"
         }
+        $jsonText = ($rawOutput | ForEach-Object { [string]$_ }) -join "`n"
+        try {
+            $response = $jsonText | ConvertFrom-Json
+        }
+        catch {
+            throw "Remote PHP operation '$ExpectedOperation' did not return valid JSON."
+        }
+        if ($null -eq $response -or $response.ok -isnot [bool] -or -not $response.ok) {
+            throw "Remote PHP operation '$ExpectedOperation' did not report semantic success."
+        }
+        if ([string]$response.operation -cne $ExpectedOperation) {
+            throw "Remote PHP operation returned unexpected operation '$($response.operation)'."
+        }
+        return $response
     }
     finally {
         Remove-Item -LiteralPath $localScript -Force -ErrorAction SilentlyContinue
@@ -145,10 +177,13 @@ foreach ($patterns as $pattern) {
 }
 $cron = shell_exec('crontab -l 2>/dev/null');
 $result['cron'] = is_string($cron) ? $cron : '';
+$result['ok'] = true;
+$result['operation'] = 'word-count-verify';
+$result['state_mutation'] = false;
 echo json_encode($result, JSON_UNESCAPED_SLASHES);
 '@.Replace('__PRIVATE_DIRECTORY__', $PrivateDirectory.Replace("'", "\'"))
 
-$remote = (Invoke-RemotePhp $remoteCode) | Out-String | ConvertFrom-Json
+$remote = (Invoke-RemotePhp $remoteCode -ExpectedOperation 'word-count-verify') | Out-String | ConvertFrom-Json
 foreach ($file in $deployFiles) {
     if ($remote.files.$file.sha256 -ne $localHashes[$file]) {
         throw "Production drift detected for $file."
