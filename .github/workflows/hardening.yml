@@ -129,8 +129,8 @@ jobs:
             )
 
             & $FilePath @ArgumentList
-            $exitCode = $LASTEXITCODE
-            if ($exitCode -ne 0) {
+            if (-not $?) {
+              $exitCode = if ($null -eq $LASTEXITCODE) { 1 } else { $LASTEXITCODE }
               throw "Verification '$Name' failed with exit code $exitCode."
             }
           }
