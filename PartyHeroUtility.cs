@@ -10,8 +10,7 @@ namespace PlayerAssistant
         string HitPoints,
         string CharacterSheetText,
         int? XpTotal = null,
-        string? AccountId = null,
-        IReadOnlyList<string>? Aliases = null);
+        string? CanonicalId = null);
 
     internal static class PartyHeroUtility
     {
@@ -29,9 +28,9 @@ namespace PlayerAssistant
             var listingPath = PlayerCharacterAssetUtility.GetPlayerCharactersListingMarkdownCachePath(pcsDirectory);
             if (File.Exists(listingPath))
             {
-                var heroes = PlayerCharacterAssetUtility
-                    .GetHeroRows(File.ReadAllText(listingPath))
-                    .Select(hero => LoadHeroFromListingRow(activeDirectory, hero))
+                var heroRows = PlayerCharacterAssetUtility.GetHeroRows(File.ReadAllText(listingPath));
+                var heroes = heroRows
+                    .Select(hero => LoadHeroFromListingRow(activeDirectory, hero, heroRows))
                     .ToArray();
                 if (heroes.Length > 0)
                 {
@@ -56,8 +55,7 @@ namespace PlayerAssistant
         public static IReadOnlyList<PartyHeroSheet> WithVisibleXpTotals(
             IReadOnlyList<PartyHeroSheet> heroes,
             IReadOnlyList<PcXpTotal> xpTotals,
-            XpAuthenticatedIdentity authenticatedIdentity,
-            bool isDungeonMaster)
+            XpAuthenticatedIdentity authenticatedIdentity)
         {
             ArgumentNullException.ThrowIfNull(heroes);
             ArgumentNullException.ThrowIfNull(xpTotals);
@@ -66,10 +64,20 @@ namespace PlayerAssistant
             return heroes
                 .Select(hero =>
                 {
-                    var authorized = isDungeonMaster
-                        || (!string.IsNullOrWhiteSpace(hero.AccountId)
-                            && string.Equals(hero.AccountId, authenticatedIdentity.AccountId, StringComparison.Ordinal));
-                    var xpTotal = authorized ? FindXpTotalForCharacter(xpTotals, hero) : null;
+                    var isUniqueAuthenticatedHero = !string.IsNullOrWhiteSpace(hero.CanonicalId)
+                        && string.Equals(
+                            hero.CanonicalId,
+                            authenticatedIdentity.CanonicalId,
+                            StringComparison.Ordinal)
+                        && heroes.Count(candidate => string.Equals(
+                            candidate.CanonicalId,
+                            authenticatedIdentity.CanonicalId,
+                            StringComparison.Ordinal)) == 1;
+                    var xpTotal = authenticatedIdentity.IsDungeonMaster
+                        ? FindXpTotalForCharacter(xpTotals, hero)
+                        : isUniqueAuthenticatedHero
+                            ? FindXpTotalForCharacter(xpTotals, hero)
+                            : null;
                     return hero with { XpTotal = xpTotal?.XpTotal };
                 })
                 .ToArray();
@@ -104,20 +112,23 @@ namespace PlayerAssistant
                 sheetText);
         }
 
-        private static PartyHeroSheet LoadHeroFromListingRow(string activeDirectory, PlayerCharacterHeroRow hero)
+        private static PartyHeroSheet LoadHeroFromListingRow(
+            string activeDirectory,
+            PlayerCharacterHeroRow hero,
+            IReadOnlyList<PlayerCharacterHeroRow> roster)
         {
-            var markdownPath = GetHeroMarkdownPath(activeDirectory, hero.Name);
+            var markdownPath = FindHeroMarkdownPath(activeDirectory, hero, roster);
             var tokenImagePath = !string.IsNullOrWhiteSpace(hero.TokenFileName)
                 ? Path.Combine(activeDirectory, hero.TokenFileName)
                 : null;
 
-            if (File.Exists(markdownPath))
+            if (markdownPath is not null)
             {
                 var sheet = ParseHeroSheet(
                     File.ReadAllText(markdownPath),
                     hero.Name,
                     File.Exists(tokenImagePath) ? tokenImagePath : null);
-                return ApplyListingSummary(sheet, hero);
+                return ApplyListingSummary(sheet with { CanonicalId = hero.CanonicalId }, hero);
             }
 
             return new PartyHeroSheet(
@@ -126,7 +137,63 @@ namespace PlayerAssistant
                 hero.Level,
                 hero.CharacterClass,
                 hero.HitPoints,
-                "Character sheet markdown is not available.");
+                "Character sheet markdown is not available.",
+                CanonicalId: hero.CanonicalId);
+        }
+
+        private static string? FindHeroMarkdownPath(
+            string activeDirectory,
+            PlayerCharacterHeroRow hero,
+            IReadOnlyList<PlayerCharacterHeroRow> roster)
+        {
+            var canonicalFileName = GetStableHeroFileName(hero.CanonicalId);
+            var candidates = new[]
+            {
+                canonicalFileName,
+                GetStableHeroFileName(hero.Name),
+                GetLegacyHeroFileName(hero.Name)
+            }
+            .Where(name => name.Length > 0)
+            .Distinct(StringComparer.OrdinalIgnoreCase);
+
+            foreach (var fileName in candidates)
+            {
+                var path = Path.Combine(activeDirectory, $"{fileName}.md");
+                if (!File.Exists(path))
+                {
+                    continue;
+                }
+
+                if (!string.Equals(fileName, canonicalFileName, StringComparison.OrdinalIgnoreCase))
+                {
+                    if (string.Equals(
+                            fileName,
+                            GetLegacyHeroFileName(hero.Name),
+                            StringComparison.OrdinalIgnoreCase))
+                    {
+                        var sameFirstNameCount = roster.Count(candidate =>
+                            string.Equals(
+                                GetFirstName(candidate.Name),
+                                GetFirstName(hero.Name),
+                                StringComparison.OrdinalIgnoreCase));
+                        if (sameFirstNameCount != 1)
+                        {
+                            continue;
+                        }
+                    }
+
+                }
+
+                var parsed = ParseHeroSheet(File.ReadAllText(path), hero.Name);
+                if (!string.Equals(parsed.Name, hero.Name, StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
+                return path;
+            }
+
+            return null;
         }
 
         private static PartyHeroSheet ApplyListingSummary(PartyHeroSheet sheet, PlayerCharacterHeroRow hero)
@@ -135,7 +202,8 @@ namespace PlayerAssistant
             {
                 Level = FirstNonBlank(hero.Level, sheet.Level),
                 CharacterClass = FirstNonBlank(hero.CharacterClass, sheet.CharacterClass),
-                HitPoints = FirstNonBlank(hero.HitPoints, sheet.HitPoints)
+                HitPoints = FirstNonBlank(hero.HitPoints, sheet.HitPoints),
+                CanonicalId = hero.CanonicalId
             };
         }
 
@@ -313,34 +381,41 @@ namespace PlayerAssistant
                 || Regex.IsMatch(trimmed, @"^XP\s*:\s*$", RegexOptions.IgnoreCase);
         }
 
-        private static string GetHeroMarkdownFileName(string heroName)
+        private static string GetStableHeroFileName(string? identity)
         {
-            return Regex.Replace(heroName.Trim().ToLowerInvariant(), @"[^a-z0-9_-]+", "-").Trim('-');
+            return string.IsNullOrWhiteSpace(identity)
+                ? string.Empty
+                : Regex.Replace(identity.Trim().ToLowerInvariant(), @"[^a-z0-9_-]+", "-").Trim('-');
         }
 
-        private static string GetHeroMarkdownPath(string activeDirectory, string heroName)
+        private static string GetLegacyHeroFileName(string heroName)
         {
-            var canonicalPath = Path.Combine(activeDirectory, $"{GetHeroMarkdownFileName(heroName)}.md");
-            if (File.Exists(canonicalPath)) return canonicalPath;
-
-            // Migration adapter for existing first-name files. New downloads use the
-            // canonical full-name path, so same-first-name heroes cannot overwrite it.
-            var firstName = heroName.Trim().Split(' ', 2)[0];
-            var legacyStem = Regex.Replace(firstName.ToLowerInvariant(), @"[^a-z0-9_-]+", "-").Trim('-');
-            var legacyPath = Path.Combine(activeDirectory, $"{legacyStem}.md");
-            return File.Exists(legacyPath) ? legacyPath : canonicalPath;
+            return GetStableHeroFileName(GetFirstName(heroName));
         }
 
         private static PcXpTotal? FindXpTotalForCharacter(
             IReadOnlyList<PcXpTotal> totals,
             PartyHeroSheet hero)
         {
-            return totals.FirstOrDefault(row =>
-                (!string.IsNullOrWhiteSpace(hero.AccountId)
-                    && !string.IsNullOrWhiteSpace(row.AccountId)
-                    && string.Equals(row.AccountId, hero.AccountId, StringComparison.Ordinal))
-                || (string.IsNullOrWhiteSpace(row.AccountId)
-                    && string.Equals(row.Name, hero.Name.Trim(), StringComparison.OrdinalIgnoreCase)));
+            if (string.IsNullOrWhiteSpace(hero.CanonicalId))
+            {
+                return null;
+            }
+
+            var canonicalMatches = totals
+                .Where(row => string.Equals(row.CanonicalId, hero.CanonicalId, StringComparison.Ordinal))
+                .ToArray();
+            return canonicalMatches.Length == 1 ? canonicalMatches[0] : null;
+        }
+
+
+        private static string GetFirstName(string value)
+        {
+            var trimmedValue = value.Trim();
+            var spaceIndex = trimmedValue.IndexOf(' ');
+            return spaceIndex < 0
+                ? trimmedValue
+                : trimmedValue[..spaceIndex];
         }
     }
 }

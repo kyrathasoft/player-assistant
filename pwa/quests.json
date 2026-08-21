@@ -22,20 +22,22 @@
     },
     "three-items-for-nuanda": {
       "title": "Three Items for Nuanda Nemere",
-      "summary": "Retrieve the three ritual ingredients Nuanda Nemere requested and bring them to her before she no longer needs them.",
+      "summary": "Retrieve the three ritual ingredients Nuanda Nemere requested and bring them to her before she no longer needs them. The party achieved this quest on May 9, 406 PR.",
       "giver": "Nuanda Nemere",
       "visibility": "individual-or-party",
-      "state": "active",
+      "state": "completed",
       "objectives": [
         "Obtain an amethyst worth at least 50 gp.",
         "Obtain hair from a deceased orc.",
         "Obtain Hwyanthemon."
       ],
-      "reward": "800 XP each for up to four eligible PCs",
+      "reward": "1,000 XP each for up to six eligible PCs",
       "dates": {
         "accepted": "",
-        "expires": "October 7, 406 PR"
+        "expires": "October 7, 406 PR",
+        "completed": "May 9, 406 PR"
       },
+      "meta-date": "8/15/2026",
       "gated-by": [],
       "unlocked-by": [],
       "wiki-url": "https://publish.obsidian.md/scarlethorizons/Quests/Quest+3+Items+for+Nuanda+Nemere"

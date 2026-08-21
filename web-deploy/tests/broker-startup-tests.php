@@ -29,6 +29,8 @@ $servicePosition = strpos($index, $serviceMarker);
 startupAssert($healthPosition !== false && $servicePosition !== false && $healthPosition < $servicePosition, 'The public health route still constructs BrokerService first.');
 startupAssert(str_contains($index, "sendJson(200, [
             'service' => 'player-assistant-broker'"), 'The public health route is not handled without BrokerService.');
+$sessionRouteList = substr($index, strpos($index, 'function isCharacterSessionRoute'));
+startupAssert(str_contains($sessionRouteList, "'/v1/magic-items'"), 'The magic-item route does not start the character session before authorization.');
 startupAssert(!str_contains(substr($index, 0, $healthPosition), 'new BrokerOperations'), 'The public health route still initializes broker operations first.');
 
 foreach (['CharacterAuthService.php', 'MessageService.php', 'QuestService.php', 'XpTrackingService.php', 'WordCountService.php'] as $file) {

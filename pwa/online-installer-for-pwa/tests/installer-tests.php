@@ -27,6 +27,16 @@ function installerRemoveTree(string $path): void
     @rmdir($path);
 }
 
+function installerRemoveLink(string $path): void
+{
+    if (is_dir($path)) {
+        @rmdir($path);
+    }
+    if (file_exists($path) || is_link($path)) {
+        @unlink($path);
+    }
+}
+
 $root = dirname(__DIR__);
 $installer = $root . '/install-player-assistant-web.php';
 $installerSource = (string)file_get_contents($installer);
@@ -201,7 +211,7 @@ if (@symlink($aliasTarget, $scarletAlias)) {
     installerAssert(
         str_contains(implode("\n", $aliasOutput), 'cannot traverse symbolic links'),
         'Ancestor symbolic-link rejection was not explicit.');
-    unlink($scarletAlias);
+    installerRemoveLink($scarletAlias);
 }
 
 $tamperedPackage = $buildOutputDirectory . '/tampered-payload.tar';
@@ -305,7 +315,7 @@ $installResult = json_decode((string)end($installOutput), true, 16, JSON_THROW_O
 installerAssert($installResult['status'] === 'installed_pending_https_verification', 'The local-only install returned the wrong status.');
 installerAssert(is_file($installResult['report_path'] ?? ''), 'The machine-readable installation report is missing.');
 $pendingReport = json_decode((string)file_get_contents($installResult['report_path']), true, 32, JSON_THROW_ON_ERROR);
-installerAssert($pendingReport['migration_version'] === 3, 'The installation report omitted the migrated schema version.');
+installerAssert($pendingReport['migration_version'] === 4, 'The installation report omitted the migrated schema version.');
 installerAssert(($pendingReport['verification']['local'] ?? null) === true, 'The installation report omitted local verification success.');
 installerAssert(count($pendingReport['promoted_file_sha256'] ?? []) > 30, 'The installation report omitted promoted file hashes.');
 installerAssert(is_file($publicRoot . '/scarlethorizons/pwa/index.html'), 'The complete PWA was not promoted.');
@@ -318,7 +328,7 @@ installerAssert(is_file($privateRoot . '/BrokerService.php'), 'The private broke
 installerAssert(is_file($privateRoot . '/config.php'), 'The private configuration was not installed.');
 installerAssert(is_file($privateRoot . '/broker.sqlite'), 'The migrated broker database was not created.');
 $installedDatabase = new PDO('sqlite:' . $privateRoot . '/broker.sqlite');
-installerAssert((int)$installedDatabase->query('PRAGMA user_version')->fetchColumn() === 3, 'The installed broker database has the wrong schema version.');
+installerAssert((int)$installedDatabase->query('PRAGMA user_version')->fetchColumn() === 4, 'The installed broker database has the wrong schema version.');
 $installedDatabase = null;
 installerAssert(is_string($installResult['transaction_id'] ?? null), 'The pending install did not return a transaction ID.');
 $transactionManifestPath = $accountHome . '/.player-assistant-installer-transactions/' . $installResult['transaction_id'] . '/manifest.json';
@@ -356,7 +366,7 @@ if (@rename($privateRoot, $privateAliasTarget) && @symlink($privateAliasTarget, 
     installerAssert(
         str_contains(implode("\n", $transactionAliasOutput), 'cannot traverse symbolic links'),
         'Transaction-action symbolic-link rejection was not explicit.');
-    unlink($privateRoot);
+    installerRemoveLink($privateRoot);
     rename($privateAliasTarget, $privateRoot);
 } elseif (is_dir($privateAliasTarget) && !is_dir($privateRoot)) {
     rename($privateAliasTarget, $privateRoot);
@@ -386,7 +396,11 @@ $rollbackResult = json_decode((string)end($rollbackOutput), true, 16, JSON_THROW
 installerAssert($rollbackResult['status'] === 'rolled_back', 'The rollback command returned the wrong status.');
 installerAssert(!file_exists($publicRoot . '/scarlethorizons/pwa'), 'Rollback left the newly installed PWA active.');
 installerAssert(!file_exists($publicRoot . '/scarlethorizons/api'), 'Rollback left the newly installed API active.');
-installerAssert(!is_dir($privateRoot), 'Rollback left the newly installed private runtime behind.');
+installerAssert(
+    !is_file($privateRoot . '/BrokerService.php')
+        && !is_file($privateRoot . '/config.php')
+        && !is_file($privateRoot . '/broker.sqlite'),
+    'Rollback left the newly installed private runtime behind.');
 $rolledBackManifest = json_decode((string)file_get_contents($transactionManifestPath), true, 16, JSON_THROW_ON_ERROR);
 installerAssert($rolledBackManifest['status'] === 'rolled_back', 'Rollback evidence was not recorded.');
 $rolledBackReport = json_decode((string)file_get_contents($installResult['report_path']), true, 32, JSON_THROW_ON_ERROR);
@@ -471,7 +485,7 @@ file_put_contents(
     LOCK_EX);
 $cleanupFaultOutput = [];
 $cleanupFaultExit = 0;
-putenv('PLAYER_ASSISTANT_TEST_FINALIZE_CLEANUP_FAILURE_AFTER_MANIFEST=1');
+putenv('PLAYER_ASSISTANT_TEST_FINALIZE_AFTER_DURABLE_STATE=1');
 exec(
     escapeshellarg(PHP_BINARY) . ' ' . escapeshellarg($installer)
         . ' --finalize-transaction=' . escapeshellarg($baselineResult['transaction_id'])
@@ -481,11 +495,12 @@ exec(
         . ' 2>&1',
     $cleanupFaultOutput,
     $cleanupFaultExit);
-putenv('PLAYER_ASSISTANT_TEST_FINALIZE_CLEANUP_FAILURE_AFTER_MANIFEST');
-installerAssert($cleanupFaultExit !== 0, 'The finalization cleanup fault fixture did not fail.');
-installerAssert(is_file($baselineManifestPath), 'Finalization cleanup failure did not preserve its transaction manifest.');
+putenv('PLAYER_ASSISTANT_TEST_FINALIZE_AFTER_DURABLE_STATE');
+installerAssert($cleanupFaultExit !== 0, 'The finalization durable-state interruption fixture did not fail.');
+installerAssert(is_file($baselineManifestPath), 'The durable finalized-state interruption did not preserve its transaction manifest.');
 $cleanupFaultManifest = json_decode((string)file_get_contents($baselineManifestPath), true, 32, JSON_THROW_ON_ERROR);
-installerAssert($cleanupFaultManifest['status'] === 'finalize_cleanup', 'Finalization cleanup failure lost its retryable state.');
+installerAssert($cleanupFaultManifest['status'] === 'finalized', 'The durable finalized-state interruption lost its finalized state.');
+installerAssert($cleanupFaultManifest['rollback_forbidden'] === true && $cleanupFaultManifest['cleanup_complete'] === false, 'The durable finalized-state interruption did not preserve rollback-forbidden cleanup state.');
 $finalizeCleanupOutput = [];
 $finalizeCleanupExit = 0;
 exec(
@@ -498,7 +513,23 @@ exec(
     $finalizeCleanupOutput,
     $finalizeCleanupExit);
 installerAssert($finalizeCleanupExit === 0, 'Finalization cleanup was not restartable: ' . implode("\n", $finalizeCleanupOutput));
-installerAssert(!is_dir($baselineResult['transaction_directory']), 'Finalization cleanup left its transaction directory behind.');
+installerAssert(is_file($baselineManifestPath), 'Finalization cleanup removed the durable finalized-state manifest.');
+$finalizedManifest = json_decode((string)file_get_contents($baselineManifestPath), true, 32, JSON_THROW_ON_ERROR);
+installerAssert($finalizedManifest['status'] === 'finalized', 'Finalization cleanup did not persist finalized state.');
+installerAssert($finalizedManifest['rollback_forbidden'] === true && $finalizedManifest['cleanup_complete'] === true, 'Finalization cleanup did not persist rollback-forbidden completion.');
+$rollbackFinalizedOutput = [];
+$rollbackFinalizedExit = 0;
+exec(
+    escapeshellarg(PHP_BINARY) . ' ' . escapeshellarg($installer)
+        . ' --rollback-transaction=' . escapeshellarg($baselineResult['transaction_id'])
+        . ' --origin=https://example.test'
+        . ' --public-root=' . escapeshellarg($publicRoot)
+        . ' --private-root=' . escapeshellarg($privateRoot)
+        . ' 2>&1',
+    $rollbackFinalizedOutput,
+    $rollbackFinalizedExit);
+installerAssert($rollbackFinalizedExit !== 0, 'A finalized transaction accepted rollback.');
+installerAssert(str_contains(implode("\n", $rollbackFinalizedOutput), 'rollback is forbidden'), 'Finalized rollback rejection was not explicit.');
 $finalizedReport = json_decode((string)file_get_contents($baselineResult['report_path']), true, 32, JSON_THROW_ON_ERROR);
 installerAssert($finalizedReport['status'] === 'finalized', 'Retried finalization cleanup did not update its report.');
 
@@ -522,7 +553,7 @@ if (@rename($privateRuntimeTarget, $privateRuntimeAliasTarget)
     installerAssert(
         str_contains(implode("\n", $privateRuntimeAliasOutput), 'private runtime target cannot be a symbolic link'),
         'Private-runtime symbolic-link rejection was not explicit.');
-    unlink($privateRuntimeTarget);
+    installerRemoveLink($privateRuntimeTarget);
     rename($privateRuntimeAliasTarget, $privateRuntimeTarget);
 } elseif (is_file($privateRuntimeAliasTarget) && !is_file($privateRuntimeTarget)) {
     rename($privateRuntimeAliasTarget, $privateRuntimeTarget);
@@ -696,7 +727,7 @@ installerAssert(str_contains((string)file_get_contents($publicRoot . '/scarletho
 installerAssert(str_contains((string)file_get_contents($privateRoot . '/BrokerService.php'), 'legacy-broker'), 'Migration-failure rollback changed private runtime code.');
 $failureDatabase = new PDO('sqlite:' . $privateRoot . '/broker.sqlite');
 installerAssert((string)$failureDatabase->query('PRAGMA integrity_check')->fetchColumn() === 'ok', 'Migration-failure rollback damaged the database.');
-installerAssert((int)$failureDatabase->query('PRAGMA user_version')->fetchColumn() === 3, 'Migration-failure rollback restored the wrong database version.');
+installerAssert((int)$failureDatabase->query('PRAGMA user_version')->fetchColumn() === 4, 'Migration-failure rollback restored the wrong database version.');
 installerAssert(strtolower((string)$failureDatabase->query('PRAGMA journal_mode')->fetchColumn()) === 'wal', 'Migration-failure rollback did not restore WAL journal mode.');
 $failureDatabase = null;
 

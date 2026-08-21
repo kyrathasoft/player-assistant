@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/../player-assistant-broker/BrokerHttpException.php';
+require_once __DIR__ . '/../player-assistant-broker/DatabaseMigrationService.php';
 require_once __DIR__ . '/../player-assistant-broker/XpTrackingService.php';
 
 function xpAssert(bool $condition, string $message): void
@@ -31,12 +32,7 @@ function xpDatabase(string $path): PDO
         PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
         PDO::ATTR_EMULATE_PREPARES => false,
     ]);
-    $database->exec('CREATE TABLE IF NOT EXISTS xp_tracking_cache (
-        cache_key TEXT PRIMARY KEY,
-        fetched_at INTEGER NOT NULL,
-        payload_json TEXT NOT NULL,
-        content_sha256 TEXT NOT NULL
-    )');
+    (new DatabaseMigrationService($database, sys_get_temp_dir() . '/pa-xp-migration-backups-' . bin2hex(random_bytes(4))))->migrate();
     return $database;
 }
 
@@ -50,6 +46,23 @@ function xpConfiguration(): array
         'timeout_seconds' => 2,
         'maximum_response_bytes' => 65536,
         'maximum_stale_seconds' => 300,
+        'character_key_aliases' => [
+            'jelb' => 'jelb',
+            'jelb-garrick' => 'jelb',
+            'max' => 'maximilian',
+            'maximilian' => 'maximilian',
+            'dorn' => 'dorn',
+            'borca' => 'borca',
+            'arilia' => 'arilia',
+            'neria' => 'neria',
+            'shade' => 'shade',
+            'ari-stoneward' => 'ari-stoneward',
+            'ari-valesong' => 'ari-valesong',
+            'limit-hero' => 'limit',
+            'dynamic-hero' => 'dynamic',
+            'alpha-hero' => 'alpha',
+            'beta-hero' => 'beta',
+        ],
     ];
 }
 
@@ -184,7 +197,6 @@ try {
     ]);
     $progressionIndexMarkdown = implode("\n", [
         '- [[Fighter]]',
-        '- [[Feycaster]]',
         '- [[Illusionist]]',
         '- [[Mystic Theurge]]',
     ]);
@@ -196,13 +208,6 @@ try {
         '| 4 | 8,000 |',
         '| 5 | 16,000 |',
         '| 6 | 32,000 |',
-    ]);
-    $feycasterProgressionMarkdown = implode("\n", [
-        '|XP|Level|Spells Known|Max Spell Level|',
-        '|---:|---:|---:|---:|',
-        '|0|1|0|0|',
-        '|1,500|2|1|1|',
-        '|3,000|3|2|1|',
     ]);
     $illusionistProgressionMarkdown = implode("\n", [
         '| 1 | 0 |',
@@ -225,7 +230,6 @@ try {
     $progressionFixture = static function (string $url) use (
         $progressionIndexMarkdown,
         $fighterProgressionMarkdown,
-        $feycasterProgressionMarkdown,
         $illusionistProgressionMarkdown,
         $theurgeProgressionMarkdown): ?string {
         if (str_contains($url, 'Class+Level+Progression')) {
@@ -233,9 +237,6 @@ try {
         }
         if (str_contains($url, '/Classes/Fighter')) {
             return $fighterProgressionMarkdown;
-        }
-        if (str_contains($url, '/Classes/Feycaster')) {
-            return $feycasterProgressionMarkdown;
         }
         if (str_contains($url, '/Classes/Illusionist')) {
             return $illusionistProgressionMarkdown;
@@ -247,12 +248,7 @@ try {
     };
     $service = new XpTrackingService(
         xpDatabase($databasePath),
-        array_replace(xpConfiguration(), [
-            'award_groups' => [
-                'jelb' => ['jelb-xp', 'arilia-xp'],
-                'maximilian' => ['maximilian-xp'],
-            ],
-        ]),
+        xpConfiguration(),
         static function (string $url) use (
             &$fetchCount,
             $markdown,
@@ -264,6 +260,127 @@ try {
             }
             return $progressionFixture($url) ?? $markdown;
         });
+
+    $sameFirstMarkdown = implode("\n", [
+        'As of 8.17.2026',
+        '| Name | Class | Level | XP Total |',
+        '| --- | --- | ---: | ---: |',
+        '| Ari Stoneward | Fighter | 2 | 2,000 |',
+        '| Ari Valesong | Fighter | 3 | 4,000 |',
+    ]);
+    $sameFirstCharacters = implode("\n", [
+        '| Name | Class | Level | Token | HP |',
+        '| --- | --- | ---: | --- | ---: |',
+        '| [[Ari Stoneward]] | Fighter | 2 | ![[ari-stoneward.webp]] | 20 |',
+        '| [[Ari Valesong]] | Fighter | 3 | ![[ari-valesong.webp]] | 24 |',
+    ]);
+    $sameFirstService = new XpTrackingService(
+        xpDatabase(':memory:'),
+        xpConfiguration(),
+        static function (string $url) use (
+            $sameFirstMarkdown,
+            $sameFirstCharacters,
+            $progressionFixture): string {
+            if (str_contains($url, 'Player+Characters+Listing')) {
+                return $sameFirstCharacters;
+            }
+            return $progressionFixture($url) ?? $sameFirstMarkdown;
+        });
+    $ariStoneward = $sameFirstService->getForAccount([
+        'role' => 'player',
+        'character_key' => 'ari-stoneward',
+    ]);
+    $ariValesong = $sameFirstService->getForAccount([
+        'role' => 'player',
+        'character_key' => 'ari-valesong',
+    ]);
+    xpAssert(
+        $ariStoneward['character']['character_name'] === 'Ari Stoneward'
+            && $ariValesong['character']['character_name'] === 'Ari Valesong',
+        'same-first-name XP authorization did not remain scoped to the full canonical character key.');
+    $unmappedSameFirstService = new XpTrackingService(
+        xpDatabase(':memory:'),
+        array_replace(xpConfiguration(), ['character_key_aliases' => ['jelb' => 'jelb']]),
+        static function (string $url) use (
+            $sameFirstMarkdown,
+            $sameFirstCharacters,
+            $progressionFixture): string {
+            if (str_contains($url, 'Player+Characters+Listing')) {
+                return $sameFirstCharacters;
+            }
+            return $progressionFixture($url) ?? $sameFirstMarkdown;
+        });
+    expectXpError(
+        fn() => $unmappedSameFirstService->getForAccount([
+            'role' => 'player',
+            'character_key' => 'ari-stoneward',
+        ]),
+        403,
+        'xp_not_authorized');
+
+    $levelRefreshMarkdown = implode("\n", [
+        'As of 8.16.2026',
+        '| Name | Class | Level | XP Total |',
+        '| --- | --- | ---: | ---: |',
+        '| Neria | Paladin | 1 | 2,400 |',
+        '| Shade | Ranger | 2 | 4,050 |',
+    ]);
+    $levelRefreshProgressionFixture = static function (string $url): ?string {
+        if (str_contains($url, 'Class+Level+Progression')) {
+            return implode("\n", [
+                '| Class | Link |',
+                '| --- | --- |',
+                '[[Paladin]]',
+                '[[Ranger]]',
+            ]);
+        }
+        if (str_contains($url, '/Classes/Paladin')) {
+            return implode("\n", [
+                '| 1 | 0 |', '| --- | --- |', '| 2 | 2,750 |', '| 3 | 5,500 |', '| 4 | 12,000 |',
+            ]);
+        }
+        if (str_contains($url, '/Classes/Ranger')) {
+            return implode("\n", [
+                '| 1 | 0 |', '| --- | --- |', '| 2 | 2,250 |', '| 3 | 4,500 |', '| 4 | 10,000 |',
+            ]);
+        }
+        return null;
+    };
+    file_put_contents($awardsDirectory . '/neria-xp.json', json_encode([[
+        'character_name' => 'Neria', 'character_class' => 'Paladin',
+        'level_before_award' => 1, 'xp_award' => 1000,
+        'xp_award_date' => '8.16.2026', 'level_after_award' => 2,
+    ]], JSON_THROW_ON_ERROR));
+    file_put_contents($awardsDirectory . '/shade-xp.json', json_encode([[
+        'character_name' => 'Shade', 'character_class' => 'Ranger',
+        'level_before_award' => 2, 'xp_award' => 1000,
+        'xp_award_date' => '8.16.2026', 'level_after_award' => 3,
+    ]], JSON_THROW_ON_ERROR));
+    $levelRefreshService = new XpTrackingService(
+        xpDatabase(':memory:'),
+        array_replace(xpConfiguration(), [
+            'awards_directory' => $awardsDirectory,
+            'awards_root' => $awardsRoot,
+            'award_groups' => ['dm' => ['neria-xp', 'shade-xp']],
+        ]),
+        static function (string $url) use ($levelRefreshMarkdown, $levelRefreshProgressionFixture): string {
+            if (str_contains($url, '/Classes/') || str_contains($url, 'Class+Level+Progression')) {
+                return $levelRefreshProgressionFixture($url) ?? '';
+            }
+            return $levelRefreshMarkdown;
+        });
+    $levelRefresh = $levelRefreshService->getForAccount([
+        'role' => 'dm',
+        'character_key' => 'dm',
+    ]);
+    $levelRefreshByName = [];
+    foreach ($levelRefresh['characters'] as $character) {
+        $levelRefreshByName[$character['character_name']] = $character;
+    }
+    xpAssert($levelRefreshByName['Neria']['level'] === 2, 'Neria current level was not taken from the latest award history.');
+    xpAssert($levelRefreshByName['Neria']['xp_to_next_level'] === 3100, 'Neria TNL was calculated from the stale level.');
+    xpAssert($levelRefreshByName['Shade']['level'] === 3, 'Shade current level was not taken from the latest award history.');
+    xpAssert($levelRefreshByName['Shade']['xp_to_next_level'] === 5950, 'Shade TNL was calculated from the stale level.');
 
     $awardEntry = [
         'character_name' => 'Limit Hero',
@@ -293,6 +410,9 @@ try {
     xpAssert(
         count($maximumAwards['progressions'][0]['entries']) === $serverProgressionEntryLimit,
         'The server rejected the shared XP award progression entry limit.');
+    xpAssert(
+        $maximumAwards['progressions'][0]['is_account_character'] === true,
+        'The XP awards response omitted the player identity marker.');
     file_put_contents(
         $awardPath,
         json_encode(
@@ -305,6 +425,42 @@ try {
         ]),
         503,
         'xp_awards_unavailable');
+
+    $cachedAwardPath = $awardsDirectory . '/jelb-xp.json';
+    file_put_contents($cachedAwardPath, json_encode([[
+        'character_name' => 'Jelb',
+        'character_class' => 'Illusionist',
+        'level_before_award' => 3,
+        'xp_award' => 500,
+        'xp_award_date' => '7.23.2026',
+        'level_after_award' => 4,
+    ]], JSON_THROW_ON_ERROR));
+    $cachedAwardFetchCount = 0;
+    $cachedAwardService = new XpTrackingService(
+        xpDatabase(':memory:'),
+        array_replace(xpConfiguration(), [
+            'awards_directory' => $awardsDirectory,
+            'awards_root' => $awardsRoot,
+            'award_groups' => ['jelb' => ['jelb-xp']],
+        ]),
+        static function (string $url) use (&$cachedAwardFetchCount, $markdown): string {
+            if (str_ends_with($url, '/XP')) {
+                $cachedAwardFetchCount++;
+                return $markdown;
+            }
+            throw new RuntimeException('Optional XP enrichment should not be fetched by XP Awards.');
+        });
+    $cachedAwardService->getForAccount([
+        'role' => 'player',
+        'character_key' => 'jelb',
+    ]);
+    $cachedAwardService->getAwardsForAccount([
+        'role' => 'player',
+        'character_key' => 'jelb',
+    ]);
+    xpAssert(
+        $cachedAwardFetchCount === 2,
+        'XP Awards performed an unnecessary second live XP/enrichment fetch.');
 
     $reservedKeyService = new XpTrackingService(
         xpDatabase(':memory:'),
@@ -331,7 +487,7 @@ try {
         'level_after_award' => 1,
     ]], JSON_THROW_ON_ERROR));
     $dynamicMarkdown = implode("\n", [
-        'As of 8.04.2026',
+        'As of  8.04.2026',
         '',
         '| Name | Class | Level | XP Total |',
         '| --- | --- | ---: | ---: |',
@@ -357,9 +513,6 @@ try {
         'character_key' => 'dynamic-hero',
     ]);
     $dynamicEntries = $dynamicAwards['progressions'][0]['entries'];
-    xpAssert(
-        ($dynamicAwards['progressions'][0]['is_account_character'] ?? false) === true,
-        'The player XP Awards response did not identify its primary account-character progression.');
     xpAssert(count($dynamicEntries) === 2, 'The live XP source did not extend the cached progression.');
     xpAssert(
         $dynamicEntries[1]['xp_award_date'] === '8.04.2026'
@@ -752,16 +905,12 @@ try {
     xpAssert($player['character']['hit_points'] === 13, 'The player received the wrong hit-point total.');
     xpAssert($player['character']['xp_total'] === 12345, 'The current player XP total was incorrect.');
     xpAssert($player['character']['xp_to_next_level'] === 7655, 'The player received the wrong TNL value.');
-    xpAssert(
-        count($player['authorized_characters'] ?? []) === 2
-            && $player['authorized_characters'][0]['character_key'] === 'jelb-xp'
-            && $player['authorized_characters'][0]['character']['character_name'] === 'Jelb'
-            && $player['authorized_characters'][1]['character_key'] === 'arilia-xp'
-            && $player['authorized_characters'][1]['character']['character_name'] === 'Arilia'
-            && $player['authorized_characters'][1]['character']['xp_total'] === 200
-            && $player['authorized_characters'][1]['character']['xp_to_next_level'] === 1300,
-        'Jelb did not receive current XP for both his own and Arilia progression.');
     xpAssert($player['date_label'] === 'As of 7.23.2026', 'The latest XP date was not selected.');
+    xpAssert(
+        count($player['authorized_characters']) === 1
+            && $player['authorized_characters'][0]['character_key'] === 'jelb'
+            && $player['authorized_characters'][0]['character']['character_name'] === 'Jelb',
+        'The player current-XP response omitted its authorized character collection.');
     xpAssert(!isset($player['characters']), 'A player response exposed the party XP array.');
 
     $maximilian = $service->getForAccount([
@@ -769,7 +918,7 @@ try {
         'character_key' => 'maximilian',
     ]);
     xpAssert($maximilian['scope'] === 'character', 'Maximilian did not receive character-scoped XP.');
-    xpAssert($maximilian['character']['character_name'] === 'Maximilian', 'Maximilian did not receive the canonical XP display name.');
+    xpAssert($maximilian['character']['character_name'] === 'Max', 'Maximilian did not receive the Max XP row.');
     xpAssert($maximilian['character']['character_class'] === 'Theurge', 'Maximilian received the wrong class.');
     xpAssert($maximilian['character']['level'] === 3, 'Maximilian received the stale listing level.');
     xpAssert($maximilian['character']['hit_points'] === 5, 'Maximilian received the wrong hit-point total.');
@@ -783,11 +932,6 @@ try {
     ]);
     xpAssert($dm['scope'] === 'party', 'The Dungeon Master did not receive party-scoped XP.');
     xpAssert(count($dm['characters']) === 5, 'The Dungeon Master did not receive every current XP row.');
-    xpAssert(
-        count(array_filter(
-            $dm['characters'],
-            static fn(array $character): bool => ($character['character_key'] ?? '') === 'borca')) === 1,
-        'The Dungeon Master XP rows did not expose stable character keys.');
     $borca = array_values(array_filter(
         $dm['characters'],
         static fn(array $character): bool => $character['character_name'] === 'Borca'));
@@ -798,9 +942,9 @@ try {
         $dm['characters'],
         static fn(array $character): bool => $character['character_name'] === 'Arilia'));
     xpAssert(
-        count($arilia) === 1 && $arilia[0]['xp_to_next_level'] === 1300,
-        'Arilia did not receive the expected Feycaster next-level progression.');
-    xpAssert($fetchCount === 21, 'Each XP request did not attempt the live source before using cached data.');
+        count($arilia) === 1 && $arilia[0]['xp_to_next_level'] === null,
+        'An unavailable class progression prevented the live XP snapshot from loading.');
+    xpAssert($fetchCount === 18, 'Each XP request did not attempt the live source before using cached data.');
 
     $olderMarkdown = implode("\n", [
         'As of 7.20.2026',

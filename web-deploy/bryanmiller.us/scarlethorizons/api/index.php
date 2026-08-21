@@ -19,6 +19,16 @@ try {
 
     $privateDirectory = dirname(__DIR__, 3) . '/player-assistant-broker';
     require_once $privateDirectory . '/BrokerHttpException.php';
+    require_once $privateDirectory . '/RpolClient.php';
+    require_once $privateDirectory . '/CharacterAuthService.php';
+    require_once $privateDirectory . '/XpTrackingService.php';
+    require_once $privateDirectory . '/WordCountService.php';
+    require_once $privateDirectory . '/BrokerOperations.php';
+    require_once $privateDirectory . '/QuestService.php';
+    require_once $privateDirectory . '/MessageService.php';
+    require_once $privateDirectory . '/MagicItemService.php';
+    require_once $privateDirectory . '/BrokerService.php';
+    require_once $privateDirectory . '/BrokerAlertService.php';
     $configPathOverride = getenv('PLAYER_ASSISTANT_BROKER_CONFIG');
     $configPath = is_string($configPathOverride) && $configPathOverride !== ''
         ? $configPathOverride
@@ -42,24 +52,13 @@ try {
             'schema_version' => 7,
             'status' => 'ok',
         ]);
+        return;
     }
-    require_once $privateDirectory . '/RpolClient.php';
-    require_once $privateDirectory . '/CharacterAuthService.php';
-    require_once $privateDirectory . '/XpTrackingService.php';
-    require_once $privateDirectory . '/WordCountService.php';
-    require_once $privateDirectory . '/BrokerOperations.php';
-    require_once $privateDirectory . '/QuestService.php';
-    require_once $privateDirectory . '/MessageService.php';
-    require_once $privateDirectory . '/RevisionService.php';
-    require_once $privateDirectory . '/BrokerService.php';
-    require_once $privateDirectory . '/BrokerAlertService.php';
-    $operations = new BrokerOperations(is_array($config) ? $config : []);
     requireJsonContentType($method);
     $requestBody = readJsonRequestBody(8 * 1024 * 1024);
     $sessionState = [];
     $regenerateSession = null;
     $destroySession = null;
-    $releaseSession = null;
     if (isCharacterSessionRoute($route)) {
         startCharacterSession(is_array($config['auth'] ?? null) ? $config['auth'] : []);
         $sessionState =& $_SESSION;
@@ -70,11 +69,6 @@ try {
         };
         $destroySession = static function (): void {
             destroyCharacterSession();
-        };
-        $releaseSession = static function (): void {
-            if (session_status() === PHP_SESSION_ACTIVE) {
-                session_write_close();
-            }
         };
     }
 
@@ -93,8 +87,7 @@ try {
         (string)($_SERVER['REMOTE_ADDR'] ?? 'unknown'),
         $sessionState,
         $regenerateSession,
-        $destroySession,
-        $releaseSession);
+        $destroySession);
 
     sendJson($response['status'], $response['body']);
 } catch (BrokerHttpException $exception) {
@@ -138,15 +131,6 @@ function recordBrokerServerError(array $config, Throwable $exception): void
         }
         $database = new PDO('sqlite:' . $databasePath, null, null, [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]);
         $database->exec('PRAGMA busy_timeout = 5000');
-        $database->exec(
-            'CREATE TABLE IF NOT EXISTS broker_alert_events (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                alert_type TEXT NOT NULL,
-                occurred_at INTEGER NOT NULL,
-                error_code TEXT NOT NULL,
-                message TEXT NOT NULL,
-                alert_sent_at INTEGER NULL
-            )');
         (new BrokerAlertService(
             $database,
             is_array($config['observability'] ?? null) ? $config['observability'] : []))
@@ -250,7 +234,7 @@ function isCharacterSessionRoute(string $route): bool
             '/v1/word-counts',
             '/v1/presence',
             '/v1/quests',
-            '/v1/revisions',
+            '/v1/magic-items',
             '/v1/quest-requests',
             '/v1/messages',
             '/v1/logout',

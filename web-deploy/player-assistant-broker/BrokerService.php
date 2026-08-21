@@ -4,8 +4,6 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/DatabaseMigrationService.php';
 require_once __DIR__ . '/BrokerAlertService.php';
-require_once __DIR__ . '/PwaSyntheticMonitor.php';
-require_once __DIR__ . '/RevisionService.php';
 
 final class BrokerService
 {
@@ -16,12 +14,12 @@ final class BrokerService
     private ?WordCountService $wordCounts = null;
     private ?QuestService $quests = null;
     private ?MessageService $messages = null;
-    private ?RevisionService $revisions = null;
     private ?BrokerAlertService $alerts = null;
     private ?BrokerOperations $operations = null;
     private $xpMarkdownFetcher;
     private $wordCountFetcher;
-    private ?string $questDataPath = null;
+    private ?string $questDataPath;
+    private ?MagicItemService $magicItems = null;
 
     public function __construct(
         private readonly array $config,
@@ -39,9 +37,6 @@ final class BrokerService
             throw new RuntimeException('The PHP PDO SQLite extension is required.');
         }
 
-        $this->xpMarkdownFetcher = $xpMarkdownFetcher;
-        $this->wordCountFetcher = $wordCountFetcher;
-        $this->questDataPath = $questDataPath;
         $this->apiConfig = $config['api'];
         $databasePath = (string)$this->apiConfig['database_path'];
         $this->database = new PDO('sqlite:' . $databasePath, null, null, [
@@ -51,6 +46,9 @@ final class BrokerService
         ]);
         $this->database->exec('PRAGMA foreign_keys = ON');
         $this->database->exec('PRAGMA busy_timeout = 5000');
+        $this->xpMarkdownFetcher = $xpMarkdownFetcher;
+        $this->wordCountFetcher = $wordCountFetcher;
+        $this->questDataPath = $questDataPath;
         $this->verifySchemaVersion();
     }
 
@@ -63,8 +61,7 @@ final class BrokerService
         string $remoteAddress,
         array &$session,
         ?callable $regenerateSession = null,
-        ?callable $destroySession = null,
-        ?callable $releaseSession = null): array
+        ?callable $destroySession = null): array
     {
         if ($method === 'GET' && $route === '/v1/health') {
             return $this->response(200, [
@@ -95,8 +92,6 @@ final class BrokerService
                 'word_count_snapshot_available' => $this->wordCounts()->hasSnapshot(),
                 'word_count_refresh' => $wordCountRefresh,
                 'operations' => $this->operations()->healthStatus(),
-                'pwa_monitor' => (new PwaSyntheticMonitor(
-                    is_array($this->config['pwa_monitor'] ?? null) ? $this->config['pwa_monitor'] : []))->healthStatus(),
                 'quest_request_workflow_configured' => true,
             ]);
         }
@@ -113,20 +108,15 @@ final class BrokerService
         }
 
         if ($method === 'GET' && $route === '/v1/session') {
-            $response = $this->characterAuth()->currentSession($session);
-            $this->releaseSessionLock($releaseSession);
-            return $this->response(200, $response);
+            return $this->response(200, $this->characterAuth()->currentSession($session));
         }
 
         if ($method === 'GET' && $route === '/v1/me') {
-            $response = $this->characterAuth()->requireCurrentAccount($session);
-            $this->releaseSessionLock($releaseSession);
-            return $this->response(200, $response);
+            return $this->response(200, $this->characterAuth()->requireCurrentAccount($session));
         }
 
         if ($method === 'GET' && $route === '/v1/xp') {
             $current = $this->characterAuth()->requireCurrentAccount($session);
-            $this->releaseSessionLock($releaseSession);
             return $this->response(
                 200,
                 $this->xpTracking()->getForAccount($current['account']));
@@ -134,15 +124,13 @@ final class BrokerService
 
         if ($method === 'GET' && $route === '/v1/xp-awards') {
             $current = $this->characterAuth()->requireCurrentAccount($session);
-            $this->releaseSessionLock($releaseSession);
             return $this->response(
                 200,
                 $this->xpTracking()->getAwardsForAccount($current['account']));
         }
 
         if ($method === 'GET' && $route === '/v1/word-counts') {
-            $current = $this->characterAuth()->requireCurrentAccount($session);
-            $this->releaseSessionLock($releaseSession);
+            $this->characterAuth()->requireCurrentAccount($session);
             return $this->response(200, $this->wordCounts()->latest());
         }
 
@@ -152,14 +140,12 @@ final class BrokerService
 
         if ($method === 'GET' && $route === '/v1/quests') {
             $current = $this->characterAuth()->requireCurrentAccount($session);
-            $this->releaseSessionLock($releaseSession);
             return $this->response(200, $this->quests()->forAccount($current['account']));
         }
 
-        if ($method === 'GET' && $route === '/v1/revisions') {
+        if ($method === 'GET' && $route === '/v1/magic-items') {
             $current = $this->characterAuth()->requireCurrentAccount($session);
-            $this->releaseSessionLock($releaseSession);
-            return $this->response(200, $this->revisions()->forAccount($current['account']));
+            return $this->response(200, $this->magicItems()->forAccount($current['account']));
         }
 
         if ($method === 'POST' && $route === '/v1/quest-requests') {
@@ -193,8 +179,7 @@ final class BrokerService
 
         if ($method === 'GET' && $route === '/v1/messages') {
             $current = $this->characterAuth()->requireCurrentAccount($session);
-            $this->releaseSessionLock($releaseSession);
-            return $this->response(200, $this->messages()->forAccount($current['account'], $query));
+            return $this->response(200, $this->messages()->forAccount($current['account']));
         }
 
         if ($method === 'POST' && $route === '/v1/messages') {
@@ -322,13 +307,6 @@ final class BrokerService
         }
 
         throw new BrokerHttpException(404, 'not_found', 'The requested broker endpoint was not found.');
-    }
-
-    private function releaseSessionLock(?callable $releaseSession): void
-    {
-        if ($releaseSession !== null) {
-            $releaseSession();
-        }
     }
 
     private function validateSnapshot(array $snapshot, bool $requireFresh): array
@@ -670,59 +648,59 @@ final class BrokerService
         $version = (int)$this->database->query('PRAGMA user_version')->fetchColumn();
         if ($version !== DatabaseMigrationService::LATEST_VERSION) {
             throw new RuntimeException(sprintf(
-                'The broker database schema is not deployment-ready (expected version %d, found %d).',
-                DatabaseMigrationService::LATEST_VERSION,
-                $version));
+                'The broker database schema is at version %d; deploy and run migrate-broker.php before serving requests (expected version %d).',
+                $version,
+                DatabaseMigrationService::LATEST_VERSION));
+        }
+        $required = [
+            'api_tokens', 'rate_limits', 'admin_request_nonces', 'audit_events',
+            'character_accounts', 'character_account_aliases', 'auth_rate_limits',
+            'auth_audit_events', 'character_session_presence', 'message_notifications',
+            'quest_requests', 'quest_state_overrides', 'word_count_snapshots',
+            'xp_tracking_cache', 'broker_alert_events', 'ix_audit_events_token_time',
+            'ix_auth_audit_account_time', 'ix_character_presence_activity',
+            'ix_message_notifications_recipient_read', 'ux_quest_requests_pending',
+            'ix_quest_requests_status_time', 'ix_quest_requests_requester_status',
+            'ix_broker_alert_events_type_time', 'ux_character_accounts_character_key',
+            'ix_character_account_aliases_account',
+            'trg_character_accounts_alias_collision_insert',
+            'trg_character_accounts_alias_collision_update',
+            'trg_character_account_aliases_name_collision_insert',
+            'trg_character_account_aliases_name_collision_update',
+        ];
+        $statement = $this->database->prepare("SELECT 1 FROM sqlite_master WHERE (type = 'table' OR type = 'index' OR type = 'trigger') AND name = ?");
+        foreach ($required as $object) {
+            $statement->execute([$object]);
+            if ($statement->fetchColumn() === false) {
+                throw new RuntimeException("The broker database is missing migrated object '$object'; deploy and run migrate-broker.php before serving requests.");
+            }
         }
     }
 
     private function characterAuth(): CharacterAuthService
     {
-        return $this->characterAuth ??= new CharacterAuthService(
-            $this->database,
-            is_array($this->config['auth'] ?? null) ? $this->config['auth'] : []);
+        return $this->characterAuth ??= new CharacterAuthService($this->database, is_array($this->config['auth'] ?? null) ? $this->config['auth'] : []);
     }
-
     private function xpTracking(): XpTrackingService
     {
-        return $this->xpTracking ??= new XpTrackingService(
-            $this->database,
-            is_array($this->config['xp'] ?? null) ? $this->config['xp'] : [],
-            $this->xpMarkdownFetcher);
+        return $this->xpTracking ??= new XpTrackingService($this->database, is_array($this->config['xp'] ?? null) ? $this->config['xp'] : [], $this->xpMarkdownFetcher);
     }
-
     private function wordCounts(): WordCountService
     {
-        return $this->wordCounts ??= new WordCountService(
-            $this->database,
-            is_array($this->config['word_counts'] ?? null) ? $this->config['word_counts'] : [],
-            $this->wordCountFetcher);
+        return $this->wordCounts ??= new WordCountService($this->database, is_array($this->config['word_counts'] ?? null) ? $this->config['word_counts'] : [], $this->wordCountFetcher);
     }
-
     private function quests(): QuestService
     {
         return $this->quests ??= new QuestService($this->database, (string)$this->questDataPath);
     }
-
     private function messages(): MessageService
     {
-        return $this->messages ??= new MessageService(
-            $this->database,
-            is_array($this->config['messages'] ?? null) ? $this->config['messages'] : []);
+        return $this->messages ??= new MessageService($this->database);
     }
-
-    private function revisions(): RevisionService
-    {
-        return $this->revisions ??= new RevisionService($this->database, (string)$this->questDataPath);
-    }
-
     private function alerts(): BrokerAlertService
     {
-        return $this->alerts ??= new BrokerAlertService(
-            $this->database,
-            is_array($this->config['observability'] ?? null) ? $this->config['observability'] : []);
+        return $this->alerts ??= new BrokerAlertService($this->database, is_array($this->config['observability'] ?? null) ? $this->config['observability'] : []);
     }
-
     private function operations(): BrokerOperations
     {
         return $this->operations ??= new BrokerOperations($this->config);
@@ -731,6 +709,15 @@ final class BrokerService
     private function base64UrlEncode(string $bytes): string
     {
         return rtrim(strtr(base64_encode($bytes), '+/', '-_'), '=');
+    }
+
+    private function magicItems(): MagicItemService
+    {
+        if (!$this->magicItems instanceof MagicItemService) {
+            $this->magicItems = new MagicItemService(
+                (string)($this->config['magic_items']['source_path'] ?? __DIR__ . '/magic-items.json'));
+        }
+        return $this->magicItems;
     }
 
     private function response(int $status, array $body): array

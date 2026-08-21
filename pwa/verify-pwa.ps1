@@ -24,7 +24,6 @@ $requiredFiles = @(
     'version.js',
     'app.js',
     'translator-worker.js',
-    'campaign-search-worker.js',
     'service-worker.js',
     'manifest.webmanifest',
     'offline.html',
@@ -36,11 +35,9 @@ $requiredFiles = @(
     'data\heroes.json',
     'level-progression.json',
     'magic-items.json',
-    'data\party-funds.json',
+    'party-funds.json',
     'quests.json',
-    'campaign-search.json',
-    'optional-packs.json',
-    'optional-pack-loader.js'
+    'campaign-search.json'
 )
 foreach ($relativePath in $requiredFiles) {
     Assert-Condition -Condition (Test-Path -LiteralPath (Join-Path $PwaRoot $relativePath) -PathType Leaf) -Message "Missing PWA file: $relativePath"
@@ -73,20 +70,14 @@ foreach ($language in @('orcish', 'elvish', 'ghukliak')) {
     Assert-Condition -Condition ($actualCount -gt 0) -Message "$language lexicon is empty."
     Assert-Condition -Condition ([int]$payload.entryCount -eq $actualCount) -Message "$language lexicon entryCount does not match its terms."
     $actualMaxPhraseWords = 1
-    $actualReverseMaxPhraseWords = 1
     $normalizedTerms = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::Ordinal)
     foreach ($property in $termProperties) {
         $phraseWords = @(($property.Name -split '\s+') | Where-Object { $_.Length -gt 0 }).Count
         $actualMaxPhraseWords = [Math]::Max($actualMaxPhraseWords, $phraseWords)
-        $normalizedTranslation = ([string]$property.Value).Normalize([System.Text.NormalizationForm]::FormKC).Trim() -replace '\s+', ' '
-        $reversePhraseWords = @(($normalizedTranslation -split '\s+') | Where-Object { $_.Length -gt 0 }).Count
-        $actualReverseMaxPhraseWords = [Math]::Max($actualReverseMaxPhraseWords, $reversePhraseWords)
         $normalizedTerm = (($property.Name.Normalize([System.Text.NormalizationForm]::FormKC).Trim() -split '\s+') -join ' ').ToLowerInvariant()
         Assert-Condition -Condition ($normalizedTerms.Add($normalizedTerm)) -Message "$language contains duplicate terms under translator-worker normalization: $normalizedTerm"
     }
     Assert-Condition -Condition ([int]$payload.maxPhraseWords -eq $actualMaxPhraseWords) -Message "$language maxPhraseWords does not match its terms."
-    Assert-Condition -Condition ([int]$payload.reverseMaxPhraseWords -eq $actualReverseMaxPhraseWords) -Message "$language reverseMaxPhraseWords does not match its translations."
-    Assert-Condition -Condition ([string]$payload.contentHash -match '^[a-f0-9]{64}$') -Message "$language contentHash is missing or malformed."
     $lexiconCounts[$language] = $actualCount
 }
 Assert-Condition -Condition ([int]$lexiconCounts.ghukliak -eq 81204) -Message 'The Ghukliak lexicon must cover every Orcish English term plus its source-only terms.'
@@ -95,37 +86,9 @@ $campaignSearch = Get-Content -Raw -LiteralPath (Join-Path $PwaRoot 'campaign-se
 Assert-Condition -Condition ([int]$campaignSearch.schemaVersion -eq 2) -Message 'Campaign search data must use the full-text schema.'
 Assert-Condition -Condition (@($campaignSearch.pages).Count -gt 0) -Message 'Campaign search data contains no pages.'
 Assert-Condition -Condition ([int]$campaignSearch.pageCount -eq @($campaignSearch.pages).Count) -Message 'Campaign search pageCount does not match its pages.'
-Assert-Condition -Condition ([int]$campaignSearch.termIndexVersion -eq 1 -and $null -ne $campaignSearch.termIndex) -Message 'Campaign search exact-term index is missing or has an unsupported version.'
-foreach ($termProperty in @($campaignSearch.termIndex.PSObject.Properties)) {
-    $previousPageId = -1L
-    foreach ($pageId in @($termProperty.Value)) {
-        Assert-Condition -Condition (($pageId -is [int] -or $pageId -is [long]) -and [int64]$pageId -gt $previousPageId -and [int64]$pageId -lt [int64]$campaignSearch.pageCount) -Message "Campaign search term index contains an invalid or unsorted page ID for '$($termProperty.Name)'."
-        $previousPageId = [int64]$pageId
-    }
-}
 Assert-Condition -Condition (@($campaignSearch.pages | Where-Object { ![string]::IsNullOrWhiteSpace($_.content) }).Count -gt 0) -Message 'Campaign search data contains no Markdown content.'
 Assert-Condition -Condition (@($campaignSearch.pages | Where-Object { [string]::IsNullOrWhiteSpace($_.title) -or $_.url -notmatch '^https://' }).Count -eq 0) -Message 'Campaign search data contains an invalid page title or URL.'
 Assert-Condition -Condition (@($campaignSearch.pages | Where-Object { $_.title -eq 'XP Tracking' }).Count -eq 0) -Message 'The protected XP Tracking page must not be included in public PWA search data.'
-
-$optionalManifest = Get-Content -Raw -LiteralPath (Join-Path $PwaRoot 'optional-packs.json') | ConvertFrom-Json
-Assert-Condition -Condition ([int]$optionalManifest.schemaVersion -eq 1 -and [int]$optionalManifest.manifestVersion -eq 1) -Message 'Optional-pack manifest version is invalid.'
-$optionalPacks = @($optionalManifest.packs)
-Assert-Condition -Condition ($optionalPacks.Count -eq 4) -Message 'Optional-pack manifest must contain exactly four packs.'
-Assert-Condition -Condition (@($optionalPacks.id | Select-Object -Unique).Count -eq $optionalPacks.Count) -Message 'Optional-pack manifest contains duplicate IDs.'
-foreach ($pack in $optionalPacks) {
-    $packPath = Join-Path $PwaRoot ([string]$pack.url).Replace('/', '\')
-    Assert-Condition -Condition (Test-Path -LiteralPath $packPath -PathType Leaf) -Message "Optional pack is missing: $($pack.id)"
-    $packBytes = [System.IO.File]::ReadAllBytes($packPath)
-    Assert-Condition -Condition ([int64]$pack.byteSize -eq $packBytes.Length) -Message "Optional pack byte size is stale: $($pack.id)"
-    Assert-Condition -Condition ([string]$pack.contentHash -eq (Get-FileHash -LiteralPath $packPath -Algorithm SHA256).Hash.ToLowerInvariant()) -Message "Optional pack hash is stale: $($pack.id)"
-    $packPayload = Get-Content -Raw -LiteralPath $packPath | ConvertFrom-Json
-    Assert-Condition -Condition ([int]$packPayload.schemaVersion -eq [int]$pack.schemaVersion) -Message "Optional pack schema version is stale: $($pack.id)"
-    $actualCount = if ([string]$pack.kind -eq 'translator') { @($packPayload.terms.PSObject.Properties).Count } else { @($packPayload.pages).Count }
-    Assert-Condition -Condition ([int]$pack.recordCount -eq $actualCount) -Message "Optional pack record count is stale: $($pack.id)"
-}
-$serviceWorkerText = Get-Content -Raw -LiteralPath (Join-Path $PwaRoot 'service-worker.js')
-$offlineDataBody = [regex]::Match($serviceWorkerText, 'const OFFLINE_DATA_ASSETS = \[(?<body>[\s\S]*?)\];').Groups['body'].Value
-Assert-Condition -Condition ($offlineDataBody -notmatch 'orcish|elvish|ghukliak|campaign-search') -Message 'Optional packs must not be present in the service-worker install data list.'
 
 $heroData = Get-Content -Raw -LiteralPath (Join-Path $PwaRoot 'data\heroes.json') | ConvertFrom-Json
 Assert-Condition -Condition ([int]$heroData.schemaVersion -eq 1) -Message 'Hero-token data must use schema version 1.'
@@ -162,11 +125,11 @@ foreach ($magicItem in @($magicItems.items)) {
     }
     Assert-Condition -Condition ($magicItemLongevityValues -contains [string]$magicItem.longevity) -Message "Magic-item fallback entry has invalid longevity '$($magicItem.longevity)'."
     $magicItemViewers = @([string]$magicItem.'viewable-by' -split ',' | ForEach-Object { $_.Trim().ToLowerInvariant() } | Where-Object { $_ -ne '' })
-    Assert-Condition -Condition ($magicItemViewers.Count -gt 0) -Message "Magic-item fallback entry has no valid 'viewable-by' values."
+    Assert-Condition -Condition ($magicItemViewers.Count -eq 1 -and $magicItemViewers[0] -eq 'all') -Message "Public magic-item fallback entries must be viewable by all only."
 }
 Assert-Condition -Condition (@($magicItems.items | Where-Object { $_.name -eq "Armstrong's Chamois" -and $_.'viewable-by' -eq 'all' }).Count -eq 1) -Message "Armstrong's Chamois must be viewable by all."
 
-$partyFunds = Get-Content -Raw -LiteralPath (Join-Path $PwaRoot 'data\party-funds.json') | ConvertFrom-Json
+$partyFunds = Get-Content -Raw -LiteralPath (Join-Path $PwaRoot 'party-funds.json') | ConvertFrom-Json
 $partyFundsGemstoneValuePattern = '^\s*(\d+(?:\.\d+)?)\s+gp$'
 $partyFundsExpectedFields = @('coins', 'fiction-date', 'gemstones', 'meta-date', 'schema_version', 'text')
 $partyFundsNormalizedText = ([string]$partyFunds.text).Replace("`r`n", "`n").Replace("`r", "`n")
@@ -253,9 +216,10 @@ $questIds = @($questProperties.Name)
 foreach ($questProperty in $questProperties) {
     Assert-Condition -Condition ($questProperty.Name -match '^[a-z0-9]+(?:-[a-z0-9]+)*$') -Message "Quest data has an invalid identifier '$($questProperty.Name)'."
     $quest = $questProperty.Value
-    $actualFields = @($quest.PSObject.Properties.Name | Sort-Object)
-    $expectedFields = @($questRequiredFields | Sort-Object)
-    Assert-Condition -Condition (($actualFields -join "`n") -eq ($expectedFields -join "`n")) -Message "Quest '$($questProperty.Name)' does not match the required schema."
+    $actualFields = @($quest.PSObject.Properties.Name)
+    $unexpectedFields = @($actualFields | Where-Object { $questRequiredFields -notcontains $_ -and $_ -ne 'meta-date' })
+    $missingFields = @($questRequiredFields | Where-Object { $actualFields -notcontains $_ })
+    Assert-Condition -Condition ($unexpectedFields.Count -eq 0 -and $missingFields.Count -eq 0) -Message "Quest '$($questProperty.Name)' does not match the required schema."
     foreach ($fieldName in @('title', 'summary', 'giver', 'visibility', 'state', 'wiki-url')) {
         Assert-Condition -Condition (![string]::IsNullOrWhiteSpace([string]$quest.$fieldName)) -Message "Quest '$($questProperty.Name)' has an empty '$fieldName'."
     }
@@ -264,7 +228,10 @@ foreach ($questProperty in $questProperties) {
     Assert-Condition -Condition (@($quest.objectives).Count -gt 0 -and @($quest.objectives).Count -le 20) -Message "Quest '$($questProperty.Name)' has invalid objectives."
     Assert-Condition -Condition (@($quest.objectives | Where-Object { [string]::IsNullOrWhiteSpace([string]$_) }).Count -eq 0) -Message "Quest '$($questProperty.Name)' has an empty objective."
     $dateFields = @($quest.dates.PSObject.Properties.Name)
-    Assert-Condition -Condition ($dateFields.Count -eq 2 -and $dateFields -contains 'accepted' -and $dateFields -contains 'expires') -Message "Quest '$($questProperty.Name)' has invalid dates."
+    $unexpectedDateFields = @($dateFields | Where-Object { @('accepted', 'expires', 'completed') -notcontains $_ })
+    $missingDateFields = @(@('accepted', 'expires') | Where-Object { $dateFields -notcontains $_ })
+    Assert-Condition -Condition ($unexpectedDateFields.Count -eq 0 -and $missingDateFields.Count -eq 0) -Message "Quest '$($questProperty.Name)' has invalid dates."
+
     Assert-Condition -Condition (@($quest.'gated-by' | Where-Object { [string]$_ -notmatch '^[a-z0-9]+(?:-[a-z0-9]+)*$' }).Count -eq 0) -Message "Quest '$($questProperty.Name)' has an invalid gate."
     Assert-Condition -Condition (@($quest.'unlocked-by' | Where-Object { [string]$_ -notmatch '^[a-z0-9]+(?:-[a-z0-9]+)*$' }).Count -eq 0) -Message "Quest '$($questProperty.Name)' has an invalid prerequisite."
     Assert-Condition -Condition (@($quest.'unlocked-by' | Where-Object { [string]$_ -eq $questProperty.Name -or $questIds -notcontains ([string]$_) }).Count -eq 0) -Message "Quest '$($questProperty.Name)' references an unknown or self prerequisite."
@@ -280,7 +247,7 @@ $featureModulePaths = @(
 $versionedFeatureModulePaths = @($featureModulePaths | ForEach-Object {
     './{0}?v=${{VERSION_METADATA.appRevision}}' -f $_
 })
-foreach ($script in @('version.js', 'app.js', 'translator-worker.js', 'campaign-search-worker.js', 'service-worker.js', 'service-worker-tests.mjs', 'campaign-search-worker-tests.mjs', 'optional-pack-tests.mjs', 'optional-pack-lifecycle-tests.mjs') + $featureModulePaths) {
+foreach ($script in @('version.js', 'app.js', 'translator-worker.js', 'service-worker.js', 'service-worker-tests.mjs') + $featureModulePaths) {
     & node --check (Join-Path $PwaRoot $script)
     Assert-Condition -Condition ($LASTEXITCODE -eq 0) -Message "JavaScript syntax check failed: $script"
 }
@@ -293,7 +260,6 @@ $featureModuleScripts = @($featureModulePaths | ForEach-Object {
 })
 $appScript = @($appScriptEntry) + $featureModuleScripts -join [Environment]::NewLine
 $translatorWorker = Get-Content -Raw -LiteralPath (Join-Path $PwaRoot 'translator-worker.js')
-$campaignSearchWorker = Get-Content -Raw -LiteralPath (Join-Path $PwaRoot 'campaign-search-worker.js')
 $requestTranslationFunction = [regex]::Match(
     $appScript,
     'const requestTranslation = \(event\) => \{.*?worker\?\.addEventListener',
@@ -301,20 +267,11 @@ $requestTranslationFunction = [regex]::Match(
 $styles = Get-Content -Raw -LiteralPath (Join-Path $PwaRoot 'styles.css')
 $serviceWorker = Get-Content -Raw -LiteralPath (Join-Path $PwaRoot 'service-worker.js')
 $serviceWorkerTests = Get-Content -Raw -LiteralPath (Join-Path $PwaRoot 'service-worker-tests.mjs')
-$optionalPackTests = Get-Content -Raw -LiteralPath (Join-Path $PwaRoot 'optional-pack-tests.mjs')
-$optionalPackLifecycleTests = Get-Content -Raw -LiteralPath (Join-Path $PwaRoot 'optional-pack-lifecycle-tests.mjs')
 $browserSmoke = Get-Content -Raw -LiteralPath (Join-Path $PwaRoot 'browser-smoke.mjs')
 $deploymentTest = Get-Content -Raw -LiteralPath (Join-Path $PwaRoot 'test-deployment.ps1')
 $productionResponseContracts = Get-Content -Raw -LiteralPath (Join-Path $PwaRoot 'production-response-contracts.ps1')
 $monitorScript = Get-Content -Raw -LiteralPath (Join-Path $PwaRoot '..\web-deploy\monitor-pwa.ps1')
-$privateMonitorScript = Get-Content -Raw -LiteralPath (Join-Path $PwaRoot '..\web-deploy\player-assistant-broker\PwaSyntheticMonitor.php')
-$privateMonitorInstaller = Get-Content -Raw -LiteralPath (Join-Path $PwaRoot '..\web-deploy\install-pwa-monitor.php')
 $monitorWorkflow = Get-Content -Raw -LiteralPath (Join-Path $PwaRoot '..\.github\workflows\pwa-synthetic-monitor.yml')
-$wordCountDeploymentTest = Get-Content -Raw -LiteralPath (Join-Path $PwaRoot '..\web-deploy\test-word-count-refresh-deployment.ps1')
-$wordCountDeployment = Get-Content -Raw -LiteralPath (Join-Path $PwaRoot '..\web-deploy\deploy-word-count-refresh.ps1')
-$brokerService = Get-Content -Raw -LiteralPath (Join-Path $PwaRoot '..\web-deploy\player-assistant-broker\BrokerService.php')
-$publicApiIndex = Get-Content -Raw -LiteralPath (Join-Path $PwaRoot '..\web-deploy\bryanmiller.us\scarlethorizons\api\index.php')
-$httpAuthTests = Get-Content -Raw -LiteralPath (Join-Path $PwaRoot '..\web-deploy\tests\run-http-auth-tests.ps1')
 $prSmokeWorkflow = Get-Content -Raw -LiteralPath (Join-Path $PwaRoot '..\.github\workflows\pr-smoke.yml')
 $fullRegressionWorkflow = Get-Content -Raw -LiteralPath (Join-Path $PwaRoot '..\.github\workflows\hardening.yml')
 $referencedIds = [regex]::Matches($appScript, "byId\('([^']+)'\)") | ForEach-Object { $_.Groups[1].Value } | Sort-Object -Unique
@@ -323,25 +280,24 @@ foreach ($id in $referencedIds) {
 }
 Assert-Condition -Condition ($appScript.Contains("credentials: 'same-origin'")) -Message 'Character authentication must use same-origin cookies.'
 Assert-Condition -Condition ($appScript.Contains("cache: 'no-store'")) -Message 'Character authentication requests must bypass browser caching.'
-Assert-Condition -Condition ($appScript.Contains("'/login'") -and $appScript.Contains("'/session'") -and $appScript.Contains("'/xp'") -and $appScript.Contains("'/xp-awards'") -and $appScript.Contains("'/word-counts'") -and $appScript.Contains("'/presence'") -and $appScript.Contains("'/quests'") -and $appScript.Contains("'/quest-requests'") -and $appScript.Contains("'/messages'") -and $appScript.Contains("'/revisions'") -and $appScript.Contains("'/logout'")) -Message 'Character authentication and protected player-data routes are incomplete.'
+Assert-Condition -Condition ($appScript.Contains("'/login'") -and $appScript.Contains("'/session'") -and $appScript.Contains("'/xp'") -and $appScript.Contains("'/xp-awards'") -and $appScript.Contains("'/word-counts'") -and $appScript.Contains("'/presence'") -and $appScript.Contains("'/quests'") -and $appScript.Contains("'/quest-requests'") -and $appScript.Contains("'/messages'") -and $appScript.Contains("'/logout'")) -Message 'Character authentication and protected player-data routes are incomplete.'
 Assert-Condition -Condition ($html.Contains('id="message-dm-nav" hidden') -and $html.Contains('id="message-player-nav" hidden') -and $styles.Contains('.nav-item[hidden]') -and $appScript.Contains('messageDmNavButton.hidden = !authenticated || isDungeonMaster;') -and $appScript.Contains('messagePlayerNavButton.hidden = !canMessagePlayer;') -and $appScript.Contains("requestedView === 'message-player' && !canMessagePlayer") -and $appScript.Contains('authenticatedMessageSnapshot?.player_recipients.length')) -Message 'Messaging navigation and view access must remain hidden until the matching authenticated role and recipient availability are active.'
-Assert-Condition -Condition ($html.Contains('id="message-notification-button"') -and $html.Contains('id="message-notification-count"') -and $html.Contains('id="message-notification-dialog"') -and $html.Contains('id="message-notification-list"') -and $html.Contains('id="messages-next"')) -Message 'Unread-message notification controls are incomplete.'
-Assert-Condition -Condition ($html.Contains('data-view="activity"') -and $html.Contains('data-view-panel="activity"') -and $html.Contains('id="activity-list"') -and $html.Contains('id="activity-refresh"') -and $appScript.Contains('validateRevisionSnapshot') -and $appScript.Contains('updateRevisionPolling') -and $appScript.Contains("document.addEventListener('visibilitychange', updateRevisionPolling)")) -Message 'Visibility-aware Activity/Inbox discovery is incomplete.'
+Assert-Condition -Condition ($html.Contains('id="message-notification-button"') -and $html.Contains('id="message-notification-count"') -and $html.Contains('id="message-notification-dialog"') -and $html.Contains('id="message-notification-list"')) -Message 'Unread-message notification controls are incomplete.'
 Assert-Condition -Condition ($appScript.Contains("everyPlayerOption.value = 'all-players';") -and $appScript.Contains("{ recipient_role: 'all_players' }")) -Message 'Dungeon Master messaging must support selecting every player.'
-Assert-Condition -Condition ($appScript.Contains('validateMessageSnapshot') -and $appScript.Contains('payload.unread_count') -and $appScript.Contains('payload.next_cursor') -and $appScript.Contains('loadMessages') -and $appScript.Contains('renderMessageNotifications') -and $appScript.Contains('markMessageRead') -and $appScript.Contains('`/messages/${messageId}/read`') -and $appScript.Contains('loadXpSummary(), loadWordCountSummary(), loadQuests(), loadMessages()')) -Message 'Login-time paginated unread-message retrieval or acknowledgement is incomplete.'
+Assert-Condition -Condition ($appScript.Contains('validateMessageSnapshot') -and $appScript.Contains('loadMessages') -and $appScript.Contains('renderMessageNotifications') -and $appScript.Contains('markMessageRead') -and $appScript.Contains('`/messages/${messageId}/read`') -and $appScript.Contains('loadXpSummary(), loadWordCountSummary(), loadQuests(), loadMessages()')) -Message 'Login-time unread-message retrieval or acknowledgement is incomplete.'
 Assert-Condition -Condition ($styles.Contains('.message-notification-button') -and $styles.Contains('.message-notification-button[hidden]') -and $styles.Contains('.message-notification-count') -and $styles.Contains('.message-notification-list')) -Message 'Unread-message notification styling is incomplete.'
 Assert-Condition -Condition ($html.Contains('autocomplete="current-password"')) -Message 'The character password field is not configured safely.'
 Assert-Condition -Condition ($html.Contains('id="xp-card"') -and $html.Contains('id="xp-total"') -and $html.Contains('id="xp-class-level"') -and $html.Contains('id="xp-hit-points"') -and $html.Contains('id="xp-tnl"') -and $html.Contains('id="xp-party-rows"')) -Message 'The protected XP dashboard card is incomplete.'
 Assert-Condition -Condition ($appScript.Contains('xpTotal.textContent = `${Number(character.xp_total).toLocaleString(''en-US'')} (TNL: ${tnlLabel})`;') -and $appScript.Contains('if (tnl) tnl.textContent = tnlLabel;')) -Message 'A player''s current XP total must show TNL on the same line.'
 Assert-Condition -Condition ($appScript.Contains('totalCell.textContent = `${Number(character.xp_total).toLocaleString(''en-US'')} (TNL: ${tnlLabel})`;') -and $appScript.Contains("const tnlLabel = character.xp_to_next_level === null")) -Message 'The Dungeon Master party XP rows must show each character''s TNL on the same line as current XP.'
 Assert-Condition -Condition ($html.Contains('id="online-users-summary"') -and $html.Contains('id="online-users-status"') -and $html.Contains('id="online-users-list"')) -Message 'The Dungeon Master online-user display is incomplete.'
-Assert-Condition -Condition ($appScript.Contains('validatePresenceSnapshot') -and $appScript.Contains('updatePresencePolling') -and $appScript.Contains("authenticatedAccount?.role !== 'dm'") -and $appScript.Contains("activeView !== 'dashboard'") -and $appScript.Contains('document.hidden') -and $appScript.Contains('!navigator.onLine') -and $appScript.Contains('await loadPresence();')) -Message 'Authenticated presence must be limited to the Dungeon Master dashboard and paused while hidden or offline.'
-Assert-Condition -Condition ($appScript.Contains('authenticatedPresenceSnapshot !== null') -and $appScript.Contains('loadRevisions') -and $browserSmoke.Contains('Player login started DM presence polling') -and $browserSmoke.Contains('Presence requests continued while the document was hidden')) -Message 'Presence activity must derive from useful revision requests and have browser coverage for player and hidden-state suppression.'
+Assert-Condition -Condition ($appScript.Contains('validatePresenceSnapshot') -and $appScript.Contains('updatePresencePolling') -and $appScript.Contains('document.hidden') -and $appScript.Contains('navigator.onLine')) -Message 'Authenticated presence polling is incomplete.'
 Assert-Condition -Condition ($appScript.Contains('payload.schema_version !== 2') -and $appScript.Contains('Last login ${new Intl.DateTimeFormat') -and $appScript.Contains('Never logged in')) -Message 'Inactive-user last-login rendering is incomplete.'
 Assert-Condition -Condition ($html.Contains('id="word-count-card"') -and $html.Contains('id="word-count-wiki"') -and $html.Contains('id="word-count-ic"') -and $html.Contains('id="word-count-ooc"') -and $html.Contains('id="word-count-date"')) -Message 'The protected word-count dashboard card is incomplete.'
 Assert-Condition -Condition ($html.Contains('data-view="quests"') -and $html.Contains('data-view-panel="quests"') -and $html.Contains('id="quests-status"') -and $html.Contains('id="quest-list"') -and $html.Contains('id="quest-state-cycle"') -and $html.Contains('id="quest-state-cycle-label"')) -Message 'The protected Quests dashboard is incomplete.'
 Assert-Condition -Condition ($html.Contains('data-view="xp-awards"') -and $html.Contains('data-view-panel="xp-awards"') -and $html.Contains('id="xp-awards-status"') -and $html.Contains('id="xp-awards-list"')) -Message 'The protected XP Awards dashboard is incomplete.'
 Assert-Condition -Condition ($appScript.Contains("await requestAuthenticationApi('/xp-awards')") -and $appScript.Contains('canViewXpAwards') -and $appScript.Contains('renderXpAwardsUi') -and $appScript.Contains('validateXpAwardsSnapshot')) -Message 'XP Awards must load through the authenticated broker session.'
+Assert-Condition -Condition ($appScript.Contains('displayProgression') -and $appScript.Contains('xp_to_next_level') -and $appScript.Contains('xp-award-progress-summary')) -Message 'XP Awards character headings must include the current TNL when available.'
 Assert-Condition -Condition (!$appScript.Contains('XP_AWARDS_PLAYER_GROUPS') -and !$appScript.Contains("fetch('XP/") -and !$appScript.Contains("fetch(`XP/")) -Message 'The PWA must not contain direct legacy XP data paths or client-side XP authorization maps.'
 Assert-Condition -Condition ($appScript.Contains('const QUEST_STATUS_VALUES') -and $appScript -match "(?s)const QUEST_STATE_DISPLAY_ORDER = Object\.freeze\(\[\s*'active',\s*'available',\s*'available \(abandoned\)',\s*'gated',\s*'completed',\s*'withdrawn'\s*\]\)" -and $appScript.Contains("'individual-only'") -and $appScript.Contains("'party-only'") -and $appScript.Contains("'individual-or-party'") -and $appScript.Contains("if (viewName === 'quests') questStateFilter = '';") -and $appScript.Contains('QUEST_STATE_DISPLAY_ORDER.indexOf(left.quest.state)') -and $appScript.Contains("const cycleValues = ['', ...availableStates]") -and $appScript.Contains("orderedQuests.filter((quest) => quest.state === questStateFilter)") -and $appScript.Contains('renderQuestUi')) -Message 'The Quests dashboard does not support ordered and filterable lifecycle states.'
 Assert-Condition -Condition ($appScript.Contains("await requestAuthenticationApi('/quests')") -and $appScript.Contains('authenticatedAccount === null')) -Message 'Quest records must load only through the authenticated broker session.'
@@ -349,9 +305,9 @@ Assert-Condition -Condition ($html.Contains('id="quest-alert-dialog"') -and $htm
 Assert-Condition -Condition ($appScript.Contains('submitQuestInterest') -and $appScript.Contains('decideQuestRequest') -and $appScript.Contains('acknowledgeQuestNotification') -and $appScript.Contains('request_status_values') -and $appScript.Contains('pending_requests') -and $appScript.Contains('notifications')) -Message 'The quest-request lifecycle UI is incomplete.'
 Assert-Condition -Condition ($appScript.Contains("authenticatedAccount?.role === 'player'") -and $appScript.Contains("authenticatedAccount?.role !== 'dm'") -and $appScript.Contains("body: { decision }")) -Message 'Quest requests must be player-only and decisions must be Dungeon-Master-only.'
 Assert-Condition -Condition ($html.Contains('data-view="magic-items"') -and $html.Contains('data-view-panel="magic-items"') -and $html.Contains('id="magic-items-status"') -and $html.Contains('id="magic-item-list"')) -Message 'The Magic Items page is incomplete.'
-Assert-Condition -Condition ($appScript.Contains('fetchWikiMagicItems') -and $appScript.Contains('fetchFallbackMagicItems') -and $appScript.Contains("fetch('magic-items.json'") -and $appScript.Contains('data_source: ''fallback''')) -Message 'Magic-item wiki-first fallback loading is incomplete.'
+Assert-Condition -Condition ($appScript.Contains('fetchBrokerMagicItems') -and $appScript.Contains('fetchFallbackMagicItems') -and $appScript.Contains("requestAuthenticationApi('/magic-items')") -and $appScript.Contains("fetch('magic-items.json'") -and $appScript.Contains('data_source: ''fallback''')) -Message 'Magic-item broker authorization and public fallback loading are incomplete.'
 Assert-Condition -Condition ($appScript.Contains('MAGIC_ITEM_LONGEVITY_VALUES') -and $appScript.Contains("'one-shot'") -and $appScript.Contains("'limited-use'") -and $appScript.Contains("'permanent'")) -Message 'Magic-item longevity validation is incomplete.'
-Assert-Condition -Condition ($appScript.Contains('getMagicItemViewers') -and $appScript.Contains('isMagicItemVisible') -and $appScript.Contains("metadata['viewable-by'] || 'all'") -and $appScript.Contains("getMagicItemViewers(viewableBy).includes('all')") -and $appScript.Contains('viewableBy.includes(name)') -and $appScript.Contains('renderMagicItems();')) -Message "Magic-item 'viewable-by' defaults or character-name filtering are incomplete."
+Assert-Condition -Condition ($appScript.Contains('getMagicItemViewers') -and $appScript.Contains('isMagicItemVisible') -and $appScript.Contains("getMagicItemViewers(item?.['viewable-by']).includes('all')") -and !$appScript.Contains('viewableBy.includes(name)') -and $appScript.Contains('renderMagicItems();')) -Message "Magic-item records must be filtered by the broker, not character-name matching in the client."
 Assert-Condition -Condition ($html.Contains('id="magic-item-counts"') -and $html.Contains('id="magic-item-count-one-shot"') -and $html.Contains('id="magic-item-count-limited-use"') -and $html.Contains('id="magic-item-count-permanent"')) -Message 'The Magic Items page is missing its longevity breakdown.'
 Assert-Condition -Condition ($appScript.Contains('const visibleItems = magicItemSnapshot.items.filter(isMagicItemVisible);') -and $appScript.Contains('MAGIC_ITEM_LONGEVITY_VALUES.map') -and $appScript.Contains('magic-item-count-${longevity}')) -Message 'Magic-item longevity totals must be calculated from the items visible to the logged-in character.'
 Assert-Condition -Condition ($styles.Contains('.magic-item-counts') -and $styles.Contains('.magic-item-counts[hidden]')) -Message 'The magic-item longevity breakdown styles are incomplete.'
@@ -382,7 +338,7 @@ Assert-Condition -Condition ($heroTokenStyle.Success -and $heroTokenStyle.Groups
 Assert-Condition -Condition (!$appScript.Contains('XP+Tracking') -and !$html.Contains('XP+Tracking')) -Message 'The XP source URL must remain outside the browser application.'
 Assert-Condition -Condition ($serviceWorker.Contains("url.pathname.startsWith('/scarlethorizons/api/')")) -Message 'The service worker must exclude protected API responses.'
 Assert-Condition -Condition ($serviceWorker.Contains("new Request(asset, { cache: 'reload' })")) -Message 'Service-worker upgrades must bypass stale browser shell caches.'
-Assert-Condition -Condition ($serviceWorker.Contains('OFFLINE_DATA_ASSETS') -and $serviceWorker.Contains("'./optional-packs.json'") -and $serviceWorker.Contains("'./optional-pack-loader.js'") -and !$offlineDataBody.Contains('orcish') -and !$offlineDataBody.Contains('elvish') -and !$offlineDataBody.Contains('ghukliak') -and !$offlineDataBody.Contains('campaign-search')) -Message 'The install shell must include the optional-pack manifest and loader without preloading large optional packs.'
+Assert-Condition -Condition ($serviceWorker.Contains('OFFLINE_DATA_ASSETS') -and $serviceWorker.Contains("'./data/orcish.json'") -and $serviceWorker.Contains("'./data/elvish.json'") -and $serviceWorker.Contains("'./data/ghukliak.json'") -and $serviceWorker.Contains("'./campaign-search.json'")) -Message 'Offline translator and campaign-search data must be preloaded into the data cache.'
 Assert-Condition -Condition ($serviceWorker.Contains('networkFirstData') -and $serviceWorker.Contains("url.pathname.endsWith('/data/heroes.json')") -and $serviceWorker.Contains("url.pathname.includes('/data/hero-tokens/')")) -Message 'Hero-token manifests and images must refresh from the network before using cached copies.'
 Assert-Condition -Condition ($serviceWorker.Contains("url.pathname.endsWith('/campaign-search.json')") -and $serviceWorker.Contains("event.respondWith(networkFirstData(request))")) -Message 'Scheduled campaign-search data must refresh from the network before using its offline cache.'
 Assert-Condition -Condition ($appScript.Contains("updateViaCache: 'none'") -and $appScript.Contains('await registration.update()')) -Message 'The PWA must explicitly check for uncached service-worker updates.'
@@ -393,13 +349,7 @@ Assert-Condition -Condition ($featureModulePaths.Count -eq @($featureModulePaths
 Assert-Condition -Condition ($monitorScript.Contains('RequireProtectedApi') -and $monitorScript.Contains('PWA_MONITOR_CHARACTER_NAME') -and $monitorScript.Contains('PWA_MONITOR_PASSWORD') -and $monitorScript.Contains('MaximumXpAgeSeconds') -and $monitorScript.Contains('MaximumWordCountAgeSeconds')) -Message 'The production monitor must require credentials and explicit XP/word-count freshness limits.'
 Assert-Condition -Condition ($productionResponseContracts.Contains('[bool]$Payload.stale -eq $false') -and $productionResponseContracts.Contains('XP source snapshot is stale') -and $productionResponseContracts.Contains('Word-count source snapshot is stale') -and $productionResponseContracts.Contains('Word-count broker snapshot is stale') -and $productionResponseContracts.Contains('Test-ProductionInteger $Payload.schema_version') -and $deploymentTest.Contains('Assert-ProductionXpResponse') -and $deploymentTest.Contains('Assert-ProductionWordCountResponse')) -Message 'Deployment verification must reject stale or malformed authorized protected responses.'
 Assert-Condition -Condition ($productionResponseContracts.Contains('Invoke-ProductionSessionCleanup') -and $productionResponseContracts.Contains('Assert-ProductionAnonymousSessionResponse') -and $productionResponseContracts.Contains('Assert-ProductionLoginResponse') -and $productionResponseContracts.Contains('Assert-ProductionIdentityResponse') -and $deploymentTest.Contains('Assert-ProductionAnonymousSessionResponse') -and $deploymentTest.Contains('Assert-ProductionLoginResponse') -and $deploymentTest.Contains('Assert-ProductionIdentityResponse') -and $deploymentTest.Contains('Invoke-ProductionSessionCleanup') -and $deploymentTest.Contains('Invoke-ProductionMonitorLogout') -and $deploymentTest.Contains('$postLogoutSessionResponse') -and $deploymentTest.Contains("'X-CSRF-Token'")) -Message 'Anonymous and authorized identity response shapes must use reusable fail-closed contracts, and monitor cleanup must verify logout.'
-Assert-Condition -Condition ($monitorWorkflow.Contains('secrets.PWA_MONITOR_CHARACTER_NAME') -and $monitorWorkflow.Contains('secrets.PWA_MONITOR_PASSWORD') -and $monitorWorkflow.Contains('install-pwa-monitor.php') -and $monitorWorkflow.Contains('run-pwa-monitor.php') -and $privateMonitorInstaller.Contains("'maximum_xp_age_seconds' => 86400") -and $privateMonitorInstaller.Contains("'maximum_word_count_age_seconds' => 604800") -and $privateMonitorScript.Contains("'/xp'") -and $privateMonitorScript.Contains("'/word-counts'") -and $privateMonitorScript.Contains("['character', 'party']") -and $privateMonitorScript.Contains('maximum_xp_age_seconds') -and $privateMonitorScript.Contains('maximum_word_count_age_seconds')) -Message 'The scheduled private production monitor must exercise authorized protected-response and freshness checks.'
-Assert-Condition -Condition (!$monitorWorkflow.Contains("'web-deploy/player-assistant-broker/BrokerService.php'") -and !$monitorWorkflow.Contains("'web-deploy/player-assistant-broker/RevisionService.php'") -and !$privateMonitorInstaller.Contains("'BrokerService.php'") -and !$privateMonitorInstaller.Contains("'RevisionService.php'")) -Message 'The private synthetic monitor deployment must not replace unrelated broker runtime files.'
-Assert-Condition -Condition ($wordCountDeploymentTest.Contains("'RevisionService.php.bak-deploy-*'")) -Message 'Production drift verification must enforce RevisionService backup retention.'
-Assert-Condition -Condition ($brokerService.Contains("require_once __DIR__ . '/RevisionService.php';")) -Message 'BrokerService must self-load RevisionService for compatibility with the previous public entry point.'
-Assert-Condition -Condition ($wordCountDeployment.IndexOf("'RevisionService.php', 'BrokerService.php'", [System.StringComparison]::Ordinal) -ge 0 -and $wordCountDeployment.Contains('foreach (array_reverse($installedFiles) as $installedFile)')) -Message 'The private broker deployment must promote RevisionService before BrokerService and roll back partial file promotion.'
-Assert-Condition -Condition ($wordCountDeployment.Contains('$PublicApiPath') -and $wordCountDeployment.Contains('Invoke-RemotePhp $rollbackCode') -and $wordCountDeployment.Contains('-PublicApiPath $PublicApiPath')) -Message 'The broker deployment must coordinate the public entry point and roll back failed post-install checks.'
-Assert-Condition -Condition ($publicApiIndex.Contains("'/v1/revisions'") -and $httpAuthTests.Contains('$baseUrl/v1/revisions')) -Message 'The public session router and HTTP integration suite must cover /v1/revisions.'
+Assert-Condition -Condition ($monitorWorkflow.Contains('secrets.PWA_MONITOR_CHARACTER_NAME') -and $monitorWorkflow.Contains('secrets.PWA_MONITOR_PASSWORD') -and $monitorWorkflow.Contains('RequireProtectedApi')) -Message 'The scheduled production monitor must exercise authorized protected-response and freshness checks.'
 Assert-Condition -Condition ($prSmokeWorkflow.Contains('.\web-deploy\tests\pwa-monitor-contract-tests.ps1') -and $fullRegressionWorkflow.Contains('./web-deploy/tests/pwa-monitor-contract-tests.ps1')) -Message 'PR smoke and full-regression CI must execute the production-response contract tests.'
 Assert-Condition -Condition ($html.Contains("styles.css?v=$($versionMetadata.PwaStylesRevision)") -and $html.Contains("$($versionMetadata.PwaVersion) PWA") -and $versionScript.Contains("pwaVersion: '$($versionMetadata.PwaVersion)'") -and $versionScript.Contains("metadataRevision: $($versionMetadata.PwaMetadataRevision)") -and $versionScript.Contains("stylesRevision: $($versionMetadata.PwaStylesRevision)") -and $versionScript.Contains("appRevision: $($versionMetadata.PwaAppRevision)") -and $versionScript.Contains("cacheRevision: $($versionMetadata.PwaCacheRevision)") -and $serviceWorker.Contains("importScripts('./version.js?v=$($versionMetadata.PwaMetadataRevision)')") -and $serviceWorker.Contains('VERSION_METADATA.cacheRevision') -and $serviceWorker.Contains('VERSION_METADATA.stylesRevision') -and $serviceWorker.Contains('VERSION_METADATA.appRevision') -and $appScriptEntry.Contains('PLAYER_ASSISTANT_VERSION_METADATA?.pwaVersion') -and $deploymentTest.Contains("'version.js' = @('application/javascript', 'text/javascript')") -and $versionedFeatureModulePaths.Count -eq @($versionedFeatureModulePaths | Where-Object { $serviceWorker.Contains($_) }).Count -and $serviceWorker.Contains("'./level-progression.json'") -and $serviceWorker.Contains("'./magic-items.json'")) -Message 'The PWA shell must use centralized cache-busting metadata, preload every cache-busted feature module, and preload the progression and magic-item data.'
 Assert-Condition -Condition ($html.Contains('value="ghukliak"') -and $html.Contains('Goblin') -and $appScript.Contains("languageSelect?.value === 'ghukliak'") -and $translatorWorker.Contains("message.language === 'ghukliak'")) -Message 'The PWA translator must expose the Goblin/Ghukliak language in its UI and worker.'
@@ -408,7 +358,7 @@ Assert-Condition -Condition (!$translatorWorker.Contains(".replaceAll('’', `"'
 Assert-Condition -Condition ($requestTranslationFunction.IndexOf('const id = ++translatorRequestId;', [System.StringComparison]::Ordinal) -ge 0 -and $requestTranslationFunction.IndexOf('const id = ++translatorRequestId;', [System.StringComparison]::Ordinal) -lt $requestTranslationFunction.IndexOf('if (source.trim().length === 0)', [System.StringComparison]::Ordinal) -and !$appScript.Contains('if (message.loading)')) -Message 'Every translator input state must invalidate prior worker responses before early-return validation.'
 Assert-Condition -Condition (!$serviceWorker.Contains("url.pathname.includes('/XP/')")) -Message 'The service worker must never fetch or cache legacy public XP data.'
 Assert-Condition -Condition ($html.Contains('class="magic-items-dashboard message-player-form"') -and $styles.Contains('.message-player-form > #message-player-recipient') -and $styles.Contains('margin-block: 5px;') -and $styles.Contains('.message-player-form > #message-player-text') -and $styles.Contains('margin-top: 5px;') -and $styles.Contains('.message-player-form > .magic-items-source-row') -and $styles.Contains('margin-top: 10px;')) -Message 'The Message a Player form must preserve the requested spacing between its labels, fields, and submit row.'
-Assert-Condition -Condition ($serviceWorker.Contains("url.pathname.endsWith('/data/party-funds.json')") -and $serviceWorker.Contains('event.respondWith(networkFirstData(request))')) -Message 'Party-funds data must use the installed data-cache fallback.'
+Assert-Condition -Condition ($serviceWorker.Contains("'./party-funds.json'")) -Message 'The PWA shell must preload party-funds data.'
 $apacheConfig = Get-Content -Raw -LiteralPath (Join-Path $PwaRoot '.htaccess')
 Assert-Condition -Condition ($apacheConfig.Contains('RewriteRule ^XP(?:/|$) - [R=404,L,NC]')) -Message 'Apache must deny legacy public XP paths.'
 Assert-Condition -Condition (!(Test-Path -LiteralPath (Join-Path $PwaRoot 'XP'))) -Message 'Legacy XP histories must not remain in the public PWA tree.'
@@ -418,13 +368,12 @@ Assert-Condition -Condition ($apacheConfig.Contains('img-src ''self'' data: http
 Assert-Condition -Condition ($apacheConfig.Contains('connect-src ''self'' https://publish-01.obsidian.md')) -Message 'The content security policy must allow the preferred magic-item wiki source.'
 Assert-Condition -Condition ($apacheConfig.Contains("object-src 'none'") -and $apacheConfig.Contains("frame-src 'none'") -and $apacheConfig.Contains('upgrade-insecure-requests')) -Message 'The content security policy must deny plugin/frame execution and upgrade insecure requests.'
 Assert-Condition -Condition ($apacheConfig.Contains('Strict-Transport-Security "max-age=31536000"')) -Message 'HSTS must be enabled for the PWA host.'
-Assert-Condition -Condition ($apacheConfig.Contains('magic-items\.json|data/party-funds\.json|quests\.json')) -Message 'Apache must require revalidation for public quest, party funds, and magic-item data.'
+Assert-Condition -Condition ($apacheConfig.Contains('magic-items\.json|party-funds\.json|quests\.json')) -Message 'Apache must require revalidation for public quest, party funds, and magic-item data.'
 Assert-Condition -Condition ($apacheConfig.Contains('campaign-search\.json')) -Message 'Apache must require revalidation for the scheduled campaign-search word-count data.'
 Assert-Condition -Condition ($apacheConfig.Contains('data/heroes\.json|data/hero-tokens/[^/]+')) -Message 'Apache must require revalidation for hero-token metadata and images.'
 Assert-Condition -Condition ($html.Contains('id="update-banner"') -and $html.Contains('id="update-apply"') -and $appScript.Contains('SKIP_WAITING') -and $serviceWorker.Contains("event.data?.type === 'SKIP_WAITING'")) -Message 'The PWA must expose an explicit service-worker update prompt.'
 Assert-Condition -Condition ($serviceWorker.Contains('cacheAssets') -and $serviceWorker.Contains('deleteCurrentCaches') -and $serviceWorker.Contains('safeCachePut') -and $serviceWorker.Contains('isValidJsonPayload') -and $serviceWorker.Contains('rejectObsoleteWorker') -and !$serviceWorker.Contains('.then(() => self.skipWaiting())')) -Message 'Service-worker installation and cache reads must fail closed on interrupted, corrupt, quota-limited, or obsolete-worker paths.'
 Assert-Condition -Condition ($serviceWorkerTests.Contains('testPartialInstallDeletesVersionedCaches') -and $serviceWorkerTests.Contains('testQuotaFailureReturnsNetworkResponse') -and $serviceWorkerTests.Contains('testSchemaInvalidCachedJsonIsDeletedAndRefetched') -and $serviceWorkerTests.Contains('testCorruptNavigationFallbackUsesValidOfflineShell') -and $serviceWorkerTests.Contains('testObsoleteWorkerCannotDeleteNewerCaches')) -Message 'Service-worker failure-injection coverage is incomplete.'
-Assert-Condition -Condition ($optionalPackTests.Contains('crypto') -and $optionalPackTests.Contains('optional-pack-loader') -and $optionalPackLifecycleTests.Contains('valid cached pack should survive failed replacement') -and $optionalPackLifecycleTests.Contains('bounded retries') -and $optionalPackLifecycleTests.Contains('removePack')) -Message 'Optional-pack lifecycle coverage is incomplete.'
 Assert-Condition -Condition ($html.Contains('id="xp-retry"') -and $html.Contains('id="quests-retry"') -and $html.Contains('id="xp-awards-retry"') -and $html.Contains('id="messages-retry"') -and $html.Contains('id="magic-items-freshness"') -and $html.Contains('id="party-funds-freshness"') -and $html.Contains('id="messages-freshness"') -and $appScript.Contains("void loadXpAwards(true)")) -Message 'Protected PWA views must expose freshness indicators and explicit retry controls.'
 
 Write-Output "PWA verified: $($lexiconCounts.orcish) Orcish terms, $($lexiconCounts.elvish) Elvish terms, $($lexiconCounts.ghukliak) Ghukliak terms, $(@($heroData.heroes).Count) player tokens and the Dungeon Master token, $($campaignSearch.pageCount) full-text campaign pages, install manifest and offline shell valid."

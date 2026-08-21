@@ -9,7 +9,6 @@ if (!VERSION_METADATA) {
 const CACHE_VERSION = `player-assistant-pwa-${VERSION_METADATA.pwaVersion}-v${VERSION_METADATA.cacheRevision}`;
 const SHELL_CACHE = `${CACHE_VERSION}-shell`;
 const DATA_CACHE = `${CACHE_VERSION}-data`;
-const NAVIGATION_TIMEOUT_MS = 8000;
 const CACHE_GENERATION_PATTERN = /^player-assistant-pwa-(\d+(?:\.\d+)*)-v(\d+)-(?:shell|data)$/;
 const SHELL_ASSETS = [
     './',
@@ -22,17 +21,23 @@ const SHELL_ASSETS = [
     `./modules/dice.js?v=${VERSION_METADATA.appRevision}`,
     `./translator-worker.js?v=${VERSION_METADATA.appRevision}`,
     `./campaign-search-worker.js?v=${VERSION_METADATA.appRevision}`,
+    './optional-pack-loader.js',
+    './optional-packs.json',
     './offline.html',
     './manifest.webmanifest',
     './icons/icon-192.png',
     './icons/icon-512.png',
     './icons/dragon-mark.png',
     './magic-items.json',
-    './level-progression.json',
-    './optional-packs.json',
-    './optional-pack-loader.js'
+    './party-funds.json',
+    './level-progression.json'
 ];
-const OFFLINE_DATA_ASSETS = [];
+const OFFLINE_DATA_ASSETS = [
+    './data/orcish.json',
+    './data/elvish.json',
+    './data/ghukliak.json',
+    './campaign-search.json'
+];
 const canonicalRequestKey = (asset) => {
     const url = new URL(asset, self.location.href);
     return `${url.pathname}${url.search}`;
@@ -113,8 +118,6 @@ const isValidJsonPayload = (pathname, value) => {
             && value.entryCount > 0
             && Number.isInteger(value.maxPhraseWords)
             && value.maxPhraseWords > 0
-            && typeof value.contentHash === 'string'
-            && /^[a-f0-9]{64}$/u.test(value.contentHash)
             && isRecord(value.terms)
             && Object.keys(value.terms).length === value.entryCount;
     }
@@ -125,13 +128,7 @@ const isValidJsonPayload = (pathname, value) => {
             && Array.isArray(value.pages)
             && value.pages.length === value.pageCount
             && Number.isInteger(value.wordCount)
-            && value.wordCount >= 0
-            && value.termIndexVersion === 1
-            && isRecord(value.termIndex)
-            && Object.values(value.termIndex).every((pageIds) => Array.isArray(pageIds)
-                && pageIds.every((pageId) => Number.isInteger(pageId)
-                    && pageId >= 0
-                    && pageId < value.pageCount));
+            && value.wordCount >= 0;
     }
     if (pathname.endsWith('/magic-items.json')) {
         return Number.isInteger(value.schema_version) && Array.isArray(value.items);
@@ -175,33 +172,12 @@ const cacheResponseIfValid = async (cache, request, response) => {
     }
 };
 
-const isValidNavigationResponse = async (response) => {
-    if (!(await isValidCachedResponse('./index.html', response))) return false;
-    try {
-        const body = (await response.clone().text()).toLowerCase();
-        return !/(?:captive portal|login portal|sign in to continue|network authentication)/u.test(body);
-    } catch {
-        return false;
-    }
-};
-
-const fetchWithValidation = async (request, { timeoutMs = 0, validationRequest = request, validator = isValidCachedResponse } = {}) => {
-    const controller = timeoutMs > 0 ? new AbortController() : null;
-    const timeout = controller ? setTimeout(() => controller.abort(), timeoutMs) : null;
-    try {
-        const response = await fetch(request, controller ? { signal: controller.signal } : undefined);
-        if (!(await validator(validationRequest, response))) {
-            throw new Error('Network response failed PWA validation.');
-        }
-        return response;
-    } finally {
-        if (timeout !== null) clearTimeout(timeout);
-    }
-};
-
 self.addEventListener('install', (event) => {
     event.waitUntil(
-        cacheAssets(SHELL_CACHE, SHELL_ASSETS)
+        Promise.all([
+            cacheAssets(SHELL_CACHE, SHELL_ASSETS),
+            cacheAssets(DATA_CACHE, OFFLINE_DATA_ASSETS)
+        ])
             .catch(async (error) => {
                 await deleteCurrentCaches();
                 throw error;
@@ -222,29 +198,27 @@ self.addEventListener('activate', (event) => {
 
 const cacheFirst = async (request, cacheName) => {
     let cache = null;
-    let cached = null;
     try {
         cache = await caches.open(cacheName);
-        cached = await cache.match(request);
+        const cached = await cache.match(request);
         if (await isValidCachedResponse(request, cached)) return cached;
         if (cached) await cache.delete(request);
-        cached = null;
     } catch {
         cache = null;
     }
-    const response = await fetchWithValidation(request);
+    const response = await fetch(request);
     if (cache) await cacheResponseIfValid(cache, request, response);
     return response;
 };
 
 const networkFirstData = async (request) => {
     const cache = await caches.open(DATA_CACHE);
-    const cached = await cache.match(request);
     try {
-        const response = await fetchWithValidation(new Request(request, { cache: 'reload' }));
+        const response = await fetch(new Request(request, { cache: 'reload' }));
         await cacheResponseIfValid(cache, request, response);
         return response;
     } catch {
+        const cached = await cache.match(request);
         if (await isValidCachedResponse(request, cached)) return cached;
         if (cached) await cache.delete(request);
         throw new Error('Network and cached PWA data are unavailable.');
@@ -253,18 +227,11 @@ const networkFirstData = async (request) => {
 
 const networkFirstNavigation = async (request) => {
     const cache = await caches.open(SHELL_CACHE);
-    const cachedIndex = await cache.match('./index.html');
     try {
-        const response = await fetchWithValidation(request, {
-            timeoutMs: NAVIGATION_TIMEOUT_MS,
-            validationRequest: './index.html',
-            validator: async (_request, candidate) => isValidNavigationResponse(candidate)
-        });
+        const response = await fetch(request);
         await cacheResponseIfValid(cache, './index.html', response);
         return response;
     } catch {
-        if (await isValidCachedResponse('./index.html', cachedIndex)) return cachedIndex;
-        if (cachedIndex) await cache.delete('./index.html');
         for (const fallbackRequest of ['./index.html', './offline.html']) {
             const cached = await cache.match(fallbackRequest);
             if (await isValidCachedResponse(fallbackRequest, cached)) return cached;
@@ -286,36 +253,13 @@ self.addEventListener('fetch', (event) => {
         return;
     }
 
-    if (url.searchParams.has('pack-hash')) {
-        event.respondWith((async () => {
-            try {
-                return await fetch(request);
-            } catch (error) {
-                for (const cacheName of await caches.keys()) {
-                    if (!cacheName.startsWith('player-assistant-optional-pack-')) continue;
-                    const cached = await (await caches.open(cacheName)).match(request);
-                    if (cached) return cached;
-                }
-                throw error;
-            }
-        })());
-        return;
-    }
-
-    if (url.pathname.endsWith('/data/orcish.json')
-        || url.pathname.endsWith('/data/elvish.json')
-        || url.pathname.endsWith('/data/ghukliak.json')) {
-        event.respondWith(cacheFirst(request, DATA_CACHE));
-        return;
-    }
-
     if (url.pathname.endsWith('/data/heroes.json')
         || url.pathname.includes('/data/hero-tokens/')) {
         event.respondWith(networkFirstData(request));
         return;
     }
 
-    if (url.pathname.endsWith('/data/party-funds.json')) {
+    if (url.pathname.endsWith('/party-funds.json')) {
         event.respondWith(networkFirstData(request));
         return;
     }

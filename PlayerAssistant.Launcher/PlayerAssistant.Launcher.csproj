@@ -12,10 +12,6 @@
     <RuntimeIdentifier>win-x64</RuntimeIdentifier>
     <SelfContained>true</SelfContained>
     <PublishSingleFile>true</PublishSingleFile>
-    <!-- The analyzer implicitly restores an SDK-patch-specific ILLink package.
-         Disable analysis so the lock file remains stable across .NET 10 SDK patches;
-         single-file publishing itself remains enabled. -->
-    <EnableSingleFileAnalyzer>false</EnableSingleFileAnalyzer>
     <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
     <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
     <DebugType>none</DebugType>

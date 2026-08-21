@@ -59,6 +59,26 @@ const sessionAccount = (request) => ({
     dm: dungeonMasterAccount
 }[sessionRole(request)] || null);
 const expectedErrorResponse = { 'X-CI-Expected-Error': 'true' };
+const magicItemFixture = Object.freeze({
+    schema_version: 1,
+    source: 'https://publish.obsidian.md/scarlethorizons/Magic+Items/Kirkilston+Crew+Magic+Items',
+    items: [
+        ['Public Relic', 'all'],
+        ['Canonical Relic', 'ci-hero'],
+        ['First Name Leak', 'ci'],
+        ['Substring Leak', 'hero'],
+        ['Same First Name Leak', 'ci-rival']
+    ].map(([name, viewers]) => ({
+        name,
+        description: `${name} description.`,
+        'date-acquired': '8.17.2026',
+        'meta-date-acquired': '8.17.2026',
+        longevity: 'permanent',
+        provenance: 'Browser smoke fixture',
+        whereabouts: 'CI vault',
+        'viewable-by': viewers
+    }))
+});
 let xpAwardsProjected = false;
 let messagesRead = false;
 let messageContinuationRequests = 0;
@@ -68,6 +88,7 @@ let messageListFailuresRemaining = 0;
 let messageListRequests = 0;
 let expireSessionOnNextRevision = false;
 let presenceRequests = 0;
+let delayMagicItemsForPlayerA = false;
 
 const readJsonBody = async (request) => {
     let body = '';
@@ -198,6 +219,8 @@ const questPayload = (currentAccount) => ({
         reward: 'Confidence',
         accepted_on: '',
         expires_on: '',
+        completed_on: '',
+        completed_meta_date: '',
         request_status: null,
         wiki_url: 'https://publish.obsidian.md/scarlethorizons/Quests/CI+Quest'
     }],
@@ -348,6 +371,23 @@ const serveApi = async (request, response, pathname) => {
         });
         return;
     }
+    if (route === '/magic-items' && request.method === 'GET') {
+        const currentAccount = requireSession(request, response);
+        if (!currentAccount) return;
+        if (currentAccount === playerAccount && delayMagicItemsForPlayerA) {
+            await new Promise((resolve) => setTimeout(resolve, 150));
+        }
+        const authorizedItems = magicItemFixture.items
+            .filter((item) => item['viewable-by'] === 'all'
+                || item['viewable-by'] === currentAccount.character_key)
+            .map((item) => ({ ...item, 'viewable-by': 'all' }));
+        jsonResponse(response, 200, {
+            ...magicItemFixture,
+            source: 'broker',
+            items: authorizedItems
+        });
+        return;
+    }
     if (route === '/quests' && request.method === 'GET') {
         const currentAccount = requireSession(request, response);
         if (!currentAccount) return;
@@ -434,6 +474,10 @@ const serveApi = async (request, response, pathname) => {
 const serveStatic = async (request, response, pathname) => {
     let relativePath = pathname.slice(pwaPrefix.length);
     if (relativePath === '' || relativePath.endsWith('/')) relativePath += 'index.html';
+    if (relativePath === 'magic-items.json') {
+        jsonResponse(response, 200, magicItemFixture);
+        return;
+    }
     relativePath = decodeURIComponent(relativePath).replaceAll('/', '\\');
     const filePath = normalize(join(pwaRoot, relativePath));
     if (relative(pwaRoot, filePath).startsWith('..')) {
@@ -488,6 +532,13 @@ let browser;
 try {
     browser = await chromium.launch({ headless: true });
     const context = await browser.newContext({ serviceWorkers: 'allow' });
+    await context.route(
+        /https:\/\/publish(?:-01)?\.obsidian\.md\/.*Magic(?:\+|%20)Items/u,
+        (route) => route.fulfill({
+            status: 404,
+            headers: { 'X-CI-Expected-Error': 'true' },
+            body: 'Not available in the deterministic browser fixture.'
+        }));
     const page = await context.newPage();
     await page.emulateMedia({ reducedMotion: 'reduce' });
     const pageErrors = [];
@@ -519,8 +570,11 @@ try {
         }
     });
     page.on('requestfailed', (request) => {
-        if (!offlineExpected) {
-            requestFailures.push(`${request.method()} ${request.url()}: ${request.failure()?.errorText || 'failed'}`);
+        const errorText = request.failure()?.errorText || 'failed';
+        const expectedMagicItemCancellation = request.url().includes('/scarlethorizons/api/v1/magic-items')
+            && errorText === 'net::ERR_ABORTED';
+        if (!offlineExpected && !expectedMagicItemCancellation) {
+            requestFailures.push(`${request.method()} ${request.url()}: ${errorText}`);
         }
     });
     page.on('response', (response) => {
@@ -720,6 +774,15 @@ try {
     const playerXpTotal = await page.locator('#xp-total').textContent();
     if (!playerXpTotal.startsWith('2,000')) {
         throw new Error(`Current XP dashboard did not render the expected total: ${playerXpTotal}; status=${await page.locator('#xp-status').textContent()}`);
+    }
+    await page.locator('[data-view="magic-items"]').click();
+    await page.locator('#magic-item-list').waitFor({ state: 'visible' });
+    const visibleMagicItems = await page.locator('#magic-item-list .magic-item-card').allTextContents();
+    if (visibleMagicItems.length !== 2
+        || !visibleMagicItems.some((text) => text.includes('Public Relic'))
+        || !visibleMagicItems.some((text) => text.includes('Canonical Relic'))
+        || visibleMagicItems.some((text) => /First Name Leak|Substring Leak|Same First Name Leak/u.test(text))) {
+        throw new Error(`Magic-item canonical viewer isolation failed: ${JSON.stringify(visibleMagicItems)}.`);
     }
     await page.locator('[data-view="quests"]').click();
     await page.locator('#quest-list').waitFor({ state: 'visible' });
@@ -930,6 +993,51 @@ try {
     await page.locator('#auth-dialog-close').click();
     await page.locator('#auth-dialog').waitFor({ state: 'hidden' });
     await page.waitForFunction(() => document.querySelector('#xp-total')?.textContent?.startsWith('1,200'));
+    await page.locator('[data-view="magic-items"]').click();
+    await page.locator('#magic-item-list').waitFor({ state: 'visible' });
+    const secondPlayerMagicItems = await page.locator('#magic-item-list .magic-item-card').allTextContents();
+    if (secondPlayerMagicItems.length !== 1
+        || !secondPlayerMagicItems.some((text) => text.includes('Public Relic'))
+        || secondPlayerMagicItems.some((text) => /Canonical Relic|First Name Leak|Substring Leak|Same First Name Leak/u.test(text))) {
+        throw new Error(`Magic-item account transition leaked the prior account snapshot: ${JSON.stringify(secondPlayerMagicItems)}.`);
+    }
+
+    delayMagicItemsForPlayerA = true;
+    await page.locator('#auth-button').click();
+    await page.locator('#auth-logout').click();
+    await page.locator('#auth-button-label').getByText('Log in', { exact: true }).waitFor();
+    await page.locator('#auth-button').click();
+    await page.locator('#auth-character-name').fill('CI Hero');
+    await page.locator('#auth-password').fill('ci-password');
+    await page.locator('#auth-submit').click();
+    await page.locator('#auth-button-label').getByText('CI Hero', { exact: true }).waitFor();
+    await page.locator('#auth-dialog-close').click();
+    await page.locator('#auth-dialog').waitFor({ state: 'hidden' });
+    const delayedMagicRequest = page.waitForRequest((request) =>
+        request.url().includes('/v1/magic-items'));
+    await page.locator('[data-view="magic-items"]').click();
+    await delayedMagicRequest;
+    await page.locator('#auth-button').click();
+    await page.locator('#auth-logout').click();
+    await page.locator('#auth-button-label').getByText('Log in', { exact: true }).waitFor();
+    await page.locator('#auth-button').click();
+    await page.locator('#auth-character-name').fill('Max');
+    await page.locator('#auth-password').fill('ci-second-password');
+    await page.locator('#auth-submit').click();
+    await page.locator('#auth-button-label').getByText('Max', { exact: true }).waitFor();
+    await page.locator('#auth-dialog-close').click();
+    await page.locator('#auth-dialog').waitFor({ state: 'hidden' });
+    await page.locator('[data-view="magic-items"]').click();
+    await page.locator('#magic-item-list').waitFor({ state: 'visible' });
+    await page.waitForTimeout(250);
+    const delayedMagicItems = await page.locator('#magic-item-list .magic-item-card').allTextContents();
+    delayMagicItemsForPlayerA = false;
+    if (delayedMagicItems.length !== 1
+        || !delayedMagicItems.some((text) => text.includes('Public Relic'))
+        || delayedMagicItems.some((text) => /Canonical Relic|First Name Leak|Substring Leak|Same First Name Leak/u.test(text))) {
+        throw new Error(`Delayed prior-account magic items repopulated the current account: ${JSON.stringify(delayedMagicItems)}.`);
+    }
+
     await page.locator('[data-view="xp-awards"]').click();
     await page.locator('#xp-awards-list').waitFor({ state: 'visible' });
     const secondPlayerAwardText = await page.locator('#xp-awards-list').textContent();
@@ -983,13 +1091,14 @@ try {
     if (presenceRequests <= presenceRequestsBeforeDmLogin) {
         throw new Error('Dungeon Master dashboard did not load presence data.');
     }
-    const presenceRequestsBeforeHidden = presenceRequests;
     await page.evaluate(() => {
         Object.defineProperty(document, 'hidden', { configurable: true, value: true });
         document.dispatchEvent(new Event('visibilitychange'));
     });
     await page.waitForTimeout(100);
-    if (presenceRequests !== presenceRequestsBeforeHidden) {
+    const presenceRequestsAfterHiddenSettled = presenceRequests;
+    await page.waitForTimeout(150);
+    if (presenceRequests !== presenceRequestsAfterHiddenSettled) {
         throw new Error('Presence requests continued while the document was hidden.');
     }
     await page.evaluate(() => {
@@ -1068,7 +1177,7 @@ try {
     await page.waitForFunction(() => document.querySelector('#search-guidance')?.textContent?.includes('pack ready offline'));
     await page.locator('#campaign-search').fill('Kirkilston');
     await page.locator('#search-results .search-result').first().waitFor({ state: 'visible' });
-    if (![...workerUrls].some((url) => url.includes('/campaign-search-worker.js?v=89'))) {
+    if (![...workerUrls].some((url) => url.includes('/campaign-search-worker.js?v=90'))) {
         throw new Error(`Campaign search did not start its dedicated worker: ${JSON.stringify([...workerUrls])}.`);
     }
 
@@ -1099,7 +1208,7 @@ try {
             throw new Error(`Offline feature data was not cached: ${requiredPath}`);
         }
     }
-    if (!cachedUrls.some((url) => url.endsWith('/campaign-search-worker.js?v=89'))) {
+    if (!cachedUrls.some((url) => url.endsWith('/campaign-search-worker.js?v=90'))) {
         throw new Error('Campaign search worker was not present in the offline shell cache.');
     }
     await page.evaluate(async () => {
@@ -1130,6 +1239,7 @@ try {
         throw new Error('Offline startup smoke loaded outside the PWA scope.');
     }
 
+    await page.waitForFunction(() => document.querySelector('#lexicon-status')?.textContent?.includes('lexicon ready'));
     await page.locator('#translator-input').fill('');
     await page.locator('#translator-input').fill('hello');
     try {
