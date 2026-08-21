@@ -40,6 +40,7 @@ $browserTestPath = Join-Path $RepoRoot 'pwa\browser-smoke.mjs'
 $translatorWorkerTestPath = Join-Path $RepoRoot 'pwa\translator-worker-tests.mjs'
 $serviceWorkerTestPath = Join-Path $RepoRoot 'pwa\service-worker-tests.mjs'
 $httpAuthTestPath = Join-Path $RepoRoot 'web-deploy\tests\run-http-auth-tests.ps1'
+$nativeFailFastVerifierPath = Join-Path $RepoRoot 'verify-native-test-fail-fast.ps1'
 $brokerOperationsPath = Join-Path $RepoRoot 'web-deploy\player-assistant-broker\BrokerOperations.php'
 $operationsConfigExamplePath = Join-Path $RepoRoot 'web-deploy\player-assistant-broker\config.operations.example.php'
 $wordCountDeploymentPath = Join-Path $RepoRoot 'web-deploy\deploy-word-count-refresh.ps1'
@@ -77,7 +78,11 @@ Assert-Condition -Condition (Test-Path -LiteralPath $lexiconVerifierPath -PathTy
 Assert-Condition -Condition ($workflow.Contains('Load canonical version metadata') -and $workflow.Contains('.\version-metadata.ps1')) -Message 'The required job must load canonical version metadata for release artifact paths.'
 Assert-Condition -Condition ($workflow.Contains('python .\verify-version-metadata.py')) -Message 'The required job must verify canonical version projections.'
 Assert-Condition -Condition (Test-Path -LiteralPath $versionVerifierPath -PathType Leaf) -Message 'The canonical version verifier is missing.'
-Assert-Condition -Condition ($workflow.Contains("Get-ChildItem -LiteralPath .\web-deploy\tests -Filter '*-tests.php' -File") -and $workflow.Contains('ForEach-Object { php $_.FullName }')) -Message 'The required job must run all PHP broker test suites.'
+Assert-Condition -Condition ($workflow.Contains("Get-ChildItem -LiteralPath .\web-deploy\tests -Filter '*-tests.php' -File") -and $workflow.Contains('ForEach-Object {')) -Message 'The required job must run all PHP broker test suites.'
+Assert-Condition -Condition ($workflow.Contains('throw "PHP suite ''$($suite.Name)'' failed with exit code $exitCode."')) -Message 'Each PHP suite must fail the workflow immediately and identify the failing suite.'
+Assert-Condition -Condition ($workflow.Contains('throw "Verification ''$Name'' failed with exit code $exitCode."')) -Message 'Sequential PowerShell/native verification commands must fail immediately and identify the failing suite.'
+Assert-Condition -Condition (Test-Path -LiteralPath $nativeFailFastVerifierPath -PathType Leaf) -Message 'The native test fail-fast policy self-test is missing.'
+Assert-Condition -Condition ($workflow.Contains('.\verify-native-test-fail-fast.ps1')) -Message 'The required job must execute the native test fail-fast policy self-test.'
 $brokerOperations = Get-Content -Raw -LiteralPath $brokerOperationsPath
 $operationsConfigExample = Get-Content -Raw -LiteralPath $operationsConfigExamplePath
 $wordCountDeployment = Get-Content -Raw -LiteralPath $wordCountDeploymentPath
@@ -100,7 +105,7 @@ for ($lineIndex = 0; $lineIndex -lt $workflowLines.Count; $lineIndex++) {
     Assert-Condition -Condition ($stepBlock -match "(?m)^\s+if: github[.]event_name == 'push'\s*$") -Message "A secret-bearing workflow step can run outside protected push events near line $($lineIndex + 1)."
 }
 Assert-Condition -Condition ($workflow.Contains('./web-deploy/tests/publish-word-counts-tests.ps1')) -Message 'The required workflow must run the PowerShell publication test suite.'
-Assert-Condition -Condition ($workflow.Contains('./web-deploy/tests/run-http-auth-tests.ps1 -PhpPath (Get-Command php).Source')) -Message 'The required workflow must run the HTTP authentication integration suite with the setup PHP executable.'
+Assert-Condition -Condition ($workflow.Contains("Invoke-CheckedVerification 'HTTP authentication' './web-deploy/tests/run-http-auth-tests.ps1'")) -Message 'The required workflow must run the HTTP authentication integration suite with the setup PHP executable.'
 Assert-Condition -Condition ($httpAuthTest.Contains("FullName -eq 'System.Net.Http.HttpResponseMessage'") -and $httpAuthTest.Contains('$_.ErrorDetails.Message') -and $httpAuthTest.Contains('ReadAsStringAsync()')) -Message 'The HTTP authentication suite must inspect disposed error responses under PowerShell 7 without breaking Windows PowerShell.'
 Assert-Condition -Condition ($workflow.Contains('./web-deploy/tests/backup-encryption-tests.ps1')) -Message 'The required workflow must run the broker backup encryption suite.'
 Assert-Condition -Condition ($workflow.Contains('.\verify-word-count-schedule.ps1')) -Message 'The required workflow must verify the full word-count scheduled publisher.'

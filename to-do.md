@@ -288,10 +288,10 @@ Planned security correction: eliminate first-name equivalence from authenticatio
   - [x] Prepend the PHP opening tag in both `Invoke-RemotePhp` writers and reject placeholder or non-PHP payloads before upload.
   - [x] Require a structured semantic success response and expected state mutation, not merely process exit zero.
   - [x] Keep `deploy-atomicity-tests.php` red-before/green-after coverage for the generated production payloads.
-- [ ] Make every native test invocation fail the workflow immediately.
-  - [ ] Check and throw on each PHP suite's exit code inside the `ForEach-Object` loop instead of allowing a later passing suite to mask an earlier failure.
-  - [ ] Apply the same fail-fast rule to sequential PowerShell/native verification commands and preserve the failing suite name in diagnostics.
-  - [ ] Add a CI-policy self-test with an intentional intermediate native-command failure followed by a passing command; the job must still fail.
+- [x] Make every native test invocation fail the workflow immediately.
+  - [x] Check and throw on each PHP suite's exit code inside the `ForEach-Object` loop instead of allowing a later passing suite to mask an earlier failure.
+  - [x] Apply the same fail-fast rule to sequential PowerShell/native verification commands and preserve the failing suite name in diagnostics.
+  - [x] Add a CI-policy self-test with an intentional intermediate native-command failure followed by a passing command; the job must still fail.
 - [ ] Eliminate the current broker production/test contract drift.
   - [ ] Make `broker-startup-tests.php` pass; request startup must not run `DatabaseMigrationService::migrate()` or mutate schema from service constructors.
   - [ ] Make `message-pagination-tests.php` pass; production `MessageService` must match the checked-in pagination, retention, cursor, and snapshot-consistency contract.
