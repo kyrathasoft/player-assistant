@@ -718,6 +718,13 @@ internal static partial class TestCases
             "account switching retained the previous account's hero identity");
     }
 
+    // Compatibility names retained for existing catalog entries during merge resolution.
+    internal static void XpIdentityRejectsSameFirstNameCrossAccountPassword()
+        => CrossAccountPasswordAccessIsDenied();
+
+    internal static void XpIdentityAcceptsExplicitUniqueAlias()
+        => ExplicitAliasesAuthenticateOnlyTheirOwner();
+
     internal static void RunCanonicalIdentityRegressionCases()
     {
         IdentityFixturesAreDistinctAndSynthetic();

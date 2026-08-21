@@ -284,10 +284,10 @@ Planned security correction: eliminate first-name equivalence from authenticatio
 - [x] Make PWA deployment finalization durable before rollback evidence is removed.
   - [x] Persist a rollback-forbidden/finalized transaction state before deleting backups; recover a lost SSH response by querying transaction status rather than invoking rollback blindly.
   - [x] Fault-inject a disconnect after remote finalization succeeds and prove the live release remains intact and restartable cleanup is safe.
-- [ ] Restore executable remote PHP controllers for word-count deployment and verification.
-  - [ ] Prepend the PHP opening tag in both `Invoke-RemotePhp` writers and reject placeholder or non-PHP payloads before upload.
-  - [ ] Require a structured semantic success response and expected state mutation, not merely process exit zero.
-  - [ ] Keep `deploy-atomicity-tests.php` red-before/green-after coverage for the generated production payloads.
+- [x] Restore executable remote PHP controllers for word-count deployment and verification.
+  - [x] Prepend the PHP opening tag in both `Invoke-RemotePhp` writers and reject placeholder or non-PHP payloads before upload.
+  - [x] Require a structured semantic success response and expected state mutation, not merely process exit zero.
+  - [x] Keep `deploy-atomicity-tests.php` red-before/green-after coverage for the generated production payloads.
 - [ ] Make every native test invocation fail the workflow immediately.
   - [ ] Check and throw on each PHP suite's exit code inside the `ForEach-Object` loop instead of allowing a later passing suite to mask an earlier failure.
   - [ ] Apply the same fail-fast rule to sequential PowerShell/native verification commands and preserve the failing suite name in diagnostics.

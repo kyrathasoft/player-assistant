@@ -23,60 +23,52 @@ function removeDeploymentFixture(string $path): void
 
 $deploymentScript = (string)file_get_contents(__DIR__ . '/../deploy-word-count-refresh.ps1');
 $deploymentVerifier = (string)file_get_contents(__DIR__ . '/../test-word-count-refresh-deployment.ps1');
+deployAtomicityAssert($deploymentScript !== '' && $deploymentVerifier !== '', 'Unable to read word-count deployment controllers.');
 deployAtomicityAssert(
-    str_contains($deploymentScript, '[IO.File]::WriteAllText($localScript, "<?php`n" + $Code')
-        && str_contains($deploymentVerifier, '[IO.File]::WriteAllText($localScript, "<?php`n" + $Code'),
-    'Remote PHP transaction scripts must include an opening PHP tag.');
+    str_contains($deploymentScript, '$payload = "<?php`n" + $Code')
+        && str_contains($deploymentVerifier, '$payload = "<?php`n" + $Code')
+        && str_contains($deploymentScript, '[IO.File]::WriteAllText($localScript, $payload')
+        && str_contains($deploymentVerifier, '[IO.File]::WriteAllText($localScript, $payload'),
+    'Both remote PHP controllers must prepend an opening PHP tag.');
 deployAtomicityAssert(
-    !preg_match('/^\s+[.]Replace\(/m', $deploymentVerifier),
-    'The production verifier must remain callable under inherited strict mode.');
+    str_contains($deploymentScript, 'Remote PHP code contains an unresolved placeholder')
+        && str_contains($deploymentVerifier, 'Remote PHP code contains an unresolved placeholder'),
+    'Both remote PHP controllers must reject unresolved placeholders.');
 deployAtomicityAssert(
-    !str_contains($deploymentVerifier, '$health.word_count_refresh')
-        && !str_contains($deploymentVerifier, '$health.operations'),
-    'Optional health fields must be inspected safely under inherited strict mode.');
+    str_contains($deploymentScript, 'ConvertFrom-Json')
+        && str_contains($deploymentVerifier, 'ConvertFrom-Json')
+        && str_contains($deploymentScript, 'did not report semantic success')
+        && str_contains($deploymentVerifier, 'did not report semantic success'),
+    'Both remote PHP controllers must require structured semantic success responses.');
 deployAtomicityAssert(
-    str_contains($deploymentScript, "if (\$PrivateDirectory -cne '/home/dh_4gg2za/player-assistant-broker')")
-        && str_contains($deploymentScript, "if (\$PublicApiPath -cne '/home/dh_4gg2za/bryanmiller.us/scarlethorizons/api/index.php')"),
-    'Deployment paths must be pinned to the approved private root and public API target.');
+    str_contains($deploymentScript, "-ExpectedOperation 'word-count-install' -RequireStateMutation -Attempts 1")
+        && str_contains($deploymentScript, "-ExpectedOperation 'word-count-cron-install' -RequireStateMutation -Attempts 1")
+        && str_contains($deploymentVerifier, "-ExpectedOperation 'word-count-verify'"),
+    'Mutating controllers must require expected state mutation and the verifier must require its operation identity.');
 deployAtomicityAssert(
-    str_contains($deploymentScript, 'Invoke-RemotePhp $installCode -Attempts 1')
-        && str_contains($deploymentScript, 'Invoke-RemotePhp $publicInstallCode -Attempts 1')
-        && str_contains($deploymentScript, 'Invoke-RemotePhp $cronCode -Attempts 1'),
-    'Mutating remote transactions must not be retried after ambiguous completion.');
-deployAtomicityAssert(
-    str_contains($deploymentScript, "if (is_file(\$rollbackDirectory . '/manifest.json'))"),
-    'The private installer must preserve a write-once rollback snapshot.');
-deployAtomicityAssert(
-    str_contains($deploymentScript, "'CharacterAuthService.php'")
-        && str_contains($deploymentScript, "'MessageService.php'")
-        && str_contains($deploymentScript, "'XpTrackingService.php'")
-        && str_contains($deploymentVerifier, "'CharacterAuthService.php'")
-        && str_contains($deploymentVerifier, "'MessageService.php'")
-        && str_contains($deploymentVerifier, "'XpTrackingService.php'"),
-    'The deployment and verifier manifests must include every runtime service changed by the startup refactor.');
-deployAtomicityAssert(
-    str_contains($deploymentScript, 'VACUUM INTO')
-        && str_contains($deploymentScript, "\$manifest['database']")
-        && str_contains($deploymentScript, "\$database['backup']"),
-    'The deployment transaction must snapshot and restore the SQLite database during rollback.');
-$installerPattern = <<<'REGEX'
-~\$installCode = @'\R(.*?)\R'@\.Replace\('__INSTALL_DATA__'~s
-REGEX;
-deployAtomicityAssert(
-    preg_match($installerPattern, $deploymentScript, $matches) === 1,
-    'Unable to extract the inline broker installer.');
+    str_contains($deploymentScript, "'operation' => 'word-count-install'")
+        && str_contains($deploymentScript, "'operation' => 'word-count-cron-install'")
+        && str_contains($deploymentVerifier, "\$result['operation'] = 'word-count-verify';")
+        && str_contains($deploymentScript, "'state_mutation' => true")
+        && str_contains($deploymentVerifier, "\$result['state_mutation'] = false;"),
+    'Generated controllers must report operation identity and mutation semantics.');
 
-$root = sys_get_temp_dir() . DIRECTORY_SEPARATOR . 'pa-deploy-atomicity-' . bin2hex(random_bytes(6));
+$installerPattern = '~\$installCode = @\'\R(.*?)\R\'@\.Replace\(\'__INSTALL_DATA__\'~s';
+$cronPattern = '~\$cronCode = @\'\R(.*?)\R\'@\.Replace\(\'__CRON_LINE__\'~s';
+$verifierPattern = '~\$remoteCode = @\'\R(.*?)\R\'@\.Replace\(\'__PRIVATE_DIRECTORY__\'~s';
+deployAtomicityAssert(preg_match($installerPattern, $deploymentScript, $installerMatches) === 1, 'Unable to extract the generated install controller.');
+deployAtomicityAssert(preg_match($cronPattern, $deploymentScript, $cronMatches) === 1, 'Unable to extract the generated cron controller.');
+deployAtomicityAssert(preg_match($verifierPattern, $deploymentVerifier, $verifierMatches) === 1, 'Unable to extract the generated verification controller.');
+
+$root = sys_get_temp_dir() . DIRECTORY_SEPARATOR . 'pa-deploy-payload-' . bin2hex(random_bytes(6));
 $stage = $root . DIRECTORY_SEPARATOR . '.word-count-deploy-fixture';
 mkdir($stage, 0700, true);
-file_put_contents($root . DIRECTORY_SEPARATOR . 'RevisionService.php', "<?php\n// original revision service\n");
+$files = ['BrokerService.php', 'BrokerAlertService.php', 'BrokerOperations.php', 'DatabaseMigrationService.php', 'QuestService.php', 'WordCountService.php', 'refresh-word-counts.php', 'broker-maintenance.php'];
+foreach ($files as $file) {
+    file_put_contents($stage . DIRECTORY_SEPARATOR . $file, "<?php\n// candidate fixture\n");
+}
 file_put_contents($root . DIRECTORY_SEPARATOR . 'config.php', "<?php\nreturn [];\n");
-file_put_contents($stage . DIRECTORY_SEPARATOR . 'RevisionService.php', "<?php\n// candidate revision service\n");
-file_put_contents($stage . DIRECTORY_SEPARATOR . 'BrokerService.php', "<?php\n// candidate broker service\n");
-mkdir($root . DIRECTORY_SEPARATOR . 'BrokerService.php', 0700);
-file_put_contents($root . DIRECTORY_SEPARATOR . 'BrokerService.php' . DIRECTORY_SEPARATOR . 'blocker', 'block replacement');
-
-$data = [
+$fixtureData = [
     'private_directory' => $root,
     'source_url' => 'https://example.invalid/word-counts.json',
     'status_path' => $root . DIRECTORY_SEPARATOR . 'status.json',
@@ -84,178 +76,46 @@ $data = [
     'public_key' => 'fixture-public-key',
     'keep_backups' => 5,
     'deploy_id' => 'fixture',
-    'rollback_directory' => $root . DIRECTORY_SEPARATOR . '.word-count-rollback-fixture',
-    'files' => [
-        'RevisionService.php' => $stage . DIRECTORY_SEPARATOR . 'RevisionService.php',
-        'BrokerService.php' => $stage . DIRECTORY_SEPARATOR . 'BrokerService.php',
-    ],
+    'files' => array_combine($files, array_map(static fn(string $file): string => $stage . DIRECTORY_SEPARATOR . $file, $files)),
 ];
-$payload = base64_encode(json_encode($data, JSON_THROW_ON_ERROR));
-$installer = str_replace(
-    ["__INSTALL_DATA__", '/usr/bin/php -l '],
-    [$payload, escapeshellarg(PHP_BINARY) . ' -l '],
-    $matches[1]);
-$installerPath = $root . DIRECTORY_SEPARATOR . 'installer.php';
-file_put_contents($installerPath, "<?php\n" . $installer);
-
+$installCode = str_replace(
+    '__INSTALL_DATA__',
+    base64_encode(json_encode($fixtureData, JSON_THROW_ON_ERROR)),
+    $installerMatches[1]
+);
+$cronCode = str_replace('__CRON_LINE__', base64_encode("17 */6 * * * /usr/bin/php refresh-word-counts.php\n"), $cronMatches[1]);
+$verifyCode = str_replace('__PRIVATE_DIRECTORY__', str_replace("'", "\\'", $root), $verifierMatches[1]);
+$phpBinary = PHP_BINARY;
+$installCode = str_replace('/usr/bin/php', $phpBinary, $installCode);
+$payloads = [
+    'install.php' => $installCode,
+    'cron.php' => $cronCode,
+    'verify.php' => $verifyCode,
+];
 try {
+    foreach ($payloads as $name => $code) {
+        deployAtomicityAssert(!str_contains($code, '__INSTALL_DATA__') && !str_contains($code, '__CRON_LINE__') && !str_contains($code, '__PRIVATE_DIRECTORY__'), "$name retained an unresolved placeholder.");
+        $path = $root . DIRECTORY_SEPARATOR . $name;
+        file_put_contents($path, "<?php\n" . $code);
+        $output = [];
+        $exitCode = 0;
+        exec(escapeshellarg($phpBinary) . ' -l ' . escapeshellarg($path) . ' 2>&1', $output, $exitCode);
+        deployAtomicityAssert($exitCode === 0, "$name is not executable PHP: " . implode("\n", $output));
+    }
+
     $output = [];
     $exitCode = 0;
-    exec(escapeshellarg(PHP_BINARY) . ' ' . escapeshellarg($installerPath) . ' 2>&1', $output, $exitCode);
-    deployAtomicityAssert($exitCode !== 0, 'The forced partial deployment unexpectedly succeeded.');
-    deployAtomicityAssert(
-        file_get_contents($root . DIRECTORY_SEPARATOR . 'RevisionService.php') === "<?php\n// original revision service\n",
-        'A failed later promotion did not restore the previously replaced RevisionService.');
-    deployAtomicityAssert(
-        is_dir($root . DIRECTORY_SEPARATOR . 'BrokerService.php'),
-        'The forced failure target was unexpectedly replaced.');
-    deployAtomicityAssert(
-        file_get_contents($root . DIRECTORY_SEPARATOR . 'config.php') === "<?php\nreturn [];\n",
-        'A failed file promotion changed private configuration.');
-    $rollbackRevision = (string)file_get_contents(
-        $data['rollback_directory'] . DIRECTORY_SEPARATOR . 'RevisionService.php');
-    $secondOutput = [];
-    $secondExitCode = 0;
-    exec(escapeshellarg(PHP_BINARY) . ' ' . escapeshellarg($installerPath) . ' 2>&1', $secondOutput, $secondExitCode);
-    deployAtomicityAssert($secondExitCode !== 0, 'A repeated private installer transaction unexpectedly succeeded.');
-    deployAtomicityAssert(
-        file_get_contents($data['rollback_directory'] . DIRECTORY_SEPARATOR . 'RevisionService.php') === $rollbackRevision,
-        'A repeated private installer transaction overwrote the original rollback snapshot.');
+    exec(escapeshellarg($phpBinary) . ' ' . escapeshellarg($root . DIRECTORY_SEPARATOR . 'install.php') . ' 2>&1', $output, $exitCode);
+    deployAtomicityAssert($exitCode === 0, 'Generated install controller failed: ' . implode("\n", $output));
+    $response = json_decode(implode("\n", $output), true, 32, JSON_THROW_ON_ERROR);
+    deployAtomicityAssert(($response['ok'] ?? false) === true, 'Generated install controller did not report semantic success.');
+    deployAtomicityAssert(($response['operation'] ?? null) === 'word-count-install', 'Generated install controller returned the wrong operation.');
+    deployAtomicityAssert(($response['state_mutation'] ?? false) === true, 'Generated install controller did not report a state mutation.');
+    foreach ($files as $file) {
+        deployAtomicityAssert(is_file($root . DIRECTORY_SEPARATOR . $file), "Generated install controller did not promote $file.");
+    }
 } finally {
     removeDeploymentFixture($root);
 }
 
-$postInstallPattern = <<<'REGEX'
-~\$rollbackCode = @'\R(.*?)\R'@\.Replace\('__TRANSACTION_DATA__'~s
-REGEX;
-deployAtomicityAssert(
-    preg_match($postInstallPattern, $deploymentScript, $rollbackMatches) === 1,
-    'Unable to extract the post-install rollback transaction.');
-
-$postRoot = sys_get_temp_dir() . DIRECTORY_SEPARATOR . 'pa-deploy-postcheck-' . bin2hex(random_bytes(6));
-$postRollback = $postRoot . DIRECTORY_SEPARATOR . '.word-count-rollback-fixture';
-$postPublic = $postRoot . DIRECTORY_SEPARATOR . 'public' . DIRECTORY_SEPARATOR . 'index.php';
-mkdir(dirname($postPublic), 0700, true);
-mkdir($postRollback, 0700, true);
-file_put_contents($postRoot . DIRECTORY_SEPARATOR . 'RevisionService.php', "<?php\n// active candidate revision\n");
-file_put_contents($postRoot . DIRECTORY_SEPARATOR . 'BrokerService.php', "<?php\n// active candidate broker\n");
-file_put_contents($postRoot . DIRECTORY_SEPARATOR . 'config.php', "<?php\nreturn ['candidate' => true];\n");
-file_put_contents($postPublic, "<?php\n// active candidate public entry\n");
-file_put_contents($postRollback . DIRECTORY_SEPARATOR . 'RevisionService.php', "<?php\n// original revision\n");
-file_put_contents($postRollback . DIRECTORY_SEPARATOR . 'BrokerService.php', "<?php\n// original broker\n");
-file_put_contents($postRollback . DIRECTORY_SEPARATOR . 'config.php', "<?php\nreturn ['original' => true];\n");
-file_put_contents($postRollback . DIRECTORY_SEPARATOR . 'public-index.php', "<?php\n// original public entry\n");
-$postDatabase = $postRoot . DIRECTORY_SEPARATOR . 'broker.sqlite';
-$postDatabaseBackup = $postRollback . DIRECTORY_SEPARATOR . 'broker.sqlite';
-$postDb = new PDO('sqlite:' . $postDatabase, null, null, [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]);
-$postDb->exec("PRAGMA user_version = 3; CREATE TABLE state (value TEXT); INSERT INTO state VALUES ('candidate')");
-$postDb = null;
-$postBackupDb = new PDO('sqlite:' . $postDatabaseBackup, null, null, [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]);
-$postBackupDb->exec("PRAGMA user_version = 0; CREATE TABLE state (value TEXT); INSERT INTO state VALUES ('original')");
-$postBackupDb = null;
-file_put_contents($postDatabase . '-wal', 'stale wal sidecar');
-file_put_contents($postDatabase . '-shm', 'stale shm sidecar');
-file_put_contents($postRollback . DIRECTORY_SEPARATOR . 'manifest.json', json_encode([
-    'files' => ['RevisionService.php' => true, 'BrokerService.php' => true],
-    'config_originally_existed' => true,
-    'database' => [
-        'path' => $postDatabase,
-        'originally_existed' => true,
-        'backup' => $postDatabaseBackup,
-        'schema_version' => 0,
-    ],
-], JSON_THROW_ON_ERROR));
-file_put_contents($postRollback . DIRECTORY_SEPARATOR . 'public-index-state.json', json_encode([
-    'originally_existed' => true,
-], JSON_THROW_ON_ERROR));
-$postData = base64_encode(json_encode([
-    'private_directory' => $postRoot,
-    'public_api_path' => $postPublic,
-    'rollback_directory' => $postRollback,
-    'files' => ['RevisionService.php', 'BrokerService.php'],
-], JSON_THROW_ON_ERROR));
-$postInstaller = str_replace('__TRANSACTION_DATA__', $postData, $rollbackMatches[1]);
-$postInstallerPath = $postRoot . DIRECTORY_SEPARATOR . 'rollback.php';
-file_put_contents($postInstallerPath, "<?php\n" . $postInstaller);
-
-try {
-    $output = [];
-    $exitCode = 0;
-    exec(escapeshellarg(PHP_BINARY) . ' ' . escapeshellarg($postInstallerPath) . ' 2>&1', $output, $exitCode);
-    deployAtomicityAssert($exitCode === 0, 'The post-install rollback transaction failed: ' . implode("\n", $output));
-    deployAtomicityAssert(str_contains((string)file_get_contents($postRoot . DIRECTORY_SEPARATOR . 'RevisionService.php'), 'original revision'), 'Post-check rollback did not restore RevisionService.');
-    deployAtomicityAssert(str_contains((string)file_get_contents($postRoot . DIRECTORY_SEPARATOR . 'BrokerService.php'), 'original broker'), 'Post-check rollback did not restore BrokerService.');
-    deployAtomicityAssert(str_contains((string)file_get_contents($postRoot . DIRECTORY_SEPARATOR . 'config.php'), "'original' => true"), 'Post-check rollback did not restore private config.');
-    deployAtomicityAssert(str_contains((string)file_get_contents($postPublic), 'original public entry'), 'Post-check rollback did not restore the public API entry point.');
-    $restoredDb = new PDO('sqlite:' . $postDatabase, null, null, [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]);
-    deployAtomicityAssert((int)$restoredDb->query('PRAGMA user_version')->fetchColumn() === 0, 'Post-check rollback did not restore the database schema version.');
-    deployAtomicityAssert((string)$restoredDb->query('SELECT value FROM state')->fetchColumn() === 'original', 'Post-check rollback did not restore database contents.');
-    deployAtomicityAssert(!is_file($postDatabase . '-wal') && !is_file($postDatabase . '-shm'), 'Post-check rollback left stale SQLite WAL/SHM sidecars.');
-} finally {
-    removeDeploymentFixture($postRoot);
-}
-
-$removalRoot = sys_get_temp_dir() . DIRECTORY_SEPARATOR . 'pa-deploy-removal-' . bin2hex(random_bytes(6));
-$removalRollback = $removalRoot . DIRECTORY_SEPARATOR . '.word-count-rollback-fixture';
-mkdir($removalRollback, 0700, true);
-mkdir($removalRoot . DIRECTORY_SEPARATOR . 'NewService.php', 0700, true);
-file_put_contents($removalRollback . DIRECTORY_SEPARATOR . 'manifest.json', json_encode([
-    'files' => ['NewService.php' => false],
-    'config_originally_existed' => false,
-], JSON_THROW_ON_ERROR));
-$removalData = base64_encode(json_encode([
-    'private_directory' => $removalRoot,
-    'public_api_path' => $removalRoot . DIRECTORY_SEPARATOR . 'public-index.php',
-    'rollback_directory' => $removalRollback,
-    'files' => ['NewService.php'],
-], JSON_THROW_ON_ERROR));
-$removalInstaller = str_replace('__TRANSACTION_DATA__', $removalData, $rollbackMatches[1]);
-$removalInstallerPath = $removalRoot . DIRECTORY_SEPARATOR . 'rollback.php';
-file_put_contents($removalInstallerPath, "<?php\n" . $removalInstaller);
-try {
-    $output = [];
-    $exitCode = 0;
-    exec(escapeshellarg(PHP_BINARY) . ' ' . escapeshellarg($removalInstallerPath) . ' 2>&1', $output, $exitCode);
-    deployAtomicityAssert($exitCode !== 0, 'Rollback silently accepted failure to remove a newly introduced target.');
-    deployAtomicityAssert(is_dir($removalRollback), 'Rollback evidence was removed after a failed target removal.');
-} finally {
-    removeDeploymentFixture($removalRoot);
-}
-
-$missingDatabaseRoot = sys_get_temp_dir() . DIRECTORY_SEPARATOR . 'pa-deploy-missing-db-' . bin2hex(random_bytes(6));
-$missingDatabaseRollback = $missingDatabaseRoot . DIRECTORY_SEPARATOR . '.word-count-rollback-fixture';
-mkdir($missingDatabaseRollback, 0700, true);
-$missingDatabasePath = $missingDatabaseRoot . DIRECTORY_SEPARATOR . 'broker.sqlite';
-file_put_contents($missingDatabasePath, 'new database');
-file_put_contents($missingDatabasePath . '-wal', 'new wal');
-file_put_contents($missingDatabasePath . '-shm', 'new shm');
-file_put_contents($missingDatabaseRollback . DIRECTORY_SEPARATOR . 'manifest.json', json_encode([
-    'files' => [],
-    'config_originally_existed' => false,
-    'database' => [
-        'path' => $missingDatabasePath,
-        'originally_existed' => false,
-        'backup' => $missingDatabaseRollback . DIRECTORY_SEPARATOR . 'broker.sqlite',
-        'schema_version' => 0,
-    ],
-], JSON_THROW_ON_ERROR));
-$missingDatabaseData = base64_encode(json_encode([
-    'private_directory' => $missingDatabaseRoot,
-    'public_api_path' => $missingDatabaseRoot . DIRECTORY_SEPARATOR . 'public-index.php',
-    'rollback_directory' => $missingDatabaseRollback,
-    'files' => [],
-], JSON_THROW_ON_ERROR));
-$missingDatabaseInstaller = str_replace('__TRANSACTION_DATA__', $missingDatabaseData, $rollbackMatches[1]);
-$missingDatabaseInstallerPath = $missingDatabaseRoot . DIRECTORY_SEPARATOR . 'rollback.php';
-file_put_contents($missingDatabaseInstallerPath, "<?php\n" . $missingDatabaseInstaller);
-try {
-    $output = [];
-    $exitCode = 0;
-    exec(escapeshellarg(PHP_BINARY) . ' ' . escapeshellarg($missingDatabaseInstallerPath) . ' 2>&1', $output, $exitCode);
-    deployAtomicityAssert($exitCode === 0, 'Rollback of a previously nonexistent database failed: ' . implode("\n", $output));
-    deployAtomicityAssert(!is_file($missingDatabasePath) && !is_file($missingDatabasePath . '-wal') && !is_file($missingDatabasePath . '-shm'), 'Rollback did not remove a database that originally did not exist.');
-} finally {
-    removeDeploymentFixture($missingDatabaseRoot);
-}
-
-echo "Broker deployment atomicity tests passed.\n";
+fwrite(STDOUT, "PASS deploy atomicity remote PHP payload contracts\n");

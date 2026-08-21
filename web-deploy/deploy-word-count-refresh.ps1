@@ -38,20 +38,56 @@ function Invoke-CheckedNative {
 }
 
 function Invoke-RemotePhp {
-    param([Parameter(Mandatory = $true)][string]$Code)
+    param(
+        [Parameter(Mandatory = $true)][string]$Code,
+        [Parameter(Mandatory = $true)][string]$ExpectedOperation,
+        [switch]$RequireStateMutation,
+        [ValidateRange(1, 5)][int]$Attempts = 3
+    )
+    if ([string]::IsNullOrWhiteSpace($Code)) {
+        throw 'Remote PHP code cannot be empty.'
+    }
+    $body = $Code.TrimStart([char]0xFEFF, [char]0x00A0, [char]0x20, [char]0x09, [char]0x0D, [char]0x0A)
+    if ($body -match '^<\?php\b') {
+        throw 'Remote PHP code must be supplied without an opening PHP tag.'
+    }
+    if ($body -match '(?i)__[A-Z0-9_]+__|\b(?:placeholder|todo)\b') {
+        throw 'Remote PHP code contains an unresolved placeholder.'
+    }
     $scriptId = [Guid]::NewGuid().ToString('N')
     $localScript = Join-Path ([IO.Path]::GetTempPath()) "player-assistant-remote-$scriptId.php"
     $remoteScript = "$PrivateDirectory/.player-assistant-remote-$scriptId.php"
-    [IO.File]::WriteAllText($localScript, "<?php`n" + $Code, [Text.UTF8Encoding]::new($false))
+    $payload = "<?php`n" + $Code
+    if ($payload -notmatch '^<\?php\b') {
+        throw 'Remote PHP payload did not receive an opening PHP tag.'
+    }
+    [IO.File]::WriteAllText($localScript, $payload, [Text.UTF8Encoding]::new($false))
     try {
-        Invoke-CheckedNative {
+        Invoke-CheckedNative -Attempts $Attempts {
             & scp -q -i $SshKeyPath -o BatchMode=yes -o IdentitiesOnly=yes -o ConnectTimeout=15 `
                 -- $localScript "${DreamHostTarget}:$remoteScript"
         } | Out-Null
-        return Invoke-CheckedNative {
+        $rawOutput = Invoke-CheckedNative -Attempts $Attempts {
             & ssh -i $SshKeyPath -o BatchMode=yes -o IdentitiesOnly=yes -o ConnectTimeout=15 `
                 $DreamHostTarget "/usr/bin/php '$remoteScript'"
         }
+        $jsonText = ($rawOutput | ForEach-Object { [string]$_ }) -join "`n"
+        try {
+            $response = $jsonText | ConvertFrom-Json
+        }
+        catch {
+            throw "Remote PHP operation '$ExpectedOperation' did not return valid JSON."
+        }
+        if ($null -eq $response -or $response.ok -isnot [bool] -or -not $response.ok) {
+            throw "Remote PHP operation '$ExpectedOperation' did not report semantic success."
+        }
+        if ([string]$response.operation -cne $ExpectedOperation) {
+            throw "Remote PHP operation returned unexpected operation '$($response.operation)'."
+        }
+        if ($RequireStateMutation -and ($response.state_mutation -isnot [bool] -or -not $response.state_mutation)) {
+            throw "Remote PHP operation '$ExpectedOperation' did not report the expected state mutation."
+        }
+        return $response
     }
     finally {
         Remove-Item -LiteralPath $localScript -Force -ErrorAction SilentlyContinue
@@ -232,9 +268,16 @@ foreach (['.BrokerService.php.deploy-*', '.BrokerAlertService.php.deploy-*', '.B
     }
 }
 @rmdir($directory . '/.word-count-deploy-' . $data['deploy_id']);
+
+echo json_encode([
+    'ok' => true,
+    'operation' => 'word-count-install',
+    'state_mutation' => true,
+    'deploy_id' => $data['deploy_id'],
+], JSON_UNESCAPED_SLASHES);
 '@.Replace('__INSTALL_DATA__', $installData64)
 
-Invoke-RemotePhp $installCode | Out-Null
+Invoke-RemotePhp $installCode -ExpectedOperation 'word-count-install' -RequireStateMutation -Attempts 1 | Out-Null
 
 $cronLines = @(
     "$CronSchedule /usr/bin/php $PrivateDirectory/refresh-word-counts.php >> $PrivateDirectory/word-count-refresh-cron.log 2>&1",
@@ -266,8 +309,13 @@ unlink($temporary);
 if ($exit !== 0) {
     throw new RuntimeException('Unable to install cron within the timeout: ' . implode("\n", $output));
 }
+echo json_encode([
+    'ok' => true,
+    'operation' => 'word-count-cron-install',
+    'state_mutation' => true,
+], JSON_UNESCAPED_SLASHES);
 '@.Replace('__CRON_LINE__', $cronData)
-Invoke-RemotePhp $cronCode | Out-Null
+Invoke-RemotePhp $cronCode -ExpectedOperation 'word-count-cron-install' -RequireStateMutation -Attempts 1 | Out-Null
 
 $runnerCommand = "/usr/bin/php $PrivateDirectory/refresh-word-counts.php"
 Invoke-CheckedNative {
