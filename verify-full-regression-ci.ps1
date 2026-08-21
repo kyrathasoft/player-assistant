@@ -64,6 +64,7 @@ Assert-Condition -Condition (Test-Path -LiteralPath $workflowPath -PathType Leaf
 
 $workflow = Get-Content -Raw -LiteralPath $workflowPath
 $httpAuthTest = Get-Content -Raw -LiteralPath $httpAuthTestPath
+$nativeFailFastVerifier = Get-Content -Raw -LiteralPath $nativeFailFastVerifierPath
 Assert-Condition -Condition ($workflow.Contains('name: Full regression')) -Message 'The workflow must expose the stable Full regression check name.'
 Assert-Condition -Condition ($workflow.Contains('  full-regression:') -and $workflow.Contains('    name: Required full regression')) -Message 'The workflow must define the required full-regression job.'
 Assert-WorkflowRunCommand -WorkflowText $workflow -Command 'dotnet build .\player-assistant.csproj --configuration Release --nologo --no-restore' -Message 'The required job must build the desktop application without an implicit restore.'
@@ -85,6 +86,7 @@ Assert-Condition -Condition ($workflow.Contains('throw "PHP suite ''$($suite.Nam
 Assert-Condition -Condition ($workflow.Contains('throw "Verification ''$Name'' failed with exit code $exitCode."')) -Message 'Sequential PowerShell/native verification commands must fail immediately and identify the failing suite.'
 Assert-Condition -Condition (Test-Path -LiteralPath $nativeFailFastVerifierPath -PathType Leaf) -Message 'The native test fail-fast policy self-test is missing.'
 Assert-Condition -Condition ($workflow.Contains('.\verify-native-test-fail-fast.ps1')) -Message 'The required job must execute the native test fail-fast policy self-test.'
+Assert-Condition -Condition ($nativeFailFastVerifier.Contains('$global:LASTEXITCODE = 0')) -Message 'The native fail-fast self-test must clear its intentional native failure before returning to the GitHub Actions host.'
 $brokerOperations = Get-Content -Raw -LiteralPath $brokerOperationsPath
 $operationsConfigExample = Get-Content -Raw -LiteralPath $operationsConfigExamplePath
 $wordCountDeployment = Get-Content -Raw -LiteralPath $wordCountDeploymentPath
