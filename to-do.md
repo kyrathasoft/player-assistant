@@ -288,18 +288,18 @@ Planned security correction: eliminate first-name equivalence from authenticatio
   - [x] Prepend the PHP opening tag in both `Invoke-RemotePhp` writers and reject placeholder or non-PHP payloads before upload.
   - [x] Require a structured semantic success response and expected state mutation, not merely process exit zero.
   - [x] Keep `deploy-atomicity-tests.php` red-before/green-after coverage for the generated production payloads.
-- [ ] Make every native test invocation fail the workflow immediately.
-  - [ ] Check and throw on each PHP suite's exit code inside the `ForEach-Object` loop instead of allowing a later passing suite to mask an earlier failure.
-  - [ ] Apply the same fail-fast rule to sequential PowerShell/native verification commands and preserve the failing suite name in diagnostics.
-  - [ ] Add a CI-policy self-test with an intentional intermediate native-command failure followed by a passing command; the job must still fail.
-- [ ] Eliminate the current broker production/test contract drift.
-  - [ ] Make `broker-startup-tests.php` pass; request startup must not run `DatabaseMigrationService::migrate()` or mutate schema from service constructors.
-  - [ ] Make `message-pagination-tests.php` pass; production `MessageService` must match the checked-in pagination, retention, cursor, and snapshot-consistency contract.
-  - [ ] Run the complete PHP suite locally and in the required workflow after fixing exit-code propagation.
-- [ ] Make clean locked restores deterministic across supported .NET 10 SDK patches.
-  - [ ] Reconcile the launcher's self-contained `Microsoft.NET.ILLink.Tasks` dependency with `PlayerAssistant.Launcher/packages.lock.json`.
-  - [ ] Either pin the supported SDK with `global.json` or test the minimum and current `10.0.x` SDKs explicitly.
-  - [ ] Verify locked restore from a clean worktree with no pre-existing `obj` assets or NuGet cache assumptions.
+- [x] Make every native test invocation fail the workflow immediately.
+  - [x] Check and throw on each PHP suite's exit code inside the `ForEach-Object` loop instead of allowing a later passing suite to mask an earlier failure.
+  - [x] Apply the same fail-fast rule to sequential PowerShell/native verification commands and preserve the failing suite name in diagnostics.
+  - [x] Add a CI-policy self-test with an intentional intermediate native-command failure followed by a passing command; the job must still fail.
+- [x] Eliminate the current broker production/test contract drift.
+  - [x] Make `broker-startup-tests.php` pass; request startup must not run `DatabaseMigrationService::migrate()` or mutate schema from service constructors.
+  - [x] Make `message-pagination-tests.php` pass; production `MessageService` must match the checked-in pagination, retention, cursor, and snapshot-consistency contract.
+  - [x] Run the complete PHP suite locally and in the required workflow after fixing exit-code propagation.
+- [x] Make clean locked restores deterministic across supported .NET 10 SDK patches.
+  - [x] Reconcile the launcher's self-contained `Microsoft.NET.ILLink.Tasks` dependency with `PlayerAssistant.Launcher/packages.lock.json`.
+  - [x] Either pin the supported SDK with `global.json` or test the minimum and current `10.0.x` SDKs explicitly.
+  - [x] Verify locked restore from a clean worktree with no pre-existing `obj` assets or NuGet cache assumptions.
 
 ### P1 — Protect authorization, state, and core operations
 

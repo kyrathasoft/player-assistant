@@ -99,9 +99,17 @@ jobs:
         if: matrix.group == 'php'
         shell: pwsh
         run: |
+          $ErrorActionPreference = 'Stop'
           Get-ChildItem -LiteralPath .\web-deploy\tests -Filter '*-tests.php' -File |
             Sort-Object Name |
-            ForEach-Object { php $_.FullName }
+            ForEach-Object {
+              $suite = $_
+              & php $suite.FullName
+              $exitCode = $LASTEXITCODE
+              if ($exitCode -ne 0) {
+                throw "PHP suite '$($suite.Name)' failed with exit code $exitCode."
+              }
+            }
 
       - name: Run browser-level PWA smoke tests
         if: matrix.group == 'browser'
@@ -112,11 +120,26 @@ jobs:
         if: matrix.group == 'powershell'
         shell: pwsh
         run: |
-          .\verify-word-count-schedule.ps1
-          ./web-deploy/tests/backup-encryption-tests.ps1
-          ./web-deploy/tests/publish-word-counts-tests.ps1
-          ./web-deploy/tests/pwa-monitor-contract-tests.ps1
-          ./web-deploy/tests/run-http-auth-tests.ps1 -PhpPath (Get-Command php).Source
+          $ErrorActionPreference = 'Stop'
+          function Invoke-CheckedVerification {
+            param(
+              [Parameter(Mandatory = $true)][string]$Name,
+              [Parameter(Mandatory = $true)][string]$FilePath,
+              [hashtable]$Parameters = @{}
+            )
+
+            & $FilePath @Parameters
+            if (-not $?) {
+              $exitCode = if ($null -eq $LASTEXITCODE) { 1 } else { $LASTEXITCODE }
+              throw "Verification '$Name' failed with exit code $exitCode."
+            }
+          }
+
+          Invoke-CheckedVerification 'word-count schedule' '.\verify-word-count-schedule.ps1'
+          Invoke-CheckedVerification 'backup encryption' './web-deploy/tests/backup-encryption-tests.ps1'
+          Invoke-CheckedVerification 'published word counts' './web-deploy/tests/publish-word-counts-tests.ps1'
+          Invoke-CheckedVerification 'PWA monitor contract' './web-deploy/tests/pwa-monitor-contract-tests.ps1'
+          Invoke-CheckedVerification 'HTTP authentication' './web-deploy/tests/run-http-auth-tests.ps1' -Parameters @{ PhpPath = (Get-Command php).Source }
 
   # Keep this job name aligned with the required GitHub Actions check on master.
   full-regression:
@@ -149,7 +172,7 @@ jobs:
       - name: Setup .NET 10 SDK
         uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6
         with:
-          dotnet-version: 10.0.x
+          dotnet-version: 10.0.301
 
       - name: Cache .NET dependencies
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
@@ -170,9 +193,18 @@ jobs:
         shell: pwsh
         run: .\verify-full-regression-ci.ps1
 
+      - name: Verify native test fail-fast policy
+        shell: pwsh
+        run: .\verify-native-test-fail-fast.ps1
+
       - name: Verify locked .NET dependencies
         shell: pwsh
-        run: .\verify-dotnet-dependencies.ps1
+        run: |
+          Get-ChildItem -LiteralPath $env:GITHUB_WORKSPACE -Recurse -Directory -Force |
+            Where-Object { $_.Name -eq 'obj' } |
+            Remove-Item -Recurse -Force
+          dotnet nuget locals all --clear
+          .\verify-dotnet-dependencies.ps1
 
       - name: Verify test harness structure
         shell: pwsh

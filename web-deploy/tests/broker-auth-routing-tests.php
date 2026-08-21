@@ -866,7 +866,7 @@ try {
     routingAssert(
         $dungeonMasterMessages['status'] === 200
             && count($dungeonMasterMessages['body']['messages']) === 1
-            && $dungeonMasterMessages['body']['schema_version'] === 2
+            && $dungeonMasterMessages['body']['schema_version'] === 3
             && count($dungeonMasterMessages['body']['player_recipients']) === 2
             && $dungeonMasterMessages['body']['messages'][0]['id'] === $messageForDungeonMasterId
             && $dungeonMasterMessages['body']['messages'][0]['sender_character_name'] === 'Routing Hero'

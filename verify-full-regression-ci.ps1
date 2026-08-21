@@ -40,11 +40,15 @@ $browserTestPath = Join-Path $RepoRoot 'pwa\browser-smoke.mjs'
 $translatorWorkerTestPath = Join-Path $RepoRoot 'pwa\translator-worker-tests.mjs'
 $serviceWorkerTestPath = Join-Path $RepoRoot 'pwa\service-worker-tests.mjs'
 $httpAuthTestPath = Join-Path $RepoRoot 'web-deploy\tests\run-http-auth-tests.ps1'
+$nativeFailFastVerifierPath = Join-Path $RepoRoot 'verify-native-test-fail-fast.ps1'
 $brokerOperationsPath = Join-Path $RepoRoot 'web-deploy\player-assistant-broker\BrokerOperations.php'
 $operationsConfigExamplePath = Join-Path $RepoRoot 'web-deploy\player-assistant-broker\config.operations.example.php'
 $wordCountDeploymentPath = Join-Path $RepoRoot 'web-deploy\deploy-word-count-refresh.ps1'
 $directoryBuildPropsPath = Join-Path $RepoRoot 'Directory.Build.props'
 $dotnetDependencyVerifierPath = Join-Path $RepoRoot 'verify-dotnet-dependencies.ps1'
+$globalJsonPath = Join-Path $RepoRoot 'global.json'
+$launcherLockPath = Join-Path $RepoRoot 'PlayerAssistant.Launcher\packages.lock.json'
+$launcherProjectPath = Join-Path $RepoRoot 'PlayerAssistant.Launcher\PlayerAssistant.Launcher.csproj'
 $dependencyReviewWorkflowPath = Join-Path $RepoRoot '.github\workflows\dependency-review.yml'
 $dependabotPath = Join-Path $RepoRoot '.github\dependabot.yml'
 $hygieneVerifierPath = Join-Path $RepoRoot 'verify-repository-hygiene.ps1'
@@ -61,6 +65,8 @@ Assert-Condition -Condition (Test-Path -LiteralPath $workflowPath -PathType Leaf
 
 $workflow = Get-Content -Raw -LiteralPath $workflowPath
 $httpAuthTest = Get-Content -Raw -LiteralPath $httpAuthTestPath
+$nativeFailFastVerifier = Get-Content -Raw -LiteralPath $nativeFailFastVerifierPath
+$launcherProject = Get-Content -Raw -LiteralPath $launcherProjectPath
 Assert-Condition -Condition ($workflow.Contains('name: Full regression')) -Message 'The workflow must expose the stable Full regression check name.'
 Assert-Condition -Condition ($workflow.Contains('  full-regression:') -and $workflow.Contains('    name: Required full regression')) -Message 'The workflow must define the required full-regression job.'
 Assert-WorkflowRunCommand -WorkflowText $workflow -Command 'dotnet build .\player-assistant.csproj --configuration Release --nologo --no-restore' -Message 'The required job must build the desktop application without an implicit restore.'
@@ -77,7 +83,13 @@ Assert-Condition -Condition (Test-Path -LiteralPath $lexiconVerifierPath -PathTy
 Assert-Condition -Condition ($workflow.Contains('Load canonical version metadata') -and $workflow.Contains('.\version-metadata.ps1')) -Message 'The required job must load canonical version metadata for release artifact paths.'
 Assert-Condition -Condition ($workflow.Contains('python .\verify-version-metadata.py')) -Message 'The required job must verify canonical version projections.'
 Assert-Condition -Condition (Test-Path -LiteralPath $versionVerifierPath -PathType Leaf) -Message 'The canonical version verifier is missing.'
-Assert-Condition -Condition ($workflow.Contains("Get-ChildItem -LiteralPath .\web-deploy\tests -Filter '*-tests.php' -File") -and $workflow.Contains('ForEach-Object { php $_.FullName }')) -Message 'The required job must run all PHP broker test suites.'
+Assert-Condition -Condition ($workflow.Contains("Get-ChildItem -LiteralPath .\web-deploy\tests -Filter '*-tests.php' -File") -and $workflow.Contains('ForEach-Object {')) -Message 'The required job must run all PHP broker test suites.'
+Assert-Condition -Condition ($workflow.Contains('throw "PHP suite ''$($suite.Name)'' failed with exit code $exitCode."')) -Message 'Each PHP suite must fail the workflow immediately and identify the failing suite.'
+Assert-Condition -Condition ($workflow.Contains('throw "Verification ''$Name'' failed with exit code $exitCode."')) -Message 'Sequential PowerShell/native verification commands must fail immediately and identify the failing suite.'
+Assert-Condition -Condition (Test-Path -LiteralPath $nativeFailFastVerifierPath -PathType Leaf) -Message 'The native test fail-fast policy self-test is missing.'
+Assert-Condition -Condition ($workflow.Contains('.\verify-native-test-fail-fast.ps1')) -Message 'The required job must execute the native test fail-fast policy self-test.'
+Assert-Condition -Condition ($nativeFailFastVerifier.Contains('$global:LASTEXITCODE = 0')) -Message 'The native fail-fast self-test must clear its intentional native failure before returning to the GitHub Actions host.'
+Assert-Condition -Condition ($launcherProject.Contains('<PublishSingleFile>true</PublishSingleFile>') -and $launcherProject.Contains('<EnableSingleFileAnalyzer>false</EnableSingleFileAnalyzer>')) -Message 'The launcher must remain single-file while disabling the SDK-patch-specific single-file analyzer dependency.'
 $brokerOperations = Get-Content -Raw -LiteralPath $brokerOperationsPath
 $operationsConfigExample = Get-Content -Raw -LiteralPath $operationsConfigExamplePath
 $wordCountDeployment = Get-Content -Raw -LiteralPath $wordCountDeploymentPath
@@ -100,7 +112,9 @@ for ($lineIndex = 0; $lineIndex -lt $workflowLines.Count; $lineIndex++) {
     Assert-Condition -Condition ($stepBlock -match "(?m)^\s+if: github[.]event_name == 'push'\s*$") -Message "A secret-bearing workflow step can run outside protected push events near line $($lineIndex + 1)."
 }
 Assert-Condition -Condition ($workflow.Contains('./web-deploy/tests/publish-word-counts-tests.ps1')) -Message 'The required workflow must run the PowerShell publication test suite.'
-Assert-Condition -Condition ($workflow.Contains('./web-deploy/tests/run-http-auth-tests.ps1 -PhpPath (Get-Command php).Source')) -Message 'The required workflow must run the HTTP authentication integration suite with the setup PHP executable.'
+Assert-Condition -Condition ($workflow.Contains('[hashtable]$Parameters = @{}') -and
+    $workflow.Contains('& $FilePath @Parameters') -and
+    $workflow.Contains("Invoke-CheckedVerification 'HTTP authentication' './web-deploy/tests/run-http-auth-tests.ps1' -Parameters @{ PhpPath = (Get-Command php).Source }")) -Message 'The required workflow must pass the setup PHP executable to the HTTP authentication suite through named PowerShell parameters.'
 Assert-Condition -Condition ($httpAuthTest.Contains("FullName -eq 'System.Net.Http.HttpResponseMessage'") -and $httpAuthTest.Contains('$_.ErrorDetails.Message') -and $httpAuthTest.Contains('ReadAsStringAsync()')) -Message 'The HTTP authentication suite must inspect disposed error responses under PowerShell 7 without breaking Windows PowerShell.'
 Assert-Condition -Condition ($workflow.Contains('./web-deploy/tests/backup-encryption-tests.ps1')) -Message 'The required workflow must run the broker backup encryption suite.'
 Assert-Condition -Condition ($workflow.Contains('.\verify-word-count-schedule.ps1')) -Message 'The required workflow must verify the full word-count scheduled publisher.'
@@ -122,6 +136,14 @@ Assert-Condition -Condition ($directoryBuildProps.Contains('<RestorePackagesWith
 Assert-Condition -Condition (Test-Path -LiteralPath $dotnetDependencyVerifierPath -PathType Leaf) -Message 'The .NET locked-restore and vulnerability verifier is missing.'
 Assert-Condition -Condition ($workflow.Contains('.\verify-dotnet-dependencies.ps1')) -Message 'The required job must run locked restores and transitive vulnerability scans.'
 $dotnetDependencyVerifier = Get-Content -Raw -LiteralPath $dotnetDependencyVerifierPath
+Assert-Condition -Condition (Test-Path -LiteralPath $globalJsonPath -PathType Leaf) -Message 'The repository SDK pinning file is missing.'
+$globalJson = Get-Content -Raw -LiteralPath $globalJsonPath | ConvertFrom-Json
+Assert-Condition -Condition ([string]$globalJson.sdk.version -eq '10.0.301' -and [string]$globalJson.sdk.rollForward -eq 'latestPatch') -Message 'The repository must pin the supported .NET SDK feature band and patch roll-forward policy.'
+Assert-Condition -Condition (Test-Path -LiteralPath $launcherLockPath -PathType Leaf) -Message 'The launcher NuGet lock file is missing.'
+$launcherLock = Get-Content -Raw -LiteralPath $launcherLockPath | ConvertFrom-Json
+Assert-Condition -Condition (@($launcherLock.dependencies.'net10.0-windows7.0'.PSObject.Properties).Count -eq 0 -and $null -eq $launcherLock.dependencies.'net10.0-windows7.0'.'Microsoft.NET.ILLink.Tasks') -Message 'The launcher lock file must remain independent of SDK-patch-specific ILLink task injection.'
+Assert-Condition -Condition ($dotnetDependencyVerifier.Contains("'--locked-mode'")) -Message 'Every project restore must run in locked mode, including the self-contained launcher.'
+Assert-Condition -Condition ($workflow.Contains('dotnet-version: 10.0.301') -and $workflow.Contains('dotnet nuget locals all --clear')) -Message 'The required job must use the pinned SDK and clear NuGet state before locked restore verification.'
 Assert-Condition -Condition ($dotnetDependencyVerifier.Contains('package --vulnerable --include-transitive --format json --no-restore')) -Message 'Vulnerability scans must not perform an unlocked implicit restore after locked restore verification.'
 Assert-Condition -Condition ($workflow.Contains("hashFiles('**/packages.lock.json')")) -Message 'The NuGet cache must be keyed from lock files.'
 foreach ($relativeLockFile in $requiredLockFiles) {
