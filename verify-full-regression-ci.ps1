@@ -107,7 +107,9 @@ for ($lineIndex = 0; $lineIndex -lt $workflowLines.Count; $lineIndex++) {
     Assert-Condition -Condition ($stepBlock -match "(?m)^\s+if: github[.]event_name == 'push'\s*$") -Message "A secret-bearing workflow step can run outside protected push events near line $($lineIndex + 1)."
 }
 Assert-Condition -Condition ($workflow.Contains('./web-deploy/tests/publish-word-counts-tests.ps1')) -Message 'The required workflow must run the PowerShell publication test suite.'
-Assert-Condition -Condition ($workflow.Contains("Invoke-CheckedVerification 'HTTP authentication' './web-deploy/tests/run-http-auth-tests.ps1'")) -Message 'The required workflow must run the HTTP authentication integration suite with the setup PHP executable.'
+Assert-Condition -Condition ($workflow.Contains('[hashtable]$Parameters = @{}') -and
+    $workflow.Contains('& $FilePath @Parameters') -and
+    $workflow.Contains("Invoke-CheckedVerification 'HTTP authentication' './web-deploy/tests/run-http-auth-tests.ps1' -Parameters @{ PhpPath = (Get-Command php).Source }")) -Message 'The required workflow must pass the setup PHP executable to the HTTP authentication suite through named PowerShell parameters.'
 Assert-Condition -Condition ($httpAuthTest.Contains("FullName -eq 'System.Net.Http.HttpResponseMessage'") -and $httpAuthTest.Contains('$_.ErrorDetails.Message') -and $httpAuthTest.Contains('ReadAsStringAsync()')) -Message 'The HTTP authentication suite must inspect disposed error responses under PowerShell 7 without breaking Windows PowerShell.'
 Assert-Condition -Condition ($workflow.Contains('./web-deploy/tests/backup-encryption-tests.ps1')) -Message 'The required workflow must run the broker backup encryption suite.'
 Assert-Condition -Condition ($workflow.Contains('.\verify-word-count-schedule.ps1')) -Message 'The required workflow must verify the full word-count scheduled publisher.'

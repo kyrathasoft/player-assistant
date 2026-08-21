@@ -125,10 +125,10 @@ jobs:
             param(
               [Parameter(Mandatory = $true)][string]$Name,
               [Parameter(Mandatory = $true)][string]$FilePath,
-              [string[]]$ArgumentList = @()
+              [hashtable]$Parameters = @{}
             )
 
-            & $FilePath @ArgumentList
+            & $FilePath @Parameters
             if (-not $?) {
               $exitCode = if ($null -eq $LASTEXITCODE) { 1 } else { $LASTEXITCODE }
               throw "Verification '$Name' failed with exit code $exitCode."
@@ -139,7 +139,7 @@ jobs:
           Invoke-CheckedVerification 'backup encryption' './web-deploy/tests/backup-encryption-tests.ps1'
           Invoke-CheckedVerification 'published word counts' './web-deploy/tests/publish-word-counts-tests.ps1'
           Invoke-CheckedVerification 'PWA monitor contract' './web-deploy/tests/pwa-monitor-contract-tests.ps1'
-          Invoke-CheckedVerification 'HTTP authentication' './web-deploy/tests/run-http-auth-tests.ps1' @('-PhpPath', (Get-Command php).Source)
+          Invoke-CheckedVerification 'HTTP authentication' './web-deploy/tests/run-http-auth-tests.ps1' -Parameters @{ PhpPath = (Get-Command php).Source }
 
   # Keep this job name aligned with the required GitHub Actions check on master.
   full-regression:
