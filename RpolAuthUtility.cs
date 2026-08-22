@@ -547,7 +547,8 @@ namespace PlayerAssistant
 
                     if (!LooksLikeCloudflareChallengePage(html))
                     {
-                        if (!page.Url.StartsWith(gameForumUri.ToString(), StringComparison.OrdinalIgnoreCase))
+                        if (!Uri.TryCreate(page.Url, UriKind.Absolute, out var currentUri)
+                            || !NetworkUrlAllowlistUtility.IsTrustedRpolNavigationUri(currentUri))
                         {
                             await WaitForPlaywrightAsync(
                                 page.GotoAsync(gameForumUri.ToString(), new PageGotoOptions
@@ -586,7 +587,8 @@ namespace PlayerAssistant
         {
             var page = context.Pages.FirstOrDefault(page =>
                 !page.IsClosed
-                && page.Url.Contains("rpol.net", StringComparison.OrdinalIgnoreCase));
+                && Uri.TryCreate(page.Url, UriKind.Absolute, out var pageUri)
+                && NetworkUrlAllowlistUtility.IsTrustedRpolCredentialSubmissionUri(pageUri));
             if (page is not null)
             {
                 return page;
@@ -613,6 +615,14 @@ namespace PlayerAssistant
             string password,
             CancellationToken cancellationToken)
         {
+            if (!Uri.TryCreate(page.Url, UriKind.Absolute, out var currentUri)
+                || !NetworkUrlAllowlistUtility.IsTrustedRpolCredentialSubmissionUri(currentUri))
+            {
+                throw new RpolAuthException(
+                    RpolAuthFailureKind.TransportSecurityFailure,
+                    "RPOL credentials were not submitted because the browser was not on the exact trusted HTTPS RPOL game path.");
+            }
+
             await WaitForPlaywrightAsync(
                 page.Locator("input[name='username']").FillAsync(userName),
                 "filling the RPOL user name in the external browser",
@@ -841,6 +851,14 @@ namespace PlayerAssistant
                 var rememberMeInput = page.Locator("input[name='perm']");
                 var submitButton = page.Locator("input[name='specialaction'][value='Login']");
 
+                if (!Uri.TryCreate(page.Url, UriKind.Absolute, out var credentialPageUri)
+                    || !NetworkUrlAllowlistUtility.IsTrustedRpolCredentialSubmissionUri(credentialPageUri))
+                {
+                    throw new RpolAuthException(
+                        RpolAuthFailureKind.TransportSecurityFailure,
+                        "RPOL credentials were not submitted because the browser was not on the exact trusted HTTPS RPOL game path.");
+                }
+
                 await WaitForPlaywrightAsync(userNameInput.FillAsync(userName), "filling the RPOL user name", cancellationToken);
                 await WaitForPlaywrightAsync(passwordInput.FillAsync(password), "filling the RPOL password", cancellationToken);
                 if (await WaitForPlaywrightAsync(rememberMeInput.CountAsync(), "checking the RPOL remember-me option", cancellationToken) > 0
@@ -849,7 +867,15 @@ namespace PlayerAssistant
                     await WaitForPlaywrightAsync(rememberMeInput.CheckAsync(), "checking the RPOL remember-me option", cancellationToken);
                 }
 
-                await WaitForPlaywrightAsync(submitButton.ClickAsync(), "submitting the RPOL login form", cancellationToken);
+                if (!Uri.TryCreate(page.Url, UriKind.Absolute, out credentialPageUri)
+                    || !NetworkUrlAllowlistUtility.IsTrustedRpolCredentialSubmissionUri(credentialPageUri))
+                {
+                    throw new RpolAuthException(
+                        RpolAuthFailureKind.TransportSecurityFailure,
+                        "RPOL credentials were not submitted because the browser left the exact trusted HTTPS RPOL game path.");
+                }
+
+                await WaitForPlaywrightAsync(submitButton.ClickAsync(), "submitting the RPOL login", cancellationToken);
                 await WaitForPlaywrightAsync(
                     page.WaitForLoadStateAsync(LoadState.DOMContentLoaded),
                     "waiting for the RPOL login response",

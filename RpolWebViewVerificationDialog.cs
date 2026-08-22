@@ -101,6 +101,12 @@ namespace PlayerAssistant
 
         public string? StorageStateJson { get; private set; }
 
+        internal static bool ShouldCancelNavigation(string? value)
+        {
+            return !Uri.TryCreate(value, UriKind.Absolute, out var uri)
+                || !NetworkUrlAllowlistUtility.IsTrustedRpolNavigationUri(uri);
+        }
+
         private async Task InitializeWebViewAsync()
         {
             try
@@ -126,10 +132,26 @@ namespace PlayerAssistant
 
                 _webView.CoreWebView2.Settings.AreDefaultContextMenusEnabled = true;
                 _webView.CoreWebView2.Settings.AreDevToolsEnabled = false;
+                _webView.CoreWebView2.NavigationStarting += (_, args) =>
+                {
+                    if (ShouldCancelNavigation(args.Uri))
+                    {
+                        args.Cancel = true;
+                        _statusLabel.Text = "Navigation was blocked because the destination is not an approved HTTPS RPOL page.";
+                    }
+                };
                 _webView.CoreWebView2.NavigationCompleted += async (_, _) =>
                 {
-                    await TryAutoSubmitLoginAsync();
-                    _saveButton.Enabled = true;
+                    if (_webView.Source is { } uri
+                                            && NetworkUrlAllowlistUtility.IsTrustedRpolNavigationUri(uri))
+                    {
+                        await TryAutoSubmitLoginAsync();
+                        _saveButton.Enabled = true;
+                    }
+                    else
+                    {
+                        _saveButton.Enabled = false;
+                    }
                     _statusLabel.Text = BuildStatusText();
                 };
                 _webView.CoreWebView2.Navigate(_request.GameForumUrl);
@@ -145,6 +167,12 @@ namespace PlayerAssistant
         private async Task TryAutoSubmitLoginAsync()
         {
             if (_webView.CoreWebView2 is null)
+            {
+                return;
+            }
+
+            if (_webView.Source is not { } currentUri
+                            || !NetworkUrlAllowlistUtility.IsTrustedRpolCredentialSubmissionUri(currentUri))
             {
                 return;
             }
@@ -200,6 +228,13 @@ namespace PlayerAssistant
             {
                 await TryAutoSubmitLoginAsync();
                 await Task.Delay(TimeSpan.FromSeconds(2), _cancellationToken);
+
+                if (_webView.Source is not { } currentUri
+                                    || !NetworkUrlAllowlistUtility.IsTrustedRpolNavigationUri(currentUri))
+                {
+                    _statusLabel.Text = "RPOL state was not saved because the page is not an approved HTTPS RPOL page.";
+                    return;
+                }
 
                 var cookies = await _webView.CoreWebView2.CookieManager.GetCookiesAsync("https://rpol.net/");
                 var rpolCookies = cookies
