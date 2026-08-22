@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 final class DatabaseMigrationService
 {
-    public const LATEST_VERSION = 4;
+    public const LATEST_VERSION = 5;
 
     public function __construct(
         private readonly PDO $database,
@@ -70,6 +70,7 @@ final class DatabaseMigrationService
             2 => $this->migrationTwo(),
             3 => $this->migrationThree(),
             4 => $this->migrationFour(),
+            5 => $this->migrationFive(),
             default => throw new RuntimeException("Unknown broker migration version: $version"),
         };
     }
@@ -282,5 +283,21 @@ final class DatabaseMigrationService
                  BEGIN
                     SELECT RAISE(ABORT, \'normalized alias is already an account name\');
                  END;');
+    }
+
+    private function migrationFive(): void
+    {
+        $this->database->exec(
+            'CREATE TABLE IF NOT EXISTS level_up_notification_receipts (
+                account_id TEXT NOT NULL,
+                progression_key TEXT NOT NULL,
+                target_level INTEGER NOT NULL CHECK(target_level >= 1 AND target_level <= 1000),
+                target_xp INTEGER NOT NULL CHECK(target_xp >= 0),
+                notified_at INTEGER NULL,
+                PRIMARY KEY (account_id, progression_key, target_level),
+                FOREIGN KEY (account_id) REFERENCES character_accounts(id) ON DELETE CASCADE
+            );
+            CREATE INDEX IF NOT EXISTS ix_level_up_notification_receipts_account_time
+                ON level_up_notification_receipts(account_id, notified_at);');
     }
 }

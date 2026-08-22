@@ -122,6 +122,22 @@ final class BrokerService
                 $this->xpTracking()->getForAccount($current['account']));
         }
 
+        if ($method === 'POST' && $route === '/v1/xp-level-up-notifications/claim') {
+            $current = $this->characterAuth()->requireMutationAccount($headers, $session);
+            return $this->response(
+                200,
+                $this->xpTracking()->claimLevelUpNotificationsForAccount($current['account']));
+        }
+
+        if ($method === 'POST' && $route === '/v1/xp-level-up-notifications/acknowledge') {
+            $current = $this->characterAuth()->requireMutationAccount($headers, $session);
+            return $this->response(
+                200,
+                $this->xpTracking()->acknowledgeLevelUpNotificationsForAccount(
+                    $current['account'],
+                    $body));
+        }
+
         if ($method === 'GET' && $route === '/v1/xp-awards') {
             $current = $this->characterAuth()->requireCurrentAccount($session);
             return $this->response(
@@ -658,11 +674,13 @@ final class BrokerService
             'auth_audit_events', 'character_session_presence', 'message_notifications',
             'quest_requests', 'quest_state_overrides', 'word_count_snapshots',
             'xp_tracking_cache', 'broker_alert_events', 'ix_audit_events_token_time',
+            'level_up_notification_receipts',
             'ix_auth_audit_account_time', 'ix_character_presence_activity',
             'ix_message_notifications_recipient_read', 'ux_quest_requests_pending',
             'ix_quest_requests_status_time', 'ix_quest_requests_requester_status',
             'ix_broker_alert_events_type_time', 'ux_character_accounts_character_key',
             'ix_character_account_aliases_account',
+            'ix_level_up_notification_receipts_account_time',
             'trg_character_accounts_alias_collision_insert',
             'trg_character_accounts_alias_collision_update',
             'trg_character_account_aliases_name_collision_insert',

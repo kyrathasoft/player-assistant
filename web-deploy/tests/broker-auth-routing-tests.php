@@ -382,6 +382,38 @@ try {
     }
 
     try {
+        $broker->dispatch(
+            'POST',
+            '/v1/xp-level-up-notifications/claim',
+            [],
+            [],
+            ['origin' => 'https://example.test'],
+            '192.0.2.30',
+            $session);
+        throw new RuntimeException('The level-up notification claim route accepted an unauthenticated request.');
+    } catch (BrokerHttpException $exception) {
+        routingAssert(
+            $exception->status === 401 && $exception->errorName === 'authentication_required',
+            'The level-up notification claim route failed with the wrong unauthenticated response.');
+    }
+
+    try {
+        $broker->dispatch(
+            'POST',
+            '/v1/xp-level-up-notifications/acknowledge',
+            [],
+            ['notifications' => [['character_key' => 'routing-xp', 'target_level' => 5]]],
+            ['origin' => 'https://example.test'],
+            '192.0.2.30',
+            $session);
+        throw new RuntimeException('The level-up acknowledgement route accepted an unauthenticated request.');
+    } catch (BrokerHttpException $exception) {
+        routingAssert(
+            $exception->status === 401 && $exception->errorName === 'authentication_required',
+            'The level-up acknowledgement route failed with the wrong unauthenticated response.');
+    }
+
+    try {
         $broker->dispatch('GET', '/v1/xp-awards', [], [], [], '192.0.2.30', $session);
         throw new RuntimeException('The protected XP awards route accepted an unauthenticated request.');
     } catch (BrokerHttpException $exception) {
@@ -555,6 +587,43 @@ try {
     routingAssert($xp['body']['character']['xp_to_next_level'] === 7655, 'The player XP response had the wrong TNL value.');
     routingAssert(!isset($xp['body']['characters']), 'The player XP response exposed party totals.');
     routingAssert(!isset($xp['body']['source_url']), 'The player XP response exposed the configured source URL.');
+
+    $levelUpNotifications = $broker->dispatch(
+        'POST',
+        '/v1/xp-level-up-notifications/claim',
+        [],
+        [],
+        [
+            'origin' => 'https://example.test',
+            'csrf-token' => $restored['body']['csrf_token'],
+        ],
+        '192.0.2.30',
+        $session);
+    routingAssert(
+        $levelUpNotifications['status'] === 200
+            && $levelUpNotifications['body']['schema_version'] === 1
+            && $levelUpNotifications['body']['notifications'] === [],
+        'The authenticated level-up notification claim route returned an invalid response.');
+
+    try {
+        $broker->dispatch(
+            'POST',
+            '/v1/xp-level-up-notifications/acknowledge',
+            [],
+            ['notifications' => []],
+            [
+                'origin' => 'https://example.test',
+                'csrf-token' => $restored['body']['csrf_token'],
+            ],
+            '192.0.2.30',
+            $session);
+        throw new RuntimeException('The level-up acknowledgement route accepted an empty receipt list.');
+    } catch (BrokerHttpException $exception) {
+        routingAssert(
+            $exception->status === 400
+                && $exception->errorName === 'invalid_level_up_acknowledgement',
+            'The level-up acknowledgement route returned the wrong validation response.');
+    }
 
     $xpAwards = $broker->dispatch(
         'GET',
