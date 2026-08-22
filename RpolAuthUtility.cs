@@ -656,8 +656,8 @@ namespace PlayerAssistant
 
                     try
                     {
-                        if (!Uri.TryCreate(page.Url, UriKind.Absolute, out var currentUri)
-                            || !NetworkUrlAllowlistUtility.IsTrustedRpolNavigationUri(currentUri))
+                        if (!Uri.TryCreate(page.Url, UriKind.Absolute, out var externalPageUri)
+                            || !NetworkUrlAllowlistUtility.IsTrustedRpolNavigationUri(externalPageUri))
                         {
                             await Task.Delay(CloudflareClearancePollInterval, cancellationToken);
                             continue;

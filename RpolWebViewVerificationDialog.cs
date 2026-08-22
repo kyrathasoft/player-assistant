@@ -119,6 +119,8 @@ namespace PlayerAssistant
 
         public string? StorageStateJson { get; private set; }
 
+        internal Exception? CleanupFailure { get; private set; }
+
         internal static bool ShouldCancelNavigation(string? value)
         {
             return !Uri.TryCreate(value, UriKind.Absolute, out var uri)
@@ -153,28 +155,11 @@ namespace PlayerAssistant
 
                 _webView.CoreWebView2.Settings.AreDefaultContextMenusEnabled = true;
                 _webView.CoreWebView2.Settings.AreDevToolsEnabled = false;
-                _webView.CoreWebView2.NavigationStarting += (_, args) =>
-                {
-                    if (ShouldCancelNavigation(args.Uri))
-                    {
-                        args.Cancel = true;
-                        _statusLabel.Text = "Navigation was blocked because the destination is not an approved HTTPS RPOL page.";
-                    }
-                };
-                _webView.CoreWebView2.NavigationCompleted += async (_, _) =>
-                {
-                    if (_webView.Source is { } uri
-                                            && NetworkUrlAllowlistUtility.IsTrustedRpolNavigationUri(uri))
-                    {
-                        await TryAutoSubmitLoginAsync();
-                        _saveButton.Enabled = true;
-                    }
-                    else
-                    {
-                        _saveButton.Enabled = false;
-                    }
-                    _statusLabel.Text = BuildStatusText();
-                };
+                _webView.CoreWebView2.NavigationStarting += OnNavigationStarting;
+                _webView.CoreWebView2.NavigationCompleted += OnNavigationCompleted;
+                _webView.CoreWebView2.NewWindowRequested += OnNewWindowRequested;
+                _webView.CoreWebView2.AddWebResourceRequestedFilter("*", CoreWebView2WebResourceContext.Document);
+                _webView.CoreWebView2.WebResourceRequested += OnWebResourceRequested;
                 _webView.CoreWebView2.Navigate(_request.GameForumUrl);
                 _statusLabel.Text = "Loading RPOL. Complete any verification prompt in this window.";
             }
@@ -261,10 +246,87 @@ namespace PlayerAssistant
                 return;
             }
 
-            if (_webView.Source is not { } currentUri
-                            || !NetworkUrlAllowlistUtility.IsTrustedRpolCredentialSubmissionUri(currentUri))
+            _credentialSubmissionArmed = false;
+            _credentialSubmissionGuard?.Complete(true);
+        }
+
+        private void TrackEventTask(Task task)
+        {
+            lock (_eventTaskGate) _eventTasks.Add(task);
+            _ = task.ContinueWith(
+                completed =>
+                {
+                    lock (_eventTaskGate) _eventTasks.Remove(completed);
+                    if (completed.IsFaulted) _ = completed.Exception;
+                },
+                CancellationToken.None,
+                TaskContinuationOptions.ExecuteSynchronously,
+                TaskScheduler.Default);
+        }
+
+        private void JoinEventTasks(CancellationToken cleanupToken)
+        {
+            Task[] tasks;
+            lock (_eventTaskGate) tasks = _eventTasks.ToArray();
+            if (tasks.Length == 0) return;
+            try
+            {
+                Task.WhenAll(tasks).WaitAsync(cleanupToken).GetAwaiter().GetResult();
+            }
+            catch
+            {
+                foreach (var task in tasks.Where(task => !task.IsCompleted)) RpolCleanupUtility.TrackLateTask(task);
+                throw;
+            }
+        }
+
+        private void CloseWebViewResources()
+        {
+            if (_resourcesClosed)
             {
                 return;
+            }
+
+            var errors = new List<Exception>();
+            using var cleanupCancellation = new CancellationTokenSource(TimeSpan.FromSeconds(15));
+            if (_webView.CoreWebView2 is not null)
+            {
+                _webView.CoreWebView2.NavigationStarting -= OnNavigationStarting;
+                _webView.CoreWebView2.NavigationCompleted -= OnNavigationCompleted;
+                _webView.CoreWebView2.NewWindowRequested -= OnNewWindowRequested;
+                _webView.CoreWebView2.WebResourceRequested -= OnWebResourceRequested;
+            }
+            _credentialSubmissionArmed = false;
+            errors.AddRange(RpolCleanupUtility.JoinLateTasksAsync(cleanupCancellation.Token).GetAwaiter().GetResult());
+            try { JoinEventTasks(cleanupCancellation.Token); }
+            catch (Exception ex) { errors.Add(new InvalidOperationException("WebView event handlers did not join before disposal.", ex)); }
+            errors.AddRange(RpolCleanupUtility.DisposeIndependently(
+                ("WebView cancellation registration", _cancellationRegistration.Dispose),
+                ("hidden probe WebView", _probeWebView.Dispose),
+                ("visible WebView", _webView.Dispose),
+                ("WebView profile", () => _profileLease?.Dispose(cleanupCancellation.Token)),
+                ("WebView lifetime", _lifetime.Dispose)));
+            _resourcesClosed = errors.Count == 0;
+            if (errors.Count > 0)
+            {
+                StorageStateJson = null;
+                CleanupFailure = new AggregateException("RPOL WebView cleanup did not complete.", errors);
+                StartupLoggingUtility.Append("RPOL WebView cleanup", CleanupFailure);
+            }
+        }
+
+        private async Task<bool> TryAutoSubmitLoginAsync()
+        {
+            if (_webView.CoreWebView2 is null)
+            {
+                return false;
+            }
+
+            if (_webView.CoreWebView2.Source is not { } currentUriText
+                            || !Uri.TryCreate(currentUriText, UriKind.Absolute, out var currentUri)
+                            || !RpolCredentialSubmissionPolicy.TryValidateCredentialPage(currentUri, out _))
+            {
+                return false;
             }
 
             var userNameJson = JsonSerializer.Serialize(_request.UserName);
@@ -450,13 +512,6 @@ namespace PlayerAssistant
                 var protectedClassification = await TryVerifyProtectedResourceAsync();
                 if (protectedClassification?.Kind != RpolProtectedResourceKind.AuthenticatedProtectedContent)
                 {
-                    return;
-                }
-
-                if (_webView.Source is not { } currentUri
-                                    || !NetworkUrlAllowlistUtility.IsTrustedRpolNavigationUri(currentUri))
-                {
-                    _statusLabel.Text = "RPOL state was not saved because the page is not an approved HTTPS RPOL page.";
                     return;
                 }
 
