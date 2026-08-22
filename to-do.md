@@ -334,7 +334,7 @@ Planned security correction: eliminate first-name equivalence from authenticatio
   - [ ] Keep public `/v1/health` independent of SQLite, migrations, private files, and unrelated service constructors.
   - [ ] Remove `ensureSchema()` writes from `BrokerService`, `CharacterAuthService`, `XpTrackingService`, `QuestService`, and `MessageService` after migration fixtures cover their schemas.
 - [ ] Restore missing broker routing and session-concurrency contracts.
-  - [ ] Wire authenticated `/v1/revisions` through the production entry point with account scoping, anonymous denial, and public HTTP coverage.
+  - [x] Wire authenticated `/v1/revisions` through the production entry point with account scoping, anonymous denial, and public HTTP coverage.
   - [ ] Copy authorized identity state and release the PHP session lock before slow read-only XP, revision, message, and quest work.
   - [ ] Prove logout/session inspection can complete while a same-cookie read request is blocked upstream.
 - [ ] Restore transactional, bounded message pagination and retention.

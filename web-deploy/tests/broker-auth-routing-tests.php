@@ -557,6 +557,23 @@ try {
         $identity['body']['account']['character_key'] === 'routing',
         'The protected identity route did not use the session account.');
 
+    $playerRevisions = $broker->dispatch(
+        'GET',
+        '/v1/revisions',
+        [],
+        [],
+        [],
+        '192.0.2.30',
+        $session);
+    routingAssert(
+        $playerRevisions['status'] === 200
+            && $playerRevisions['body']['schema_version'] === 1
+            && $playerRevisions['body']['messages']['unread_count'] === 0
+            && $playerRevisions['body']['quests']['activity_count'] === 0
+            && preg_match('/^[a-f0-9]{64}$/', $playerRevisions['body']['messages']['revision']) === 1
+            && preg_match('/^[a-f0-9]{64}$/', $playerRevisions['body']['quests']['revision']) === 1,
+        'The protected player revision route returned invalid or cross-account activity.');
+
     $magicItems = $broker->dispatch(
         'GET',
         '/v1/magic-items',
@@ -1142,6 +1159,19 @@ try {
             && $dungeonMasterQuests['body']['pending_requests'][0]['requester_character_name']
                 === 'Routing Hero',
         'The Dungeon Master did not receive the full quest list and pending quest alert.');
+
+    $dungeonMasterRevisions = $broker->dispatch(
+        'GET',
+        '/v1/revisions',
+        [],
+        [],
+        [],
+        '192.0.2.31',
+        $dungeonMasterSession);
+    routingAssert(
+        $dungeonMasterRevisions['status'] === 200
+            && $dungeonMasterRevisions['body']['quests']['activity_count'] === 1,
+        'The Dungeon Master revision route did not include the pending quest activity.');
 
     try {
         $broker->dispatch(

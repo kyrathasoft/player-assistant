@@ -52,15 +52,25 @@ function Invoke-WebRequestAllowError {
     param(
         [Parameter(Mandatory = $true)][string]$Uri,
         [hashtable]$Headers = @{},
-        [Microsoft.PowerShell.Commands.WebRequestSession]$WebSession
+        [Microsoft.PowerShell.Commands.WebRequestSession]$WebSession,
+        [string]$Method = 'Get',
+        [string]$ContentType = '',
+        [string]$Body = ''
     )
     $requestParameters = @{
         UseBasicParsing = $true
         Uri = $Uri
         Headers = $Headers
+        Method = $Method
     }
     if ($null -ne $WebSession) {
         $requestParameters.WebSession = $WebSession
+    }
+    if (![string]::IsNullOrWhiteSpace($ContentType)) {
+        $requestParameters.ContentType = $ContentType
+    }
+    if ($Body -ne '') {
+        $requestParameters.Body = $Body
     }
     try {
         return Invoke-WebRequest @requestParameters
@@ -183,6 +193,9 @@ try {
     Assert-Condition -Condition ($unauthenticatedXp.StatusCode -eq 401) -Message 'The HTTP XP route was not session-protected.'
     Assert-Condition -Condition ([string]$unauthenticatedXp.Headers['Cache-Control'] -match '(?i)(^|,\s*)no-store($|,)') -Message 'The rejected XP response was cacheable.'
 
+    $unauthenticatedRevisions = Invoke-WebRequestAllowError -Uri "$baseUrl/v1/revisions"
+    Assert-Condition -Condition ($unauthenticatedRevisions.StatusCode -eq 401) -Message 'The HTTP revision route was not session-protected.'
+
     $createBody = @{
         character_name = 'HTTP Hero'
         password = 'http integration password'
@@ -238,6 +251,43 @@ try {
         -WebSession $localWebSession
     $identity = $identityResponse.Content | ConvertFrom-Json
     Assert-Condition -Condition ($identity.account.character_key -eq 'http-hero') -Message 'The protected identity was not session-authorized.'
+
+    $revisionResponse = Invoke-WebRequest `
+        -UseBasicParsing `
+        -Uri "$baseUrl/v1/revisions" `
+        -WebSession $localWebSession
+    $revisionBody = $revisionResponse.Content | ConvertFrom-Json
+    Assert-Condition -Condition ($revisionResponse.StatusCode -eq 200) -Message 'The authenticated revision route failed.'
+    Assert-Condition -Condition ([int]$revisionBody.schema_version -eq 1) -Message 'The revision response used the wrong schema.'
+    Assert-Condition -Condition ([string]$revisionBody.messages.revision -match '^[a-f0-9]{64}$') -Message 'The message revision was invalid.'
+    Assert-Condition -Condition ([string]$revisionBody.quests.revision -match '^[a-f0-9]{64}$') -Message 'The quest revision was invalid.'
+    Assert-Condition -Condition ([int]$revisionBody.messages.unread_count -eq 0 -and [int]$revisionBody.quests.activity_count -eq 0) -Message 'The new account revision response exposed activity.'
+
+    $claimResponse = Invoke-WebRequestAllowError `
+        -Uri "$baseUrl/v1/xp-level-up-notifications/claim" `
+        -Method Post `
+        -Headers @{
+            Origin = 'https://example.test'
+            'X-CSRF-Token' = [string]$loginBody.csrf_token
+        } `
+        -WebSession $localWebSession
+    Assert-Condition -Condition ($claimResponse.StatusCode -eq 503) -Message 'The authenticated level-up claim route did not retain the character session.'
+    $claimBody = $claimResponse.Content | ConvertFrom-Json
+    Assert-Condition -Condition ($claimBody.error -eq 'xp_awards_unavailable') -Message 'The authenticated level-up claim route failed for the wrong reason.'
+
+    $acknowledgementResponse = Invoke-WebRequestAllowError `
+        -Uri "$baseUrl/v1/xp-level-up-notifications/acknowledge" `
+        -Method Post `
+        -Headers @{
+            Origin = 'https://example.test'
+            'X-CSRF-Token' = [string]$loginBody.csrf_token
+        } `
+        -ContentType 'application/json' `
+        -Body '{"notifications":[]}' `
+        -WebSession $localWebSession
+    Assert-Condition -Condition ($acknowledgementResponse.StatusCode -eq 503) -Message 'The authenticated level-up acknowledgement route did not retain the character session.'
+    $acknowledgementBody = $acknowledgementResponse.Content | ConvertFrom-Json
+    Assert-Condition -Condition ($acknowledgementBody.error -eq 'xp_awards_unavailable') -Message 'The authenticated level-up acknowledgement route failed for the wrong reason.'
 
     $unconfiguredXp = Invoke-WebRequestAllowError -Uri "$baseUrl/v1/xp" -WebSession $localWebSession
     $unconfiguredXpBody = $unconfiguredXp.Content | ConvertFrom-Json
