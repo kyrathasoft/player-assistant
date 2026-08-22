@@ -304,9 +304,9 @@ Planned security correction: eliminate first-name equivalence from authenticatio
 
 ### P1 — Protect authorization, state, and core operations
 
-- [ ] Bind RPOL credential submission to an exact trusted HTTPS origin and path.
-  - [ ] Cancel untrusted WebView navigation, revalidate the parsed URI immediately before autofill/submission, and replace substring-based Playwright page selection.
-  - [ ] Prove a matching form on an untrusted page and a URL such as `evil.example/?next=rpol.net` receive no credentials.
+- [x] Bind RPOL credential submission to an exact trusted HTTPS origin and path.
+  - [x] Cancel untrusted WebView navigation, revalidate the parsed URI immediately before autofill/submission, and replace substring-based Playwright page selection.
+  - [x] Prove a matching form on an untrusted page and a URL such as `evil.example/?next=rpol.net` receive no credentials.
 - [ ] Replace derivable portable/settings encryption with operating-system secret protection.
   - [ ] Keep portable payloads secret-free and store RPOL credentials through DPAPI, Credential Manager, or explicit user/installer provisioning.
   - [ ] Add migration and copied-fixture tests proving another Windows identity cannot decrypt protected local credentials.

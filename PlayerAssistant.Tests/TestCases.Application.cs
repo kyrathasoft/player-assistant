@@ -1532,6 +1532,73 @@ internal static partial class TestCases
         AssertFalse(unrelatedUserModule.IsAllowed, "unrelated RPOL user-module URLs should remain blocked");
     }
 
+    internal static void RpolCredentialSubmissionRequiresExactTrustedHttpsOriginAndPath()
+    {
+        var trusted = new Uri("https://rpol.net/game.php?gi=80170");
+        var wrongScheme = new Uri("http://rpol.net/game.php?gi=80170");
+        var wrongHost = new Uri("https://evil.example/game.php?next=rpol.net");
+        var lookalikeQuery = new Uri("https://evil.example/?next=rpol.net");
+        var wrongPath = new Uri("https://rpol.net/gameinfo.php?gi=80170");
+        var subdomain = new Uri("https://login.rpol.net/game.php?gi=80170");
+
+        AssertTrue(
+            NetworkUrlAllowlistUtility.IsTrustedRpolCredentialSubmissionUri(trusted),
+            "the exact RPOL HTTPS game path should be trusted for credential submission");
+        AssertFalse(
+            NetworkUrlAllowlistUtility.IsTrustedRpolCredentialSubmissionUri(wrongScheme),
+            "HTTP must never be trusted for credential submission");
+        AssertFalse(
+            NetworkUrlAllowlistUtility.IsTrustedRpolCredentialSubmissionUri(wrongHost),
+            "a hostile matching form must not receive credentials");
+        AssertFalse(
+            NetworkUrlAllowlistUtility.IsTrustedRpolCredentialSubmissionUri(lookalikeQuery),
+            "a URL that only mentions rpol.net in a query must not receive credentials");
+        AssertFalse(
+            NetworkUrlAllowlistUtility.IsTrustedRpolCredentialSubmissionUri(wrongPath),
+            "a different RPOL path must not receive credentials");
+        AssertFalse(
+            NetworkUrlAllowlistUtility.IsTrustedRpolCredentialSubmissionUri(subdomain),
+            "an RPOL subdomain must not receive credentials");
+    }
+
+    internal static void RpolWebViewNavigationRequiresApprovedHttpsPath()
+    {
+        AssertTrue(
+            NetworkUrlAllowlistUtility.IsTrustedRpolNavigationUri(new Uri("https://rpol.net/game.php?gi=80170")),
+            "the configured RPOL game page should be navigable");
+        AssertTrue(
+            NetworkUrlAllowlistUtility.IsTrustedRpolNavigationUri(new Uri("https://rpol.net/login.cgi?gi=80170")),
+            "the exact RPOL login endpoint should be navigable after form submission");
+        AssertTrue(
+            NetworkUrlAllowlistUtility.IsTrustedRpolNavigationUri(new Uri("https://rpol.net/display.cgi?gi=80170&ti=12")),
+            "approved RPOL content paths should remain navigable");
+        AssertFalse(
+            NetworkUrlAllowlistUtility.IsTrustedRpolNavigationUri(new Uri("http://rpol.net/game.php?gi=80170")),
+            "HTTP RPOL navigation must be cancelled");
+        AssertFalse(
+            NetworkUrlAllowlistUtility.IsTrustedRpolNavigationUri(new Uri("https://evil.example/?next=rpol.net")),
+            "untrusted lookalike navigation must be cancelled");
+    }
+
+    internal static void RpolWebViewNavigationStartingGuardCancelsUntrustedUrls()
+    {
+        AssertFalse(
+            RpolWebViewVerificationDialog.ShouldCancelNavigation("https://rpol.net/game.php?gi=80170"),
+            "NavigationStarting should allow the trusted RPOL game page");
+        AssertFalse(
+            RpolWebViewVerificationDialog.ShouldCancelNavigation("https://rpol.net/login.cgi?gi=80170"),
+            "NavigationStarting should allow the exact RPOL login endpoint");
+        AssertTrue(
+            RpolWebViewVerificationDialog.ShouldCancelNavigation("https://evil.example/?next=rpol.net"),
+            "NavigationStarting should cancel a hostile lookalike URL");
+        AssertTrue(
+            RpolWebViewVerificationDialog.ShouldCancelNavigation("http://rpol.net/game.php?gi=80170"),
+            "NavigationStarting should cancel HTTP RPOL navigation");
+        AssertTrue(
+            RpolWebViewVerificationDialog.ShouldCancelNavigation(null),
+            "NavigationStarting should cancel an unparsable or missing URL");
+    }
+
     internal static void NetworkAllowlistAcceptsObsidianPublishContentHosts()
     {
         var page = NetworkUrlAllowlistUtility.Validate(
