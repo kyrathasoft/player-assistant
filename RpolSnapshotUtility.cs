@@ -24,7 +24,21 @@ namespace PlayerAssistant
         int Discovered,
         int Published,
         int Failed,
-        IReadOnlyList<string> Errors);
+        IReadOnlyList<string> Errors,
+        int Attempted = 0,
+        IReadOnlyList<RpolTargetOutcome>? TargetOutcomes = null,
+        bool UploadCompleted = false,
+        bool CursorPersisted = false,
+        string? RecoveryStage = null);
+
+    internal sealed record RpolSnapshotCursorRecovery(
+        [property: JsonPropertyName("schema_version")] int SchemaVersion,
+        [property: JsonPropertyName("source_url")] string SourceUrl,
+        [property: JsonPropertyName("payload_sha256")] string PayloadSha256,
+        [property: JsonPropertyName("next_state")] RpolSnapshotPublisherState NextState,
+        [property: JsonPropertyName("created_at")] string CreatedAt,
+        [property: JsonPropertyName("payload")] RpolSnapshotPayload Payload,
+        [property: JsonPropertyName("recovery_stage")] string RecoveryStage);
 
     internal sealed record RpolSnapshotPublisherState(
         [property: JsonPropertyName("schema_version")] int SchemaVersion,
@@ -38,8 +52,9 @@ namespace PlayerAssistant
         private const int SchemaVersion = 1;
         private const int PublisherStateSchemaVersion = 1;
         private const string PublisherStateFileName = "rpol-snapshot-publisher-state.json";
+        private const string CursorRecoveryFileName = "rpol-snapshot-cursor-recovery.json";
         private static readonly TimeSpan StartupFreshnessInterval = TimeSpan.FromHours(1);
-        private static readonly Uri DiceRollerUri = new($"https://rpol.net/usermodules/diceroller.cgi?gi={GameId}");
+        private static readonly Uri DiceRollerUri = RpolAuthUtility.ProtectedDiceRollerUri;
         private static readonly HttpClient HttpClient = new(new SocketsHttpHandler
         {
             AutomaticDecompression = DecompressionMethods.All,
@@ -59,6 +74,15 @@ namespace PlayerAssistant
 
         public static async Task CheckForPossiblyStaleSnapshotsAsync(
             CancellationToken cancellationToken = default)
+        {
+            await ExecuteWithPublisherLockAsync(
+                owner => CheckForPossiblyStaleSnapshotsCoreAsync(cancellationToken, owner),
+                cancellationToken);
+        }
+
+        private static async Task CheckForPossiblyStaleSnapshotsCoreAsync(
+            CancellationToken cancellationToken,
+            RpolCrossProcessLock lockOwner)
         {
             var now = DateTimeOffset.UtcNow;
             var statePath = RuntimePathUtility.GetUserDataPath(PublisherStateFileName);
@@ -81,13 +105,13 @@ namespace PlayerAssistant
                 cancellationToken);
             if (state is null || rootPayload is null || IsPossiblyStale(rootPayload, now))
             {
-                var discovery = await DiscoverSourceUrisAsync(cancellationToken);
+                var discovery = await DiscoverSourceUrisAsync(cancellationToken, lockOwner);
                 state = MergeDiscoveredSourceUris(state, discovery.SourceUris);
                 await SavePublisherStateAsync(statePath, state, cancellationToken);
                 await PublishSnapshotAsync(rootUri, discovery.RootHtml, cancellationToken);
                 if (state.SourceUrls.Count > 1)
                 {
-                    await PublishNextSnapshotForStartupAsync(statePath, state, cancellationToken);
+                    await PublishNextSnapshotForStartupAsync(statePath, state, cancellationToken, lockOwner);
                 }
 
                 return;
@@ -111,7 +135,7 @@ namespace PlayerAssistant
                 cancellationToken);
             if (refreshRequired)
             {
-                await PublishNextSnapshotForStartupAsync(statePath, state, cancellationToken);
+                await PublishNextSnapshotForStartupAsync(statePath, state, cancellationToken, lockOwner);
             }
             else if (state.SourceUrls.Count > 1)
             {
@@ -174,7 +198,44 @@ namespace PlayerAssistant
             return merged with { NextIndex = nextIndex };
         }
 
-        public static async Task<RpolSnapshotPublishReport> PublishAsync(CancellationToken cancellationToken = default)
+        public static Task<RpolSnapshotPublishReport> PublishAsync(
+            CancellationToken cancellationToken = default,
+            RpolCrossProcessLock? lockOwner = null)
+        {
+            return lockOwner is not null
+                ? PublishCoreAsync(cancellationToken, lockOwner)
+                : ExecuteWithPublisherLockAsync(
+                    owner => PublishCoreAsync(cancellationToken, owner),
+                    cancellationToken);
+        }
+
+        internal static async Task<T> ExecuteWithPublisherLockAsync<T>(
+            Func<RpolCrossProcessLock, Task<T>> operation,
+            CancellationToken cancellationToken)
+        {
+            ArgumentNullException.ThrowIfNull(operation);
+            using var operationLock = await RpolCrossProcessLock.AcquireAsync(
+                RpolCrossProcessLock.AuthAndPublisherName,
+                TimeSpan.FromSeconds(10),
+                cancellationToken);
+            return await operation(operationLock);
+        }
+
+        internal static async Task ExecuteWithPublisherLockAsync(
+            Func<RpolCrossProcessLock, Task> operation,
+            CancellationToken cancellationToken)
+        {
+            ArgumentNullException.ThrowIfNull(operation);
+            using var operationLock = await RpolCrossProcessLock.AcquireAsync(
+                RpolCrossProcessLock.AuthAndPublisherName,
+                TimeSpan.FromSeconds(10),
+                cancellationToken);
+            await operation(operationLock);
+        }
+
+        private static async Task<RpolSnapshotPublishReport> PublishCoreAsync(
+            CancellationToken cancellationToken,
+            RpolCrossProcessLock lockOwner)
         {
             var adminKey = RuntimeSecretStoreUtility.GetBrokerAdminKey();
             var signingKey = RuntimeSecretStoreUtility.GetSnapshotSigningKey();
@@ -185,11 +246,22 @@ namespace PlayerAssistant
             }
 
             var statePath = RuntimePathUtility.GetUserDataPath(PublisherStateFileName);
+            var recoveryPath = RuntimePathUtility.GetUserDataPath(CursorRecoveryFileName);
             var state = LoadPublisherState(statePath);
+            var recovery = LoadCursorRecovery(recoveryPath);
+            if (recovery is not null)
+            {
+                return await RecoverPendingUploadAsync(
+                    recovery,
+                    adminKey,
+                    statePath,
+                    recoveryPath,
+                    cancellationToken);
+            }
             RpolSnapshotDiscovery? discovery = null;
             if (state is null)
             {
-                discovery = await DiscoverSourceUrisAsync(cancellationToken);
+                discovery = await DiscoverSourceUrisAsync(cancellationToken, lockOwner);
                 state = CreatePublisherState(discovery.SourceUris);
                 await SavePublisherStateAsync(statePath, state, cancellationToken);
             }
@@ -215,7 +287,7 @@ namespace PlayerAssistant
                 }
                 else
                 {
-                    var response = await RpolAuthUtility.GetSnapshotResponseAsync(sourceUri, cancellationToken);
+                    var response = await RpolAuthUtility.GetSnapshotResponseAsync(sourceUri, cancellationToken, lockOwner);
                     html = RpolAuthUtility.DecodeHtmlBody(response.Body, response.ContentType);
                     contentType = "text/html; charset=utf-8";
                 }
@@ -233,18 +305,174 @@ namespace PlayerAssistant
                     contentType,
                     DateTimeOffset.UtcNow,
                     signingKey);
-                await UploadAsync(payload, adminKey, cancellationToken);
-                await SavePublisherStateAsync(
-                    statePath,
-                    AdvancePublisherState(state),
+                var nextState = AdvancePublisherState(state);
+                var cursorRecovery = new RpolSnapshotCursorRecovery(
+                    1,
+                    sourceUri.AbsoluteUri,
+                    payload.ContentSha256,
+                    nextState,
+                    DateTimeOffset.UtcNow.ToString("O"),
+                    payload,
+                    "intent");
+                var transaction = await RpolUploadRecoveryTransaction.ExecuteAsync(
+                    () => SaveCursorRecoveryAsync(recoveryPath, cursorRecovery, cancellationToken),
+                    () => UploadAsync(payload, adminKey, CancellationToken.None),
+                    () => SaveCursorRecoveryAsync(
+                        recoveryPath,
+                        cursorRecovery with { RecoveryStage = "uploaded" },
+                        cancellationToken),
+                    () => SavePublisherStateAsync(statePath, nextState, cancellationToken),
+                    () =>
+                    {
+                        File.Delete(recoveryPath);
+                        return Task.CompletedTask;
+                    },
                     cancellationToken);
-                return new RpolSnapshotPublishReport(state.SourceUrls.Count, 1, 0, []);
+                if (!transaction.Succeeded)
+                {
+                    var error = $"{sourceUri}: {string.Join("; ", transaction.Errors)}";
+                    var uploadConfirmed = transaction.UploadCompleted;
+                    return new RpolSnapshotPublishReport(
+                        state.SourceUrls.Count,
+                        uploadConfirmed ? 1 : 0,
+                        uploadConfirmed ? 0 : 1,
+                        [error],
+                        Attempted: 1,
+                        TargetOutcomes:
+                        [
+                            new RpolTargetOutcome(
+                                sourceUri.AbsoluteUri,
+                                uploadConfirmed ? "published-cursor-pending" : "failed",
+                                error)
+                        ],
+                        UploadCompleted: transaction.UploadCompleted,
+                        CursorPersisted: transaction.CursorPersisted,
+                        RecoveryStage: transaction.RecoveryStage);
+                }
+
+                return new RpolSnapshotPublishReport(
+                    state.SourceUrls.Count,
+                    1,
+                    0,
+                    [],
+                    Attempted: 1,
+                    TargetOutcomes: [new RpolTargetOutcome(sourceUri.AbsoluteUri, "published", null)],
+                    UploadCompleted: true,
+                    CursorPersisted: true);
             }
             catch (Exception ex) when (ShouldHandlePublisherFailure(ex, cancellationToken))
             {
                 var error = $"{sourceUri}: {SensitiveTextRedactionUtility.Redact(ex.Message)}";
-                return new RpolSnapshotPublishReport(state.SourceUrls.Count, 0, 1, [error]);
+                return new RpolSnapshotPublishReport(
+                    state.SourceUrls.Count,
+                    0,
+                    1,
+                    [error],
+                    Attempted: 1,
+                    TargetOutcomes: [new RpolTargetOutcome(sourceUri.AbsoluteUri, "failed", error)],
+                    UploadCompleted: false,
+                    CursorPersisted: false);
             }
+        }
+
+        internal static async Task<RpolSnapshotPublishReport> RecoverPendingUploadAsync(
+            RpolSnapshotCursorRecovery recovery,
+            string adminKey,
+            string statePath,
+            string recoveryPath,
+            CancellationToken cancellationToken,
+            Func<RpolSnapshotCursorRecovery, CancellationToken, Task<bool>>? readbackCommittedAsync = null,
+            Func<RpolSnapshotPayload, string, CancellationToken, Task>? uploadAsync = null,
+            Func<string, RpolSnapshotCursorRecovery, CancellationToken, Task>? saveRecoveryAsync = null,
+            Func<string, RpolSnapshotPublisherState, CancellationToken, Task>? saveStateAsync = null,
+            Action<string>? deleteRecovery = null)
+        {
+            ArgumentNullException.ThrowIfNull(recovery);
+            ArgumentException.ThrowIfNullOrWhiteSpace(adminKey);
+            ArgumentException.ThrowIfNullOrWhiteSpace(statePath);
+            ArgumentException.ThrowIfNullOrWhiteSpace(recoveryPath);
+            readbackCommittedAsync ??= (item, token) => IsUploadCommittedAsync(item, token);
+            uploadAsync ??= (payload, key, token) => UploadAsync(payload, key, token);
+            saveRecoveryAsync ??= SaveCursorRecoveryAsync;
+            saveStateAsync ??= SavePublisherStateAsync;
+            deleteRecovery ??= File.Delete;
+
+            if (string.Equals(recovery.RecoveryStage, "intent", StringComparison.Ordinal))
+            {
+                await ReconcilePendingUploadAsync(
+                    () => readbackCommittedAsync(recovery, cancellationToken),
+                    () => uploadAsync(recovery.Payload, adminKey, CancellationToken.None),
+                    cancellationToken);
+                await saveRecoveryAsync(
+                    recoveryPath,
+                    recovery with { RecoveryStage = "uploaded" },
+                    cancellationToken);
+            }
+            await saveStateAsync(statePath, recovery.NextState, cancellationToken);
+            deleteRecovery(recoveryPath);
+            return new RpolSnapshotPublishReport(
+                recovery.NextState.SourceUrls.Count,
+                1,
+                0,
+                [],
+                Attempted: 1,
+                TargetOutcomes: [new RpolTargetOutcome(recovery.SourceUrl, "published-cursor-recovered", null)],
+                UploadCompleted: true,
+                CursorPersisted: true,
+                RecoveryStage: null);
+        }
+
+        internal static bool IsSuccessfulPublishReport(RpolSnapshotPublishReport report)
+        {
+            ArgumentNullException.ThrowIfNull(report);
+            var attempted = report.Attempted == 0 ? report.Published + report.Failed : report.Attempted;
+            return report.Discovered > 0
+                && attempted == 1
+                && report.Published == 1
+                && report.Failed == 0
+                && report.Errors.Count == 0
+                && report.UploadCompleted
+                && report.CursorPersisted
+                && string.IsNullOrWhiteSpace(report.RecoveryStage)
+                && (report.TargetOutcomes is null || report.TargetOutcomes.Count == 1);
+        }
+
+        internal static RpolSnapshotCursorRecovery? LoadCursorRecovery(string path)
+        {
+            ArgumentException.ThrowIfNullOrWhiteSpace(path);
+            if (!File.Exists(path))
+            {
+                return null;
+            }
+
+            var recovery = JsonSerializer.Deserialize<RpolSnapshotCursorRecovery>(File.ReadAllText(path))
+                ?? throw new InvalidOperationException("The RPOL cursor recovery record is empty.");
+            if (recovery.SchemaVersion != 1
+                || !Uri.TryCreate(recovery.SourceUrl, UriKind.Absolute, out _)
+                || string.IsNullOrWhiteSpace(recovery.PayloadSha256)
+                || recovery.Payload is null
+                || !string.Equals(recovery.Payload.ContentSha256, recovery.PayloadSha256, StringComparison.OrdinalIgnoreCase)
+                || recovery.RecoveryStage is not ("intent" or "uploaded"))
+            {
+                throw new InvalidOperationException("The RPOL cursor recovery record is invalid; republishing is blocked.");
+            }
+
+            ValidatePublisherState(recovery.NextState);
+            return recovery;
+        }
+
+        internal static async Task SaveCursorRecoveryAsync(
+            string path,
+            RpolSnapshotCursorRecovery recovery,
+            CancellationToken cancellationToken = default)
+        {
+            ArgumentException.ThrowIfNullOrWhiteSpace(path);
+            ArgumentNullException.ThrowIfNull(recovery);
+            ValidatePublisherState(recovery.NextState);
+            await AtomicFileUtility.WriteAllTextAsync(
+                path,
+                JsonSerializer.Serialize(recovery, new JsonSerializerOptions { WriteIndented = true }),
+                cancellationToken);
         }
 
         internal static bool ShouldHandlePublisherFailure(
@@ -535,10 +763,13 @@ namespace PlayerAssistant
             }
         }
 
-        private static async Task<RpolSnapshotDiscovery> DiscoverSourceUrisAsync(CancellationToken cancellationToken)
+        internal static async Task<RpolSnapshotDiscovery> DiscoverSourceUrisAsync(
+            CancellationToken cancellationToken,
+            RpolCrossProcessLock lockOwner)
         {
+            ArgumentNullException.ThrowIfNull(lockOwner);
             var rootUri = new Uri(AppSettingsUtility.GameForumUrl);
-            var rootResponse = await RpolAuthUtility.GetSnapshotResponseAsync(rootUri, cancellationToken);
+            var rootResponse = await RpolAuthUtility.GetSnapshotResponseAsync(rootUri, cancellationToken, lockOwner);
             var rootHtml = RpolAuthUtility.DecodeHtmlBody(rootResponse.Body, rootResponse.ContentType);
             var candidates = new List<Uri>
             {
@@ -584,7 +815,7 @@ namespace PlayerAssistant
                 || text.StartsWith("Notice: Aside -", StringComparison.OrdinalIgnoreCase);
         }
 
-        private sealed record RpolSnapshotDiscovery(Uri RootUri, string RootHtml, List<Uri> SourceUris);
+        internal sealed record RpolSnapshotDiscovery(Uri RootUri, string RootHtml, List<Uri> SourceUris);
 
         private static async Task UploadAsync(
             RpolSnapshotPayload payload,
@@ -609,6 +840,7 @@ namespace PlayerAssistant
                     using var hmac = new HMACSHA256(Encoding.UTF8.GetBytes(adminKey));
                     request.Headers.Add("X-Broker-Admin-Timestamp", timestamp);
                     request.Headers.Add("X-Broker-Admin-Nonce", nonce);
+                    request.Headers.Add("Idempotency-Key", payload.ContentSha256);
                     request.Headers.Add(
                         "X-Broker-Admin-Signature",
                         Convert.ToHexStringLower(hmac.ComputeHash(Encoding.UTF8.GetBytes(canonical))));
@@ -628,6 +860,35 @@ namespace PlayerAssistant
                     $"The RPOL snapshot broker returned HTTP {(int)response.StatusCode}: "
                     + SensitiveTextRedactionUtility.Redact(responseBody));
             }
+        }
+
+        private static async Task<bool> IsUploadCommittedAsync(
+            RpolSnapshotCursorRecovery recovery,
+            CancellationToken cancellationToken)
+        {
+            var remotePayload = await GetSnapshotPayloadAsync(
+                new Uri(recovery.SourceUrl),
+                allowUnavailable: true,
+                verifySignature: false,
+                cancellationToken);
+            if (remotePayload is null) return false;
+            if (!string.Equals(remotePayload.ContentSha256, recovery.PayloadSha256, StringComparison.OrdinalIgnoreCase))
+            {
+                throw new InvalidOperationException("The RPOL recovery readback found a different payload for the same source; reupload is blocked.");
+            }
+            return true;
+        }
+
+        internal static async Task ReconcilePendingUploadAsync(
+            Func<Task<bool>> readbackCommittedAsync,
+            Func<Task> uploadAsync,
+            CancellationToken cancellationToken)
+        {
+            ArgumentNullException.ThrowIfNull(readbackCommittedAsync);
+            ArgumentNullException.ThrowIfNull(uploadAsync);
+            cancellationToken.ThrowIfCancellationRequested();
+            if (await readbackCommittedAsync().ConfigureAwait(false)) return;
+            await uploadAsync().ConfigureAwait(false);
         }
 
         private static async Task<RpolSnapshotPayload?> GetSnapshotPayloadAsync(
@@ -711,11 +972,12 @@ namespace PlayerAssistant
         private static async Task PublishNextSnapshotForStartupAsync(
             string statePath,
             RpolSnapshotPublisherState state,
-            CancellationToken cancellationToken)
+            CancellationToken cancellationToken,
+            RpolCrossProcessLock lockOwner)
         {
             try
             {
-                var report = await PublishAsync(cancellationToken);
+                var report = await PublishAsync(cancellationToken, lockOwner);
                 if (report.Failed == 0)
                 {
                     return;

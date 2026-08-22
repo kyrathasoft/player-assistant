@@ -1820,18 +1820,56 @@ final class XpTrackingService
             throw new RuntimeException('The class progression page could not be read.');
         }
 
+        // Obsidian class pages put XP in column one and Level in column two,
+        // while older fixtures and some class pages use Level then XP. Parse
+        // the first two columns by their headers, with a headerless fallback
+        // for the historical Level/XP shape.
         $progression = [];
+        $columnOrder = null;
         foreach ($lines as $line) {
-            if (preg_match(
-                '/^\|\s*(?<level>\d{1,3})\s*\|\s*(?<xp>\d[\d,]*)\s*\|$/',
-                trim((string)$line),
-                $matches) !== 1) {
+            $cells = $this->splitTableRow((string)$line);
+            if (count($cells) < 2) {
                 continue;
             }
-            $this->addClassProgressionEntry(
-                $progression,
-                (string)$matches['level'],
-                (string)$matches['xp']);
+            $firstHeader = strtolower(trim((string)$cells[0]));
+            $secondHeader = strtolower(trim((string)$cells[1]));
+            if ($firstHeader === 'xp' && $secondHeader === 'level') {
+                $columnOrder = 'xp-level';
+                continue;
+            }
+            if ($firstHeader === 'level' && $secondHeader === 'xp') {
+                $columnOrder = 'level-xp';
+                continue;
+            }
+            if ($this->isSeparatorRow(array_slice($cells, 0, 2))) {
+                continue;
+            }
+            $first = trim(str_replace(['**', '__'], '', (string)$cells[0]));
+            $second = trim(str_replace(['**', '__'], '', (string)$cells[1]));
+            if (preg_match('/^\d[\d,]*$/', $first) !== 1
+                || preg_match('/^\d[\d,]*$/', $second) !== 1) {
+                continue;
+            }
+            if ($columnOrder === null) {
+                if ($first === '1' && $second === '0') {
+                    $columnOrder = 'level-xp';
+                } elseif ($first === '0' && $second === '1') {
+                    $columnOrder = 'xp-level';
+                } else {
+                    continue;
+                }
+            }
+            if ($columnOrder === 'xp-level') {
+                $this->addClassProgressionEntry(
+                    $progression,
+                    $second,
+                    $first);
+            } else {
+                $this->addClassProgressionEntry(
+                    $progression,
+                    $first,
+                    $second);
+            }
         }
         if ($progression !== []) {
             return $this->validateClassProgression($progression);

@@ -18,6 +18,27 @@ internal static class Program
             return 0;
         }
 
+        if (args is ["--rpol-normal-active-loader-child", var proofPath])
+        {
+            var prior = "separate-process-prior";
+            var candidate = "separate-process-candidate";
+            var slots = new Dictionary<string, string> { ["A"] = prior, ["B"] = candidate };
+            var pointer = new RpolActiveStatePointer(
+                2,
+                "B",
+                "A",
+                Verified: false,
+                Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(candidate))));
+            if (!RpolVersionedStateTransaction.TryReadNormalActiveState(pointer, slot => slots.TryGetValue(slot, out var value) ? value : null, out var loaded)
+                || !string.Equals(prior, loaded, StringComparison.Ordinal))
+            {
+                return 1;
+            }
+
+            File.WriteAllText(proofPath, loaded);
+            return 0;
+        }
+
         var requestedTestFilter = args.Length > 0 ? string.Join(" ", args).Trim() : string.Empty;
         var tests = TestCatalog.Create();
         if (!string.IsNullOrWhiteSpace(requestedTestFilter)) tests = tests.Where(test => test.Name.Contains(requestedTestFilter, StringComparison.OrdinalIgnoreCase)).ToArray();

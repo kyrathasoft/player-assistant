@@ -103,22 +103,33 @@ try {
     }
 }
 
-$invalidPortOperations = new BrokerOperations([
-    'api' => ['database_path' => '/private/broker.sqlite'],
-    'operations' => [
-        'offsite' => [
-            'transport' => 'ftps',
-            'host' => 'backup.example.com',
-            'port' => 70000,
-            'username' => 'backup-user',
-            'password' => 'test-only-password',
-            'directory' => 'private-backups',
+$invalidEnvironment = [];
+foreach (['BACKUP_FTPS_HOST', 'BACKUP_FTPS_PORT', 'BACKUP_FTPS_USERNAME', 'BACKUP_FTPS_PASSWORD', 'BACKUP_FTPS_REMOTE_PATH'] as $name) {
+    $invalidEnvironment[$name] = getenv($name);
+    putenv($name);
+}
+try {
+    $invalidPortOperations = new BrokerOperations([
+        'api' => ['database_path' => '/private/broker.sqlite'],
+        'operations' => [
+            'offsite' => [
+                'transport' => 'ftps',
+                'host' => 'backup.example.com',
+                'port' => 70000,
+                'username' => 'backup-user',
+                'password' => 'test-only-password',
+                'directory' => 'private-backups',
+            ],
         ],
-    ],
-]);
-ftpsAssert(
-    $invalidPortOperations->healthStatus()['offsite_backup_configured'] === false,
-    'An out-of-range FTPS port was reported as configured.');
+    ]);
+    ftpsAssert(
+        $invalidPortOperations->healthStatus()['offsite_backup_configured'] === false,
+        'An out-of-range FTPS port was reported as configured.');
+} finally {
+    foreach ($invalidEnvironment as $name => $value) {
+        putenv($value === false ? $name : $name . '=' . $value);
+    }
+}
 
 $exampleConfig = (string)file_get_contents(__DIR__ . '/../player-assistant-broker/config.operations.example.php');
 ftpsAssert(

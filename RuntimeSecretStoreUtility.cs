@@ -1,5 +1,6 @@
 using System.IO.Compression;
 using System.Text;
+using System.Text.Json;
 
 namespace PlayerAssistant
 {
@@ -8,6 +9,10 @@ namespace PlayerAssistant
         private const string RpolUserNameTarget = "PlayerAssistant/RPOL/UserName";
         private const string RpolPasswordTarget = "PlayerAssistant/RPOL/Password";
         private const string RpolStorageStateTarget = "PlayerAssistant/RPOL/StorageState";
+        private const string RpolStorageStateCandidateTarget = "PlayerAssistant/RPOL/StorageStateCandidate";
+        private const string RpolStorageStateSlotATarget = "PlayerAssistant/RPOL/StorageStateActiveA";
+        private const string RpolStorageStateSlotBTarget = "PlayerAssistant/RPOL/StorageStateActiveB";
+        private const string RpolStorageStatePointerTarget = "PlayerAssistant/RPOL/StorageStateActivePointer";
         private const string BrokerTokenTarget = "PlayerAssistant/Broker/Token";
         private const string BrokerAdminKeyTarget = "PlayerAssistant/Broker/AdminKey";
         private const string SnapshotSigningKeyTarget = "PlayerAssistant/Broker/SnapshotSigningKey";
@@ -63,7 +68,70 @@ namespace PlayerAssistant
 
         public static bool TryGetRpolStorageState(out string? storageStateJson, out DateTimeOffset lastWritten)
         {
+            if (WindowsCredentialManagerUtility.TryReadSecret(RpolStorageStatePointerTarget, out _, out _)
+                && !TryGetActivePointer(out _, out _))
+            {
+                storageStateJson = null;
+                lastWritten = DateTimeOffset.MinValue;
+                return false;
+            }
+            if (TryGetActivePointer(out var pointer, out lastWritten))
+            {
+                if (RpolVersionedStateTransaction.TryReadNormalActiveState(
+                        pointer!,
+                        ReadActiveSlot,
+                        out storageStateJson))
+                {
+                    return true;
+                }
+
+                storageStateJson = null;
+                return false;
+            }
+
             if (!WindowsCredentialManagerUtility.TryReadSecret(RpolStorageStateTarget, out var compressedBytes, out lastWritten))
+            {
+                storageStateJson = null;
+                return false;
+            }
+
+            storageStateJson = DecompressUtf8(compressedBytes);
+            return !string.IsNullOrWhiteSpace(storageStateJson);
+        }
+
+        public static void SaveRpolStorageState(string storageStateJson)
+        {
+            ArgumentException.ThrowIfNullOrWhiteSpace(storageStateJson);
+            var nextVersion = 1;
+            var nextSlot = "A";
+            if (TryGetActivePointer(out var current, out _)
+                && current is not null)
+            {
+                nextVersion = checked(current.Version + 1);
+                nextSlot = string.Equals(current.ActiveSlot, "A", StringComparison.Ordinal) ? "B" : "A";
+            }
+            WriteActiveSlot(nextSlot, storageStateJson);
+            WriteActivePointer(new RpolActiveStatePointer(
+                nextVersion,
+                nextSlot,
+                TryGetActivePointer(out var previous, out _) ? previous?.ActiveSlot : null,
+                Verified: true,
+                Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(Encoding.UTF8.GetBytes(storageStateJson)))));
+            WindowsCredentialManagerUtility.DeleteSecret(RpolStorageStateTarget);
+        }
+
+        internal static void SaveRpolStorageStateCandidate(string storageStateJson)
+        {
+            ArgumentException.ThrowIfNullOrWhiteSpace(storageStateJson);
+            WindowsCredentialManagerUtility.WriteSecret(
+                RpolStorageStateCandidateTarget,
+                CompressUtf8(storageStateJson),
+                RpolStorageStateComment + " candidate");
+        }
+
+        internal static bool TryGetRpolStorageStateCandidate(out string? storageStateJson)
+        {
+            if (!WindowsCredentialManagerUtility.TryReadSecret(RpolStorageStateCandidateTarget, out var compressedBytes, out _))
             {
                 storageStateJson = null;
                 return false;
@@ -73,18 +141,157 @@ namespace PlayerAssistant
             return true;
         }
 
-        public static void SaveRpolStorageState(string storageStateJson)
+        internal static bool PromoteRpolStorageStateCandidate(out string? error)
         {
-            ArgumentException.ThrowIfNullOrWhiteSpace(storageStateJson);
+            error = null;
+            if (!TryGetRpolStorageStateCandidate(out var candidate) || string.IsNullOrWhiteSpace(candidate))
+            {
+                error = "The RPOL candidate state is missing.";
+                return false;
+            }
+
+            var pointerArtifactExists = WindowsCredentialManagerUtility.TryReadSecret(RpolStorageStatePointerTarget, out _, out _);
+            if (!TryGetActivePointer(out var pointer, out _))
+            {
+                if (pointerArtifactExists)
+                {
+                    error = "The RPOL active state pointer is malformed; promotion is blocked.";
+                    return false;
+                }
+                if (WindowsCredentialManagerUtility.TryReadSecret(RpolStorageStateTarget, out var legacyBytes, out _))
+                {
+                    SaveRpolStorageState(DecompressUtf8(legacyBytes));
+                    TryGetActivePointer(out pointer, out _);
+                }
+            }
+
+            var promoted = RpolVersionedStateTransaction.TryPromote(
+                candidate,
+                () => TryGetActivePointer(out var current, out _) ? current : null,
+                ReadActiveSlot,
+                WriteActiveSlot,
+                WriteActivePointer,
+                out _,
+                out error,
+                clearPointer: () => WindowsCredentialManagerUtility.DeleteSecret(RpolStorageStatePointerTarget));
+            if (promoted)
+            {
+                return true;
+            }
+            error ??= "The RPOL active state candidate could not be promoted.";
+            return false;
+        }
+
+
+        internal static RpolActiveStatePointer? CaptureRpolActiveStatePointer()
+        {
+            return TryGetActivePointer(out var pointer, out _) ? pointer : null;
+        }
+
+        internal static void RestoreRpolActiveStatePointer(RpolActiveStatePointer? pointer)
+        {
+            if (pointer is null)
+            {
+                WindowsCredentialManagerUtility.DeleteSecret(RpolStorageStatePointerTarget);
+                return;
+            }
+            WriteActivePointer(pointer);
+        }
+
+        internal static bool VerifyRpolActiveStateRestored(
+            RpolActiveStatePointer? expectedPointer,
+            string? expectedState,
+            out string reason)
+        {
+            var actualPointer = TryGetActivePointer(out var pointer, out _) ? pointer : null;
+            if (!Equals(actualPointer, expectedPointer))
+            {
+                reason = "The restored RPOL active pointer did not match the captured prior pointer.";
+                return false;
+            }
+
+            var hasState = TryGetRpolStorageState(out var actualState, out _);
+            if (expectedState is null ? hasState : !hasState || !string.Equals(actualState, expectedState, StringComparison.Ordinal))
+            {
+                reason = "The restored RPOL state could not be proven through the normal active credential-store loader.";
+                return false;
+            }
+
+            reason = string.Empty;
+            return true;
+        }
+
+        internal static void MarkRpolStorageStateVerified()
+        {
+            if (!TryGetActivePointer(out var pointer, out _) || pointer is null)
+            {
+                throw new InvalidOperationException("The RPOL active state pointer is missing.");
+            }
+
+            RpolVersionedStateTransaction.MarkVerified(pointer, () =>
+                TryGetActivePointer(out var current, out _) ? current : null, WriteActivePointer);
+        }
+
+        private static bool TryGetActivePointer(out RpolActiveStatePointer? pointer, out DateTimeOffset lastWritten)
+        {
+            pointer = null;
+            if (!WindowsCredentialManagerUtility.TryReadSecret(RpolStorageStatePointerTarget, out var bytes, out lastWritten))
+            {
+                return false;
+            }
+
+            try
+            {
+                pointer = JsonSerializer.Deserialize<RpolActiveStatePointer>(Encoding.UTF8.GetString(bytes));
+                return pointer is not null
+                    && pointer.Version > 0
+                    && pointer.ActiveSlot is "A" or "B"
+                    && !string.IsNullOrWhiteSpace(pointer.ContentHash);
+            }
+            catch (JsonException)
+            {
+                return false;
+            }
+        }
+
+        private static string? ReadActiveSlot(string slot)
+        {
+            var target = string.Equals(slot, "A", StringComparison.Ordinal)
+                ? RpolStorageStateSlotATarget
+                : RpolStorageStateSlotBTarget;
+            return WindowsCredentialManagerUtility.TryReadSecret(target, out var bytes, out _)
+                ? DecompressUtf8(bytes)
+                : null;
+        }
+
+        private static void WriteActiveSlot(string slot, string state)
+        {
+            var target = string.Equals(slot, "A", StringComparison.Ordinal)
+                ? RpolStorageStateSlotATarget
+                : RpolStorageStateSlotBTarget;
+            WindowsCredentialManagerUtility.WriteSecret(target, CompressUtf8(state), RpolStorageStateComment + " versioned");
+        }
+
+        private static void WriteActivePointer(RpolActiveStatePointer pointer)
+        {
             WindowsCredentialManagerUtility.WriteSecret(
-                RpolStorageStateTarget,
-                CompressUtf8(storageStateJson),
-                RpolStorageStateComment);
+                RpolStorageStatePointerTarget,
+                Encoding.UTF8.GetBytes(JsonSerializer.Serialize(pointer)),
+                RpolStorageStateComment + " pointer");
+        }
+
+        internal static void DeleteRpolStorageStateCandidate()
+        {
+            WindowsCredentialManagerUtility.DeleteSecret(RpolStorageStateCandidateTarget);
         }
 
         public static void DeleteRpolStorageState()
         {
             WindowsCredentialManagerUtility.DeleteSecret(RpolStorageStateTarget);
+            WindowsCredentialManagerUtility.DeleteSecret(RpolStorageStateSlotATarget);
+            WindowsCredentialManagerUtility.DeleteSecret(RpolStorageStateSlotBTarget);
+            WindowsCredentialManagerUtility.DeleteSecret(RpolStorageStatePointerTarget);
+            WindowsCredentialManagerUtility.DeleteSecret(RpolStorageStateCandidateTarget);
         }
 
         public static string? GetBrokerToken()
