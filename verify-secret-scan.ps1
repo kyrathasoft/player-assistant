@@ -115,6 +115,8 @@ function Invoke-Git {
     $startInfo.WorkingDirectory = $WorkingDirectory
     $startInfo.RedirectStandardOutput = $true
     $startInfo.RedirectStandardError = $true
+    $startInfo.StandardOutputEncoding = [System.Text.UTF8Encoding]::new($false)
+    $startInfo.StandardErrorEncoding = [System.Text.UTF8Encoding]::new($false)
     $startInfo.UseShellExecute = $false
 
     $process = [System.Diagnostics.Process]::Start($startInfo)
@@ -260,30 +262,67 @@ function Test-HistoryContent {
 
     $commitsOutput = Invoke-Git -Arguments @('rev-list', '--all')
     $commits = @($commitsOutput.Output -split "`r?`n" | Where-Object { ![string]::IsNullOrWhiteSpace($_) })
-    foreach ($commit in $commits) {
-        $treeOutput = Invoke-Git -Arguments @('ls-tree', '-r', '--name-only', $commit)
-        $paths = @($treeOutput.Output -split "`r?`n" | Where-Object { ![string]::IsNullOrWhiteSpace($_) })
-        Test-ForbiddenTrackedPaths -Paths $paths -Findings $Findings
+    if ($commits.Count -eq 0) {
+        return
+    }
 
+    $historyPathsOutput = Invoke-Git -Arguments @('log', '--all', '--root', '--format=', '--name-only', '-z', '--no-renames', '-m')
+    $historyPaths = @(
+        $historyPathsOutput.Output -split "`0" |
+            Where-Object { ![string]::IsNullOrWhiteSpace($_) } |
+            Sort-Object -Unique
+    )
+    Test-ForbiddenTrackedPaths -Paths $historyPaths -Findings $Findings
+
+    # Every line that exists in reachable history appears as an addition in the
+    # root commit, the commit that introduced it, or a merge-parent diff. Scan
+    # that patch stream once instead of starting Git for every pattern/commit.
+    $historyDiffArguments = [string[]](@(
+        'log',
+        '--all',
+        '--format=commit:%H',
+        '--no-renames',
+        '--root',
+        '--text',
+        '-m',
+        '-p',
+        '--'
+    ) + $GitGrepContentPathspec)
+    $historyDiffOutput = Invoke-Git -Arguments $historyDiffArguments
+    $currentCommit = ''
+    $currentPath = ''
+
+    foreach ($diffLine in ($historyDiffOutput.Output -split "`r?`n")) {
+        if ($diffLine.StartsWith('commit:', [System.StringComparison]::Ordinal)) {
+            $currentCommit = $diffLine.Substring('commit:'.Length)
+            continue
+        }
+
+        if ($diffLine.StartsWith('diff --git ', [System.StringComparison]::Ordinal)) {
+            $destinationMarker = $diffLine.LastIndexOf(' b/', [System.StringComparison]::Ordinal)
+            $currentPath = if ($destinationMarker -ge 0) {
+                $diffLine.Substring($destinationMarker + 3).Trim('"')
+            }
+            else {
+                ''
+            }
+            continue
+        }
+
+        if ($diffLine.Length -lt 2 -or
+            ($diffLine[0] -ne '+' -and $diffLine[0] -ne '-') -or
+            $diffLine.StartsWith('+++', [System.StringComparison]::Ordinal) -or
+            $diffLine.StartsWith('---', [System.StringComparison]::Ordinal)) {
+            continue
+        }
+
+        $contentLine = $diffLine.Substring(1)
+        $findingPath = if ([string]::IsNullOrWhiteSpace($currentPath)) { '<unparsed-git-path>' } else { $currentPath }
         foreach ($secretPattern in $SecretPatterns) {
-            $grepOutput = Invoke-Git -Arguments ([string[]](@('grep', '-n', '-E', $secretPattern.Pattern, $commit, '--') + $GitGrepContentPathspec)) -AllowFailure
-            if ($grepOutput.ExitCode -eq 0 -and ![string]::IsNullOrWhiteSpace($grepOutput.Output)) {
-                $grepOutput.Output.TrimEnd() -split "`r?`n" |
-                    ForEach-Object {
-                        $allowedFixture = $false
-                        $parts = $_ -split ':', 4
-                        if ($parts.Length -ge 4) {
-                            $path = $parts[1]
-                            $line = $parts[3]
-                            if (Test-IsAllowedFixtureMatch -Path $path -Line $line) {
-                                $allowedFixture = $true
-                            }
-                        }
-
-                        if (!$allowedFixture) {
-                            Add-Finding -Findings $Findings -Message "$($secretPattern.Name): $_"
-                        }
-                    }
+            if ($contentLine -match $secretPattern.Pattern -and
+                ([string]::IsNullOrWhiteSpace($currentPath) -or
+                    !(Test-IsAllowedFixtureMatch -Path $currentPath -Line $contentLine))) {
+                Add-Finding -Findings $Findings -Message "$($secretPattern.Name): ${currentCommit}:${findingPath}:$contentLine"
             }
         }
     }
@@ -293,8 +332,8 @@ $resolvedRepoRoot = Resolve-FullPath $RepoRoot
 Assert-PathInsideRepo -Path $resolvedRepoRoot -Description 'repository root'
 
 $findings = [System.Collections.Generic.List[string]]::new()
-$trackedOutput = Invoke-Git -Arguments @('ls-files') -WorkingDirectory $resolvedRepoRoot
-$trackedPaths = @($trackedOutput.Output -split "`r?`n" | Where-Object { ![string]::IsNullOrWhiteSpace($_) })
+$trackedOutput = Invoke-Git -Arguments @('ls-files', '-z') -WorkingDirectory $resolvedRepoRoot
+$trackedPaths = @($trackedOutput.Output -split "`0" | Where-Object { ![string]::IsNullOrWhiteSpace($_) })
 
 Test-ForbiddenTrackedPaths -Paths $trackedPaths -Findings $findings
 Test-TrackedContent -Paths $trackedPaths -Findings $findings

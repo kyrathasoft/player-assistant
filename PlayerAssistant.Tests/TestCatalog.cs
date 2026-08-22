@@ -471,6 +471,8 @@ internal static class TestCatalog
     ("published health verification accepts current output", TestCases.PublishedHealthVerificationAcceptsCurrentOutput),
     ("secret scan accepts current repository", TestCases.SecretScanAcceptsCurrentRepository),
     ("secret scan rejects tracked env secret", TestCases.SecretScanRejectsTrackedEnvSecret),
+    ("secret scan rejects deleted secret in quoted path", TestCases.SecretScanRejectsDeletedSecretInQuotedPath),
+    ("secret scan rejects forbidden path unique to merge results", TestCases.SecretScanRejectsForbiddenPathUniqueToMergeResults),
     ("release publish parity accepts current output", TestCases.ReleasePublishParityAcceptsCurrentOutput),
     ("release publish parity rejects mismatched sidecar", TestCases.ReleasePublishParityRejectsMismatchedSidecar),
     ("diagnostic bundle redacts sensitive values", TestCases.DiagnosticBundleRedactsSensitiveValues),
