@@ -656,13 +656,8 @@ namespace PlayerAssistant
 
                     try
                     {
-                        await VerifyAuthenticatedContextAsync(context, cancellationToken);
-                        return;
-                    }
-                    catch (RpolAuthException ex) when (ex.Kind == RpolAuthFailureKind.LoginRejected
-                        || ex.Kind == RpolAuthFailureKind.AuthSessionExpired)
-                    {
-                        if (ShouldAwaitManualExternalLogin(loginSubmissionCount))
+                        if (!Uri.TryCreate(page.Url, UriKind.Absolute, out var currentUri)
+                            || !NetworkUrlAllowlistUtility.IsTrustedRpolNavigationUri(currentUri))
                         {
                             await Task.Delay(CloudflareClearancePollInterval, cancellationToken);
                             continue;
@@ -846,7 +841,7 @@ namespace PlayerAssistant
             var page = context.Pages.FirstOrDefault(page =>
                 !page.IsClosed
                 && Uri.TryCreate(page.Url, UriKind.Absolute, out var pageUri)
-                && RpolCredentialSubmissionPolicy.TryValidateCredentialPage(pageUri, out _));
+                && NetworkUrlAllowlistUtility.IsTrustedRpolCredentialSubmissionUri(pageUri));
             if (page is not null)
             {
                 return page;
@@ -873,11 +868,17 @@ namespace PlayerAssistant
             string password,
             CancellationToken cancellationToken)
         {
-            await SubmitValidatedCredentialFormAsync(
-                page,
-                userName,
-                password,
-                "submitting RPOL credentials in the external browser",
+            if (!Uri.TryCreate(page.Url, UriKind.Absolute, out var currentUri)
+                || !NetworkUrlAllowlistUtility.IsTrustedRpolCredentialSubmissionUri(currentUri))
+            {
+                throw new RpolAuthException(
+                    RpolAuthFailureKind.TransportSecurityFailure,
+                    "RPOL credentials were not submitted because the browser was not on the exact trusted HTTPS RPOL game path.");
+            }
+
+            await WaitForPlaywrightAsync(
+                page.Locator("input[name='username']").FillAsync(userName),
+                "filling the RPOL user name in the external browser",
                 cancellationToken);
             await WaitForPlaywrightAsync(
                 page.WaitForLoadStateAsync(LoadState.DOMContentLoaded),
@@ -1299,12 +1300,36 @@ namespace PlayerAssistant
                     return;
                 }
 
-                await SubmitValidatedCredentialFormAsync(
-                    page,
-                    userName,
-                    password,
-                    "submitting RPOL credentials",
-                    cancellationToken);
+                var userNameInput = page.Locator("input[name='username']");
+                var passwordInput = page.Locator("input[name='password']");
+                var rememberMeInput = page.Locator("input[name='perm']");
+                var submitButton = page.Locator("input[name='specialaction'][value='Login']");
+
+                if (!Uri.TryCreate(page.Url, UriKind.Absolute, out var credentialPageUri)
+                    || !NetworkUrlAllowlistUtility.IsTrustedRpolCredentialSubmissionUri(credentialPageUri))
+                {
+                    throw new RpolAuthException(
+                        RpolAuthFailureKind.TransportSecurityFailure,
+                        "RPOL credentials were not submitted because the browser was not on the exact trusted HTTPS RPOL game path.");
+                }
+
+                await WaitForPlaywrightAsync(userNameInput.FillAsync(userName), "filling the RPOL user name", cancellationToken);
+                await WaitForPlaywrightAsync(passwordInput.FillAsync(password), "filling the RPOL password", cancellationToken);
+                if (await WaitForPlaywrightAsync(rememberMeInput.CountAsync(), "checking the RPOL remember-me option", cancellationToken) > 0
+                    && !await WaitForPlaywrightAsync(rememberMeInput.IsCheckedAsync(), "reading the RPOL remember-me option", cancellationToken))
+                {
+                    await WaitForPlaywrightAsync(rememberMeInput.CheckAsync(), "checking the RPOL remember-me option", cancellationToken);
+                }
+
+                if (!Uri.TryCreate(page.Url, UriKind.Absolute, out credentialPageUri)
+                    || !NetworkUrlAllowlistUtility.IsTrustedRpolCredentialSubmissionUri(credentialPageUri))
+                {
+                    throw new RpolAuthException(
+                        RpolAuthFailureKind.TransportSecurityFailure,
+                        "RPOL credentials were not submitted because the browser left the exact trusted HTTPS RPOL game path.");
+                }
+
+                await WaitForPlaywrightAsync(submitButton.ClickAsync(), "submitting the RPOL login", cancellationToken);
                 await WaitForPlaywrightAsync(
                     page.WaitForLoadStateAsync(LoadState.DOMContentLoaded),
                     "waiting for the RPOL login response",
