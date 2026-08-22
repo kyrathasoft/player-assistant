@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/DatabaseMigrationService.php';
 require_once __DIR__ . '/BrokerAlertService.php';
+require_once __DIR__ . '/RevisionService.php';
 
 final class BrokerService
 {
@@ -14,6 +15,7 @@ final class BrokerService
     private ?WordCountService $wordCounts = null;
     private ?QuestService $quests = null;
     private ?MessageService $messages = null;
+    private ?RevisionService $revisions = null;
     private ?BrokerAlertService $alerts = null;
     private ?BrokerOperations $operations = null;
     private $xpMarkdownFetcher;
@@ -157,6 +159,11 @@ final class BrokerService
         if ($method === 'GET' && $route === '/v1/quests') {
             $current = $this->characterAuth()->requireCurrentAccount($session);
             return $this->response(200, $this->quests()->forAccount($current['account']));
+        }
+
+        if ($method === 'GET' && $route === '/v1/revisions') {
+            $current = $this->characterAuth()->requireCurrentAccount($session);
+            return $this->response(200, $this->revisions()->forAccount($current['account']));
         }
 
         if ($method === 'GET' && $route === '/v1/magic-items') {
@@ -714,6 +721,10 @@ final class BrokerService
     private function messages(): MessageService
     {
         return $this->messages ??= new MessageService($this->database);
+    }
+    private function revisions(): RevisionService
+    {
+        return $this->revisions ??= new RevisionService($this->database, (string)$this->questDataPath);
     }
     private function alerts(): BrokerAlertService
     {

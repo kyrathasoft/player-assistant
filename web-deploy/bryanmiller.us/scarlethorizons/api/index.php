@@ -26,6 +26,7 @@ try {
     require_once $privateDirectory . '/BrokerOperations.php';
     require_once $privateDirectory . '/QuestService.php';
     require_once $privateDirectory . '/MessageService.php';
+    require_once $privateDirectory . '/RevisionService.php';
     require_once $privateDirectory . '/MagicItemService.php';
     require_once $privateDirectory . '/BrokerService.php';
     require_once $privateDirectory . '/BrokerAlertService.php';
@@ -236,6 +237,7 @@ function isCharacterSessionRoute(string $route): bool
             '/v1/word-counts',
             '/v1/presence',
             '/v1/quests',
+            '/v1/revisions',
             '/v1/magic-items',
             '/v1/quest-requests',
             '/v1/messages',
