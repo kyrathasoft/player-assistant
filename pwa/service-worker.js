@@ -1,6 +1,6 @@
 'use strict';
 
-importScripts('./version.js?v=1');
+importScripts('./version.js?v=2');
 
 const VERSION_METADATA = globalThis.PLAYER_ASSISTANT_VERSION_METADATA;
 if (!VERSION_METADATA) {

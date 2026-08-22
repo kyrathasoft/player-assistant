@@ -48,8 +48,28 @@ try {
     migrationAssert((int)$database->query("SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'broker_alert_events'")->fetchColumn() === 1, 'The alert-events migration did not run.');
     migrationAssert((int)$database->query("SELECT COUNT(*) FROM pragma_table_info('character_accounts') WHERE name = 'session_version'")->fetchColumn() === 1, 'The session-version upgrade did not run.');
     migrationAssert((int)$database->query("SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'character_account_aliases'")->fetchColumn() === 1, 'The account-alias migration did not run.');
+    migrationAssert((int)$database->query("SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'level_up_notification_receipts'")->fetchColumn() === 1, 'The level-up notification receipt migration did not run.');
+    migrationAssert((int)$database->query("SELECT COUNT(*) FROM sqlite_master WHERE type = 'index' AND name = 'ix_level_up_notification_receipts_account_time'")->fetchColumn() === 1, 'The level-up notification receipt index was not created.');
+    $receiptColumns = $database->query("PRAGMA table_info('level_up_notification_receipts')")->fetchAll(PDO::FETCH_ASSOC);
+    $receiptColumnsByName = array_column($receiptColumns, null, 'name');
+    migrationAssert(
+        isset($receiptColumnsByName['notified_at'])
+            && (int)$receiptColumnsByName['notified_at']['notnull'] === 0,
+        'The receipt acknowledgement timestamp must remain nullable until browser display.');
+    migrationAssert(
+        (int)($receiptColumnsByName['account_id']['pk'] ?? 0) === 1
+            && (int)($receiptColumnsByName['progression_key']['pk'] ?? 0) === 2
+            && (int)($receiptColumnsByName['target_level']['pk'] ?? 0) === 3,
+        'The receipt table does not enforce account/progression/level uniqueness.');
+    $receiptForeignKeys = $database->query("PRAGMA foreign_key_list('level_up_notification_receipts')")->fetchAll(PDO::FETCH_ASSOC);
+    migrationAssert(
+        count($receiptForeignKeys) === 1
+            && $receiptForeignKeys[0]['table'] === 'character_accounts'
+            && $receiptForeignKeys[0]['from'] === 'account_id'
+            && strtoupper((string)$receiptForeignKeys[0]['on_delete']) === 'CASCADE',
+        'The receipt table is not bound to character-account lifecycle.');
     $backups = glob($backupDirectory . '/broker-migration-*.sqlite') ?: [];
-    migrationAssert(count($backups) === 3, 'The upgrade did not create one pre-migration backup per upgrade step.');
+    migrationAssert(count($backups) === 4, 'The upgrade did not create one pre-migration backup per upgrade step.');
     $backup = new PDO('sqlite:' . $backups[0], null, null, [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]);
     migrationAssert((int)$backup->query('PRAGMA user_version')->fetchColumn() === 1, 'The pre-migration backup was not from the old version.');
 

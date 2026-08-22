@@ -1,6 +1,6 @@
-import { initializeTranslator } from './modules/translator.js?v=90';
-import { initializeCampaignSearch } from './modules/search.js?v=90';
-import { initializeDice } from './modules/dice.js?v=90';
+import { initializeTranslator } from './modules/translator.js?v=91';
+import { initializeCampaignSearch } from './modules/search.js?v=91';
+import { initializeDice } from './modules/dice.js?v=91';
 
 (() => {
     'use strict';
@@ -76,6 +76,9 @@ import { initializeDice } from './modules/dice.js?v=90';
     let xpAwardsLoading = null;
     let xpAwardsRequestId = 0;
     let xpAwardsError = '';
+    let pendingLevelUpNotifications = [];
+    let pendingLevelUpAcknowledgements = [];
+    let levelUpAcknowledgementTimer = 0;
     let authenticatedWordCountSnapshot = null;
     let wordCountRequestId = 0;
     let authenticatedPresenceSnapshot = null;
@@ -388,7 +391,16 @@ import { initializeDice } from './modules/dice.js?v=90';
             && character.xp_total >= 0
             && (character.xp_to_next_level === null
                 || (Number.isSafeInteger(character.xp_to_next_level)
-                    && character.xp_to_next_level >= 0));
+                    && character.xp_to_next_level >= 0))
+            && ((character.level_up_target_level === null
+                && character.level_up_target_xp === null
+                && character.level_up_attained === null)
+                || (Number.isSafeInteger(character.level_up_target_level)
+                    && character.level_up_target_level >= 1
+                    && character.level_up_target_level <= 1000
+                    && Number.isSafeInteger(character.level_up_target_xp)
+                    && character.level_up_target_xp >= 0
+                    && typeof character.level_up_attained === 'boolean'));
         if (payload.scope === 'character'
             && validCharacter(payload.character)
             && Array.isArray(payload.authorized_characters)
@@ -457,6 +469,91 @@ import { initializeDice } from './modules/dice.js?v=90';
         return progressAmount === '' ? '' : `${character.character_name} is ${progressAmount}`;
     };
 
+    const resetLevelUpNotificationState = () => {
+        pendingLevelUpNotifications = [];
+        pendingLevelUpAcknowledgements = [];
+        if (levelUpAcknowledgementTimer !== 0) {
+            clearTimeout(levelUpAcknowledgementTimer);
+            levelUpAcknowledgementTimer = 0;
+        }
+    };
+
+    const acknowledgeDisplayedLevelUpNotifications = async () => {
+        if (pendingLevelUpAcknowledgements.length === 0 || authenticatedAccount === null) return;
+        const batch = pendingLevelUpAcknowledgements.map((notification) => ({
+            character_key: notification.character_key,
+            target_level: notification.target_level
+        }));
+        try {
+            const payload = await requestAuthenticationApi('/xp-level-up-notifications/acknowledge', {
+                method: 'POST',
+                body: { notifications: batch },
+                csrf: true
+            });
+            if (payload.schema_version !== 1
+                || !Number.isSafeInteger(payload.acknowledged_count)
+                || payload.acknowledged_count < 0
+                || payload.acknowledged_count > batch.length) {
+                throw new Error('The level-up acknowledgement response was invalid.');
+            }
+            pendingLevelUpAcknowledgements = [];
+        } catch {
+            if (authenticatedAccount !== null && pendingLevelUpAcknowledgements.length > 0) {
+                levelUpAcknowledgementTimer = window.setTimeout(() => {
+                    levelUpAcknowledgementTimer = 0;
+                    void acknowledgeDisplayedLevelUpNotifications();
+                }, 5000);
+            }
+        }
+    };
+
+    const showPendingLevelUpNotifications = () => {
+        const dialog = byId('level-up-alert-dialog');
+        const list = byId('level-up-alert-list');
+        const auth = byId('auth-dialog');
+        if (!(dialog instanceof HTMLDialogElement)
+            || !(list instanceof HTMLElement)
+            || pendingLevelUpNotifications.length === 0
+            || dialog.open
+            || (auth instanceof HTMLDialogElement && auth.open)) return;
+        const displayedNotifications = pendingLevelUpNotifications;
+        list.replaceChildren(...displayedNotifications.map((notification) => {
+            const item = document.createElement('li');
+            item.textContent = `${notification.character_name} reached ${notification.character_class} Level ${notification.target_level}`;
+            return item;
+        }));
+        dialog.showModal();
+        pendingLevelUpNotifications = [];
+        pendingLevelUpAcknowledgements = displayedNotifications;
+        void acknowledgeDisplayedLevelUpNotifications();
+    };
+
+    const claimLevelUpNotifications = async () => {
+        const payload = await requestAuthenticationApi('/xp-level-up-notifications/claim', {
+            method: 'POST',
+            csrf: true
+        });
+        if (payload.schema_version !== 1
+            || !Array.isArray(payload.notifications)
+            || payload.notifications.length > 200
+            || !payload.notifications.every((notification) => notification
+                && typeof notification.character_key === 'string'
+                && /^[a-z0-9][a-z0-9._:-]{0,99}$/u.test(notification.character_key)
+                && typeof notification.character_name === 'string'
+                && notification.character_name.length >= 1
+                && notification.character_name.length <= 200
+                && typeof notification.character_class === 'string'
+                && notification.character_class.length >= 1
+                && notification.character_class.length <= 200
+                && Number.isSafeInteger(notification.target_level)
+                && notification.target_level >= 1
+                && notification.target_level <= 1000)) {
+            throw new Error('The level-up notification response was invalid.');
+        }
+        pendingLevelUpNotifications = payload.notifications;
+        showPendingLevelUpNotifications();
+    };
+
     const renderXpAwardsUi = () => {
         const status = byId('xp-awards-status');
         const list = byId('xp-awards-list');
@@ -486,7 +583,7 @@ import { initializeDice } from './modules/dice.js?v=90';
         }
         status.textContent = '';
         const fragment = document.createDocumentFragment();
-        authenticatedXpAwardsSnapshot.forEach(({ characterKey, currentCharacter, entries }, progressionIndex) => {
+        authenticatedXpAwardsSnapshot.forEach(({ characterKey, currentCharacter, entries }) => {
             const character = entries[0];
             const progressionCharacterKey = characterKey.endsWith('-xp')
                 ? characterKey.slice(0, -3)
@@ -499,9 +596,7 @@ import { initializeDice } from './modules/dice.js?v=90';
                     ? (Array.isArray(authenticatedXpSnapshot.characters)
                         ? (authenticatedXpSnapshot.characters.find(
                             (entry) => entry.character_key === characterKey
-                                || entry.character_key === progressionCharacterKey
-                                || entry.character_name === character.character_name)
-                            || authenticatedXpSnapshot.characters[progressionIndex])
+                                || entry.character_key === progressionCharacterKey))
                         : null)
                     : null;
             const displayProgression = currentCharacter || currentProgression;
@@ -658,6 +753,18 @@ import { initializeDice } from './modules/dice.js?v=90';
                     || (currentCharacter.xp_to_next_level !== null
                         && (!Number.isSafeInteger(currentCharacter.xp_to_next_level)
                             || currentCharacter.xp_to_next_level < 0)))) {
+                throw new Error('The XP Awards response was invalid.');
+            }
+            if (currentCharacter !== undefined
+                && !((currentCharacter.level_up_target_level === null
+                    && currentCharacter.level_up_target_xp === null
+                    && currentCharacter.level_up_attained === null)
+                    || (Number.isSafeInteger(currentCharacter.level_up_target_level)
+                        && currentCharacter.level_up_target_level >= 1
+                        && currentCharacter.level_up_target_level <= 1000
+                        && Number.isSafeInteger(currentCharacter.level_up_target_xp)
+                        && currentCharacter.level_up_target_xp >= 0
+                        && typeof currentCharacter.level_up_attained === 'boolean'))) {
                 throw new Error('The XP Awards response was invalid.');
             }
             return {
@@ -2332,6 +2439,7 @@ import { initializeDice } from './modules/dice.js?v=90';
         authenticatedXpAwardsSnapshot = null;
         xpAwardsLoading = null;
         xpAwardsError = '';
+        resetLevelUpNotificationState();
         xpAwardsRequestId++;
         authenticatedWordCountSnapshot = null;
         wordCountRequestId++;
@@ -2349,7 +2457,7 @@ import { initializeDice } from './modules/dice.js?v=90';
         messageError = '';
         questStateFilter = '';
         lastQuestAlertSignature = '';
-        for (const id of ['quest-alert-dialog', 'message-notification-dialog']) {
+        for (const id of ['level-up-alert-dialog', 'quest-alert-dialog', 'message-notification-dialog']) {
             const dialog = byId(id);
             if (dialog instanceof HTMLDialogElement && dialog.open) dialog.close();
         }
@@ -2605,6 +2713,7 @@ import { initializeDice } from './modules/dice.js?v=90';
         authenticatedXpAwardsSnapshot = null;
         xpAwardsLoading = null;
         xpAwardsError = '';
+        resetLevelUpNotificationState();
         xpAwardsRequestId++;
         authenticatedWordCountSnapshot = null;
         authenticatedPresenceSnapshot = null;
@@ -2671,6 +2780,11 @@ import { initializeDice } from './modules/dice.js?v=90';
     window.addEventListener('offline', updateRevisionPolling);
     authDialog?.addEventListener('close', () => {
         void renderAuthenticatedHeroToken();
+        showPendingLevelUpNotifications();
+    });
+    byId('level-up-alert-close')?.addEventListener('click', () => {
+        const dialog = byId('level-up-alert-dialog');
+        if (dialog instanceof HTMLDialogElement) dialog.close();
     });
 
     authLoginForm?.addEventListener('submit', async (event) => {
@@ -2703,6 +2817,7 @@ import { initializeDice } from './modules/dice.js?v=90';
             authenticatedXpAwardsSnapshot = null;
             xpAwardsLoading = null;
             xpAwardsError = '';
+            resetLevelUpNotificationState();
             xpAwardsRequestId++;
             authenticatedWordCountSnapshot = null;
             authenticatedQuestSnapshot = null;
@@ -2728,6 +2843,11 @@ import { initializeDice } from './modules/dice.js?v=90';
             updateAuthenticationUi();
             updateRevisionPolling();
             await Promise.all([loadXpSummary(), loadWordCountSummary(), loadQuests(), loadMessages()]);
+            try {
+                await claimLevelUpNotifications();
+            } catch {
+                // Login remains available when optional level-up notification delivery fails.
+            }
         } catch (error) {
             authenticatedAccount = null;
             authenticationCsrfToken = '';
@@ -2737,6 +2857,7 @@ import { initializeDice } from './modules/dice.js?v=90';
             authenticatedXpAwardsSnapshot = null;
             xpAwardsLoading = null;
             xpAwardsError = '';
+            resetLevelUpNotificationState();
             xpAwardsRequestId++;
             authenticatedWordCountSnapshot = null;
             authenticatedQuestSnapshot = null;
@@ -2776,6 +2897,7 @@ import { initializeDice } from './modules/dice.js?v=90';
             authenticatedXpAwardsSnapshot = null;
             xpAwardsLoading = null;
             xpAwardsError = '';
+            resetLevelUpNotificationState();
             xpAwardsRequestId++;
             authenticatedWordCountSnapshot = null;
             wordCountRequestId++;
@@ -2798,6 +2920,10 @@ import { initializeDice } from './modules/dice.js?v=90';
             const messageDialog = byId('message-notification-dialog');
             if (messageDialog instanceof HTMLDialogElement && messageDialog.open) {
                 messageDialog.close();
+            }
+            const levelUpDialog = byId('level-up-alert-dialog');
+            if (levelUpDialog instanceof HTMLDialogElement && levelUpDialog.open) {
+                levelUpDialog.close();
             }
             updateAuthenticationUi();
             updateRevisionPolling();

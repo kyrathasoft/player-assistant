@@ -189,6 +189,183 @@ final class XpTrackingService
         ];
     }
 
+    public function claimLevelUpNotificationsForAccount(array $account): array
+    {
+        [$accountId, $progressionKeys] = $this->notificationScopeForAccount($account);
+        if ($progressionKeys === []) {
+            return ['schema_version' => 1, 'notifications' => []];
+        }
+
+        $snapshot = $this->loadCurrentSnapshot();
+        $charactersByKey = [];
+        foreach ($snapshot['characters'] as $character) {
+            $charactersByKey[$this->characterKeyForName(
+                (string)$character['character_name'])] = $character;
+        }
+
+        $candidates = [];
+        foreach ($progressionKeys as $progressionKey) {
+            $baseKey = (string)preg_replace('/-xp$/', '', $progressionKey);
+            $character = $charactersByKey[$baseKey] ?? null;
+            if (!is_array($character)
+                || ($character['level_up_attained'] ?? null) !== true
+                || !is_int($character['level_up_target_level'] ?? null)
+                || !is_int($character['level_up_target_xp'] ?? null)) {
+                continue;
+            }
+            $candidates[] = [
+                'character_key' => $progressionKey,
+                'character_name' => (string)$character['character_name'],
+                'character_class' => (string)$character['character_class'],
+                'target_level' => $character['level_up_target_level'],
+                'target_xp' => $character['level_up_target_xp'],
+            ];
+        }
+
+        $notifications = [];
+        $insert = $this->database->prepare(
+            'INSERT OR IGNORE INTO level_up_notification_receipts (
+                account_id, progression_key, target_level, target_xp, notified_at
+             ) VALUES (
+                :account_id, :progression_key, :target_level, :target_xp, NULL
+             )');
+        $pending = $this->database->prepare(
+            'SELECT notified_at
+               FROM level_up_notification_receipts
+              WHERE account_id = :account_id
+                AND progression_key = :progression_key
+                AND target_level = :target_level');
+        $this->database->beginTransaction();
+        try {
+            foreach ($candidates as $candidate) {
+                $insert->execute([
+                    ':account_id' => $accountId,
+                    ':progression_key' => $candidate['character_key'],
+                    ':target_level' => $candidate['target_level'],
+                    ':target_xp' => $candidate['target_xp'],
+                ]);
+                $pending->execute([
+                    ':account_id' => $accountId,
+                    ':progression_key' => $candidate['character_key'],
+                    ':target_level' => $candidate['target_level'],
+                ]);
+                $receipt = $pending->fetch(PDO::FETCH_ASSOC);
+                if (is_array($receipt) && $receipt['notified_at'] === null) {
+                    unset($candidate['target_xp']);
+                    $notifications[] = $candidate;
+                }
+            }
+            $this->database->commit();
+        } catch (Throwable $exception) {
+            if ($this->database->inTransaction()) {
+                $this->database->rollBack();
+            }
+            throw $exception;
+        }
+
+        return [
+            'schema_version' => 1,
+            'notifications' => $notifications,
+        ];
+    }
+
+    public function acknowledgeLevelUpNotificationsForAccount(array $account, array $body): array
+    {
+        [$accountId, $progressionKeys] = $this->notificationScopeForAccount($account);
+        $notifications = $body['notifications'] ?? null;
+        if (!is_array($notifications) || count($notifications) < 1 || count($notifications) > 200) {
+            throw new BrokerHttpException(
+                400,
+                'invalid_level_up_acknowledgement',
+                'One to 200 displayed level-up notifications are required.');
+        }
+        $authorizedKeys = array_fill_keys($progressionKeys, true);
+        $requested = [];
+        foreach ($notifications as $notification) {
+            $progressionKey = is_array($notification)
+                ? (string)($notification['character_key'] ?? '')
+                : '';
+            $targetLevel = is_array($notification)
+                ? ($notification['target_level'] ?? null)
+                : null;
+            if (count((array)$notification) !== 2
+                || preg_match('/^[a-z0-9][a-z0-9._:-]{0,99}$/', $progressionKey) !== 1
+                || !is_int($targetLevel)
+                || $targetLevel < 1
+                || $targetLevel > 1000) {
+                throw new BrokerHttpException(
+                    400,
+                    'invalid_level_up_acknowledgement',
+                    'The displayed level-up notification acknowledgement is invalid.');
+            }
+            if (!isset($authorizedKeys[$progressionKey])) {
+                throw new BrokerHttpException(
+                    403,
+                    'xp_not_authorized',
+                    'The level-up notification is not authorized for this account.');
+            }
+            $requested[$progressionKey . "\0" . $targetLevel] = [
+                'character_key' => $progressionKey,
+                'target_level' => $targetLevel,
+            ];
+        }
+
+        $update = $this->database->prepare(
+            'UPDATE level_up_notification_receipts
+                SET notified_at = :notified_at
+              WHERE account_id = :account_id
+                AND progression_key = :progression_key
+                AND target_level = :target_level
+                AND notified_at IS NULL');
+        $acknowledgedCount = 0;
+        $this->database->beginTransaction();
+        try {
+            foreach ($requested as $notification) {
+                $update->execute([
+                    ':notified_at' => time(),
+                    ':account_id' => $accountId,
+                    ':progression_key' => $notification['character_key'],
+                    ':target_level' => $notification['target_level'],
+                ]);
+                $acknowledgedCount += $update->rowCount();
+            }
+            $this->database->commit();
+        } catch (Throwable $exception) {
+            if ($this->database->inTransaction()) {
+                $this->database->rollBack();
+            }
+            throw $exception;
+        }
+
+        return [
+            'schema_version' => 1,
+            'acknowledged_count' => $acknowledgedCount,
+        ];
+    }
+
+    private function notificationScopeForAccount(array $account): array
+    {
+        $accountId = (string)($account['id'] ?? '');
+        $role = (string)($account['role'] ?? '');
+        $characterKey = (string)($account['character_key'] ?? '');
+        if (preg_match('/^[a-f0-9]{32}$/', $accountId) !== 1
+            || !in_array($role, ['player', 'dm'], true)
+            || preg_match('/^[a-z0-9][a-z0-9._:-]{0,99}$/', $characterKey) !== 1) {
+            throw new BrokerHttpException(
+                403,
+                'xp_not_authorized',
+                'XP level-up notifications are not authorized for this account.');
+        }
+
+        $groups = $this->validatedAwardGroups();
+        $progressionKeys = $role === 'dm'
+            ? ($groups === []
+                ? []
+                : array_values(array_unique(array_merge(...array_values($groups)))))
+            : ($groups[$characterKey] ?? []);
+        return [$accountId, $progressionKeys];
+    }
+
     private function authorizedCharactersForAccount(string $characterKey, array $snapshot): array
     {
         $authorizedKeys = [];
@@ -1091,6 +1268,7 @@ final class XpTrackingService
             }
             $progressionByPage = [];
             foreach ($parsed['characters'] as &$character) {
+                $reportedLevel = (int)$character['level'];
                 $characterKey = $this->characterKeyForName(
                     (string)$character['character_name']);
                 $character['level'] = $this->currentLevelFromAwardHistory(
@@ -1099,6 +1277,9 @@ final class XpTrackingService
                 $hasLiveHitPoints = array_key_exists($characterKey, $hitPointsByCharacterKey);
                 $character['hit_points'] = $hitPointsByCharacterKey[$characterKey] ?? 0;
                 $character['xp_to_next_level'] = null;
+                $character['level_up_target_level'] = null;
+                $character['level_up_target_xp'] = null;
+                $character['level_up_attained'] = null;
                 $tnlResolved = false;
                 try {
                     $classLink = $this->resolveClassProgressionLink(
@@ -1111,6 +1292,14 @@ final class XpTrackingService
                             $classLink);
                         $progressionByPage[$pageKey] = $this->parseClassProgression(
                             $this->fetchMarkdown($pageUrl));
+                    }
+                    $reportedNextLevel = $reportedLevel + 1;
+                    $reportedNextLevelXp = $progressionByPage[$pageKey][$reportedNextLevel] ?? null;
+                    if (is_int($reportedNextLevelXp)) {
+                        $character['level_up_target_level'] = $reportedNextLevel;
+                        $character['level_up_target_xp'] = $reportedNextLevelXp;
+                        $character['level_up_attained'] =
+                            (int)$character['xp_total'] >= $reportedNextLevelXp;
                     }
                     $character['level'] = $this->currentLevelForXp(
                         $progressionByPage[$pageKey],
@@ -1339,6 +1528,9 @@ final class XpTrackingService
         $xpIndex = $this->findCellIndex($headers, 'XP Total');
         $hitPointsIndex = $this->findCellIndex($headers, 'HP');
         $tnlIndex = $this->findCellIndex($headers, 'TNL');
+        $levelUpTargetLevelIndex = $this->findCellIndex($headers, 'Level-up Target Level');
+        $levelUpTargetXpIndex = $this->findCellIndex($headers, 'Level-up Target XP');
+        $levelUpAttainedIndex = $this->findCellIndex($headers, 'Level-up Attained');
         $characters = [];
         $seenNames = [];
 
@@ -1433,6 +1625,45 @@ final class XpTrackingService
                     }
                     $characters[array_key_last($characters)]['xp_to_next_level'] =
                         (int)$tnlDigits;
+                }
+            }
+            if ($levelUpTargetLevelIndex >= 0
+                || $levelUpTargetXpIndex >= 0
+                || $levelUpAttainedIndex >= 0) {
+                if (min($levelUpTargetLevelIndex, $levelUpTargetXpIndex, $levelUpAttainedIndex) < 0
+                    || count($cells) <= max(
+                        $levelUpTargetLevelIndex,
+                        $levelUpTargetXpIndex,
+                        $levelUpAttainedIndex)) {
+                    throw new RuntimeException('A cached level-up determination was incomplete.');
+                }
+                $targetLevelValue = trim((string)$cells[$levelUpTargetLevelIndex]);
+                $targetXpValue = trim((string)$cells[$levelUpTargetXpIndex]);
+                $attainedValue = strtolower(trim((string)$cells[$levelUpAttainedIndex]));
+                if ($targetLevelValue === '—' && $targetXpValue === '—' && $attainedValue === '—') {
+                    $characters[array_key_last($characters)]['level_up_target_level'] = null;
+                    $characters[array_key_last($characters)]['level_up_target_xp'] = null;
+                    $characters[array_key_last($characters)]['level_up_attained'] = null;
+                } else {
+                    $targetLevelDigits = preg_replace('/\D+/', '', $targetLevelValue);
+                    $targetXpDigits = preg_replace('/\D+/', '', $targetXpValue);
+                    if (!is_string($targetLevelDigits)
+                        || filter_var($targetLevelDigits, FILTER_VALIDATE_INT, [
+                            'options' => ['min_range' => 1, 'max_range' => 1000],
+                        ]) === false
+                        || !is_string($targetXpDigits)
+                        || filter_var($targetXpDigits, FILTER_VALIDATE_INT, [
+                            'options' => ['min_range' => 0, 'max_range' => PHP_INT_MAX],
+                        ]) === false
+                        || !in_array($attainedValue, ['yes', 'no'], true)) {
+                        throw new RuntimeException('A cached level-up determination was invalid.');
+                    }
+                    $characters[array_key_last($characters)]['level_up_target_level'] =
+                        (int)$targetLevelDigits;
+                    $characters[array_key_last($characters)]['level_up_target_xp'] =
+                        (int)$targetXpDigits;
+                    $characters[array_key_last($characters)]['level_up_attained'] =
+                        $attainedValue === 'yes';
                 }
             }
             if (count($characters) > self::MAXIMUM_CHARACTERS) {
@@ -1798,7 +2029,8 @@ final class XpTrackingService
             }
             $validated = $this->parseSnapshot($this->snapshotToMarkdown($payload));
             foreach ($validated['characters'] as $character) {
-                if (!array_key_exists('xp_to_next_level', $character)) {
+                if (!array_key_exists('xp_to_next_level', $character)
+                    || !array_key_exists('level_up_attained', $character)) {
                     return null;
                 }
             }
@@ -1817,15 +2049,15 @@ final class XpTrackingService
         $lines = [
             (string)$payload['date_label'],
             '',
-            '| Name | Class | Level | XP Total | HP | TNL |',
-            '| --- | --- | ---: | ---: | ---: | ---: |',
+            '| Name | Class | Level | XP Total | HP | TNL | Level-up Target Level | Level-up Target XP | Level-up Attained |',
+            '| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | --- |',
         ];
         foreach ($payload['characters'] as $character) {
             if (!is_array($character)) {
                 throw new RuntimeException('The cached XP snapshot was invalid.');
             }
             $lines[] = sprintf(
-                '| %s | %s | %s | %s | %s | %s |',
+                '| %s | %s | %s | %s | %s | %s | %s | %s | %s |',
                 (string)($character['character_name'] ?? ''),
                 (string)($character['character_class'] ?? ''),
                 (string)($character['level'] ?? ''),
@@ -1834,7 +2066,16 @@ final class XpTrackingService
                 array_key_exists('xp_to_next_level', $character)
                     && $character['xp_to_next_level'] === null
                         ? '—'
-                        : (string)($character['xp_to_next_level'] ?? ''));
+                        : (string)($character['xp_to_next_level'] ?? ''),
+                ($character['level_up_target_level'] ?? null) === null
+                    ? '—'
+                    : (string)$character['level_up_target_level'],
+                ($character['level_up_target_xp'] ?? null) === null
+                    ? '—'
+                    : (string)$character['level_up_target_xp'],
+                ($character['level_up_attained'] ?? null) === null
+                    ? '—'
+                    : ($character['level_up_attained'] ? 'yes' : 'no'));
         }
         return implode("\n", $lines);
     }
