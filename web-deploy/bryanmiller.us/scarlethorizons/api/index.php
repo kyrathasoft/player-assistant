@@ -231,6 +231,8 @@ function isCharacterSessionRoute(string $route): bool
             '/v1/me',
             '/v1/xp',
             '/v1/xp-awards',
+            '/v1/xp-level-up-notifications/claim',
+            '/v1/xp-level-up-notifications/acknowledge',
             '/v1/word-counts',
             '/v1/presence',
             '/v1/quests',

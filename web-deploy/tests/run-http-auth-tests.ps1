@@ -52,15 +52,25 @@ function Invoke-WebRequestAllowError {
     param(
         [Parameter(Mandatory = $true)][string]$Uri,
         [hashtable]$Headers = @{},
-        [Microsoft.PowerShell.Commands.WebRequestSession]$WebSession
+        [Microsoft.PowerShell.Commands.WebRequestSession]$WebSession,
+        [string]$Method = 'Get',
+        [string]$ContentType = '',
+        [string]$Body = ''
     )
     $requestParameters = @{
         UseBasicParsing = $true
         Uri = $Uri
         Headers = $Headers
+        Method = $Method
     }
     if ($null -ne $WebSession) {
         $requestParameters.WebSession = $WebSession
+    }
+    if (![string]::IsNullOrWhiteSpace($ContentType)) {
+        $requestParameters.ContentType = $ContentType
+    }
+    if ($Body -ne '') {
+        $requestParameters.Body = $Body
     }
     try {
         return Invoke-WebRequest @requestParameters
@@ -238,6 +248,32 @@ try {
         -WebSession $localWebSession
     $identity = $identityResponse.Content | ConvertFrom-Json
     Assert-Condition -Condition ($identity.account.character_key -eq 'http-hero') -Message 'The protected identity was not session-authorized.'
+
+    $claimResponse = Invoke-WebRequestAllowError `
+        -Uri "$baseUrl/v1/xp-level-up-notifications/claim" `
+        -Method Post `
+        -Headers @{
+            Origin = 'https://example.test'
+            'X-CSRF-Token' = [string]$loginBody.csrf_token
+        } `
+        -WebSession $localWebSession
+    Assert-Condition -Condition ($claimResponse.StatusCode -eq 503) -Message 'The authenticated level-up claim route did not retain the character session.'
+    $claimBody = $claimResponse.Content | ConvertFrom-Json
+    Assert-Condition -Condition ($claimBody.error -eq 'xp_awards_unavailable') -Message 'The authenticated level-up claim route failed for the wrong reason.'
+
+    $acknowledgementResponse = Invoke-WebRequestAllowError `
+        -Uri "$baseUrl/v1/xp-level-up-notifications/acknowledge" `
+        -Method Post `
+        -Headers @{
+            Origin = 'https://example.test'
+            'X-CSRF-Token' = [string]$loginBody.csrf_token
+        } `
+        -ContentType 'application/json' `
+        -Body '{"notifications":[]}' `
+        -WebSession $localWebSession
+    Assert-Condition -Condition ($acknowledgementResponse.StatusCode -eq 503) -Message 'The authenticated level-up acknowledgement route did not retain the character session.'
+    $acknowledgementBody = $acknowledgementResponse.Content | ConvertFrom-Json
+    Assert-Condition -Condition ($acknowledgementBody.error -eq 'xp_awards_unavailable') -Message 'The authenticated level-up acknowledgement route failed for the wrong reason.'
 
     $unconfiguredXp = Invoke-WebRequestAllowError -Uri "$baseUrl/v1/xp" -WebSession $localWebSession
     $unconfiguredXpBody = $unconfiguredXp.Content | ConvertFrom-Json
