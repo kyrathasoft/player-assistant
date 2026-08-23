@@ -312,6 +312,7 @@ internal static class TestCatalog
     ("rpol snapshot accepts sanitized campaign content", TestCases.RpolSnapshotAcceptsSanitizedCampaignContent),
     ("rpol snapshot rejects login-only content", TestCases.RpolSnapshotRejectsLoginOnlyContent),
     ("rpol challenge detection ignores passive cloudflare references", TestCases.RpolChallengeDetectionIgnoresPassiveCloudflareReferences),
+    ("rpol protected probe handles dynamic login fixture", TestCases.RpolProtectedProbeHandlesDynamicLoginFixture),
     ("rpol verification recognizes authenticated browser title", TestCases.RpolVerificationRecognizesAuthenticatedBrowserTitle),
     ("rpol verification browser starts with cdp enabled", TestCases.RpolVerificationBrowserStartsWithCdpEnabled),
     ("rpol verification connects over cdp before inspecting page state", TestCases.RpolVerificationConnectsOverCdpBeforeInspectingPageState),

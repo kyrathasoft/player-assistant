@@ -161,34 +161,25 @@ internal static partial class RpolProtectedResourceUtility
                 "The protected probe did not return a non-empty HTML response.");
         }
 
-        // A login form can remain in RPOL's page shell after protected content
-        // is available.  The exact protected-content contract is authoritative.
-        if (HasDiceRollerContract(html))
+        if (!HasDiceRollerContract(html))
         {
             return Create(
-                RpolProtectedResourceKind.AuthenticatedProtectedContent,
+                RpolProtectedResourceKind.UnexpectedContent,
                 requestedUri,
                 settledUri,
                 statusCode,
-                "The exact RPOL Dice Roller protected resource is accessible.");
+                "The protected probe response does not match the Dice Roller page contract.");
         }
 
-        if (LooksLikeLoginForm(html))
-        {
-            return Create(
-                RpolProtectedResourceKind.LoginRequired,
-                requestedUri,
-                settledUri,
-                statusCode,
-                "The protected probe response contains the RPOL login form.");
-        }
-
+        // RPOL can retain an embedded login form in the authenticated page shell.
+        // The protected Dice Roller contract is the readiness signal; form markup
+        // alone must not override it after the exact protected resource is proven.
         return Create(
-            RpolProtectedResourceKind.UnexpectedContent,
+            RpolProtectedResourceKind.AuthenticatedProtectedContent,
             requestedUri,
             settledUri,
             statusCode,
-            "The protected probe response does not match the Dice Roller page contract.");
+            "The exact RPOL Dice Roller protected resource is accessible.");
     }
 
     private static RpolProtectedResourceClassification? ClassifyNavigationUri(
@@ -286,9 +277,7 @@ internal static partial class RpolProtectedResourceUtility
             return false;
         }
 
-        // The protected Dice Roller page is authenticated even when no roll has
-        // been made in the current session.  Roll-history markers are optional
-        // content and must not be part of the authentication boundary.
+        // Roll history is optional; the authenticated Dice Roller shell is enough.
         return true;
     }
 
