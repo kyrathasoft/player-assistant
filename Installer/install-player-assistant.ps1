@@ -158,10 +158,15 @@ function Copy-PayloadToStaging {
 function Grant-AppDirectoryAccess {
     param([Parameter(Mandatory = $true)][string]$Directory)
 
+    $systemSid = '*S-1-5-18'
+    $administratorsSid = '*S-1-5-32-544'
     $usersSid = '*S-1-5-32-545'
-    & icacls.exe $Directory /grant "${usersSid}:(OI)(CI)M" /T /C | Out-Null
+
+    # The published application tree is immutable for standard users. Runtime
+    # state is resolved to the per-user writable runtime directory by the app.
+    & icacls.exe $Directory /inheritance:r /grant:r "${systemSid}:F" "${administratorsSid}:F" "${usersSid}:RX" /T /C | Out-Null
     if ($LASTEXITCODE -ne 0) {
-        throw "Unable to grant standard Users modify access to $Directory."
+        throw "Unable to restrict standard Users access to read/execute for $Directory."
     }
 }
 

@@ -6187,7 +6187,7 @@ namespace PlayerAssistant
 
         private void ShowPlayerCharacterResolvedImagePathsOnce()
         {
-            var markerPath = Path.Combine(AppContext.BaseDirectory, IndexImagePathMessageBoxShownFileName);
+            var markerPath = RuntimePathUtility.GetWritableRuntimePath(IndexImagePathMessageBoxShownFileName);
 
             if (File.Exists(markerPath))
             {
@@ -6224,7 +6224,7 @@ namespace PlayerAssistant
 
         private void ShowPlayerCharacterHtmlImageUrisOnce()
         {
-            var markerPath = Path.Combine(AppContext.BaseDirectory, HtmlImageUriMessageBoxShownFileName);
+            var markerPath = RuntimePathUtility.GetWritableRuntimePath(HtmlImageUriMessageBoxShownFileName);
 
             if (File.Exists(markerPath))
             {
@@ -6247,7 +6247,7 @@ namespace PlayerAssistant
 
         private void ShowPlayerCharacterImageUrisOnce()
         {
-            var markerPath = Path.Combine(AppContext.BaseDirectory, ImageUriMessageBoxShownFileName);
+            var markerPath = RuntimePathUtility.GetWritableRuntimePath(ImageUriMessageBoxShownFileName);
 
             if (File.Exists(markerPath))
             {

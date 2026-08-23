@@ -492,7 +492,7 @@ internal static class TestCatalog
     ("local settings encrypt command writes portable envelope", TestCases.LocalSettingsEncryptCommandWritesPortableEnvelope),
     ("local settings decrypt command writes plaintext json", TestCases.LocalSettingsDecryptCommandWritesPlaintextJson),
     ("local settings rejects future schema version", TestCases.LocalSettingsRejectsFutureSchemaVersion),
-    ("scoped local settings reject copied install path", TestCases.ScopedLocalSettingsRejectCopiedInstallPath),
+    ("current-user protected local settings copy remains readable for same identity", TestCases.CurrentUserProtectedLocalSettingsCopyRemainsReadableForSameIdentity),
     ("authenticated local settings reject tampered payload", TestCases.AuthenticatedLocalSettingsRejectTamperedPayload),
     ("local settings restores newest valid backup", TestCases.LocalSettingsRestoresNewestValidBackup),
     ("runtime path utility rejects escaped paths", TestCases.RuntimePathUtilityRejectsEscapedPaths),

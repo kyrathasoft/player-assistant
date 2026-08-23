@@ -17,6 +17,7 @@ namespace PlayerAssistant
         private const string SchemaVersionPropertyName = "schema_version";
         private const int CurrentSchemaVersion = 1;
         private const string EncryptionKeySeed = "PlayerAssistant.LocalSettings.v1";
+        private const string CurrentUserKeyScope = "current-user";
         private const int AesIvSizeBytes = 16;
         private const int HmacSizeBytes = 32;
         private static readonly byte[] V1EncryptionKey = SHA256.HashData(Encoding.UTF8.GetBytes(EncryptionKeySeed));
@@ -197,7 +198,10 @@ namespace PlayerAssistant
         {
             ArgumentNullException.ThrowIfNull(settings);
 
-            var plaintextBytes = JsonSerializer.SerializeToUtf8Bytes(settings, JsonOptions);
+            var portableSettings = new Dictionary<string, string>(settings, StringComparer.OrdinalIgnoreCase);
+            portableSettings.Remove("RPOL user name");
+            portableSettings.Remove("RPOL password");
+            var plaintextBytes = JsonSerializer.SerializeToUtf8Bytes(portableSettings, JsonOptions);
             try
             {
                 var encryptedEnvelope = CreatePortableEncryptedEnvelope(plaintextBytes);
@@ -294,6 +298,7 @@ namespace PlayerAssistant
             {
                 return envelope.Format switch
                 {
+                    EncryptedFormat when IsCurrentUserProtected(envelope) => DecryptDpapiPayload(envelope.Payload),
                     EncryptedFormat => DecryptAuthenticatedAesCbcPayload(envelope.Payload, settingsPath, EncryptedFormat),
                     V2EncryptedFormat => DecryptAuthenticatedAesCbcPayload(envelope.Payload, settingsPath, V2EncryptedFormat),
                     V1EncryptedFormat => DecryptAesCbcPayload(envelope.Payload),
@@ -397,48 +402,32 @@ namespace PlayerAssistant
 
         private static EncryptedSettingsEnvelope CreateEncryptedEnvelope(byte[] plaintextBytes, string settingsPath)
         {
-            var iv = RandomNumberGenerator.GetBytes(AesIvSizeBytes);
-            var keySet = GetKeySet(EncryptedFormat, settingsPath);
-
-            using var aes = Aes.Create();
-            aes.Key = keySet.EncryptionKey;
-            aes.IV = iv;
-            aes.Mode = CipherMode.CBC;
-            aes.Padding = PaddingMode.PKCS7;
-
-            using var encryptor = aes.CreateEncryptor();
-            var ciphertext = encryptor.TransformFinalBlock(plaintextBytes, 0, plaintextBytes.Length);
-            byte[]? protectedContent = null;
-            byte[]? tag = null;
-            byte[]? payloadBytes = null;
+            var protectedBytes = ProtectedData.Protect(
+                plaintextBytes,
+                optionalEntropy: null,
+                DataProtectionScope.CurrentUser);
             try
             {
-                protectedContent = new byte[iv.Length + ciphertext.Length];
-                Buffer.BlockCopy(iv, 0, protectedContent, 0, iv.Length);
-                Buffer.BlockCopy(ciphertext, 0, protectedContent, iv.Length, ciphertext.Length);
-
-                using (var hmac = new HMACSHA256(keySet.AuthenticationKey))
-                {
-                    tag = hmac.ComputeHash(protectedContent);
-                }
-
-                payloadBytes = new byte[protectedContent.Length + tag.Length];
-                Buffer.BlockCopy(protectedContent, 0, payloadBytes, 0, protectedContent.Length);
-                Buffer.BlockCopy(tag, 0, payloadBytes, protectedContent.Length, tag.Length);
-
                 return new EncryptedSettingsEnvelope(
                     CurrentSchemaVersion,
                     EncryptedFormat,
-                    Convert.ToBase64String(payloadBytes),
-                    GetKeyScope(settingsPath));
+                    Convert.ToBase64String(protectedBytes),
+                    new KeyScope(
+                        MachineBound: false,
+                        UserBound: true,
+                        InstallPathBound: false,
+                        ScopeHash: CurrentUserKeyScope));
             }
             finally
             {
-                ZeroMemory(ciphertext);
-                ZeroMemory(protectedContent);
-                ZeroMemory(tag);
-                ZeroMemory(payloadBytes);
+                ZeroMemory(protectedBytes);
             }
+        }
+
+        private static bool IsCurrentUserProtected(EncryptedSettingsEnvelope envelope)
+        {
+            return string.Equals(envelope.KeyScope?.ScopeHash, CurrentUserKeyScope, StringComparison.Ordinal)
+                && envelope.KeyScope is { UserBound: true, MachineBound: false, InstallPathBound: false };
         }
 
         private static EncryptedSettingsEnvelope CreatePortableEncryptedEnvelope(byte[] plaintextBytes)

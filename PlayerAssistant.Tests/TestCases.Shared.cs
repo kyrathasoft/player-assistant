@@ -687,18 +687,25 @@ internal static partial class TestCases
     {
         var settings = new Dictionary<string, string>
         {
+            ["XP Tracking"] = "https://publish.obsidian.md/scarlethorizons/Intentional+Orphans/XP+Tracking",
             ["RPOL user name"] = "example-user",
             ["RPOL password"] = "example-password"
         };
         var encryptedJson = LocalSettingsUtility.CreatePortableEncryptedSettingsJson(settings);
+        AssertFalse(encryptedJson.Contains("example-user", StringComparison.Ordinal), "portable settings must not contain the RPOL user name");
+        AssertFalse(encryptedJson.Contains("example-password", StringComparison.Ordinal), "portable settings must not contain the RPOL password");
         var encryptedUtf8 = System.Text.Encoding.UTF8.GetBytes(encryptedJson);
 
         var loadedSettings = LocalSettingsUtility.LoadPortableEncryptedSettingsFromUtf8Bytes(
             encryptedUtf8,
             "test settings");
 
-        AssertEqual("example-user", loadedSettings["RPOL user name"], "unexpected user name after byte-buffer load");
-        AssertEqual("example-password", loadedSettings["RPOL password"], "unexpected password after byte-buffer load");
+        AssertEqual(
+            "https://publish.obsidian.md/scarlethorizons/Intentional+Orphans/XP+Tracking",
+            loadedSettings["XP Tracking"],
+            "portable settings should preserve non-secret configuration");
+        AssertFalse(loadedSettings.ContainsKey("RPOL user name"), "portable settings must omit the RPOL user name");
+        AssertFalse(loadedSettings.ContainsKey("RPOL password"), "portable settings must omit the RPOL password");
         AssertTrue(encryptedUtf8.All(static value => value == 0), "portable encrypted settings buffer should be cleared after load");
     }
 

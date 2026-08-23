@@ -90,7 +90,18 @@ namespace PlayerAssistant
                             ? LocalSettingsUtility.LoadSettings(localSettingsPath)
                             : LocalSettingsUtility.LoadSettingsWithoutMigration(localSettingsPath);
 
-                    PrimeRpolCredentialStoreFromLocalSettings(localSettings, localSettingsPath);
+                    try
+                    {
+                        _ = RuntimeSecretStoreUtility.TryMigrateRpolSecretsFromSettings(localSettings, localSettingsPath);
+                    }
+                    catch (Exception ex)
+                    {
+                        StartupLoggingUtility.Append(
+                            "local settings secret-store migration",
+                            new InvalidOperationException(
+                                $"Unable to migrate RPOL credentials from local settings '{localSettingsPath}' into Windows Credential Manager. Continuing with local settings values for this run.",
+                                ex));
+                    }
 
                     foreach (var pair in localSettings)
                     {
@@ -137,32 +148,6 @@ namespace PlayerAssistant
             }
 
             return RuntimePathUtility.ResolveUserDataFileForRead(LocalSettingsFileName);
-        }
-
-        private static void PrimeRpolCredentialStoreFromLocalSettings(
-            IReadOnlyDictionary<string, string> localSettings,
-            string localSettingsPath)
-        {
-            if (!localSettings.TryGetValue(RpolUserNameSettingsKey, out var userName)
-                || !localSettings.TryGetValue(RpolPasswordSettingsKey, out var password)
-                || string.IsNullOrWhiteSpace(userName)
-                || string.IsNullOrWhiteSpace(password))
-            {
-                return;
-            }
-
-            try
-            {
-                RuntimeSecretStoreUtility.SaveRpolCredentials(userName, password);
-            }
-            catch (Exception ex)
-            {
-                StartupLoggingUtility.Append(
-                    "local settings secret-store migration",
-                    new InvalidOperationException(
-                        $"Unable to prime RPOL credentials from local settings '{localSettingsPath}' into Windows Credential Manager. Continuing with local settings values for this run.",
-                        ex));
-            }
         }
 
         private static void OverlayStoredRpolCredentials(IDictionary<string, string> settings)

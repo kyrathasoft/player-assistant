@@ -98,7 +98,9 @@ function ConvertTo-PlainSettingsObject {
 
     $plainSettings = [ordered]@{}
     foreach ($property in $Settings.PSObject.Properties) {
-        if ($property.Name -eq 'schema_version') {
+        if ($property.Name -eq 'schema_version' -or
+            $property.Name -eq 'RPOL user name' -or
+            $property.Name -eq 'RPOL password') {
             continue
         }
 

@@ -124,8 +124,8 @@ internal static partial class TestCases
         WithHostedSettingsIsolation(() =>
             settings = new Dictionary<string, string>(AppSettingsUtility.LoadSettings(directory.Path), StringComparer.OrdinalIgnoreCase));
 
-        AssertEqual("example-user", settings["RPOL user name"], "unexpected migrated RPOL user name");
-        AssertEqual("example-password", settings["RPOL password"], "unexpected migrated RPOL password");
+        AssertFalse(settings.ContainsKey("RPOL user name"), "hosted portable settings must not expose the RPOL user name");
+        AssertFalse(settings.ContainsKey("RPOL password"), "hosted portable settings must not expose the RPOL password");
         AssertEqual(
             "https://publish.obsidian.md/scarlethorizons/Intentional+Orphans/XP+Tracking",
             settings["XP Tracking"],
@@ -134,8 +134,8 @@ internal static partial class TestCases
             "https://bryanmiller.us/scarlethorizons/settings.local.json",
             requestedHostedSettingsUrl ?? string.Empty,
             "unexpected hosted local settings URL");
-        AssertEqual("example-user", RuntimeSecretStoreUtility.GetRpolUserName()!, "credential manager should store RPOL user name");
-        AssertEqual("example-password", RuntimeSecretStoreUtility.GetRpolPassword()!, "credential manager should store RPOL password");
+        AssertTrue(string.IsNullOrEmpty(RuntimeSecretStoreUtility.GetRpolUserName()), "portable hosted settings must not provision an RPOL user name");
+        AssertTrue(string.IsNullOrEmpty(RuntimeSecretStoreUtility.GetRpolPassword()), "portable hosted settings must not provision an RPOL password");
         AssertFalse(
             File.Exists(Path.Combine(directory.Path, "settings.local.json")),
             "hosted local settings should not be persisted after credential migration");
@@ -2977,7 +2977,8 @@ internal static partial class TestCases
         AssertContains(encryptedJson, "\"schema_version\": 1");
         AssertContains(encryptedJson, "\"format\": \"app-protected-v3\"");
         AssertContains(encryptedJson, "\"key_scope\":");
-        AssertContains(encryptedJson, "\"install_path_bound\": true");
+        AssertContains(encryptedJson, "\"install_path_bound\": false");
+        AssertContains(encryptedJson, "\"scope_hash\": \"current-user\"");
     }
 
     internal static void CredentialManagerUtf8HelpersClearTransientBuffers()
@@ -3156,7 +3157,7 @@ internal static partial class TestCases
         AssertContains(encryptedJson, "\"key_scope\":");
     }
 
-    internal static void ScopedLocalSettingsRejectCopiedInstallPath()
+    internal static void CurrentUserProtectedLocalSettingsCopyRemainsReadableForSameIdentity()
     {
         using var sourceDirectory = TemporaryDirectory.Create();
         using var copiedDirectory = TemporaryDirectory.Create();
@@ -3173,9 +3174,9 @@ internal static partial class TestCases
 
         File.Copy(sourcePath, copiedPath);
 
-        var exception = AssertThrows<InvalidOperationException>(() =>
-            LocalSettingsUtility.LoadSettings(copiedPath));
-        AssertContains(exception.Message, "different Windows user, machine, or install directory");
+        var settings = LocalSettingsUtility.LoadSettings(copiedPath);
+        AssertEqual("example-user", settings["RPOL user name"], "copied current-user protected settings should remain readable by the same Windows identity");
+        AssertEqual("example-password", settings["RPOL password"], "copied current-user protected settings should preserve the secret for the same Windows identity");
     }
 
     internal static void AuthenticatedLocalSettingsRejectTamperedPayload()

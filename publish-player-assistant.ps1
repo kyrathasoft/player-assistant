@@ -465,7 +465,9 @@ function ConvertTo-PlainSettingsObject {
 
     $plainSettings = [ordered]@{}
     foreach ($property in $Settings.PSObject.Properties) {
-        if ($property.Name -eq $SettingsSchemaVersionPropertyName) {
+        if ($property.Name -eq $SettingsSchemaVersionPropertyName -or
+            $property.Name -eq 'RPOL user name' -or
+            $property.Name -eq 'RPOL password') {
             continue
         }
 
@@ -493,6 +495,27 @@ function ConvertFrom-AppEncryptedLocalSettings {
     }
 
     $payloadBytes = [Convert]::FromBase64String($envelope.payload)
+    if ($envelope.format -eq $SettingsFormat -and
+        $envelope.key_scope -and
+        $envelope.key_scope.scope_hash -eq 'current-user' -and
+        $envelope.key_scope.user_bound -eq $true -and
+        $envelope.key_scope.machine_bound -eq $false -and
+        $envelope.key_scope.install_path_bound -eq $false) {
+        # Current-user DPAPI payloads are intentionally not portable. Public release
+        # artifacts must not decrypt or republish their contents; runtime credentials
+        # are provisioned through Credential Manager instead. Recover only the
+        # non-secret XP source URL from the adjacent public settings file.
+        $publicSettingsPath = Join-Path ([System.IO.Path]::GetDirectoryName($SettingsPath)) 'settings.json'
+        $publicSettings = [ordered]@{}
+        if (Test-Path -LiteralPath $publicSettingsPath -PathType Leaf) {
+            $publicSettingsDocument = Get-Content -Raw -LiteralPath $publicSettingsPath | ConvertFrom-Json
+            if ($publicSettingsDocument.PSObject.Properties['XP Tracking']) {
+                $publicSettings['XP Tracking'] = [string]$publicSettingsDocument.'XP Tracking'
+            }
+        }
+        return [pscustomobject]$publicSettings
+    }
+
     if ($envelope.format -eq $SettingsFormat -or $envelope.format -eq $PreviousSettingsFormat) {
         if ($payloadBytes.Length -lt 49) {
             throw "$SettingsLocalFileName authenticated encrypted payload is too short."
@@ -738,13 +761,6 @@ function Assert-EncryptedLocalSettings {
         if (![System.Uri]::TryCreate([string]$publishedProperty.Value, [System.UriKind]::Absolute, [ref]$uri) -or
             ($uri.Scheme -ne [System.Uri]::UriSchemeHttp -and $uri.Scheme -ne [System.Uri]::UriSchemeHttps)) {
             throw "Published $SettingsLocalFileName value '$settingsKey' must be an absolute HTTP or HTTPS URL."
-        }
-    }
-
-    foreach ($settingsKey in $RequiredLocalSettingsCredentialKeys) {
-        $publishedProperty = $publishedSettings.PSObject.Properties[$settingsKey]
-        if ($null -eq $publishedProperty -or [string]::IsNullOrWhiteSpace([string]$publishedProperty.Value)) {
-            throw "Published $SettingsLocalFileName is missing required RPOL credential setting '$settingsKey'."
         }
     }
 
