@@ -36,16 +36,18 @@ namespace PlayerAssistant
         private static readonly UpdateManifestSigningKeyTrustEntry[] TrustedUpdateManifestKeys =
         [
             new(
-                "update-signing-2026-primary",
+                "update-signing-2026-rotated",
                 """
                 -----BEGIN PUBLIC KEY-----
-                MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAmn1/5EhDHNdV2zIdKxB/
-                S1ny3TygjZHHPfvj9myjjFw23z5K2vGQkAgfzn4+WSp/a9MxHfCunug5S8Ig0uMB
-                sTbgDogxg/81SOi+qWTuYEcn7rTJVZISWX4uVw7K7TFhes+orRUULqHR3hbsa1Ta
-                t4XeflJaz2Z+C6bVmNtazwVgqkJVMVCzrDXdGgrUWXKIGa1NWj58RCVboqQdQKIa
-                LfBfW8oeWxzbH6rngE8R2U9PmJn3WO3o76iOgCueKsxmx4PVX6BBxd4vKHCjuivY
-                LyTK9NT40bqTOpiKa8QG1cggowwhgR+V7Hphu8OexyI/WkcYG5tZp8cD8vvyP7VU
-                MQIDAQAB
+                MIIBojANBgkqhkiG9w0BAQEFAAOCAY8AMIIBigKCAYEAsal4hZqzJMwcYpU+pkZp
+                2hWMPxo0rXEhMax5evHqNwQ98UGSW9wwR7Oo3/KnNZKDyuRl52F8mL+H5AOEVo9J
+                axCYVicXr4CaJC6nUdOwzeHobgEconFkMJE5IId3GeaV8lC3pI8GWsuAJWlr/QWR
+                rnM/jm0oKJICme6NTIViVo2InvjnLYHcPjWtmryfxEP7rNSMGysUy1FCQVPZgJFb
+                Vaj/2ACGKs5OuzlameUViWWM/p1bBPi3EvUONoEE3Wq1Xxl7QXTMaIFSgcTzb68Y
+                d7I/BTSJvqfzNt6TNsBs+yxsMW3a+5ENFzPKc1ugqYnOdxP/DGnOWBQyY56COYqo
+                NOkTOHU1wtv9y12p9aFNo2HqiNYGv8iUHOajwNCAy6UAPoOT7FJiDDWA4fSIXqhs
+                vHTCxkHDbGyjJM/qUewfj2biij1wiCi49RCce1MoFN8A9b2ROH0Ye10/1m64g0cr
+                eYjkDtbmDJ8g0n6T4Rz44Vhv0rZ09XSFyB5OW0Lh9lAVAgMBAAE=
                 -----END PUBLIC KEY-----
                 """)
         ];
