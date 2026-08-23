@@ -45,6 +45,18 @@ function Get-Sha256 {
         [System.Security.Cryptography.SHA256]::HashData($Bytes))
 }
 
+function Get-ComparableSha256 {
+    param(
+        [Parameter(Mandatory = $true)][byte[]]$Bytes,
+        [Parameter(Mandatory = $true)][bool]$NormalizeText
+    )
+    if (!$NormalizeText) {
+        return Get-Sha256 -Bytes $Bytes
+    }
+    $text = [System.Text.Encoding]::UTF8.GetString($Bytes).Replace("`r`n", "`n").Replace("`r", "`n")
+    return Get-Sha256 -Bytes ([System.Text.Encoding]::UTF8.GetBytes($text))
+}
+
 function Get-ProductionStaticResponse {
     param(
         [Parameter(Mandatory = $true)][System.Net.Http.HttpClient]$Client,
@@ -195,7 +207,10 @@ try {
 
         $remoteBytes = $response.Content.ReadAsByteArrayAsync().GetAwaiter().GetResult()
         $localBytes = [System.IO.File]::ReadAllBytes($localPath)
-        Assert-Condition -Condition ((Get-Sha256 $remoteBytes) -eq (Get-Sha256 $localBytes)) -Message "$relativePath does not match the local deployment file."
+        $isText = @($entry.Value | Where-Object {
+            $_ -like 'text/*' -or $_ -in @('application/javascript', 'text/javascript', 'application/json', 'text/json', 'application/manifest+json')
+        }).Count -gt 0
+        Assert-Condition -Condition ((Get-ComparableSha256 -Bytes $remoteBytes -NormalizeText $isText) -eq (Get-ComparableSha256 -Bytes $localBytes -NormalizeText $isText)) -Message "$relativePath does not match the local deployment file."
     }
 
     $indexResponse = $responses['index.html']
