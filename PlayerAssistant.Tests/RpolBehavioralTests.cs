@@ -159,6 +159,18 @@ internal static partial class TestCases
         }
     }
 
+    internal static void RpolProtectedProbeAcceptsDiceRollerShellWithoutRollHistory()
+    {
+        var html = "<html><head><title>Dice Roller - World of Issenda - Scarlet Horizons - RPoL</title></head><body><form action='/login.cgi'><input name='username'><input name='password' type='password'></form><div>Step 1: Choose the Dice</div><div>Roll the Dice</div></body></html>";
+        var classification = RpolProtectedResourceUtility.Classify(
+            RpolAuthUtility.ProtectedDiceRollerUri,
+            RpolAuthUtility.ProtectedDiceRollerUri,
+            200,
+            "text/html; charset=utf-8",
+            html);
+        AssertEqual(RpolProtectedResourceKind.AuthenticatedProtectedContent, classification.Kind, "the protected Dice Roller shell must prove authentication without roll history");
+    }
+
     private static async Task RunProtectedProbeFixtureAsync()
     {
         using var playwright = await Playwright.CreateAsync();
@@ -176,7 +188,7 @@ internal static partial class TestCases
                     Status = 200,
                     ContentType = "text/html; charset=utf-8",
                     Headers = new Dictionary<string, string> { ["x-fixture-proof"] = "observed" },
-                    Body = "<html><head><title>Dice Roller - World of Issenda - Scarlet Horizons - RPoL</title></head><body><div>Step 1: Choose the Dice</div><div>Roll the Dice</div><div id='roll-log'>Kelpie rolled 1d20 using d20. [roll=1.2.3]</div><script>setTimeout(() => { document.querySelector('#roll-log').textContent = 'Kelpie rolled 1d20 using d20. [roll=after-one-second]'; }, 1250);</script></body></html>"
+                    Body = "<html><head><title>Dice Roller - World of Issenda - Scarlet Horizons - RPoL</title></head><body><form action='/search.cgi'><input name='q'></form><form action='/login.cgi' method='post'><input name='username'><input name='password' type='password'></form><div>Step 1: Choose the Dice</div><div>Roll the Dice</div><div id='roll-log'>Kelpie rolled 1d20 using d20. [roll=1.2.3]</div><script>setTimeout(() => { document.querySelector('#roll-log').textContent = 'Kelpie rolled 1d20 using d20. [roll=after-one-second]'; }, 1250);</script></body></html>"
                 });
                 return;
             }

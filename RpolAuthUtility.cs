@@ -496,8 +496,6 @@ namespace PlayerAssistant
 
                 await CompleteExternalBrowserVerificationAsync(
                     context,
-                    userName,
-                    password,
                     cancellationToken);
                 await SaveStorageStateSecretAsync(
                     context,
@@ -596,82 +594,57 @@ namespace PlayerAssistant
 
         private static async Task CompleteExternalBrowserVerificationAsync(
             IBrowserContext context,
-            string userName,
-            string password,
             CancellationToken cancellationToken)
         {
-            var gameForumUri = new Uri(AppSettingsUtility.GameForumUrl);
-            var page = await GetExternalRpolPageAsync(context, gameForumUri, cancellationToken);
             var startedAt = DateTimeOffset.UtcNow;
-            var loginSubmissionCount = 0;
+            RpolProtectedResourceClassification? lastClassification = null;
 
+            // The headed browser is a manual-verification handoff only.  Never
+            // inspect, fill, or submit a login form in this browser.  Readiness
+            // is established solely by the exact protected Dice Roller probe.
             while (DateTimeOffset.UtcNow - startedAt < CloudflareClearanceMaxWait)
             {
                 cancellationToken.ThrowIfCancellationRequested();
-
                 try
                 {
-                    if (page.IsClosed)
+                    var existingProtectedPage = context.Pages.FirstOrDefault(candidate =>
+                        !candidate.IsClosed
+                        && Uri.TryCreate(candidate.Url, UriKind.Absolute, out var candidateUri)
+                        && RpolProtectedResourceUtility.IsExactProtectedUri(candidateUri));
+                    if (existingProtectedPage is not null)
                     {
-                        page = await GetExternalRpolPageAsync(context, gameForumUri, cancellationToken);
-                    }
-
-                    var html = await WaitForPlaywrightAsync(
-                        page.ContentAsync(),
-                        "checking the external RPOL browser page",
-                        cancellationToken);
-                    if (await HasLoginFormAsync(page, cancellationToken))
-                    {
-                        if (ShouldAwaitManualExternalLogin(loginSubmissionCount))
-                        {
-                            await Task.Delay(CloudflareClearancePollInterval, cancellationToken);
-                            continue;
-                        }
-
-                        await SubmitExternalBrowserLoginAsync(page, userName, password, cancellationToken);
-                        loginSubmissionCount++;
-                        await Task.Delay(TimeSpan.FromSeconds(3), cancellationToken);
-                        continue;
-                    }
-
-                    if (LooksLikeCloudflareChallengePage(html))
-                    {
-                        await Task.Delay(CloudflareClearancePollInterval, cancellationToken);
-                        continue;
-                    }
-
-                    if (!Uri.TryCreate(page.Url, UriKind.Absolute, out var currentUri)
-                        || !NetworkUrlAllowlistUtility.IsTrustedRpolNavigationUri(currentUri))
-                    {
-                        await WaitForPlaywrightAsync(
-                            page.GotoAsync(gameForumUri.ToString(), new PageGotoOptions
-                            {
-                                WaitUntil = WaitUntilState.DOMContentLoaded,
-                                Timeout = (float)PlaywrightOperationTimeout.TotalMilliseconds
-                            }),
-                            $"loading '{gameForumUri}' in the external RPOL browser",
+                        var existingHtml = await WaitForPlaywrightAsync(
+                            existingProtectedPage.ContentAsync(),
+                            "reading the authenticated external RPOL Dice Roller page",
                             cancellationToken);
-                        continue;
-                    }
-
-                    try
-                    {
-                        if (!Uri.TryCreate(page.Url, UriKind.Absolute, out var externalPageUri)
-                            || !NetworkUrlAllowlistUtility.IsTrustedRpolNavigationUri(externalPageUri))
+                        lastClassification = RpolProtectedResourceUtility.ClassifyEvidence(
+                            new RpolProtectedProbeEvidence(
+                                ProtectedDiceRollerUri,
+                                ProtectedDiceRollerUri,
+                                ProtectedDiceRollerUri,
+                                200,
+                                "text/html; charset=utf-8",
+                                existingHtml,
+                                AppSettingsUtility.GameForumUrl,
+                                SettledAfterStabilization: true));
+                        if (lastClassification.Kind == RpolProtectedResourceKind.AuthenticatedProtectedContent)
                         {
-                            await Task.Delay(CloudflareClearancePollInterval, cancellationToken);
-                            continue;
+                            return;
                         }
+                    }
 
-                        page = await GetExternalRpolPageAsync(context, gameForumUri, cancellationToken);
-                        await SubmitExternalBrowserLoginAsync(page, userName, password, cancellationToken);
-                        loginSubmissionCount++;
-                        await Task.Delay(TimeSpan.FromSeconds(3), cancellationToken);
-                    }
-                    catch (RpolAuthException ex) when (ex.Kind == RpolAuthFailureKind.CloudflareChallenge)
-                    {
-                        await Task.Delay(CloudflareClearancePollInterval, cancellationToken);
-                    }
+                    lastClassification = await VerifyAuthenticatedContextAsync(context, cancellationToken);
+                    return;
+                }
+                catch (RpolAuthException ex) when (
+                    ex.Kind is RpolAuthFailureKind.CloudflareChallenge
+                        or RpolAuthFailureKind.AuthSessionExpired
+                        or RpolAuthFailureKind.UnexpectedProtectedContent)
+                {
+                    StartupLoggingUtility.Append(
+                        "RPOL external protected probe",
+                        $"stage=waiting category={ex.Kind}");
+                    await Task.Delay(CloudflareClearancePollInterval, cancellationToken);
                 }
                 catch (PlaywrightException ex) when (IsBrowserClosedException(ex))
                 {
@@ -680,13 +653,11 @@ namespace PlayerAssistant
                         "RPOL browser verification was cancelled because the temporary browser window was closed before verification completed.",
                         ex);
                 }
-
-                await Task.Delay(CloudflareClearancePollInterval, cancellationToken);
             }
 
             throw new RpolAuthException(
                 RpolAuthFailureKind.CloudflareChallenge,
-                $"RPOL browser verification did not complete within {CloudflareClearanceMaxWait.TotalMinutes:0} minutes. Complete the checkbox in the temporary Chrome or Edge window, keep that window open, and let Player Assistant finish saving the RPOL browser state.");
+                $"RPOL browser verification did not complete within {CloudflareClearanceMaxWait.TotalMinutes:0} minutes. The exact protected Dice Roller probe remained {lastClassification?.Kind.ToString() ?? "unobserved"}. Complete RPOL/Cloudflare verification in the temporary browser and keep it open.");
         }
 
         private static async Task<RpolProtectedResourceClassification> VerifyAuthenticatedContextAsync(
@@ -1114,7 +1085,7 @@ namespace PlayerAssistant
                 "--no-first-run",
                 "--new-window",
                 new Uri(noticePath).AbsoluteUri,
-                AppSettingsUtility.GameForumUrl
+                RpolProtectedResourceUtility.ProtectedDiceRollerUri.AbsoluteUri
             ];
         }
 

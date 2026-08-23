@@ -161,6 +161,18 @@ internal static partial class RpolProtectedResourceUtility
                 "The protected probe did not return a non-empty HTML response.");
         }
 
+        // A login form can remain in RPOL's page shell after protected content
+        // is available.  The exact protected-content contract is authoritative.
+        if (HasDiceRollerContract(html))
+        {
+            return Create(
+                RpolProtectedResourceKind.AuthenticatedProtectedContent,
+                requestedUri,
+                settledUri,
+                statusCode,
+                "The exact RPOL Dice Roller protected resource is accessible.");
+        }
+
         if (LooksLikeLoginForm(html))
         {
             return Create(
@@ -171,22 +183,12 @@ internal static partial class RpolProtectedResourceUtility
                 "The protected probe response contains the RPOL login form.");
         }
 
-        if (!HasDiceRollerContract(html))
-        {
-            return Create(
-                RpolProtectedResourceKind.UnexpectedContent,
-                requestedUri,
-                settledUri,
-                statusCode,
-                "The protected probe response does not match the Dice Roller page contract.");
-        }
-
         return Create(
-            RpolProtectedResourceKind.AuthenticatedProtectedContent,
+            RpolProtectedResourceKind.UnexpectedContent,
             requestedUri,
             settledUri,
             statusCode,
-            "The exact RPOL Dice Roller protected resource is accessible.");
+            "The protected probe response does not match the Dice Roller page contract.");
     }
 
     private static RpolProtectedResourceClassification? ClassifyNavigationUri(
@@ -284,9 +286,10 @@ internal static partial class RpolProtectedResourceUtility
             return false;
         }
 
-        return normalizedHtml.Contains("rolled", StringComparison.OrdinalIgnoreCase)
-            && normalizedHtml.Contains("d20", StringComparison.OrdinalIgnoreCase)
-            && normalizedHtml.Contains("[roll=", StringComparison.OrdinalIgnoreCase);
+        // The protected Dice Roller page is authenticated even when no roll has
+        // been made in the current session.  Roll-history markers are optional
+        // content and must not be part of the authentication boundary.
+        return true;
     }
 
     private static string NormalizeText(string value)

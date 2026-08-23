@@ -4126,9 +4126,9 @@ internal static partial class TestCases
             arguments.Contains(new Uri("C:/temp/rpol-notice.html").AbsoluteUri, StringComparer.Ordinal),
             "the verification browser should retain its local instructions page");
         AssertEqual(
-            AppSettingsUtility.GameForumUrl,
+            RpolProtectedResourceUtility.ProtectedDiceRollerUri.AbsoluteUri,
             arguments[^1],
-            "the RPOL page should be the active tab used to detect completed verification");
+            "the exact protected Dice Roller page should be the active tab used to detect completed verification");
     }
 
     internal static void RpolVerificationConnectsOverCdpBeforeInspectingPageState()
