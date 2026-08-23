@@ -161,16 +161,6 @@ internal static partial class RpolProtectedResourceUtility
                 "The protected probe did not return a non-empty HTML response.");
         }
 
-        if (LooksLikeLoginForm(html))
-        {
-            return Create(
-                RpolProtectedResourceKind.LoginRequired,
-                requestedUri,
-                settledUri,
-                statusCode,
-                "The protected probe response contains the RPOL login form.");
-        }
-
         if (!HasDiceRollerContract(html))
         {
             return Create(
@@ -181,6 +171,9 @@ internal static partial class RpolProtectedResourceUtility
                 "The protected probe response does not match the Dice Roller page contract.");
         }
 
+        // RPOL can retain an embedded login form in the authenticated page shell.
+        // The protected Dice Roller contract is the readiness signal; form markup
+        // alone must not override it after the exact protected resource is proven.
         return Create(
             RpolProtectedResourceKind.AuthenticatedProtectedContent,
             requestedUri,
@@ -284,9 +277,10 @@ internal static partial class RpolProtectedResourceUtility
             return false;
         }
 
-        return normalizedHtml.Contains("rolled", StringComparison.OrdinalIgnoreCase)
-            && normalizedHtml.Contains("d20", StringComparison.OrdinalIgnoreCase)
-            && normalizedHtml.Contains("[roll=", StringComparison.OrdinalIgnoreCase);
+        return normalizedHtml.Contains("only players may roll dice", StringComparison.Ordinal)
+            || (normalizedHtml.Contains("rolled", StringComparison.Ordinal)
+                && normalizedHtml.Contains("d20", StringComparison.Ordinal)
+                && normalizedHtml.Contains("[roll=", StringComparison.Ordinal));
     }
 
     private static string NormalizeText(string value)

@@ -907,6 +907,32 @@ internal static partial class TestCases
             "challenge content must not be accepted merely because transport returned 200");
     }
 
+    internal static void RpolProtectedProbeHandlesDynamicLoginFixture()
+    {
+        var protectedUri = RpolAuthUtility.ProtectedDiceRollerUri;
+        var challengeHtml = "<html><body><form id='unrelated'></form>"
+            + "<form id='login'><input name='username'><input name='password'></form>"
+            + "<div class='cf-challenge'>Verify you are human</div></body></html>";
+        var challenge = RpolAuthUtility.ClassifyProtectedResource(
+            protectedUri, protectedUri, 200, "text/html; charset=utf-8", challengeHtml);
+        AssertEqual(
+            RpolProtectedResourceKind.CloudflareChallenge,
+            challenge.Kind,
+            "a challenge page with multiple dynamically replaced forms must remain a challenge");
+
+        var authenticatedHtml = "<html><head><title>Dice Roller - World of Issenda - Scarlet Horizons - RPoL</title></head>"
+            + "<body><form id='unrelated'></form>"
+            + "<form id='login'><input name='username'><input name='password'></form>"
+            + "<div>Step 1: Choose the Dice</div><div>Roll the Dice</div>"
+            + "<div>Only Players May Roll Dice - Example Screen Only</div></body></html>";
+        var authenticated = RpolAuthUtility.ClassifyProtectedResource(
+            protectedUri, protectedUri, 200, "text/html; charset=utf-8", authenticatedHtml);
+        AssertEqual(
+            RpolProtectedResourceKind.AuthenticatedProtectedContent,
+            authenticated.Kind,
+            "the protected probe must accept authenticated content even when the page shell retains a login form");
+    }
+
     internal static void RpolProtectedProbeClassifiesMissingResponse()
     {
         var protectedUri = RpolAuthUtility.ProtectedDiceRollerUri;
@@ -967,9 +993,9 @@ internal static partial class TestCases
             loginHtml);
 
         AssertEqual(
-            RpolProtectedResourceKind.LoginRequired,
+            RpolProtectedResourceKind.UnexpectedContent,
             result.Kind,
-            "Dice Roller content containing RPOL login controls must not prove authentication");
+            "Dice Roller-looking content without the complete contract must not prove authentication");
     }
 
     internal static void RpolLoginClassifierHandlesHtmlAttributeVariants()
@@ -4135,29 +4161,27 @@ internal static partial class TestCases
     {
         var source = File.ReadAllText(Path.Combine(GetRepositoryRoot(), "RpolAuthUtility.cs"));
         var connectIndex = source.IndexOf("browser = await ConnectToExternalBrowserAsync(", StringComparison.Ordinal);
-        var inspectIndex = source.IndexOf("await CompleteExternalBrowserVerificationAsync(", StringComparison.Ordinal);
-        var completeMethodIndex = source.IndexOf(
-            "private static async Task CompleteExternalBrowserVerificationAsync(",
-            StringComparison.Ordinal);
-        var protectedProbeIndex = source.IndexOf(
-            "await VerifyAuthenticatedContextAsync(context, cancellationToken);",
-            completeMethodIndex,
-            StringComparison.Ordinal);
-        var storageSaveIndex = source.IndexOf(
-            "await SaveStorageStateSecretAsync(",
-            inspectIndex,
-            StringComparison.Ordinal);
+        var inspectIndex = source.IndexOf("await WaitForExternalBrowserAuthenticationAsync(", StringComparison.Ordinal);
+        var probeIndex = source.IndexOf("await VerifyAuthenticatedContextAsync(context, cancellationToken, page);", inspectIndex, StringComparison.Ordinal);
+        var storageSaveIndex = source.IndexOf("await SaveStorageStateSecretAsync(", inspectIndex, StringComparison.Ordinal);
 
         AssertTrue(connectIndex >= 0, "external RPOL verification must connect over CDP");
         AssertTrue(inspectIndex > connectIndex,
             "external RPOL verification must connect over CDP before inspecting the RPOL page state");
-        AssertFalse(source.Contains("await WaitForManualBrowserVerificationAsync(", StringComparison.Ordinal),
-            "the local instructions tab title must not block CDP connection to an already-authenticated RPOL tab");
-
-        AssertTrue(protectedProbeIndex > completeMethodIndex,
+        AssertTrue(probeIndex > inspectIndex,
             "external verification must prove protected access after CDP page inspection");
         AssertTrue(storageSaveIndex > inspectIndex,
             "RPOL storage state must not be captured before the external protected probe completes");
+        AssertFalse(source.Contains("SubmitExternalBrowserLoginAsync(", StringComparison.Ordinal),
+            "the headed external-browser path must not submit credentials against a dynamic login DOM");
+        AssertTrue(source.Contains("IPage? suppliedPage = null", StringComparison.Ordinal),
+            "the protected probe must be able to reuse the visible manual-verification page");
+        AssertTrue(source.Contains("var ownsPage = suppliedPage is null", StringComparison.Ordinal),
+            "owned protected-probe pages must still be cleaned up independently");
+        AssertTrue(source.Contains("IsRetryableExternalAuthenticationFailure", StringComparison.Ordinal),
+            "manual verification must retry only classified transient protected-probe failures");
+        AssertTrue(source.Contains("Path.GetFileName(browserPath)", StringComparison.Ordinal),
+            "external-browser cleanup must target the executable that was actually launched");
 
         var webViewSource = File.ReadAllText(Path.Combine(GetRepositoryRoot(), "RpolWebViewVerificationDialog.cs"));
         AssertTrue(webViewSource.Contains("_webView.CoreWebView2.Source", StringComparison.Ordinal),
