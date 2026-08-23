@@ -232,6 +232,10 @@ jobs:
         shell: pwsh
         run: dotnet build .\PlayerAssistant.Tests\PlayerAssistant.Tests.csproj --configuration Release --nologo --no-restore -p:UseSharedCompilation=false
 
+      - name: Install .NET Playwright browser
+        shell: pwsh
+        run: .\PlayerAssistant.Tests\bin\Release\net10.0-windows\playwright.ps1 install chromium
+
       - name: Verify .NET formatting
         shell: pwsh
         run: dotnet format .\player-assistant.slnx --verify-no-changes --no-restore
