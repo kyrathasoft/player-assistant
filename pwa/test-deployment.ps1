@@ -170,6 +170,7 @@ $handler = [System.Net.Http.HttpClientHandler]::new()
 $handler.AutomaticDecompression = [System.Net.DecompressionMethods]::All
 $handler.CookieContainer = [System.Net.CookieContainer]::new()
 $client = [System.Net.Http.HttpClient]::new($handler)
+$client.DefaultRequestHeaders.UserAgent.ParseAdd('PlayerAssistant-PwaMonitor/1.0')
 $client.Timeout = [TimeSpan]::FromSeconds(90)
 
 try {
