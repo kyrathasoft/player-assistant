@@ -449,6 +449,11 @@ namespace PlayerAssistant
 
                     using var dialog = new RpolWebViewVerificationDialog(request, cancellationToken);
                     var result = dialog.ShowDialog(this);
+                    if (dialog.CleanupFailure is { } cleanupFailure)
+                    {
+                        completion.TrySetException(cleanupFailure);
+                        return;
+                    }
                     completion.TrySetResult(result == DialogResult.OK
                         ? dialog.StorageStateJson
                         : null);

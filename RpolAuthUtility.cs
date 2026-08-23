@@ -1,7 +1,9 @@
 using System.Diagnostics;
 using System.ComponentModel;
+using System.Collections.Concurrent;
 using System.Net;
 using System.Net.Sockets;
+using System.Runtime.ExceptionServices;
 using System.Text;
 using System.Text.Json;
 using Microsoft.Playwright;
@@ -19,6 +21,8 @@ namespace PlayerAssistant
         AuthSessionExpired,
         CloudflareChallenge,
         RpolBlocked,
+        UntrustedNavigation,
+        UnexpectedProtectedContent,
         RemoteUnavailable
     }
 
@@ -51,8 +55,49 @@ namespace PlayerAssistant
         private static bool _processExitRegistered;
         private static bool _clearCloudflareChallengeWithHeadedBrowser;
         private static DateTimeOffset? _lastNavigationAttemptUtc;
+        private static readonly ConcurrentDictionary<Task, byte> LatePlaywrightCleanupTasks = new();
 
         internal static Func<RpolWebViewVerificationRequest, CancellationToken, Task<string?>>? WebViewVerificationHandler { get; set; }
+        internal static Func<Uri, CancellationToken, RpolCrossProcessLock, Task<RpolResponse>>? SnapshotResponseOverrideForTests { get; set; }
+        internal static Func<string, CancellationToken, RpolCrossProcessLock, Task>? PersistVerifiedStorageStateJsonOverrideForTests { get; set; }
+
+        internal static Uri ProtectedDiceRollerUri => RpolProtectedResourceUtility.ProtectedDiceRollerUri;
+
+        internal static RpolProtectedResourceClassification ClassifyProtectedResource(
+            Uri requestedUri,
+            Uri? finalUri,
+            int? statusCode,
+            string? contentType,
+            string? html,
+            string? challengeMarkers = null)
+        {
+            return RpolProtectedResourceUtility.Classify(
+                requestedUri,
+                finalUri,
+                statusCode,
+                contentType,
+                html,
+                challengeMarkers);
+        }
+
+        internal static RpolProtectedResourceClassification ClassifyProtectedResource(
+            Uri requestedUri,
+            Uri? responseUri,
+            Uri? settledUri,
+            int? statusCode,
+            string? contentType,
+            string? html,
+            string? challengeMarkers = null)
+        {
+            return RpolProtectedResourceUtility.Classify(
+                requestedUri,
+                responseUri,
+                settledUri,
+                statusCode,
+                contentType,
+                html,
+                challengeMarkers);
+        }
 
         public static bool IsRpolUri(Uri uri)
         {
@@ -108,15 +153,22 @@ namespace PlayerAssistant
 
         internal static async Task<RpolResponse> GetSnapshotResponseAsync(
             Uri uri,
-            CancellationToken cancellationToken = default)
+            CancellationToken cancellationToken,
+            RpolCrossProcessLock lockOwner)
         {
-            return await GetResponseAsync(uri, allowEmbeddedLoginForm: true, cancellationToken);
+            ArgumentNullException.ThrowIfNull(lockOwner);
+            if (SnapshotResponseOverrideForTests is not null)
+            {
+                return await SnapshotResponseOverrideForTests(uri, cancellationToken, lockOwner);
+            }
+            return await GetResponseAsync(uri, allowEmbeddedLoginForm: true, cancellationToken, lockOwner);
         }
 
         private static async Task<RpolResponse> GetResponseAsync(
             Uri uri,
             bool allowEmbeddedLoginForm,
-            CancellationToken cancellationToken)
+            CancellationToken cancellationToken,
+            RpolCrossProcessLock? lockOwner = null)
         {
             cancellationToken.ThrowIfCancellationRequested();
             NetworkUrlAllowlistUtility.EnsureAllowed(uri, NetworkUrlPurpose.Rpol);
@@ -126,7 +178,7 @@ namespace PlayerAssistant
             {
                 try
                 {
-                    var context = await GetAuthenticatedContextAsync(cancellationToken);
+                    var context = await GetAuthenticatedContextAsync(cancellationToken, lockOwner);
                     var response = await GetPageResponseAsync(context, uri, cancellationToken);
 
                     if (ShouldTreatResponseAsLogin(
@@ -162,7 +214,9 @@ namespace PlayerAssistant
                 $"RPoL returned a login page after authenticated navigation to '{uri}'. The stored auth state may have expired or the account may no longer have access."));
         }
 
-        private static async Task<IBrowserContext> GetAuthenticatedContextAsync(CancellationToken cancellationToken)
+        private static async Task<IBrowserContext> GetAuthenticatedContextAsync(
+            CancellationToken cancellationToken,
+            RpolCrossProcessLock? lockOwner = null)
         {
             await SessionSemaphore.WaitAsync(cancellationToken);
             try
@@ -174,7 +228,7 @@ namespace PlayerAssistant
                 {
                     var clearCloudflareChallenge = _clearCloudflareChallengeWithHeadedBrowser;
                     _clearCloudflareChallengeWithHeadedBrowser = false;
-                    _session = await CreateAuthenticatedSessionAsync(cancellationToken, clearCloudflareChallenge);
+                    _session = await CreateAuthenticatedSessionAsync(cancellationToken, clearCloudflareChallenge, lockOwner);
                 }
 
                 return _session.Context;
@@ -187,7 +241,8 @@ namespace PlayerAssistant
 
         private static async Task<RpolBrowserSession> CreateAuthenticatedSessionAsync(
             CancellationToken cancellationToken,
-            bool clearCloudflareChallenge = false)
+            bool clearCloudflareChallenge = false,
+            RpolCrossProcessLock? lockOwner = null)
         {
             var (userName, password) = GetCredentials();
             Environment.SetEnvironmentVariable("NODE_OPTIONS", "--use-system-ca");
@@ -219,16 +274,17 @@ namespace PlayerAssistant
                                 "RPOL browser verification did not provide a usable browser state.");
                         }
 
-                        RuntimeSecretStoreUtility.SaveRpolStorageState(storageStateJson);
+                        await PersistStorageStateAsync(storageStateJson, cancellationToken, lockOwner, null);
                         playwright.Dispose();
-                        return await CreateAuthenticatedSessionAsync(cancellationToken);
+                        return await CreateAuthenticatedSessionAsync(cancellationToken, lockOwner: lockOwner);
                     }
 
                     return await RefreshStorageStateWithExternalBrowserAsync(
                         playwright,
                         userName,
                         password,
-                        cancellationToken);
+                        cancellationToken,
+                        lockOwner);
                 }
 
                 var browserLaunch = await LaunchRpolBrowserAsync(
@@ -279,13 +335,14 @@ namespace PlayerAssistant
                 }
 
                 await EnsureLoggedInAsync(context, userName, password, clearCloudflareChallenge, cancellationToken);
-                await SaveStorageStateSecretAsync(context, cancellationToken);
+                await VerifyAuthenticatedContextAsync(context, cancellationToken);
+                await SaveStorageStateSecretAsync(context, cancellationToken, lockOwner);
                 if (clearCloudflareChallenge)
                 {
                     await context.CloseAsync();
                     await browser.CloseAsync();
                     playwright.Dispose();
-                    return await CreateAuthenticatedSessionAsync(cancellationToken);
+                    return await CreateAuthenticatedSessionAsync(cancellationToken, lockOwner: lockOwner);
                 }
 
                 return new RpolBrowserSession(playwright, browser, context);
@@ -387,7 +444,8 @@ namespace PlayerAssistant
             IPlaywright playwright,
             string userName,
             string password,
-            CancellationToken cancellationToken)
+            CancellationToken cancellationToken,
+            RpolCrossProcessLock? lockOwner = null)
         {
             var browserPath = FindExternalBrowserExecutable()
                 ?? throw new RpolAuthException(
@@ -395,6 +453,15 @@ namespace PlayerAssistant
                     "RPOL browser verification requires installed Chrome or Microsoft Edge, but neither browser executable was found.");
             var tempDirectory = RuntimePathUtility.GetUserDataPath("temp");
             Directory.CreateDirectory(tempDirectory);
+            var staleProfileCleanupErrors = RpolExternalProfileCleanup.ScavengeStaleProfiles(
+                tempDirectory,
+                DateTimeOffset.UtcNow.AddHours(-1));
+            if (staleProfileCleanupErrors.Count > 0)
+            {
+                throw new AggregateException(
+                    "RPOL stale external verification profile cleanup was incomplete.",
+                    staleProfileCleanupErrors);
+            }
             var profileDirectory = RuntimePathUtility.CombineUnderBase(
                 tempDirectory,
                 $"{ExternalBrowserVerificationDirectoryName}-{Guid.NewGuid():N}");
@@ -402,21 +469,26 @@ namespace PlayerAssistant
                 tempDirectory,
                 $"rpol-browser-verification-{Guid.NewGuid():N}.html");
             Directory.CreateDirectory(profileDirectory);
-            File.WriteAllText(noticePath, CreateExternalBrowserNoticeHtml(), Encoding.UTF8);
             var remoteDebuggingPort = GetAvailableLoopbackPort();
-            var verificationProcess = StartExternalBrowserForManualVerification(
-                browserPath,
-                remoteDebuggingPort,
-                profileDirectory,
-                noticePath);
 
             IBrowser? browser = null;
+            Process? verificationProcess = null;
+            RpolExternalProfileLease? profileLease = null;
             try
             {
+                profileLease = RpolExternalProfileCleanup.Acquire(profileDirectory);
+                File.WriteAllText(noticePath, CreateExternalBrowserNoticeHtml(), Encoding.UTF8);
+                verificationProcess = StartExternalBrowserForManualVerification(
+                    browserPath,
+                    remoteDebuggingPort,
+                    profileDirectory,
+                    noticePath);
+                StartupLoggingUtility.Append("RPOL authentication stage", "stage=external_browser_started");
                 browser = await ConnectToExternalBrowserAsync(
                     playwright,
                     remoteDebuggingPort,
                     cancellationToken);
+                StartupLoggingUtility.Append("RPOL authentication stage", "stage=cdp_connected");
                 var context = browser.Contexts.FirstOrDefault()
                     ?? throw new RpolAuthException(
                         RpolAuthFailureKind.PlaywrightUnavailable,
@@ -427,42 +499,60 @@ namespace PlayerAssistant
                     userName,
                     password,
                     cancellationToken);
-                await SaveStorageStateSecretAsync(context, cancellationToken);
+                await SaveStorageStateSecretAsync(
+                    context,
+                    cancellationToken,
+                    lockOwner,
+                    $"http://127.0.0.1:{remoteDebuggingPort}");
+                StartupLoggingUtility.Append("RPOL authentication stage", "stage=state_persisted");
                 DeleteTemporaryStorageStateFile(noticePath);
                 return new RpolBrowserSession(
                     playwright,
                     browser,
                     context,
                     verificationProcess,
-                    profileDirectory);
+                    profileDirectory,
+                    profileLease);
             }
-            catch
+            catch (Exception ex)
             {
+                var cleanupErrors = new List<Exception>();
                 if (browser is not null)
                 {
-                    try
-                    {
-                        await browser.CloseAsync();
-                    }
-                    catch
-                    {
-                    }
+                    cleanupErrors.AddRange(await RpolCleanupUtility.DisposeAsyncIndependently(
+                        cancellationToken,
+                        ("external browser", () => browser.CloseAsync())));
                 }
-
-                if (!verificationProcess.HasExited)
+                if (verificationProcess is not null)
                 {
-                    try
-                    {
-                        verificationProcess.Kill(entireProcessTree: true);
-                    }
-                    catch
-                    {
-                    }
+                    cleanupErrors.AddRange(RpolCleanupUtility.DisposeIndependently(
+                        ("external browser process", () =>
+                        {
+                            if (!verificationProcess.HasExited)
+                            {
+                                verificationProcess.Kill(entireProcessTree: true);
+                                if (!verificationProcess.WaitForExit(5000))
+                                {
+                                    throw new TimeoutException("The external RPOL browser did not exit within the cleanup bound.");
+                                }
+                            }
+                        }
+                    ),
+                        ("external browser process handle", verificationProcess.Dispose)));
                 }
-
-                DeleteTemporaryStorageStateFile(noticePath);
-                DeleteTemporaryDirectory(profileDirectory);
-                verificationProcess.Dispose();
+                cleanupErrors.AddRange(RpolCleanupUtility.DisposeIndependently(
+                    ("external browser notice", () => DeleteTemporaryStorageStateFile(noticePath)),
+                    ("external browser process tree", () => TerminateExternalBrowserProcessesForProfile(profileDirectory)),
+                    ("external browser profile", profileLease is not null
+                        ? profileLease.Dispose
+                        : () => RpolExternalProfileCleanup.CleanupProfile(profileDirectory))));
+                if (cleanupErrors.Count > 0)
+                {
+                    throw new AggregateException(
+                        "RPOL external-browser authentication failed and cleanup was incomplete.",
+                        new[] { ex }.Concat(cleanupErrors));
+                }
+                ExceptionDispatchInfo.Capture(ex).Throw();
                 throw;
             }
         }
@@ -530,13 +620,12 @@ namespace PlayerAssistant
                         page.ContentAsync(),
                         "checking the external RPOL browser page",
                         cancellationToken);
-                    if (ShouldTreatExternalPageAsLogin(html))
+                    if (await HasLoginFormAsync(page, cancellationToken))
                     {
-                        if (ShouldRejectPersistentExternalLoginPage(loginSubmissionCount))
+                        if (ShouldAwaitManualExternalLogin(loginSubmissionCount))
                         {
-                            throw new RpolAuthException(
-                                RpolAuthFailureKind.LoginRejected,
-                                "RPOL rejected the configured credentials in the temporary browser.");
+                            await Task.Delay(CloudflareClearancePollInterval, cancellationToken);
+                            continue;
                         }
 
                         await SubmitExternalBrowserLoginAsync(page, userName, password, cancellationToken);
@@ -545,23 +634,43 @@ namespace PlayerAssistant
                         continue;
                     }
 
-                    if (!LooksLikeCloudflareChallengePage(html))
+                    if (LooksLikeCloudflareChallengePage(html))
                     {
-                        if (!Uri.TryCreate(page.Url, UriKind.Absolute, out var currentUri)
-                            || !NetworkUrlAllowlistUtility.IsTrustedRpolNavigationUri(currentUri))
+                        await Task.Delay(CloudflareClearancePollInterval, cancellationToken);
+                        continue;
+                    }
+
+                    if (!Uri.TryCreate(page.Url, UriKind.Absolute, out var currentUri)
+                        || !NetworkUrlAllowlistUtility.IsTrustedRpolNavigationUri(currentUri))
+                    {
+                        await WaitForPlaywrightAsync(
+                            page.GotoAsync(gameForumUri.ToString(), new PageGotoOptions
+                            {
+                                WaitUntil = WaitUntilState.DOMContentLoaded,
+                                Timeout = (float)PlaywrightOperationTimeout.TotalMilliseconds
+                            }),
+                            $"loading '{gameForumUri}' in the external RPOL browser",
+                            cancellationToken);
+                        continue;
+                    }
+
+                    try
+                    {
+                        if (!Uri.TryCreate(page.Url, UriKind.Absolute, out var externalPageUri)
+                            || !NetworkUrlAllowlistUtility.IsTrustedRpolNavigationUri(externalPageUri))
                         {
-                            await WaitForPlaywrightAsync(
-                                page.GotoAsync(gameForumUri.ToString(), new PageGotoOptions
-                                {
-                                    WaitUntil = WaitUntilState.DOMContentLoaded,
-                                    Timeout = (float)PlaywrightOperationTimeout.TotalMilliseconds
-                                }),
-                                $"loading '{gameForumUri}' in the external RPOL browser",
-                                cancellationToken);
+                            await Task.Delay(CloudflareClearancePollInterval, cancellationToken);
                             continue;
                         }
 
-                        return;
+                        page = await GetExternalRpolPageAsync(context, gameForumUri, cancellationToken);
+                        await SubmitExternalBrowserLoginAsync(page, userName, password, cancellationToken);
+                        loginSubmissionCount++;
+                        await Task.Delay(TimeSpan.FromSeconds(3), cancellationToken);
+                    }
+                    catch (RpolAuthException ex) when (ex.Kind == RpolAuthFailureKind.CloudflareChallenge)
+                    {
+                        await Task.Delay(CloudflareClearancePollInterval, cancellationToken);
                     }
                 }
                 catch (PlaywrightException ex) when (IsBrowserClosedException(ex))
@@ -578,6 +687,150 @@ namespace PlayerAssistant
             throw new RpolAuthException(
                 RpolAuthFailureKind.CloudflareChallenge,
                 $"RPOL browser verification did not complete within {CloudflareClearanceMaxWait.TotalMinutes:0} minutes. Complete the checkbox in the temporary Chrome or Edge window, keep that window open, and let Player Assistant finish saving the RPOL browser state.");
+        }
+
+        private static async Task<RpolProtectedResourceClassification> VerifyAuthenticatedContextAsync(
+            IBrowserContext context,
+            CancellationToken cancellationToken)
+        {
+            var startedAt = DateTimeOffset.UtcNow;
+            RpolProtectedResourceKind? classificationKind = null;
+            var page = await WaitForPlaywrightAsync(
+                context.NewPageAsync(),
+                "opening the RPOL protected authentication probe",
+                cancellationToken);
+            string? mainFrameReferer = null;
+            void ObserveMainFrameRequest(object? _, IRequest request)
+            {
+                if (request.IsNavigationRequest
+                    && request.Frame == page.MainFrame
+                    && Uri.TryCreate(request.Url, UriKind.Absolute, out var requestUri)
+                    && RpolProtectedResourceUtility.IsExactProtectedUri(requestUri))
+                {
+                    request.Headers.TryGetValue("referer", out mainFrameReferer);
+                }
+            }
+
+            page.Request += ObserveMainFrameRequest;
+            try
+            {
+                var response = await WaitForPlaywrightAsync(
+                    page.GotoAsync(ProtectedDiceRollerUri.AbsoluteUri, new PageGotoOptions
+                    {
+                        WaitUntil = WaitUntilState.DOMContentLoaded,
+                        Timeout = (float)PlaywrightOperationTimeout.TotalMilliseconds,
+                        Referer = AppSettingsUtility.GameForumUrl
+                    }),
+                    "loading the exact RPOL Dice Roller authentication probe",
+                    cancellationToken);
+                var contentType = response?.Headers.TryGetValue("content-type", out var headerValue) == true
+                    ? headerValue
+                    : null;
+                var stableNavigation = await RpolNavigationStability.WaitForStableAsync(
+                    async token =>
+                    {
+                        try
+                        {
+                            var domJson = await WaitForPlaywrightAsync(
+                                page.EvaluateAsync<string>("""
+                                    () => {
+                                        const root = document.documentElement;
+                                        if (!root) return JSON.stringify({ Identity: 'missing', Html: '' });
+                                        if (!root.dataset.playerAssistantRpolIdentity) {
+                                            root.dataset.playerAssistantRpolIdentity =
+                                                (globalThis.crypto && crypto.randomUUID) ? crypto.randomUUID() : String(Date.now());
+                                        }
+                                        return JSON.stringify({ Identity: root.dataset.playerAssistantRpolIdentity, Html: root.outerHTML });
+                                    }
+                                    """),
+                                "reading the RPOL protected authentication DOM identity",
+                                token);
+                            var dom = JsonSerializer.Deserialize<RpolNavigationDomSnapshot>(domJson)
+                                ?? throw new RpolAuthException(
+                                    RpolAuthFailureKind.UnexpectedProtectedContent,
+                                    "The RPOL protected authentication DOM evidence could not be decoded.");
+                            NetworkRequestUtility.EnsureByteCountWithinLimit(
+                                Encoding.UTF8.GetByteCount(dom.Html),
+                                NetworkResponseContentLimit.Html);
+                            return new RpolNavigationSnapshot(
+                                Uri.TryCreate(page.Url, UriKind.Absolute, out var currentUri) ? currentUri : null,
+                                dom.Identity,
+                                dom.Html);
+                        }
+                        catch (PlaywrightException ex) when (IsTransientProtectedProbeObservationFailure(ex.Message))
+                        {
+                            return new RpolNavigationSnapshot(
+                                Uri.TryCreate(page.Url, UriKind.Absolute, out var navigatingUri) ? navigatingUri : null,
+                                $"navigating-{Guid.NewGuid():N}",
+                                string.Empty);
+                        }
+                    },
+                    quietPeriod: TimeSpan.FromSeconds(1),
+                    maximumWait: TimeSpan.FromSeconds(20),
+                    pollInterval: TimeSpan.FromMilliseconds(100),
+                    cancellationToken);
+                var secondSettledUri = stableNavigation.Url;
+                var secondHtml = stableNavigation.Html;
+
+                var challengeHeader = response?.Headers.Keys.Any(header =>
+                    header.StartsWith("cf-", StringComparison.OrdinalIgnoreCase)) == true
+                    ? "Cloudflare"
+                    : null;
+                var classification = RpolProtectedResourceUtility.ClassifyEvidence(
+                    new RpolProtectedProbeEvidence(
+                        ProtectedDiceRollerUri,
+                        response is not null && Uri.TryCreate(response.Url, UriKind.Absolute, out var responseUri)
+                            ? responseUri
+                            : null,
+                        secondSettledUri,
+                        response?.Status,
+                        contentType,
+                        secondHtml,
+                        mainFrameReferer,
+                        SettledAfterStabilization: true));
+                classificationKind = classification.Kind;
+                if (classification.Kind != RpolProtectedResourceKind.AuthenticatedProtectedContent)
+                {
+                    throw CreateProtectedProbeException(classification);
+                }
+
+                return classification;
+            }
+            finally
+            {
+                page.Request -= ObserveMainFrameRequest;
+                try
+                {
+                    await page.CloseAsync().WaitAsync(PlaywrightOperationTimeout, cancellationToken);
+                }
+                catch (Exception cleanupException)
+                {
+                    StartupLoggingUtility.Append(
+                        "RPOL protected probe",
+                        $"stage=protected_probe_cleanup category=cleanup_failure error={cleanupException.GetType().Name}");
+                    throw new RpolCleanupFailureException(
+                        "RPOL protected probe page cleanup failed; authentication evidence is not accepted.",
+                        cleanupException);
+                }
+
+                StartupLoggingUtility.Append(
+                    "RPOL protected probe",
+                    $"stage=protected_probe category={classificationKind?.ToString() ?? "error"} duration_ms={(DateTimeOffset.UtcNow - startedAt).TotalMilliseconds:0}");
+            }
+        }
+
+        private static RpolAuthException CreateProtectedProbeException(
+            RpolProtectedResourceClassification classification)
+        {
+            var failureKind = classification.Kind switch
+            {
+                RpolProtectedResourceKind.LoginRequired => RpolAuthFailureKind.AuthSessionExpired,
+                RpolProtectedResourceKind.CloudflareChallenge => RpolAuthFailureKind.CloudflareChallenge,
+                RpolProtectedResourceKind.UntrustedNavigation => RpolAuthFailureKind.UntrustedNavigation,
+                RpolProtectedResourceKind.UnexpectedContent => RpolAuthFailureKind.UnexpectedProtectedContent,
+                _ => RpolAuthFailureKind.RemoteUnavailable
+            };
+            return new RpolAuthException(failureKind, classification.Reason);
         }
 
         private static async Task<IPage> GetExternalRpolPageAsync(
@@ -628,34 +881,203 @@ namespace PlayerAssistant
                 "filling the RPOL user name in the external browser",
                 cancellationToken);
             await WaitForPlaywrightAsync(
-                page.Locator("input[name='password']").FillAsync(password),
-                "filling the RPOL password in the external browser",
-                cancellationToken);
-
-            var rememberMeInput = page.Locator("input[name='perm']");
-            if (await WaitForPlaywrightAsync(
-                    rememberMeInput.CountAsync(),
-                    "checking the RPOL remember-me option in the external browser",
-                    cancellationToken) > 0
-                && !await WaitForPlaywrightAsync(
-                    rememberMeInput.IsCheckedAsync(),
-                    "reading the RPOL remember-me option in the external browser",
-                    cancellationToken))
-            {
-                await WaitForPlaywrightAsync(
-                    rememberMeInput.CheckAsync(),
-                    "checking the RPOL remember-me option in the external browser",
-                    cancellationToken);
-            }
-
-            await WaitForPlaywrightAsync(
-                page.Locator("input[name='specialaction'][value='Login']").ClickAsync(),
-                "submitting the RPOL login form in the external browser",
-                cancellationToken);
-            await WaitForPlaywrightAsync(
                 page.WaitForLoadStateAsync(LoadState.DOMContentLoaded),
                 "waiting for the RPOL login response in the external browser",
                 cancellationToken);
+        }
+
+        private static async Task ValidateCredentialFormAsync(
+            IPage page,
+            string operationDescription,
+            CancellationToken cancellationToken)
+        {
+            if (!Uri.TryCreate(page.Url, UriKind.Absolute, out var topFrameUri))
+            {
+                throw new RpolAuthException(
+                    RpolAuthFailureKind.TransportSecurityFailure,
+                    $"RPOL credentials were not submitted because the live page URI was invalid while {operationDescription}.");
+            }
+
+            var forms = page.Locator("form");
+            var formCount = await WaitForPlaywrightAsync(
+                forms.CountAsync(),
+                $"checking the RPOL login form count while {operationDescription}",
+                cancellationToken);
+            if (formCount != 1)
+            {
+                throw new RpolAuthException(
+                    RpolAuthFailureKind.TransportSecurityFailure,
+                    $"RPOL credentials were not submitted because the login form was ambiguous while {operationDescription}.");
+            }
+
+            var snapshotJson = await WaitForPlaywrightAsync(
+                forms.First.EvaluateAsync<string>("form => JSON.stringify({ Action: form.action, Method: form.method, Target: form.target, SameFrame: window.top === window.self })"),
+                $"reading the RPOL login form while {operationDescription}",
+                cancellationToken);
+            var snapshot = JsonSerializer.Deserialize<RpolLoginFormSnapshot>(snapshotJson)
+                ?? throw new RpolAuthException(
+                    RpolAuthFailureKind.TransportSecurityFailure,
+                    "RPOL login form details could not be read safely.");
+            var reason = snapshot.SameFrame ? string.Empty : "The login form is not in the top frame.";
+            var validForm = snapshot.SameFrame
+                && RpolCredentialSubmissionPolicy.TryValidateLoginForm(
+                    topFrameUri,
+                    snapshot.Action,
+                    snapshot.Method,
+                    snapshot.Target,
+                    out reason);
+            if (!validForm)
+            {
+                throw new RpolAuthException(
+                    RpolAuthFailureKind.TransportSecurityFailure,
+                    $"RPOL credentials were not submitted because the login form changed: {reason}");
+            }
+        }
+
+        private static async Task SubmitValidatedCredentialFormAsync(
+            IPage page,
+            string userName,
+            string password,
+            string operationDescription,
+            CancellationToken cancellationToken)
+        {
+            var popupObserved = false;
+            var frameReplacementObserved = false;
+            var submitEvaluationStarted = false;
+            var credentialRequestObserved = false;
+            string? requestGuardFailure = null;
+            Task? popupCloseTask = null;
+            using var credentialGuard = new RpolCredentialSubmissionGuard();
+            void OnPopup(object? _, IPage popup)
+            {
+                popupObserved = true;
+                popupCloseTask = popup.CloseAsync();
+            }
+            void OnFrameNavigated(object? _, IFrame frame)
+            {
+                if (frame != page.MainFrame || !submitEvaluationStarted)
+                {
+                    frameReplacementObserved = true;
+                }
+            }
+            async Task OnRoute(IRoute route)
+            {
+                var request = route.Request;
+                if (!submitEvaluationStarted)
+                {
+                    await route.ContinueAsync();
+                    return;
+                }
+
+                if (!request.IsNavigationRequest)
+                {
+                    await route.ContinueAsync();
+                    return;
+                }
+
+                if (!credentialGuard.IsArmed)
+                {
+                    requestGuardFailure = "The credential transmission guard was no longer armed.";
+                    await route.AbortAsync();
+                    return;
+                }
+
+                var topFrameUri = Uri.TryCreate(page.Url, UriKind.Absolute, out var currentUri)
+                    ? currentUri
+                    : null;
+                var isMainFrame = request.Frame == page.MainFrame;
+                string? reason = null;
+                var validRequest = topFrameUri is not null
+                    && Uri.TryCreate(request.Url, UriKind.Absolute, out var requestUri)
+                    && RpolCredentialSubmissionPolicy.TryValidateCredentialRequest(
+                        topFrameUri,
+                        requestUri,
+                        request.Method,
+                        isMainFrame,
+                        out reason);
+                if (!validRequest)
+                {
+                    requestGuardFailure = reason ?? "The credential-bearing request could not be validated.";
+                    await route.AbortAsync();
+                    submitEvaluationStarted = false;
+                    credentialGuard.Complete(false);
+                    return;
+                }
+
+                credentialRequestObserved = true;
+                try
+                {
+                    await route.ContinueAsync();
+                    submitEvaluationStarted = false;
+                    credentialGuard.Complete(true);
+                }
+                catch
+                {
+                    submitEvaluationStarted = false;
+                    credentialGuard.Complete(false);
+                    throw;
+                }
+            }
+
+            page.Popup += OnPopup;
+            page.FrameNavigated += OnFrameNavigated;
+            var routeInstalled = false;
+            try
+            {
+                await page.Context.RouteAsync("**/*", OnRoute);
+                routeInstalled = true;
+                await ValidateCredentialFormAsync(page, $"before {operationDescription}", cancellationToken);
+                var form = page.Locator("form").First;
+                submitEvaluationStarted = true;
+                var submitted = await WaitForPlaywrightAsync(
+                    form.EvaluateAsync<bool>(
+                        RpolCredentialSubmissionScript.Source,
+                        new { userName, password }),
+                    operationDescription,
+                    cancellationToken);
+                if (submitted)
+                {
+                    var requestValidated = await credentialGuard.WaitForRequestAsync(
+                        PlaywrightOperationTimeout,
+                        cancellationToken);
+                    if (!requestValidated)
+                    {
+                        throw new RpolAuthException(
+                            RpolAuthFailureKind.TransportSecurityFailure,
+                            "RPOL credential submission did not produce a validated main-frame request before the guard deadline.");
+                    }
+                }
+                if (popupCloseTask is not null)
+                {
+                    try
+                    {
+                        await popupCloseTask.WaitAsync(PlaywrightOperationTimeout, cancellationToken);
+                    }
+                    catch
+                    {
+                        if (!popupCloseTask.IsCompleted) RpolCleanupUtility.TrackLateTask(popupCloseTask);
+                        throw;
+                    }
+                }
+                if (!submitted
+                    || !credentialRequestObserved
+                    || requestGuardFailure is not null
+                    || popupObserved
+                    || frameReplacementObserved)
+                {
+                    throw new RpolAuthException(
+                        RpolAuthFailureKind.TransportSecurityFailure,
+                        $"RPOL credentials were not submitted because the validated form changed during {operationDescription}: {requestGuardFailure ?? "navigation or popup mutation observed"}.");
+                }
+            }
+            finally
+            {
+                submitEvaluationStarted = false;
+                if (popupCloseTask is not null && !popupCloseTask.IsCompleted) RpolCleanupUtility.TrackLateTask(popupCloseTask);
+                if (routeInstalled) await page.Context.UnrouteAsync("**/*", OnRoute);
+                page.Popup -= OnPopup;
+                page.FrameNavigated -= OnFrameNavigated;
+            }
         }
 
         private static Process StartExternalBrowserForManualVerification(
@@ -711,6 +1133,42 @@ namespace PlayerAssistant
                     RpolAuthFailureKind.PlaywrightUnavailable,
                     $"RPOL browser verification could not start the external browser process: {ex.Message}",
                     ex);
+            }
+        }
+
+        private static void TerminateExternalBrowserProcessesForProfile(string profileDirectory)
+        {
+            if (!OperatingSystem.IsWindows() || string.IsNullOrWhiteSpace(profileDirectory))
+            {
+                return;
+            }
+
+            var escapedProfile = profileDirectory.Replace("'", "''", StringComparison.Ordinal);
+            var script = $"$profile = '{escapedProfile}'; "
+                + "$items = Get-CimInstance Win32_Process | Where-Object { $_.Name -eq 'chrome.exe' -and $_.CommandLine -like ('*' + $profile + '*') }; "
+                + "foreach ($item in $items) { & taskkill.exe /PID $item.ProcessId /T /F | Out-Null };";
+            using var process = Process.Start(new ProcessStartInfo
+            {
+                FileName = "powershell.exe",
+                UseShellExecute = false,
+                CreateNoWindow = true,
+                ArgumentList =
+                {
+                    "-NoProfile",
+                    "-NonInteractive",
+                    "-ExecutionPolicy",
+                    "Bypass",
+                    "-Command",
+                    script
+                }
+            }) ?? throw new InvalidOperationException("RPOL browser cleanup could not start the process cleanup helper.");
+            if (!process.WaitForExit(5000))
+            {
+                throw new TimeoutException("RPOL browser process cleanup exceeded its bound.");
+            }
+            if (process.ExitCode != 0)
+            {
+                throw new InvalidOperationException("RPOL browser process cleanup returned a failure status.");
             }
         }
 
@@ -802,18 +1260,14 @@ namespace PlayerAssistant
             }
         }
 
-        private static void DeleteTemporaryDirectory(string path)
+        private static void DeleteTemporaryDirectory(string path, CancellationToken cancellationToken = default)
         {
-            try
+            cancellationToken.ThrowIfCancellationRequested();
+            if (Directory.Exists(path))
             {
-                if (Directory.Exists(path))
-                {
-                    Directory.Delete(path, recursive: true);
-                }
+                Directory.Delete(path, recursive: true);
             }
-            catch
-            {
-            }
+            cancellationToken.ThrowIfCancellationRequested();
         }
 
         private static async Task EnsureLoggedInAsync(
@@ -956,6 +1410,17 @@ namespace PlayerAssistant
             return exception.Message.Contains("Target page, context or browser has been closed", StringComparison.OrdinalIgnoreCase)
                 || exception.Message.Contains("Browser has been closed", StringComparison.OrdinalIgnoreCase)
                 || exception.Message.Contains("Target closed", StringComparison.OrdinalIgnoreCase);
+        }
+
+        internal static bool IsTransientProtectedProbeObservationFailure(string? message)
+        {
+            if (string.IsNullOrWhiteSpace(message))
+            {
+                return false;
+            }
+
+            return message.Contains("page is navigating and changing the content", StringComparison.OrdinalIgnoreCase)
+                || message.Contains("Execution context was destroyed", StringComparison.OrdinalIgnoreCase);
         }
 
         internal static bool IsTransportSecurityFailureMessage(string? message)
@@ -1131,9 +1596,8 @@ namespace PlayerAssistant
 
         internal static bool LooksLikeLoginPage(string html)
         {
-            return html.Contains("action='/login.cgi'", StringComparison.OrdinalIgnoreCase)
-                && html.Contains("name='username'", StringComparison.OrdinalIgnoreCase)
-                && html.Contains("name='password'", StringComparison.OrdinalIgnoreCase);
+            ArgumentNullException.ThrowIfNull(html);
+            return RpolProtectedResourceUtility.LooksLikeLoginForm(html);
         }
 
         public static void ResetAuthenticationState()
@@ -1161,26 +1625,37 @@ namespace PlayerAssistant
 
                 var tempDirectory = RuntimePathUtility.GetUserDataPath("temp");
                 Directory.CreateDirectory(tempDirectory);
+                RpolSecureStorageStateFile.Scavenge(tempDirectory, DateTimeOffset.UtcNow.AddHours(-1));
                 var tempPath = RuntimePathUtility.CombineUnderBase(
                     tempDirectory,
                     $"rpol-storage-state-{Guid.NewGuid():N}.json");
-                File.WriteAllText(tempPath, storageStateJson);
+                WriteUserOnlyStorageStateFile(tempPath, storageStateJson);
                 File.SetLastWriteTimeUtc(tempPath, lastWritten.UtcDateTime);
 
                 if (!TryPrepareStorageStateFile(tempPath, DateTimeOffset.Now))
                 {
-                    DeleteTemporaryStorageStateFile(tempPath);
+                    try
+                    {
+                        DeleteTemporaryStorageStateFile(tempPath);
+                    }
+                    catch (Exception cleanupException)
+                    {
+                        throw new RpolCleanupFailureException(
+                            "Malformed RPOL browser auth state could not be deleted; authentication is stopped.",
+                            cleanupException);
+                    }
                     RuntimeSecretStoreUtility.DeleteRpolStorageState();
                     return null;
                 }
 
                 return tempPath;
             }
-            catch (Exception ex) when (ex is IOException
-                or UnauthorizedAccessException
-                or InvalidDataException
-                or JsonException
-                or InvalidOperationException)
+            catch (Exception ex) when (ex is not RpolCleanupFailureException
+                && (ex is IOException
+                    or UnauthorizedAccessException
+                    or InvalidDataException
+                    or JsonException
+                    or InvalidOperationException))
             {
                 RuntimeSecretStoreUtility.DeleteRpolStorageState();
                 StartupLoggingUtility.Append(
@@ -1194,24 +1669,33 @@ namespace PlayerAssistant
 
         private static async Task SaveStorageStateSecretAsync(
             IBrowserContext context,
-            CancellationToken cancellationToken)
+            CancellationToken cancellationToken,
+            RpolCrossProcessLock? lockOwner = null,
+            string? cdpEndpoint = null)
         {
             var tempDirectory = RuntimePathUtility.GetUserDataPath("temp");
             Directory.CreateDirectory(tempDirectory);
+            RpolSecureStorageStateFile.Scavenge(tempDirectory, DateTimeOffset.UtcNow.AddHours(-1));
             var tempPath = RuntimePathUtility.CombineUnderBase(
                 tempDirectory,
                 $"rpol-storage-state-save-{Guid.NewGuid():N}.json");
 
             try
             {
-                await WaitForPlaywrightAsync(
-                    context.StorageStateAsync(new BrowserContextStorageStateOptions
-                    {
-                        Path = tempPath
-                    }),
+                var storageStateJson = await WaitForPlaywrightAsync(
+                    context.StorageStateAsync(),
                     "saving the RPOL browser storage state",
                     cancellationToken);
-                RuntimeSecretStoreUtility.SaveRpolStorageState(File.ReadAllText(tempPath));
+                WriteUserOnlyStorageStateFile(tempPath, storageStateJson);
+                StartupLoggingUtility.Append("RPOL authentication stage", "stage=storage_captured");
+                if (!TryPrepareStorageStateFile(tempPath, DateTimeOffset.UtcNow))
+                {
+                    throw new RpolAuthException(
+                        RpolAuthFailureKind.UnexpectedProtectedContent,
+                        "RPOL browser storage state failed structural validation before persistence.");
+                }
+
+                await PersistStorageStateAsync(storageStateJson, cancellationToken, lockOwner, cdpEndpoint);
             }
             finally
             {
@@ -1219,23 +1703,261 @@ namespace PlayerAssistant
             }
         }
 
-        private static void DeleteTemporaryStorageStateFile(string? path)
+        private static async Task PersistStorageStateAsync(
+            string storageStateJson,
+            CancellationToken cancellationToken,
+            RpolCrossProcessLock? lockOwner,
+            string? cdpEndpoint)
         {
-            if (string.IsNullOrWhiteSpace(path))
+            if (lockOwner is not null)
             {
+                await PersistVerifiedStorageStateJsonAsync(storageStateJson, cancellationToken, lockOwner, cdpEndpoint);
                 return;
             }
 
+            using var operationLock = await RpolCrossProcessLock.AcquireAsync(
+                RpolCrossProcessLock.AuthAndPublisherName,
+                TimeSpan.FromSeconds(10),
+                cancellationToken);
+            await PersistVerifiedStorageStateJsonAsync(storageStateJson, cancellationToken, operationLock, cdpEndpoint);
+        }
+
+        internal static async Task PersistVerifiedStorageStateJsonAsync(
+            string storageStateJson,
+            CancellationToken cancellationToken,
+            RpolCrossProcessLock lockOwner,
+            string? cdpEndpoint = null)
+        {
+            ArgumentException.ThrowIfNullOrWhiteSpace(storageStateJson);
+            ArgumentNullException.ThrowIfNull(lockOwner);
+            if (PersistVerifiedStorageStateJsonOverrideForTests is not null)
+            {
+                await PersistVerifiedStorageStateJsonOverrideForTests(storageStateJson, cancellationToken, lockOwner);
+                return;
+            }
+            using var operationLock = lockOwner.AcquireReentrant(TimeSpan.FromSeconds(10), cancellationToken);
+            var previousPointer = RuntimeSecretStoreUtility.CaptureRpolActiveStatePointer();
+            var hasPreviousState = RuntimeSecretStoreUtility.TryGetRpolStorageState(out var previousState, out _);
+            previousState = hasPreviousState ? previousState : null;
+            var tempDirectory = RuntimePathUtility.GetUserDataPath("temp");
+            Directory.CreateDirectory(tempDirectory);
+            var tempPath = RuntimePathUtility.CombineUnderBase(
+                tempDirectory,
+                $"rpol-storage-state-candidate-{Guid.NewGuid():N}.json");
+            var promotionStarted = false;
             try
             {
-                if (File.Exists(path))
+                WriteUserOnlyStorageStateFile(tempPath, storageStateJson);
+                if (!TryPrepareStorageStateFile(tempPath, DateTimeOffset.UtcNow))
                 {
-                    File.Delete(path);
+                    throw new RpolAuthException(
+                        RpolAuthFailureKind.UnexpectedProtectedContent,
+                        "RPOL candidate browser storage state failed structural validation.");
+                }
+
+                RuntimeSecretStoreUtility.SaveRpolStorageStateCandidate(storageStateJson);
+                StartupLoggingUtility.Append("RPOL authentication stage", "stage=candidate_state_written");
+                if (!RuntimeSecretStoreUtility.PromoteRpolStorageStateCandidate(out var promotionError))
+                {
+                    throw new RpolAuthException(
+                        RpolAuthFailureKind.UnexpectedProtectedContent,
+                        promotionError ?? "RPOL candidate state promotion failed.");
+                }
+                promotionStarted = true;
+
+                if (RuntimeSecretStoreUtility.TryGetRpolStorageState(out var loadedState, out _)
+                    && string.Equals(loadedState, storageStateJson, StringComparison.Ordinal))
+                {
+                    throw new RpolAuthException(
+                        RpolAuthFailureKind.UnexpectedProtectedContent,
+                        "The promoted RPOL state unexpectedly became visible through the normal active-state loader before proof.");
+                }
+                await RpolPublisherEquivalentProcessProof.ProveCandidateAsync(
+                    cancellationToken,
+                    timeout: TimeSpan.FromSeconds(45),
+                    cdpEndpoint);
+                RuntimeSecretStoreUtility.MarkRpolStorageStateVerified();
+                RuntimeSecretStoreUtility.DeleteRpolStorageStateCandidate();
+                StartupLoggingUtility.Append("RPOL authentication stage", "stage=state_persisted");
+            }
+            catch (Exception ex)
+            {
+                var cleanupErrors = new List<Exception>();
+                if (promotionStarted)
+                {
+                    try
+                    {
+                        RuntimeSecretStoreUtility.RestoreRpolActiveStatePointer(previousPointer);
+                        if (!RuntimeSecretStoreUtility.VerifyRpolActiveStateRestored(previousPointer, previousState, out var rollbackReason))
+                        {
+                            throw new InvalidOperationException(rollbackReason);
+                        }
+                    }
+                    catch (Exception rollbackException) { cleanupErrors.Add(new InvalidOperationException("RPOL active-state rollback failed.", rollbackException)); }
+                }
+                try { RuntimeSecretStoreUtility.DeleteRpolStorageStateCandidate(); }
+                catch (Exception candidateCleanupException) { cleanupErrors.Add(new InvalidOperationException("RPOL candidate cleanup failed.", candidateCleanupException)); }
+                if (cleanupErrors.Count > 0)
+                {
+                    throw new AggregateException("RPOL state promotion failed and cleanup was incomplete.", new[] { ex }.Concat(cleanupErrors));
+                }
+                throw;
+            }
+            finally
+            {
+                DeleteTemporaryStorageStateFile(tempPath);
+            }
+        }
+
+        private static void WriteUserOnlyStorageStateFile(string path, string contents)
+        {
+            using var stream = new FileStream(path, FileMode.CreateNew, FileAccess.ReadWrite, FileShare.None);
+            RpolSecureStorageStateFile.ApplyUserOnlyAcl(path);
+            using var writer = new StreamWriter(stream, new UTF8Encoding(false), leaveOpen: true);
+            writer.Write(contents);
+            writer.Flush();
+            stream.Flush(true);
+        }
+
+        internal static async Task VerifyCandidateStorageStateInPublisherProcessAsync(
+            CancellationToken cancellationToken,
+            string? cdpEndpoint = null)
+        {
+            if (!RuntimeSecretStoreUtility.TryGetRpolStorageStateCandidate(out var storageStateJson)
+                || string.IsNullOrWhiteSpace(storageStateJson))
+            {
+                throw new RpolAuthException(
+                    RpolAuthFailureKind.UnexpectedProtectedContent,
+                    "The RPOL candidate state was not available to the publisher-equivalent proof.");
+            }
+
+            if (!string.IsNullOrWhiteSpace(cdpEndpoint))
+            {
+                await VerifyCandidateThroughCdpAsync(cdpEndpoint, cancellationToken);
+                return;
+            }
+
+            var tempDirectory = RuntimePathUtility.GetUserDataPath("temp");
+            Directory.CreateDirectory(tempDirectory);
+            RpolSecureStorageStateFile.Scavenge(tempDirectory, DateTimeOffset.UtcNow.AddHours(-1));
+            var tempPath = RuntimePathUtility.CombineUnderBase(
+                tempDirectory,
+                $"rpol-storage-state-proof-{Guid.NewGuid():N}.json");
+            IPlaywright? playwright = null;
+            IBrowser? browser = null;
+            IBrowserContext? context = null;
+            Exception? primaryFailure = null;
+            try
+            {
+                WriteUserOnlyStorageStateFile(tempPath, storageStateJson);
+                playwright = await WaitForPlaywrightAsync(
+                    Playwright.CreateAsync(),
+                    "starting the separate RPOL publisher-equivalent proof browser",
+                    cancellationToken);
+                var launch = await LaunchRpolBrowserAsync(playwright, clearCloudflareChallenge: false, cancellationToken);
+                browser = launch.Browser;
+                context = await WaitForPlaywrightAsync(
+                    browser.NewContextAsync(CreateBrowserContextOptions(tempPath, launch.UseDefaultUserAgent)),
+                    "creating the publisher-equivalent RPOL proof context",
+                    cancellationToken);
+                await WaitForPlaywrightAsync(
+                    context.AddInitScriptAsync("""
+                    Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
+                    """),
+                    "configuring the publisher-equivalent RPOL proof context",
+                    cancellationToken);
+                await VerifyAuthenticatedContextAsync(context, cancellationToken);
+            }
+            catch (Exception ex)
+            {
+                primaryFailure = ex;
+            }
+            finally
+            {
+                var cleanupErrors = new List<Exception>();
+                if (context is not null)
+                {
+                    cleanupErrors.AddRange(await RpolCleanupUtility.DisposeAsyncIndependently(
+                        cancellationToken,
+                        ("publisher proof context", () => context.CloseAsync())));
+                }
+
+                if (browser is not null)
+                {
+                    cleanupErrors.AddRange(await RpolCleanupUtility.DisposeAsyncIndependently(
+                        cancellationToken,
+                        ("publisher proof browser", () => browser.CloseAsync())));
+                }
+
+                cleanupErrors.AddRange(RpolCleanupUtility.DisposeIndependently(
+                    ("publisher proof Playwright", () => playwright?.Dispose()),
+                    ("publisher proof storage state", () => DeleteTemporaryStorageStateFile(tempPath))));
+                if (cleanupErrors.Count > 0)
+                {
+                    var cleanupFailure = new AggregateException("Publisher-equivalent RPOL proof cleanup failed.", cleanupErrors);
+                    if (primaryFailure is not null) throw new AggregateException(cleanupFailure, primaryFailure);
+                    throw cleanupFailure;
                 }
             }
-            catch
+            if (primaryFailure is not null) ExceptionDispatchInfo.Capture(primaryFailure).Throw();
+        }
+
+        private static async Task VerifyCandidateThroughCdpAsync(
+            string cdpEndpoint,
+            CancellationToken cancellationToken)
+        {
+            if (!Uri.TryCreate(cdpEndpoint, UriKind.Absolute, out var endpoint)
+                || !string.Equals(endpoint.Scheme, "http", StringComparison.OrdinalIgnoreCase)
+                || (endpoint.Host is not ("127.0.0.1" or "localhost"))
+                || endpoint.AbsolutePath != "/")
             {
+                throw new RpolAuthException(
+                    RpolAuthFailureKind.UntrustedNavigation,
+                    "The RPOL publisher proof CDP endpoint was not a loopback HTTP endpoint.");
             }
+
+            IPlaywright? playwright = null;
+            try
+            {
+                playwright = await WaitForPlaywrightAsync(
+                    Playwright.CreateAsync(),
+                    "starting the RPOL publisher-equivalent CDP proof",
+                    cancellationToken);
+                var browser = await WaitForPlaywrightAsync(
+                    playwright.Chromium.ConnectOverCDPAsync(cdpEndpoint),
+                    "connecting the RPOL publisher-equivalent proof to the authenticated browser",
+                    cancellationToken);
+                var context = browser.Contexts.FirstOrDefault()
+                    ?? throw new RpolAuthException(
+                        RpolAuthFailureKind.PlaywrightUnavailable,
+                        "The authenticated RPOL browser did not expose a context to the publisher proof.");
+                await VerifyAuthenticatedContextAsync(context, cancellationToken);
+            }
+            finally
+            {
+                playwright?.Dispose();
+            }
+        }
+
+        internal static async Task DisposeCurrentSessionAsync(CancellationToken cancellationToken = default)
+        {
+            await ResetSessionAsync(cancellationToken);
+            await AwaitLatePlaywrightCleanupAsync(cancellationToken);
+        }
+
+        private static void DeleteTemporaryStorageStateFile(string? path)
+        {
+            if (!string.IsNullOrWhiteSpace(path) && File.Exists(path))
+            {
+                File.Delete(path);
+            }
+        }
+
+        // Playwright storage-state JSON has no authenticated-resource proof. Only a live protected probe can establish it.
+        internal static bool IsStorageStateSemanticProof(string storageStateJson)
+        {
+            ArgumentNullException.ThrowIfNull(storageStateJson);
+            return false;
         }
 
         internal static bool TryPrepareStorageStateFile(
@@ -1351,11 +2073,11 @@ namespace PlayerAssistant
             }
             catch (Exception deleteException) when (deleteException is IOException or UnauthorizedAccessException)
             {
-                StartupLoggingUtility.Append(
-                    "RPOL storage state validation",
-                    new InvalidOperationException(
-                        $"RPOL browser auth state '{storageStatePath}' is invalid but could not be deleted.",
-                        deleteException));
+                var cleanupFailure = new InvalidOperationException(
+                    $"RPOL browser auth state '{storageStatePath}' is invalid and could not be deleted.",
+                    deleteException);
+                StartupLoggingUtility.Append("RPOL storage state validation", cleanupFailure);
+                throw cleanupFailure;
             }
         }
 
@@ -1467,12 +2189,9 @@ namespace PlayerAssistant
         internal static string? GetNavigationReferer(Uri uri)
         {
             ArgumentNullException.ThrowIfNull(uri);
-            return string.Equals(
-                uri.AbsolutePath,
-                "/usermodules/diceroller.cgi",
-                StringComparison.OrdinalIgnoreCase)
-                    ? AppSettingsUtility.GameForumUrl
-                    : null;
+            return RpolProtectedResourceUtility.IsExactProtectedUri(uri)
+                ? AppSettingsUtility.GameForumUrl
+                : null;
         }
 
         private static void EnsureSuccessfulResponse(Uri uri, IResponse? response, string? responseBody = null)
@@ -1589,7 +2308,7 @@ namespace PlayerAssistant
                     or RpolAuthFailureKind.LoginRejected;
         }
 
-        internal static bool ShouldRejectPersistentExternalLoginPage(int loginSubmissionCount)
+        internal static bool ShouldAwaitManualExternalLogin(int loginSubmissionCount)
         {
             return loginSubmissionCount > 0;
         }
@@ -1610,7 +2329,9 @@ namespace PlayerAssistant
                 or RpolAuthFailureKind.TransportSecurityFailure
                 or RpolAuthFailureKind.LoginRejected
                 or RpolAuthFailureKind.AuthSessionExpired
-                or RpolAuthFailureKind.RpolBlocked;
+                or RpolAuthFailureKind.RpolBlocked
+                or RpolAuthFailureKind.UntrustedNavigation
+                or RpolAuthFailureKind.UnexpectedProtectedContent;
         }
 
         private static RpolAuthException CacheFatalAuthFailure(RpolAuthException exception)
@@ -1650,7 +2371,7 @@ namespace PlayerAssistant
 
                 var session = _session;
                 _session = null;
-                await session.DisposeAsync();
+                await session.DisposeAsync(cancellationToken);
             }
             finally
             {
@@ -1676,19 +2397,22 @@ namespace PlayerAssistant
         {
             private readonly Process? _externalBrowserProcess;
             private readonly string? _profileDirectory;
+            private readonly RpolExternalProfileLease? _profileLease;
 
             public RpolBrowserSession(
                 IPlaywright playwright,
                 IBrowser browser,
                 IBrowserContext context,
                 Process? externalBrowserProcess = null,
-                string? profileDirectory = null)
+                string? profileDirectory = null,
+                RpolExternalProfileLease? profileLease = null)
             {
                 Playwright = playwright;
                 Browser = browser;
                 Context = context;
                 _externalBrowserProcess = externalBrowserProcess;
                 _profileDirectory = profileDirectory;
+                _profileLease = profileLease;
             }
 
             public IPlaywright Playwright { get; }
@@ -1699,29 +2423,84 @@ namespace PlayerAssistant
 
             public async ValueTask DisposeAsync()
             {
+                await DisposeAsync(CancellationToken.None);
+            }
+
+            public async ValueTask DisposeAsync(CancellationToken cancellationToken)
+            {
+                var cleanupErrors = new List<Exception>();
                 try
                 {
-                    await Context.CloseAsync();
-                    await Browser.CloseAsync();
+                    await Context.CloseAsync().WaitAsync(TimeSpan.FromSeconds(5), cancellationToken);
                 }
-                finally
+                catch (Exception ex)
                 {
-                    if (_externalBrowserProcess is not null)
+                    cleanupErrors.Add(new InvalidOperationException("RPOL browser context cleanup failed.", ex));
+                }
+
+                try
+                {
+                    await Browser.CloseAsync().WaitAsync(TimeSpan.FromSeconds(5), cancellationToken);
+                }
+                catch (Exception ex)
+                {
+                    cleanupErrors.Add(new InvalidOperationException("RPOL browser cleanup failed.", ex));
+                }
+
+                if (_externalBrowserProcess is not null)
+                {
+                    try
                     {
                         if (!_externalBrowserProcess.HasExited)
                         {
                             _externalBrowserProcess.Kill(entireProcessTree: true);
+                            if (!_externalBrowserProcess.WaitForExit(5000))
+                            {
+                                cleanupErrors.Add(new TimeoutException("RPOL external browser cleanup exceeded its bound."));
+                            }
                         }
-
+                    }
+                    catch (Exception ex)
+                    {
+                        cleanupErrors.Add(new InvalidOperationException("RPOL external browser cleanup failed.", ex));
+                    }
+                    finally
+                    {
                         _externalBrowserProcess.Dispose();
                     }
+                }
 
-                    if (!string.IsNullOrWhiteSpace(_profileDirectory))
+                if (!string.IsNullOrWhiteSpace(_profileDirectory))
+                {
+                    try
                     {
-                        DeleteTemporaryDirectory(_profileDirectory);
+                        TerminateExternalBrowserProcessesForProfile(_profileDirectory);
+                        if (_profileLease is not null)
+                        {
+                            _profileLease.Dispose();
+                        }
+                        else
+                        {
+                            RpolExternalProfileCleanup.CleanupProfile(_profileDirectory, cancellationToken);
+                        }
                     }
+                    catch (Exception ex)
+                    {
+                        cleanupErrors.Add(new InvalidOperationException("RPOL temporary browser profile cleanup failed.", ex));
+                    }
+                }
 
+                try
+                {
                     Playwright.Dispose();
+                }
+                catch (Exception ex)
+                {
+                    cleanupErrors.Add(new InvalidOperationException("RPOL Playwright cleanup failed.", ex));
+                }
+                if (cleanupErrors.Count > 0)
+                {
+                    throw new AggregateException("RPOL browser session cleanup did not complete.", cleanupErrors);
                 }
             }
         }
@@ -1743,9 +2522,15 @@ namespace PlayerAssistant
             }
             catch (TimeoutException ex)
             {
+                ObserveLatePlaywrightTask(task, operationDescription);
                 throw new TimeoutException(
                     $"Timed out after {PlaywrightOperationTimeout.TotalSeconds:0} seconds while {operationDescription}.",
                     ex);
+            }
+            catch (OperationCanceledException)
+            {
+                ObserveLatePlaywrightTask(task, operationDescription);
+                throw;
             }
         }
 
@@ -1764,9 +2549,134 @@ namespace PlayerAssistant
             }
             catch (TimeoutException ex)
             {
+                ObserveLatePlaywrightResource(task, operationDescription);
                 throw new TimeoutException(
                     $"Timed out after {PlaywrightOperationTimeout.TotalSeconds:0} seconds while {operationDescription}.",
                     ex);
+            }
+            catch (OperationCanceledException)
+            {
+                ObserveLatePlaywrightResource(task, operationDescription);
+                throw;
+            }
+        }
+
+        private static void ObserveLatePlaywrightTask(Task task, string operationDescription)
+        {
+            TrackLatePlaywrightCleanupTask(task.ContinueWith(
+                completed =>
+                {
+                    if (completed.IsFaulted)
+                    {
+                        _ = completed.Exception;
+                        return;
+                    }
+
+                    if (!completed.IsCanceled)
+                    {
+                        StartupLoggingUtility.Append(
+                            "RPOL late Playwright operation completed after cancellation",
+                            operationDescription);
+                    }
+                },
+                CancellationToken.None,
+                TaskContinuationOptions.ExecuteSynchronously,
+                TaskScheduler.Default));
+        }
+
+        private static void ObserveLatePlaywrightResource<T>(Task<T> task, string operationDescription)
+        {
+            TrackLatePlaywrightCleanupTask(task.ContinueWith(
+                completed =>
+                {
+                    if (completed.IsCanceled)
+                    {
+                        return Task.CompletedTask;
+                    }
+
+                    if (completed.IsFaulted)
+                    {
+                        _ = completed.Exception;
+                        return Task.CompletedTask;
+                    }
+
+                    return DisposeLatePlaywrightResourceAsync(completed.Result, operationDescription);
+                },
+                CancellationToken.None,
+                TaskContinuationOptions.ExecuteSynchronously,
+                TaskScheduler.Default).Unwrap());
+        }
+
+        private static void TrackLatePlaywrightCleanupTask(Task task)
+        {
+            LatePlaywrightCleanupTasks.TryAdd(task, 0);
+        }
+
+        private static async Task AwaitLatePlaywrightCleanupAsync(CancellationToken cancellationToken)
+        {
+            var cleanupErrors = new List<Exception>();
+            while (LatePlaywrightCleanupTasks.Count > 0)
+            {
+                var stoppedForCancellation = false;
+                foreach (var task in LatePlaywrightCleanupTasks.Keys.ToArray())
+                {
+                    try
+                    {
+                        await task.WaitAsync(cancellationToken).ConfigureAwait(false);
+                    }
+                    catch (OperationCanceledException ex) when (cancellationToken.IsCancellationRequested)
+                    {
+                        cleanupErrors.Add(new InvalidOperationException(
+                            "Late RPOL Playwright cleanup exceeded the shared cleanup deadline.", ex));
+                        stoppedForCancellation = true;
+                        break;
+                    }
+                    catch (Exception ex)
+                    {
+                        cleanupErrors.Add(new InvalidOperationException(
+                            "A late RPOL Playwright operation did not complete cleanly.", ex));
+                    }
+                    finally
+                    {
+                        if (task.IsCompleted)
+                        {
+                            LatePlaywrightCleanupTasks.TryRemove(task, out _);
+                        }
+                    }
+                }
+
+                if (stoppedForCancellation)
+                {
+                    break;
+                }
+            }
+
+            if (cleanupErrors.Count > 0)
+            {
+                throw new AggregateException("Late RPOL Playwright cleanup failed.", cleanupErrors);
+            }
+        }
+
+        private static async Task DisposeLatePlaywrightResourceAsync(object? resource, string operationDescription)
+        {
+            try
+            {
+                switch (resource)
+                {
+                    case IAsyncDisposable asyncDisposable:
+                        await asyncDisposable.DisposeAsync();
+                        break;
+                    case IDisposable disposable:
+                        disposable.Dispose();
+                        break;
+                }
+            }
+            catch (Exception ex)
+            {
+                StartupLoggingUtility.Append(
+                    "RPOL late Playwright resource cleanup failed",
+                    $"{operationDescription}: {SensitiveTextRedactionUtility.Redact(ex.Message)}");
+                throw;
             }
         }
     }
@@ -1776,4 +2686,14 @@ namespace PlayerAssistant
         string UserName,
         string Password,
         TimeSpan MaxWait);
+
+    internal sealed record RpolLoginFormSnapshot(
+        string? Action,
+        string? Method,
+        string? Target,
+        bool SameFrame);
+
+    internal sealed record RpolNavigationDomSnapshot(
+        string Identity,
+        string Html);
 }

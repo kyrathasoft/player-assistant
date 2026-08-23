@@ -21,6 +21,10 @@ namespace PlayerAssistant
         private static readonly string[] DecryptLocalSettingsArguments = ["--decrypt-local-settings", "/decrypt-local-settings"];
         private static readonly string[] HashXpPasswordsArguments = ["--hash-xp-passwords", "/hash-xp-passwords"];
         private static readonly string[] PublishRpolSnapshotsArguments = ["--publish-rpol-snapshots", "/publish-rpol-snapshots"];
+        private static readonly string[] RpolStateProofArguments = ["--rpol-state-proof", "/rpol-state-proof"];
+        private const string RpolRunIdArgument = "--rpol-run-id";
+        private const string RpolResultPathArgument = "--rpol-result-path";
+        private const string RpolCdpEndpointArgument = "--rpol-cdp-endpoint";
 
         /// <summary>
         ///  The main entry point for the application.
@@ -77,9 +81,15 @@ namespace PlayerAssistant
                 return;
             }
 
+            if (args.Any(IsRpolStateProofArgument))
+            {
+                RunRpolStateProof(GetRpolCdpEndpoint(args));
+                return;
+            }
+
             if (args.Any(IsPublishRpolSnapshotsArgument))
             {
-                RunRpolSnapshotPublisher();
+                RunRpolSnapshotPublisher(args);
                 return;
             }
 
@@ -195,6 +205,12 @@ namespace PlayerAssistant
         internal static bool IsPublishRpolSnapshotsArgument(string argument)
         {
             return PublishRpolSnapshotsArguments.Any(candidate =>
+                string.Equals(argument, candidate, StringComparison.OrdinalIgnoreCase));
+        }
+
+        internal static bool IsRpolStateProofArgument(string argument)
+        {
+            return RpolStateProofArguments.Any(candidate =>
                 string.Equals(argument, candidate, StringComparison.OrdinalIgnoreCase));
         }
 
@@ -334,33 +350,204 @@ namespace PlayerAssistant
                 || IsEncryptLocalSettingsArgument(value)
                 || IsDecryptLocalSettingsArgument(value)
                 || IsHashXpPasswordsArgument(value)
-                || IsPublishRpolSnapshotsArgument(value);
+                || IsPublishRpolSnapshotsArgument(value)
+                || IsRpolStateProofArgument(value)
+                || string.Equals(value, RpolRunIdArgument, StringComparison.OrdinalIgnoreCase)
+                || string.Equals(value, RpolResultPathArgument, StringComparison.OrdinalIgnoreCase)
+                || string.Equals(value, RpolCdpEndpointArgument, StringComparison.OrdinalIgnoreCase);
         }
 
-        private static void RunRpolSnapshotPublisher()
+        private static void RunRpolStateProof(string? cdpEndpoint)
         {
-            RpolSnapshotPublishReport report;
             try
             {
                 AppSettingsUtility.Load();
-                report = RpolSnapshotUtility.PublishAsync().GetAwaiter().GetResult();
+                RpolAuthUtility.VerifyCandidateStorageStateInPublisherProcessAsync(
+                    CancellationToken.None,
+                    cdpEndpoint).GetAwaiter().GetResult();
+                Environment.ExitCode = 0;
             }
             catch (Exception ex)
             {
+                StartupLoggingUtility.Append("RPOL candidate proof", SensitiveTextRedactionUtility.Redact(ex.Message));
+                Environment.ExitCode = 1;
+            }
+        }
+
+        private static string? GetRpolCdpEndpoint(IReadOnlyList<string> args)
+        {
+            for (var index = 0; index + 1 < args.Count; index++)
+            {
+                if (!string.Equals(args[index], RpolCdpEndpointArgument, StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
+                var value = args[index + 1];
+                if (!Uri.TryCreate(value, UriKind.Absolute, out var uri)
+                    || !string.Equals(uri.Scheme, "http", StringComparison.OrdinalIgnoreCase)
+                    || (uri.Host is not ("127.0.0.1" or "localhost"))
+                    || uri.AbsolutePath != "/")
+                {
+                    throw new ArgumentException("The RPOL CDP endpoint must be an HTTP loopback endpoint.", nameof(args));
+                }
+                return value;
+            }
+            return null;
+        }
+
+        private static void RunRpolSnapshotPublisher(string[] args)
+        {
+            RunRpolSnapshotPublisherAsync(args).GetAwaiter().GetResult();
+        }
+
+        private static async Task RunRpolSnapshotPublisherAsync(string[] args)
+        {
+            var runId = GetRpolRunId(args) ?? Guid.NewGuid().ToString("N");
+            if (!Guid.TryParseExact(runId, "N", out _))
+            {
+                throw new ArgumentException("The RPOL run ID must be a GUID in N format.", nameof(args));
+            }
+            var startedAt = DateTimeOffset.UtcNow;
+            var reportPath = GetRpolResultPath(args, runId);
+            var stage = "starting";
+            var timeoutCategory = (string?)null;
+            var cleanupErrors = new List<string>();
+            RpolSnapshotPublishReport? report = null;
+            using var deadline = RpolOperationDeadline.Create(
+                TimeSpan.FromMinutes(10),
+                TimeSpan.FromSeconds(30));
+            RpolCrossProcessLock? operationLock = null;
+            try
+            {
+                stage = "lock";
+                operationLock = await RpolCrossProcessLock.AcquireAsync(
+                    RpolCrossProcessLock.AuthAndPublisherName,
+                    TimeSpan.FromSeconds(5),
+                    deadline.OperationToken);
+                stage = "settings";
+                await Task.Run(AppSettingsUtility.Load, deadline.OperationToken).WaitAsync(deadline.OperationToken);
+                stage = "publishing";
+                report = await RpolSnapshotUtility.PublishAsync(deadline.OperationToken, operationLock).WaitAsync(deadline.OperationToken);
+            }
+            catch (OperationCanceledException) when (deadline.OperationToken.IsCancellationRequested)
+            {
+                timeoutCategory = "end-to-end-deadline";
                 report = new RpolSnapshotPublishReport(
-                    Discovered: 0,
-                    Published: 0,
-                    Failed: 1,
-                    [SensitiveTextRedactionUtility.Redact(ex.Message)]);
+                    -1,
+                    0,
+                    1,
+                    ["RPOL publishing exceeded its end-to-end deadline."],
+                    Attempted: 0,
+                    TargetOutcomes: []);
+            }
+            catch (TimeoutException ex)
+            {
+                timeoutCategory = "operation-timeout";
+                report = new RpolSnapshotPublishReport(-1, 0, 1, [SensitiveTextRedactionUtility.Redact(ex.Message)], 0, []);
+            }
+            catch (Exception ex)
+            {
+                report = new RpolSnapshotPublishReport(-1, 0, 1, [SensitiveTextRedactionUtility.Redact(ex.Message)], 0, []);
+            }
+            finally
+            {
+                if (report is not null)
+                {
+                    stage = RpolSnapshotUtility.IsSuccessfulPublishReport(report)
+                        ? "published"
+                        : stage == "publishing" ? "target-failed" : stage;
+                }
+
+                try
+                {
+                    await RpolAuthUtility.DisposeCurrentSessionAsync(deadline.CleanupToken);
+                }
+                catch (Exception ex)
+                {
+                    cleanupErrors.Add(SensitiveTextRedactionUtility.Redact(ex.Message));
+                    stage = "disposal";
+                }
+
+                try
+                {
+                    operationLock?.Dispose();
+                }
+                catch (Exception ex)
+                {
+                    cleanupErrors.Add(SensitiveTextRedactionUtility.Redact(ex.Message));
+                    stage = "disposal";
+                }
             }
 
-            var reportPath = RuntimePathUtility.CombineUnderBase(
+            report ??= new RpolSnapshotPublishReport(-1, 0, 1, ["RPOL publisher ended without a result."], 0, []);
+            var endedAt = DateTimeOffset.UtcNow;
+            var result = RpolPublishResultRecord.FromReport(
+                report,
+                runId,
+                startedAt,
+                endedAt,
+                stage,
+                timeoutCategory,
+                cleanupErrors);
+            try
+            {
+                RpolPublishResultValidator.WriteAtomic(reportPath, result);
+            }
+            catch
+            {
+                // The wrapper owns the crash/timeout fallback when the application cannot write its result.
+            }
+
+            Console.WriteLine(JsonSerializer.Serialize(result, new JsonSerializerOptions { WriteIndented = true }));
+            Environment.ExitCode = result.TerminalStatus == "success" ? 0 : 1;
+        }
+
+        private static string? GetRpolRunId(IReadOnlyList<string> args)
+        {
+            for (var index = 0; index + 1 < args.Count; index++)
+            {
+                if (string.Equals(args[index], RpolRunIdArgument, StringComparison.OrdinalIgnoreCase))
+                {
+                    return string.IsNullOrWhiteSpace(args[index + 1]) ? null : args[index + 1];
+                }
+            }
+
+            return null;
+        }
+
+        internal static string GetRpolResultPathForTests(IReadOnlyList<string> args, string runId)
+            => GetRpolResultPath(args, runId);
+
+        private static string GetRpolResultPath(IReadOnlyList<string> args, string runId)
+        {
+            if (!Guid.TryParseExact(runId, "N", out _))
+            {
+                throw new InvalidOperationException("The RPOL result path requires the exact current run ID in N-format GUID form.");
+            }
+
+            string? suppliedPath = null;
+            for (var index = 0; index + 1 < args.Count; index++)
+            {
+                if (string.Equals(args[index], RpolResultPathArgument, StringComparison.OrdinalIgnoreCase))
+                {
+                    suppliedPath = args[index + 1];
+                    break;
+                }
+            }
+
+            var expectedPath = RuntimePathUtility.CombineUnderBase(
                 AppContext.BaseDirectory,
-                "rpol-snapshot-publish-result.json");
-            var json = JsonSerializer.Serialize(report, new JsonSerializerOptions { WriteIndented = true });
-            File.WriteAllText(reportPath, json);
-            Console.WriteLine(json);
-            Environment.ExitCode = report.Failed == 0 && report.Published > 0 ? 0 : 1;
+                "rpol-results",
+                runId,
+                "result.json");
+            var path = suppliedPath is null ? expectedPath : Path.GetFullPath(suppliedPath);
+            if (!string.Equals(path, expectedPath, StringComparison.OrdinalIgnoreCase))
+            {
+                throw new InvalidOperationException("The RPOL result path must be exactly '<exe>/rpol-results/<run-id>/result.json'.");
+            }
+
+            return path;
         }
 
         internal static string GetVersionText()

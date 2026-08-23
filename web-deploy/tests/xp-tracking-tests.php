@@ -186,7 +186,7 @@ try {
         '| Dorn | Fighter | 5 | 98,765 |',
         '| Max | Theurge | **3** | 6,100 |',
         '| Borca | Fighter | 1 | 304 |',
-        '| Arilia | Feycaster | 1 | 200 |',
+        '| Arilia | Feycaster | 1 | 1,525 |',
     ]);
     $characterMarkdown = implode("\n", [
         '| Name | Class | Level | Token | HP |',
@@ -197,8 +197,17 @@ try {
     ]);
     $progressionIndexMarkdown = implode("\n", [
         '- [[Fighter]]',
+        '- [[Feycaster]]',
         '- [[Illusionist]]',
         '- [[Mystic Theurge]]',
+    ]);
+    $feycasterProgressionMarkdown = implode("\n", [
+        '|XP|Level|Spells Known|Max Spell Level|',
+        '|---|---|---|---|',
+        '|0|1|-|-|',
+        '|1,500|2|1|1|',
+        '|3,000|3|2|1|',
+        '|6,000|4|3|2|',
     ]);
     $fighterProgressionMarkdown = implode("\n", [
         '| 1 | 0 |',
@@ -229,11 +238,15 @@ try {
     ]);
     $progressionFixture = static function (string $url) use (
         $progressionIndexMarkdown,
+        $feycasterProgressionMarkdown,
         $fighterProgressionMarkdown,
         $illusionistProgressionMarkdown,
         $theurgeProgressionMarkdown): ?string {
         if (str_contains($url, 'Class+Level+Progression')) {
             return $progressionIndexMarkdown;
+        }
+        if (str_contains($url, '/Classes/Feycaster')) {
+            return $feycasterProgressionMarkdown;
         }
         if (str_contains($url, '/Classes/Fighter')) {
             return $fighterProgressionMarkdown;
@@ -1058,9 +1071,12 @@ try {
         $dm['characters'],
         static fn(array $character): bool => $character['character_name'] === 'Arilia'));
     xpAssert(
-        count($arilia) === 1 && $arilia[0]['xp_to_next_level'] === null,
-        'An unavailable class progression prevented the live XP snapshot from loading.');
-    xpAssert($fetchCount === 18, 'Each XP request did not attempt the live source before using cached data.');
+        count($arilia) === 1
+            && $arilia[0]['xp_total'] === 1525
+            && $arilia[0]['level'] === 2
+            && $arilia[0]['xp_to_next_level'] === 1475,
+        'Arilia did not receive TNL 1,475 from the Feycaster XP/Level progression table.');
+    xpAssert($fetchCount === 21, 'Each XP request did not attempt the live source before using cached data.');
 
     $olderMarkdown = implode("\n", [
         'As of 7.20.2026',
