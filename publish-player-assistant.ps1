@@ -290,7 +290,11 @@ function Get-ProjectRuntimeInfo {
         return $null
     }
 
-    $packages = @($project.Project.ItemGroup | ForEach-Object { $_.PackageReference } | Where-Object { $_ -and $_.Include } | ForEach-Object {
+    $packages = @($project.Project.ItemGroup | ForEach-Object {
+        if ($_.PSObject.Properties.Name -contains 'PackageReference') {
+            $_.PackageReference
+        }
+    } | Where-Object { $_ -and $_.Include } | ForEach-Object {
         [ordered]@{
             name = [string]$_.Include
             version = [string]$_.Version
@@ -923,6 +927,27 @@ function Assert-NoForbiddenPublishArtifacts {
         $paths = $pdbFiles | ForEach-Object { $_.FullName }
         throw "Publish output contains debug symbol files: $($paths -join ', ')"
     }
+}
+
+function Remove-ForbiddenPublishArtifacts {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Directory
+    )
+
+    foreach ($fileName in @($SensitiveFileNames + $ForbiddenPublishFileNames)) {
+        Get-ChildItem -LiteralPath $Directory -Recurse -Force -File -Filter $fileName |
+            Remove-Item -Force -ErrorAction SilentlyContinue
+    }
+
+    foreach ($directoryName in $ForbiddenPublishDirectoryNames) {
+        Get-ChildItem -LiteralPath $Directory -Recurse -Force -Directory -Filter $directoryName |
+            Sort-Object FullName -Descending |
+            Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
+    }
+
+    Get-ChildItem -LiteralPath $Directory -Recurse -Force -File -Filter '*.pdb' |
+        Remove-Item -Force -ErrorAction SilentlyContinue
 }
 
 function Assert-NoPlaintextCredentialMarkers {
@@ -1791,6 +1816,7 @@ if (Test-Path -LiteralPath $releaseLocalSettingsPath -PathType Leaf) {
 }
 
 Get-ChildItem -LiteralPath $resolvedOutputDir -Recurse -Filter '*.pdb' -File | Remove-Item -Force
+Remove-ForbiddenPublishArtifacts -Directory $resolvedOutputDir
 
 Copy-Item -LiteralPath (Join-Path $PSScriptRoot "Release\$KeywordIndexFileName") -Destination (Join-Path $resolvedOutputDir $KeywordIndexFileName) -Force
 Copy-Item -LiteralPath (Join-Path $PSScriptRoot "Release\$KeywordTermsFileName") -Destination (Join-Path $resolvedOutputDir $KeywordTermsFileName) -Force
