@@ -171,6 +171,9 @@ $handler.AutomaticDecompression = [System.Net.DecompressionMethods]::All
 $handler.CookieContainer = [System.Net.CookieContainer]::new()
 $client = [System.Net.Http.HttpClient]::new($handler)
 $client.DefaultRequestHeaders.UserAgent.ParseAdd('PlayerAssistant-PwaMonitor/1.0')
+$client.DefaultRequestHeaders.CacheControl = [System.Net.Http.Headers.CacheControlHeaderValue]::new()
+$client.DefaultRequestHeaders.CacheControl.NoCache = $true
+$client.DefaultRequestHeaders.Pragma.TryParseAdd('no-cache') | Out-Null
 $client.Timeout = [TimeSpan]::FromSeconds(90)
 
 try {
