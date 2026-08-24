@@ -274,6 +274,8 @@ namespace PlayerAssistant
             var resolvedSourcePath = Path.GetFullPath(sourcePath);
             var resolvedDestinationPath = Path.GetFullPath(destinationPath ?? sourcePath);
             var settings = LocalSettingsUtility.LoadSettingsWithoutMigration(resolvedSourcePath);
+            settings.Remove(AppSettingsUtility.RpolUserNameSettingsKey);
+            settings.Remove(AppSettingsUtility.RpolPasswordSettingsKey);
             LocalSettingsUtility.SavePortableEncryptedSettings(resolvedDestinationPath, settings);
         }
 
