@@ -295,7 +295,7 @@ internal static partial class TestCases
 
         var exception = AssertThrows<InvalidOperationException>(() =>
             HostedSettingsTrustUtility.TryReadTrustedHostedSettingsVersion(statePath));
-        AssertContains(exception.Message, "authenticate or decrypt");
+        AssertContains(exception.Message, "Unable to decrypt");
     }
 
     internal static void HostedSettingsRejectsRollbackBelowTrustedVersionFloor()
@@ -3236,7 +3236,7 @@ internal static partial class TestCases
 
         var exception = AssertThrows<InvalidOperationException>(() =>
             LocalSettingsUtility.LoadSettings(localSettingsPath));
-        AssertContains(exception.Message, "authenticate or decrypt");
+        AssertContains(exception.Message, "Unable to decrypt");
     }
 
     internal static void LocalSettingsRestoresNewestValidBackup()
