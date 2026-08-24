@@ -263,7 +263,7 @@ internal static partial class TestCases
             statePath);
 
         var encryptedJson = File.ReadAllText(statePath);
-        AssertContains(encryptedJson, "\"format\": \"app-protected-v3\"");
+        AssertContains(encryptedJson, "\"format\": \"dpapi-current-user-v2\"");
         AssertContains(encryptedJson, "\"key_scope\":");
         AssertFalse(encryptedJson.Contains("1.0.1", StringComparison.Ordinal), "trusted hosted settings version should not be stored in plaintext");
     }
@@ -287,7 +287,7 @@ internal static partial class TestCases
                 $$"""
                 {
                   "schema_version": 1,
-                  "format": "app-protected-v3",
+                  "format": "dpapi-current-user-v2",
                   "payload": "{{Convert.ToBase64String(payloadBytes)}}"
                 }
                 """);
@@ -3105,7 +3105,7 @@ internal static partial class TestCases
             """
             {
               "schema_version": 99,
-              "format": "app-protected-v3",
+              "format": "dpapi-current-user-v2",
               "payload": "not-a-real-payload"
             }
             """);
@@ -3228,7 +3228,7 @@ internal static partial class TestCases
                 localSettingsPath,
                 $$"""
                 {
-                  "format": "app-protected-v3",
+                  "format": "dpapi-current-user-v2",
                   "payload": "{{Convert.ToBase64String(payloadBytes)}}"
                 }
                 """);
