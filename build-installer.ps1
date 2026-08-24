@@ -98,7 +98,9 @@ function ConvertTo-PlainSettingsObject {
 
     $plainSettings = [ordered]@{}
     foreach ($property in $Settings.PSObject.Properties) {
-        if ($property.Name -eq 'schema_version') {
+        if ($property.Name -eq 'schema_version' -or
+            $property.Name -eq 'RPOL user name' -or
+            $property.Name -eq 'RPOL password') {
             continue
         }
 
@@ -402,7 +404,7 @@ Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'Installer\install-player-assist
 Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'Installer\install-player-assistant.cmd') -Destination (Join-Path $packageRoot 'install-player-assistant.cmd') -Force
 Copy-DirectoryContents -Source $PublishDir -Destination $payloadRoot
 
-$sourceSettings = ConvertFrom-SettingsFile -Path (Join-Path $PSScriptRoot $SettingsLocalFileName)
+$sourceSettings = ConvertFrom-SettingsFile -Path (Join-Path $PSScriptRoot 'settings.json')
 $payloadSettingsPath = Join-Path $payloadRoot $SettingsLocalFileName
 if (Test-Path -LiteralPath $payloadSettingsPath -PathType Leaf) {
     Set-ItemProperty -LiteralPath $payloadSettingsPath -Name IsReadOnly -Value $false

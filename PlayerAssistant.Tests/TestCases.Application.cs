@@ -2975,9 +2975,38 @@ internal static partial class TestCases
             "expected the local settings file to be encrypted after load");
         var encryptedJson = File.ReadAllText(localSettingsPath);
         AssertContains(encryptedJson, "\"schema_version\": 1");
-        AssertContains(encryptedJson, "\"format\": \"app-protected-v3\"");
+        AssertContains(encryptedJson, "\"format\": \"dpapi-current-user-v2\"");
         AssertContains(encryptedJson, "\"key_scope\":");
-        AssertContains(encryptedJson, "\"install_path_bound\": true");
+        AssertContains(encryptedJson, "\"user_bound\": true");
+    }
+
+    internal static void PortableLocalSettingsOmitRpolCredentials()
+    {
+        using var directory = TemporaryDirectory.Create();
+        var localSettingsPath = Path.Combine(directory.Path, "settings.local.json");
+        File.WriteAllText(
+            localSettingsPath,
+            """
+            {
+              "XP Tracking": "https://publish.obsidian.md/scarlethorizons/Intentional+Orphans/XP+Tracking",
+              "RPOL user name": "example-user",
+              "RPOL password": "example-password"
+            }
+            """);
+
+        var programType = typeof(PlayerAssistant.Form1).Assembly.GetType("PlayerAssistant.Program")
+            ?? throw new InvalidOperationException("Unable to find PlayerAssistant.Program type.");
+        using var output = new StringWriter();
+        _ = (bool)InvokeStaticMethod(
+            programType,
+            "TryRunLocalSettingsCommand",
+            new[] { "--encrypt-local-settings", localSettingsPath },
+            output)!;
+
+        var settings = LocalSettingsUtility.LoadPortableEncryptedSettings(localSettingsPath);
+        AssertTrue(settings.ContainsKey("XP Tracking"), "portable settings should retain public configuration");
+        AssertFalse(settings.ContainsKey("RPOL user name"), "portable settings must omit the RPOL user name");
+        AssertFalse(settings.ContainsKey("RPOL password"), "portable settings must omit the RPOL password");
     }
 
     internal static void CredentialManagerUtf8HelpersClearTransientBuffers()
@@ -3116,8 +3145,8 @@ internal static partial class TestCases
         AssertEqual("example-user", settings["RPOL user name"], "unexpected user name after migrating legacy encrypted settings");
         AssertEqual("example-password", settings["RPOL password"], "unexpected password after migrating legacy encrypted settings");
         AssertTrue(
-            File.ReadAllText(localSettingsPath).Contains("\"format\": \"app-protected-v3\"", StringComparison.Ordinal),
-            "expected legacy encrypted settings to be rewritten using the scoped app-protected-v3 format");
+            File.ReadAllText(localSettingsPath).Contains("\"format\": \"dpapi-current-user-v2\"", StringComparison.Ordinal),
+            "expected legacy encrypted settings to be rewritten using the current-user DPAPI format");
     }
 
     internal static void V1LocalSettingsMigrateToAuthenticatedEncryption()
@@ -3134,7 +3163,7 @@ internal static partial class TestCases
 
         AssertEqual("example-user", settings["RPOL user name"], "unexpected user name after migrating v1 encrypted settings");
         AssertEqual("example-password", settings["RPOL password"], "unexpected password after migrating v1 encrypted settings");
-        AssertContains(File.ReadAllText(localSettingsPath), "\"format\": \"app-protected-v3\"");
+        AssertContains(File.ReadAllText(localSettingsPath), "\"format\": \"dpapi-current-user-v2\"");
     }
 
     internal static void V2LocalSettingsMigrateToScopedEncryption()
@@ -3152,11 +3181,11 @@ internal static partial class TestCases
         AssertEqual("example-user", settings["RPOL user name"], "unexpected user name after migrating v2 encrypted settings");
         AssertEqual("example-password", settings["RPOL password"], "unexpected password after migrating v2 encrypted settings");
         var encryptedJson = File.ReadAllText(localSettingsPath);
-        AssertContains(encryptedJson, "\"format\": \"app-protected-v3\"");
+        AssertContains(encryptedJson, "\"format\": \"dpapi-current-user-v2\"");
         AssertContains(encryptedJson, "\"key_scope\":");
     }
 
-    internal static void ScopedLocalSettingsRejectCopiedInstallPath()
+    internal static void CurrentUserLocalSettingsCopiedFixtureRoundTrips()
     {
         using var sourceDirectory = TemporaryDirectory.Create();
         using var copiedDirectory = TemporaryDirectory.Create();
@@ -3173,9 +3202,9 @@ internal static partial class TestCases
 
         File.Copy(sourcePath, copiedPath);
 
-        var exception = AssertThrows<InvalidOperationException>(() =>
-            LocalSettingsUtility.LoadSettings(copiedPath));
-        AssertContains(exception.Message, "different Windows user, machine, or install directory");
+        var settings = LocalSettingsUtility.LoadSettings(copiedPath);
+        AssertEqual("example-user", settings["RPOL user name"], "current-user DPAPI settings should round-trip from a copied fixture for the same user");
+        AssertEqual("example-password", settings["RPOL password"], "current-user DPAPI password should round-trip from a copied fixture for the same user");
     }
 
     internal static void AuthenticatedLocalSettingsRejectTamperedPayload()
@@ -3312,13 +3341,11 @@ internal static partial class TestCases
     {
         WithCopiedPublishDirectory(directoryPath =>
         {
-            LocalSettingsUtility.SaveEncryptedSettings(
+            LocalSettingsUtility.SavePortableEncryptedSettings(
                 Path.Combine(directoryPath, "settings.local.json"),
                 new Dictionary<string, string>
                 {
-                    ["XP Tracking"] = "https://publish.obsidian.md/scarlethorizons/Intentional+Orphans/XP+Tracking",
-                    ["RPOL user name"] = "example-user",
-                    ["RPOL password"] = "example-password"
+                    ["XP Tracking"] = "https://publish.obsidian.md/scarlethorizons/Intentional+Orphans/XP+Tracking"
                 });
             WriteReleaseManifest(directoryPath);
             WriteReleaseProvenance(directoryPath);
@@ -3328,7 +3355,7 @@ internal static partial class TestCases
             AssertEqual(
                 0,
                 output.ExitCode,
-                $"publish verification should accept encrypted settings.local.json with RPOL credentials. Output: {output.Output}");
+                $"publish verification should accept a secret-free encrypted settings.local.json. Output: {output.Output}");
         });
     }
 
@@ -3367,13 +3394,11 @@ internal static partial class TestCases
     """,
                     string.Empty,
                     StringComparison.Ordinal));
-            LocalSettingsUtility.SaveEncryptedSettings(
+            LocalSettingsUtility.SavePortableEncryptedSettings(
                 Path.Combine(directoryPath, "settings.local.json"),
                 new Dictionary<string, string>
                 {
-                    ["XP Tracking"] = "https://publish.obsidian.md/scarlethorizons/Intentional+Orphans/XP+Tracking",
-                    ["RPOL user name"] = "example-user",
-                    ["RPOL password"] = "example-password"
+                    ["XP Tracking"] = "https://publish.obsidian.md/scarlethorizons/Intentional+Orphans/XP+Tracking"
                 });
             WriteReleaseManifest(directoryPath);
             WriteReleaseProvenance(directoryPath);
@@ -3383,7 +3408,7 @@ internal static partial class TestCases
             AssertEqual(
                 0,
                 output.ExitCode,
-                $"publish verification should accept settings.json without Hosted Local Settings when encrypted local settings ships. Output: {output.Output}");
+                $"publish verification should accept settings.json without Hosted Local Settings when a secret-free encrypted local settings file ships. Output: {output.Output}");
         });
     }
 
@@ -3770,7 +3795,7 @@ internal static partial class TestCases
         WriteRequiredRuntimeSidecars(directoryPath);
         File.WriteAllText(Path.Combine(directoryPath, "player-assistant.exe"), "synthetic executable");
         File.WriteAllText(Path.Combine(directoryPath, "settings.json"), "{}");
-        LocalSettingsUtility.SaveEncryptedSettings(
+        LocalSettingsUtility.SavePortableEncryptedSettings(
             Path.Combine(directoryPath, "settings.local.json"),
             new Dictionary<string, string>
             {

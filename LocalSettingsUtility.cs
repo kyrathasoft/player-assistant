@@ -8,9 +8,10 @@ namespace PlayerAssistant
     internal static class LocalSettingsUtility
     {
         private const string LegacyEncryptedFormat = "dpapi-current-user";
+        private const string CurrentEncryptedFormat = "dpapi-current-user-v2";
         private const string V1EncryptedFormat = "app-protected-v1";
         private const string V2EncryptedFormat = "app-protected-v2";
-        private const string EncryptedFormat = "app-protected-v3";
+        private const string LegacyScopedEncryptedFormat = "app-protected-v3";
         private const string FormatPropertyName = "format";
         private const string PayloadPropertyName = "payload";
         private const string KeyScopePropertyName = "key_scope";
@@ -82,7 +83,7 @@ namespace PlayerAssistant
                 {
                     var decryptedSettings = DecryptSettings(envelope, resolvedDecryptionScopePath);
                     if (migrateToCurrentFormat
-                        && (!string.Equals(envelope.Format, EncryptedFormat, StringComparison.Ordinal)
+                        && (!string.Equals(envelope.Format, CurrentEncryptedFormat, StringComparison.Ordinal)
                             || envelope.SchemaVersion != CurrentSchemaVersion))
                     {
                         SaveEncryptedSettings(settingsPath, decryptedSettings);
@@ -294,7 +295,8 @@ namespace PlayerAssistant
             {
                 return envelope.Format switch
                 {
-                    EncryptedFormat => DecryptAuthenticatedAesCbcPayload(envelope.Payload, settingsPath, EncryptedFormat),
+                    CurrentEncryptedFormat => DecryptDpapiPayload(envelope.Payload),
+                    LegacyScopedEncryptedFormat => DecryptAuthenticatedAesCbcPayload(envelope.Payload, settingsPath, LegacyScopedEncryptedFormat),
                     V2EncryptedFormat => DecryptAuthenticatedAesCbcPayload(envelope.Payload, settingsPath, V2EncryptedFormat),
                     V1EncryptedFormat => DecryptAesCbcPayload(envelope.Payload),
                     LegacyEncryptedFormat => DecryptDpapiPayload(envelope.Payload),
@@ -397,47 +399,25 @@ namespace PlayerAssistant
 
         private static EncryptedSettingsEnvelope CreateEncryptedEnvelope(byte[] plaintextBytes, string settingsPath)
         {
-            var iv = RandomNumberGenerator.GetBytes(AesIvSizeBytes);
-            var keySet = GetKeySet(EncryptedFormat, settingsPath);
-
-            using var aes = Aes.Create();
-            aes.Key = keySet.EncryptionKey;
-            aes.IV = iv;
-            aes.Mode = CipherMode.CBC;
-            aes.Padding = PaddingMode.PKCS7;
-
-            using var encryptor = aes.CreateEncryptor();
-            var ciphertext = encryptor.TransformFinalBlock(plaintextBytes, 0, plaintextBytes.Length);
-            byte[]? protectedContent = null;
-            byte[]? tag = null;
-            byte[]? payloadBytes = null;
+            var protectedBytes = ProtectedData.Protect(
+                plaintextBytes,
+                optionalEntropy: null,
+                DataProtectionScope.CurrentUser);
             try
             {
-                protectedContent = new byte[iv.Length + ciphertext.Length];
-                Buffer.BlockCopy(iv, 0, protectedContent, 0, iv.Length);
-                Buffer.BlockCopy(ciphertext, 0, protectedContent, iv.Length, ciphertext.Length);
-
-                using (var hmac = new HMACSHA256(keySet.AuthenticationKey))
-                {
-                    tag = hmac.ComputeHash(protectedContent);
-                }
-
-                payloadBytes = new byte[protectedContent.Length + tag.Length];
-                Buffer.BlockCopy(protectedContent, 0, payloadBytes, 0, protectedContent.Length);
-                Buffer.BlockCopy(tag, 0, payloadBytes, protectedContent.Length, tag.Length);
-
                 return new EncryptedSettingsEnvelope(
                     CurrentSchemaVersion,
-                    EncryptedFormat,
-                    Convert.ToBase64String(payloadBytes),
-                    GetKeyScope(settingsPath));
+                    CurrentEncryptedFormat,
+                    Convert.ToBase64String(protectedBytes),
+                    new KeyScope(
+                        MachineBound: false,
+                        UserBound: true,
+                        InstallPathBound: false,
+                        ScopeHash: string.Empty));
             }
             finally
             {
-                ZeroMemory(ciphertext);
-                ZeroMemory(protectedContent);
-                ZeroMemory(tag);
-                ZeroMemory(payloadBytes);
+                ZeroMemory(protectedBytes);
             }
         }
 
@@ -507,10 +487,15 @@ namespace PlayerAssistant
                 return new KeySet(V2EncryptionKey, V2AuthenticationKey);
             }
 
-            var scope = GetDerivationScope(settingsPath);
-            return new KeySet(
-                SHA256.HashData(Encoding.UTF8.GetBytes($"{EncryptionKeySeed}.v3.encryption.{scope}")),
-                SHA256.HashData(Encoding.UTF8.GetBytes($"{EncryptionKeySeed}.v3.hmac.{scope}")));
+            if (string.Equals(format, LegacyScopedEncryptedFormat, StringComparison.Ordinal))
+            {
+                var scope = GetDerivationScope(settingsPath);
+                return new KeySet(
+                    SHA256.HashData(Encoding.UTF8.GetBytes($"{EncryptionKeySeed}.v3.encryption.{scope}")),
+                    SHA256.HashData(Encoding.UTF8.GetBytes($"{EncryptionKeySeed}.v3.hmac.{scope}")));
+            }
+
+            throw new InvalidOperationException($"Unsupported settings encryption format '{format}'.");
         }
 
         private static string GetDerivationScope(string settingsPath)
@@ -558,7 +543,8 @@ namespace PlayerAssistant
             }
 
             var format = formatElement.GetString() ?? string.Empty;
-            if (!string.Equals(format, EncryptedFormat, StringComparison.Ordinal)
+            if (!string.Equals(format, CurrentEncryptedFormat, StringComparison.Ordinal)
+                && !string.Equals(format, LegacyScopedEncryptedFormat, StringComparison.Ordinal)
                 && !string.Equals(format, V2EncryptedFormat, StringComparison.Ordinal)
                 && !string.Equals(format, V1EncryptedFormat, StringComparison.Ordinal)
                 && !string.Equals(format, LegacyEncryptedFormat, StringComparison.Ordinal))
