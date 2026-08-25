@@ -1585,13 +1585,11 @@ internal static partial class TestCases
                 overwrite: true);
             WriteRequiredRuntimeSidecars(directoryPath);
             var shippedLocalSettingsPath = Path.Combine(directoryPath, "settings.local.json");
-            LocalSettingsUtility.SaveEncryptedSettings(
+            LocalSettingsUtility.SavePortableEncryptedSettings(
                 shippedLocalSettingsPath,
                 new Dictionary<string, string>
                 {
-                    ["XP Tracking"] = "https://publish.obsidian.md/scarlethorizons/Intentional+Orphans/XP+Tracking",
-                    ["RPOL user name"] = "example-user",
-                    ["RPOL password"] = "example-password"
+                    ["XP Tracking"] = "https://publish.obsidian.md/scarlethorizons/Intentional+Orphans/XP+Tracking"
                 });
             WriteReleaseRuntimeInventory(directoryPath);
             WriteReleaseManifest(directoryPath);

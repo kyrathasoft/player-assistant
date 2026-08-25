@@ -17,9 +17,7 @@ $RequiredSidecarFileNames = @(
     $XpPasswordFileName
 )
 $AllowedEncryptedFormats = @(
-    'app-protected-v1',
-    'app-protected-v2',
-    'app-protected-v3'
+    'app-protected-v2'
 )
 $ForbiddenPlaintextMarkers = @(
     '"RPOL password"',

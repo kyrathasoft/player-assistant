@@ -593,7 +593,7 @@ internal static partial class TestCases
         var protectedJson = File.ReadAllText(statePath);
 
         AssertEqual(new Version(0, 9, 2), version!, "unexpected migrated trusted update version");
-        AssertContains(protectedJson, "\"format\": \"app-protected-v3\"");
+        AssertContains(protectedJson, "\"format\": \"dpapi-current-user-v2\"");
         AssertContains(protectedJson, "\"key_scope\":");
     }
 
@@ -614,7 +614,7 @@ internal static partial class TestCases
             statePath);
 
         var encryptedJson = File.ReadAllText(statePath);
-        AssertContains(encryptedJson, "\"format\": \"app-protected-v3\"");
+        AssertContains(encryptedJson, "\"format\": \"dpapi-current-user-v2\"");
         AssertContains(encryptedJson, "\"key_scope\":");
         AssertFalse(encryptedJson.Contains("0.9.2", StringComparison.Ordinal), "trusted version should not be stored in plaintext");
     }
@@ -645,7 +645,7 @@ internal static partial class TestCases
                 $$"""
                 {
                   "schema_version": 1,
-                  "format": "app-protected-v3",
+                  "format": "dpapi-current-user-v2",
                   "payload": "{{Convert.ToBase64String(payloadBytes)}}"
                 }
                 """);
@@ -653,7 +653,7 @@ internal static partial class TestCases
 
         var exception = AssertThrows<InvalidOperationException>(() =>
             PlayerAssistantUpdateUtility.TryReadTrustedUpdateVersion(statePath));
-        AssertContains(exception.Message, "authenticate or decrypt");
+        AssertContains(exception.Message, "Unable to decrypt");
     }
 
     internal static (string ManifestJson, string SignatureText, string PublicKeyPem) CreateSignedUpdateManifest(string manifestJson)
