@@ -1,0 +1,2 @@
+# Preserve downloaded RPOL corpus bytes exactly.
+Release/Posts/** -text

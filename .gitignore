@@ -1,7 +1,10 @@
 bin/
 obj/
 node_modules/
-Release/
+# Keep generated Release output ignored except the downloaded post corpus.
+Release/*
+!Release/Posts/
+!Release/Posts/**
 Release-verify/
 publish/
 publish-msbuild/
