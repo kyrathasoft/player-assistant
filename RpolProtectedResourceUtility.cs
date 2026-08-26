@@ -277,10 +277,8 @@ internal static partial class RpolProtectedResourceUtility
             return false;
         }
 
-        return normalizedHtml.Contains("only players may roll dice", StringComparison.Ordinal)
-            || (normalizedHtml.Contains("rolled", StringComparison.Ordinal)
-                && normalizedHtml.Contains("d20", StringComparison.Ordinal)
-                && normalizedHtml.Contains("[roll=", StringComparison.Ordinal));
+        // Roll history is optional; the authenticated Dice Roller shell is enough.
+        return true;
     }
 
     private static string NormalizeText(string value)

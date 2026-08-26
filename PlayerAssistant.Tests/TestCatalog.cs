@@ -239,6 +239,7 @@ internal static class TestCatalog
     ("rpol credential submission is behaviorally atomic against event mutation", TestCases.RpolCredentialSubmissionIsBehaviorallyAtomicAgainstEventMutation),
     ("rpol credential guard remains armed until request or bounded failure", TestCases.RpolCredentialGuardRemainsArmedUntilRequestOrBoundedFailure),
     ("rpol protected probe fixture observes referer response and delayed dom", TestCases.RpolProtectedProbeFixtureObservesRefererResponseAndDelayedDom),
+    ("rpol protected probe accepts dice roller shell without roll history", TestCases.RpolProtectedProbeAcceptsDiceRollerShellWithoutRollHistory),
     ("rpol publisher equivalent proof uses separate process architecture", TestCases.RpolPublisherEquivalentProofUsesSeparateProcessArchitecture),
     ("rpol separate process normal active loader proof runs", TestCases.RpolSeparateProcessNormalActiveLoaderProofRuns),
     ("rpol candidate promotion preserves active on failure", TestCases.RpolCandidatePromotionPreservesActiveOnFailure),

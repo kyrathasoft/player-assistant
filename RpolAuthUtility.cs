@@ -1055,7 +1055,7 @@ namespace PlayerAssistant
                 "--no-first-run",
                 "--new-window",
                 new Uri(noticePath).AbsoluteUri,
-                AppSettingsUtility.GameForumUrl
+                RpolProtectedResourceUtility.ProtectedDiceRollerUri.AbsoluteUri
             ];
         }
 
