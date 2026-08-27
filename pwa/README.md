@@ -116,6 +116,14 @@ When publishing a new PWA release, increment `PlayerAssistantPwaCacheRevision` i
 
 ## Local smoke test
 
+Install the PWA test dependencies before running the browser smoke suite. This keeps the local workflow consistent with CI and installs the pinned Playwright version from `package-lock.json`:
+
+```powershell
+npm ci --prefix .\pwa
+npx --prefix .\pwa playwright install chromium
+npm --prefix .\pwa test
+```
+
 Serve the directory over HTTP on localhost; do not open `index.html` directly with a `file://` URL:
 
 ```powershell

@@ -749,6 +749,19 @@ internal static partial class TestCases
         AssertContains(exception.Message, "elevation context changed");
     }
 
+    internal static void InstallerProtectsInstalledApplicationTree()
+    {
+        var installerPath = Path.Combine(GetRepositoryRoot(), "Installer", "install-player-assistant.ps1");
+        var script = File.ReadAllText(installerPath);
+
+        AssertContains(script, "function Protect-AppDirectory");
+        AssertContains(script, "/inheritance:r");
+        AssertContains(script, "${usersSid}:(OI)(CI)RX");
+        AssertContains(script, "${systemSid}:F");
+        AssertContains(script, "${administratorsSid}:F");
+        AssertFalse(script.Contains("${usersSid}:(OI)(CI)M", StringComparison.Ordinal), "installer must not grant Users modify access to the application tree");
+    }
+
     internal static void PublishVerificationAcceptsCurrentOutput()
     {
         WithCopiedPublishDirectory(directoryPath =>

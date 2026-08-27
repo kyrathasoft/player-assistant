@@ -263,7 +263,7 @@ internal static partial class TestCases
             statePath);
 
         var encryptedJson = File.ReadAllText(statePath);
-        AssertContains(encryptedJson, "\"format\": \"app-protected-v3\"");
+        AssertContains(encryptedJson, "\"format\": \"dpapi-current-user-v2\"");
         AssertContains(encryptedJson, "\"key_scope\":");
         AssertFalse(encryptedJson.Contains("1.0.1", StringComparison.Ordinal), "trusted hosted settings version should not be stored in plaintext");
     }
@@ -2908,7 +2908,7 @@ internal static partial class TestCases
             "expected the local settings file to be encrypted after load");
         var encryptedJson = File.ReadAllText(localSettingsPath);
         AssertContains(encryptedJson, "\"schema_version\": 1");
-        AssertContains(encryptedJson, "\"format\": \"app-protected-v3\"");
+        AssertContains(encryptedJson, "\"format\": \"dpapi-current-user-v2\"");
         AssertContains(encryptedJson, "\"key_scope\":");
         AssertContains(encryptedJson, "\"install_path_bound\": true");
     }
@@ -2966,6 +2966,25 @@ internal static partial class TestCases
             "https://publish.obsidian.md/scarlethorizons/Intentional+Orphans/XP+Tracking",
             settings["XP Tracking"],
             "unexpected XP Tracking value after portable encryption");
+    }
+
+    internal static void PortableSettingsNeverCarryRpolCredentials()
+    {
+        var settings = new Dictionary<string, string>
+        {
+            ["XP Tracking"] = "https://publish.obsidian.md/scarlethorizons/Intentional+Orphans/XP+Tracking",
+            ["RPOL user name"] = "example-user",
+            ["RPOL password"] = "example-password"
+        };
+
+        var portableJson = LocalSettingsUtility.CreatePortableEncryptedSettingsJson(settings);
+        var loaded = LocalSettingsUtility.LoadPortableEncryptedSettingsFromContents(
+            portableJson,
+            "portable settings fixture");
+
+        AssertTrue(loaded.ContainsKey("XP Tracking"), "portable settings should retain non-secret settings");
+        AssertFalse(loaded.ContainsKey("RPOL user name"), "portable settings must not carry the RPOL user name");
+        AssertFalse(loaded.ContainsKey("RPOL password"), "portable settings must not carry the RPOL password");
     }
 
     internal static void LocalSettingsDecryptCommandWritesPlaintextJson()
@@ -3049,8 +3068,8 @@ internal static partial class TestCases
         AssertEqual("example-user", settings["RPOL user name"], "unexpected user name after migrating legacy encrypted settings");
         AssertEqual("example-password", settings["RPOL password"], "unexpected password after migrating legacy encrypted settings");
         AssertTrue(
-            File.ReadAllText(localSettingsPath).Contains("\"format\": \"app-protected-v3\"", StringComparison.Ordinal),
-            "expected legacy encrypted settings to be rewritten using the scoped app-protected-v3 format");
+            File.ReadAllText(localSettingsPath).Contains("\"format\": \"dpapi-current-user-v2\"", StringComparison.Ordinal),
+            "expected legacy encrypted settings to be rewritten using the OS-protected DPAPI format");
     }
 
     internal static void V1LocalSettingsMigrateToAuthenticatedEncryption()
@@ -3067,7 +3086,7 @@ internal static partial class TestCases
 
         AssertEqual("example-user", settings["RPOL user name"], "unexpected user name after migrating v1 encrypted settings");
         AssertEqual("example-password", settings["RPOL password"], "unexpected password after migrating v1 encrypted settings");
-        AssertContains(File.ReadAllText(localSettingsPath), "\"format\": \"app-protected-v3\"");
+        AssertContains(File.ReadAllText(localSettingsPath), "\"format\": \"dpapi-current-user-v2\"");
     }
 
     internal static void V2LocalSettingsMigrateToScopedEncryption()
@@ -3085,7 +3104,7 @@ internal static partial class TestCases
         AssertEqual("example-user", settings["RPOL user name"], "unexpected user name after migrating v2 encrypted settings");
         AssertEqual("example-password", settings["RPOL password"], "unexpected password after migrating v2 encrypted settings");
         var encryptedJson = File.ReadAllText(localSettingsPath);
-        AssertContains(encryptedJson, "\"format\": \"app-protected-v3\"");
+        AssertContains(encryptedJson, "\"format\": \"dpapi-current-user-v2\"");
         AssertContains(encryptedJson, "\"key_scope\":");
     }
 

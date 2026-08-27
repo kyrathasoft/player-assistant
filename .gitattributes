@@ -1,0 +1,5 @@
+# Preserve generated runtime sidecar bytes exactly in version control.
+Release/keyword-index.json -text
+Release/game-posts-key-terms.md -text
+Release/sitemap.xml -text
+Release/sitemap-keyword-urls.json -text

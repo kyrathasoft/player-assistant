@@ -187,7 +187,8 @@ namespace PlayerAssistant
 
         private static async Task<RpolBrowserSession> CreateAuthenticatedSessionAsync(
             CancellationToken cancellationToken,
-            bool clearCloudflareChallenge = false)
+            bool clearCloudflareChallenge = false,
+            bool useHeadedBrowser = false)
         {
             var (userName, password) = GetCredentials();
             Environment.SetEnvironmentVariable("NODE_OPTIONS", "--use-system-ca");
@@ -221,7 +222,7 @@ namespace PlayerAssistant
 
                         RuntimeSecretStoreUtility.SaveRpolStorageState(storageStateJson);
                         playwright.Dispose();
-                        return await CreateAuthenticatedSessionAsync(cancellationToken);
+                        return await CreateAuthenticatedSessionAsync(cancellationToken, useHeadedBrowser: true);
                     }
 
                     return await RefreshStorageStateWithExternalBrowserAsync(
@@ -233,7 +234,7 @@ namespace PlayerAssistant
 
                 var browserLaunch = await LaunchRpolBrowserAsync(
                     playwright,
-                    clearCloudflareChallenge,
+                    clearCloudflareChallenge || useHeadedBrowser,
                     cancellationToken);
                 browser = browserLaunch.Browser;
                 useDefaultUserAgent = browserLaunch.UseDefaultUserAgent;
@@ -586,7 +587,8 @@ namespace PlayerAssistant
         {
             var page = context.Pages.FirstOrDefault(page =>
                 !page.IsClosed
-                && page.Url.Contains("rpol.net", StringComparison.OrdinalIgnoreCase));
+                && Uri.TryCreate(page.Url, UriKind.Absolute, out var pageUri)
+                && NetworkUrlAllowlistUtility.IsRpolVerificationNavigationUri(pageUri));
             if (page is not null)
             {
                 return page;
@@ -613,6 +615,7 @@ namespace PlayerAssistant
             string password,
             CancellationToken cancellationToken)
         {
+            EnsureRpolCredentialEntryPage(page);
             await WaitForPlaywrightAsync(
                 page.Locator("input[name='username']").FillAsync(userName),
                 "filling the RPOL user name in the external browser",
@@ -638,6 +641,7 @@ namespace PlayerAssistant
                     cancellationToken);
             }
 
+            EnsureRpolCredentialEntryPage(page);
             await WaitForPlaywrightAsync(
                 page.Locator("input[name='specialaction'][value='Login']").ClickAsync(),
                 "submitting the RPOL login form in the external browser",
@@ -646,6 +650,17 @@ namespace PlayerAssistant
                 page.WaitForLoadStateAsync(LoadState.DOMContentLoaded),
                 "waiting for the RPOL login response in the external browser",
                 cancellationToken);
+        }
+
+        private static void EnsureRpolCredentialEntryPage(IPage page)
+        {
+            if (!Uri.TryCreate(page.Url, UriKind.Absolute, out var pageUri)
+                || !NetworkUrlAllowlistUtility.IsRpolCredentialEntryUri(pageUri))
+            {
+                throw new RpolAuthException(
+                    RpolAuthFailureKind.TransportSecurityFailure,
+                    "RPOL credentials were not submitted because the live page was not the exact trusted HTTPS game path.");
+            }
         }
 
         private static Process StartExternalBrowserForManualVerification(
@@ -841,6 +856,7 @@ namespace PlayerAssistant
                 var rememberMeInput = page.Locator("input[name='perm']");
                 var submitButton = page.Locator("input[name='specialaction'][value='Login']");
 
+                EnsureRpolCredentialEntryPage(page);
                 await WaitForPlaywrightAsync(userNameInput.FillAsync(userName), "filling the RPOL user name", cancellationToken);
                 await WaitForPlaywrightAsync(passwordInput.FillAsync(password), "filling the RPOL password", cancellationToken);
                 if (await WaitForPlaywrightAsync(rememberMeInput.CountAsync(), "checking the RPOL remember-me option", cancellationToken) > 0
@@ -849,6 +865,7 @@ namespace PlayerAssistant
                     await WaitForPlaywrightAsync(rememberMeInput.CheckAsync(), "checking the RPOL remember-me option", cancellationToken);
                 }
 
+                EnsureRpolCredentialEntryPage(page);
                 await WaitForPlaywrightAsync(submitButton.ClickAsync(), "submitting the RPOL login form", cancellationToken);
                 await WaitForPlaywrightAsync(
                     page.WaitForLoadStateAsync(LoadState.DOMContentLoaded),

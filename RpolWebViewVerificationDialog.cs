@@ -126,6 +126,15 @@ namespace PlayerAssistant
 
                 _webView.CoreWebView2.Settings.AreDefaultContextMenusEnabled = true;
                 _webView.CoreWebView2.Settings.AreDevToolsEnabled = false;
+                _webView.CoreWebView2.NavigationStarting += (_, args) =>
+                {
+                    if (!Uri.TryCreate(args.Uri, UriKind.Absolute, out var uri)
+                        || !NetworkUrlAllowlistUtility.IsRpolVerificationNavigationUri(uri))
+                    {
+                        args.Cancel = true;
+                        _statusLabel.Text = "Blocked an untrusted RPOL navigation.";
+                    }
+                };
                 _webView.CoreWebView2.NavigationCompleted += async (_, _) =>
                 {
                     await TryAutoSubmitLoginAsync();
@@ -149,15 +158,38 @@ namespace PlayerAssistant
                 return;
             }
 
+            if (!Uri.TryCreate(_webView.CoreWebView2.Source, UriKind.Absolute, out var currentUri)
+                || !NetworkUrlAllowlistUtility.IsRpolCredentialEntryUri(currentUri))
+            {
+                return;
+            }
+
             var userNameJson = JsonSerializer.Serialize(_request.UserName);
             var passwordJson = JsonSerializer.Serialize(_request.Password);
             var script = $$"""
                 (() => {
+                    const currentUrl = new URL(window.location.href);
+                    if (currentUrl.protocol !== 'https:'
+                        || currentUrl.hostname !== 'rpol.net'
+                        || (currentUrl.port !== '' && currentUrl.port !== '443')
+                        || currentUrl.pathname !== '/game.php') {
+                        return false;
+                    }
+
                     const userName = {{userNameJson}};
                     const password = {{passwordJson}};
                     const userInput = document.querySelector("input[name='username']");
                     const passwordInput = document.querySelector("input[name='password']");
                     if (!userInput || !passwordInput) {
+                        return false;
+                    }
+
+                    const form = passwordInput.form || userInput.form;
+                    const actionUrl = new URL(form?.action || currentUrl.href, currentUrl.href);
+                    if (actionUrl.protocol !== 'https:'
+                        || actionUrl.hostname !== 'rpol.net'
+                        || (actionUrl.port !== '' && actionUrl.port !== '443')
+                        || (actionUrl.pathname !== '/game.php' && actionUrl.pathname !== '/login.cgi')) {
                         return false;
                     }
 

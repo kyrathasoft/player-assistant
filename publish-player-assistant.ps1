@@ -7,6 +7,7 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
+Add-Type -AssemblyName System.Security
 
 . (Join-Path $PSScriptRoot 'version-metadata.ps1')
 
@@ -16,6 +17,7 @@ $SettingsFormat = 'app-protected-v3'
 $PreviousSettingsFormat = 'app-protected-v2'
 $V1SettingsFormat = 'app-protected-v1'
 $LegacySettingsFormat = 'dpapi-current-user'
+$DpapiSettingsFormat = 'dpapi-current-user-v2'
 $SettingsSchemaVersionPropertyName = 'schema_version'
 $SettingsSchemaVersion = 1
 $SettingsEncryptionSeed = 'PlayerAssistant.LocalSettings.v1'
@@ -484,6 +486,10 @@ function ConvertFrom-AppEncryptedLocalSettings {
     $raw = Get-Content -Raw -LiteralPath $SettingsPath
     $envelope = $raw | ConvertFrom-Json
     [void](Get-SettingsSchemaVersion -Settings $envelope -Description $SettingsLocalFileName)
+    if ($envelope.format -eq $DpapiSettingsFormat) {
+        return ConvertFrom-DpapiLocalSettings -SettingsPath $SettingsPath
+    }
+
     if ($envelope.format -ne $SettingsFormat -and $envelope.format -ne $PreviousSettingsFormat -and $envelope.format -ne $V1SettingsFormat) {
         throw "$SettingsLocalFileName must use encrypted format '$SettingsFormat', '$PreviousSettingsFormat', or '$V1SettingsFormat', but found '$($envelope.format)'."
     }
@@ -583,6 +589,38 @@ function ConvertFrom-AppEncryptedLocalSettings {
     return ConvertTo-PlainSettingsObject -Settings ($plaintextJson | ConvertFrom-Json)
 }
 
+function ConvertFrom-DpapiLocalSettings {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$SettingsPath
+    )
+
+    $raw = Get-Content -Raw -LiteralPath $SettingsPath
+    $envelope = $raw | ConvertFrom-Json
+    if ($envelope.format -ne $DpapiSettingsFormat) {
+        throw "$SettingsLocalFileName must use DPAPI format '$DpapiSettingsFormat', but found '$($envelope.format)'."
+    }
+
+    if ([string]::IsNullOrWhiteSpace($envelope.payload)) {
+        throw "$SettingsLocalFileName has an empty DPAPI encrypted payload."
+    }
+
+    $protectedBytes = [Convert]::FromBase64String($envelope.payload)
+    $entropy = Get-SettingsDpapiEntropy -SettingsPath $SettingsPath
+    try {
+        $plaintextBytes = [System.Security.Cryptography.ProtectedData]::Unprotect(
+            $protectedBytes,
+            $entropy,
+            [System.Security.Cryptography.DataProtectionScope]::CurrentUser)
+    }
+    finally {
+        [Array]::Clear($entropy, 0, $entropy.Length)
+    }
+
+    $plaintextJson = [System.Text.Encoding]::UTF8.GetString($plaintextBytes)
+    return ConvertTo-PlainSettingsObject -Settings ($plaintextJson | ConvertFrom-Json)
+}
+
 function ConvertFrom-LegacyDpapiLocalSettings {
     param(
         [Parameter(Mandatory = $true)]
@@ -616,7 +654,7 @@ function Test-IsEncryptedLocalSettings {
 
     return $Settings.PSObject.Properties['format'] `
         -and $Settings.PSObject.Properties['payload'] `
-        -and ($Settings.format -eq $SettingsFormat -or $Settings.format -eq $PreviousSettingsFormat -or $Settings.format -eq $V1SettingsFormat -or $Settings.format -eq $LegacySettingsFormat)
+        -and ($Settings.format -eq $DpapiSettingsFormat -or $Settings.format -eq $SettingsFormat -or $Settings.format -eq $PreviousSettingsFormat -or $Settings.format -eq $V1SettingsFormat -or $Settings.format -eq $LegacySettingsFormat)
 }
 
 function ConvertFrom-LocalSettingsFile {
@@ -627,6 +665,10 @@ function ConvertFrom-LocalSettingsFile {
 
     $settings = Get-Content -Raw -LiteralPath $SettingsPath | ConvertFrom-Json
     if (Test-IsEncryptedLocalSettings -Settings $settings) {
+        if ($settings.format -eq $DpapiSettingsFormat) {
+            return ConvertFrom-DpapiLocalSettings -SettingsPath $SettingsPath
+        }
+
         if ($settings.format -eq $SettingsFormat -or $settings.format -eq $PreviousSettingsFormat -or $settings.format -eq $V1SettingsFormat) {
             return ConvertFrom-AppEncryptedLocalSettings -SettingsPath $SettingsPath
         }
@@ -650,6 +692,32 @@ function Write-AppEncryptedLocalSettings {
     Assert-RequiredFile -Path $SourcePath -Description $SettingsLocalFileName
 
     $settings = ConvertFrom-LocalSettingsFile -SettingsPath $SourcePath
+    $plaintextJson = $settings | ConvertTo-Json -Depth 10
+    $plaintextBytes = [System.Text.Encoding]::UTF8.GetBytes($plaintextJson)
+    $entropy = Get-SettingsDpapiEntropy -SettingsPath $DestinationPath
+    try {
+        $protectedBytes = [System.Security.Cryptography.ProtectedData]::Protect(
+            $plaintextBytes,
+            $entropy,
+            [System.Security.Cryptography.DataProtectionScope]::CurrentUser)
+    }
+    finally {
+        [Array]::Clear($entropy, 0, $entropy.Length)
+    }
+
+    $envelope = [ordered]@{
+        schema_version = $SettingsSchemaVersion
+        format = $DpapiSettingsFormat
+        payload = [Convert]::ToBase64String($protectedBytes)
+        key_scope = Get-SettingsKeyScope -SettingsPath $DestinationPath
+    }
+
+    [System.IO.File]::WriteAllText(
+        $DestinationPath,
+        ([pscustomobject]$envelope | ConvertTo-Json -Depth 4),
+        [System.Text.UTF8Encoding]::new($false))
+    return
+
     $plaintextJson = $settings | ConvertTo-Json -Depth 10
     $plaintextBytes = [System.Text.Encoding]::UTF8.GetBytes($plaintextJson)
 
@@ -1244,6 +1312,16 @@ function Convert-BytesToHex {
     )
 
     return [System.BitConverter]::ToString($Bytes).Replace('-', '')
+}
+
+function Get-SettingsDpapiEntropy {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$SettingsPath
+    )
+
+    $scope = Get-SettingsDerivationScope -SettingsPath $SettingsPath
+    return ,(Get-ScopedSha256Bytes -Value "$SettingsEncryptionSeed.dpapi.$scope")
 }
 
 function Get-SettingsV3EncryptionKey {

@@ -303,16 +303,17 @@ Planned security correction: eliminate first-name equivalence from authenticatio
 
 ### P1 — Protect authorization, state, and core operations
 
-- [ ] Bind RPOL credential submission to an exact trusted HTTPS origin and path.
-  - [ ] Cancel untrusted WebView navigation, revalidate the parsed URI immediately before autofill/submission, and replace substring-based Playwright page selection.
-  - [ ] Prove a matching form on an untrusted page and a URL such as `evil.example/?next=rpol.net` receive no credentials.
-- [ ] Replace derivable portable/settings encryption with operating-system secret protection.
-  - [ ] Keep portable payloads secret-free and store RPOL credentials through DPAPI, Credential Manager, or explicit user/installer provisioning.
-  - [ ] Add migration and copied-fixture tests proving another Windows identity cannot decrypt protected local credentials.
-- [ ] Make the installed application tree immutable and correctly permissioned.
-  - [ ] Route diagnostics, caches, markers, generated manifests, and snapshots through `WritableRuntimeDirectory` or another user-data location.
-  - [ ] Remove inherited Users-Modify access from Program Files executables, DLLs, and the generated uninstaller.
-  - [ ] Launch from a read/execute-only published directory and prove startup succeeds while the publish-tree hash remains unchanged.
+- [x] Bind RPOL credential submission to an exact trusted HTTPS origin and path.
+  - [x] Cancel untrusted WebView navigation, revalidate the parsed URI immediately before autofill/submission, and replace substring-based Playwright page selection.
+  - [x] Prove a matching form on an untrusted page and a URL such as `evil.example/?next=rpol.net` receive no credentials.
+  - [x] Added exact parsed-URI policy tests for HTTPS, host, default port, credential-entry path, hostile lookalike hosts, and trusted verification navigation paths.
+- [x] Replace derivable portable/settings encryption with operating-system secret protection.
+  - [x] Keep portable payloads secret-free and store RPOL credentials through DPAPI, Credential Manager, or explicit user/installer provisioning.
+  - [x] Add migration and copied-fixture tests proving another Windows identity cannot decrypt protected local credentials.
+- [x] Make the installed application tree immutable and correctly permissioned.
+  - [x] Route diagnostics, caches, markers, generated manifests, and snapshots through `WritableRuntimeDirectory` or another user-data location.
+  - [x] Remove inherited Users-Modify access from Program Files executables, DLLs, and the generated uninstaller.
+  - [x] Launch from a read/execute-only published directory and prove startup succeeds while the publish-tree hash remains unchanged.
 - [ ] Make update and installer transitions cancellation-safe and transactional.
   - [ ] Thread form-lifetime cancellation through update checks/downloads and gate every post-await dialog, UI mutation, launch-ticket write, and `Process.Start`.
   - [ ] On ZIP-installer failures after promotion, quarantine/remove the candidate and restore the prior tree, ACLs, shortcuts, and uninstall registration exactly.

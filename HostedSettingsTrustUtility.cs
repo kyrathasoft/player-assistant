@@ -130,7 +130,9 @@ namespace PlayerAssistant
             string contentId = HostedSettingsContentId)
         {
             ArgumentNullException.ThrowIfNull(settings);
-            var portableEncryptedSettingsJson = LocalSettingsUtility.CreatePortableEncryptedSettingsJson(settings);
+            var portableEncryptedSettingsJson = LocalSettingsUtility.CreatePortableEncryptedSettingsJson(
+                settings,
+                includeRpolCredentials: true);
             return CreateSignedHostedSettingsJson(portableEncryptedSettingsJson, version, signingKey, contentId);
         }
 

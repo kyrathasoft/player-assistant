@@ -11,6 +11,7 @@ namespace PlayerAssistant
         private const string V1EncryptedFormat = "app-protected-v1";
         private const string V2EncryptedFormat = "app-protected-v2";
         private const string EncryptedFormat = "app-protected-v3";
+        private const string DpapiEncryptedFormat = "dpapi-current-user-v2";
         private const string FormatPropertyName = "format";
         private const string PayloadPropertyName = "payload";
         private const string KeyScopePropertyName = "key_scope";
@@ -82,7 +83,7 @@ namespace PlayerAssistant
                 {
                     var decryptedSettings = DecryptSettings(envelope, resolvedDecryptionScopePath);
                     if (migrateToCurrentFormat
-                        && (!string.Equals(envelope.Format, EncryptedFormat, StringComparison.Ordinal)
+                        && (!string.Equals(envelope.Format, DpapiEncryptedFormat, StringComparison.Ordinal)
                             || envelope.SchemaVersion != CurrentSchemaVersion))
                     {
                         SaveEncryptedSettings(settingsPath, decryptedSettings);
@@ -193,11 +194,20 @@ namespace PlayerAssistant
             AtomicFileUtility.WriteAllText(settingsPath, encryptedJson);
         }
 
-        internal static string CreatePortableEncryptedSettingsJson(IReadOnlyDictionary<string, string> settings)
+        internal static string CreatePortableEncryptedSettingsJson(
+            IReadOnlyDictionary<string, string> settings,
+            bool includeRpolCredentials = false)
         {
             ArgumentNullException.ThrowIfNull(settings);
 
-            var plaintextBytes = JsonSerializer.SerializeToUtf8Bytes(settings, JsonOptions);
+            var portableSettings = new Dictionary<string, string>(settings, StringComparer.OrdinalIgnoreCase);
+            if (!includeRpolCredentials)
+            {
+                portableSettings.Remove(AppSettingsUtility.RpolUserNameSettingsKey);
+                portableSettings.Remove(AppSettingsUtility.RpolPasswordSettingsKey);
+            }
+
+            var plaintextBytes = JsonSerializer.SerializeToUtf8Bytes(portableSettings, JsonOptions);
             try
             {
                 var encryptedEnvelope = CreatePortableEncryptedEnvelope(plaintextBytes);
@@ -294,10 +304,11 @@ namespace PlayerAssistant
             {
                 return envelope.Format switch
                 {
+                    DpapiEncryptedFormat => DecryptDpapiPayload(envelope.Payload, settingsPath),
                     EncryptedFormat => DecryptAuthenticatedAesCbcPayload(envelope.Payload, settingsPath, EncryptedFormat),
                     V2EncryptedFormat => DecryptAuthenticatedAesCbcPayload(envelope.Payload, settingsPath, V2EncryptedFormat),
                     V1EncryptedFormat => DecryptAesCbcPayload(envelope.Payload),
-                    LegacyEncryptedFormat => DecryptDpapiPayload(envelope.Payload),
+                    LegacyEncryptedFormat => DecryptDpapiPayload(envelope.Payload, settingsPath: null),
                     _ => throw new InvalidOperationException(
                         $"Unsupported encrypted settings format '{envelope.Format}'.")
                 };
@@ -380,64 +391,54 @@ namespace PlayerAssistant
             }
         }
 
-        private static byte[] DecryptDpapiPayload(string payload)
+        private static byte[] DecryptDpapiPayload(string payload, string? settingsPath)
         {
             try
             {
                 var protectedBytes = Convert.FromBase64String(payload);
-                return ProtectedData.Unprotect(protectedBytes, optionalEntropy: null, DataProtectionScope.CurrentUser);
+                var entropy = settingsPath is null ? null : GetDpapiEntropy(settingsPath);
+                try
+                {
+                    return ProtectedData.Unprotect(protectedBytes, entropy, DataProtectionScope.CurrentUser);
+                }
+                finally
+                {
+                    ZeroMemory(entropy);
+                }
             }
             catch (CryptographicException ex)
             {
                 throw new InvalidOperationException(
-                    "Unable to decrypt settings.local.json. The legacy dpapi-current-user format is tied to the original Windows user profile and cannot be decrypted on a different machine. Replace it with plaintext once or with an app-protected-v1 file.",
+                    "Unable to decrypt settings.local.json. The encrypted settings file may have been corrupted or created for a different Windows user, machine, or install directory.",
                     ex);
             }
         }
 
         private static EncryptedSettingsEnvelope CreateEncryptedEnvelope(byte[] plaintextBytes, string settingsPath)
         {
-            var iv = RandomNumberGenerator.GetBytes(AesIvSizeBytes);
-            var keySet = GetKeySet(EncryptedFormat, settingsPath);
-
-            using var aes = Aes.Create();
-            aes.Key = keySet.EncryptionKey;
-            aes.IV = iv;
-            aes.Mode = CipherMode.CBC;
-            aes.Padding = PaddingMode.PKCS7;
-
-            using var encryptor = aes.CreateEncryptor();
-            var ciphertext = encryptor.TransformFinalBlock(plaintextBytes, 0, plaintextBytes.Length);
-            byte[]? protectedContent = null;
-            byte[]? tag = null;
-            byte[]? payloadBytes = null;
+            var entropy = GetDpapiEntropy(settingsPath);
             try
             {
-                protectedContent = new byte[iv.Length + ciphertext.Length];
-                Buffer.BlockCopy(iv, 0, protectedContent, 0, iv.Length);
-                Buffer.BlockCopy(ciphertext, 0, protectedContent, iv.Length, ciphertext.Length);
-
-                using (var hmac = new HMACSHA256(keySet.AuthenticationKey))
+                var protectedBytes = ProtectedData.Protect(
+                    plaintextBytes,
+                    entropy,
+                    DataProtectionScope.CurrentUser);
+                try
                 {
-                    tag = hmac.ComputeHash(protectedContent);
+                    return new EncryptedSettingsEnvelope(
+                        CurrentSchemaVersion,
+                        DpapiEncryptedFormat,
+                        Convert.ToBase64String(protectedBytes),
+                        GetKeyScope(settingsPath));
                 }
-
-                payloadBytes = new byte[protectedContent.Length + tag.Length];
-                Buffer.BlockCopy(protectedContent, 0, payloadBytes, 0, protectedContent.Length);
-                Buffer.BlockCopy(tag, 0, payloadBytes, protectedContent.Length, tag.Length);
-
-                return new EncryptedSettingsEnvelope(
-                    CurrentSchemaVersion,
-                    EncryptedFormat,
-                    Convert.ToBase64String(payloadBytes),
-                    GetKeyScope(settingsPath));
+                finally
+                {
+                    ZeroMemory(protectedBytes);
+                }
             }
             finally
             {
-                ZeroMemory(ciphertext);
-                ZeroMemory(protectedContent);
-                ZeroMemory(tag);
-                ZeroMemory(payloadBytes);
+                ZeroMemory(entropy);
             }
         }
 
@@ -513,6 +514,11 @@ namespace PlayerAssistant
                 SHA256.HashData(Encoding.UTF8.GetBytes($"{EncryptionKeySeed}.v3.hmac.{scope}")));
         }
 
+        private static byte[] GetDpapiEntropy(string settingsPath)
+        {
+            return SHA256.HashData(Encoding.UTF8.GetBytes($"{EncryptionKeySeed}.dpapi.{GetDerivationScope(settingsPath)}"));
+        }
+
         private static string GetDerivationScope(string settingsPath)
         {
             var directoryPath = Path.GetDirectoryName(Path.GetFullPath(settingsPath)) ?? AppContext.BaseDirectory;
@@ -559,6 +565,7 @@ namespace PlayerAssistant
 
             var format = formatElement.GetString() ?? string.Empty;
             if (!string.Equals(format, EncryptedFormat, StringComparison.Ordinal)
+                && !string.Equals(format, DpapiEncryptedFormat, StringComparison.Ordinal)
                 && !string.Equals(format, V2EncryptedFormat, StringComparison.Ordinal)
                 && !string.Equals(format, V1EncryptedFormat, StringComparison.Ordinal)
                 && !string.Equals(format, LegacyEncryptedFormat, StringComparison.Ordinal))

@@ -197,6 +197,31 @@ namespace PlayerAssistant
             return IsHost(uri, "rpol.net");
         }
 
+        internal static bool IsRpolCredentialEntryUri(Uri uri)
+        {
+            ArgumentNullException.ThrowIfNull(uri);
+
+            return IsHttpsRpolUri(uri)
+                && PathEquals(uri, "/game.php");
+        }
+
+        internal static bool IsRpolVerificationNavigationUri(Uri uri)
+        {
+            ArgumentNullException.ThrowIfNull(uri);
+
+            if (!IsHttpsRpolUri(uri))
+            {
+                return false;
+            }
+
+            return PathEquals(uri, "/game.php")
+                || PathEquals(uri, "/gameinfo.php")
+                || PathEquals(uri, "/login.cgi")
+                || PathEquals(uri, "/display.cgi")
+                || PathEquals(uri, "/usermodules/diceroller.cgi")
+                || PathStartsWith(uri, "/c-webp/");
+        }
+
         public static bool IsObsidianPublishHost(Uri uri)
         {
             ArgumentNullException.ThrowIfNull(uri);
@@ -299,6 +324,15 @@ namespace PlayerAssistant
 
             return string.Equals(uri.Host, host, StringComparison.OrdinalIgnoreCase)
                 || (allowSubdomains && uri.Host.EndsWith($".{host}", StringComparison.OrdinalIgnoreCase));
+        }
+
+        private static bool IsHttpsRpolUri(Uri uri)
+        {
+            return uri.IsAbsoluteUri
+                && uri.Scheme == Uri.UriSchemeHttps
+                && uri.IsDefaultPort
+                && string.IsNullOrWhiteSpace(uri.UserInfo)
+                && string.Equals(uri.Host, "rpol.net", StringComparison.OrdinalIgnoreCase);
         }
 
         private static bool HasNonEmptyPath(Uri uri)

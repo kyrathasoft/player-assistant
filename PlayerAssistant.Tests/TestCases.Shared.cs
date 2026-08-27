@@ -593,7 +593,7 @@ internal static partial class TestCases
         var protectedJson = File.ReadAllText(statePath);
 
         AssertEqual(new Version(0, 9, 2), version!, "unexpected migrated trusted update version");
-        AssertContains(protectedJson, "\"format\": \"app-protected-v3\"");
+        AssertContains(protectedJson, "\"format\": \"dpapi-current-user-v2\"");
         AssertContains(protectedJson, "\"key_scope\":");
     }
 
@@ -614,7 +614,7 @@ internal static partial class TestCases
             statePath);
 
         var encryptedJson = File.ReadAllText(statePath);
-        AssertContains(encryptedJson, "\"format\": \"app-protected-v3\"");
+        AssertContains(encryptedJson, "\"format\": \"dpapi-current-user-v2\"");
         AssertContains(encryptedJson, "\"key_scope\":");
         AssertFalse(encryptedJson.Contains("0.9.2", StringComparison.Ordinal), "trusted version should not be stored in plaintext");
     }
@@ -687,8 +687,7 @@ internal static partial class TestCases
     {
         var settings = new Dictionary<string, string>
         {
-            ["RPOL user name"] = "example-user",
-            ["RPOL password"] = "example-password"
+            ["XP Tracking"] = "https://publish.obsidian.md/scarlethorizons/XP"
         };
         var encryptedJson = LocalSettingsUtility.CreatePortableEncryptedSettingsJson(settings);
         var encryptedUtf8 = System.Text.Encoding.UTF8.GetBytes(encryptedJson);
@@ -697,8 +696,7 @@ internal static partial class TestCases
             encryptedUtf8,
             "test settings");
 
-        AssertEqual("example-user", loadedSettings["RPOL user name"], "unexpected user name after byte-buffer load");
-        AssertEqual("example-password", loadedSettings["RPOL password"], "unexpected password after byte-buffer load");
+        AssertEqual("https://publish.obsidian.md/scarlethorizons/XP", loadedSettings["XP Tracking"], "unexpected setting after byte-buffer load");
         AssertTrue(encryptedUtf8.All(static value => value == 0), "portable encrypted settings buffer should be cleared after load");
     }
 
