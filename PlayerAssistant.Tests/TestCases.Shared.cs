@@ -645,7 +645,7 @@ internal static partial class TestCases
                 $$"""
                 {
                   "schema_version": 1,
-                  "format": "app-protected-v3",
+                  "format": "dpapi-current-user-v2",
                   "payload": "{{Convert.ToBase64String(payloadBytes)}}"
                 }
                 """);
@@ -653,7 +653,7 @@ internal static partial class TestCases
 
         var exception = AssertThrows<InvalidOperationException>(() =>
             PlayerAssistantUpdateUtility.TryReadTrustedUpdateVersion(statePath));
-        AssertContains(exception.Message, "authenticate or decrypt");
+        AssertContains(exception.Message, "Unable to decrypt");
     }
 
     internal static (string ManifestJson, string SignatureText, string PublicKeyPem) CreateSignedUpdateManifest(string manifestJson)

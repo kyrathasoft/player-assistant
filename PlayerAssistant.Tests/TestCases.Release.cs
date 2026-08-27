@@ -1235,18 +1235,120 @@ internal static partial class TestCases
             RunGit(scratchPath, "init");
             RunGit(scratchPath, "config", "user.email", "test@example.invalid");
             RunGit(scratchPath, "config", "user.name", "Player Assistant Test");
+            File.WriteAllText(Path.Combine(scratchPath, "README.md"), "Synthetic secret-scan fixture.");
+            RunGit(scratchPath, "add", "README.md");
+            RunGit(scratchPath, "commit", "-m", "add fixture readme");
             File.WriteAllText(
                 Path.Combine(scratchPath, ".env"),
                 "OPENAI" + "_API_KEY=sk-" + "proj-synthetic-test-secret-1234567890");
             RunGit(scratchPath, "add", ".env");
             RunGit(scratchPath, "commit", "-m", "add synthetic secret");
+            RunGit(scratchPath, "rm", ".env");
+            RunGit(scratchPath, "commit", "-m", "remove synthetic secret");
 
             var output = RunSecretScan(scratchPath, includeHistory: true);
 
-            AssertFalse(output.ExitCode == 0, "secret scan should fail for a tracked env secret");
+            AssertFalse(output.ExitCode == 0, "secret scan should fail for a secret that remains only in reachable history");
             AssertContains(output.Output, "Secret scan findings:");
             AssertContains(output.Output, "Forbidden tracked path");
             AssertContains(output.Output, "OpenAI API key");
+        }
+        finally
+        {
+            if (Directory.Exists(scratchPath))
+            {
+                DeleteDirectoryTree(scratchPath);
+            }
+        }
+    }
+
+    internal static void SecretScanRejectsDeletedSecretInQuotedPath()
+    {
+        var scratchRoot = Path.Combine(GetRepositoryRoot(), "codex-scratch");
+        var scratchPath = Path.Combine(scratchRoot, $"secret-scan-quoted-path-{Guid.NewGuid():N}");
+
+        try
+        {
+            Directory.CreateDirectory(scratchPath);
+            RunGit(scratchPath, "init");
+            RunGit(scratchPath, "config", "user.email", "test@example.invalid");
+            RunGit(scratchPath, "config", "user.name", "Player Assistant Test");
+            File.WriteAllText(Path.Combine(scratchPath, "README.md"), "Synthetic secret-scan fixture.");
+            RunGit(scratchPath, "add", "README.md");
+            RunGit(scratchPath, "commit", "-m", "add fixture readme");
+
+            const string quotedPath = "odd-é.txt";
+            File.WriteAllText(Path.Combine(scratchPath, quotedPath), "client_" + "secret=abcdefghijklmnop1234");
+            RunGit(scratchPath, "add", quotedPath);
+
+            var trackedOutput = RunSecretScan(scratchPath, includeHistory: true);
+            AssertFalse(trackedOutput.ExitCode == 0, "secret scan should fail for a staged secret in a Git-quoted path");
+            AssertContains(trackedOutput.Output, "generic API key assignment");
+
+            RunGit(scratchPath, "commit", "-m", "add synthetic quoted-path secret");
+            RunGit(scratchPath, "rm", quotedPath);
+            RunGit(scratchPath, "commit", "-m", "remove synthetic quoted-path secret");
+
+            var output = RunSecretScan(scratchPath, includeHistory: true);
+
+            AssertFalse(output.ExitCode == 0, "secret scan should fail for a deleted secret in a Git-quoted path");
+            AssertContains(output.Output, "Secret scan findings:");
+            AssertContains(output.Output, "generic API key assignment");
+        }
+        finally
+        {
+            if (Directory.Exists(scratchPath))
+            {
+                DeleteDirectoryTree(scratchPath);
+            }
+        }
+    }
+
+    internal static void SecretScanRejectsForbiddenPathUniqueToMergeResults()
+    {
+        var scratchRoot = Path.Combine(GetRepositoryRoot(), "codex-scratch");
+        var scratchPath = Path.Combine(scratchRoot, $"secret-scan-merge-path-{Guid.NewGuid():N}");
+
+        try
+        {
+            Directory.CreateDirectory(scratchPath);
+            RunGit(scratchPath, "init");
+            RunGit(scratchPath, "config", "user.email", "test@example.invalid");
+            RunGit(scratchPath, "config", "user.name", "Player Assistant Test");
+            File.WriteAllText(Path.Combine(scratchPath, "README.md"), "Synthetic secret-scan fixture.");
+            RunGit(scratchPath, "add", "README.md");
+            RunGit(scratchPath, "commit", "-m", "add fixture readme");
+            RunGit(scratchPath, "branch", "-M", "main");
+
+            RunGit(scratchPath, "checkout", "-b", "merge-add-source");
+            File.WriteAllText(Path.Combine(scratchPath, "add-source.txt"), "merge source");
+            RunGit(scratchPath, "add", "add-source.txt");
+            RunGit(scratchPath, "commit", "-m", "add merge source");
+            RunGit(scratchPath, "checkout", "main");
+            File.WriteAllText(Path.Combine(scratchPath, "add-main.txt"), "main source");
+            RunGit(scratchPath, "add", "add-main.txt");
+            RunGit(scratchPath, "commit", "-m", "add main source");
+            RunGit(scratchPath, "merge", "--no-ff", "--no-commit", "merge-add-source");
+            File.WriteAllText(Path.Combine(scratchPath, ".env"), "benign merge-only forbidden path");
+            RunGit(scratchPath, "add", ".env");
+            RunGit(scratchPath, "commit", "-m", "introduce forbidden path in merge result");
+
+            RunGit(scratchPath, "checkout", "-b", "merge-remove-source");
+            File.WriteAllText(Path.Combine(scratchPath, "remove-source.txt"), "second merge source");
+            RunGit(scratchPath, "add", "remove-source.txt");
+            RunGit(scratchPath, "commit", "-m", "add second merge source");
+            RunGit(scratchPath, "checkout", "main");
+            File.WriteAllText(Path.Combine(scratchPath, "remove-main.txt"), "second main source");
+            RunGit(scratchPath, "add", "remove-main.txt");
+            RunGit(scratchPath, "commit", "-m", "add second main source");
+            RunGit(scratchPath, "merge", "--no-ff", "--no-commit", "merge-remove-source");
+            RunGit(scratchPath, "rm", ".env");
+            RunGit(scratchPath, "commit", "-m", "remove forbidden path in merge result");
+
+            var output = RunSecretScan(scratchPath, includeHistory: true);
+
+            AssertFalse(output.ExitCode == 0, "secret scan should fail for a forbidden path unique to intermediate merge-result trees");
+            AssertContains(output.Output, "Forbidden tracked path: .env");
         }
         finally
         {
@@ -1496,13 +1598,11 @@ internal static partial class TestCases
                 overwrite: true);
             WriteRequiredRuntimeSidecars(directoryPath);
             var shippedLocalSettingsPath = Path.Combine(directoryPath, "settings.local.json");
-            LocalSettingsUtility.SaveEncryptedSettings(
+            LocalSettingsUtility.SavePortableEncryptedSettings(
                 shippedLocalSettingsPath,
                 new Dictionary<string, string>
                 {
-                    ["XP Tracking"] = "https://publish.obsidian.md/scarlethorizons/Intentional+Orphans/XP+Tracking",
-                    ["RPOL user name"] = "example-user",
-                    ["RPOL password"] = "example-password"
+                    ["XP Tracking"] = "https://publish.obsidian.md/scarlethorizons/Intentional+Orphans/XP+Tracking"
                 });
             WriteReleaseRuntimeInventory(directoryPath);
             WriteReleaseManifest(directoryPath);

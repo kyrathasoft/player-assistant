@@ -382,6 +382,38 @@ try {
     }
 
     try {
+        $broker->dispatch(
+            'POST',
+            '/v1/xp-level-up-notifications/claim',
+            [],
+            [],
+            ['origin' => 'https://example.test'],
+            '192.0.2.30',
+            $session);
+        throw new RuntimeException('The level-up notification claim route accepted an unauthenticated request.');
+    } catch (BrokerHttpException $exception) {
+        routingAssert(
+            $exception->status === 401 && $exception->errorName === 'authentication_required',
+            'The level-up notification claim route failed with the wrong unauthenticated response.');
+    }
+
+    try {
+        $broker->dispatch(
+            'POST',
+            '/v1/xp-level-up-notifications/acknowledge',
+            [],
+            ['notifications' => [['character_key' => 'routing-xp', 'target_level' => 5]]],
+            ['origin' => 'https://example.test'],
+            '192.0.2.30',
+            $session);
+        throw new RuntimeException('The level-up acknowledgement route accepted an unauthenticated request.');
+    } catch (BrokerHttpException $exception) {
+        routingAssert(
+            $exception->status === 401 && $exception->errorName === 'authentication_required',
+            'The level-up acknowledgement route failed with the wrong unauthenticated response.');
+    }
+
+    try {
         $broker->dispatch('GET', '/v1/xp-awards', [], [], [], '192.0.2.30', $session);
         throw new RuntimeException('The protected XP awards route accepted an unauthenticated request.');
     } catch (BrokerHttpException $exception) {
@@ -525,6 +557,23 @@ try {
         $identity['body']['account']['character_key'] === 'routing',
         'The protected identity route did not use the session account.');
 
+    $playerRevisions = $broker->dispatch(
+        'GET',
+        '/v1/revisions',
+        [],
+        [],
+        [],
+        '192.0.2.30',
+        $session);
+    routingAssert(
+        $playerRevisions['status'] === 200
+            && $playerRevisions['body']['schema_version'] === 1
+            && $playerRevisions['body']['messages']['unread_count'] === 0
+            && $playerRevisions['body']['quests']['activity_count'] === 0
+            && preg_match('/^[a-f0-9]{64}$/', $playerRevisions['body']['messages']['revision']) === 1
+            && preg_match('/^[a-f0-9]{64}$/', $playerRevisions['body']['quests']['revision']) === 1,
+        'The protected player revision route returned invalid or cross-account activity.');
+
     $magicItems = $broker->dispatch(
         'GET',
         '/v1/magic-items',
@@ -555,6 +604,43 @@ try {
     routingAssert($xp['body']['character']['xp_to_next_level'] === 7655, 'The player XP response had the wrong TNL value.');
     routingAssert(!isset($xp['body']['characters']), 'The player XP response exposed party totals.');
     routingAssert(!isset($xp['body']['source_url']), 'The player XP response exposed the configured source URL.');
+
+    $levelUpNotifications = $broker->dispatch(
+        'POST',
+        '/v1/xp-level-up-notifications/claim',
+        [],
+        [],
+        [
+            'origin' => 'https://example.test',
+            'csrf-token' => $restored['body']['csrf_token'],
+        ],
+        '192.0.2.30',
+        $session);
+    routingAssert(
+        $levelUpNotifications['status'] === 200
+            && $levelUpNotifications['body']['schema_version'] === 1
+            && $levelUpNotifications['body']['notifications'] === [],
+        'The authenticated level-up notification claim route returned an invalid response.');
+
+    try {
+        $broker->dispatch(
+            'POST',
+            '/v1/xp-level-up-notifications/acknowledge',
+            [],
+            ['notifications' => []],
+            [
+                'origin' => 'https://example.test',
+                'csrf-token' => $restored['body']['csrf_token'],
+            ],
+            '192.0.2.30',
+            $session);
+        throw new RuntimeException('The level-up acknowledgement route accepted an empty receipt list.');
+    } catch (BrokerHttpException $exception) {
+        routingAssert(
+            $exception->status === 400
+                && $exception->errorName === 'invalid_level_up_acknowledgement',
+            'The level-up acknowledgement route returned the wrong validation response.');
+    }
 
     $xpAwards = $broker->dispatch(
         'GET',
@@ -1073,6 +1159,19 @@ try {
             && $dungeonMasterQuests['body']['pending_requests'][0]['requester_character_name']
                 === 'Routing Hero',
         'The Dungeon Master did not receive the full quest list and pending quest alert.');
+
+    $dungeonMasterRevisions = $broker->dispatch(
+        'GET',
+        '/v1/revisions',
+        [],
+        [],
+        [],
+        '192.0.2.31',
+        $dungeonMasterSession);
+    routingAssert(
+        $dungeonMasterRevisions['status'] === 200
+            && $dungeonMasterRevisions['body']['quests']['activity_count'] === 1,
+        'The Dungeon Master revision route did not include the pending quest activity.');
 
     try {
         $broker->dispatch(

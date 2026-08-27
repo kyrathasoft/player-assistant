@@ -39,6 +39,10 @@ namespace PlayerAssistant
                 uri => IsHost(uri, "rpol.net") && (PathEquals(uri, "/game.php") || PathEquals(uri, "/gameinfo.php"))),
             new(
                 NetworkUrlPurpose.Rpol,
+                "RPOL login submissions must use rpol.net with the exact '/login.cgi' path.",
+                uri => IsHost(uri, "rpol.net", allowSubdomains: false) && PathEquals(uri, "/login.cgi")),
+            new(
+                NetworkUrlPurpose.Rpol,
                 "RPOL thread display URLs must use rpol.net with the '/display.cgi' path.",
                 uri => IsHost(uri, "rpol.net") && PathEquals(uri, "/display.cgi")),
             new(
@@ -197,29 +201,23 @@ namespace PlayerAssistant
             return IsHost(uri, "rpol.net");
         }
 
-        internal static bool IsRpolCredentialEntryUri(Uri uri)
+        public static bool IsTrustedRpolCredentialSubmissionUri(Uri uri)
         {
             ArgumentNullException.ThrowIfNull(uri);
 
-            return IsHttpsRpolUri(uri)
-                && PathEquals(uri, "/game.php");
+            return uri.Scheme == Uri.UriSchemeHttps
+                && IsHost(uri, "rpol.net", allowSubdomains: false)
+                && (uri.Port is -1 or 443)
+                && PathEquals(uri, "/game.php")
+                && string.IsNullOrWhiteSpace(uri.UserInfo);
         }
 
-        internal static bool IsRpolVerificationNavigationUri(Uri uri)
+        public static bool IsTrustedRpolNavigationUri(Uri uri)
         {
             ArgumentNullException.ThrowIfNull(uri);
 
-            if (!IsHttpsRpolUri(uri))
-            {
-                return false;
-            }
-
-            return PathEquals(uri, "/game.php")
-                || PathEquals(uri, "/gameinfo.php")
-                || PathEquals(uri, "/login.cgi")
-                || PathEquals(uri, "/display.cgi")
-                || PathEquals(uri, "/usermodules/diceroller.cgi")
-                || PathStartsWith(uri, "/c-webp/");
+            return uri.Scheme == Uri.UriSchemeHttps
+                && Validate(uri, NetworkUrlPurpose.Rpol).IsAllowed;
         }
 
         public static bool IsObsidianPublishHost(Uri uri)

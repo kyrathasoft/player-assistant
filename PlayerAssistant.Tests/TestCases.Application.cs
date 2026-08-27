@@ -287,7 +287,7 @@ internal static partial class TestCases
                 $$"""
                 {
                   "schema_version": 1,
-                  "format": "app-protected-v3",
+                  "format": "dpapi-current-user-v2",
                   "payload": "{{Convert.ToBase64String(payloadBytes)}}"
                 }
                 """);
@@ -295,7 +295,7 @@ internal static partial class TestCases
 
         var exception = AssertThrows<InvalidOperationException>(() =>
             HostedSettingsTrustUtility.TryReadTrustedHostedSettingsVersion(statePath));
-        AssertContains(exception.Message, "authenticate or decrypt");
+        AssertContains(exception.Message, "Unable to decrypt");
     }
 
     internal static void HostedSettingsRejectsRollbackBelowTrustedVersionFloor()
@@ -1530,6 +1530,73 @@ internal static partial class TestCases
         AssertTrue(threadDisplay.IsAllowed, "RPOL thread display URLs should remain valid local search results");
         AssertTrue(diceRoller.IsAllowed, "the exact RPOL Dice Roller URL should be allowed");
         AssertFalse(unrelatedUserModule.IsAllowed, "unrelated RPOL user-module URLs should remain blocked");
+    }
+
+    internal static void RpolCredentialSubmissionRequiresExactTrustedHttpsOriginAndPath()
+    {
+        var trusted = new Uri("https://rpol.net/game.php?gi=80170");
+        var wrongScheme = new Uri("http://rpol.net/game.php?gi=80170");
+        var wrongHost = new Uri("https://evil.example/game.php?next=rpol.net");
+        var lookalikeQuery = new Uri("https://evil.example/?next=rpol.net");
+        var wrongPath = new Uri("https://rpol.net/gameinfo.php?gi=80170");
+        var subdomain = new Uri("https://login.rpol.net/game.php?gi=80170");
+
+        AssertTrue(
+            NetworkUrlAllowlistUtility.IsTrustedRpolCredentialSubmissionUri(trusted),
+            "the exact RPOL HTTPS game path should be trusted for credential submission");
+        AssertFalse(
+            NetworkUrlAllowlistUtility.IsTrustedRpolCredentialSubmissionUri(wrongScheme),
+            "HTTP must never be trusted for credential submission");
+        AssertFalse(
+            NetworkUrlAllowlistUtility.IsTrustedRpolCredentialSubmissionUri(wrongHost),
+            "a hostile matching form must not receive credentials");
+        AssertFalse(
+            NetworkUrlAllowlistUtility.IsTrustedRpolCredentialSubmissionUri(lookalikeQuery),
+            "a URL that only mentions rpol.net in a query must not receive credentials");
+        AssertFalse(
+            NetworkUrlAllowlistUtility.IsTrustedRpolCredentialSubmissionUri(wrongPath),
+            "a different RPOL path must not receive credentials");
+        AssertFalse(
+            NetworkUrlAllowlistUtility.IsTrustedRpolCredentialSubmissionUri(subdomain),
+            "an RPOL subdomain must not receive credentials");
+    }
+
+    internal static void RpolWebViewNavigationRequiresApprovedHttpsPath()
+    {
+        AssertTrue(
+            NetworkUrlAllowlistUtility.IsTrustedRpolNavigationUri(new Uri("https://rpol.net/game.php?gi=80170")),
+            "the configured RPOL game page should be navigable");
+        AssertTrue(
+            NetworkUrlAllowlistUtility.IsTrustedRpolNavigationUri(new Uri("https://rpol.net/login.cgi?gi=80170")),
+            "the exact RPOL login endpoint should be navigable after form submission");
+        AssertTrue(
+            NetworkUrlAllowlistUtility.IsTrustedRpolNavigationUri(new Uri("https://rpol.net/display.cgi?gi=80170&ti=12")),
+            "approved RPOL content paths should remain navigable");
+        AssertFalse(
+            NetworkUrlAllowlistUtility.IsTrustedRpolNavigationUri(new Uri("http://rpol.net/game.php?gi=80170")),
+            "HTTP RPOL navigation must be cancelled");
+        AssertFalse(
+            NetworkUrlAllowlistUtility.IsTrustedRpolNavigationUri(new Uri("https://evil.example/?next=rpol.net")),
+            "untrusted lookalike navigation must be cancelled");
+    }
+
+    internal static void RpolWebViewNavigationStartingGuardCancelsUntrustedUrls()
+    {
+        AssertFalse(
+            RpolWebViewVerificationDialog.ShouldCancelNavigation("https://rpol.net/game.php?gi=80170"),
+            "NavigationStarting should allow the trusted RPOL game page");
+        AssertFalse(
+            RpolWebViewVerificationDialog.ShouldCancelNavigation("https://rpol.net/login.cgi?gi=80170"),
+            "NavigationStarting should allow the exact RPOL login endpoint");
+        AssertTrue(
+            RpolWebViewVerificationDialog.ShouldCancelNavigation("https://evil.example/?next=rpol.net"),
+            "NavigationStarting should cancel a hostile lookalike URL");
+        AssertTrue(
+            RpolWebViewVerificationDialog.ShouldCancelNavigation("http://rpol.net/game.php?gi=80170"),
+            "NavigationStarting should cancel HTTP RPOL navigation");
+        AssertTrue(
+            RpolWebViewVerificationDialog.ShouldCancelNavigation(null),
+            "NavigationStarting should cancel an unparsable or missing URL");
     }
 
     internal static void NetworkAllowlistAcceptsObsidianPublishContentHosts()
@@ -2910,7 +2977,36 @@ internal static partial class TestCases
         AssertContains(encryptedJson, "\"schema_version\": 1");
         AssertContains(encryptedJson, "\"format\": \"dpapi-current-user-v2\"");
         AssertContains(encryptedJson, "\"key_scope\":");
-        AssertContains(encryptedJson, "\"install_path_bound\": true");
+        AssertContains(encryptedJson, "\"user_bound\": true");
+    }
+
+    internal static void PortableLocalSettingsOmitRpolCredentials()
+    {
+        using var directory = TemporaryDirectory.Create();
+        var localSettingsPath = Path.Combine(directory.Path, "settings.local.json");
+        File.WriteAllText(
+            localSettingsPath,
+            """
+            {
+              "XP Tracking": "https://publish.obsidian.md/scarlethorizons/Intentional+Orphans/XP+Tracking",
+              "RPOL user name": "example-user",
+              "RPOL password": "example-password"
+            }
+            """);
+
+        var programType = typeof(PlayerAssistant.Form1).Assembly.GetType("PlayerAssistant.Program")
+            ?? throw new InvalidOperationException("Unable to find PlayerAssistant.Program type.");
+        using var output = new StringWriter();
+        _ = (bool)InvokeStaticMethod(
+            programType,
+            "TryRunLocalSettingsCommand",
+            new[] { "--encrypt-local-settings", localSettingsPath },
+            output)!;
+
+        var settings = LocalSettingsUtility.LoadPortableEncryptedSettings(localSettingsPath);
+        AssertTrue(settings.ContainsKey("XP Tracking"), "portable settings should retain public configuration");
+        AssertFalse(settings.ContainsKey("RPOL user name"), "portable settings must omit the RPOL user name");
+        AssertFalse(settings.ContainsKey("RPOL password"), "portable settings must omit the RPOL password");
     }
 
     internal static void CredentialManagerUtf8HelpersClearTransientBuffers()
@@ -3028,7 +3124,7 @@ internal static partial class TestCases
             """
             {
               "schema_version": 99,
-              "format": "app-protected-v3",
+              "format": "dpapi-current-user-v2",
               "payload": "not-a-real-payload"
             }
             """);
@@ -3069,7 +3165,7 @@ internal static partial class TestCases
         AssertEqual("example-password", settings["RPOL password"], "unexpected password after migrating legacy encrypted settings");
         AssertTrue(
             File.ReadAllText(localSettingsPath).Contains("\"format\": \"dpapi-current-user-v2\"", StringComparison.Ordinal),
-            "expected legacy encrypted settings to be rewritten using the OS-protected DPAPI format");
+            "expected legacy encrypted settings to be rewritten using the current-user DPAPI format");
     }
 
     internal static void V1LocalSettingsMigrateToAuthenticatedEncryption()
@@ -3108,7 +3204,7 @@ internal static partial class TestCases
         AssertContains(encryptedJson, "\"key_scope\":");
     }
 
-    internal static void ScopedLocalSettingsRejectCopiedInstallPath()
+    internal static void CurrentUserLocalSettingsCopiedFixtureRoundTrips()
     {
         using var sourceDirectory = TemporaryDirectory.Create();
         using var copiedDirectory = TemporaryDirectory.Create();
@@ -3125,9 +3221,9 @@ internal static partial class TestCases
 
         File.Copy(sourcePath, copiedPath);
 
-        var exception = AssertThrows<InvalidOperationException>(() =>
-            LocalSettingsUtility.LoadSettings(copiedPath));
-        AssertContains(exception.Message, "different Windows user, machine, or install directory");
+        var settings = LocalSettingsUtility.LoadSettings(copiedPath);
+        AssertEqual("example-user", settings["RPOL user name"], "current-user DPAPI settings should round-trip from a copied fixture for the same user");
+        AssertEqual("example-password", settings["RPOL password"], "current-user DPAPI password should round-trip from a copied fixture for the same user");
     }
 
     internal static void AuthenticatedLocalSettingsRejectTamperedPayload()
@@ -3151,7 +3247,7 @@ internal static partial class TestCases
                 localSettingsPath,
                 $$"""
                 {
-                  "format": "app-protected-v3",
+                  "format": "dpapi-current-user-v2",
                   "payload": "{{Convert.ToBase64String(payloadBytes)}}"
                 }
                 """);
@@ -3159,7 +3255,7 @@ internal static partial class TestCases
 
         var exception = AssertThrows<InvalidOperationException>(() =>
             LocalSettingsUtility.LoadSettings(localSettingsPath));
-        AssertContains(exception.Message, "authenticate or decrypt");
+        AssertContains(exception.Message, "Unable to decrypt");
     }
 
     internal static void LocalSettingsRestoresNewestValidBackup()
@@ -3264,13 +3360,11 @@ internal static partial class TestCases
     {
         WithCopiedPublishDirectory(directoryPath =>
         {
-            LocalSettingsUtility.SaveEncryptedSettings(
+            LocalSettingsUtility.SavePortableEncryptedSettings(
                 Path.Combine(directoryPath, "settings.local.json"),
                 new Dictionary<string, string>
                 {
-                    ["XP Tracking"] = "https://publish.obsidian.md/scarlethorizons/Intentional+Orphans/XP+Tracking",
-                    ["RPOL user name"] = "example-user",
-                    ["RPOL password"] = "example-password"
+                    ["XP Tracking"] = "https://publish.obsidian.md/scarlethorizons/Intentional+Orphans/XP+Tracking"
                 });
             WriteReleaseManifest(directoryPath);
             WriteReleaseProvenance(directoryPath);
@@ -3280,7 +3374,7 @@ internal static partial class TestCases
             AssertEqual(
                 0,
                 output.ExitCode,
-                $"publish verification should accept encrypted settings.local.json with RPOL credentials. Output: {output.Output}");
+                $"publish verification should accept a secret-free encrypted settings.local.json. Output: {output.Output}");
         });
     }
 
@@ -3319,13 +3413,11 @@ internal static partial class TestCases
     """,
                     string.Empty,
                     StringComparison.Ordinal));
-            LocalSettingsUtility.SaveEncryptedSettings(
+            LocalSettingsUtility.SavePortableEncryptedSettings(
                 Path.Combine(directoryPath, "settings.local.json"),
                 new Dictionary<string, string>
                 {
-                    ["XP Tracking"] = "https://publish.obsidian.md/scarlethorizons/Intentional+Orphans/XP+Tracking",
-                    ["RPOL user name"] = "example-user",
-                    ["RPOL password"] = "example-password"
+                    ["XP Tracking"] = "https://publish.obsidian.md/scarlethorizons/Intentional+Orphans/XP+Tracking"
                 });
             WriteReleaseManifest(directoryPath);
             WriteReleaseProvenance(directoryPath);
@@ -3335,7 +3427,7 @@ internal static partial class TestCases
             AssertEqual(
                 0,
                 output.ExitCode,
-                $"publish verification should accept settings.json without Hosted Local Settings when encrypted local settings ships. Output: {output.Output}");
+                $"publish verification should accept settings.json without Hosted Local Settings when a secret-free encrypted local settings file ships. Output: {output.Output}");
         });
     }
 
@@ -3722,7 +3814,7 @@ internal static partial class TestCases
         WriteRequiredRuntimeSidecars(directoryPath);
         File.WriteAllText(Path.Combine(directoryPath, "player-assistant.exe"), "synthetic executable");
         File.WriteAllText(Path.Combine(directoryPath, "settings.json"), "{}");
-        LocalSettingsUtility.SaveEncryptedSettings(
+        LocalSettingsUtility.SavePortableEncryptedSettings(
             Path.Combine(directoryPath, "settings.local.json"),
             new Dictionary<string, string>
             {

@@ -50,6 +50,7 @@
   - [x] Authenticated browser coverage covers XP Awards, current XP, quests, messages, party funds, failed login, logout, account switching, expired sessions, and cross-account denial.
   - [x] The browser fixture proves that a newly published cumulative total produces exactly one XP award with the correct date and delta, without duplication on subsequent refreshes.
   - [x] Protected views expose local freshness timestamps and explicit retry or refresh controls; broker stale/fallback metadata and full message/quest coverage remain.
+  - [x] Login shows server-derived attained level-ups only for each PC or hireling authorized to the account, using the published XP Tracking and Class Level Progression sources; durable claim/acknowledgement receipts prevent missed or repeated alerts, and XP Awards cards do not repeat them.
   - [x] Service-worker installation cleans up failed partial caches, handles quota failures, validates corrupted cache entries, protects newer workers from obsolete activation, and has failure-injection coverage.
   - [x] Browser smoke covers dialog focus containment/restoration, accessible names, visible focus contracts, table-backed protected data, reduced motion, and narrow mobile layouts.
   - [x] Production security headers now include `object-src`, `frame-src`, and `upgrade-insecure-requests`; host-level HSTS remains enabled pending any future verified subdomain expansion.
@@ -306,14 +307,13 @@ Planned security correction: eliminate first-name equivalence from authenticatio
 - [x] Bind RPOL credential submission to an exact trusted HTTPS origin and path.
   - [x] Cancel untrusted WebView navigation, revalidate the parsed URI immediately before autofill/submission, and replace substring-based Playwright page selection.
   - [x] Prove a matching form on an untrusted page and a URL such as `evil.example/?next=rpol.net` receive no credentials.
-  - [x] Added exact parsed-URI policy tests for HTTPS, host, default port, credential-entry path, hostile lookalike hosts, and trusted verification navigation paths.
-- [x] Replace derivable portable/settings encryption with operating-system secret protection.
-  - [x] Keep portable payloads secret-free and store RPOL credentials through DPAPI, Credential Manager, or explicit user/installer provisioning.
-  - [x] Add migration and copied-fixture tests proving another Windows identity cannot decrypt protected local credentials.
-- [x] Make the installed application tree immutable and correctly permissioned.
-  - [x] Route diagnostics, caches, markers, generated manifests, and snapshots through `WritableRuntimeDirectory` or another user-data location.
-  - [x] Remove inherited Users-Modify access from Program Files executables, DLLs, and the generated uninstaller.
-  - [x] Launch from a read/execute-only published directory and prove startup succeeds while the publish-tree hash remains unchanged.
+- [ ] Replace derivable portable/settings encryption with operating-system secret protection.
+  - [ ] Keep portable payloads secret-free and store RPOL credentials through DPAPI, Credential Manager, or explicit user/installer provisioning.
+  - [ ] Add migration and copied-fixture tests proving another Windows identity cannot decrypt protected local credentials.
+- [ ] Make the installed application tree immutable and correctly permissioned.
+  - [ ] Route diagnostics, caches, markers, generated manifests, and snapshots through `WritableRuntimeDirectory` or another user-data location.
+  - [ ] Remove inherited Users-Modify access from Program Files executables, DLLs, and the generated uninstaller.
+  - [ ] Launch from a read/execute-only published directory and prove startup succeeds while the publish-tree hash remains unchanged.
 - [ ] Make update and installer transitions cancellation-safe and transactional.
   - [ ] Thread form-lifetime cancellation through update checks/downloads and gate every post-await dialog, UI mutation, launch-ticket write, and `Process.Start`.
   - [ ] On ZIP-installer failures after promotion, quarantine/remove the candidate and restore the prior tree, ACLs, shortcuts, and uninstall registration exactly.
@@ -334,7 +334,7 @@ Planned security correction: eliminate first-name equivalence from authenticatio
   - [ ] Keep public `/v1/health` independent of SQLite, migrations, private files, and unrelated service constructors.
   - [ ] Remove `ensureSchema()` writes from `BrokerService`, `CharacterAuthService`, `XpTrackingService`, `QuestService`, and `MessageService` after migration fixtures cover their schemas.
 - [ ] Restore missing broker routing and session-concurrency contracts.
-  - [ ] Wire authenticated `/v1/revisions` through the production entry point with account scoping, anonymous denial, and public HTTP coverage.
+  - [x] Wire authenticated `/v1/revisions` through the production entry point with account scoping, anonymous denial, and public HTTP coverage.
   - [ ] Copy authorized identity state and release the PHP session lock before slow read-only XP, revision, message, and quest work.
   - [ ] Prove logout/session inspection can complete while a same-cookie read request is blocked upstream.
 - [ ] Restore transactional, bounded message pagination and retention.

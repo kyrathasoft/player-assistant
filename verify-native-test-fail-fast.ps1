@@ -39,6 +39,7 @@ catch {
 }
 
 Write-Output 'Native test fail-fast policy self-test passed.'
+$global:LASTEXITCODE = 0
 }
 finally {
     Remove-Item -LiteralPath $fixture -Force -ErrorAction SilentlyContinue

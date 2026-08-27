@@ -19,6 +19,1087 @@ namespace PlayerAssistant.Tests;
 
 internal static partial class TestCases
 {
+    internal static void RpolCredentialSubmissionRejectsFormSubstitution()
+    {
+        var gameUri = new Uri("https://rpol.net/game.php?gi=80170");
+        AssertFalse(
+            RpolCredentialSubmissionPolicy.TryValidateLoginForm(
+                gameUri,
+                "https://evil.example/login.cgi",
+                "POST",
+                "_self",
+                out _),
+            "credential submission must reject an untrusted form action");
+        AssertFalse(
+            RpolCredentialSubmissionPolicy.TryValidateLoginForm(
+                gameUri,
+                "https://rpol.net/login.cgi",
+                "GET",
+                "_self",
+                out _),
+            "credential submission must reject a non-POST form");
+        AssertFalse(
+            RpolCredentialSubmissionPolicy.TryValidateLoginForm(
+                gameUri,
+                "https://rpol.net/login.cgi",
+                "POST",
+                "_blank",
+                out _),
+            "credential submission must reject a cross-frame form target");
+    }
+
+    internal static void RpolCredentialSubmissionAcceptsExactForm()
+    {
+        AssertTrue(
+            RpolCredentialSubmissionPolicy.TryValidateLoginForm(
+                new Uri("https://rpol.net/game.php?gi=80170"),
+                "/login.cgi",
+                "post",
+                "",
+                out _),
+            "the exact RPOL login form should be accepted");
+    }
+
+    internal static void RpolCredentialSubmissionRejectsNavigationRace()
+    {
+        AssertFalse(
+            RpolCredentialSubmissionPolicy.CanSubmitAfterAwaitedOperation(
+                new Uri("https://rpol.net/game.php?gi=80170"),
+                new Uri("https://rpol.net/display.cgi?gi=80170"),
+                new Uri("https://rpol.net/display.cgi?gi=80170"),
+                "/login.cgi",
+                "POST",
+                "",
+                out _),
+            "a navigation race between fill and submit must abort credential submission");
+    }
+
+    internal static void RpolCredentialSubmissionRequestGuardValidatesDestinationMethodAndFrame()
+    {
+        var pageUri = new Uri("https://rpol.net/game.php?gi=80170");
+        var loginUri = new Uri("https://rpol.net/login.cgi");
+        AssertTrue(
+            RpolCredentialSubmissionPolicy.TryValidateCredentialRequest(pageUri, loginUri, "POST", true, out _),
+            "the exact main-frame RPOL POST must be accepted at transmission");
+        AssertFalse(
+            RpolCredentialSubmissionPolicy.TryValidateCredentialRequest(pageUri, loginUri, "POST", false, out _),
+            "a credential request from a child frame must be blocked");
+        AssertFalse(
+            RpolCredentialSubmissionPolicy.TryValidateCredentialRequest(pageUri, new Uri("https://evil.example/login.cgi"), "POST", true, out _),
+            "a credential request to an unrelated destination must be blocked");
+        AssertFalse(
+            RpolCredentialSubmissionPolicy.TryValidateCredentialRequest(pageUri, loginUri, "GET", true, out _),
+            "a non-POST credential request must be blocked");
+    }
+
+    internal static void RpolProtectedProbeRejectsResponseOrSettledUrlChanges()
+    {
+        var requested = RpolAuthUtility.ProtectedDiceRollerUri;
+        var protectedHtml = "<html><title>RPoL: Die Roller</title><body><h1>Die Roller</h1><pre>roll</pre></body></html>";
+        var responseRedirect = RpolAuthUtility.ClassifyProtectedResource(
+            requested,
+            new Uri("https://rpol.net/login.cgi"),
+            requested,
+            200,
+            "text/html",
+            protectedHtml);
+        var settledRedirect = RpolAuthUtility.ClassifyProtectedResource(
+            requested,
+            requested,
+            new Uri("https://rpol.net/display.cgi?gi=80170"),
+            200,
+            "text/html",
+            protectedHtml);
+        AssertEqual(RpolProtectedResourceKind.LoginRequired, responseRedirect.Kind, "response redirect must fail closed");
+        AssertEqual(RpolProtectedResourceKind.UntrustedNavigation, settledRedirect.Kind, "settled URL change must fail closed");
+    }
+
+    internal static void RpolPublisherEquivalentProofUsesSeparateProcessArchitecture()
+    {
+        var arguments = RpolPublisherEquivalentProcessProof.CreateChildArguments();
+        AssertTrue(arguments.Contains("--rpol-state-proof", StringComparer.Ordinal), "publisher proof must launch a dedicated proof process");
+        var cdpArguments = RpolPublisherEquivalentProcessProof.CreateChildArguments("http://127.0.0.1:54808");
+        AssertTrue(cdpArguments.Contains("--rpol-cdp-endpoint", StringComparer.Ordinal), "publisher proof must carry the authenticated browser CDP option");
+        AssertTrue(cdpArguments.Contains("http://127.0.0.1:54808", StringComparer.Ordinal), "publisher proof must carry only the loopback CDP endpoint");
+        AssertTrue(
+            RpolPublisherEquivalentProcessProof.IsSeparateProcessProof(
+                new RpolPublisherEquivalentProcessProofMetadata("publisher", "separate-process", true)),
+            "publisher proof metadata must identify a separate process");
+    }
+
+    internal static void RpolSeparateProcessNormalActiveLoaderProofRuns()
+    {
+        using var directory = TemporaryDirectory.Create();
+        var proofPath = Path.Combine(directory.Path, "normal-active-proof.txt");
+        var startInfo = new ProcessStartInfo("dotnet")
+        {
+            UseShellExecute = false,
+            CreateNoWindow = true,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true
+        };
+        startInfo.ArgumentList.Add(typeof(TestCases).Assembly.Location);
+        startInfo.ArgumentList.Add("--rpol-normal-active-loader-child");
+        startInfo.ArgumentList.Add(proofPath);
+        using var process = Process.Start(startInfo)
+            ?? throw new InvalidOperationException("The normal active-loader proof process could not be started.");
+        var error = process.StandardError.ReadToEnd();
+        process.WaitForExit();
+        AssertEqual(0, process.ExitCode, $"the separate process must prove the normal active loader: {error}");
+        AssertEqual("separate-process-prior", File.ReadAllText(proofPath), "the separate process normal active loader must fail closed to the prior verified state");
+    }
+
+    internal static void RpolCandidatePromotionPreservesActiveOnFailure()
+    {
+        var active = "active-state";
+        var candidate = "candidate-state";
+        var restored = active;
+        var writeCount = 0;
+        var promoted = RpolStorageStateTransaction.TryPromote(
+            candidate,
+            () => restored,
+            value =>
+            {
+                restored = value;
+                if (++writeCount == 1)
+                {
+                    throw new IOException("synthetic promotion failure");
+                }
+            },
+            out _);
+        AssertFalse(promoted, "a failed candidate promotion must report failure");
+        AssertEqual(active, restored, "a failed candidate promotion must preserve active state");
+    }
+
+    internal static void RpolVersionedPromotionPreservesVerifiedPointerAtEveryFaultBoundary()
+    {
+        var slots = new Dictionary<string, string> { ["A"] = "active-state" };
+        var pointer = new RpolActiveStatePointer(1, "A", null, true, HashText("active-state"));
+        foreach (var fault in new[] { "slot", "pointer", "readback" })
+        {
+            var localSlots = new Dictionary<string, string>(slots);
+            var localPointer = pointer;
+            var pointerReadCount = 0;
+            var threw = false;
+            var promoted = RpolVersionedStateTransaction.TryPromote(
+                "candidate-state",
+                () =>
+                {
+                    pointerReadCount++;
+                    if (fault == "readback" && pointerReadCount >= 2)
+                    {
+                        threw = true;
+                        return localPointer with { Version = localPointer.Version + 99 };
+                    }
+
+                    return localPointer;
+                },
+                slot => localSlots.TryGetValue(slot, out var value) ? value : null,
+                (slot, value) =>
+                {
+                    if (fault == "slot")
+                    {
+                        threw = true;
+                        throw new IOException("slot fault");
+                    }
+                    localSlots[slot] = value;
+                },
+                value =>
+                {
+                    if (fault == "pointer")
+                    {
+                        threw = true;
+                        throw new IOException("pointer fault");
+                    }
+                    localPointer = value;
+                },
+                out _,
+                out _);
+            AssertFalse(promoted, $"fault boundary '{fault}' must not report promotion success");
+            AssertTrue(threw, $"fault boundary '{fault}' must be exercised");
+            AssertEqual("A", localPointer.ActiveSlot, $"fault boundary '{fault}' must preserve the verified pointer");
+            AssertTrue(localPointer.Verified, $"fault boundary '{fault}' must preserve verified state");
+            AssertEqual("active-state", localSlots["A"], $"fault boundary '{fault}' must preserve active bytes");
+        }
+
+        static string HashText(string value) => Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(value)));
+    }
+
+    internal static void RpolVersionedPromotionRequiresPostPromotionVerification()
+    {
+        var slots = new Dictionary<string, string> { ["A"] = "active-state" };
+        var pointer = new RpolActiveStatePointer(1, "A", null, true, HashText("active-state"));
+        AssertTrue(
+            RpolVersionedStateTransaction.TryPromote(
+                "candidate-state",
+                () => pointer,
+                slot => slots.TryGetValue(slot, out var value) ? value : null,
+                (slot, value) => slots[slot] = value,
+                value => pointer = value,
+                out _,
+                out _),
+            "candidate slot and pending pointer should promote atomically");
+        AssertFalse(pointer.Verified, "promotion must remain pending until normal active-load proof succeeds");
+        AssertTrue(
+            RpolVersionedStateTransaction.TryReadVerifiedState(pointer, slot => slots[slot], out var state)
+                && string.Equals("active-state", state, StringComparison.Ordinal),
+            "the verified-state rollback reader must retain prior state while pending");
+        AssertTrue(
+            RpolVersionedStateTransaction.TryReadNormalActiveState(pointer, slot => slots[slot], out state)
+                && string.Equals("active-state", state, StringComparison.Ordinal),
+            "the normal publisher active loader must never expose an unverified pending candidate");
+        RpolVersionedStateTransaction.MarkVerified(pointer, () => pointer, value => pointer = value);
+        AssertTrue(pointer.Verified, "post-promotion proof must explicitly mark the active pointer verified");
+        AssertTrue(
+            RpolVersionedStateTransaction.TryReadVerifiedState(pointer, slot => slots[slot], out state)
+                && string.Equals("candidate-state", state, StringComparison.Ordinal),
+            "verified normal active load must read the promoted state");
+
+        static string HashText(string value) => Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(value)));
+    }
+
+    internal static void RpolCredentialStoreRollbackProofUsesNormalActiveLoader()
+    {
+        using var backendScope = RuntimeSecretStoreUtility.UseBackendForTests(new InMemoryWindowsCredentialStoreBackend());
+        RuntimeSecretStoreUtility.SaveRpolStorageState("prior-state");
+        var priorPointer = RuntimeSecretStoreUtility.CaptureRpolActiveStatePointer()
+            ?? throw new InvalidOperationException("the credential-store backend must expose the prior active pointer");
+        RuntimeSecretStoreUtility.SaveRpolStorageStateCandidate("candidate-state");
+        AssertTrue(RuntimeSecretStoreUtility.PromoteRpolStorageStateCandidate(out var promotionError), promotionError ?? "candidate promotion must succeed in the credential-store backend");
+        AssertTrue(
+            RuntimeSecretStoreUtility.TryGetRpolStorageState(out var pendingState, out _)
+            && string.Equals(pendingState, "prior-state", StringComparison.Ordinal),
+            "the normal credential-store loader must expose only the prior verified state while promotion is pending");
+        RuntimeSecretStoreUtility.RestoreRpolActiveStatePointer(priorPointer);
+        AssertTrue(
+            RuntimeSecretStoreUtility.VerifyRpolActiveStateRestored(priorPointer, "prior-state", out var reason),
+            reason);
+        AssertFalse(
+            RuntimeSecretStoreUtility.VerifyRpolActiveStateRestored(priorPointer with { Version = priorPointer.Version + 1 }, "prior-state", out _),
+            "rollback proof must fail when the read-back pointer does not match the captured prior pointer");
+    }
+
+    internal static void RpolCrossProcessLockExcludesConcurrentRun()
+    {
+        var lockName = $"PlayerAssistant.Tests.Rpol.{Guid.NewGuid():N}";
+        using var held = RpolCrossProcessLock.TryAcquire(lockName);
+        AssertTrue(held is not null, "the first RPOL operation should acquire its lock");
+        RpolCrossProcessLock? second;
+        using (ExecutionContext.SuppressFlow())
+        {
+            second = Task.Run(() => RpolCrossProcessLock.TryAcquire(lockName)).GetAwaiter().GetResult();
+        }
+        AssertTrue(second is null, "a concurrent RPOL operation should be excluded by the cross-process lock");
+    }
+
+    internal static void RpolPublisherRefreshCarriesLockOwnership()
+    {
+        var root = GetRepositoryRoot();
+        var authSource = File.ReadAllText(Path.Combine(root, "RpolAuthUtility.cs"));
+        var snapshotSource = File.ReadAllText(Path.Combine(root, "RpolSnapshotUtility.cs"));
+        var programSource = File.ReadAllText(Path.Combine(root, "Program.cs"));
+        AssertTrue(authSource.Contains("AcquireReentrant", StringComparison.Ordinal), "auth persistence must support an owned reentrant lease");
+        AssertTrue(authSource.Contains("PersistStorageStateAsync(storageStateJson, cancellationToken, lockOwner, cdpEndpoint)", StringComparison.Ordinal), "auth refresh must pass publisher lock ownership to persistence");
+        AssertTrue(snapshotSource.Contains("GetSnapshotResponseAsync(sourceUri, cancellationToken, lockOwner)", StringComparison.Ordinal), "publisher snapshot fetch must carry lock ownership into auth refresh");
+        AssertTrue(programSource.Contains("PublishAsync(deadline.OperationToken, operationLock)", StringComparison.Ordinal), "the production publisher must pass its existing lock into refresh");
+    }
+
+    internal static void RpolInitialAndStaleDiscoveryRefreshAuthUnderOwnedPublisherLock()
+    {
+        var persistedOwners = new List<RpolCrossProcessLock>();
+        var responseOwners = new List<RpolCrossProcessLock>();
+        var lockName = RpolCrossProcessLock.AuthAndPublisherName;
+        RpolAuthUtility.SnapshotResponseOverrideForTests = async (_, cancellationToken, owner) =>
+        {
+            responseOwners.Add(owner);
+            await RpolAuthUtility.PersistVerifiedStorageStateJsonAsync(
+                "test-auth-state",
+                cancellationToken,
+                owner);
+            return new RpolResponse(
+                System.Text.Encoding.UTF8.GetBytes("<html><body>Game Links</body></html>"),
+                "text/html; charset=utf-8");
+        };
+        RpolAuthUtility.PersistVerifiedStorageStateJsonOverrideForTests = (_, _, owner) =>
+        {
+            persistedOwners.Add(owner);
+            return Task.CompletedTask;
+        };
+
+        try
+        {
+            using var publisherOwner = RpolCrossProcessLock.Acquire(lockName, TimeSpan.FromSeconds(1));
+            using var separateOwner = RpolCrossProcessLock.TryAcquire(lockName);
+            AssertTrue(separateOwner is null, "a separate publisher owner must remain excluded while discovery owns the lock");
+
+            var initial = RpolSnapshotUtility.DiscoverSourceUrisAsync(
+                CancellationToken.None,
+                publisherOwner).GetAwaiter().GetResult();
+            var staleStartup = RpolSnapshotUtility.DiscoverSourceUrisAsync(
+                CancellationToken.None,
+                publisherOwner).GetAwaiter().GetResult();
+
+            AssertTrue(initial.SourceUris.Count > 0, "initial publisher discovery must return validated sources");
+            AssertTrue(staleStartup.SourceUris.Count > 0, "stale-startup discovery must return validated sources");
+            AssertEqual(2, responseOwners.Count, "both discovery paths must perform authenticated source discovery");
+            AssertEqual(2, persistedOwners.Count, "both discovery paths must persist refreshed auth");
+            AssertTrue(responseOwners.All(owner => ReferenceEquals(owner, publisherOwner)), "discovery must forward the existing publisher owner");
+            AssertTrue(persistedOwners.All(owner => ReferenceEquals(owner, publisherOwner)), "auth persistence must retain the existing publisher owner");
+        }
+        finally
+        {
+            RpolAuthUtility.SnapshotResponseOverrideForTests = null;
+            RpolAuthUtility.PersistVerifiedStorageStateJsonOverrideForTests = null;
+        }
+    }
+
+    internal static void RpolPublisherEntryPointsShareOneCrossProcessLock()
+    {
+        var entered = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var release = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var first = RpolSnapshotUtility.ExecuteWithPublisherLockAsync(
+            async _ =>
+            {
+                entered.SetResult(true);
+                await release.Task;
+            },
+            CancellationToken.None);
+        AssertTrue(entered.Task.Wait(TimeSpan.FromSeconds(2)), "the startup/direct publisher lock path must enter its protected operation");
+
+        var secondStarted = false;
+        var second = RpolSnapshotUtility.ExecuteWithPublisherLockAsync(
+            async _ =>
+            {
+                secondStarted = true;
+                await Task.CompletedTask;
+            },
+            CancellationToken.None);
+        Thread.Sleep(100);
+        AssertFalse(secondStarted, "a scheduled publisher must wait while a startup publisher owns the shared lock");
+        release.SetResult(true);
+        AssertTrue(Task.WhenAll(first, second).Wait(TimeSpan.FromSeconds(3)), "both publisher entry paths must complete after ownership is released");
+        AssertTrue(secondStarted, "the waiting publisher must eventually acquire the shared lock");
+    }
+
+    internal static void RpolResultRejectsStaleOrMismatchedRun()
+    {
+        var record = RpolPublishResultRecord.Create("run-a", DateTimeOffset.Parse("2026-08-22T10:00:00Z")) with
+        {
+            EndedAt = "2026-08-22T10:00:01Z",
+            TerminalStatus = "success",
+            TerminalStage = "published",
+            Discovered = 2,
+            Attempted = 1,
+            Published = 1,
+            Failed = 0,
+            TargetOutcomes = [new RpolTargetOutcome("target-a", "published", null)],
+            UploadCompleted = true,
+            CursorPersisted = true
+        };
+        AssertTrue(RpolPublishResultValidator.Validate(record, "run-a", DateTimeOffset.Parse("2026-08-22T09:59:59Z"), out _), "a fresh matching result should validate");
+        AssertFalse(RpolPublishResultValidator.Validate(record, "run-b", DateTimeOffset.Parse("2026-08-22T09:59:59Z"), out _), "a mismatched run ID must be rejected");
+        AssertFalse(RpolPublishResultValidator.Validate(record, "run-a", DateTimeOffset.Parse("2026-08-22T10:00:02Z"), out _), "a stale result must be rejected");
+    }
+
+    internal static void RpolResultRejectsUnknownDiscoveryAndCountMismatch()
+    {
+        var record = RpolPublishResultRecord.Create("run-a", DateTimeOffset.UtcNow) with
+        {
+            EndedAt = DateTimeOffset.UtcNow.ToString("O"),
+            TerminalStatus = "success",
+            TerminalStage = "published",
+            Discovered = -1,
+            Attempted = 1,
+            Published = 1,
+            Failed = 0,
+            TargetOutcomes = [new RpolTargetOutcome("target-a", "published", null)],
+            UploadCompleted = true,
+            CursorPersisted = true
+        };
+        AssertFalse(RpolPublishResultValidator.Validate(record, "run-a", DateTimeOffset.UtcNow.AddMinutes(-1), out _), "unknown discovery must not validate as a successful result");
+        AssertFalse(
+            RpolPublishResultValidator.Validate(
+                record with { Discovered = 2, Published = 0, Failed = 0 },
+                "run-a",
+                DateTimeOffset.UtcNow.AddMinutes(-1),
+                out _),
+            "published plus failed must equal attempted");
+    }
+
+    internal static void RpolResultAcceptsWrapperTimeoutFallback()
+    {
+        var started = DateTimeOffset.UtcNow.AddSeconds(-1);
+        var record = RpolPublishResultRecord.Create("run-timeout", started) with
+        {
+            EndedAt = DateTimeOffset.UtcNow.ToString("O"),
+            TerminalStatus = "timeout",
+            TerminalStage = "wrapper-timeout",
+            TimeoutCategory = "wrapper-deadline",
+            Discovered = -1,
+            Attempted = 0,
+            Published = 0,
+            Failed = 1,
+            TargetOutcomes = []
+        };
+        AssertTrue(
+            RpolPublishResultValidator.Validate(record, "run-timeout", started.AddMilliseconds(-1), out _),
+            "a wrapper timeout fallback must validate without claiming discovery or an attempted target");
+    }
+
+    internal static void RpolResultPathRejectsTraversalAndUnrelatedRuntimeOverwrite()
+    {
+        var runId = Guid.NewGuid().ToString("N");
+        var expected = Path.Combine(AppContext.BaseDirectory, "rpol-results", runId, "result.json");
+        AssertEqual(
+            Path.GetFullPath(expected),
+            PlayerAssistant.Program.GetRpolResultPathForTests([], runId),
+            "the default result path must be exactly below the executable results directory for this run");
+        AssertThrows<InvalidOperationException>(
+            () => PlayerAssistant.Program.GetRpolResultPathForTests(["--rpol-result-path", Path.Combine(AppContext.BaseDirectory, "runtime.json")], runId));
+        AssertThrows<InvalidOperationException>(
+            () => PlayerAssistant.Program.GetRpolResultPathForTests(["--rpol-result-path", Path.Combine(AppContext.BaseDirectory, "rpol-results", Guid.NewGuid().ToString("N"), "result.json")], runId));
+        AssertThrows<InvalidOperationException>(
+            () => PlayerAssistant.Program.GetRpolResultPathForTests(["--rpol-result-path", Path.Combine(AppContext.BaseDirectory, "rpol-results", runId, "..", "other.json")], runId));
+    }
+
+    internal static void RpolPublisherWrapperContainsAtomicSupervisionContract()
+    {
+        var source = File.ReadAllText(Path.Combine(GetRepositoryRoot(), "publish-rpol-snapshots.ps1"));
+        foreach (var required in new[] { "schema_version", "run_id", "started_at", "ended_at", "target_outcomes", "Write-AtomicJsonResult", "Kill($true)", "WaitForExit" })
+        {
+            AssertTrue(source.Contains(required, StringComparison.Ordinal), $"publisher wrapper must contain '{required}'");
+        }
+        AssertFalse(source.Contains("Start-Process", StringComparison.Ordinal) && source.Contains("-Wait", StringComparison.Ordinal), "publisher wrapper must not delegate deadline control to an unbounded synchronous wait");
+    }
+
+    internal static void RpolPublisherWrapperAllowsBoundedClockSkew()
+    {
+        var source = File.ReadAllText(Path.Combine(GetRepositoryRoot(), "publish-rpol-snapshots.ps1"));
+        AssertTrue(
+            source.Contains("$StartedAt.AddSeconds(-5)", StringComparison.Ordinal),
+            "publisher wrapper should tolerate a bounded five-second wall-clock adjustment because the exact per-run GUID already prevents stale-result reuse");
+        AssertTrue(
+            source.Contains("$resultEndedAt -lt $resultStartedAt", StringComparison.Ordinal),
+            "publisher wrapper must still reject results whose end precedes their start");
+    }
+
+    internal static void RpolProtectedProbeDoesNotRequireNetworkIdle()
+    {
+        var source = File.ReadAllText(Path.Combine(GetRepositoryRoot(), "RpolAuthUtility.cs"));
+        var methodStart = source.IndexOf("private static async Task<RpolProtectedResourceClassification> VerifyAuthenticatedContextAsync", StringComparison.Ordinal);
+        var methodEnd = source.IndexOf("private static RpolAuthException CreateProtectedProbeException", methodStart, StringComparison.Ordinal);
+        AssertTrue(methodStart >= 0 && methodEnd > methodStart, "protected authentication probe method should be present");
+        var methodSource = source[methodStart..methodEnd];
+        AssertFalse(
+            methodSource.Contains("LoadState.NetworkIdle", StringComparison.Ordinal),
+            "protected authentication must not require NetworkIdle because RPOL pages can retain background network activity");
+        AssertTrue(
+            methodSource.Contains("RpolNavigationStability.WaitForStableAsync", StringComparison.Ordinal),
+            "protected authentication must retain its bounded URL, document-identity, and final-DOM stability proof");
+    }
+
+    internal static void RpolProtectedProbeUsesJsonDomBoundary()
+    {
+        var source = File.ReadAllText(Path.Combine(GetRepositoryRoot(), "RpolAuthUtility.cs"));
+        AssertFalse(
+            source.Contains("EvaluateAsync<RpolNavigationDomSnapshot>", StringComparison.Ordinal),
+            "Playwright must not directly map an evaluated JavaScript object to the internal DOM snapshot record");
+        AssertTrue(
+            source.Contains("EvaluateAsync<string>", StringComparison.Ordinal)
+                && source.Contains("JsonSerializer.Deserialize<RpolNavigationDomSnapshot>", StringComparison.Ordinal),
+            "Playwright DOM evidence should cross the runtime boundary as JSON and then be deserialized explicitly");
+    }
+
+    internal static void RpolProtectedProbeRetriesTransientNavigationObservation()
+    {
+        AssertTrue(
+            RpolAuthUtility.IsTransientProtectedProbeObservationFailure(
+                "Unable to retrieve content because the page is navigating and changing the content."),
+            "the live Playwright navigation race should be treated as a transient protected-probe observation");
+        AssertTrue(
+            RpolAuthUtility.IsTransientProtectedProbeObservationFailure(
+                "Execution context was destroyed, most likely because of a navigation."),
+            "a destroyed execution context during navigation should be treated as transient");
+        AssertFalse(
+            RpolAuthUtility.IsTransientProtectedProbeObservationFailure(
+                "Target page, context or browser has been closed"),
+            "a closed browser must remain a terminal failure rather than being retried as navigation");
+    }
+
+    internal static void RpolLoginFormJsonPreservesFrameFlag()
+    {
+        var source = File.ReadAllText(Path.Combine(GetRepositoryRoot(), "RpolAuthUtility.cs"));
+        AssertTrue(
+            source.Contains("JSON.stringify({ Action: form.action, Method: form.method, Target: form.target, SameFrame: window.top === window.self })", StringComparison.Ordinal),
+            "login-form JSON must use the C# contract property names so a true same-frame observation cannot deserialize as false");
+    }
+
+    internal static void RpolProcessSupervisorKillsTimedOutProcessTree()
+    {
+        using var directory = TemporaryDirectory.Create();
+        var pidPath = Path.Combine(directory.Path, "child.pid");
+        var startInfo = new System.Diagnostics.ProcessStartInfo("dotnet")
+        {
+            UseShellExecute = false,
+            CreateNoWindow = true
+        };
+        startInfo.ArgumentList.Add(typeof(TestCases).Assembly.Location);
+        startInfo.ArgumentList.Add("--cancellation-child");
+        startInfo.ArgumentList.Add(pidPath);
+        var result = RpolProcessSupervisor.RunAsync(startInfo, TimeSpan.FromMilliseconds(500), CancellationToken.None).GetAwaiter().GetResult();
+        AssertTrue(result.TimedOut, "the process supervisor should report a timeout");
+        AssertTrue(result.ProcessTreeTerminated, "the process supervisor should terminate and wait for the process tree");
+    }
+
+    internal static void RpolPublisherValidateOnlyWrapperUsesValidResultsRoot()
+    {
+        var scriptPath = Path.Combine(GetRepositoryRoot(), "publish-rpol-snapshots.ps1");
+        var startInfo = new ProcessStartInfo("powershell.exe")
+        {
+            UseShellExecute = false,
+            CreateNoWindow = true,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true
+        };
+        foreach (var argument in new[] { "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", scriptPath, "-ValidateOnly" })
+        {
+            startInfo.ArgumentList.Add(argument);
+        }
+
+        using var process = Process.Start(startInfo)
+            ?? throw new InvalidOperationException("PowerShell could not start the RPOL validation wrapper.");
+        var output = process.StandardOutput.ReadToEnd();
+        var error = process.StandardError.ReadToEnd();
+        process.WaitForExit();
+        AssertEqual(0, process.ExitCode, $"the harmless RPOL wrapper validation path must succeed: {error}");
+        using var document = JsonDocument.Parse(output);
+        var resultsRoot = document.RootElement.GetProperty("results_root").GetString();
+        var expectedRoot = Path.Combine(GetRepositoryRoot(), "Release", "rpol-results");
+        AssertEqual(Path.GetFullPath(expectedRoot), Path.GetFullPath(resultsRoot ?? string.Empty), "the wrapper must report the current valid resultsRoot path");
+        AssertTrue(Directory.Exists(expectedRoot), "the wrapper validation path must create the valid resultsRoot directory");
+    }
+
+    internal static void RpolSecureStorageStateCleanupRunsOnFailure()
+    {
+        using var directory = TemporaryDirectory.Create();
+        var statePath = Path.Combine(directory.Path, "state.json");
+        AssertThrows<InvalidOperationException>(() =>
+            RpolSecureStorageStateFile.WriteAndRun(
+                statePath,
+                "synthetic-state",
+                _ => throw new InvalidOperationException("synthetic failure")));
+        AssertFalse(File.Exists(statePath), "temporary storage state must be removed on every exit path");
+    }
+
+    internal static void RpolCleanupContinuesAfterFailure()
+    {
+        var completed = new List<string>();
+        var errors = RpolCleanupUtility.DisposeIndependently(
+            ("first", () =>
+            {
+                completed.Add("first");
+                throw new IOException("synthetic cleanup failure");
+            }
+        ),
+            ("second", () => completed.Add("second")));
+
+        AssertEqual(1, errors.Count, "cleanup must report the failed resource");
+        AssertTrue(completed.SequenceEqual(["first", "second"]), "cleanup must continue disposing later resources after a failure");
+    }
+
+    internal static void RpolOperationDeadlineCarriesCleanupMargin()
+    {
+        using var deadline = RpolOperationDeadline.Create(
+            TimeSpan.FromMilliseconds(50),
+            TimeSpan.FromMilliseconds(200));
+        Thread.Sleep(90);
+        AssertTrue(deadline.OperationToken.IsCancellationRequested, "the operation deadline must expire first");
+        AssertFalse(deadline.CleanupToken.IsCancellationRequested, "cleanup must retain the shared deadline margin");
+        Thread.Sleep(180);
+        AssertTrue(deadline.CleanupToken.IsCancellationRequested, "cleanup must eventually expire at the run boundary");
+    }
+
+    internal static void RpolWebViewProfileLeaseIsExclusiveAndResets()
+    {
+        using var directory = TemporaryDirectory.Create();
+        var profilePath = Path.Combine(directory.Path, "profile");
+        using var first = RpolWebViewProfileLease.Acquire(profilePath);
+        AssertThrows<IOException>(() => RpolWebViewProfileLease.Acquire(profilePath));
+        first.Dispose();
+        AssertFalse(Directory.Exists(profilePath), "a completed WebView verification must reset its authenticated profile");
+    }
+
+    internal static void RpolWebViewProfileCleanupCanRetryAfterCancelledToken()
+    {
+        using var directory = TemporaryDirectory.Create();
+        var profilePath = Path.Combine(directory.Path, "profile");
+        using var lease = RpolWebViewProfileLease.Acquire(profilePath);
+        File.WriteAllText(Path.Combine(profilePath, "leftover.txt"), "synthetic");
+        using var cancelled = new CancellationTokenSource();
+        cancelled.Cancel();
+        AssertThrows<AggregateException>(() => lease.Dispose(cancelled.Token));
+        AssertTrue(Directory.Exists(profilePath), "failed cleanup must leave the profile available for a retry");
+        lease.Dispose(CancellationToken.None);
+        AssertFalse(Directory.Exists(profilePath), "a later independent cleanup token must be able to finish profile cleanup");
+    }
+
+    internal static void RpolWebViewLifetimeHonorsMaxWaitAndDisposal()
+    {
+        using var lifetime = RpolWebViewLifetime.Create(TimeSpan.FromMilliseconds(50), CancellationToken.None);
+        Thread.Sleep(100);
+        AssertFalse(lifetime.IsAlive, "WebView work must be cancelled at the requested maximum wait");
+        AssertThrows<OperationCanceledException>(lifetime.ThrowIfNotAlive);
+    }
+
+    internal static void RpolWebViewCredentialScriptRevalidatesBeforeSubmit()
+    {
+        var source = File.ReadAllText(Path.Combine(GetRepositoryRoot(), "RpolWebViewVerificationDialog.cs"));
+        var authSource = File.ReadAllText(Path.Combine(GetRepositoryRoot(), "RpolAuthUtility.cs"));
+        AssertTrue(source.Contains("RpolCredentialSubmissionScript.Source", StringComparison.Ordinal), "WebView must execute the shared atomic credential script");
+        foreach (var required in new[] { "window.top === window.self", "form.method", "form.action", "location.href", "dispatchEvent(new Event('change'", "HTMLFormElement.prototype.submit.call" })
+        {
+            AssertTrue(RpolCredentialSubmissionScript.Source.Contains(required, StringComparison.Ordinal), $"the shared credential script must contain '{required}'");
+        }
+        foreach (var required in new[] { "WebResourceRequested", "NewWindowRequested", "TryValidateCredentialRequest", "CreateWebResourceResponse" })
+        {
+            AssertTrue(source.Contains(required, StringComparison.Ordinal), $"the WebView credential guard must contain '{required}'");
+        }
+        AssertTrue(authSource.Contains("RouteAsync", StringComparison.Ordinal), "Playwright credential submission must install a request route guard");
+        AssertTrue(authSource.Contains("AbortAsync", StringComparison.Ordinal), "the Playwright route guard must fail closed by aborting invalid transmission");
+        AssertFalse(
+            RpolCredentialSubmissionScript.Source.Contains("setTimeout", StringComparison.Ordinal),
+            "credential submission must not schedule a native submit after the transmission guard is torn down");
+    }
+
+    internal static void RpolExternalProfileCleanupUsesIndependentDeadlineOwnership()
+    {
+        using var directory = TemporaryDirectory.Create();
+        var profile = Path.Combine(directory.Path, RpolExternalProfileCleanup.ProfilePrefix + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(profile);
+        File.WriteAllText(Path.Combine(profile, "leftover.txt"), "profile");
+        using var cancelled = new CancellationTokenSource();
+        cancelled.Cancel();
+        RpolExternalProfileCleanup.CleanupProfile(profile, cancelled.Token);
+        AssertFalse(Directory.Exists(profile), "profile deletion must use independent cleanup ownership instead of the canceled operation token");
+    }
+
+    internal static void RpolExternalProfileScavengerSkipsActiveLockedProfiles()
+    {
+        using var directory = TemporaryDirectory.Create();
+        var stale = Path.Combine(directory.Path, RpolExternalProfileCleanup.ProfilePrefix + "stale");
+        var active = Path.Combine(directory.Path, RpolExternalProfileCleanup.ProfilePrefix + "active");
+        Directory.CreateDirectory(stale);
+        Directory.CreateDirectory(active);
+        File.WriteAllText(Path.Combine(stale, "stale.txt"), "stale");
+        var activeLockPath = Path.Combine(active, ".rpol-profile.lock");
+        using var activeLock = new FileStream(activeLockPath, FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None);
+        var old = DateTime.UtcNow.AddHours(-2);
+        Directory.SetLastWriteTimeUtc(stale, old);
+        Directory.SetLastWriteTimeUtc(active, old);
+        var errors = RpolExternalProfileCleanup.ScavengeStaleProfiles(directory.Path, DateTimeOffset.UtcNow.AddHours(-1));
+        AssertEqual(0, errors.Count, "active profile locks must be skipped without producing cleanup errors");
+        AssertFalse(Directory.Exists(stale), "an unlocked stale verification profile must be scavenged");
+        AssertTrue(Directory.Exists(active), "an active locked verification profile must never be scavenged");
+    }
+
+    internal static void RpolUploadRecoveryFaultsRemainTruthful()
+    {
+        foreach (var faultStage in new[] { "intent-write", "upload", "uploaded-stage-write", "cursor-write", "recovery-cleanup" })
+        {
+            var events = new List<string>();
+            var uploadCalls = 0;
+            var result = RpolUploadRecoveryTransaction.ExecuteAsync(
+                () => FaultedStep("intent-write"),
+                () =>
+                {
+                    events.Add("upload");
+                    uploadCalls++;
+                    return FaultedStep("upload");
+                },
+                () => FaultedStep("uploaded-stage-write"),
+                () => FaultedStep("cursor-write"),
+                () => FaultedStep("recovery-cleanup"),
+                CancellationToken.None).GetAwaiter().GetResult();
+
+            AssertFalse(result.Succeeded, $"fault '{faultStage}' must not report success");
+            AssertEqual(faultStage, result.RecoveryStage, $"fault '{faultStage}' must identify its durable recovery stage");
+            AssertEqual(
+                faultStage is "uploaded-stage-write" or "cursor-write" or "recovery-cleanup",
+                result.UploadCompleted,
+                $"fault '{faultStage}' must preserve confirmed upload truthfully");
+            AssertEqual(faultStage is "recovery-cleanup", result.CursorPersisted, $"fault '{faultStage}' cursor truth must be preserved");
+            AssertEqual(faultStage is "intent-write" ? 0 : 1, uploadCalls, $"fault '{faultStage}' must not republish ambiguously");
+            AssertEqual(faultStage != "intent-write", events.Contains("upload"), $"fault '{faultStage}' must expose the upload boundary only when reached");
+
+            async Task FaultedStep(string stage)
+            {
+                events.Add(stage);
+                if (stage == faultStage)
+                {
+                    throw new IOException("synthetic recovery fault");
+                }
+
+                await Task.CompletedTask;
+            }
+        }
+    }
+
+    internal static void RpolPublishRecoveryReconcilesBeforeUpload()
+    {
+        var source = File.ReadAllText(Path.Combine(GetRepositoryRoot(), "RpolSnapshotUtility.cs"));
+        AssertTrue(source.Contains("return await RecoverPendingUploadAsync", StringComparison.Ordinal), "production PublishAsync must execute the tested recovery branch");
+        var uploadCalls = 0;
+        var sourceUrl = "https://rpol.net/game.php?gi=80170";
+        var payload = new RpolSnapshotPayload(1, "80170", sourceUrl, "2026-08-22T00:00:00Z", "text/html", "hash", Convert.ToBase64String("html"u8.ToArray()), "HMAC-SHA256", "signature");
+        var recovery = new RpolSnapshotCursorRecovery(
+            1,
+            sourceUrl,
+            payload.ContentSha256,
+            new RpolSnapshotPublisherState(1, [sourceUrl], 0),
+            "2026-08-22T00:00:00Z",
+            payload,
+            "intent");
+
+        var report = RpolSnapshotUtility.RecoverPendingUploadAsync(
+            recovery,
+            "synthetic-admin-key",
+            "synthetic-state-path",
+            "synthetic-recovery-path",
+            CancellationToken.None,
+            (_, _) => Task.FromResult(true),
+            (_, _, _) =>
+            {
+                uploadCalls++;
+                return Task.CompletedTask;
+            },
+            (_, _, _) => Task.CompletedTask,
+            (_, _, _) => Task.CompletedTask,
+            _ => { }).GetAwaiter().GetResult();
+        AssertTrue(report.UploadCompleted && report.CursorPersisted, "the production recovery branch must report recovered upload and cursor truth");
+        AssertEqual(0, uploadCalls, "a matching readback must suppress an ambiguous reupload");
+
+        RpolSnapshotUtility.RecoverPendingUploadAsync(
+            recovery,
+            "synthetic-admin-key",
+            "synthetic-state-path",
+            "synthetic-recovery-path",
+            CancellationToken.None,
+            (_, _) => Task.FromResult(false),
+            (_, _, _) =>
+            {
+                uploadCalls++;
+                return Task.CompletedTask;
+            },
+            (_, _, _) => Task.CompletedTask,
+            (_, _, _) => Task.CompletedTask,
+            _ => { }).GetAwaiter().GetResult();
+        AssertEqual(1, uploadCalls, "a missing or mismatched readback must perform exactly one owned reupload");
+    }
+
+    internal static void RpolSnapshotPublisherReportRequiresOneAttempt()
+    {
+        AssertTrue(
+            RpolSnapshotUtility.IsSuccessfulPublishReport(new RpolSnapshotPublishReport(16, 1, 0, [], UploadCompleted: true, CursorPersisted: true)),
+            "a one-target publisher invocation succeeds only when its target was published");
+        AssertFalse(
+            RpolSnapshotUtility.IsSuccessfulPublishReport(new RpolSnapshotPublishReport(16, 0, 0, [])),
+            "an invocation with no published target must not be reported as success");
+        AssertFalse(
+            RpolSnapshotUtility.IsSuccessfulPublishReport(new RpolSnapshotPublishReport(16, 1, 1, ["failure"])),
+            "publisher output with errors must not be reported as success");
+        AssertFalse(
+            RpolSnapshotUtility.IsSuccessfulPublishReport(new RpolSnapshotPublishReport(0, 0, 0, [])),
+            "unknown discovery must not be reported as successful publishing");
+    }
+
+    internal static void RpolProtectedProbeRejectsPublicCampaignContent()
+    {
+        var protectedUri = RpolAuthUtility.ProtectedDiceRollerUri;
+        var publicCampaignHtml = "<html><title>Scarlet Horizons</title><body>"
+            + "<div>Campaign content and Dice Roller</div>"
+            + "</body></html>";
+
+        var result = RpolAuthUtility.ClassifyProtectedResource(
+            protectedUri,
+            protectedUri,
+            200,
+            "text/html; charset=utf-8",
+            publicCampaignHtml);
+
+        AssertEqual(
+            RpolProtectedResourceKind.UnexpectedContent,
+            result.Kind,
+            "public campaign-shaped content must not prove protected Dice Roller access");
+    }
+
+    internal static void RpolProtectedProbeRejectsLoginRedirect()
+    {
+        var requestedUri = RpolAuthUtility.ProtectedDiceRollerUri;
+        var finalUri = new Uri("https://rpol.net/login.cgi?gi=80170");
+
+        var result = RpolAuthUtility.ClassifyProtectedResource(
+            requestedUri,
+            finalUri,
+            200,
+            "text/html; charset=utf-8",
+            "<html><body>login</body></html>");
+
+        AssertEqual(
+            RpolProtectedResourceKind.LoginRequired,
+            result.Kind,
+            "a protected probe redirected to login must be rejected");
+    }
+
+    internal static void RpolProtectedProbeRejectsUntrustedUris()
+    {
+        var protectedUri = RpolAuthUtility.ProtectedDiceRollerUri;
+        var invalidUris = new[]
+        {
+            new Uri("http://rpol.net/usermodules/diceroller.cgi?gi=80170"),
+            new Uri("https://www.rpol.net/usermodules/diceroller.cgi?gi=80170"),
+            new Uri("https://user:password@rpol.net/usermodules/diceroller.cgi?gi=80170"),
+            new Uri("https://rpol.net/usermodules/diceroller.cgi?gi=80171"),
+            new Uri("https://rpol.net/usermodules/diceroller.cgi?gi=80170&gi=80170"),
+            new Uri("https://rpol.net/usermodules/diceroller.cgi?gi=80170#fragment"),
+            new Uri("https://rpol.net/display.cgi?gi=80170")
+        };
+
+        foreach (var invalidUri in invalidUris)
+        {
+            var result = RpolAuthUtility.ClassifyProtectedResource(
+                invalidUri,
+                protectedUri,
+                200,
+                "text/html; charset=utf-8",
+                "<html><title>Die Roller</title><body>roll</body></html>");
+
+            AssertEqual(
+                RpolProtectedResourceKind.UntrustedNavigation,
+                result.Kind,
+                $"protected probe must reject '{invalidUri}'");
+        }
+    }
+
+    internal static void RpolProtectedProbeClassifiesCloudflareChallenge()
+    {
+        var protectedUri = RpolAuthUtility.ProtectedDiceRollerUri;
+        var result = RpolAuthUtility.ClassifyProtectedResource(
+            protectedUri,
+            protectedUri,
+            403,
+            "text/html; charset=utf-8",
+            "<html><title>Just a moment...</title><body>Verify you are human</body></html>");
+
+        AssertEqual(
+            RpolProtectedResourceKind.CloudflareChallenge,
+            result.Kind,
+            "Cloudflare challenge must remain distinct from login rejection");
+
+        var challengeWithSuccessfulTransport = RpolAuthUtility.ClassifyProtectedResource(
+            protectedUri,
+            protectedUri,
+            200,
+            "text/html; charset=utf-8",
+            "<html><title>Just a moment...</title><body>cf-challenge</body></html>");
+        AssertEqual(
+            RpolProtectedResourceKind.CloudflareChallenge,
+            challengeWithSuccessfulTransport.Kind,
+            "challenge content must not be accepted merely because transport returned 200");
+    }
+
+    internal static void RpolProtectedProbeHandlesDynamicLoginFixture()
+    {
+        var protectedUri = RpolAuthUtility.ProtectedDiceRollerUri;
+        var challengeHtml = "<html><body><form id='unrelated'></form>"
+            + "<form id='login'><input name='username'><input name='password'></form>"
+            + "<div class='cf-challenge'>Verify you are human</div></body></html>";
+        var challenge = RpolAuthUtility.ClassifyProtectedResource(
+            protectedUri, protectedUri, 200, "text/html; charset=utf-8", challengeHtml);
+        AssertEqual(
+            RpolProtectedResourceKind.CloudflareChallenge,
+            challenge.Kind,
+            "a challenge page with multiple dynamically replaced forms must remain a challenge");
+
+        var authenticatedHtml = "<html><head><title>Dice Roller - World of Issenda - Scarlet Horizons - RPoL</title></head>"
+            + "<body><form id='unrelated'></form>"
+            + "<form id='login'><input name='username'><input name='password'></form>"
+            + "<div>Step 1: Choose the Dice</div><div>Roll the Dice</div>"
+            + "<div>Only Players May Roll Dice - Example Screen Only</div></body></html>";
+        var authenticated = RpolAuthUtility.ClassifyProtectedResource(
+            protectedUri, protectedUri, 200, "text/html; charset=utf-8", authenticatedHtml);
+        AssertEqual(
+            RpolProtectedResourceKind.AuthenticatedProtectedContent,
+            authenticated.Kind,
+            "the protected probe must accept authenticated content even when the page shell retains a login form");
+    }
+
+    internal static void RpolProtectedProbeClassifiesMissingResponse()
+    {
+        var protectedUri = RpolAuthUtility.ProtectedDiceRollerUri;
+        var result = RpolAuthUtility.ClassifyProtectedResource(
+            protectedUri,
+            null,
+            null,
+            null,
+            null);
+
+        AssertEqual(
+            RpolProtectedResourceKind.RemoteFailure,
+            result.Kind,
+            "a missing protected-probe response must be a bounded remote failure");
+    }
+
+    internal static void RpolProtectedProbeAcceptsExactDiceRollerContract()
+    {
+        var protectedUri = RpolAuthUtility.ProtectedDiceRollerUri;
+        var protectedHtml = "<html><head><title>Dice Roller - World of Issenda - Scarlet Horizons - RPoL</title></head>"
+            + "<body><div>Step 1: Choose the Dice</div><div>Roll the Dice</div>"
+            + "<div>Kelpie rolled 1d20 using d20. [roll=1.2.3]</div></body></html>";
+
+        var result = RpolAuthUtility.ClassifyProtectedResource(
+            protectedUri,
+            protectedUri,
+            200,
+            "text/html; charset=utf-8",
+            protectedHtml);
+
+        AssertEqual(
+            RpolProtectedResourceKind.AuthenticatedProtectedContent,
+            result.Kind,
+            "the exact protected Dice Roller contract should prove authentication");
+    }
+
+    internal static void RpolProtectedProbeDoesNotTreatCookieShapeAsAuthentication()
+    {
+        AssertFalse(
+            RpolAuthUtility.IsStorageStateSemanticProof(
+                "{\"cookies\":[{\"name\":\"rpol_session\",\"value\":\"opaque\",\"domain\":\".rpol.net\",\"path\":\"/\"}],\"origins\":[]}"),
+            "an rpol.net cookie-shaped state is not semantic authentication proof");
+    }
+
+    internal static void RpolProtectedProbeRejectsDiceRollerLoginControls()
+    {
+        var protectedUri = RpolAuthUtility.ProtectedDiceRollerUri;
+        var loginHtml = "<html><title>Dice Roller - Scarlet Horizons</title><body>"
+            + "<div>Dice Roller campaign results</div>"
+            + "<form action='/login.cgi'><input name='username'><input name='password'></form>"
+            + "</body></html>";
+
+        var result = RpolAuthUtility.ClassifyProtectedResource(
+            protectedUri,
+            protectedUri,
+            200,
+            "text/html; charset=utf-8",
+            loginHtml);
+
+        AssertEqual(
+            RpolProtectedResourceKind.UnexpectedContent,
+            result.Kind,
+            "Dice Roller-looking content without the complete contract must not prove authentication");
+    }
+
+    internal static void RpolLoginClassifierHandlesHtmlAttributeVariants()
+    {
+        var variants = new[]
+        {
+            "<FORM ACTION=\"https://rpol.net/login.cgi\"><INPUT NAME=\"username\"><INPUT NAME=\"password\"></FORM>",
+            "<form action='/login.cgi' method='post'><input name='username'><input name='password' type='password'></form>",
+            "<form action=https://rpol.net/login.cgi><input name=username><input name=password></form>"
+        };
+
+        foreach (var html in variants)
+        {
+            AssertTrue(
+                RpolAuthUtility.LooksLikeLoginPage(html),
+                "every structurally equivalent RPOL login form must be classified as login-required");
+        }
+    }
+
+    internal static void RpolProtectedProbeRequiresUniqueDiceRollerStructure()
+    {
+        var requested = RpolAuthUtility.ProtectedDiceRollerUri;
+        var spoofedHtml = "<html><title>RPoL: Die Roller</title><body>"
+            + "<h1>Die Roller</h1><p>Kelpie rolled a d20.</p></body></html>";
+
+        var result = RpolAuthUtility.ClassifyProtectedResource(
+            requested,
+            requested,
+            200,
+            "text/html; charset=utf-8",
+            spoofedHtml);
+
+        AssertEqual(
+            RpolProtectedResourceKind.UnexpectedContent,
+            result.Kind,
+            "generic title, heading, and roll text must not prove the unique Dice Roller contract");
+    }
+
+    internal static void RpolProtectedProbeRequiresObservedRefererAndSettlement()
+    {
+        var evidence = new RpolProtectedProbeEvidence(
+            RpolAuthUtility.ProtectedDiceRollerUri,
+            RpolAuthUtility.ProtectedDiceRollerUri,
+            RpolAuthUtility.ProtectedDiceRollerUri,
+            200,
+            "text/html; charset=utf-8",
+            "<html><title>RPoL: Die Roller</title><body><h1>Die Roller</h1><pre>[roll=1] Kelpie rolled a d20.</pre></body></html>",
+            null,
+            true);
+
+        var result = RpolProtectedResourceUtility.ClassifyEvidence(evidence);
+
+        AssertEqual(
+            RpolProtectedResourceKind.UntrustedNavigation,
+            result.Kind,
+            "protected content without an observed main-frame Referer must fail closed");
+        AssertEqual(
+            RpolProtectedResourceKind.RemoteFailure,
+            RpolProtectedResourceUtility.ClassifyEvidence(evidence with
+            {
+                MainFrameReferer = AppSettingsUtility.GameForumUrl,
+                SettledAfterStabilization = false
+            }).Kind,
+            "protected content without a stabilization boundary must fail closed");
+    }
+
+    internal static void RpolCrossProcessLockIsReentrantAcrossAwaitAndThreads()
+    {
+        var lockName = $"PlayerAssistant.Tests.Rpol.Reentrant.{Guid.NewGuid():N}";
+        using var outer = RpolCrossProcessLock.Acquire(lockName, TimeSpan.FromSeconds(1));
+        var nested = Task.Run(async () =>
+        {
+            await Task.Yield();
+            using var inner = outer.AcquireReentrant(TimeSpan.FromMilliseconds(250));
+            await Task.Delay(10);
+            return true;
+        });
+
+        AssertTrue(nested.Wait(TimeSpan.FromSeconds(2)), "explicit nested ownership must not deadlock across an await");
+        AssertTrue(nested.Result, "explicit nested ownership must succeed");
+
+        using var contender = RpolCrossProcessLock.TryAcquire(lockName);
+        AssertTrue(contender is null, "the outer lease must retain ownership after a nested Task.Run lease is released");
+    }
+
+    internal static void RpolCrossProcessLockAsyncAcquireReleaseIsStandaloneAndConcurrent()
+    {
+        var lockName = $"PlayerAssistant.Tests.Rpol.Async.{Guid.NewGuid():N}";
+        using var first = RpolCrossProcessLock.Acquire(lockName, TimeSpan.FromSeconds(1));
+        var blocked = Task.Run(async () =>
+        {
+            using var second = await RpolCrossProcessLock.AcquireAsync(lockName, TimeSpan.FromSeconds(2));
+            return true;
+        });
+        Thread.Sleep(100);
+        AssertFalse(blocked.IsCompleted, "a concurrent process-style acquire must remain blocked while the first lease is held");
+        first.Dispose();
+        AssertTrue(blocked.Wait(TimeSpan.FromSeconds(3)), "the async acquire must complete after release");
+        AssertTrue(blocked.Result, "the async lease must be usable and releasable on its worker thread");
+
+        using var final = RpolCrossProcessLock.TryAcquire(lockName);
+        AssertTrue(final is not null, "released async ownership must not leak into a subsequent acquire");
+    }
+
     internal static void RpolAuthDetectsLoginPageFallback()
     {
         var loginHtml =
@@ -146,12 +1227,12 @@ internal static partial class TestCases
             "ordinary remote failures should not launch the verification browser");
     }
 
-    internal static void RpolAuthRejectsPersistentHeadedLoginPage()
+    internal static void RpolAuthAwaitsManualPersistentHeadedLoginPage()
     {
-        AssertFalse(RpolAuthUtility.ShouldRejectPersistentExternalLoginPage(0),
+        AssertFalse(RpolAuthUtility.ShouldAwaitManualExternalLogin(0),
             "the headed browser should submit configured credentials once");
-        AssertTrue(RpolAuthUtility.ShouldRejectPersistentExternalLoginPage(1),
-            "a login page that remains after submission must fail as rejected credentials");
+        AssertTrue(RpolAuthUtility.ShouldAwaitManualExternalLogin(1),
+            "a login page that remains after one guarded submission should wait for the user to correct or complete login manually");
     }
 
     internal static void RpolAuthClassifiesEmbeddedLoginFormByCampaignContent()
@@ -3071,9 +4152,9 @@ internal static partial class TestCases
             arguments.Contains(new Uri("C:/temp/rpol-notice.html").AbsoluteUri, StringComparer.Ordinal),
             "the verification browser should retain its local instructions page");
         AssertEqual(
-            AppSettingsUtility.GameForumUrl,
+            RpolProtectedResourceUtility.ProtectedDiceRollerUri.AbsoluteUri,
             arguments[^1],
-            "the RPOL page should be the active tab used to detect completed verification");
+            "the exact protected Dice Roller page should be the active tab used to detect completed verification");
     }
 
     internal static void RpolCredentialEntryUriRequiresExactTrustedOriginAndPath()
@@ -3144,13 +4225,33 @@ internal static partial class TestCases
     {
         var source = File.ReadAllText(Path.Combine(GetRepositoryRoot(), "RpolAuthUtility.cs"));
         var connectIndex = source.IndexOf("browser = await ConnectToExternalBrowserAsync(", StringComparison.Ordinal);
-        var inspectIndex = source.IndexOf("await CompleteExternalBrowserVerificationAsync(", StringComparison.Ordinal);
+        var inspectIndex = source.IndexOf("await WaitForExternalBrowserAuthenticationAsync(", StringComparison.Ordinal);
+        var probeIndex = source.IndexOf("await VerifyAuthenticatedContextAsync(context, cancellationToken, page);", inspectIndex, StringComparison.Ordinal);
+        var storageSaveIndex = source.IndexOf("await SaveStorageStateSecretAsync(", inspectIndex, StringComparison.Ordinal);
 
         AssertTrue(connectIndex >= 0, "external RPOL verification must connect over CDP");
         AssertTrue(inspectIndex > connectIndex,
             "external RPOL verification must connect over CDP before inspecting the RPOL page state");
-        AssertFalse(source.Contains("await WaitForManualBrowserVerificationAsync(", StringComparison.Ordinal),
-            "the local instructions tab title must not block CDP connection to an already-authenticated RPOL tab");
+        AssertTrue(probeIndex > inspectIndex,
+            "external verification must prove protected access after CDP page inspection");
+        AssertTrue(storageSaveIndex > inspectIndex,
+            "RPOL storage state must not be captured before the external protected probe completes");
+        AssertFalse(source.Contains("SubmitExternalBrowserLoginAsync(", StringComparison.Ordinal),
+            "the headed external-browser path must not submit credentials against a dynamic login DOM");
+        AssertTrue(source.Contains("IPage? suppliedPage = null", StringComparison.Ordinal),
+            "the protected probe must be able to reuse the visible manual-verification page");
+        AssertTrue(source.Contains("var ownsPage = suppliedPage is null", StringComparison.Ordinal),
+            "owned protected-probe pages must still be cleaned up independently");
+        AssertTrue(source.Contains("IsRetryableExternalAuthenticationFailure", StringComparison.Ordinal),
+            "manual verification must retry only classified transient protected-probe failures");
+        AssertTrue(source.Contains("Path.GetFileName(browserPath)", StringComparison.Ordinal),
+            "external-browser cleanup must target the executable that was actually launched");
+
+        var webViewSource = File.ReadAllText(Path.Combine(GetRepositoryRoot(), "RpolWebViewVerificationDialog.cs"));
+        AssertTrue(webViewSource.Contains("_webView.CoreWebView2.Source", StringComparison.Ordinal),
+            "WebView verification must read the live CoreWebView2 source");
+        AssertFalse(webViewSource.Contains("_webView.Source", StringComparison.Ordinal),
+            "WebView verification must not use the stale WinForms wrapper source property");
     }
 
     internal static void RpolWebViewStateReplaysInHeadedBrowser()
@@ -3343,7 +4444,7 @@ internal static partial class TestCases
     {
         var source = File.ReadAllText(Path.Combine(GetRepositoryRoot(), "RpolSnapshotUtility.cs"));
         var discoveryStart = source.IndexOf(
-            "private static async Task<RpolSnapshotDiscovery> DiscoverSourceUrisAsync",
+            "internal static async Task<RpolSnapshotDiscovery> DiscoverSourceUrisAsync",
             StringComparison.Ordinal);
         var discoveryEnd = source.IndexOf("private static", discoveryStart + 1, StringComparison.Ordinal);
         var discoverySource = source[discoveryStart..discoveryEnd];

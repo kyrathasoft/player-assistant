@@ -46,6 +46,17 @@ try {
         (int)$database->query('PRAGMA user_version')->fetchColumn() === DatabaseMigrationService::LATEST_VERSION,
         'A migrated broker database was not accepted at the expected version.');
 
+    $database->exec('DROP INDEX ix_level_up_notification_receipts_account_time');
+    try {
+        new BrokerService($config, new RpolClient($config['rpol']));
+        throw new RuntimeException('A version-5 database missing the receipt index was accepted.');
+    } catch (RuntimeException $exception) {
+        schemaGuardAssert(
+            str_contains($exception->getMessage(), 'ix_level_up_notification_receipts_account_time')
+                && str_contains($exception->getMessage(), 'run migrate-broker.php'),
+            'The incomplete level-up receipt schema did not fail closed with an actionable error.');
+    }
+
     echo "Broker schema guard tests passed.\n";
 } finally {
     @unlink($databasePath);

@@ -8,10 +8,10 @@ namespace PlayerAssistant
     internal static class LocalSettingsUtility
     {
         private const string LegacyEncryptedFormat = "dpapi-current-user";
+        private const string CurrentEncryptedFormat = "dpapi-current-user-v2";
         private const string V1EncryptedFormat = "app-protected-v1";
         private const string V2EncryptedFormat = "app-protected-v2";
-        private const string EncryptedFormat = "app-protected-v3";
-        private const string DpapiEncryptedFormat = "dpapi-current-user-v2";
+        private const string LegacyScopedEncryptedFormat = "app-protected-v3";
         private const string FormatPropertyName = "format";
         private const string PayloadPropertyName = "payload";
         private const string KeyScopePropertyName = "key_scope";
@@ -83,7 +83,7 @@ namespace PlayerAssistant
                 {
                     var decryptedSettings = DecryptSettings(envelope, resolvedDecryptionScopePath);
                     if (migrateToCurrentFormat
-                        && (!string.Equals(envelope.Format, DpapiEncryptedFormat, StringComparison.Ordinal)
+                        && (!string.Equals(envelope.Format, CurrentEncryptedFormat, StringComparison.Ordinal)
                             || envelope.SchemaVersion != CurrentSchemaVersion))
                     {
                         SaveEncryptedSettings(settingsPath, decryptedSettings);
@@ -304,8 +304,8 @@ namespace PlayerAssistant
             {
                 return envelope.Format switch
                 {
-                    DpapiEncryptedFormat => DecryptDpapiPayload(envelope.Payload, settingsPath),
-                    EncryptedFormat => DecryptAuthenticatedAesCbcPayload(envelope.Payload, settingsPath, EncryptedFormat),
+                    CurrentEncryptedFormat => DecryptDpapiPayload(envelope.Payload),
+                    LegacyScopedEncryptedFormat => DecryptAuthenticatedAesCbcPayload(envelope.Payload, settingsPath, LegacyScopedEncryptedFormat),
                     V2EncryptedFormat => DecryptAuthenticatedAesCbcPayload(envelope.Payload, settingsPath, V2EncryptedFormat),
                     V1EncryptedFormat => DecryptAesCbcPayload(envelope.Payload),
                     LegacyEncryptedFormat => DecryptDpapiPayload(envelope.Payload, settingsPath: null),
@@ -416,29 +416,25 @@ namespace PlayerAssistant
 
         private static EncryptedSettingsEnvelope CreateEncryptedEnvelope(byte[] plaintextBytes, string settingsPath)
         {
-            var entropy = GetDpapiEntropy(settingsPath);
+            var protectedBytes = ProtectedData.Protect(
+                plaintextBytes,
+                optionalEntropy: null,
+                DataProtectionScope.CurrentUser);
             try
             {
-                var protectedBytes = ProtectedData.Protect(
-                    plaintextBytes,
-                    entropy,
-                    DataProtectionScope.CurrentUser);
-                try
-                {
-                    return new EncryptedSettingsEnvelope(
-                        CurrentSchemaVersion,
-                        DpapiEncryptedFormat,
-                        Convert.ToBase64String(protectedBytes),
-                        GetKeyScope(settingsPath));
-                }
-                finally
-                {
-                    ZeroMemory(protectedBytes);
-                }
+                return new EncryptedSettingsEnvelope(
+                    CurrentSchemaVersion,
+                    CurrentEncryptedFormat,
+                    Convert.ToBase64String(protectedBytes),
+                    new KeyScope(
+                        MachineBound: false,
+                        UserBound: true,
+                        InstallPathBound: false,
+                        ScopeHash: string.Empty));
             }
             finally
             {
-                ZeroMemory(entropy);
+                ZeroMemory(protectedBytes);
             }
         }
 
@@ -508,10 +504,15 @@ namespace PlayerAssistant
                 return new KeySet(V2EncryptionKey, V2AuthenticationKey);
             }
 
-            var scope = GetDerivationScope(settingsPath);
-            return new KeySet(
-                SHA256.HashData(Encoding.UTF8.GetBytes($"{EncryptionKeySeed}.v3.encryption.{scope}")),
-                SHA256.HashData(Encoding.UTF8.GetBytes($"{EncryptionKeySeed}.v3.hmac.{scope}")));
+            if (string.Equals(format, LegacyScopedEncryptedFormat, StringComparison.Ordinal))
+            {
+                var scope = GetDerivationScope(settingsPath);
+                return new KeySet(
+                    SHA256.HashData(Encoding.UTF8.GetBytes($"{EncryptionKeySeed}.v3.encryption.{scope}")),
+                    SHA256.HashData(Encoding.UTF8.GetBytes($"{EncryptionKeySeed}.v3.hmac.{scope}")));
+            }
+
+            throw new InvalidOperationException($"Unsupported settings encryption format '{format}'.");
         }
 
         private static byte[] GetDpapiEntropy(string settingsPath)
@@ -564,8 +565,8 @@ namespace PlayerAssistant
             }
 
             var format = formatElement.GetString() ?? string.Empty;
-            if (!string.Equals(format, EncryptedFormat, StringComparison.Ordinal)
-                && !string.Equals(format, DpapiEncryptedFormat, StringComparison.Ordinal)
+            if (!string.Equals(format, CurrentEncryptedFormat, StringComparison.Ordinal)
+                && !string.Equals(format, LegacyScopedEncryptedFormat, StringComparison.Ordinal)
                 && !string.Equals(format, V2EncryptedFormat, StringComparison.Ordinal)
                 && !string.Equals(format, V1EncryptedFormat, StringComparison.Ordinal)
                 && !string.Equals(format, LegacyEncryptedFormat, StringComparison.Ordinal))

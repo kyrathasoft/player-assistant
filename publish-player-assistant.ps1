@@ -91,10 +91,7 @@ $RequiredSettingsUrlKeys = @(
 $RequiredLocalSettingsUrlKeys = @(
     'XP Tracking'
 )
-$RequiredLocalSettingsCredentialKeys = @(
-    'RPOL user name',
-    'RPOL password'
-)
+
 $ProcessLockDiagnosticsScriptPath = Join-Path $PSScriptRoot 'diagnose-player-assistant-locks.ps1'
 $RuntimeSidecarVerificationScriptPath = Join-Path $PSScriptRoot 'verify-runtime-sidecars.ps1'
 
@@ -692,6 +689,8 @@ function Write-AppEncryptedLocalSettings {
     Assert-RequiredFile -Path $SourcePath -Description $SettingsLocalFileName
 
     $settings = ConvertFrom-LocalSettingsFile -SettingsPath $SourcePath
+    $settings.PSObject.Properties.Remove('RPOL user name')
+    $settings.PSObject.Properties.Remove('RPOL password')
     $plaintextJson = $settings | ConvertTo-Json -Depth 10
     $plaintextBytes = [System.Text.Encoding]::UTF8.GetBytes($plaintextJson)
     $entropy = Get-SettingsDpapiEntropy -SettingsPath $DestinationPath
@@ -731,7 +730,7 @@ function Write-AppEncryptedLocalSettings {
     }
 
     $aes = [System.Security.Cryptography.Aes]::Create()
-    $aes.Key = Get-SettingsV3EncryptionKey -SettingsPath $DestinationPath
+    $aes.Key = Get-SettingsV2EncryptionKey
     $aes.IV = $iv
     $aes.Mode = [System.Security.Cryptography.CipherMode]::CBC
     $aes.Padding = [System.Security.Cryptography.PaddingMode]::PKCS7
@@ -751,7 +750,7 @@ function Write-AppEncryptedLocalSettings {
     $protectedContent = [byte[]]::new($iv.Length + $ciphertext.Length)
     [System.Buffer]::BlockCopy($iv, 0, $protectedContent, 0, $iv.Length)
     [System.Buffer]::BlockCopy($ciphertext, 0, $protectedContent, $iv.Length, $ciphertext.Length)
-    $hmac = [System.Security.Cryptography.HMACSHA256]::new((Get-SettingsV3AuthenticationKey -SettingsPath $DestinationPath))
+    $hmac = [System.Security.Cryptography.HMACSHA256]::new((Get-SettingsV2AuthenticationKey))
     try {
         $tag = $hmac.ComputeHash($protectedContent)
     }
@@ -765,9 +764,8 @@ function Write-AppEncryptedLocalSettings {
 
     $envelope = [ordered]@{
         schema_version = $SettingsSchemaVersion
-        format = $SettingsFormat
+        format = $PreviousSettingsFormat
         payload = [Convert]::ToBase64String($payloadBytes)
-        key_scope = Get-SettingsKeyScope -SettingsPath $DestinationPath
     }
 
     [System.IO.File]::WriteAllText(
@@ -809,10 +807,9 @@ function Assert-EncryptedLocalSettings {
         }
     }
 
-    foreach ($settingsKey in $RequiredLocalSettingsCredentialKeys) {
-        $publishedProperty = $publishedSettings.PSObject.Properties[$settingsKey]
-        if ($null -eq $publishedProperty -or [string]::IsNullOrWhiteSpace([string]$publishedProperty.Value)) {
-            throw "Published $SettingsLocalFileName is missing required RPOL credential setting '$settingsKey'."
+    foreach ($credentialKey in @('RPOL user name', 'RPOL password')) {
+        if ($null -ne $publishedSettings.PSObject.Properties[$credentialKey]) {
+            throw "Published $SettingsLocalFileName must not contain RPOL credential setting '$credentialKey'; provision credentials through Windows Credential Manager."
         }
     }
 

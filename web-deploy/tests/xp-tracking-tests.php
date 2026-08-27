@@ -186,7 +186,7 @@ try {
         '| Dorn | Fighter | 5 | 98,765 |',
         '| Max | Theurge | **3** | 6,100 |',
         '| Borca | Fighter | 1 | 304 |',
-        '| Arilia | Feycaster | 1 | 200 |',
+        '| Arilia | Feycaster | 1 | 1,525 |',
     ]);
     $characterMarkdown = implode("\n", [
         '| Name | Class | Level | Token | HP |',
@@ -197,8 +197,17 @@ try {
     ]);
     $progressionIndexMarkdown = implode("\n", [
         '- [[Fighter]]',
+        '- [[Feycaster]]',
         '- [[Illusionist]]',
         '- [[Mystic Theurge]]',
+    ]);
+    $feycasterProgressionMarkdown = implode("\n", [
+        '|XP|Level|Spells Known|Max Spell Level|',
+        '|---|---|---|---|',
+        '|0|1|-|-|',
+        '|1,500|2|1|1|',
+        '|3,000|3|2|1|',
+        '|6,000|4|3|2|',
     ]);
     $fighterProgressionMarkdown = implode("\n", [
         '| 1 | 0 |',
@@ -229,11 +238,15 @@ try {
     ]);
     $progressionFixture = static function (string $url) use (
         $progressionIndexMarkdown,
+        $feycasterProgressionMarkdown,
         $fighterProgressionMarkdown,
         $illusionistProgressionMarkdown,
         $theurgeProgressionMarkdown): ?string {
         if (str_contains($url, 'Class+Level+Progression')) {
             return $progressionIndexMarkdown;
+        }
+        if (str_contains($url, '/Classes/Feycaster')) {
+            return $feycasterProgressionMarkdown;
         }
         if (str_contains($url, '/Classes/Fighter')) {
             return $fighterProgressionMarkdown;
@@ -905,6 +918,11 @@ try {
     xpAssert($player['character']['hit_points'] === 13, 'The player received the wrong hit-point total.');
     xpAssert($player['character']['xp_total'] === 12345, 'The current player XP total was incorrect.');
     xpAssert($player['character']['xp_to_next_level'] === 7655, 'The player received the wrong TNL value.');
+    xpAssert(
+        $player['character']['level_up_target_level'] === 5
+            && $player['character']['level_up_target_xp'] === 20000
+            && $player['character']['level_up_attained'] === false,
+        'The player level-up determination did not match the published class threshold.');
     xpAssert($player['date_label'] === 'As of 7.23.2026', 'The latest XP date was not selected.');
     xpAssert(
         count($player['authorized_characters']) === 1
@@ -924,6 +942,11 @@ try {
     xpAssert($maximilian['character']['hit_points'] === 5, 'Maximilian received the wrong hit-point total.');
     xpAssert($maximilian['character']['xp_total'] === 6100, 'Maximilian received the wrong current XP total.');
     xpAssert($maximilian['character']['xp_to_next_level'] === 4900, 'Maximilian received the wrong TNL value.');
+    xpAssert(
+        $maximilian['character']['level_up_target_level'] === 4
+            && $maximilian['character']['level_up_target_xp'] === 11000
+            && $maximilian['character']['level_up_attained'] === false,
+        'The Theurge level-up determination did not use the published progression threshold.');
     xpAssert(!isset($maximilian['characters']), 'Maximilian received the party XP array.');
 
     $dm = $service->getForAccount([
@@ -932,6 +955,112 @@ try {
     ]);
     xpAssert($dm['scope'] === 'party', 'The Dungeon Master did not receive party-scoped XP.');
     xpAssert(count($dm['characters']) === 5, 'The Dungeon Master did not receive every current XP row.');
+    $dorn = array_values(array_filter(
+        $dm['characters'],
+        static fn(array $character): bool => $character['character_name'] === 'Dorn'));
+    xpAssert(
+        count($dorn) === 1
+            && $dorn[0]['level_up_target_level'] === 6
+            && $dorn[0]['level_up_target_xp'] === 32000
+            && $dorn[0]['level_up_attained'] === true,
+        'The attained level-up determination did not match the published Fighter threshold.');
+    $receiptDatabase = xpDatabase($databasePath);
+    $accountInsert = $receiptDatabase->prepare(
+        'INSERT INTO character_accounts (
+            id, normalized_name, display_name, character_key, role, enabled,
+            password_hash, created_at, password_changed_at, session_version
+         ) VALUES (
+            :id, :normalized_name, :display_name, :character_key, :role, 1,
+            :password_hash, :created_at, :password_changed_at, 1
+         )');
+    foreach ([
+        ['dddddddddddddddddddddddddddddddd', 'dorn', 'Dorn', 'player'],
+        ['eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee', 'jelb', 'Jelb', 'player'],
+        ['ffffffffffffffffffffffffffffffff', 'dorn-party', 'Dorn Party', 'player'],
+        ['aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', 'dungeon-master', 'Dungeon Master', 'dm'],
+    ] as [$accountId, $characterKey, $displayName, $role]) {
+        $accountInsert->execute([
+            ':id' => $accountId,
+            ':normalized_name' => $characterKey,
+            ':display_name' => $displayName,
+            ':character_key' => $characterKey,
+            ':role' => $role,
+            ':password_hash' => 'test-only-hash',
+            ':created_at' => time(),
+            ':password_changed_at' => time(),
+        ]);
+    }
+    $claimService = new XpTrackingService(
+        xpDatabase($databasePath),
+        array_replace(xpConfiguration(), [
+            'awards_root' => $awardsRoot,
+            'awards_directory' => $awardsDirectory,
+            'award_groups' => [
+                'dorn' => ['dorn'],
+                'jelb' => ['jelb'],
+                'dorn-party' => ['dorn'],
+            ],
+        ]),
+        static fn(string $url): string => str_contains($url, 'Player+Characters+Listing')
+            ? $characterMarkdown
+            : ($progressionFixture($url) ?? $markdown));
+    $dornAccount = [
+        'id' => 'dddddddddddddddddddddddddddddddd',
+        'role' => 'player',
+        'character_key' => 'dorn',
+    ];
+    $firstDornNotifications = $claimService->claimLevelUpNotificationsForAccount($dornAccount);
+    xpAssert(
+        $firstDornNotifications['schema_version'] === 1
+            && count($firstDornNotifications['notifications']) === 1
+            && $firstDornNotifications['notifications'][0]['character_name'] === 'Dorn'
+            && $firstDornNotifications['notifications'][0]['target_level'] === 6,
+        'The first login did not claim Dorn\'s attained level-up notification.');
+    $replayedDornNotifications = $claimService->claimLevelUpNotificationsForAccount($dornAccount);
+    xpAssert(
+        $replayedDornNotifications['notifications'] === $firstDornNotifications['notifications'],
+        'A response lost before browser display permanently consumed the level-up notification.');
+    $acknowledgedDornNotifications = $claimService->acknowledgeLevelUpNotificationsForAccount(
+        $dornAccount,
+        ['notifications' => [[
+            'character_key' => 'dorn',
+            'target_level' => 6,
+        ]]]);
+    xpAssert(
+        $acknowledgedDornNotifications['schema_version'] === 1
+            && $acknowledgedDornNotifications['acknowledged_count'] === 1,
+        'The displayed level-up notification was not acknowledged.');
+    $thirdDornNotifications = $claimService->claimLevelUpNotificationsForAccount($dornAccount);
+    xpAssert(
+        $thirdDornNotifications['notifications'] === [],
+        'An acknowledged level-up notification was returned on a later login.');
+    $independentPartyClaim = $claimService->claimLevelUpNotificationsForAccount([
+        'id' => 'ffffffffffffffffffffffffffffffff',
+        'role' => 'player',
+        'character_key' => 'dorn-party',
+    ]);
+    xpAssert(
+        count($independentPartyClaim['notifications']) === 1
+            && $independentPartyClaim['notifications'][0]['character_key'] === 'dorn',
+        'An authorized account did not receive its independent notification for the shared progression.');
+    $dungeonMasterClaim = $claimService->claimLevelUpNotificationsForAccount([
+        'id' => 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+        'role' => 'dm',
+        'character_key' => 'dungeon-master',
+    ]);
+    xpAssert(
+        count(array_filter(
+            $dungeonMasterClaim['notifications'],
+            static fn(array $notification): bool => $notification['character_key'] === 'dorn')) === 1,
+        'The Dungeon Master did not receive the attained party level-up notification.');
+    $jelbNotifications = $claimService->claimLevelUpNotificationsForAccount([
+        'id' => 'eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee',
+        'role' => 'player',
+        'character_key' => 'jelb',
+    ]);
+    xpAssert(
+        $jelbNotifications['notifications'] === [],
+        'A character that did not level up received a notification.');
     $borca = array_values(array_filter(
         $dm['characters'],
         static fn(array $character): bool => $character['character_name'] === 'Borca'));
@@ -942,9 +1071,12 @@ try {
         $dm['characters'],
         static fn(array $character): bool => $character['character_name'] === 'Arilia'));
     xpAssert(
-        count($arilia) === 1 && $arilia[0]['xp_to_next_level'] === null,
-        'An unavailable class progression prevented the live XP snapshot from loading.');
-    xpAssert($fetchCount === 18, 'Each XP request did not attempt the live source before using cached data.');
+        count($arilia) === 1
+            && $arilia[0]['xp_total'] === 1525
+            && $arilia[0]['level'] === 2
+            && $arilia[0]['xp_to_next_level'] === 1475,
+        'Arilia did not receive TNL 1,475 from the Feycaster XP/Level progression table.');
+    xpAssert($fetchCount === 21, 'Each XP request did not attempt the live source before using cached data.');
 
     $olderMarkdown = implode("\n", [
         'As of 7.20.2026',
@@ -1012,6 +1144,28 @@ try {
             && $enrichmentFallback['character']['hit_points'] === 13
             && $enrichmentFallback['character']['xp_to_next_level'] === 7655,
         'Optional enrichment failure discarded last-known-good HP or TNL values.');
+
+    $advancedLevelWithoutEnrichmentMarkdown = str_replace(
+        '| [[Jelb]] | Illusionist | 4 | 12,345 |',
+        '| [[Jelb]] | Illusionist | 5 | 12,345 |',
+        $markdown);
+    $advancedLevelWithoutEnrichmentService = new XpTrackingService(
+        xpDatabase($databasePath),
+        xpConfiguration(),
+        static fn(string $url): string => str_ends_with($url, '/XP')
+            ? $advancedLevelWithoutEnrichmentMarkdown
+            : throw new RuntimeException('simulated optional enrichment failure'));
+    $advancedLevelWithoutEnrichment = $advancedLevelWithoutEnrichmentService->getForAccount([
+        'role' => 'player',
+        'character_key' => 'jelb',
+    ]);
+    xpAssert(
+        $advancedLevelWithoutEnrichment['stale'] === false
+            && $advancedLevelWithoutEnrichment['character']['xp_total'] === 12345
+            && $advancedLevelWithoutEnrichment['character']['level_up_target_level'] === null
+            && $advancedLevelWithoutEnrichment['character']['level_up_target_xp'] === null
+            && $advancedLevelWithoutEnrichment['character']['level_up_attained'] === null,
+        'A changed published level reused a stale cached level-up determination.');
 
     expectXpError(
         fn() => $service->getForAccount(['role' => 'player', 'character_key' => 'missing']),

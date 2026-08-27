@@ -27,7 +27,7 @@ const dungeonMasterAccount = Object.freeze({
 });
 const formerPlayerAccount = Object.freeze({
     id: 'cccccccccccccccccccccccccccccccc',
-    character_name: 'Urvan',
+    character_name: 'CI Hero',
     character_key: 'urvan',
     role: 'player'
 });
@@ -80,6 +80,11 @@ const magicItemFixture = Object.freeze({
     }))
 });
 let xpAwardsProjected = false;
+const levelUpNotificationClaims = new Map();
+const levelUpNotificationAcknowledgements = new Map();
+let levelUpClaimFailuresRemaining = 0;
+let levelUpAcknowledgementAttempts = 0;
+let levelUpAcknowledgementResponseLossesRemaining = 1;
 let messagesRead = false;
 let messageContinuationRequests = 0;
 let revisionRequests = 0;
@@ -113,7 +118,10 @@ const xpCharacter = (currentAccount) => ({
     level: 1,
     hit_points: 10,
     xp_total: currentAccount === playerAccount ? 2000 : 1200,
-    xp_to_next_level: 3000
+    xp_to_next_level: 3000,
+    level_up_target_level: 2,
+    level_up_target_xp: 1500,
+    level_up_attained: currentAccount === playerAccount
 });
 
 const xpAwardEntry = (currentAccount) => ({
@@ -136,17 +144,6 @@ const xpProgression = (currentAccount, progressionKey = currentAccount.character
         },
         ...(currentAccount === playerAccount && xpAwardsProjected ? [xpAwardEntry(currentAccount)] : [])
     ],
-    ...(currentAccount === formerPlayerAccount
-        ? {
-            current_character: {
-                character_name: 'Urvan',
-                character_class: 'paladin',
-                level: 2,
-                xp_total: 3735,
-                xp_to_next_level: 1265
-            }
-        }
-        : {})
 });
 
 const playerHirelingProgression = Object.freeze({
@@ -172,7 +169,10 @@ const playerHirelingXp = Object.freeze({
     level: 1,
     hit_points: 8,
     xp_total: 1000,
-    xp_to_next_level: 3000
+    xp_to_next_level: 3000,
+    level_up_target_level: 2,
+    level_up_target_xp: 4000,
+    level_up_attained: false
 });
 
 const secondPlayerHirelingProgression = Object.freeze({
@@ -198,7 +198,10 @@ const secondPlayerHirelingXp = Object.freeze({
     level: 1,
     hit_points: 8,
     xp_total: 554,
-    xp_to_next_level: 1696
+    xp_to_next_level: 1696,
+    level_up_target_level: 2,
+    level_up_target_xp: 2250,
+    level_up_attained: false
 });
 
 const questPayload = (currentAccount) => ({
@@ -329,7 +332,10 @@ const serveApi = async (request, response, pathname) => {
                         ...xpCharacter(playerAccount),
                         level: 4,
                         xp_total: 10770,
-                        xp_to_next_level: 5230
+                        xp_to_next_level: 5230,
+                        level_up_target_level: 5,
+                        level_up_target_xp: 16000,
+                        level_up_attained: false
                     },
                     xpCharacter(secondPlayerAccount)
                 ]
@@ -356,7 +362,7 @@ const serveApi = async (request, response, pathname) => {
         if (!currentAccount) return;
         if (currentAccount === playerAccount) xpAwardsProjected = true;
         const accounts = currentAccount.role === 'dm'
-            ? [playerAccount, secondPlayerAccount, formerPlayerAccount]
+            ? [formerPlayerAccount, playerAccount, secondPlayerAccount]
             : [currentAccount];
         jsonResponse(response, 200, {
             schema_version: 1,
@@ -368,6 +374,66 @@ const serveApi = async (request, response, pathname) => {
                 ...(currentAccount === playerAccount ? [playerHirelingProgression] : []),
                 ...(currentAccount === secondPlayerAccount ? [secondPlayerHirelingProgression] : [])
             ]
+        });
+        return;
+    }
+    if (route === '/xp-level-up-notifications/claim' && request.method === 'POST') {
+        const currentAccount = requireSession(request, response);
+        if (!currentAccount) return;
+        if (levelUpClaimFailuresRemaining > 0) {
+            levelUpClaimFailuresRemaining -= 1;
+            jsonResponse(
+                response,
+                503,
+                { error: 'level_up_notifications_unavailable' },
+                expectedErrorResponse);
+            return;
+        }
+        const previousClaims = levelUpNotificationClaims.get(currentAccount.id) || 0;
+        levelUpNotificationClaims.set(currentAccount.id, previousClaims + 1);
+        const acknowledged = levelUpNotificationAcknowledgements.get(currentAccount.id) === true;
+        jsonResponse(response, 200, {
+            schema_version: 1,
+            notifications: currentAccount === playerAccount && !acknowledged
+                ? [
+                    {
+                        character_key: 'ci-hero',
+                        character_name: 'CI Hero',
+                        character_class: 'Fighter',
+                        target_level: 2
+                    },
+                    {
+                        character_key: 'ci-hireling',
+                        character_name: 'CI Hireling',
+                        character_class: 'Fighter',
+                        target_level: 2
+                    }
+                ]
+                : []
+        });
+        return;
+    }
+    if (route === '/xp-level-up-notifications/acknowledge' && request.method === 'POST') {
+        const currentAccount = requireSession(request, response);
+        if (!currentAccount) return;
+        levelUpAcknowledgementAttempts += 1;
+        const body = await readJsonBody(request);
+        if (currentAccount !== playerAccount
+            || !Array.isArray(body.notifications)
+            || body.notifications.length !== 2) {
+            jsonResponse(response, 400, { error: 'invalid_level_up_acknowledgement' });
+            return;
+        }
+        const wasAcknowledged = levelUpNotificationAcknowledgements.get(currentAccount.id) === true;
+        levelUpNotificationAcknowledgements.set(currentAccount.id, true);
+        if (levelUpAcknowledgementResponseLossesRemaining > 0) {
+            levelUpAcknowledgementResponseLossesRemaining -= 1;
+            response.destroy();
+            return;
+        }
+        jsonResponse(response, 200, {
+            schema_version: 1,
+            acknowledged_count: wasAcknowledged ? 0 : body.notifications.length
         });
         return;
     }
@@ -547,6 +613,7 @@ try {
     const requestUrls = [];
     const apiRequestHeaders = [];
     const unexpectedResponses = [];
+    let acknowledgementReplayResponse = null;
     let initialResponseBytes = 0;
     const workerUrls = new Set();
     let offlineExpected = false;
@@ -578,6 +645,10 @@ try {
         }
     });
     page.on('response', (response) => {
+        if (response.status() === 200
+            && response.url().endsWith('/v1/xp-level-up-notifications/acknowledge')) {
+            acknowledgementReplayResponse = response;
+        }
         if (response.status() === 200 && !offlineExpected) {
             const contentLength = Number.parseInt(response.headers()['content-length'] || '', 10);
             if (Number.isFinite(contentLength)) initialResponseBytes += contentLength;
@@ -740,6 +811,30 @@ try {
     }
     await page.locator('#auth-dialog-close').click();
     await page.locator('#auth-dialog').waitFor({ state: 'hidden' });
+    await page.locator('#level-up-alert-dialog').waitFor({ state: 'visible' });
+    const firstLevelUpAlert = await page.locator('#level-up-alert-list').textContent();
+    if (!firstLevelUpAlert.includes('CI Hero reached Fighter Level 2')
+        || !firstLevelUpAlert.includes('CI Hireling reached Fighter Level 2')
+        || firstLevelUpAlert.includes('Did not level-up')) {
+        throw new Error(`The first-login level-up notification was incorrect: ${firstLevelUpAlert}`);
+    }
+    for (let attempt = 0; attempt < 2_000 && acknowledgementReplayResponse === null; attempt += 1) {
+        await page.waitForTimeout(10);
+    }
+    if (acknowledgementReplayResponse === null) {
+        throw new Error('The browser did not receive the idempotent acknowledgement replay response.');
+    }
+    const acknowledgementReplayPayload = await acknowledgementReplayResponse.json();
+    if (levelUpNotificationAcknowledgements.get(playerAccount.id) !== true
+        || levelUpAcknowledgementAttempts !== 2
+        || acknowledgementReplayPayload.acknowledged_count !== 0) {
+        throw new Error(`The acknowledgement replay was incorrect: attempts=${levelUpAcknowledgementAttempts}, payload=${JSON.stringify(acknowledgementReplayPayload)}.`);
+    }
+    await page.waitForTimeout(5_500);
+    if (levelUpAcknowledgementAttempts !== 2) {
+        throw new Error(`The browser rejected the idempotent acknowledgement replay and retried again: ${levelUpAcknowledgementAttempts} attempts.`);
+    }
+    await page.locator('#level-up-alert-close').click();
     if (!await page.locator('#auth-button').evaluate((button) => document.activeElement === button)) {
         throw new Error('Dialog focus restoration failed after closing character login.');
     }
@@ -868,9 +963,16 @@ try {
     await page.locator('#auth-button').click();
     await page.locator('#auth-character-name').fill('CI Hero');
     await page.locator('#auth-password').fill('ci-password');
-    await page.locator('#auth-submit').click();
+    await Promise.all([
+        page.waitForResponse((response) => response.url().endsWith('/v1/xp-level-up-notifications/claim')),
+        page.locator('#auth-submit').click()
+    ]);
     await page.locator('#auth-button-label').getByText('CI Hero', { exact: true }).waitFor();
     await page.locator('#auth-dialog-close').click();
+    await page.waitForTimeout(50);
+    if (!(await page.locator('#level-up-alert-dialog').isHidden())) {
+        throw new Error('A claimed level-up notification was repeated on a later login.');
+    }
 
     await page.locator('[data-view="party-funds"]').click();
     await page.locator('#party-funds-total').waitFor({ state: 'visible' });
@@ -915,6 +1017,10 @@ try {
         || !playerProgressPresentation.sameLine
         || await page.locator('#xp-awards-list > .xp-award-progress-section').count() !== 0) {
         throw new Error(`Player XP Awards progress presentation was incorrect: ${JSON.stringify(playerProgressPresentation)}`);
+    }
+    const playerAwardCardText = await page.locator('#xp-awards-list').textContent();
+    if (playerAwardCardText.includes('Leveled-up:') || playerAwardCardText.includes('Did not level-up:')) {
+        throw new Error(`XP Awards repeated a login-only level-up notification: ${playerAwardCardText}.`);
     }
 
     await page.setViewportSize({ width: 320, height: 800 });
@@ -988,7 +1094,12 @@ try {
     await page.locator('#auth-button').click();
     await page.locator('#auth-character-name').fill('Max');
     await page.locator('#auth-password').fill('ci-second-password');
-    await page.locator('#auth-submit').click();
+    levelUpClaimFailuresRemaining = 1;
+    await Promise.all([
+        page.waitForResponse((response) => response.url().endsWith('/v1/xp-level-up-notifications/claim')
+            && response.status() === 503),
+        page.locator('#auth-submit').click()
+    ]);
     await page.locator('#auth-button-label').getByText('Max', { exact: true }).waitFor();
     await page.locator('#auth-dialog-close').click();
     await page.locator('#auth-dialog').waitFor({ state: 'hidden' });
@@ -1043,6 +1154,8 @@ try {
     const secondPlayerAwardText = await page.locator('#xp-awards-list').textContent();
     if (!secondPlayerAwardText.includes('Maximilian - Progress: 28.6% of the way toward Fighter Level 2')
         || !secondPlayerAwardText.includes('Corba - Progress: 24.6% of the way toward Ranger Level 2')
+        || secondPlayerAwardText.includes('Leveled-up:')
+        || secondPlayerAwardText.includes('Did not level-up:')
         || secondPlayerAwardText.includes('Max Progress toward')
         || secondPlayerAwardText.includes('CI Hero')) {
         throw new Error('Account switching or cross-account XP filtering failed.');
@@ -1114,10 +1227,10 @@ try {
     await page.locator('[data-view="xp-awards"]').click();
     await page.locator('#xp-awards-list').waitFor({ state: 'visible' });
     const dungeonMasterAwardHeadings = await page.locator('#xp-awards-list .xp-award-character h2').allTextContents();
-    if (dungeonMasterAwardHeadings[0]?.trim() !== 'CI Hero - 10,770 XP (TNL: 5,230)'
-        || dungeonMasterAwardHeadings[1]?.trim() !== 'Max - 1,200 XP (TNL: 3,000)'
-        || dungeonMasterAwardHeadings[2]?.trim() !== 'Urvan - 3,735 XP (TNL: 1,265)') {
-        throw new Error(`Dungeon Master XP Awards headings did not include TNL values: ${JSON.stringify(dungeonMasterAwardHeadings)}`);
+    if (dungeonMasterAwardHeadings[0]?.trim() !== 'CI Hero'
+        || dungeonMasterAwardHeadings[1]?.trim() !== 'CI Hero - 10,770 XP (TNL: 5,230)'
+        || dungeonMasterAwardHeadings[2]?.trim() !== 'Max - 1,200 XP (TNL: 3,000)') {
+        throw new Error(`Dungeon Master XP Awards headings did not preserve stable identity matching: ${JSON.stringify(dungeonMasterAwardHeadings)}`);
     }
     const dungeonMasterProgressItems = await page.locator('#xp-awards-list .xp-award-progress-list li').allTextContents();
     if (dungeonMasterProgressItems.length !== 2
@@ -1125,6 +1238,11 @@ try {
         || !dungeonMasterProgressItems[1].startsWith('Maximilian is ')
         || await page.locator('#xp-awards-list .xp-award-character .xp-award-progress-summary').count() !== 0) {
         throw new Error(`Dungeon Master XP Awards progress list was incorrect: ${JSON.stringify(dungeonMasterProgressItems)}`);
+    }
+    const dungeonMasterAwardCardText = await page.locator('#xp-awards-list').textContent();
+    if (dungeonMasterAwardCardText.includes('Leveled-up:')
+        || dungeonMasterAwardCardText.includes('Did not level-up:')) {
+        throw new Error(`Dungeon Master XP Awards repeated a login-only level-up notification: ${dungeonMasterAwardCardText}.`);
     }
 
     await context.clearCookies();
@@ -1177,7 +1295,7 @@ try {
     await page.waitForFunction(() => document.querySelector('#search-guidance')?.textContent?.includes('pack ready offline'));
     await page.locator('#campaign-search').fill('Kirkilston');
     await page.locator('#search-results .search-result').first().waitFor({ state: 'visible' });
-    if (![...workerUrls].some((url) => url.includes('/campaign-search-worker.js?v=90'))) {
+    if (![...workerUrls].some((url) => url.includes('/campaign-search-worker.js?v=91'))) {
         throw new Error(`Campaign search did not start its dedicated worker: ${JSON.stringify([...workerUrls])}.`);
     }
 
@@ -1208,7 +1326,7 @@ try {
             throw new Error(`Offline feature data was not cached: ${requiredPath}`);
         }
     }
-    if (!cachedUrls.some((url) => url.endsWith('/campaign-search-worker.js?v=90'))) {
+    if (!cachedUrls.some((url) => url.endsWith('/campaign-search-worker.js?v=91'))) {
         throw new Error('Campaign search worker was not present in the offline shell cache.');
     }
     await page.evaluate(async () => {
