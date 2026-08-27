@@ -16,7 +16,8 @@ $XpPasswordMinimumIterations = 600000
 $RequiredSidecarFileNames = @(
     $XpPasswordFileName
 )
-$AllowedEncryptedFormats = @(
+$AllowedSettingsFormats = @(
+    'public-settings-v1',
     'app-protected-v2'
 )
 $ForbiddenPlaintextMarkers = @(
@@ -99,7 +100,7 @@ function Assert-EncryptedSidecar {
         throw "Runtime sidecar $FileName must declare schema_version 1."
     }
 
-    if ($AllowedEncryptedFormats -notcontains [string]$json.format) {
+    if ($AllowedSettingsFormats -notcontains [string]$json.format) {
         throw "Runtime sidecar $FileName must use an approved encrypted app-protected format."
     }
 

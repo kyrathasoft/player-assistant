@@ -124,8 +124,8 @@ internal static partial class TestCases
         WithHostedSettingsIsolation(() =>
             settings = new Dictionary<string, string>(AppSettingsUtility.LoadSettings(directory.Path), StringComparer.OrdinalIgnoreCase));
 
-        AssertEqual("example-user", settings["RPOL user name"], "unexpected migrated RPOL user name");
-        AssertEqual("example-password", settings["RPOL password"], "unexpected migrated RPOL password");
+        AssertFalse(settings.ContainsKey("RPOL user name"), "hosted settings must not return portable RPOL user name");
+        AssertFalse(settings.ContainsKey("RPOL password"), "hosted settings must not return portable RPOL password");
         AssertEqual(
             "https://publish.obsidian.md/scarlethorizons/Intentional+Orphans/XP+Tracking",
             settings["XP Tracking"],
@@ -134,8 +134,9 @@ internal static partial class TestCases
             "https://bryanmiller.us/scarlethorizons/settings.local.json",
             requestedHostedSettingsUrl ?? string.Empty,
             "unexpected hosted local settings URL");
-        AssertEqual("example-user", RuntimeSecretStoreUtility.GetRpolUserName()!, "credential manager should store RPOL user name");
-        AssertEqual("example-password", RuntimeSecretStoreUtility.GetRpolPassword()!, "credential manager should store RPOL password");
+        AssertFalse(
+            RuntimeSecretStoreUtility.TryGetRpolCredentials(out _, out _),
+            "hosted settings must not provision RPOL credentials from a portable payload");
         AssertFalse(
             File.Exists(Path.Combine(directory.Path, "settings.local.json")),
             "hosted local settings should not be persisted after credential migration");
@@ -450,7 +451,7 @@ internal static partial class TestCases
     {
         using var directory = TemporaryDirectory.Create();
         var sidecarPath = Path.Combine(directory.Path, XpPasswordStoreUtility.FileName);
-        LocalSettingsUtility.SavePortableEncryptedSettings(
+        LocalSettingsUtility.SaveEncryptedSettings(
             sidecarPath,
             new Dictionary<string, string> { ["Kelpie"] = "gemstone" });
 
@@ -464,7 +465,7 @@ internal static partial class TestCases
     {
         using var directory = TemporaryDirectory.Create();
         var sidecarPath = Path.Combine(directory.Path, XpPasswordStoreUtility.FileName);
-        LocalSettingsUtility.SavePortableEncryptedSettings(
+        LocalSettingsUtility.SaveEncryptedSettings(
             sidecarPath,
             new Dictionary<string, string>
             {
@@ -3052,7 +3053,7 @@ internal static partial class TestCases
 
         AssertTrue(handled, "expected encrypt-local-settings command to be handled");
         var encryptedJson = File.ReadAllText(localSettingsPath);
-        AssertContains(encryptedJson, "\"format\": \"app-protected-v2\"");
+        AssertContains(encryptedJson, "\"format\": \"public-settings-v1\"");
         AssertFalse(
             encryptedJson.Contains("Intentional+Orphans/XP+Tracking", StringComparison.Ordinal),
             "portable encrypted settings should not keep the plaintext URL on disk");

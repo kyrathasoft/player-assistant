@@ -15,6 +15,7 @@ $SettingsLocalFileName = 'settings.local.json'
 $ProjectFileName = 'player-assistant.csproj'
 $SettingsFormat = 'app-protected-v3'
 $PreviousSettingsFormat = 'app-protected-v2'
+$PublicSettingsFormat = 'public-settings-v1'
 $V1SettingsFormat = 'app-protected-v1'
 $LegacySettingsFormat = 'dpapi-current-user'
 $DpapiSettingsFormat = 'dpapi-current-user-v2'
@@ -485,6 +486,20 @@ function ConvertFrom-AppEncryptedLocalSettings {
     [void](Get-SettingsSchemaVersion -Settings $envelope -Description $SettingsLocalFileName)
     if ($envelope.format -eq $DpapiSettingsFormat) {
         return ConvertFrom-DpapiLocalSettings -SettingsPath $SettingsPath
+    }
+
+    if ($envelope.format -eq $PublicSettingsFormat) {
+        if ([string]::IsNullOrWhiteSpace($envelope.payload)) {
+            throw "$SettingsLocalFileName has an empty public settings payload."
+        }
+        try {
+            $publicBytes = [Convert]::FromBase64String([string]$envelope.payload)
+            if ($publicBytes.Length -eq 0) { throw 'empty payload' }
+            return ConvertTo-PlainSettingsObject -Settings ([System.Text.Encoding]::UTF8.GetString($publicBytes) | ConvertFrom-Json)
+        }
+        catch {
+            throw "$SettingsLocalFileName public settings payload is invalid: $($_.Exception.Message)"
+        }
     }
 
     if ($envelope.format -ne $SettingsFormat -and $envelope.format -ne $PreviousSettingsFormat -and $envelope.format -ne $V1SettingsFormat) {

@@ -307,9 +307,12 @@ Planned security correction: eliminate first-name equivalence from authenticatio
 - [x] Bind RPOL credential submission to an exact trusted HTTPS origin and path.
   - [x] Cancel untrusted WebView navigation, revalidate the parsed URI immediately before autofill/submission, and replace substring-based Playwright page selection.
   - [x] Prove a matching form on an untrusted page and a URL such as `evil.example/?next=rpol.net` receive no credentials.
-- [ ] Replace derivable portable/settings encryption with operating-system secret protection.
-  - [ ] Keep portable payloads secret-free and store RPOL credentials through DPAPI, Credential Manager, or explicit user/installer provisioning.
-  - [ ] Add migration and copied-fixture tests proving another Windows identity cannot decrypt protected local credentials.
+- [x] Replace derivable portable/settings encryption with operating-system secret protection.
+  - [x] Portable settings now contain only public configuration in a versioned, base64-encoded public-settings-v1 envelope; RPOL credentials are always excluded.
+  - [x] Local settings continue to use current-user DPAPI, and legacy local envelopes migrate to DPAPI on load.
+  - [x] RPOL credentials remain provisioned through Windows Credential Manager rather than portable or hosted settings payloads.
+  - [x] Installer and runtime validators accept the public settings envelope while retaining legacy migration compatibility.
+  - [x] Focused settings, installer-package, PowerShell parse, and full 536-test regression gates pass.
 - [ ] Make the installed application tree immutable and correctly permissioned.
   - [ ] Route diagnostics, caches, markers, generated manifests, and snapshots through `WritableRuntimeDirectory` or another user-data location.
   - [ ] Remove inherited Users-Modify access from Program Files executables, DLLs, and the generated uninstaller.

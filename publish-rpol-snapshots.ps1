@@ -100,7 +100,7 @@ if ($InstallScheduledTask) {
     }
     $scriptPath = $MyInvocation.MyCommand.Path
     $action = New-ScheduledTaskAction -Execute 'powershell.exe' -Argument (
-        "-NoProfile -ExecutionPolicy Bypass -File `"$scriptPath`"")
+        "-NoProfile -NonInteractive -WindowStyle Hidden -ExecutionPolicy Bypass -File `"$scriptPath`"")
     $triggers = @(
         New-ScheduledTaskTrigger -Daily -At '3:00 AM'
         New-ScheduledTaskTrigger -Weekly -DaysOfWeek Wednesday -At '5:00 PM'

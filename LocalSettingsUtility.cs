@@ -12,6 +12,7 @@ namespace PlayerAssistant
         private const string V1EncryptedFormat = "app-protected-v1";
         private const string V2EncryptedFormat = "app-protected-v2";
         private const string LegacyScopedEncryptedFormat = "app-protected-v3";
+        private const string PublicSettingsFormat = "public-settings-v1";
         private const string FormatPropertyName = "format";
         private const string PayloadPropertyName = "payload";
         private const string KeyScopePropertyName = "key_scope";
@@ -171,10 +172,11 @@ namespace PlayerAssistant
                     throw new InvalidOperationException($"{sourceDescription} must use an authenticated encrypted envelope.");
                 }
 
-                if (!string.Equals(envelope.Format, V2EncryptedFormat, StringComparison.Ordinal))
+                if (!string.Equals(envelope.Format, V2EncryptedFormat, StringComparison.Ordinal)
+                    && !string.Equals(envelope.Format, PublicSettingsFormat, StringComparison.Ordinal))
                 {
                     throw new InvalidOperationException(
-                        $"{sourceDescription} must use the portable authenticated encrypted format '{V2EncryptedFormat}'.");
+                        $"{sourceDescription} must use the portable settings format '{PublicSettingsFormat}'.");
                 }
 
                 return DecryptSettings(envelope, sourceDescription);
@@ -201,11 +203,10 @@ namespace PlayerAssistant
             ArgumentNullException.ThrowIfNull(settings);
 
             var portableSettings = new Dictionary<string, string>(settings, StringComparer.OrdinalIgnoreCase);
-            if (!includeRpolCredentials)
-            {
-                portableSettings.Remove(AppSettingsUtility.RpolUserNameSettingsKey);
-                portableSettings.Remove(AppSettingsUtility.RpolPasswordSettingsKey);
-            }
+            // RPOL credentials are never portable. They are provisioned into Windows Credential
+            // Manager and deliberately excluded even when legacy callers pass true.
+            portableSettings.Remove(AppSettingsUtility.RpolUserNameSettingsKey);
+            portableSettings.Remove(AppSettingsUtility.RpolPasswordSettingsKey);
 
             var plaintextBytes = JsonSerializer.SerializeToUtf8Bytes(portableSettings, JsonOptions);
             try
@@ -305,6 +306,7 @@ namespace PlayerAssistant
                 return envelope.Format switch
                 {
                     CurrentEncryptedFormat => DecryptDpapiPayload(envelope.Payload, settingsPath: null),
+                    PublicSettingsFormat => DecodePublicSettingsPayload(envelope.Payload),
                     LegacyScopedEncryptedFormat => DecryptAuthenticatedAesCbcPayload(envelope.Payload, settingsPath, LegacyScopedEncryptedFormat),
                     V2EncryptedFormat => DecryptAuthenticatedAesCbcPayload(envelope.Payload, settingsPath, V2EncryptedFormat),
                     V1EncryptedFormat => DecryptAesCbcPayload(envelope.Payload),
@@ -316,6 +318,23 @@ namespace PlayerAssistant
             catch (FormatException ex)
             {
                 throw new InvalidOperationException("The encrypted settings payload is not valid base64.", ex);
+            }
+        }
+
+        private static byte[] DecodePublicSettingsPayload(string payload)
+        {
+            try
+            {
+                var bytes = Convert.FromBase64String(payload);
+                if (bytes.Length == 0)
+                {
+                    throw new InvalidOperationException("The public settings payload is empty.");
+                }
+                return bytes;
+            }
+            catch (FormatException ex)
+            {
+                throw new InvalidOperationException("The public settings payload is not valid base64.", ex);
             }
         }
 
@@ -440,46 +459,18 @@ namespace PlayerAssistant
 
         private static EncryptedSettingsEnvelope CreatePortableEncryptedEnvelope(byte[] plaintextBytes)
         {
-            var iv = RandomNumberGenerator.GetBytes(AesIvSizeBytes);
-
-            using var aes = Aes.Create();
-            aes.Key = V2EncryptionKey;
-            aes.IV = iv;
-            aes.Mode = CipherMode.CBC;
-            aes.Padding = PaddingMode.PKCS7;
-
-            using var encryptor = aes.CreateEncryptor();
-            var ciphertext = encryptor.TransformFinalBlock(plaintextBytes, 0, plaintextBytes.Length);
-            byte[]? protectedContent = null;
-            byte[]? tag = null;
-            byte[]? payloadBytes = null;
-            try
+            if (plaintextBytes.Length == 0)
             {
-                protectedContent = new byte[iv.Length + ciphertext.Length];
-                Buffer.BlockCopy(iv, 0, protectedContent, 0, iv.Length);
-                Buffer.BlockCopy(ciphertext, 0, protectedContent, iv.Length, ciphertext.Length);
-
-                using (var hmac = new HMACSHA256(V2AuthenticationKey))
-                {
-                    tag = hmac.ComputeHash(protectedContent);
-                }
-
-                payloadBytes = new byte[protectedContent.Length + tag.Length];
-                Buffer.BlockCopy(protectedContent, 0, payloadBytes, 0, protectedContent.Length);
-                Buffer.BlockCopy(tag, 0, payloadBytes, protectedContent.Length, tag.Length);
-
-                return new EncryptedSettingsEnvelope(
-                    CurrentSchemaVersion,
-                    V2EncryptedFormat,
-                    Convert.ToBase64String(payloadBytes));
+                throw new InvalidOperationException("Portable settings cannot be empty.");
             }
-            finally
-            {
-                ZeroMemory(ciphertext);
-                ZeroMemory(protectedContent);
-                ZeroMemory(tag);
-                ZeroMemory(payloadBytes);
-            }
+
+            // Portable settings contain public configuration only. Credentials are stored in
+            // Windows Credential Manager, while authenticity of hosted settings comes from the
+            // outer signed envelope. Never use a derivable executable-embedded key here.
+            return new EncryptedSettingsEnvelope(
+                CurrentSchemaVersion,
+                PublicSettingsFormat,
+                Convert.ToBase64String(plaintextBytes));
         }
 
         private static void ZeroMemory(byte[]? bytes)
@@ -569,6 +560,7 @@ namespace PlayerAssistant
                 && !string.Equals(format, LegacyScopedEncryptedFormat, StringComparison.Ordinal)
                 && !string.Equals(format, V2EncryptedFormat, StringComparison.Ordinal)
                 && !string.Equals(format, V1EncryptedFormat, StringComparison.Ordinal)
+                && !string.Equals(format, PublicSettingsFormat, StringComparison.Ordinal)
                 && !string.Equals(format, LegacyEncryptedFormat, StringComparison.Ordinal))
             {
                 return false;

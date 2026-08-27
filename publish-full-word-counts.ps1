@@ -41,7 +41,7 @@ $resultPath = Join-Path $repositoryRoot 'Release\word-count-publish-result.json'
 if ($InstallScheduledTask) {
     $scriptPath = $MyInvocation.MyCommand.Path
     $action = New-ScheduledTaskAction -Execute $pwshPath -Argument (
-        "-NoProfile -NonInteractive -ExecutionPolicy Bypass -File `"$scriptPath`"")
+        "-NoProfile -NonInteractive -WindowStyle Hidden -ExecutionPolicy Bypass -File `"$scriptPath`"")
     $triggers = @(
         New-ScheduledTaskTrigger -Daily -At '4:00 AM'
         New-ScheduledTaskTrigger -Daily -At '8:30 PM'

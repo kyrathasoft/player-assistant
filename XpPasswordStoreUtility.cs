@@ -295,7 +295,7 @@ namespace PlayerAssistant
             using var document = JsonDocument.Parse(File.ReadAllText(path));
             if (!document.RootElement.TryGetProperty("format", out var formatElement)
                 || formatElement.ValueKind != JsonValueKind.String
-                || formatElement.GetString() is not ("app-protected-v1" or "app-protected-v2" or "app-protected-v3"))
+                || formatElement.GetString() is not ("app-protected-v1" or "app-protected-v2" or "app-protected-v3" or "dpapi-current-user-v2"))
             {
                 throw new InvalidOperationException(
                     $"{FileName} migration requires a legacy authenticated app-protected envelope.");

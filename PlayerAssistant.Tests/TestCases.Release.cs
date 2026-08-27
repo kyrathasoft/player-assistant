@@ -973,8 +973,8 @@ internal static partial class TestCases
         AssertContains(File.ReadAllText(builderPath), "p-assist-$InstallerVersion.exe");
         AssertContains(File.ReadAllText(builderPath), "Get-PlayerAssistantVersionMetadata");
         AssertContains(File.ReadAllText(versionHelperPath), "PlayerAssistantVersion");
-        AssertContains(File.ReadAllText(builderPath), "app-protected-v2");
-        AssertContains(File.ReadAllText(verifierPath), "app-protected-v2");
+        AssertContains(File.ReadAllText(builderPath), "public-settings-v1");
+        AssertContains(File.ReadAllText(verifierPath), "public-settings-v1");
     }
 
     internal static void InstallerPackageVerificationAcceptsCurrentPackage()
