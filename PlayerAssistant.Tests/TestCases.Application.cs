@@ -3064,6 +3064,25 @@ internal static partial class TestCases
             "unexpected XP Tracking value after portable encryption");
     }
 
+    internal static void PortableSettingsNeverCarryRpolCredentials()
+    {
+        var settings = new Dictionary<string, string>
+        {
+            ["XP Tracking"] = "https://publish.obsidian.md/scarlethorizons/Intentional+Orphans/XP+Tracking",
+            ["RPOL user name"] = "example-user",
+            ["RPOL password"] = "example-password"
+        };
+
+        var portableJson = LocalSettingsUtility.CreatePortableEncryptedSettingsJson(settings);
+        var loaded = LocalSettingsUtility.LoadPortableEncryptedSettingsFromContents(
+            portableJson,
+            "portable settings fixture");
+
+        AssertTrue(loaded.ContainsKey("XP Tracking"), "portable settings should retain non-secret settings");
+        AssertFalse(loaded.ContainsKey("RPOL user name"), "portable settings must not carry the RPOL user name");
+        AssertFalse(loaded.ContainsKey("RPOL password"), "portable settings must not carry the RPOL password");
+    }
+
     internal static void LocalSettingsDecryptCommandWritesPlaintextJson()
     {
         using var directory = TemporaryDirectory.Create();

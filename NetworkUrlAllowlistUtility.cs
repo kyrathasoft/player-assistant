@@ -324,6 +324,15 @@ namespace PlayerAssistant
                 || (allowSubdomains && uri.Host.EndsWith($".{host}", StringComparison.OrdinalIgnoreCase));
         }
 
+        private static bool IsHttpsRpolUri(Uri uri)
+        {
+            return uri.IsAbsoluteUri
+                && uri.Scheme == Uri.UriSchemeHttps
+                && uri.IsDefaultPort
+                && string.IsNullOrWhiteSpace(uri.UserInfo)
+                && string.Equals(uri.Host, "rpol.net", StringComparison.OrdinalIgnoreCase);
+        }
+
         private static bool HasNonEmptyPath(Uri uri)
         {
             return !string.IsNullOrWhiteSpace(uri.AbsolutePath);

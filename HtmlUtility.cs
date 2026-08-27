@@ -37,7 +37,16 @@ namespace PlayerAssistant
             {
                 if (!string.IsNullOrWhiteSpace(RuntimeSecretStoreUtility.GetBrokerToken()))
                 {
-                    return await RpolSnapshotUtility.GetHtmlAsync(uri, cancellationToken);
+                    try
+                    {
+                        return await RpolSnapshotUtility.GetHtmlAsync(uri, cancellationToken);
+                    }
+                    catch (InvalidOperationException ex) when (ShouldFallbackToDirectRpol(ex))
+                    {
+                        // A missing or expired broker snapshot must not prevent the
+                        // normal authenticated downloader from refreshing local posts.
+                        return await RpolAuthUtility.GetHtmlFromUrlAsync(uri, cancellationToken);
+                    }
                 }
 
                 return await RpolAuthUtility.GetHtmlFromUrlAsync(uri, cancellationToken);
@@ -62,6 +71,14 @@ namespace PlayerAssistant
                 response.Content,
                 NetworkResponseContentLimit.Html,
                 cancellationToken);
+        }
+
+        internal static bool ShouldFallbackToDirectRpol(InvalidOperationException exception)
+        {
+            ArgumentNullException.ThrowIfNull(exception);
+            return exception.Message.Contains("snapshot broker returned HTTP 404", StringComparison.Ordinal)
+                || exception.Message.Contains("snapshot broker returned HTTP 410", StringComparison.Ordinal)
+                || exception.Message.Contains("snapshot broker returned an empty response", StringComparison.Ordinal);
         }
 
         public static Task<Hyperlink[]> GetRpolGameHyperlinksAsync(CancellationToken cancellationToken = default)

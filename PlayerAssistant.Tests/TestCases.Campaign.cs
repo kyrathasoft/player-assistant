@@ -4157,6 +4157,72 @@ internal static partial class TestCases
             "the exact protected Dice Roller page should be the active tab used to detect completed verification");
     }
 
+    internal static void RpolCredentialEntryUriRequiresExactTrustedOriginAndPath()
+    {
+        AssertTrue(
+            NetworkUrlAllowlistUtility.IsTrustedRpolCredentialSubmissionUri(
+                new Uri("https://rpol.net/game.php?gi=80170")),
+            "the exact RPOL HTTPS game path should allow credential entry");
+        AssertFalse(
+            NetworkUrlAllowlistUtility.IsTrustedRpolCredentialSubmissionUri(
+                new Uri("http://rpol.net/game.php?gi=80170")),
+            "HTTP RPOL pages must not allow credential entry");
+        AssertFalse(
+            NetworkUrlAllowlistUtility.IsTrustedRpolCredentialSubmissionUri(
+                new Uri("https://evil.example/game.php?next=rpol.net")),
+            "lookalike hosts must not allow credential entry");
+        AssertFalse(
+            NetworkUrlAllowlistUtility.IsTrustedRpolCredentialSubmissionUri(
+                new Uri("https://rpol.net/login.cgi?gi=80170")),
+            "login action paths must not become credential-entry pages");
+        AssertFalse(
+            NetworkUrlAllowlistUtility.IsTrustedRpolCredentialSubmissionUri(
+                new Uri("https://rpol.net/game.php/evil")),
+            "unexpected RPOL paths must not allow credential entry");
+    }
+
+    internal static void RpolVerificationNavigationRequiresTrustedHttpsRpolPath()
+    {
+        AssertTrue(
+            NetworkUrlAllowlistUtility.IsTrustedRpolNavigationUri(
+                new Uri("https://rpol.net/game.php?gi=80170")),
+            "the RPOL game page should be a trusted verification navigation");
+        AssertTrue(
+            NetworkUrlAllowlistUtility.IsTrustedRpolNavigationUri(
+                new Uri("https://rpol.net/login.cgi")),
+            "the RPOL login action should remain a trusted navigation target");
+        AssertFalse(
+            NetworkUrlAllowlistUtility.IsTrustedRpolNavigationUri(
+                new Uri("http://rpol.net/game.php?gi=80170")),
+            "HTTP verification navigation must be rejected");
+        AssertFalse(
+            NetworkUrlAllowlistUtility.IsTrustedRpolNavigationUri(
+                new Uri("https://evil.example/?next=rpol.net/game.php")),
+            "lookalike verification navigation must be rejected");
+    }
+
+    internal static void RpolWebViewCredentialFlowGuardsNavigationAndSubmission()
+    {
+        var source = File.ReadAllText(Path.Combine(GetRepositoryRoot(), "RpolWebViewVerificationDialog.cs"))
+            + Environment.NewLine
+            + File.ReadAllText(Path.Combine(GetRepositoryRoot(), "RpolCredentialSubmissionScript.cs"));
+        var navigationHandlerIndex = source.IndexOf("NavigationStarting +=", StringComparison.Ordinal);
+        var navigationPolicyIndex = source.IndexOf("IsTrustedRpolNavigationUri", navigationHandlerIndex, StringComparison.Ordinal);
+        var credentialPolicyIndex = source.IndexOf("TryValidateCredentialPage", navigationHandlerIndex, StringComparison.Ordinal);
+        var scriptExecutionIndex = source.IndexOf("ExecuteScriptAsync", StringComparison.Ordinal);
+
+        AssertTrue(navigationHandlerIndex >= 0, "RPOL WebView must handle navigation before page content is trusted");
+        AssertTrue(
+            navigationPolicyIndex > navigationHandlerIndex,
+            "RPOL WebView navigation must use the exact trusted navigation policy");
+        AssertTrue(
+            credentialPolicyIndex > navigationHandlerIndex && credentialPolicyIndex < scriptExecutionIndex,
+            "RPOL WebView must validate the live credential-entry URI before executing autofill script");
+        AssertTrue(
+            source.Contains("action.pathname === '/login.cgi'", StringComparison.Ordinal),
+            "RPOL WebView autofill must validate the exact form action path before submission");
+    }
+
     internal static void RpolVerificationConnectsOverCdpBeforeInspectingPageState()
     {
         var source = File.ReadAllText(Path.Combine(GetRepositoryRoot(), "RpolAuthUtility.cs"));
@@ -4188,6 +4254,20 @@ internal static partial class TestCases
             "WebView verification must read the live CoreWebView2 source");
         AssertFalse(webViewSource.Contains("_webView.Source", StringComparison.Ordinal),
             "WebView verification must not use the stale WinForms wrapper source property");
+    }
+
+    internal static void RpolWebViewStateReplaysInHeadedBrowser()
+    {
+        var source = File.ReadAllText(Path.Combine(GetRepositoryRoot(), "RpolAuthUtility.cs"));
+
+        AssertTrue(
+            source.Contains("_clearCloudflareChallengeWithHeadedBrowser = true", StringComparison.Ordinal),
+            "RPOL authentication failures must schedule a headed browser retry for Cloudflare-compatible state");
+        AssertTrue(
+            source.Contains("CreateAuthenticatedSessionAsync(cancellationToken, clearCloudflareChallenge, lockOwner)", StringComparison.Ordinal)
+                && source.Contains("LaunchRpolBrowserAsync(", StringComparison.Ordinal)
+                && source.Contains("clearCloudflareChallenge", StringComparison.Ordinal),
+            "the retry flag must select headed browser launch options without restarting WebView verification");
     }
 
     internal static void RpolSnapshotUploadJsonUsesBrokerCanonicalEscaping()
@@ -4376,6 +4456,16 @@ internal static partial class TestCases
         AssertContains(discoverySource, "RpolAuthUtility.GetSnapshotResponseAsync(rootUri");
         AssertFalse(discoverySource.Contains("RpolAuthUtility.GetHtmlFromUrlAsync(rootUri", StringComparison.Ordinal),
             "snapshot discovery must not reject the authenticated campaign root merely because RPOL embeds its login form");
+    }
+
+    internal static void SnapshotBrokerUnavailableFallsBackToDirectRpol()
+    {
+        AssertTrue(
+            HtmlUtility.ShouldFallbackToDirectRpol(new InvalidOperationException("The RPOL snapshot broker returned HTTP 410 for 'https://rpol.net/game.php?gi=80170'.")),
+            "an unavailable snapshot broker response should permit direct RPOL refresh");
+        AssertFalse(
+            HtmlUtility.ShouldFallbackToDirectRpol(new InvalidOperationException("The RPOL snapshot broker rejected the signed payload.")),
+            "a broker integrity failure must not silently fall back");
     }
 
     internal static void GameForumStartupChecksSnapshotsBeforeDownloads()

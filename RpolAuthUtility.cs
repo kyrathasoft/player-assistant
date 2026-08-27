@@ -1021,6 +1021,17 @@ namespace PlayerAssistant
             }
         }
 
+        private static void EnsureRpolCredentialEntryPage(IPage page)
+        {
+            if (!Uri.TryCreate(page.Url, UriKind.Absolute, out var pageUri)
+                || !NetworkUrlAllowlistUtility.IsTrustedRpolCredentialSubmissionUri(pageUri))
+            {
+                throw new RpolAuthException(
+                    RpolAuthFailureKind.TransportSecurityFailure,
+                    "RPOL credentials were not submitted because the live page was not the exact trusted HTTPS game path.");
+            }
+        }
+
         private static Process StartExternalBrowserForManualVerification(
             string browserPath,
             int remoteDebuggingPort,

@@ -13,6 +13,46 @@ function ftpsAssert(bool $condition, string $message): void
     }
 }
 
+/**
+ * Run a fixture with explicit FTPS environment values and restore the caller's environment afterward.
+ * A null value means the variable must be absent for the duration of the fixture.
+ */
+function withFtpsEnvironment(array $values, callable $callback): void
+{
+    $originalValues = [];
+    foreach (array_keys($values) as $name) {
+        $originalValues[$name] = getenv($name);
+        $value = $values[$name];
+        putenv($value === null ? $name : $name . '=' . $value);
+    }
+
+    try {
+        $callback();
+    } finally {
+        foreach ($originalValues as $name => $value) {
+            putenv($value === false ? $name : $name . '=' . $value);
+        }
+    }
+}
+
+$ftpsEnvironmentNames = [
+    'BACKUP_FTPS_HOST',
+    'BACKUP_FTPS_PORT',
+    'BACKUP_FTPS_USERNAME',
+    'BACKUP_FTPS_PASSWORD',
+    'BACKUP_FTPS_REMOTE_PATH',
+];
+$callerFtpsEnvironment = [];
+foreach ($ftpsEnvironmentNames as $name) {
+    $callerFtpsEnvironment[$name] = getenv($name);
+    putenv($name);
+}
+register_shutdown_function(static function () use ($callerFtpsEnvironment): void {
+    foreach ($callerFtpsEnvironment as $name => $value) {
+        putenv($value === false ? $name : $name . '=' . $value);
+    }
+});
+
 final class InMemoryBrokerFtpsClient implements BrokerFtpsClient
 {
     public bool $corruptDownloads = false;
@@ -84,12 +124,7 @@ $environmentValues = [
     'BACKUP_FTPS_REMOTE_PATH' => '/account-root/private-backups',
     'BACKUP_ENCRYPTION_KEY' => 'environment-backup-encryption-key-with-sufficient-entropy',
 ];
-$originalEnvironment = [];
-foreach ($environmentValues as $name => $value) {
-    $originalEnvironment[$name] = getenv($name);
-    putenv($name . '=' . $value);
-}
-try {
+withFtpsEnvironment($environmentValues, static function (): void {
     $environmentOperations = new BrokerOperations([
         'api' => ['database_path' => '/private/broker.sqlite'],
         'operations' => ['offsite' => ['transport' => 'ftps']],
@@ -97,11 +132,7 @@ try {
     ftpsAssert(
         $environmentOperations->healthStatus()['offsite_backup_configured'] === true,
         'FTPS credentials supplied only through the process environment were not recognized.');
-} finally {
-    foreach ($originalEnvironment as $name => $value) {
-        putenv($value === false ? $name : $name . '=' . $value);
-    }
-}
+});
 
 $invalidEnvironment = [];
 foreach (['BACKUP_FTPS_HOST', 'BACKUP_FTPS_PORT', 'BACKUP_FTPS_USERNAME', 'BACKUP_FTPS_PASSWORD', 'BACKUP_FTPS_REMOTE_PATH'] as $name) {

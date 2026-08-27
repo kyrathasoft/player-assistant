@@ -155,13 +155,16 @@ function Copy-PayloadToStaging {
     }
 }
 
-function Grant-AppDirectoryAccess {
+function Protect-AppDirectory {
     param([Parameter(Mandatory = $true)][string]$Directory)
 
+    $systemSid = '*S-1-5-18'
+    $administratorsSid = '*S-1-5-32-544'
     $usersSid = '*S-1-5-32-545'
-    & icacls.exe $Directory /grant "${usersSid}:(OI)(CI)M" /T /C | Out-Null
+
+    & icacls.exe $Directory /inheritance:r /grant:r "${systemSid}:F" "${administratorsSid}:F" "${usersSid}:(OI)(CI)RX" /T /C | Out-Null
     if ($LASTEXITCODE -ne 0) {
-        throw "Unable to grant standard Users modify access to $Directory."
+        throw "Unable to make the installed application tree read/execute-only for standard Users: $Directory"
     }
 }
 
@@ -288,7 +291,7 @@ function Install-PlayerAssistant {
         Move-Item -LiteralPath $stagingDir -Destination $resolvedInstallDir -Force
 
         Write-Step 'Applying application directory permissions...'
-        Grant-AppDirectoryAccess -Directory $resolvedInstallDir
+        Protect-AppDirectory -Directory $resolvedInstallDir
         Protect-EncryptedSidecars -Directory $resolvedInstallDir
         Assert-ProtectedEncryptedSidecars -Directory $resolvedInstallDir
 

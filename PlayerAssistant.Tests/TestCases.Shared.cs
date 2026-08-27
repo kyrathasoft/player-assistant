@@ -687,8 +687,7 @@ internal static partial class TestCases
     {
         var settings = new Dictionary<string, string>
         {
-            ["RPOL user name"] = "example-user",
-            ["RPOL password"] = "example-password"
+            ["XP Tracking"] = "https://publish.obsidian.md/scarlethorizons/XP"
         };
         var encryptedJson = LocalSettingsUtility.CreatePortableEncryptedSettingsJson(settings);
         var encryptedUtf8 = System.Text.Encoding.UTF8.GetBytes(encryptedJson);
@@ -697,8 +696,7 @@ internal static partial class TestCases
             encryptedUtf8,
             "test settings");
 
-        AssertEqual("example-user", loadedSettings["RPOL user name"], "unexpected user name after byte-buffer load");
-        AssertEqual("example-password", loadedSettings["RPOL password"], "unexpected password after byte-buffer load");
+        AssertEqual("https://publish.obsidian.md/scarlethorizons/XP", loadedSettings["XP Tracking"], "unexpected setting after byte-buffer load");
         AssertTrue(encryptedUtf8.All(static value => value == 0), "portable encrypted settings buffer should be cleared after load");
     }
 

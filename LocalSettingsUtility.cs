@@ -194,11 +194,20 @@ namespace PlayerAssistant
             AtomicFileUtility.WriteAllText(settingsPath, encryptedJson);
         }
 
-        internal static string CreatePortableEncryptedSettingsJson(IReadOnlyDictionary<string, string> settings)
+        internal static string CreatePortableEncryptedSettingsJson(
+            IReadOnlyDictionary<string, string> settings,
+            bool includeRpolCredentials = false)
         {
             ArgumentNullException.ThrowIfNull(settings);
 
-            var plaintextBytes = JsonSerializer.SerializeToUtf8Bytes(settings, JsonOptions);
+            var portableSettings = new Dictionary<string, string>(settings, StringComparer.OrdinalIgnoreCase);
+            if (!includeRpolCredentials)
+            {
+                portableSettings.Remove(AppSettingsUtility.RpolUserNameSettingsKey);
+                portableSettings.Remove(AppSettingsUtility.RpolPasswordSettingsKey);
+            }
+
+            var plaintextBytes = JsonSerializer.SerializeToUtf8Bytes(portableSettings, JsonOptions);
             try
             {
                 var encryptedEnvelope = CreatePortableEncryptedEnvelope(plaintextBytes);
@@ -295,11 +304,11 @@ namespace PlayerAssistant
             {
                 return envelope.Format switch
                 {
-                    CurrentEncryptedFormat => DecryptDpapiPayload(envelope.Payload),
+                    CurrentEncryptedFormat => DecryptDpapiPayload(envelope.Payload, settingsPath: null),
                     LegacyScopedEncryptedFormat => DecryptAuthenticatedAesCbcPayload(envelope.Payload, settingsPath, LegacyScopedEncryptedFormat),
                     V2EncryptedFormat => DecryptAuthenticatedAesCbcPayload(envelope.Payload, settingsPath, V2EncryptedFormat),
                     V1EncryptedFormat => DecryptAesCbcPayload(envelope.Payload),
-                    LegacyEncryptedFormat => DecryptDpapiPayload(envelope.Payload),
+                    LegacyEncryptedFormat => DecryptDpapiPayload(envelope.Payload, settingsPath: null),
                     _ => throw new InvalidOperationException(
                         $"Unsupported encrypted settings format '{envelope.Format}'.")
                 };
@@ -382,17 +391,25 @@ namespace PlayerAssistant
             }
         }
 
-        private static byte[] DecryptDpapiPayload(string payload)
+        private static byte[] DecryptDpapiPayload(string payload, string? settingsPath)
         {
             try
             {
                 var protectedBytes = Convert.FromBase64String(payload);
-                return ProtectedData.Unprotect(protectedBytes, optionalEntropy: null, DataProtectionScope.CurrentUser);
+                var entropy = settingsPath is null ? null : GetDpapiEntropy(settingsPath);
+                try
+                {
+                    return ProtectedData.Unprotect(protectedBytes, entropy, DataProtectionScope.CurrentUser);
+                }
+                finally
+                {
+                    ZeroMemory(entropy);
+                }
             }
             catch (CryptographicException ex)
             {
                 throw new InvalidOperationException(
-                    "Unable to decrypt settings.local.json. The legacy dpapi-current-user format is tied to the original Windows user profile and cannot be decrypted on a different machine. Replace it with plaintext once or with an app-protected-v1 file.",
+                    "Unable to decrypt settings.local.json. The encrypted settings file may have been corrupted or created for a different Windows user, machine, or install directory.",
                     ex);
             }
         }
@@ -496,6 +513,11 @@ namespace PlayerAssistant
             }
 
             throw new InvalidOperationException($"Unsupported settings encryption format '{format}'.");
+        }
+
+        private static byte[] GetDpapiEntropy(string settingsPath)
+        {
+            return SHA256.HashData(Encoding.UTF8.GetBytes($"{EncryptionKeySeed}.dpapi.{GetDerivationScope(settingsPath)}"));
         }
 
         private static string GetDerivationScope(string settingsPath)
