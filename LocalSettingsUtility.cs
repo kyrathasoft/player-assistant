@@ -304,7 +304,7 @@ namespace PlayerAssistant
             {
                 return envelope.Format switch
                 {
-                    CurrentEncryptedFormat => DecryptDpapiPayload(envelope.Payload),
+                    CurrentEncryptedFormat => DecryptDpapiPayload(envelope.Payload, settingsPath: null),
                     LegacyScopedEncryptedFormat => DecryptAuthenticatedAesCbcPayload(envelope.Payload, settingsPath, LegacyScopedEncryptedFormat),
                     V2EncryptedFormat => DecryptAuthenticatedAesCbcPayload(envelope.Payload, settingsPath, V2EncryptedFormat),
                     V1EncryptedFormat => DecryptAesCbcPayload(envelope.Payload),

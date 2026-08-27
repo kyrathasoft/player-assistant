@@ -289,7 +289,7 @@ namespace PlayerAssistant
 
                 var browserLaunch = await LaunchRpolBrowserAsync(
                     playwright,
-                    clearCloudflareChallenge || useHeadedBrowser,
+                    clearCloudflareChallenge,
                     cancellationToken);
                 browser = browserLaunch.Browser;
                 useDefaultUserAgent = browserLaunch.UseDefaultUserAgent;
@@ -1024,7 +1024,7 @@ namespace PlayerAssistant
         private static void EnsureRpolCredentialEntryPage(IPage page)
         {
             if (!Uri.TryCreate(page.Url, UriKind.Absolute, out var pageUri)
-                || !NetworkUrlAllowlistUtility.IsRpolCredentialEntryUri(pageUri))
+                || !NetworkUrlAllowlistUtility.IsTrustedRpolCredentialSubmissionUri(pageUri))
             {
                 throw new RpolAuthException(
                     RpolAuthFailureKind.TransportSecurityFailure,

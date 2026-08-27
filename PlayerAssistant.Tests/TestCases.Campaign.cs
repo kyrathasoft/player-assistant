@@ -4160,23 +4160,23 @@ internal static partial class TestCases
     internal static void RpolCredentialEntryUriRequiresExactTrustedOriginAndPath()
     {
         AssertTrue(
-            NetworkUrlAllowlistUtility.IsRpolCredentialEntryUri(
+            NetworkUrlAllowlistUtility.IsTrustedRpolCredentialSubmissionUri(
                 new Uri("https://rpol.net/game.php?gi=80170")),
             "the exact RPOL HTTPS game path should allow credential entry");
         AssertFalse(
-            NetworkUrlAllowlistUtility.IsRpolCredentialEntryUri(
+            NetworkUrlAllowlistUtility.IsTrustedRpolCredentialSubmissionUri(
                 new Uri("http://rpol.net/game.php?gi=80170")),
             "HTTP RPOL pages must not allow credential entry");
         AssertFalse(
-            NetworkUrlAllowlistUtility.IsRpolCredentialEntryUri(
+            NetworkUrlAllowlistUtility.IsTrustedRpolCredentialSubmissionUri(
                 new Uri("https://evil.example/game.php?next=rpol.net")),
             "lookalike hosts must not allow credential entry");
         AssertFalse(
-            NetworkUrlAllowlistUtility.IsRpolCredentialEntryUri(
+            NetworkUrlAllowlistUtility.IsTrustedRpolCredentialSubmissionUri(
                 new Uri("https://rpol.net/login.cgi?gi=80170")),
             "login action paths must not become credential-entry pages");
         AssertFalse(
-            NetworkUrlAllowlistUtility.IsRpolCredentialEntryUri(
+            NetworkUrlAllowlistUtility.IsTrustedRpolCredentialSubmissionUri(
                 new Uri("https://rpol.net/game.php/evil")),
             "unexpected RPOL paths must not allow credential entry");
     }
@@ -4184,29 +4184,31 @@ internal static partial class TestCases
     internal static void RpolVerificationNavigationRequiresTrustedHttpsRpolPath()
     {
         AssertTrue(
-            NetworkUrlAllowlistUtility.IsRpolVerificationNavigationUri(
+            NetworkUrlAllowlistUtility.IsTrustedRpolNavigationUri(
                 new Uri("https://rpol.net/game.php?gi=80170")),
             "the RPOL game page should be a trusted verification navigation");
         AssertTrue(
-            NetworkUrlAllowlistUtility.IsRpolVerificationNavigationUri(
+            NetworkUrlAllowlistUtility.IsTrustedRpolNavigationUri(
                 new Uri("https://rpol.net/login.cgi")),
             "the RPOL login action should remain a trusted navigation target");
         AssertFalse(
-            NetworkUrlAllowlistUtility.IsRpolVerificationNavigationUri(
+            NetworkUrlAllowlistUtility.IsTrustedRpolNavigationUri(
                 new Uri("http://rpol.net/game.php?gi=80170")),
             "HTTP verification navigation must be rejected");
         AssertFalse(
-            NetworkUrlAllowlistUtility.IsRpolVerificationNavigationUri(
+            NetworkUrlAllowlistUtility.IsTrustedRpolNavigationUri(
                 new Uri("https://evil.example/?next=rpol.net/game.php")),
             "lookalike verification navigation must be rejected");
     }
 
     internal static void RpolWebViewCredentialFlowGuardsNavigationAndSubmission()
     {
-        var source = File.ReadAllText(Path.Combine(GetRepositoryRoot(), "RpolWebViewVerificationDialog.cs"));
+        var source = File.ReadAllText(Path.Combine(GetRepositoryRoot(), "RpolWebViewVerificationDialog.cs"))
+            + Environment.NewLine
+            + File.ReadAllText(Path.Combine(GetRepositoryRoot(), "RpolCredentialSubmissionScript.cs"));
         var navigationHandlerIndex = source.IndexOf("NavigationStarting +=", StringComparison.Ordinal);
-        var navigationPolicyIndex = source.IndexOf("IsRpolVerificationNavigationUri", StringComparison.Ordinal);
-        var credentialPolicyIndex = source.IndexOf("IsRpolCredentialEntryUri", StringComparison.Ordinal);
+        var navigationPolicyIndex = source.IndexOf("IsTrustedRpolNavigationUri", navigationHandlerIndex, StringComparison.Ordinal);
+        var credentialPolicyIndex = source.IndexOf("TryValidateCredentialPage", navigationHandlerIndex, StringComparison.Ordinal);
         var scriptExecutionIndex = source.IndexOf("ExecuteScriptAsync", StringComparison.Ordinal);
 
         AssertTrue(navigationHandlerIndex >= 0, "RPOL WebView must handle navigation before page content is trusted");
@@ -4217,8 +4219,8 @@ internal static partial class TestCases
             credentialPolicyIndex > navigationHandlerIndex && credentialPolicyIndex < scriptExecutionIndex,
             "RPOL WebView must validate the live credential-entry URI before executing autofill script");
         AssertTrue(
-            source.Contains("actionUrl.pathname !== '/game.php'", StringComparison.Ordinal),
-            "RPOL WebView autofill must validate the form action path before submission");
+            source.Contains("action.pathname === '/login.cgi'", StringComparison.Ordinal),
+            "RPOL WebView autofill must validate the exact form action path before submission");
     }
 
     internal static void RpolVerificationConnectsOverCdpBeforeInspectingPageState()
@@ -4259,11 +4261,13 @@ internal static partial class TestCases
         var source = File.ReadAllText(Path.Combine(GetRepositoryRoot(), "RpolAuthUtility.cs"));
 
         AssertTrue(
-            source.Contains("CreateAuthenticatedSessionAsync(cancellationToken, useHeadedBrowser: true)", StringComparison.Ordinal),
-            "RPOL state captured by WebView2 must be replayed in a headed browser so Cloudflare sees a compatible browser session");
+            source.Contains("_clearCloudflareChallengeWithHeadedBrowser = true", StringComparison.Ordinal),
+            "RPOL authentication failures must schedule a headed browser retry for Cloudflare-compatible state");
         AssertTrue(
-            source.Contains("clearCloudflareChallenge || useHeadedBrowser", StringComparison.Ordinal),
-            "the replay flag must select headed browser launch options without restarting WebView verification");
+            source.Contains("CreateAuthenticatedSessionAsync(cancellationToken, clearCloudflareChallenge, lockOwner)", StringComparison.Ordinal)
+                && source.Contains("LaunchRpolBrowserAsync(", StringComparison.Ordinal)
+                && source.Contains("clearCloudflareChallenge", StringComparison.Ordinal),
+            "the retry flag must select headed browser launch options without restarting WebView verification");
     }
 
     internal static void RpolSnapshotUploadJsonUsesBrokerCanonicalEscaping()
