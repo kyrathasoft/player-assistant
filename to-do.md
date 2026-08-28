@@ -313,10 +313,10 @@ Planned security correction: eliminate first-name equivalence from authenticatio
   - [x] RPOL credentials remain provisioned through Windows Credential Manager rather than portable or hosted settings payloads.
   - [x] Installer and runtime validators accept the public settings envelope while retaining legacy migration compatibility.
   - [x] Focused settings, installer-package, PowerShell parse, and full 536-test regression gates pass.
-- [ ] Make the installed application tree immutable and correctly permissioned.
-  - [ ] Route diagnostics, caches, markers, generated manifests, and snapshots through `WritableRuntimeDirectory` or another user-data location.
-  - [ ] Remove inherited Users-Modify access from Program Files executables, DLLs, and the generated uninstaller.
-  - [ ] Launch from a read/execute-only published directory and prove startup succeeds while the publish-tree hash remains unchanged.
+- [x] Make the installed application tree immutable and correctly permissioned.
+  - [x] Route diagnostics, caches, markers, generated manifests, and snapshots through `WritableRuntimeDirectory` or another user-data location.
+  - [x] Remove inherited Users-Modify access from Program Files executables, DLLs, and the generated uninstaller.
+  - [x] Launch from a read/execute-only published directory and prove startup succeeds while the publish-tree hash remains unchanged.
 - [ ] Make update and installer transitions cancellation-safe and transactional.
   - [ ] Thread form-lifetime cancellation through update checks/downloads and gate every post-await dialog, UI mutation, launch-ticket write, and `Process.Start`.
   - [ ] On ZIP-installer failures after promotion, quarantine/remove the candidate and restore the prior tree, ACLs, shortcuts, and uninstall registration exactly.

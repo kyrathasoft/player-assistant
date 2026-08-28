@@ -29,7 +29,7 @@ namespace PlayerAssistant
 
         public static void CleanCurrentRuntimeAndLog()
         {
-            var report = Clean(AppContext.BaseDirectory);
+            var report = Clean(RuntimePathUtility.WritableRuntimeDirectory);
             if (report.HasActivity)
             {
                 StartupLoggingUtility.Append("runtime housekeeping", report.ToLogMessage());

@@ -142,7 +142,7 @@ namespace PlayerAssistant
 
         private static string GetLogPath()
         {
-            return Path.Combine(AppContext.BaseDirectory, LogFileName);
+            return RuntimePathUtility.GetWritableRuntimePath(LogFileName);
         }
     }
 }

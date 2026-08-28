@@ -293,7 +293,7 @@ namespace PlayerAssistant
             var failureEntries = failures
                 .OrderBy(entry => entry, StringComparer.Ordinal)
                 .ToArray();
-            var logPath = Path.Combine(AppContext.BaseDirectory, ErrorLogFileName);
+            var logPath = RuntimePathUtility.GetWritableRuntimePath(ErrorLogFileName);
 
             if (failureEntries.Length == 0)
             {
