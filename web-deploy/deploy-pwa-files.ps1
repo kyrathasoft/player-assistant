@@ -23,15 +23,17 @@ $remoteStage = "$RemoteDirectory/.release-$releaseId"
 $remoteArchive = "$remoteStage.tar"
 $remoteState = "$remoteStage/.transaction.json"
 $pwaDirectory = Join-Path $PSScriptRoot '..\pwa'
+$sshExecutable = Join-Path $env:WINDIR 'System32\OpenSSH\ssh.exe'
+$scpExecutable = Join-Path $env:WINDIR 'System32\OpenSSH\scp.exe'
 $sshOptions = @('-i', $SshKeyPath, '-o', 'BatchMode=yes', '-o', 'IdentitiesOnly=yes', '-o', 'ConnectTimeout=15', '-o', 'ConnectionAttempts=1', '-o', 'ServerAliveInterval=5', '-o', 'ServerAliveCountMax=3')
 
 function Invoke-RemoteSsh([string]$Command) {
-    & ssh @sshOptions $DreamHostTarget $Command
+    & $sshExecutable @sshOptions $DreamHostTarget $Command
     return $LASTEXITCODE
 }
 
 function Get-RemoteStatus {
-    $output = & ssh @sshOptions $DreamHostTarget "/usr/bin/php '$remoteStage/install.php' status"
+    $output = & $sshExecutable @sshOptions $DreamHostTarget "/usr/bin/php '$remoteStage/install.php' status"
     $exitCode = $LASTEXITCODE
     if ($exitCode -ne 0) { throw "Unable to query PWA release transaction status (exit code $exitCode). Do not rerun release $releaseId until the remote transaction is inspected." }
     try { return ($output -join "`n" | ConvertFrom-Json) }
@@ -144,12 +146,14 @@ elseif ($action === 'rollback') {
 else { throw new RuntimeException('Unknown release action: '.$action); }
 '@.Replace('__MANIFEST__', $manifest64)
     [IO.File]::WriteAllText((Join-Path $localStage 'install.php'), $controller, [Text.UTF8Encoding]::new($false))
-    & tar -cf $localArchive -C $localStage -- @Files 'install.php'
+    $tarStage = (& cygpath -u $localStage).Trim()
+    $tarArchive = (& cygpath -u $localArchive).Trim()
+    & tar -cf $tarArchive -C $tarStage -- @Files 'install.php'
     if ($LASTEXITCODE -ne 0) { throw 'Unable to create the PWA release archive.' }
 
     $uploaded = $false
     for ($attempt = 1; $attempt -le 3 -and -not $uploaded; $attempt++) {
-        & scp -q @sshOptions -- $localArchive "${DreamHostTarget}:$remoteArchive"
+        & $scpExecutable -q @sshOptions -- $localArchive "${DreamHostTarget}:$remoteArchive"
         $uploaded = $LASTEXITCODE -eq 0
         if (-not $uploaded) { Start-Sleep -Seconds (2 * $attempt) }
     }
