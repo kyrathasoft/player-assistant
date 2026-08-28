@@ -2081,12 +2081,14 @@ namespace PlayerAssistant
         private async void CheckForUpdateToolStripMenuItem_Click(object? sender, EventArgs e)
         {
             checkForUpdateToolStripMenuItem.Enabled = false;
+            var cancellationToken = _formLifetimeCancellation.Token;
             try
             {
                 SetStatusBarMessage("Checking for updates...");
                 using var activity = BeginStatusBarActivity();
                 using var httpClient = NetworkRequestUtility.CreateHttpClient();
-                var update = await PlayerAssistantUpdateUtility.CheckForLatestUpdateAsync(httpClient);
+                var update = await PlayerAssistantUpdateUtility.CheckForLatestUpdateAsync(httpClient, cancellationToken);
+                EnsureFormOperationActive(cancellationToken);
                 var currentVersion = PlayerAssistantUpdateUtility.GetCurrentAppVersion();
                 if (update is null)
                 {
@@ -2102,6 +2104,7 @@ namespace PlayerAssistant
 
                 if (!update.IsNewerThan(currentVersion))
                 {
+                    EnsureFormOperationActive(cancellationToken);
                     MessageBox.Show(
                         this,
                         GetLatestVersionMessage(),
@@ -2125,8 +2128,10 @@ namespace PlayerAssistant
                 }
 
                 SetStatusBarMessage($"Downloading verified installer: {update.VersionText}...");
-                var installer = await VerifiedInstallerUpdateUtility.DownloadVerifiedInstallerAsync(httpClient, update);
-                var installerLaunchTicket = VerifiedInstallerLaunchUtility.CreateLaunchTicket(installer);
+                var installer = await VerifiedInstallerUpdateUtility.DownloadVerifiedInstallerAsync(httpClient, update, cancellationToken);
+                EnsureFormOperationActive(cancellationToken);
+                var installerLaunchTicket = VerifiedInstallerLaunchUtility.CreateLaunchTicket(installer, cancellationToken);
+                EnsureFormOperationActive(cancellationToken);
                 var launchInstallerResult = MessageBox.Show(
                     this,
                     $"Player Assistant {update.VersionText} was downloaded and verified.{Environment.NewLine}{Environment.NewLine}Installer: {installer.InstallerPath}{Environment.NewLine}{Environment.NewLine}Run the installer now?",
@@ -2139,11 +2144,20 @@ namespace PlayerAssistant
                     return;
                 }
 
-                Process.Start(VerifiedInstallerLaunchUtility.CreateStartInfo(installerLaunchTicket));
+                EnsureFormOperationActive(cancellationToken);
+                Process.Start(VerifiedInstallerLaunchUtility.CreateStartInfo(installerLaunchTicket, cancellationToken));
                 SetStatusBarMessage($"Launching verified installer: {update.VersionText}.");
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
             }
             catch (Exception ex)
             {
+                if (cancellationToken.IsCancellationRequested || IsDisposed || Disposing)
+                {
+                    return;
+                }
+
                 await ReportOperationFailureAsync(
                     "update check",
                     "Update check unavailable",
@@ -2153,7 +2167,19 @@ namespace PlayerAssistant
             }
             finally
             {
-                checkForUpdateToolStripMenuItem.Enabled = true;
+                if (!IsDisposed && !Disposing)
+                {
+                    checkForUpdateToolStripMenuItem.Enabled = true;
+                }
+            }
+        }
+
+        private void EnsureFormOperationActive(CancellationToken cancellationToken)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            if (IsDisposed || Disposing)
+            {
+                throw new OperationCanceledException(cancellationToken);
             }
         }
 

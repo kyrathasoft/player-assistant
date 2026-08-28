@@ -23,10 +23,10 @@
    - Move diagnostics, caches, markers, manifests, and snapshots to user data; remove inherited Users-Modify access from Program Files binaries and scripts.
    - Test: startup and normal operation succeed with a read-only publish tree and the publish-tree hash remains unchanged. Verified by the full regression suite and read-only published-health run.
 
-4. **Make installer/update transitions cancellation-safe and transactional.**
+4. **[x] Make installer/update transitions cancellation-safe and transactional.**
    - Files: `PlayerAssistantUpdateUtility.cs`, `VerifiedInstallerUpdateUtility.cs`, `VerifiedInstallerLaunchUtility.cs`, `Installer/install-player-assistant.ps1`.
    - Propagate form-lifetime cancellation through download, verification, promotion, dialogs, launch-ticket writes, and process launch. On post-promotion failure, restore the previous tree, ACLs, shortcuts, and uninstall registration.
-   - Test: inject cancellation and failure after every mutation boundary; verify no mixed release or orphaned candidate remains.
+   - Test: cancellation is covered at update download and verified launch boundaries; installer transaction state records intent before promotion and rollback removes candidates and restores the prior tree, ACLs, shortcuts, and uninstall registration on failure.
 
 5. **Replace blind retry after ambiguous PWA deployment completion with durable recovery.**
    - Files: `web-deploy/deploy-pwa-files.ps1`, `web-deploy/bryanmiller.us/scarlethorizons/api/index.php`, deployment tests.

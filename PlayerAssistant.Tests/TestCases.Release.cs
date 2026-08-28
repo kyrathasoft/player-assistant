@@ -461,6 +461,32 @@ internal static partial class TestCases
         AssertFalse(result.ReusedExistingFile, "fresh installer download should not report reuse");
     }
 
+    internal static void VerifiedUpdaterHonorsCancellationBeforeMutation()
+    {
+        using var directory = TemporaryDirectory.Create();
+        using var cancellation = new CancellationTokenSource();
+        cancellation.Cancel();
+        var update = new PlayerAssistantUpdateInfo(
+            new Version(0, 9, 1),
+            "0.9.1",
+            new Uri("https://bryanmiller.us/scarlethorizons/p-assist-0.9.1.zip"),
+            new string('A', 64),
+            new Uri("https://bryanmiller.us/scarlethorizons/p-assist-0.9.1.exe"),
+            new string('B', 64));
+
+        using var httpClient = NetworkRequestUtility.CreateHttpClient(new ScriptedHttpMessageHandler((_, _) =>
+            throw new InvalidOperationException("cancelled update must not reach the network")));
+
+        AssertThrows<OperationCanceledException>(() =>
+            VerifiedInstallerUpdateUtility.DownloadVerifiedInstallerAsync(
+                httpClient,
+                update,
+                new AuthenticodeSignaturePolicy("CN=KyrathaSoft", "ABC123"),
+                _ => new AuthenticodeSignatureInfo("Valid", "CN=KyrathaSoft LLC", "ABC123"),
+                directory.Path,
+                cancellation.Token).GetAwaiter().GetResult());
+    }
+
     internal static void UpdateHostCertificatePinningAcceptsTrustedLeafPin()
     {
         var isValid = CertificatePinningUtility.ValidatePinnedRequest(
@@ -749,6 +775,27 @@ internal static partial class TestCases
         AssertContains(exception.Message, "elevation context changed");
     }
 
+    internal static void VerifiedInstallerLaunchHonorsCancellationBeforeExecution()
+    {
+        using var directory = TemporaryDirectory.Create();
+        var installerPath = Path.Combine(directory.Path, "p-assist-0.9.1.exe");
+        var installerBytes = System.Text.Encoding.UTF8.GetBytes("signed installer bytes");
+        File.WriteAllBytes(installerPath, installerBytes);
+        var signature = new AuthenticodeSignatureInfo("Valid", "CN=KyrathaSoft LLC", "ABC123");
+        var download = new VerifiedInstallerDownloadResult(
+            installerPath,
+            Convert.ToHexString(SHA256.HashData(installerBytes)),
+            signature,
+            ReusedExistingFile: false);
+        using var cancellation = new CancellationTokenSource();
+        cancellation.Cancel();
+
+        AssertThrows<OperationCanceledException>(() =>
+            VerifiedInstallerLaunchUtility.CreateLaunchTicket(
+                download,
+                cancellation.Token));
+    }
+
     internal static void InstallerProtectsInstalledApplicationTree()
     {
         var installerPath = Path.Combine(GetRepositoryRoot(), "Installer", "install-player-assistant.ps1");
@@ -760,6 +807,9 @@ internal static partial class TestCases
         AssertContains(script, "${systemSid}:F");
         AssertContains(script, "${administratorsSid}:F");
         AssertFalse(script.Contains("${usersSid}:(OI)(CI)M", StringComparison.Ordinal), "installer must not grant Users modify access to the application tree");
+        AssertContains(script, "function Write-TransactionState");
+        AssertContains(script, "function Restore-ExistingInstallationState");
+        AssertContains(script, "Remove-Item -LiteralPath $resolvedInstallDir -Recurse -Force -ErrorAction SilentlyContinue");
     }
 
     internal static void PublishVerificationAcceptsCurrentOutput()

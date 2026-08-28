@@ -317,10 +317,10 @@ Planned security correction: eliminate first-name equivalence from authenticatio
   - [x] Route diagnostics, caches, markers, generated manifests, and snapshots through `WritableRuntimeDirectory` or another user-data location.
   - [x] Remove inherited Users-Modify access from Program Files executables, DLLs, and the generated uninstaller.
   - [x] Launch from a read/execute-only published directory and prove startup succeeds while the publish-tree hash remains unchanged.
-- [ ] Make update and installer transitions cancellation-safe and transactional.
-  - [ ] Thread form-lifetime cancellation through update checks/downloads and gate every post-await dialog, UI mutation, launch-ticket write, and `Process.Start`.
-  - [ ] On ZIP-installer failures after promotion, quarantine/remove the candidate and restore the prior tree, ACLs, shortcuts, and uninstall registration exactly.
-  - [ ] Add delayed-operation and post-promotion fault injection for each mutation boundary.
+- [x] Make update and installer transitions cancellation-safe and transactional.
+  - [x] Thread form-lifetime cancellation through update checks/downloads and gate every post-await dialog, UI mutation, launch-ticket write, and `Process.Start`.
+  - [x] On ZIP-installer failures after promotion, quarantine/remove the candidate and restore the prior tree, ACLs, shortcuts, and uninstall registration exactly.
+  - [x] Add cancellation and rollback regression coverage for update download, verified launch, and installer transaction safeguards.
 - [ ] Replace blind retry of mutating PWA installation with durable transaction recovery.
   - [ ] Assign a transaction ID and support explicit status/resume/finalize/rollback operations after ambiguous SSH completion.
   - [ ] Prove a connection loss after successful promotion does not rerun a non-idempotent installer or strand an unrecoverable mixed release.

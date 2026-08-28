@@ -92,6 +92,7 @@ namespace PlayerAssistant
                 signatureText,
                 UpdateManifestUri,
                 trustedSigningKeys);
+            cancellationToken.ThrowIfCancellationRequested();
             return ApplyTrustedUpdateVersionPolicy(
                 latestUpdate,
                 GetCurrentAppVersion(),
