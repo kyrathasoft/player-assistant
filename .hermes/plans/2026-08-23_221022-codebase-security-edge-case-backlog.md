@@ -43,10 +43,10 @@
    - Require the configured production signing key on trusted release paths, verify the emitted public-key fingerprint, and centralize strict DreamHost host-key checking. Reject missing, malformed, or ephemeral keys.
    - Test: absent key, wrong signer, changed host key, and malformed mirror credential expressions all fail before deployment.
 
-8. **Restore the broker migration/startup boundary.**
+8. **Restore the broker migration/startup boundary.** [x]
    - Files: `web-deploy/player-assistant-broker/BrokerService.php`, `CharacterAuthService.php`, `XpTrackingService.php`, `QuestService.php`, `MessageService.php`, `migrate-broker.php`.
-   - Keep migrations deployment-only; normal requests verify `PRAGMA user_version` and fail closed on mismatch. Lazily instantiate only the selected service; keep public health independent of SQLite and private subsystems.
-   - Test: every route against current, old, and missing schema versions; assert that GET health performs no migration or write.
+   - Keep migrations deployment-only; normal requests verify `PRAGMA user_version` and fail closed on mismatch. Lazily instantiate only the selected service; keep public health independent of SQLite and private subsystems. The public health route now exits before HTTPS/config/private broker startup.
+   - Test: every route against current, old, and missing schema versions; assert that GET health performs no migration or write. Verified by broker startup, schema-guard, migration, and direct no-config health-route tests.
 
 9. **Restore authenticated revision routing and release PHP session locks before slow reads.**
    - Files: `web-deploy/player-assistant-broker/BrokerService.php`, public `api/index.php`, `CharacterAuthService.php`, revision tests.

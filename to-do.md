@@ -332,11 +332,12 @@ Planned security correction: eliminate first-name equivalence from authenticatio
   - [x] Centralize the pinned DreamHost host key and require strict host-key checking for every deployment workflow and script.
   - [x] Correct the malformed Gitea mirror source credential expression and add semantic workflow validation plus a dry-run authenticated fetch.
 
-- [ ] Re-establish the broker startup and migration boundary.
-  - [ ] Keep ordered migrations in `migrate-broker.php` and deployment only; normal requests must verify the expected `PRAGMA user_version` and fail closed on mismatch.
-  - [ ] Lazily construct only the service required by the selected route.
-  - [ ] Keep public `/v1/health` independent of SQLite, migrations, private files, and unrelated service constructors.
-  - [ ] Remove `ensureSchema()` writes from `BrokerService`, `CharacterAuthService`, `XpTrackingService`, `QuestService`, and `MessageService` after migration fixtures cover their schemas.
+- [x] Re-establish the broker startup and migration boundary.
+  - [x] Keep ordered migrations in `migrate-broker.php` and deployment only; normal requests verify the expected `PRAGMA user_version` and fail closed on mismatch.
+  - [x] Lazily construct only the service required by the selected route.
+  - [x] Keep public `/v1/health` independent of SQLite, migrations, private files, and unrelated service constructors; the route now exits before HTTPS/config/private broker startup.
+  - [x] Remove `ensureSchema()` writes from `BrokerService`, `CharacterAuthService`, `XpTrackingService`, `QuestService`, and `MessageService` after migration fixtures cover their schemas.
+  - [x] Verified with broker startup, schema-guard, migration, and direct no-config health-route tests.
 - [ ] Restore missing broker routing and session-concurrency contracts.
   - [x] Wire authenticated `/v1/revisions` through the production entry point with account scoping, anonymous denial, and public HTTP coverage.
   - [ ] Copy authorized identity state and release the PHP session lock before slow read-only XP, revision, message, and quest work.
