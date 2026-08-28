@@ -135,6 +135,13 @@ function ConvertFrom-EncryptedSettingsFile {
     $encryptionKey = $null
     $authenticationKey = $null
 
+    if ($format -eq 'public-settings-v1') {
+        if ([string]::IsNullOrWhiteSpace($envelope.payload)) { throw 'Public settings payload is empty.' }
+        $publicBytes = [Convert]::FromBase64String([string]$envelope.payload)
+        if ($publicBytes.Length -eq 0) { throw 'Public settings payload is empty.' }
+        return ConvertTo-PlainSettingsObject -Settings ([System.Text.Encoding]::UTF8.GetString($publicBytes) | ConvertFrom-Json)
+    }
+
     if ($format -eq 'app-protected-v3') {
         $scope = Get-SettingsDerivationScope -SettingsPath $Path
         $encryptionKey = Get-Sha256Bytes -Value "$SettingsEncryptionSeed.v3.encryption.$scope"
@@ -220,60 +227,30 @@ function Write-PortableEncryptedSettings {
         [Parameter(Mandatory = $true)][string]$DestinationPath
     )
 
-    $plaintextJson = $Settings | ConvertTo-Json -Depth 10
+    $portableSettings = [ordered]@{}
+    foreach ($property in $Settings.PSObject.Properties) {
+        if ($property.Name -notin @('RPOL user name', 'RPOL password')) {
+            $portableSettings[$property.Name] = [string]$property.Value
+        }
+    }
+    $plaintextJson = [pscustomobject]$portableSettings | ConvertTo-Json -Depth 10
     $plaintextBytes = [System.Text.Encoding]::UTF8.GetBytes($plaintextJson)
-    $iv = [byte[]]::new(16)
-    $rng = [System.Security.Cryptography.RandomNumberGenerator]::Create()
     try {
-        $rng.GetBytes($iv)
+        $envelope = [ordered]@{
+            schema_version = $SettingsSchemaVersion
+            format = 'public-settings-v1'
+            payload = [Convert]::ToBase64String($plaintextBytes)
+        }
+        [System.IO.File]::WriteAllText(
+            $DestinationPath,
+            ([pscustomobject]$envelope | ConvertTo-Json -Depth 4),
+            [System.Text.UTF8Encoding]::new($false))
     }
     finally {
-        $rng.Dispose()
-    }
-
-    $aes = [System.Security.Cryptography.Aes]::Create()
-    try {
-        $aes.Key = Get-Sha256Bytes -Value $SettingsEncryptionSeed
-        $aes.IV = $iv
-        $aes.Mode = [System.Security.Cryptography.CipherMode]::CBC
-        $aes.Padding = [System.Security.Cryptography.PaddingMode]::PKCS7
-        $encryptor = $aes.CreateEncryptor()
-        try {
-            $ciphertext = $encryptor.TransformFinalBlock($plaintextBytes, 0, $plaintextBytes.Length)
-        }
-        finally {
-            $encryptor.Dispose()
+        if ($plaintextBytes.Length -gt 0) {
+            [System.Security.Cryptography.CryptographicOperations]::ZeroMemory($plaintextBytes)
         }
     }
-    finally {
-        $aes.Dispose()
-    }
-
-    $protectedContent = [byte[]]::new($iv.Length + $ciphertext.Length)
-    [System.Buffer]::BlockCopy($iv, 0, $protectedContent, 0, $iv.Length)
-    [System.Buffer]::BlockCopy($ciphertext, 0, $protectedContent, $iv.Length, $ciphertext.Length)
-    $hmac = [System.Security.Cryptography.HMACSHA256]::new((Get-Sha256Bytes -Value "$SettingsEncryptionSeed.hmac"))
-    try {
-        $tag = $hmac.ComputeHash($protectedContent)
-    }
-    finally {
-        $hmac.Dispose()
-    }
-
-    $payloadBytes = [byte[]]::new($protectedContent.Length + $tag.Length)
-    [System.Buffer]::BlockCopy($protectedContent, 0, $payloadBytes, 0, $protectedContent.Length)
-    [System.Buffer]::BlockCopy($tag, 0, $payloadBytes, $protectedContent.Length, $tag.Length)
-
-    $envelope = [ordered]@{
-        schema_version = $SettingsSchemaVersion
-        format = 'app-protected-v2'
-        payload = [Convert]::ToBase64String($payloadBytes)
-    }
-
-    [System.IO.File]::WriteAllText(
-        $DestinationPath,
-        ([pscustomobject]$envelope | ConvertTo-Json -Depth 4),
-        [System.Text.UTF8Encoding]::new($false))
 }
 
 function Copy-DirectoryContents {

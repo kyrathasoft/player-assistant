@@ -59,8 +59,8 @@ function Assert-EncryptedEnvelope {
         throw "$Description must declare schema_version 1."
     }
 
-    if ($json.format -ne 'app-protected-v2') {
-        throw "$Description must use portable encrypted format app-protected-v2 for installer payloads."
+    if ($json.format -notin @('public-settings-v1', 'app-protected-v2')) {
+        throw "$Description must use a supported portable settings format."
     }
 
     if ([string]::IsNullOrWhiteSpace([string]$json.payload)) {
