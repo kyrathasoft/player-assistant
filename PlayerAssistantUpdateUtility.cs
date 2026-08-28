@@ -39,13 +39,13 @@ namespace PlayerAssistant
                 "update-signing-2026-primary",
                 """
                 -----BEGIN PUBLIC KEY-----
-                MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAmn1/5EhDHNdV2zIdKxB/
-                S1ny3TygjZHHPfvj9myjjFw23z5K2vGQkAgfzn4+WSp/a9MxHfCunug5S8Ig0uMB
-                sTbgDogxg/81SOi+qWTuYEcn7rTJVZISWX4uVw7K7TFhes+orRUULqHR3hbsa1Ta
-                t4XeflJaz2Z+C6bVmNtazwVgqkJVMVCzrDXdGgrUWXKIGa1NWj58RCVboqQdQKIa
-                LfBfW8oeWxzbH6rngE8R2U9PmJn3WO3o76iOgCueKsxmx4PVX6BBxd4vKHCjuivY
-                LyTK9NT40bqTOpiKa8QG1cggowwhgR+V7Hphu8OexyI/WkcYG5tZp8cD8vvyP7VU
-                MQIDAQAB
+                MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA1R2zji4+vrp2Frr8uZFh
+                ks5b0IFN+LMc5FQ/0HUcCB8kUUss0pdvQiovbAiprdIR7EauJQLqia0CK8b/xW6W
+                Ck4F4BGz0yXTaPzY4U/N2xPYlQ3vfkDYHuTVDNV0AbSEgtbkphWw6kbMZBqZSVSh
+                Omky1PEHsUsoLz9VFmVxeX4gq1I7nxVWvfEJlt08OzOT64JDoauc4HVJIQyfwMAF
+                rk7/DgmnmaSGt0MRaIZfdUbmEeG0hWbxC14mUVYXXrzfm76rpTLmAgsFwBMiQMZZ
+                QPjyxnTRYMThkJwMXaNeUMdWrymTe7nfAUFU1TDbD2ezEWsCd27d8fskvqL9kd36
+                aQIDAQAB
                 -----END PUBLIC KEY-----
                 """)
         ];
