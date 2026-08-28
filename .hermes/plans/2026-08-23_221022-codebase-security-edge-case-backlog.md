@@ -38,7 +38,7 @@
    - Stage in the same directory, verify exact remote hash and schema, then rename atomically while retaining rollback evidence.
    - Test: interrupt transfer and promotion independently; old production bytes must remain served.
 
-7. **Fail closed on release signing and deployment host identity.**
+7. **[x] Fail closed on release signing and deployment host identity.**
    - Files: `.github/workflows/*.yml`, `AuthenticodeSignatureUtility.cs`, `web-deploy/*.ps1`.
    - Require the configured production signing key on trusted release paths, verify the emitted public-key fingerprint, and centralize strict DreamHost host-key checking. Reject missing, malformed, or ephemeral keys.
    - Test: absent key, wrong signer, changed host key, and malformed mirror credential expressions all fail before deployment.

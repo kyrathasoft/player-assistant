@@ -11,11 +11,18 @@ param(
     [string[]]$Files,
     [string]$DreamHostTarget = 'player-assistant-dreamhost',
     [string]$SshKeyPath = (Join-Path $HOME '.ssh\dreamhost_player_assistant'),
+    [string]$KnownHostsPath = (Join-Path $PSScriptRoot 'dreamhost_known_hosts'),
     [string]$RemoteDirectory = '/home/dh_4gg2za/bryanmiller.us/scarlethorizons/pwa',
     [uri]$PublicBaseUri = 'https://bryanmiller.us/scarlethorizons/pwa/'
 )
 
 $ErrorActionPreference = 'Stop'
+if (-not (Test-Path -LiteralPath $KnownHostsPath -PathType Leaf)) {
+    throw "Pinned DreamHost known-hosts file is required: $KnownHostsPath"
+}
+if (-not (Test-Path -LiteralPath $SshKeyPath -PathType Leaf)) {
+    throw "DreamHost deployment private key is required: $SshKeyPath"
+}
 $releaseId = [Guid]::NewGuid().ToString('N')
 $localStage = Join-Path ([IO.Path]::GetTempPath()) "player-assistant-pwa-$releaseId"
 $localArchive = "$localStage.tar"
@@ -25,7 +32,7 @@ $remoteState = "$remoteStage/.transaction.json"
 $pwaDirectory = Join-Path $PSScriptRoot '..\pwa'
 $sshExecutable = Join-Path $env:WINDIR 'System32\OpenSSH\ssh.exe'
 $scpExecutable = Join-Path $env:WINDIR 'System32\OpenSSH\scp.exe'
-$sshOptions = @('-i', $SshKeyPath, '-o', 'BatchMode=yes', '-o', 'IdentitiesOnly=yes', '-o', 'ConnectTimeout=15', '-o', 'ConnectionAttempts=1', '-o', 'ServerAliveInterval=5', '-o', 'ServerAliveCountMax=3')
+$sshOptions = @('-i', $SshKeyPath, '-o', 'BatchMode=yes', '-o', 'IdentitiesOnly=yes', '-o', 'StrictHostKeyChecking=yes', '-o', "UserKnownHostsFile=$KnownHostsPath", '-o', 'ConnectTimeout=15', '-o', 'ConnectionAttempts=1', '-o', 'ServerAliveInterval=5', '-o', 'ServerAliveCountMax=3')
 
 function Invoke-RemoteSsh([string]$Command) {
     & $sshExecutable @sshOptions $DreamHostTarget $Command

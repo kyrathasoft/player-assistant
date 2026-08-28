@@ -162,7 +162,9 @@ The script prompts securely for the broker administrator key and sends only the 
 
 ## PWA files
 
-Deploy changed public runtime files through the transactional deployment script:
+Deploy changed public runtime files through the transactional deployment script. The script requires
+`web-deploy/dreamhost_known_hosts` and enables strict host-key checking; update the pinned entry only
+through an independently verified host-key rotation process.
 
 ```powershell
 .\web-deploy\deploy-pwa-files.ps1 -Files @(

@@ -9,6 +9,7 @@ param(
     [string]$SignaturePath,
     [string]$PublicKeyXmlPath,
     [string]$PrivateKeyXmlPath,
+    [string]$ExpectedPublicKeyXmlPath,
     [switch]$GenerateEphemeralSigningKey
 )
 
@@ -99,6 +100,33 @@ function New-SigningKeyPair {
     $rsa = [System.Security.Cryptography.RSACryptoServiceProvider]::new(2048)
     $rsa.PersistKeyInCsp = $false
     return $rsa
+}
+
+function Assert-SigningKeyMatchesExpected {
+    param(
+        [Parameter(Mandatory = $true)][System.Security.Cryptography.RSACryptoServiceProvider]$SigningKey,
+        [Parameter(Mandatory = $true)][string]$ExpectedPublicKeyXmlPath
+    )
+
+    Assert-RequiredFile -Path $ExpectedPublicKeyXmlPath -Description 'expected trusted public signing key XML'
+    $expected = [System.Security.Cryptography.RSACryptoServiceProvider]::new()
+    $expected.PersistKeyInCsp = $false
+    try {
+        $expected.FromXmlString((Get-Content -Raw -LiteralPath $ExpectedPublicKeyXmlPath))
+        $actualParameters = $SigningKey.ExportParameters($false)
+        $expectedParameters = $expected.ExportParameters($false)
+        $actualModulus = [Convert]::ToBase64String($actualParameters.Modulus)
+        $expectedModulus = [Convert]::ToBase64String($expectedParameters.Modulus)
+        $actualExponent = [Convert]::ToBase64String($actualParameters.Exponent)
+        $expectedExponent = [Convert]::ToBase64String($expectedParameters.Exponent)
+        if (($actualModulus -ne $expectedModulus) -or ($actualExponent -ne $expectedExponent)) {
+            throw 'The configured private signing key does not match the expected trusted public signing key.'
+        }
+    }
+    finally {
+        $expected.Clear()
+        $expected.Dispose()
+    }
 }
 
 function Get-SigningKey {
@@ -202,8 +230,14 @@ $manifest = [ordered]@{
 $manifestJson = $manifest | ConvertTo-Json -Depth 6
 [System.IO.File]::WriteAllText($resolvedManifestPath, $manifestJson + [Environment]::NewLine, [System.Text.UTF8Encoding]::new($false))
 
+if (![string]::IsNullOrWhiteSpace($ExpectedPublicKeyXmlPath) -and $GenerateEphemeralSigningKey) {
+    throw 'An expected trusted public key cannot be combined with ephemeral signing.'
+}
 $rsa = Get-SigningKey -PrivateKeyXmlPath $PrivateKeyXmlPath -GenerateEphemeralSigningKey:$GenerateEphemeralSigningKey
 try {
+    if (![string]::IsNullOrWhiteSpace($ExpectedPublicKeyXmlPath)) {
+        Assert-SigningKeyMatchesExpected -SigningKey $rsa -ExpectedPublicKeyXmlPath $ExpectedPublicKeyXmlPath
+    }
     $manifestBytes = [System.IO.File]::ReadAllBytes($resolvedManifestPath)
     $signatureBytes = $rsa.SignData($manifestBytes, 'SHA256')
     [System.IO.File]::WriteAllText($resolvedSignaturePath, [Convert]::ToBase64String($signatureBytes) + [Environment]::NewLine, [System.Text.UTF8Encoding]::new($false))

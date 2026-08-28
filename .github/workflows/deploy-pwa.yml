@@ -38,6 +38,7 @@ jobs:
               -DreamHostTarget 'dh_4gg2za@pdx1-shared-a1-13.dreamhost.com' `
               -RemoteDirectory '/home/dh_4gg2za/bryanmiller.us/scarlethorizons/pwa' `
               -SshKeyPath $keyPath `
+              -KnownHostsPath '.\web-deploy\dreamhost_known_hosts' `
               -Files $files
             if ($LASTEXITCODE -ne 0) { throw 'The PWA deployment or production verification failed.' }
           }
