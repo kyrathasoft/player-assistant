@@ -461,6 +461,7 @@ jobs:
             -ExpectedPublicKeyXmlPath $publicKeyPath
 
       - name: Verify signed release update artifacts
+        if: github.event_name == 'push'
         shell: pwsh
         env:
           UPDATE_MANIFEST_PUBLIC_KEY_XML: ${{ secrets.PLAYER_ASSISTANT_UPDATE_MANIFEST_PUBLIC_KEY_XML }}
