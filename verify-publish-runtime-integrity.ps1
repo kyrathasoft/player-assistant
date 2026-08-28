@@ -373,14 +373,19 @@ $backupDirectory = Join-Path $PSScriptRoot "codex-scratch\publish-integrity-back
 $backedUpDiagnostics = [string[]]@()
 $process = $null
 
+# Published applications write mutable runtime diagnostics to the per-user writable
+# runtime directory, not beside the deployed executable. Keep the verifier aligned
+# with RuntimePathUtility so it observes the health record the launched process writes.
+$runtimeDataDirectory = Join-Path $env:LOCALAPPDATA 'KyrathaSoft\player-assistant'
+
 try {
     New-Item -ItemType Directory -Force -Path $backupDirectory | Out-Null
-    $backedUpDiagnostics = Backup-PublishDiagnostics -Directory $resolvedPublishDir -BackupDirectory $backupDirectory
+    $backedUpDiagnostics = Backup-PublishDiagnostics -Directory $runtimeDataDirectory -BackupDirectory $backupDirectory
 
     $beforeManifest = Get-ReleaseManifest -Directory $resolvedReleaseDir -RelativePaths $TrackedReleaseFile
     $startedAtUtc = [DateTime]::UtcNow
     $process = Start-Process -FilePath $exePath -ArgumentList '--suppress-hero-images' -WorkingDirectory $resolvedPublishDir -PassThru
-    $health = Wait-ForStartupHealth -HealthPath (Join-Path $resolvedPublishDir $HealthFileName) -StartedAfterUtc $startedAtUtc -TimeoutSeconds $StartupTimeoutSeconds
+    $health = Wait-ForStartupHealth -HealthPath (Join-Path $runtimeDataDirectory $HealthFileName) -StartedAfterUtc $startedAtUtc -TimeoutSeconds $StartupTimeoutSeconds
     Assert-StartupHealth -Health $health
 
     if ($PostHealthRunSeconds -gt 0) {
@@ -405,7 +410,7 @@ finally {
     }
 
     if (Test-Path -LiteralPath $backupDirectory) {
-        Restore-PublishDiagnostics -Directory $resolvedPublishDir -BackupDirectory $backupDirectory -BackedUpPaths ([string[]]$backedUpDiagnostics)
+        Restore-PublishDiagnostics -Directory $runtimeDataDirectory -BackupDirectory $backupDirectory -BackedUpPaths ([string[]]$backedUpDiagnostics)
         Remove-Item -LiteralPath $backupDirectory -Recurse -Force
     }
 }
