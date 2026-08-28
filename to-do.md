@@ -331,6 +331,7 @@ Planned security correction: eliminate first-name equivalence from authenticatio
   - [x] On trusted pushes, require the configured production update-signing key and verify the emitted public-key fingerprint; never substitute an ephemeral key.
   - [x] Centralize the pinned DreamHost host key and require strict host-key checking for every deployment workflow and script.
   - [x] Correct the malformed Gitea mirror source credential expression and add semantic workflow validation plus a dry-run authenticated fetch.
+
 - [ ] Re-establish the broker startup and migration boundary.
   - [ ] Keep ordered migrations in `migrate-broker.php` and deployment only; normal requests must verify the expected `PRAGMA user_version` and fail closed on mismatch.
   - [ ] Lazily construct only the service required by the selected route.
