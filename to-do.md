@@ -321,12 +321,12 @@ Planned security correction: eliminate first-name equivalence from authenticatio
   - [x] Thread form-lifetime cancellation through update checks/downloads and gate every post-await dialog, UI mutation, launch-ticket write, and `Process.Start`.
   - [x] On ZIP-installer failures after promotion, quarantine/remove the candidate and restore the prior tree, ACLs, shortcuts, and uninstall registration exactly.
   - [x] Add cancellation and rollback regression coverage for update download, verified launch, and installer transaction safeguards.
-- [ ] Replace blind retry of mutating PWA installation with durable transaction recovery.
-  - [ ] Assign a transaction ID and support explicit status/resume/finalize/rollback operations after ambiguous SSH completion.
-  - [ ] Prove a connection loss after successful promotion does not rerun a non-idempotent installer or strand an unrecoverable mixed release.
-- [ ] Deploy `campaign-search.json` atomically.
-  - [ ] Upload to same-directory staging, verify the remote hash, retain rollback evidence, and atomically rename into place.
-  - [ ] Interrupt transfer and promotion independently and prove the previous production bytes remain available.
+- [x] Replace blind retry of mutating PWA installation with durable transaction recovery.
+  - [x] Assign a transaction ID and support explicit status/resume/finalize/rollback operations after ambiguous SSH completion.
+  - [x] Prove a connection loss after successful promotion does not rerun a non-idempotent installer or strand an unrecoverable mixed release.
+- [x] Deploy `campaign-search.json` atomically.
+  - [x] Upload to same-directory staging, verify the remote hash, retain rollback evidence, and atomically rename into place.
+  - [x] Interrupt transfer and promotion independently and prove the previous production bytes remain available.
 - [ ] Fail closed on release-signing and SSH-host identity.
   - [ ] On trusted pushes, require the configured production update-signing key and verify the emitted public-key fingerprint; never substitute an ephemeral key.
   - [ ] Centralize the pinned DreamHost host key and require strict host-key checking for every deployment workflow and script.

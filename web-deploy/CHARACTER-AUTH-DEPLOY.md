@@ -193,7 +193,8 @@ broker API behavior pass `pwa/test-deployment.ps1`. If verification fails, it
 atomically restores the previous release; newly introduced files disappear with
 the rejected release directory. `.htaccess` is verified through its observable
 HTTPS headers because the file itself is not publicly retrievable. Interrupted
-install commands are retried idempotently, and a persistent transaction marker
+A mutating install command is never blindly retried after an ambiguous SSH result. A persistent
+transaction marker supports status inspection and explicit resume, finalize, or rollback, and
 prevents a later deployment from silently replacing an unresolved release.
 
 The complete PWA runtime includes at minimum:

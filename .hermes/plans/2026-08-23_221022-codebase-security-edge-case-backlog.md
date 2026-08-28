@@ -28,12 +28,12 @@
    - Propagate form-lifetime cancellation through download, verification, promotion, dialogs, launch-ticket writes, and process launch. On post-promotion failure, restore the previous tree, ACLs, shortcuts, and uninstall registration.
    - Test: cancellation is covered at update download and verified launch boundaries; installer transaction state records intent before promotion and rollback removes candidates and restores the prior tree, ACLs, shortcuts, and uninstall registration on failure.
 
-5. **Replace blind retry after ambiguous PWA deployment completion with durable recovery.**
+5. **[x] Replace blind retry after ambiguous PWA deployment completion with durable recovery.**
    - Files: `web-deploy/deploy-pwa-files.ps1`, `web-deploy/bryanmiller.us/scarlethorizons/api/index.php`, deployment tests.
    - Persist a transaction ID and explicit status/resume/finalize/rollback state. Query status after SSH disconnect instead of rerunning a non-idempotent operation.
    - Test: disconnect after remote promotion and after finalization; recovery must converge without rollback-after-finalization.
 
-6. **Deploy generated PWA data atomically.**
+6. **[x] Deploy generated PWA data atomically.**
    - Files: `pwa/refresh-campaign-search.ps1`, `web-deploy/deploy-pwa-files.ps1`, `pwa/campaign-search.json` packaging/verification.
    - Stage in the same directory, verify exact remote hash and schema, then rename atomically while retaining rollback evidence.
    - Test: interrupt transfer and promotion independently; old production bytes must remain served.
