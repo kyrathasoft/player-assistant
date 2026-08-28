@@ -21,7 +21,7 @@ namespace PlayerAssistant
 
             try
             {
-                var path = Path.Combine(AppContext.BaseDirectory, FileName);
+                var path = RuntimePathUtility.GetWritableRuntimePath(FileName);
                 if (!overwrite && File.Exists(path))
                 {
                     return;

@@ -2081,12 +2081,14 @@ namespace PlayerAssistant
         private async void CheckForUpdateToolStripMenuItem_Click(object? sender, EventArgs e)
         {
             checkForUpdateToolStripMenuItem.Enabled = false;
+            var cancellationToken = _formLifetimeCancellation.Token;
             try
             {
                 SetStatusBarMessage("Checking for updates...");
                 using var activity = BeginStatusBarActivity();
                 using var httpClient = NetworkRequestUtility.CreateHttpClient();
-                var update = await PlayerAssistantUpdateUtility.CheckForLatestUpdateAsync(httpClient);
+                var update = await PlayerAssistantUpdateUtility.CheckForLatestUpdateAsync(httpClient, cancellationToken);
+                EnsureFormOperationActive(cancellationToken);
                 var currentVersion = PlayerAssistantUpdateUtility.GetCurrentAppVersion();
                 if (update is null)
                 {
@@ -2102,6 +2104,7 @@ namespace PlayerAssistant
 
                 if (!update.IsNewerThan(currentVersion))
                 {
+                    EnsureFormOperationActive(cancellationToken);
                     MessageBox.Show(
                         this,
                         GetLatestVersionMessage(),
@@ -2125,8 +2128,10 @@ namespace PlayerAssistant
                 }
 
                 SetStatusBarMessage($"Downloading verified installer: {update.VersionText}...");
-                var installer = await VerifiedInstallerUpdateUtility.DownloadVerifiedInstallerAsync(httpClient, update);
-                var installerLaunchTicket = VerifiedInstallerLaunchUtility.CreateLaunchTicket(installer);
+                var installer = await VerifiedInstallerUpdateUtility.DownloadVerifiedInstallerAsync(httpClient, update, cancellationToken);
+                EnsureFormOperationActive(cancellationToken);
+                var installerLaunchTicket = VerifiedInstallerLaunchUtility.CreateLaunchTicket(installer, cancellationToken);
+                EnsureFormOperationActive(cancellationToken);
                 var launchInstallerResult = MessageBox.Show(
                     this,
                     $"Player Assistant {update.VersionText} was downloaded and verified.{Environment.NewLine}{Environment.NewLine}Installer: {installer.InstallerPath}{Environment.NewLine}{Environment.NewLine}Run the installer now?",
@@ -2139,11 +2144,20 @@ namespace PlayerAssistant
                     return;
                 }
 
-                Process.Start(VerifiedInstallerLaunchUtility.CreateStartInfo(installerLaunchTicket));
+                EnsureFormOperationActive(cancellationToken);
+                Process.Start(VerifiedInstallerLaunchUtility.CreateStartInfo(installerLaunchTicket, cancellationToken));
                 SetStatusBarMessage($"Launching verified installer: {update.VersionText}.");
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
             }
             catch (Exception ex)
             {
+                if (cancellationToken.IsCancellationRequested || IsDisposed || Disposing)
+                {
+                    return;
+                }
+
                 await ReportOperationFailureAsync(
                     "update check",
                     "Update check unavailable",
@@ -2153,7 +2167,19 @@ namespace PlayerAssistant
             }
             finally
             {
-                checkForUpdateToolStripMenuItem.Enabled = true;
+                if (!IsDisposed && !Disposing)
+                {
+                    checkForUpdateToolStripMenuItem.Enabled = true;
+                }
+            }
+        }
+
+        private void EnsureFormOperationActive(CancellationToken cancellationToken)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            if (IsDisposed || Disposing)
+            {
+                throw new OperationCanceledException(cancellationToken);
             }
         }
 
@@ -4468,13 +4494,13 @@ namespace PlayerAssistant
                     hyperlinks,
                     icPostsDirectory,
                     cancellationToken);
-                var chapterPrefixesPath = Path.Combine(AppContext.BaseDirectory, GameForumChapterPrefixesFileName);
+                var chapterPrefixesPath = RuntimePathUtility.GetWritableRuntimePath(GameForumChapterPrefixesFileName);
                 await AtomicFileUtility.WriteAllLinesAsync(
                     chapterPrefixesPath,
                     chapterDownloads.Select(download => download.Prefix),
                     cancellationToken);
 
-                var chapterDownloadsPath = Path.Combine(AppContext.BaseDirectory, GameForumChapterDownloadsFileName);
+                var chapterDownloadsPath = RuntimePathUtility.GetWritableRuntimePath(GameForumChapterDownloadsFileName);
                 await WriteDownloadManifestAsync(
                     chapterDownloadsPath,
                     chapterDownloads.Select(download =>
@@ -4529,7 +4555,7 @@ namespace PlayerAssistant
                     hyperlinks,
                     asidePostsDirectory,
                     cancellationToken);
-                var asideDownloadsPath = Path.Combine(AppContext.BaseDirectory, GameForumAsideDownloadsFileName);
+                var asideDownloadsPath = RuntimePathUtility.GetWritableRuntimePath(GameForumAsideDownloadsFileName);
                 await WriteDownloadManifestAsync(
                     asideDownloadsPath,
                     asideDownloads.Select(download =>
@@ -4554,7 +4580,7 @@ namespace PlayerAssistant
             string oocPostsDirectory,
             CancellationToken cancellationToken = default)
         {
-            var manifestPath = Path.Combine(AppContext.BaseDirectory, GameForumOutOfCharacterDownloadsFileName);
+            var manifestPath = RuntimePathUtility.GetWritableRuntimePath(GameForumOutOfCharacterDownloadsFileName);
             var allDownloads = new List<GameForumPostDownload>();
 
             try
@@ -4897,10 +4923,10 @@ namespace PlayerAssistant
             try
             {
                 cancellationToken.ThrowIfCancellationRequested();
-                var sitemapPath = Path.Combine(AppContext.BaseDirectory, SitemapFileName);
+                var sitemapPath = RuntimePathUtility.GetWritableRuntimePath(SitemapFileName);
                 var tempDirectory = RuntimePathUtility.GetUserDataPath(TempDirectoryName);
                 var tempSitemapPath = Path.Combine(tempDirectory, SitemapFileName);
-                var keywordUrlsPath = Path.Combine(AppContext.BaseDirectory, SitemapKeywordUrlsFileName);
+                var keywordUrlsPath = RuntimePathUtility.GetWritableRuntimePath(SitemapKeywordUrlsFileName);
 
                 Directory.CreateDirectory(tempDirectory);
                 await SitemapUtility.DownloadSitemapAsync(SitemapUrl, tempSitemapPath, cancellationToken);
@@ -6187,7 +6213,7 @@ namespace PlayerAssistant
 
         private void ShowPlayerCharacterResolvedImagePathsOnce()
         {
-            var markerPath = Path.Combine(AppContext.BaseDirectory, IndexImagePathMessageBoxShownFileName);
+            var markerPath = RuntimePathUtility.GetWritableRuntimePath(IndexImagePathMessageBoxShownFileName);
 
             if (File.Exists(markerPath))
             {
@@ -6224,7 +6250,7 @@ namespace PlayerAssistant
 
         private void ShowPlayerCharacterHtmlImageUrisOnce()
         {
-            var markerPath = Path.Combine(AppContext.BaseDirectory, HtmlImageUriMessageBoxShownFileName);
+            var markerPath = RuntimePathUtility.GetWritableRuntimePath(HtmlImageUriMessageBoxShownFileName);
 
             if (File.Exists(markerPath))
             {
@@ -6247,7 +6273,7 @@ namespace PlayerAssistant
 
         private void ShowPlayerCharacterImageUrisOnce()
         {
-            var markerPath = Path.Combine(AppContext.BaseDirectory, ImageUriMessageBoxShownFileName);
+            var markerPath = RuntimePathUtility.GetWritableRuntimePath(ImageUriMessageBoxShownFileName);
 
             if (File.Exists(markerPath))
             {

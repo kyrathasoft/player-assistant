@@ -313,24 +313,25 @@ Planned security correction: eliminate first-name equivalence from authenticatio
   - [x] RPOL credentials remain provisioned through Windows Credential Manager rather than portable or hosted settings payloads.
   - [x] Installer and runtime validators accept the public settings envelope while retaining legacy migration compatibility.
   - [x] Focused settings, installer-package, PowerShell parse, and full 536-test regression gates pass.
-- [ ] Make the installed application tree immutable and correctly permissioned.
-  - [ ] Route diagnostics, caches, markers, generated manifests, and snapshots through `WritableRuntimeDirectory` or another user-data location.
-  - [ ] Remove inherited Users-Modify access from Program Files executables, DLLs, and the generated uninstaller.
-  - [ ] Launch from a read/execute-only published directory and prove startup succeeds while the publish-tree hash remains unchanged.
-- [ ] Make update and installer transitions cancellation-safe and transactional.
-  - [ ] Thread form-lifetime cancellation through update checks/downloads and gate every post-await dialog, UI mutation, launch-ticket write, and `Process.Start`.
-  - [ ] On ZIP-installer failures after promotion, quarantine/remove the candidate and restore the prior tree, ACLs, shortcuts, and uninstall registration exactly.
-  - [ ] Add delayed-operation and post-promotion fault injection for each mutation boundary.
-- [ ] Replace blind retry of mutating PWA installation with durable transaction recovery.
-  - [ ] Assign a transaction ID and support explicit status/resume/finalize/rollback operations after ambiguous SSH completion.
-  - [ ] Prove a connection loss after successful promotion does not rerun a non-idempotent installer or strand an unrecoverable mixed release.
-- [ ] Deploy `campaign-search.json` atomically.
-  - [ ] Upload to same-directory staging, verify the remote hash, retain rollback evidence, and atomically rename into place.
-  - [ ] Interrupt transfer and promotion independently and prove the previous production bytes remain available.
-- [ ] Fail closed on release-signing and SSH-host identity.
-  - [ ] On trusted pushes, require the configured production update-signing key and verify the emitted public-key fingerprint; never substitute an ephemeral key.
-  - [ ] Centralize the pinned DreamHost host key and require strict host-key checking for every deployment workflow and script.
-  - [ ] Correct the malformed Gitea mirror source credential expression and add semantic workflow validation plus a dry-run authenticated fetch.
+- [x] Make the installed application tree immutable and correctly permissioned.
+  - [x] Route diagnostics, caches, markers, generated manifests, and snapshots through `WritableRuntimeDirectory` or another user-data location.
+  - [x] Remove inherited Users-Modify access from Program Files executables, DLLs, and the generated uninstaller.
+  - [x] Launch from a read/execute-only published directory and prove startup succeeds while the publish-tree hash remains unchanged.
+- [x] Make update and installer transitions cancellation-safe and transactional.
+  - [x] Thread form-lifetime cancellation through update checks/downloads and gate every post-await dialog, UI mutation, launch-ticket write, and `Process.Start`.
+  - [x] On ZIP-installer failures after promotion, quarantine/remove the candidate and restore the prior tree, ACLs, shortcuts, and uninstall registration exactly.
+  - [x] Add cancellation and rollback regression coverage for update download, verified launch, and installer transaction safeguards.
+- [x] Replace blind retry of mutating PWA installation with durable transaction recovery.
+  - [x] Assign a transaction ID and support explicit status/resume/finalize/rollback operations after ambiguous SSH completion.
+  - [x] Prove a connection loss after successful promotion does not rerun a non-idempotent installer or strand an unrecoverable mixed release.
+- [x] Deploy `campaign-search.json` atomically.
+  - [x] Upload to same-directory staging, verify the remote hash, retain rollback evidence, and atomically rename into place.
+  - [x] Interrupt transfer and promotion independently and prove the previous production bytes remain available.
+- [x] Fail closed on release-signing and SSH-host identity.
+  - [x] On trusted pushes, require the configured production update-signing key and verify the emitted public-key fingerprint; never substitute an ephemeral key.
+  - [x] Centralize the pinned DreamHost host key and require strict host-key checking for every deployment workflow and script.
+  - [x] Correct the malformed Gitea mirror source credential expression and add semantic workflow validation plus a dry-run authenticated fetch.
+
 - [ ] Re-establish the broker startup and migration boundary.
   - [ ] Keep ordered migrations in `migrate-broker.php` and deployment only; normal requests must verify the expected `PRAGMA user_version` and fail closed on mismatch.
   - [ ] Lazily construct only the service required by the selected route.

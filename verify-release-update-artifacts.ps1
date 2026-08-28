@@ -5,6 +5,7 @@ param(
     [string]$ManifestPath = (Join-Path $PSScriptRoot 'Release\installer\p-assist-updates.json'),
     [string]$SignaturePath = (Join-Path $PSScriptRoot 'Release\installer\p-assist-updates.json.sig'),
     [string]$PublicKeyXmlPath = (Join-Path $PSScriptRoot 'Release\installer\p-assist-updates.public-key.xml'),
+    [string]$ExpectedPublicKeyXmlPath,
     [string]$ExpectedSignerSubject = $env:PLAYER_ASSISTANT_RELEASE_SIGNER_SUBJECT,
     [string]$ExpectedSignerThumbprint = $env:PLAYER_ASSISTANT_RELEASE_SIGNER_THUMBPRINT,
     [switch]$RequireCodeSigning
@@ -155,6 +156,35 @@ function Assert-ManifestSignature {
     }
 }
 
+function Assert-PublicKeyMatchesExpected {
+    param(
+        [Parameter(Mandatory = $true)][string]$ActualPublicKeyXmlPath,
+        [Parameter(Mandatory = $true)][string]$ExpectedPublicKeyXmlPath
+    )
+
+    Assert-RequiredFile -Path $ExpectedPublicKeyXmlPath -Description 'expected trusted public signing key XML'
+    $actual = [System.Security.Cryptography.RSACryptoServiceProvider]::new()
+    $expected = [System.Security.Cryptography.RSACryptoServiceProvider]::new()
+    $actual.PersistKeyInCsp = $false
+    $expected.PersistKeyInCsp = $false
+    try {
+        $actual.FromXmlString((Get-Content -Raw -LiteralPath $ActualPublicKeyXmlPath))
+        $expected.FromXmlString((Get-Content -Raw -LiteralPath $ExpectedPublicKeyXmlPath))
+        $actualParameters = $actual.ExportParameters($false)
+        $expectedParameters = $expected.ExportParameters($false)
+        $actualModulus = [Convert]::ToBase64String($actualParameters.Modulus)
+        $expectedModulus = [Convert]::ToBase64String($expectedParameters.Modulus)
+        $actualExponent = [Convert]::ToBase64String($actualParameters.Exponent)
+        $expectedExponent = [Convert]::ToBase64String($expectedParameters.Exponent)
+        if (($actualModulus -ne $expectedModulus) -or ($actualExponent -ne $expectedExponent)) {
+            throw 'The emitted update-manifest public key does not match the configured trusted public key.'
+        }
+    }
+    finally {
+        $actual.Clear(); $actual.Dispose(); $expected.Clear(); $expected.Dispose()
+    }
+}
+
 function Assert-ReleaseArchiveVersion {
     param(
         [Parameter(Mandatory = $true)][string]$ArchivePath,
@@ -202,6 +232,9 @@ $resolvedPublicKeyXmlPath = [System.IO.Path]::GetFullPath($PublicKeyXmlPath)
 Assert-RequiredFile -Path $resolvedPublishArchivePath -Description 'release update archive'
 Assert-RequiredFile -Path $resolvedInstallerPath -Description 'release installer executable'
 Assert-ManifestSignature -ManifestPath $resolvedManifestPath -SignaturePath $resolvedSignaturePath -PublicKeyXmlPath $resolvedPublicKeyXmlPath
+if (![string]::IsNullOrWhiteSpace($ExpectedPublicKeyXmlPath)) {
+    Assert-PublicKeyMatchesExpected -ActualPublicKeyXmlPath $resolvedPublicKeyXmlPath -ExpectedPublicKeyXmlPath ([System.IO.Path]::GetFullPath($ExpectedPublicKeyXmlPath))
+}
 
 $installerVersion = Get-InstallerVersion -Version $Version
 $expectedArchiveName = "p-assist-$installerVersion.zip"

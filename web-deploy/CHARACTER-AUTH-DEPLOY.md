@@ -162,7 +162,9 @@ The script prompts securely for the broker administrator key and sends only the 
 
 ## PWA files
 
-Deploy changed public runtime files through the transactional deployment script:
+Deploy changed public runtime files through the transactional deployment script. The script requires
+`web-deploy/dreamhost_known_hosts` and enables strict host-key checking; update the pinned entry only
+through an independently verified host-key rotation process.
 
 ```powershell
 .\web-deploy\deploy-pwa-files.ps1 -Files @(
@@ -193,7 +195,8 @@ broker API behavior pass `pwa/test-deployment.ps1`. If verification fails, it
 atomically restores the previous release; newly introduced files disappear with
 the rejected release directory. `.htaccess` is verified through its observable
 HTTPS headers because the file itself is not publicly retrievable. Interrupted
-install commands are retried idempotently, and a persistent transaction marker
+A mutating install command is never blindly retried after an ambiguous SSH result. A persistent
+transaction marker supports status inspection and explicit resume, finalize, or rollback, and
 prevents a later deployment from silently replacing an unresolved release.
 
 The complete PWA runtime includes at minimum:

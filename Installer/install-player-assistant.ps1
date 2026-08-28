@@ -266,6 +266,75 @@ function Register-UninstallEntry {
     New-ItemProperty -Path $UninstallKeyPath -Name 'QuietUninstallString' -Value "powershell.exe -NoProfile -ExecutionPolicy Bypass -File `"$uninstallPath`" -Quiet" -PropertyType String -Force | Out-Null
 }
 
+function Write-TransactionState {
+    param(
+        [Parameter(Mandatory = $true)][string]$Path,
+        [Parameter(Mandatory = $true)][hashtable]$State
+    )
+
+    $State | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $Path -Encoding UTF8
+}
+
+function Backup-ExistingInstallationState {
+    param(
+        [Parameter(Mandatory = $true)][string]$TransactionDir,
+        [Parameter(Mandatory = $true)][string]$InstallPath
+    )
+
+    $shortcutsDir = Join-Path $TransactionDir 'shortcuts'
+    New-Item -ItemType Directory -Force -Path $shortcutsDir | Out-Null
+    $shortcutPaths = @(
+        (Join-Path ([Environment]::GetFolderPath('CommonPrograms')) 'KyrathaSoft\Player Assistant.lnk'),
+        (Join-Path ([Environment]::GetFolderPath('CommonDesktopDirectory')) 'Player Assistant.lnk')
+    )
+    $shortcutState = @()
+    foreach ($shortcutPath in $shortcutPaths) {
+        $backupPath = Join-Path $shortcutsDir ([IO.Path]::GetFileName($shortcutPath))
+        $exists = Test-Path -LiteralPath $shortcutPath -PathType Leaf
+        if ($exists) {
+            Copy-Item -LiteralPath $shortcutPath -Destination $backupPath -Force
+        }
+        $shortcutState += @{ Path = $shortcutPath; BackupPath = $backupPath; Exists = $exists }
+    }
+
+    $registryBackupPath = Join-Path $TransactionDir 'uninstall.reg'
+    & reg.exe export 'HKLM\Software\Microsoft\Windows\CurrentVersion\Uninstall\KyrathaSoft Player Assistant' $registryBackupPath /y | Out-Null
+    $registryExists = $LASTEXITCODE -eq 0
+    if (!$registryExists -and (Test-Path -LiteralPath $registryBackupPath)) {
+        Remove-Item -LiteralPath $registryBackupPath -Force
+    }
+
+    return @{
+        InstallPath = $InstallPath
+        Shortcuts = $shortcutState
+        RegistryBackupPath = $registryBackupPath
+        RegistryExists = $registryExists
+    }
+}
+
+function Restore-ExistingInstallationState {
+    param([Parameter(Mandatory = $true)][hashtable]$State)
+
+    foreach ($shortcut in $State.Shortcuts) {
+        if ($shortcut.Exists) {
+            Copy-Item -LiteralPath $shortcut.BackupPath -Destination $shortcut.Path -Force
+        }
+        else {
+            Remove-Item -LiteralPath $shortcut.Path -Force -ErrorAction SilentlyContinue
+        }
+    }
+
+    if ($State.RegistryExists) {
+        & reg.exe import $State.RegistryBackupPath | Out-Null
+        if ($LASTEXITCODE -ne 0) {
+            throw "Unable to restore the prior Player Assistant uninstall registration."
+        }
+    }
+    else {
+        Remove-Item -LiteralPath $UninstallKeyPath -Recurse -Force -ErrorAction SilentlyContinue
+    }
+}
+
 function Install-PlayerAssistant {
     Assert-Payload
 
@@ -275,17 +344,29 @@ function Install-PlayerAssistant {
 
     $stagingDir = Join-Path $installParent ("player-assistant.installing.{0}" -f ([Guid]::NewGuid().ToString('N')))
     $backupDir = Join-Path $installParent ("player-assistant.backup.{0}" -f ([Guid]::NewGuid().ToString('N')))
+    $transactionDir = Join-Path $installParent ("player-assistant.transaction.{0}" -f ([Guid]::NewGuid().ToString('N')))
+    $transactionStatePath = Join-Path $transactionDir 'state.json'
     $movedExisting = $false
+    $transactionState = $null
 
     try {
         Write-Step "Copying application files..."
         Copy-PayloadToStaging -StagingDir $stagingDir
         Write-Uninstaller -Directory $stagingDir
 
+        New-Item -ItemType Directory -Force -Path $transactionDir | Out-Null
+        $transactionState = Backup-ExistingInstallationState -TransactionDir $transactionDir -InstallPath $resolvedInstallDir
+        $transactionState['StagingDir'] = $stagingDir
+        $transactionState['BackupDir'] = $backupDir
+        $transactionState['MovedExisting'] = $false
+        Write-TransactionState -Path $transactionStatePath -State $transactionState
+
         Write-Step "Installing to $resolvedInstallDir..."
         if (Test-Path -LiteralPath $resolvedInstallDir) {
             Move-Item -LiteralPath $resolvedInstallDir -Destination $backupDir -Force
             $movedExisting = $true
+            $transactionState['MovedExisting'] = $true
+            Write-TransactionState -Path $transactionStatePath -State $transactionState
         }
 
         Move-Item -LiteralPath $stagingDir -Destination $resolvedInstallDir -Force
@@ -316,6 +397,8 @@ function Install-PlayerAssistant {
             Remove-Item -LiteralPath $backupDir -Recurse -Force
         }
 
+        Remove-Item -LiteralPath $transactionDir -Recurse -Force -ErrorAction SilentlyContinue
+
         if ($StartAfterInstall) {
             Start-Process -FilePath $executablePath -WorkingDirectory $resolvedInstallDir
         }
@@ -327,8 +410,20 @@ function Install-PlayerAssistant {
             Remove-Item -LiteralPath $stagingDir -Recurse -Force -ErrorAction SilentlyContinue
         }
 
-        if ($movedExisting -and !(Test-Path -LiteralPath $resolvedInstallDir) -and (Test-Path -LiteralPath $backupDir)) {
+        if (Test-Path -LiteralPath $resolvedInstallDir) {
+            Remove-Item -LiteralPath $resolvedInstallDir -Recurse -Force -ErrorAction SilentlyContinue
+        }
+
+        if ($movedExisting -and (Test-Path -LiteralPath $backupDir)) {
             Move-Item -LiteralPath $backupDir -Destination $resolvedInstallDir -Force
+        }
+
+        if ($null -ne $transactionState) {
+            Restore-ExistingInstallationState -State $transactionState
+        }
+
+        if (Test-Path -LiteralPath $transactionDir) {
+            Remove-Item -LiteralPath $transactionDir -Recurse -Force -ErrorAction SilentlyContinue
         }
 
         throw

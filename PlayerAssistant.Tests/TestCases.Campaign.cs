@@ -449,7 +449,7 @@ internal static partial class TestCases
     internal static void RpolResultPathRejectsTraversalAndUnrelatedRuntimeOverwrite()
     {
         var runId = Guid.NewGuid().ToString("N");
-        var expected = Path.Combine(AppContext.BaseDirectory, "rpol-results", runId, "result.json");
+        var expected = RuntimePathUtility.GetWritableRuntimePath("rpol-results", runId, "result.json");
         AssertEqual(
             Path.GetFullPath(expected),
             PlayerAssistant.Program.GetRpolResultPathForTests([], runId),
@@ -1300,7 +1300,7 @@ internal static partial class TestCases
     internal static void RpolAuthCachedFailureLogsOnce()
     {
         ResetRpolAuthFailureCache();
-        var startupLogPath = Path.Combine(AppContext.BaseDirectory, StartupLoggingUtility.LogFileName);
+        var startupLogPath = RuntimePathUtility.GetWritableRuntimePath(StartupLoggingUtility.LogFileName);
         var hadStartupLog = File.Exists(startupLogPath);
         var originalStartupLog = hadStartupLog ? File.ReadAllText(startupLogPath) : null;
 

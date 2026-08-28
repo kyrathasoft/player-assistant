@@ -208,7 +208,7 @@ internal static partial class TestCases
         using var directory = TemporaryDirectory.Create();
         var loginInfoPath = Path.Combine(directory.Path, "login-info.json");
         File.WriteAllText(loginInfoPath, "{ not valid json");
-        var startupLogPath = Path.Combine(AppContext.BaseDirectory, StartupLoggingUtility.LogFileName);
+        var startupLogPath = RuntimePathUtility.GetWritableRuntimePath(StartupLoggingUtility.LogFileName);
         var hadStartupLog = File.Exists(startupLogPath);
         var originalStartupLog = hadStartupLog ? File.ReadAllText(startupLogPath) : null;
 
@@ -1261,7 +1261,7 @@ internal static partial class TestCases
 
     private static string GetLastCrashPath()
     {
-        return Path.Combine(AppContext.BaseDirectory, LastCrashDiagnosticUtility.FileName);
+        return RuntimePathUtility.GetWritableRuntimePath(LastCrashDiagnosticUtility.FileName);
     }
 
     private static void WithPreservedFileAbsent(string filePath, Action action)

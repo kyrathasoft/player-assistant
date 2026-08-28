@@ -17,7 +17,7 @@ namespace PlayerAssistant
 
         public static string GetReleasePath()
         {
-            return GetReleasePath(AppContext.BaseDirectory);
+            return GetReleasePath(RuntimePathUtility.WritableRuntimeDirectory);
         }
 
         internal static string GetReleasePath(string baseDirectory)
@@ -34,6 +34,12 @@ namespace PlayerAssistant
                 return releasePath;
             }
 
+            var applicationPath = RuntimePathUtility.ResolveApplicationFileForRead(FileName);
+            if (File.Exists(applicationPath))
+            {
+                return applicationPath;
+            }
+
             var repoRoot = Directory.GetParent(Path.GetDirectoryName(releasePath) ?? releasePath)?.FullName;
             if (string.IsNullOrWhiteSpace(repoRoot) || !Directory.Exists(repoRoot))
             {
@@ -45,7 +51,7 @@ namespace PlayerAssistant
 
         public static void EnsureReleaseCopy()
         {
-            EnsureReleaseCopy(AppContext.BaseDirectory);
+            EnsureReleaseCopy(RuntimePathUtility.WritableRuntimeDirectory);
         }
 
         internal static void EnsureReleaseCopy(string baseDirectory)

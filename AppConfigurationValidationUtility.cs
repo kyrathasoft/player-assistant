@@ -103,17 +103,18 @@ namespace PlayerAssistant
             LatestReport = Validate(
                 settings,
                 AppContext.BaseDirectory,
-                warnAboutMissingRpolCredentials: AppSettingsUtility.HostedLocalSettingsLoadFailed);
+                warnAboutMissingRpolCredentials: AppSettingsUtility.HostedLocalSettingsLoadFailed,
+                checkRuntimeDirectoryWritable: false);
             if (LatestReport.HasIssues)
             {
-                WriteRemediationFile(LatestReport, AppContext.BaseDirectory);
+                WriteRemediationFile(LatestReport, RuntimePathUtility.WritableRuntimeDirectory);
                 StartupLoggingUtility.Append(
                     "configuration validation",
                     new AppConfigurationValidationException(LatestReport));
             }
             else
             {
-                DeleteRemediationFile(AppContext.BaseDirectory);
+                DeleteRemediationFile(RuntimePathUtility.WritableRuntimeDirectory);
             }
 
             return LatestReport;
@@ -139,7 +140,8 @@ namespace PlayerAssistant
         public static AppConfigurationValidationReport Validate(
             IReadOnlyDictionary<string, string> settings,
             string runtimeDirectory,
-            bool warnAboutMissingRpolCredentials = false)
+            bool warnAboutMissingRpolCredentials = false,
+            bool checkRuntimeDirectoryWritable = true)
         {
             ArgumentNullException.ThrowIfNull(settings);
             ArgumentException.ThrowIfNullOrWhiteSpace(runtimeDirectory);
@@ -153,7 +155,7 @@ namespace PlayerAssistant
             ValidateHttpUrlSetting(settings, ObsidianGameVaultSettingsKey, NetworkUrlPurpose.ObsidianPublish, issues);
             ValidateHttpUrlSetting(settings, XpTrackingSettingsKey, NetworkUrlPurpose.ObsidianPublish, issues);
             ValidateRpolCredentials(settings, issues, warnAboutMissingRpolCredentials);
-            ValidateRuntimeDirectory(runtimeDirectory, issues);
+            ValidateRuntimeDirectory(runtimeDirectory, issues, checkRuntimeDirectoryWritable);
             ValidateRuntimeSidecars(runtimeDirectory, issues);
             ValidateReleaseIntegrityManifest(runtimeDirectory, issues);
 
@@ -247,7 +249,10 @@ namespace PlayerAssistant
                 "Confirm the Hosted Local Settings URL is reachable and contains both RPOL user name and RPOL password, then restart the app."));
         }
 
-        private static void ValidateRuntimeDirectory(string runtimeDirectory, List<AppConfigurationIssue> issues)
+        private static void ValidateRuntimeDirectory(
+            string runtimeDirectory,
+            List<AppConfigurationIssue> issues,
+            bool checkWritable)
         {
             if (!Directory.Exists(runtimeDirectory))
             {
@@ -255,6 +260,11 @@ namespace PlayerAssistant
                     AppConfigurationIssueSeverity.Error,
                     $"Runtime directory does not exist: {runtimeDirectory}",
                     "Restore the Release or publish folder, or rebuild/publish the app so the runtime directory exists."));
+                return;
+            }
+
+            if (!checkWritable)
+            {
                 return;
             }
 

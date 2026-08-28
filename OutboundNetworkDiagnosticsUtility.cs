@@ -159,7 +159,7 @@ namespace PlayerAssistant
                         .ThenBy(entry => entry.Path, StringComparer.Ordinal)
                         .ToArray());
                 AtomicFileUtility.WriteAllText(
-                    Path.Combine(AppContext.BaseDirectory, DiagnosticsFileName),
+                    RuntimePathUtility.GetWritableRuntimePath(DiagnosticsFileName),
                     JsonSerializer.Serialize(snapshot, JsonOptions));
             }
             catch

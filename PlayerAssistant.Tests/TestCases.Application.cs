@@ -1051,7 +1051,7 @@ internal static partial class TestCases
 
     internal static void UiOperationFailureReporterLogsStatusAndDialog()
     {
-        var startupLogPath = Path.Combine(AppContext.BaseDirectory, StartupLoggingUtility.LogFileName);
+        var startupLogPath = RuntimePathUtility.GetWritableRuntimePath(StartupLoggingUtility.LogFileName);
         var hadStartupLog = File.Exists(startupLogPath);
         var originalStartupLog = hadStartupLog ? File.ReadAllText(startupLogPath) : null;
         var statusMessages = new List<string>();
@@ -1132,7 +1132,7 @@ internal static partial class TestCases
 
     internal static void BackgroundTaskSupervisorLogsFailures()
     {
-        var startupLogPath = Path.Combine(AppContext.BaseDirectory, StartupLoggingUtility.LogFileName);
+        var startupLogPath = RuntimePathUtility.GetWritableRuntimePath(StartupLoggingUtility.LogFileName);
         var hadStartupLog = File.Exists(startupLogPath);
         var originalStartupLog = hadStartupLog ? File.ReadAllText(startupLogPath) : null;
 
@@ -1267,10 +1267,8 @@ internal static partial class TestCases
 
     internal static void OutboundNetworkDiagnosticsRecordsSanitizedSuccessEndpoint()
     {
-        var diagnosticsPath = Path.Combine(
-            Path.GetDirectoryName(typeof(NetworkRequestUtility).Assembly.Location)
-                ?? throw new InvalidOperationException("Unable to resolve test assembly directory."),
-            OutboundNetworkDiagnosticsUtility.DiagnosticsFileName);
+        var diagnosticsPath = RuntimePathUtility.GetWritableRuntimePath(
+                    OutboundNetworkDiagnosticsUtility.DiagnosticsFileName);
         WithPreservedFileAbsent(diagnosticsPath, () =>
         {
             OutboundNetworkDiagnosticsUtility.Reset();
@@ -1314,10 +1312,8 @@ internal static partial class TestCases
 
     internal static void OutboundNetworkDiagnosticsRecordsFailureCounts()
     {
-        var diagnosticsPath = Path.Combine(
-            Path.GetDirectoryName(typeof(NetworkRequestUtility).Assembly.Location)
-                ?? throw new InvalidOperationException("Unable to resolve test assembly directory."),
-            OutboundNetworkDiagnosticsUtility.DiagnosticsFileName);
+        var diagnosticsPath = RuntimePathUtility.GetWritableRuntimePath(
+                    OutboundNetworkDiagnosticsUtility.DiagnosticsFileName);
         WithPreservedFileAbsent(diagnosticsPath, () =>
         {
             OutboundNetworkDiagnosticsUtility.Reset();
@@ -1745,7 +1741,7 @@ internal static partial class TestCases
         using var directory = TemporaryDirectory.Create();
         var artifactPath = Path.Combine(directory.Path, "runtime-cache.json");
         File.WriteAllText(artifactPath, "{ not valid json");
-        var startupLogPath = Path.Combine(AppContext.BaseDirectory, StartupLoggingUtility.LogFileName);
+        var startupLogPath = RuntimePathUtility.GetWritableRuntimePath(StartupLoggingUtility.LogFileName);
         var hadStartupLog = File.Exists(startupLogPath);
         var originalStartupLog = hadStartupLog ? File.ReadAllText(startupLogPath) : null;
 
@@ -1848,7 +1844,7 @@ internal static partial class TestCases
 
     internal static void AssetManifestLoadReturnsEmptyForMalformedJson()
     {
-        var startupLogPath = Path.Combine(AppContext.BaseDirectory, StartupLoggingUtility.LogFileName);
+        var startupLogPath = RuntimePathUtility.GetWritableRuntimePath(StartupLoggingUtility.LogFileName);
         var hadStartupLog = File.Exists(startupLogPath);
         var originalStartupLog = hadStartupLog ? File.ReadAllText(startupLogPath) : null;
 
@@ -2036,13 +2032,13 @@ internal static partial class TestCases
     {
         RunOnStaThread(() =>
         {
-            var startupLogPath = Path.Combine(AppContext.BaseDirectory, StartupLoggingUtility.LogFileName);
+            var startupLogPath = RuntimePathUtility.GetWritableRuntimePath(StartupLoggingUtility.LogFileName);
             var manifestPaths = new[]
             {
-                Path.Combine(AppContext.BaseDirectory, "game-forum-chapter-prefixes.txt"),
-                Path.Combine(AppContext.BaseDirectory, "game-forum-chapter-downloads.txt"),
-                Path.Combine(AppContext.BaseDirectory, "game-forum-aside-downloads.txt"),
-                Path.Combine(AppContext.BaseDirectory, "game-forum-ooc-downloads.txt")
+                RuntimePathUtility.GetWritableRuntimePath("game-forum-chapter-prefixes.txt"),
+                RuntimePathUtility.GetWritableRuntimePath("game-forum-chapter-downloads.txt"),
+                RuntimePathUtility.GetWritableRuntimePath("game-forum-aside-downloads.txt"),
+                RuntimePathUtility.GetWritableRuntimePath("game-forum-ooc-downloads.txt")
             };
             var preservedFiles = manifestPaths
                 .Append(startupLogPath)
@@ -2099,7 +2095,7 @@ internal static partial class TestCases
         var indexPath = Path.Combine(directory.Path, "keyword-index.json");
         File.WriteAllText(indexPath, "{ not valid json");
 
-        var startupLogPath = Path.Combine(AppContext.BaseDirectory, StartupLoggingUtility.LogFileName);
+        var startupLogPath = RuntimePathUtility.GetWritableRuntimePath(StartupLoggingUtility.LogFileName);
         var hadStartupLog = File.Exists(startupLogPath);
         var originalStartupLog = hadStartupLog ? File.ReadAllText(startupLogPath) : null;
 
@@ -3667,12 +3663,12 @@ internal static partial class TestCases
 
     private static string GetStartupLogPath()
     {
-        return Path.Combine(AppContext.BaseDirectory, StartupLoggingUtility.LogFileName);
+        return RuntimePathUtility.GetWritableRuntimePath(StartupLoggingUtility.LogFileName);
     }
 
     private static string GetStartupHealthPath()
     {
-        return Path.Combine(AppContext.BaseDirectory, StartupHealthUtility.HealthFileName);
+        return RuntimePathUtility.GetWritableRuntimePath(StartupHealthUtility.HealthFileName);
     }
 
     private static void WithPreservedStartupLog(Action action)

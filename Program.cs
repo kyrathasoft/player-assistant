@@ -538,8 +538,7 @@ namespace PlayerAssistant
                 }
             }
 
-            var expectedPath = RuntimePathUtility.CombineUnderBase(
-                AppContext.BaseDirectory,
+            var expectedPath = RuntimePathUtility.GetWritableRuntimePath(
                 "rpol-results",
                 runId,
                 "result.json");

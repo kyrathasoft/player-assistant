@@ -45,8 +45,11 @@ namespace PlayerAssistant
     {
         private const string DefaultLaunchVerb = "open";
 
-        public static VerifiedInstallerLaunchTicket CreateLaunchTicket(VerifiedInstallerDownloadResult installer)
+        public static VerifiedInstallerLaunchTicket CreateLaunchTicket(
+            VerifiedInstallerDownloadResult installer,
+            CancellationToken cancellationToken = default)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             return CreateLaunchTicket(
                 installer,
                 AuthenticodeSignatureUtility.GetCurrentProcessSignaturePolicy(),
@@ -77,8 +80,11 @@ namespace PlayerAssistant
                 DefaultLaunchVerb);
         }
 
-        public static ProcessStartInfo CreateStartInfo(VerifiedInstallerLaunchTicket ticket)
+        public static ProcessStartInfo CreateStartInfo(
+            VerifiedInstallerLaunchTicket ticket,
+            CancellationToken cancellationToken = default)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             return CreateStartInfo(
                 ticket,
                 AuthenticodeSignatureUtility.InspectSignature,

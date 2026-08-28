@@ -442,32 +442,42 @@ jobs:
         shell: pwsh
         env:
           UPDATE_MANIFEST_PRIVATE_KEY_XML: ${{ secrets.PLAYER_ASSISTANT_UPDATE_MANIFEST_PRIVATE_KEY_XML }}
+          UPDATE_MANIFEST_PUBLIC_KEY_XML: ${{ secrets.PLAYER_ASSISTANT_UPDATE_MANIFEST_PUBLIC_KEY_XML }}
         run: |
-          $arguments = @{
-            OutputDir = $env:INSTALLER_DIR
-            PublishDir = $env:PUBLISH_DIR
-          }
-
           if ([string]::IsNullOrWhiteSpace($env:UPDATE_MANIFEST_PRIVATE_KEY_XML)) {
-            $arguments['GenerateEphemeralSigningKey'] = $true
+            throw 'The PLAYER_ASSISTANT_UPDATE_MANIFEST_PRIVATE_KEY_XML secret is required for trusted release artifacts.'
           }
-          else {
-            $privateKeyPath = Join-Path $env:RUNNER_TEMP 'player-assistant-update-manifest.private-key.xml'
-            [System.IO.File]::WriteAllText($privateKeyPath, $env:UPDATE_MANIFEST_PRIVATE_KEY_XML, [System.Text.UTF8Encoding]::new($false))
-            $arguments['PrivateKeyXmlPath'] = $privateKeyPath
+          if ([string]::IsNullOrWhiteSpace($env:UPDATE_MANIFEST_PUBLIC_KEY_XML)) {
+            throw 'The PLAYER_ASSISTANT_UPDATE_MANIFEST_PUBLIC_KEY_XML secret is required for trusted release artifacts.'
           }
-
-          .\build-release-update-artifacts.ps1 @arguments
+          $privateKeyPath = Join-Path $env:RUNNER_TEMP 'player-assistant-update-manifest.private-key.xml'
+          $publicKeyPath = Join-Path $env:RUNNER_TEMP 'player-assistant-update-manifest.public-key.xml'
+          [System.IO.File]::WriteAllText($privateKeyPath, $env:UPDATE_MANIFEST_PRIVATE_KEY_XML, [System.Text.UTF8Encoding]::new($false))
+          [System.IO.File]::WriteAllText($publicKeyPath, $env:UPDATE_MANIFEST_PUBLIC_KEY_XML, [System.Text.UTF8Encoding]::new($false))
+          .\build-release-update-artifacts.ps1 `
+            -OutputDir $env:INSTALLER_DIR `
+            -PublishDir $env:PUBLISH_DIR `
+            -PrivateKeyXmlPath $privateKeyPath `
+            -ExpectedPublicKeyXmlPath $publicKeyPath
 
       - name: Verify signed release update artifacts
+        if: github.event_name == 'push'
         shell: pwsh
-        run: >
-          .\verify-release-update-artifacts.ps1
-          -PublishArchivePath $env:UPDATE_ARCHIVE_PATH
-          -InstallerPath $env:UPDATE_INSTALLER_PATH
-          -ManifestPath $env:UPDATE_MANIFEST_PATH
-          -SignaturePath $env:UPDATE_MANIFEST_SIGNATURE_PATH
-          -PublicKeyXmlPath $env:UPDATE_MANIFEST_PUBLIC_KEY_PATH
+        env:
+          UPDATE_MANIFEST_PUBLIC_KEY_XML: ${{ secrets.PLAYER_ASSISTANT_UPDATE_MANIFEST_PUBLIC_KEY_XML }}
+        run: |
+          if ([string]::IsNullOrWhiteSpace($env:UPDATE_MANIFEST_PUBLIC_KEY_XML)) {
+            throw 'The PLAYER_ASSISTANT_UPDATE_MANIFEST_PUBLIC_KEY_XML secret is required for trusted artifact verification.'
+          }
+          $publicKeyPath = Join-Path $env:RUNNER_TEMP 'player-assistant-update-manifest.public-key.xml'
+          [System.IO.File]::WriteAllText($publicKeyPath, $env:UPDATE_MANIFEST_PUBLIC_KEY_XML, [System.Text.UTF8Encoding]::new($false))
+          .\verify-release-update-artifacts.ps1 `
+            -PublishArchivePath $env:UPDATE_ARCHIVE_PATH `
+            -InstallerPath $env:UPDATE_INSTALLER_PATH `
+            -ManifestPath $env:UPDATE_MANIFEST_PATH `
+            -SignaturePath $env:UPDATE_MANIFEST_SIGNATURE_PATH `
+            -PublicKeyXmlPath $env:UPDATE_MANIFEST_PUBLIC_KEY_PATH `
+            -ExpectedPublicKeyXmlPath $publicKeyPath
 
       - name: Secret scan
         shell: pwsh

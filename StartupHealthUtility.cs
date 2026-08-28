@@ -61,7 +61,7 @@ namespace PlayerAssistant
                     _updatedAt,
                     Phases.ToArray());
                 AtomicFileUtility.WriteAllText(
-                    Path.Combine(AppContext.BaseDirectory, HealthFileName),
+                    RuntimePathUtility.GetWritableRuntimePath(HealthFileName),
                     JsonSerializer.Serialize(snapshot, JsonOptions));
             }
             catch
