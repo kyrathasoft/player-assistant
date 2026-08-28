@@ -63,7 +63,8 @@ final class BrokerService
         string $remoteAddress,
         array &$session,
         ?callable $regenerateSession = null,
-        ?callable $destroySession = null): array
+        ?callable $destroySession = null,
+        ?callable $releaseSession = null): array
     {
         if ($method === 'GET' && $route === '/v1/health') {
             return $this->response(200, [
@@ -110,7 +111,9 @@ final class BrokerService
         }
 
         if ($method === 'GET' && $route === '/v1/session') {
-            return $this->response(200, $this->characterAuth()->currentSession($session));
+            $response = $this->characterAuth()->currentSession($session);
+            $this->releaseSession($releaseSession);
+            return $this->response(200, $response);
         }
 
         if ($method === 'GET' && $route === '/v1/me') {
@@ -119,6 +122,7 @@ final class BrokerService
 
         if ($method === 'GET' && $route === '/v1/xp') {
             $current = $this->characterAuth()->requireCurrentAccount($session);
+            $this->releaseSession($releaseSession);
             return $this->response(
                 200,
                 $this->xpTracking()->getForAccount($current['account']));
@@ -142,6 +146,7 @@ final class BrokerService
 
         if ($method === 'GET' && $route === '/v1/xp-awards') {
             $current = $this->characterAuth()->requireCurrentAccount($session);
+            $this->releaseSession($releaseSession);
             return $this->response(
                 200,
                 $this->xpTracking()->getAwardsForAccount($current['account']));
@@ -149,6 +154,7 @@ final class BrokerService
 
         if ($method === 'GET' && $route === '/v1/word-counts') {
             $this->characterAuth()->requireCurrentAccount($session);
+            $this->releaseSession($releaseSession);
             return $this->response(200, $this->wordCounts()->latest());
         }
 
@@ -158,16 +164,19 @@ final class BrokerService
 
         if ($method === 'GET' && $route === '/v1/quests') {
             $current = $this->characterAuth()->requireCurrentAccount($session);
+            $this->releaseSession($releaseSession);
             return $this->response(200, $this->quests()->forAccount($current['account']));
         }
 
         if ($method === 'GET' && $route === '/v1/revisions') {
             $current = $this->characterAuth()->requireCurrentAccount($session);
+            $this->releaseSession($releaseSession);
             return $this->response(200, $this->revisions()->forAccount($current['account']));
         }
 
         if ($method === 'GET' && $route === '/v1/magic-items') {
             $current = $this->characterAuth()->requireCurrentAccount($session);
+            $this->releaseSession($releaseSession);
             return $this->response(200, $this->magicItems()->forAccount($current['account']));
         }
 
@@ -202,6 +211,7 @@ final class BrokerService
 
         if ($method === 'GET' && $route === '/v1/messages') {
             $current = $this->characterAuth()->requireCurrentAccount($session);
+            $this->releaseSession($releaseSession);
             return $this->response(200, $this->messages()->forAccount($current['account']));
         }
 
@@ -330,6 +340,13 @@ final class BrokerService
         }
 
         throw new BrokerHttpException(404, 'not_found', 'The requested broker endpoint was not found.');
+    }
+
+    private function releaseSession(?callable $releaseSession): void
+    {
+        if ($releaseSession !== null) {
+            $releaseSession();
+        }
     }
 
     private function validateSnapshot(array $snapshot, bool $requireFresh): array

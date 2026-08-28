@@ -557,6 +557,7 @@ try {
         $identity['body']['account']['character_key'] === 'routing',
         'The protected identity route did not use the session account.');
 
+    $sessionReleaseCount = 0;
     $playerRevisions = $broker->dispatch(
         'GET',
         '/v1/revisions',
@@ -564,7 +565,12 @@ try {
         [],
         [],
         '192.0.2.30',
-        $session);
+        $session,
+        null,
+        null,
+        static function () use (&$sessionReleaseCount): void {
+            ++$sessionReleaseCount;
+        });
     routingAssert(
         $playerRevisions['status'] === 200
             && $playerRevisions['body']['schema_version'] === 1
@@ -573,6 +579,9 @@ try {
             && preg_match('/^[a-f0-9]{64}$/', $playerRevisions['body']['messages']['revision']) === 1
             && preg_match('/^[a-f0-9]{64}$/', $playerRevisions['body']['quests']['revision']) === 1,
         'The protected player revision route returned invalid or cross-account activity.');
+    routingAssert(
+        $sessionReleaseCount === 1,
+        'The protected revision route did not release the PHP session before the read.');
 
     $magicItems = $broker->dispatch(
         'GET',
@@ -587,6 +596,7 @@ try {
         array_column($magicItems['body']['items'], 'name') === ['Public Routing Item'],
         'The protected magic-item route returned an unexpected item set.');
 
+    $sessionReleaseCount = 0;
     $xp = $broker->dispatch(
         'GET',
         '/v1/xp',
@@ -594,8 +604,16 @@ try {
         [],
         [],
         '192.0.2.30',
-        $session);
+        $session,
+        null,
+        null,
+        static function () use (&$sessionReleaseCount): void {
+            ++$sessionReleaseCount;
+        });
     routingAssert($xp['status'] === 200, 'The protected XP route failed.');
+    routingAssert(
+        $sessionReleaseCount === 1,
+        'The protected XP route did not release the PHP session before the read.');
     routingAssert($xp['body']['scope'] === 'character', 'The player XP response had the wrong scope.');
     routingAssert($xp['body']['character']['xp_total'] === 12345, 'The player XP response had the wrong total.');
     routingAssert($xp['body']['character']['character_class'] === 'Ranger', 'The player XP response had the wrong class.');
