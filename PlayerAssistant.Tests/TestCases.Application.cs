@@ -19,6 +19,17 @@ namespace PlayerAssistant.Tests;
 
 internal static partial class TestCases
 {
+    internal static void KeepAlivePolicyIsTruthfulAndObservable()
+    {
+        var repoRoot = GetRepositoryRoot();
+        var verifier = Path.Combine(repoRoot, "verify-keep-alive.ps1");
+        using var process = Process.Start(new ProcessStartInfo("powershell.exe", $"-NoProfile -NonInteractive -ExecutionPolicy Bypass -File \"{verifier}\"") { RedirectStandardOutput = true, RedirectStandardError = true, UseShellExecute = false, CreateNoWindow = true });
+        AssertTrue(process is not null, "keep-alive verifier process should start");
+        process!.WaitForExit();
+        AssertEqual(0, process.ExitCode, (process.StandardOutput.ReadToEnd() + process.StandardError.ReadToEnd()).Trim());
+    }
+
+
     internal static void AppConfigurationValidationAcceptsCompleteRuntime()
     {
         using var directory = TemporaryDirectory.Create();
@@ -1361,6 +1372,53 @@ internal static partial class TestCases
 
         AssertContains(exception.Message, "not allowed");
         AssertEqual(0, attempts, "disallowed requests should be rejected before the HTTP handler runs");
+    }
+
+    internal static void NetworkRequestFollowsAllowedRedirectAtRequestBoundary()
+    {
+        var requests = new List<Uri>();
+        using var httpClient = NetworkRequestUtility.CreateHttpClient(new ScriptedHttpMessageHandler((request, _) =>
+        {
+            requests.Add(request.RequestUri!);
+            return requests.Count == 1
+                ? Task.FromResult(new HttpResponseMessage(HttpStatusCode.Redirect)
+                {
+                    Headers = { Location = new Uri("https://rpol.net/game.php?gi=80170&redirected=true") }
+                })
+                : Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK));
+        }));
+
+        using var response = NetworkRequestUtility.SendAsync(
+            httpClient,
+            () => new HttpRequestMessage(HttpMethod.Get, "https://rpol.net/game.php?gi=80170"),
+            policy: new NetworkRequestPolicy(TimeSpan.FromSeconds(1), MaxAttempts: 1, TimeSpan.Zero),
+            purpose: NetworkUrlPurpose.Rpol).GetAwaiter().GetResult();
+
+        AssertEqual(HttpStatusCode.OK, response.StatusCode, "allowed redirect should return the final response");
+        AssertEqual(2, requests.Count, "allowed redirect should send one follow-up request");
+        AssertEqual("https://rpol.net/game.php?gi=80170&redirected=true", requests[1].AbsoluteUri, "unexpected redirect target");
+    }
+
+    internal static void NetworkRequestRejectsDisallowedRedirectBeforeSend()
+    {
+        var requests = new List<Uri>();
+        using var httpClient = NetworkRequestUtility.CreateHttpClient(new ScriptedHttpMessageHandler((request, _) =>
+        {
+            requests.Add(request.RequestUri!);
+            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.Redirect)
+            {
+                Headers = { Location = new Uri("http://127.0.0.1:1/private") }
+            });
+        }));
+
+        AssertThrows<InvalidOperationException>(() =>
+            NetworkRequestUtility.SendAsync(
+                httpClient,
+                () => new HttpRequestMessage(HttpMethod.Get, "https://rpol.net/game.php?gi=80170"),
+                policy: new NetworkRequestPolicy(TimeSpan.FromSeconds(1), MaxAttempts: 1, TimeSpan.Zero),
+                purpose: NetworkUrlPurpose.Rpol).GetAwaiter().GetResult());
+
+        AssertEqual(1, requests.Count, "disallowed redirect target must never reach the request handler");
     }
 
     internal static void NetworkRequestDoesNotRetryUnauthorized()

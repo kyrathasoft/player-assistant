@@ -357,43 +357,45 @@ Planned security correction: eliminate first-name equivalence from authenticatio
   - [x] Replace independently supplied `IsDungeonMaster` and `AccountScope` values with a validated role/scope derived by one identity factory from the canonical identity record.
   - [x] Reject impossible combinations such as a player canonical ID carrying Dungeon Master scope.
   - [x] Add negative tests at every protected desktop boundary that currently consumes `XpAuthenticatedIdentity`.
-- [ ] Restore source-aware login throttling without enabling cross-address account lockout.
-  - [ ] Scope progressive failures to account plus normalized source while retaining a separate address-wide abuse threshold.
-  - [ ] Preserve address abuse history across successful logins and restore deterministic IPv4/IPv6 normalization tests.
-- [ ] Make persistent multi-file refreshes crash-safe and monotonic.
-  - [ ] Inventory XP progression, award-history, word-count, lexicon, and runtime-cache collections that can expose mixed generations.
-  - [ ] Add per-collection locking, an explicit commit point or journal, durable promotion, and idempotent recovery where several files form one logical snapshot.
-  - [ ] Add fault injection for stale-but-valid sources, equal-date events, partial promotion, concurrent refresh, replay, reset/decrease, and recovery interruption.
-- [ ] Make the Windows keep-alive behavior truthful and observable.
-  - [ ] Stop relying on a hard-coded repository path in the hidden launcher; install a validated absolute path appropriate to the current machine.
-  - [ ] Treat failed `SetThreadExecutionState` or `SendInput` calls as task failures and write bounded diagnostic status.
-  - [ ] Ensure the refresh cadence is shorter than the effective display timeout, including battery policy, or use a supervised long-running assertion.
-  - [ ] Separate display, system-sleep, and disk-idle requirements; use `ES_SYSTEM_REQUIRED` or explicit power-policy changes only when those behaviors are intentionally requested and tested.
+- [x] Restore source-aware login throttling without enabling cross-address account lockout.
+  - [x] Scope progressive failures to account plus normalized source while retaining a separate address-wide abuse threshold.
+  - [x] Preserve address abuse history across successful logins and restore deterministic IPv4/IPv6 normalization tests.
+- [x] Make persistent multi-file refreshes crash-safe and monotonic.
+  - [x] Inventory XP progression, award-history, word-count, lexicon, and runtime-cache collections that can expose mixed generations.
+  - [x] Add per-collection locking, an explicit commit point or journal, durable promotion, and idempotent recovery where several files form one logical snapshot.
+  - [x] Add fault injection for stale-but-valid sources, equal-date events, partial promotion, concurrent refresh, replay, reset/decrease, and recovery interruption.
+- [x] Make the Windows keep-alive behavior truthful and observable.
+  - [x] Stop relying on a hard-coded repository path in the hidden launcher; install a validated absolute path appropriate to the current machine.
+  - [x] Treat failed `SetThreadExecutionState` or `SendInput` calls as task failures and write bounded diagnostic status.
+  - [x] Ensure the refresh cadence is shorter than the effective display timeout, including battery policy, or use a supervised long-running assertion.
+  - [x] Separate display, system-sleep, and disk-idle requirements; use `ES_SYSTEM_REQUIRED` or explicit power-policy changes only when those behaviors are intentionally requested and tested.
 
 ### P2 — Strengthen asynchronous and deployment edge cases
 
-- [ ] Expand authenticated PWA lifecycle fault injection.
-  - [ ] Prove empty, malformed, HTML, and stalled `401` responses invalidate the session before body parsing can block cleanup.
-  - [ ] Keep request timeout and cancellation active through response-body decoding, then recheck account generation before applying results.
-  - [ ] Prove late success or failure from a prior account generation cannot clear or repopulate a newly authenticated account.
-  - [ ] Keep observed and applied revision tokens separate through failed initial loads and sibling-resource partial failures.
-  - [ ] Test hidden/visible and offline/online transitions for exactly one immediate resume request and no duplicate polling intervals.
-- [ ] Restore optional packs to truly optional, reclaimable storage.
-  - [ ] Remove optional datasets from install-time general precache and store them exclusively in content-addressed optional caches after demand loading.
-  - [ ] Make failed manifest requests retryable and generation-guard load/remove so late completion cannot resurrect a removed pack.
-  - [ ] Add both optional-pack suites to canonical CI and replace source-regex assertions with cache-key, request-byte, and removal behavior checks.
-- [ ] Validate service-worker responses semantically before use or commit.
-  - [ ] Prefer a valid cached response over HTTP errors, wrong MIME types, captive-portal HTML, malformed JSON, or otherwise invalid network content.
-  - [ ] Validate mandatory precache MIME, nonempty content, and JSON/schema before committing the installation cache; clean partial version caches on failure.
-  - [ ] Bound navigation fetch time before falling back to the cached shell.
-- [ ] Make service-worker controller transitions deterministic in long-lived pages.
-  - [ ] Avoid reloading on first controller acquisition, but reload exactly once when a later worker takes control in the same page.
-- [ ] Prevent trusted-network redirects from connecting to untrusted targets.
-  - [ ] Disable automatic redirects and manually follow a bounded hop count, validating every parsed target against its purpose-specific allowlist before sending.
-  - [ ] Prove a trusted endpoint redirecting to localhost or another disallowed authority sends zero requests to that target.
+- [x] Expand authenticated PWA lifecycle fault injection.
+  - [x] Prove empty, malformed, HTML, and stalled `401` responses invalidate the session before body parsing can block cleanup.
+  - [x] Keep request timeout and cancellation active through response-body decoding, then recheck account generation before applying results.
+  - [x] Prove late success or failure from a prior account generation cannot clear or repopulate a newly authenticated account.
+  - [x] Keep observed and applied revision tokens separate through failed initial loads and sibling-resource partial failures.
+  - [x] Test hidden/visible and offline/online transitions for exactly one immediate resume request and no duplicate polling intervals.
+- [x] Restore optional packs to truly optional, reclaimable storage.
+  - [x] Remove optional datasets from install-time general precache and store them exclusively in content-addressed optional caches after demand loading.
+  - [x] Make failed manifest requests retryable and generation-guard load/remove so late completion cannot resurrect a removed pack.
+  - [x] Add both optional-pack suites to canonical CI and replace source-regex assertions with cache-key, request-byte, and removal behavior checks.
+- [x] Validate service-worker responses semantically before use or commit.
+  - [x] Prefer a valid cached response over HTTP errors, wrong MIME types, captive-portal HTML, malformed JSON, or otherwise invalid network content.
+  - [x] Validate mandatory precache MIME, nonempty content, and JSON/schema before committing the installation cache; clean partial version caches on failure.
+  - [x] Bound navigation fetch time before falling back to the cached shell.
+- [x] Make service-worker controller transitions deterministic in long-lived pages.
+  - [x] Avoid reloading on first controller acquisition, but reload exactly once when a later worker takes control in the same page.
+  - [x] Cover duplicate controllerchange events, explicit SKIP_WAITING update prompts, and online/offline lifecycle transitions in focused and browser smoke tests.
+- [x] Prevent trusted-network redirects from connecting to untrusted targets.
+  - [x] Disable automatic redirects and manually follow a bounded hop count, validating every parsed target against its purpose-specific allowlist before sending.
+  - [x] Prove a trusted endpoint redirecting to localhost or another disallowed authority sends zero requests to that target.
 - [ ] Make RPOL credential migration and WebView dispatch lifetime-safe.
   - [ ] Store username/password as one versioned credential record or compensate on partial write/delete so migration and plaintext removal are all-or-nothing.
   - [ ] Complete cancellation even when UI enqueue fails or the handle is destroyed; dispose registrations and recheck dialog viability after each await.
+  - Blocked pending the release-candidate self-test fixture `Release\\publish\\settings.local.json`, which is not present in this checkout; functional migration and dispatch regression coverage passes.
 - [ ] Prove RPOL authentication against the exact protected resource before capturing or reusing browser state.
   - [ ] Define one canonical protected Dice Roller probe for game `80170` and use it for visible-browser verification, WebView verification, restored-state validation, and publisher preflight.
   - [ ] Reject public campaign content, cookie presence, login redirects/forms, untrusted navigation, challenges, wrong paths, wrong game IDs, and unexpected protected-page shapes as authentication proof.

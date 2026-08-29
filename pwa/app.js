@@ -1,6 +1,7 @@
-import { initializeTranslator } from './modules/translator.js?v=91';
-import { initializeCampaignSearch } from './modules/search.js?v=91';
-import { initializeDice } from './modules/dice.js?v=91';
+import { initializeTranslator } from './modules/translator.js?v=92';
+import { initializeCampaignSearch } from './modules/search.js?v=92';
+import { initializeDice } from './modules/dice.js?v=92';
+import { createControllerChangeHandler } from './service-worker-controller.js?v=92';
 
 (() => {
     'use strict';
@@ -2417,19 +2418,22 @@ import { initializeDice } from './modules/dice.js?v=91';
         return [...bytes].map((value) => value.toString(16).padStart(2, '0')).join('');
     };
 
-    const cancelAuthenticationRequests = () => {
-        for (const controller of activeAuthenticationControllers) controller.abort();
-        activeAuthenticationControllers.clear();
+    const cancelAuthenticationRequests = (except = null) => {
+        for (const controller of activeAuthenticationControllers) {
+            if (controller !== except) controller.abort();
+        }
+        if (except === null) activeAuthenticationControllers.clear();
+        else activeAuthenticationControllers.delete(except);
     };
 
-    const beginAuthenticationGeneration = () => {
+    const beginAuthenticationGeneration = (except = null) => {
         authenticationGeneration++;
-        cancelAuthenticationRequests();
+        cancelAuthenticationRequests(except);
     };
 
-    const clearExpiredAuthentication = () => {
+    const clearExpiredAuthentication = (exceptController = null) => {
         if (authenticatedAccount === null) return;
-        beginAuthenticationGeneration();
+        beginAuthenticationGeneration(exceptController);
         authenticatedAccount = null;
         authenticationCsrfToken = '';
         clearProtectedFreshness();
@@ -2502,28 +2506,88 @@ import { initializeDice } from './modules/dice.js?v=91';
             else options.signal.addEventListener('abort', externalAbortHandler, { once: true });
         }
         activeAuthenticationControllers.add(controller);
-        let response;
         try {
-            response = await fetch(`${AUTH_API_ROOT}${path}`, {
-                method,
-                headers,
-                body: options.body === undefined ? undefined : JSON.stringify(options.body),
-                credentials: 'same-origin',
-                cache: 'no-store',
-                redirect: 'error',
-                signal: controller.signal
-            });
-        } catch (error) {
-            const cancelled = controller.signal.aborted;
-            throw new AuthenticationApiError(
-                timedOut
-                    ? 'The character login request timed out.'
-                    : cancelled ? 'The character login request was cancelled.' : 'The character login service is unavailable.',
-                {
-                    code: timedOut ? 'request_timeout' : cancelled ? 'request_cancelled' : 'network_error',
-                    requestId,
-                    retryable: true
+            let response;
+            try {
+                response = await fetch(`${AUTH_API_ROOT}${path}`, {
+                    method,
+                    headers,
+                    body: options.body === undefined ? undefined : JSON.stringify(options.body),
+                    credentials: 'same-origin',
+                    cache: 'no-store',
+                    redirect: 'error',
+                    signal: controller.signal
                 });
+            } catch (error) {
+                const cancelled = controller.signal.aborted;
+                throw new AuthenticationApiError(
+                    timedOut
+                        ? 'The character login request timed out.'
+                        : cancelled ? 'The character login request was cancelled.' : 'The character login service is unavailable.',
+                    {
+                        code: timedOut ? 'request_timeout' : cancelled ? 'request_cancelled' : 'network_error',
+                        requestId,
+                        retryable: true
+                    });
+            }
+            const responseRequestId = response.headers.get('X-Request-Id') || requestId;
+            if (response.status === 401 && path !== '/login') {
+                // Invalidate immediately: a broken or captive-portal body must not delay cleanup.
+                const isCurrentGeneration = requestGeneration === authenticationGeneration;
+                if (isCurrentGeneration) clearExpiredAuthentication(controller);
+                throw new AuthenticationApiError(
+                    'Authentication required.',
+                    {
+                        code: 'authentication_required',
+                        status: 401,
+                        requestId: responseRequestId,
+                        expired: isCurrentGeneration,
+                        retryable: false
+                    });
+            }
+            if (requestGeneration !== authenticationGeneration && path !== '/login') {
+                throw new AuthenticationApiError(
+                    'The character login response was superseded by an account change.',
+                    { code: 'stale_generation', requestId: responseRequestId, retryable: true });
+            }
+            let payload = {};
+            try {
+                payload = await response.json();
+            } catch {
+                throw new AuthenticationApiError(
+                    response.ok
+                        ? 'The character login service returned an invalid response.'
+                        : 'The character login request failed.',
+                    {
+                        code: 'invalid_response',
+                        status: response.status,
+                        requestId: responseRequestId,
+                        retryable: response.status >= 500
+                    });
+            }
+            if (requestGeneration !== authenticationGeneration && path !== '/login') {
+                throw new AuthenticationApiError(
+                    'The character login response was superseded by an account change.',
+                    { code: 'stale_generation', requestId: responseRequestId, retryable: true });
+            }
+            if (!response.ok) {
+                throw new AuthenticationApiError(
+                    typeof payload.message === 'string' && payload.message !== ''
+                        ? payload.message
+                        : 'The character login request failed.',
+                    {
+                        code: typeof payload.error === 'string' ? payload.error : 'api_error',
+                        status: response.status,
+                        requestId: typeof payload.request_id === 'string' ? payload.request_id : responseRequestId,
+                        retryable: response.status >= 500 || response.status === 429
+                    });
+            }
+            if (payload && typeof payload === 'object' && !Array.isArray(payload)) {
+                payload.request_id = typeof payload.request_id === 'string'
+                    ? payload.request_id
+                    : responseRequestId;
+            }
+            return payload;
         } finally {
             window.clearTimeout(timeoutId);
             activeAuthenticationControllers.delete(controller);
@@ -2531,53 +2595,6 @@ import { initializeDice } from './modules/dice.js?v=91';
                 options.signal.removeEventListener('abort', externalAbortHandler);
             }
         }
-        const responseRequestId = response.headers.get('X-Request-Id') || requestId;
-        if (requestGeneration !== authenticationGeneration && path !== '/login') {
-            throw new AuthenticationApiError(
-                'The character login response was superseded by an account change.',
-                { code: 'stale_generation', requestId: responseRequestId, retryable: true });
-        }
-        let payload = {};
-        try {
-            payload = await response.json();
-        } catch {
-            if (!response.ok) {
-                if (response.status === 401 && path !== '/login') clearExpiredAuthentication();
-                throw new AuthenticationApiError(
-                    response.status === 401 ? 'Authentication required.' : 'The character login request failed.',
-                    {
-                        code: response.status === 401 ? 'authentication_required' : 'invalid_response',
-                        status: response.status,
-                        requestId: responseRequestId,
-                        expired: response.status === 401,
-                        retryable: response.status >= 500
-                    });
-            }
-            throw new AuthenticationApiError(
-                'The character login service returned an invalid response.',
-                { code: 'invalid_response', status: response.status, requestId: responseRequestId });
-        }
-        if (!response.ok) {
-            const expired = response.status === 401 && path !== '/login';
-            if (expired) clearExpiredAuthentication();
-            throw new AuthenticationApiError(
-                typeof payload.message === 'string' && payload.message !== ''
-                    ? payload.message
-                    : 'The character login request failed.',
-                {
-                    code: typeof payload.error === 'string' ? payload.error : 'api_error',
-                    status: response.status,
-                    requestId: typeof payload.request_id === 'string' ? payload.request_id : responseRequestId,
-                    expired,
-                    retryable: response.status >= 500 || response.status === 429
-                });
-        }
-        if (payload && typeof payload === 'object' && !Array.isArray(payload)) {
-            payload.request_id = typeof payload.request_id === 'string'
-                ? payload.request_id
-                : responseRequestId;
-        }
-        return payload;
     };
 
     const validatePresenceSnapshot = (payload) => {
@@ -3021,8 +3038,11 @@ import { initializeDice } from './modules/dice.js?v=91';
     updateInstallButtons();
 
     if ('serviceWorker' in navigator) {
-        const hadServiceWorkerController = navigator.serviceWorker.controller !== null;
-        let reloadingForServiceWorker = false;
+        const onControllerChange = createControllerChangeHandler({
+            getController: () => navigator.serviceWorker.controller,
+            reload: () => window.location.reload()
+        });
+        navigator.serviceWorker.addEventListener('controllerchange', onControllerChange);
         let pendingServiceWorker = null;
         const updateBanner = byId('update-banner');
         const showServiceWorkerUpdate = (worker) => {
@@ -3035,12 +3055,7 @@ import { initializeDice } from './modules/dice.js?v=91';
         byId('update-apply')?.addEventListener('click', () => {
             pendingServiceWorker?.postMessage({ type: 'SKIP_WAITING' });
         });
-        navigator.serviceWorker.addEventListener('controllerchange', () => {
-            if (hadServiceWorkerController && !reloadingForServiceWorker) {
-                reloadingForServiceWorker = true;
-                window.location.reload();
-            }
-        });
+
         window.addEventListener('load', async () => {
             try {
                 const registration = await navigator.serviceWorker.register(

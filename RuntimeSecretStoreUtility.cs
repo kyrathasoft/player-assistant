@@ -8,6 +8,7 @@ namespace PlayerAssistant
     {
         private const string RpolUserNameTarget = "PlayerAssistant/RPOL/UserName";
         private const string RpolPasswordTarget = "PlayerAssistant/RPOL/Password";
+        private const string RpolCredentialRecordTarget = "PlayerAssistant/RPOL/Credentials";
         private const string RpolStorageStateTarget = "PlayerAssistant/RPOL/StorageState";
         private const string RpolStorageStateCandidateTarget = "PlayerAssistant/RPOL/StorageStateCandidate";
         private const string RpolStorageStateSlotATarget = "PlayerAssistant/RPOL/StorageStateActiveA";
@@ -21,6 +22,16 @@ namespace PlayerAssistant
 
         public static bool TryGetRpolCredentials(out string? userName, out string? password)
         {
+            if (WindowsCredentialManagerUtility.TryReadSecret(RpolCredentialRecordTarget, out var recordBytes, out _))
+            {
+                try
+                {
+                    var record = JsonSerializer.Deserialize<RpolCredentialRecord>(recordBytes);
+                    if (record?.Version == 1 && !string.IsNullOrWhiteSpace(record.UserName) && !string.IsNullOrWhiteSpace(record.Password))
+                    { userName = record.UserName; password = record.Password; return true; }
+                }
+                catch (JsonException) { }
+            }
             var hasUserName = WindowsCredentialManagerUtility.TryReadSecretUtf8(RpolUserNameTarget, out userName, out _);
             var hasPassword = WindowsCredentialManagerUtility.TryReadSecretUtf8(RpolPasswordTarget, out password, out _);
 
@@ -39,16 +50,12 @@ namespace PlayerAssistant
 
         public static string? GetRpolUserName()
         {
-            return WindowsCredentialManagerUtility.TryReadSecretUtf8(RpolUserNameTarget, out var userName, out _)
-                ? userName
-                : null;
+            return TryGetRpolCredentials(out var userName, out _) ? userName : null;
         }
 
         public static string? GetRpolPassword()
         {
-            return WindowsCredentialManagerUtility.TryReadSecretUtf8(RpolPasswordTarget, out var password, out _)
-                ? password
-                : null;
+            return TryGetRpolCredentials(out _, out var password) ? password : null;
         }
 
         public static void SaveRpolCredentials(string userName, string password)
@@ -56,12 +63,14 @@ namespace PlayerAssistant
             ArgumentException.ThrowIfNullOrWhiteSpace(userName);
             ArgumentException.ThrowIfNullOrWhiteSpace(password);
 
-            WindowsCredentialManagerUtility.WriteSecretUtf8(RpolUserNameTarget, userName.Trim(), RpolComment);
-            WindowsCredentialManagerUtility.WriteSecretUtf8(RpolPasswordTarget, password, RpolComment);
+            var recordBytes = JsonSerializer.SerializeToUtf8Bytes(new RpolCredentialRecord(1, userName.Trim(), password));
+            try { WindowsCredentialManagerUtility.WriteSecret(RpolCredentialRecordTarget, recordBytes, RpolComment + " versioned"); }
+            finally { Array.Clear(recordBytes, 0, recordBytes.Length); }
         }
 
         public static void DeleteRpolCredentials()
         {
+            WindowsCredentialManagerUtility.DeleteSecret(RpolCredentialRecordTarget);
             WindowsCredentialManagerUtility.DeleteSecret(RpolUserNameTarget);
             WindowsCredentialManagerUtility.DeleteSecret(RpolPasswordTarget);
         }
@@ -352,34 +361,29 @@ namespace PlayerAssistant
                 return false;
             }
 
-            if (!string.IsNullOrWhiteSpace(userName))
+            if (string.IsNullOrWhiteSpace(userName) || string.IsNullOrWhiteSpace(password)) return false;
+            var original = new Dictionary<string, string>(settings, StringComparer.OrdinalIgnoreCase);
+            try
             {
-                WindowsCredentialManagerUtility.WriteSecretUtf8(RpolUserNameTarget, userName.Trim(), RpolComment);
-            }
-            else
-            {
+                SaveRpolCredentials(userName, password);
+                settings.Remove(AppSettingsUtility.RpolUserNameSettingsKey);
+                settings.Remove(AppSettingsUtility.RpolPasswordSettingsKey);
+                if (!string.IsNullOrWhiteSpace(persistedSettingsPath))
+                    LocalSettingsUtility.SaveEncryptedSettings(persistedSettingsPath, new Dictionary<string, string>(settings, StringComparer.OrdinalIgnoreCase));
                 WindowsCredentialManagerUtility.DeleteSecret(RpolUserNameTarget);
-            }
-
-            if (!string.IsNullOrWhiteSpace(password))
-            {
-                WindowsCredentialManagerUtility.WriteSecretUtf8(RpolPasswordTarget, password, RpolComment);
-            }
-            else
-            {
                 WindowsCredentialManagerUtility.DeleteSecret(RpolPasswordTarget);
+                return true;
             }
-
-            settings.Remove(AppSettingsUtility.RpolUserNameSettingsKey);
-            settings.Remove(AppSettingsUtility.RpolPasswordSettingsKey);
-            if (!string.IsNullOrWhiteSpace(persistedSettingsPath))
+            catch
             {
-                LocalSettingsUtility.SaveEncryptedSettings(
-                    persistedSettingsPath,
-                    new Dictionary<string, string>(settings, StringComparer.OrdinalIgnoreCase));
+                settings.Clear(); foreach (var pair in original) settings[pair.Key] = pair.Value;
+                if (!string.IsNullOrWhiteSpace(persistedSettingsPath))
+                {
+                    try { LocalSettingsUtility.SaveEncryptedSettings(persistedSettingsPath, original); } catch { }
+                }
+                try { DeleteRpolCredentials(); } catch { }
+                throw;
             }
-
-            return true;
         }
 
         internal static IDisposable UseBackendForTests(IWindowsCredentialStoreBackend backend)
@@ -398,6 +402,8 @@ namespace PlayerAssistant
 
             return destination.ToArray();
         }
+
+        private sealed record RpolCredentialRecord(int Version, string UserName, string Password);
 
         private static string DecompressUtf8(byte[] compressedBytes)
         {

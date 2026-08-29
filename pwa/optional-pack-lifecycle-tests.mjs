@@ -38,8 +38,9 @@ class MemoryCache {
     async keys() { return [...this.entries.keys()].map((url) => new Request(url)); }
 }
 
-const createHarness = (responses, cacheMap = new Map()) => {
+const createHarness = (responses, cacheMap = new Map(), manifestFailures = 0) => {
     let packFetches = 0;
+    let manifestFetches = 0;
     const cacheApi = {
         async open(name) {
             if (!cacheMap.has(name)) cacheMap.set(name, new MemoryCache());
@@ -66,12 +67,14 @@ const createHarness = (responses, cacheMap = new Map()) => {
         fetch: async (request) => {
             const url = String(request.url || request);
             if (url.endsWith('/optional-packs.json') || url === 'optional-packs.json') {
+                manifestFetches += 1;
+                if (manifestFetches <= manifestFailures) throw new Error('manifest unavailable');
                 return Response.json(manifest, { headers: { 'Content-Type': 'application/json' } });
             }
             packFetches += 1;
             const next = responses.length > 1 ? responses.shift() : responses[0];
             if (next instanceof Error) throw next;
-            return next.clone();
+            return (await next).clone();
         }
     });
     context.globalThis = context;
@@ -79,7 +82,8 @@ const createHarness = (responses, cacheMap = new Map()) => {
     return {
         loader: context.PlayerAssistantPackLoader,
         cacheMap,
-        packFetches: () => packFetches
+        packFetches: () => packFetches,
+        manifestFetches: () => manifestFetches
     };
 };
 
@@ -88,14 +92,38 @@ const sharedCaches = new Map();
 const first = createHarness([validResponse()], sharedCaches);
 assert.equal(JSON.stringify(await first.loader.loadPack('translator-orcish')), JSON.stringify(payload));
 assert.equal(first.packFetches(), 1);
+const optionalCache = sharedCaches.get('player-assistant-optional-pack-translator-orcish');
+assert.equal(optionalCache.entries.size, 1, 'validated packs are stored in an isolated optional cache');
+const [storedKey] = optionalCache.entries.keys();
+assert.match(storedKey, /pack-hash=/u, 'cache key is content-addressed');
+assert.equal((await optionalCache.entries.get(storedKey).clone().arrayBuffer()).byteLength, bytes.length, 'cache stores exact response bytes');
 
-const replacementFailure = createHarness([new Error('offline')], sharedCaches);
+const invalidCacheMap = new Map();
+const invalidCache = new MemoryCache();
+const cacheKey = `https://example.test/scarlethorizons/pwa/data/orcish.json?pack-hash=${hash}`;
+await invalidCache.put(cacheKey, new Response('{bad', { headers: { 'Content-Type': 'application/json' } }));
+invalidCacheMap.set('player-assistant-optional-pack-translator-orcish', invalidCache);
+const invalidCached = createHarness([validResponse()], invalidCacheMap);
+assert.equal(JSON.stringify(await invalidCached.loader.loadPack('translator-orcish')), JSON.stringify(payload));
+assert.equal(invalidCached.packFetches(), 1, 'invalid cached bytes are removed before refetch');
+assert.equal(invalidCache.entries.size, 1, 'the validated replacement remains the only optional entry');
+
+const invalidNetwork = createHarness([new Response(JSON.stringify({ schemaVersion: 1, language: 'Orcish' }), { headers: { 'Content-Type': 'application/json' } })]);
+await assert.rejects(invalidNetwork.loader.loadPack('translator-orcish'), /content verification|schema validation/u);
+assert.equal(invalidNetwork.cacheMap.get('player-assistant-optional-pack-translator-orcish')?.entries.size || 0, 0, 'invalid network payload is never cached');
+
+const replacementFailure = createHarness([new Response('offline', { status: 503, headers: { 'Content-Type': 'application/json' } })], sharedCaches);
 await assert.rejects(
     replacementFailure.loader.loadPack('translator-orcish', { force: true }),
-    /offline/u);
-const retained = createHarness([new Error('offline')], sharedCaches);
+    /503/u);
+const retained = createHarness([new Response('offline', { status: 503, headers: { 'Content-Type': 'application/json' } })], sharedCaches);
 assert.equal(JSON.stringify(await retained.loader.loadPack('translator-orcish')), JSON.stringify(payload));
 assert.equal(retained.packFetches(), 0, 'valid cached pack should survive failed replacement');
+
+const manifestRetry = createHarness([validResponse()], new Map(), 1);
+await assert.rejects(manifestRetry.loader.loadPack('translator-orcish'), /manifest unavailable/u);
+assert.equal(JSON.stringify(await manifestRetry.loader.loadPack('translator-orcish')), JSON.stringify(payload));
+assert.equal(manifestRetry.manifestFetches(), 2, 'failed manifest requests are retryable');
 
 const retry = createHarness([
     new Response('temporary', { status: 503, headers: { 'Content-Type': 'application/json' } }),
@@ -104,6 +132,15 @@ const retry = createHarness([
 ]);
 assert.equal(JSON.stringify(await retry.loader.loadPack('translator-orcish')), JSON.stringify(payload));
 assert.equal(retry.packFetches(), 3, 'transient pack failures should use bounded retries');
+
+const delayedResponses = [];
+const delayed = createHarness([new Promise((resolve) => delayedResponses.push(resolve))]);
+const pendingLoad = delayed.loader.loadPack('translator-orcish');
+await new Promise((resolve) => setTimeout(resolve, 0));
+await delayed.loader.removePack('translator-orcish');
+delayedResponses[0](validResponse());
+await assert.rejects(pendingLoad, /removed|generation|cancel/i);
+assert.equal(delayed.cacheMap.has('player-assistant-optional-pack-translator-orcish'), false, 'late load cannot resurrect removed pack');
 
 await retained.loader.removePack('translator-orcish');
 assert.equal(retained.cacheMap.has('player-assistant-optional-pack-translator-orcish'), false);

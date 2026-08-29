@@ -141,7 +141,11 @@ $runtimeFiles = [ordered]@{
     'modules/translator.js' = @('application/javascript', 'text/javascript')
     'modules/search.js' = @('application/javascript', 'text/javascript')
     'modules/dice.js' = @('application/javascript', 'text/javascript')
+    'service-worker-controller.js' = @('application/javascript', 'text/javascript')
     'translator-worker.js' = @('application/javascript', 'text/javascript')
+    'campaign-search-worker.js' = @('application/javascript', 'text/javascript')
+    'optional-pack-loader.js' = @('application/javascript', 'text/javascript')
+    'optional-packs.json' = @('application/json', 'text/json')
     'service-worker.js' = @('application/javascript', 'text/javascript')
     'offline.html' = @('text/html')
     'manifest.webmanifest' = @('application/manifest+json', 'application/json')
@@ -179,6 +183,7 @@ foreach ($hero in @($heroData.heroes) + @($heroData.dungeonMaster)) {
 }
 
 $handler = [System.Net.Http.HttpClientHandler]::new()
+$handler.AllowAutoRedirect = $false
 $handler.AutomaticDecompression = [System.Net.DecompressionMethods]::All
 $handler.CookieContainer = [System.Net.CookieContainer]::new()
 $client = [System.Net.Http.HttpClient]::new($handler)

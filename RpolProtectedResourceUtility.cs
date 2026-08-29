@@ -19,6 +19,8 @@ internal sealed record RpolProtectedResourceClassification(
     int? StatusCode,
     string Reason);
 
+internal sealed record RpolProtectedResourceProbe(int GameId, Uri Uri, string Referer);
+
 internal sealed record RpolProtectedProbeEvidence(
     Uri RequestedUri,
     Uri? ResponseUri,
@@ -31,8 +33,10 @@ internal sealed record RpolProtectedProbeEvidence(
 
 internal static partial class RpolProtectedResourceUtility
 {
-    internal static readonly Uri ProtectedDiceRollerUri =
-        new("https://rpol.net/usermodules/diceroller.cgi?gi=80170");
+    internal static readonly RpolProtectedResourceProbe CanonicalDiceRollerProbe =
+        new(80170, new Uri("https://rpol.net/usermodules/diceroller.cgi?gi=80170"), AppSettingsUtility.GameForumUrl);
+
+    internal static Uri ProtectedDiceRollerUri => CanonicalDiceRollerProbe.Uri;
 
     internal static RpolProtectedResourceClassification Classify(
         Uri requestedUri,
@@ -66,7 +70,7 @@ internal static partial class RpolProtectedResourceUtility
                 "The protected probe did not reach a settled navigation boundary.");
         }
 
-        var expectedReferer = AppSettingsUtility.GameForumUrl;
+        var expectedReferer = CanonicalDiceRollerProbe.Referer;
         if (!string.Equals(evidence.MainFrameReferer, expectedReferer, StringComparison.Ordinal))
         {
             return Create(
@@ -161,6 +165,16 @@ internal static partial class RpolProtectedResourceUtility
                 "The protected probe did not return a non-empty HTML response.");
         }
 
+        if (LooksLikeLoginForm(html))
+        {
+            return Create(
+                RpolProtectedResourceKind.LoginRequired,
+                requestedUri,
+                settledUri,
+                statusCode,
+                "The protected probe response still contains an RPOL login form.");
+        }
+
         if (!HasDiceRollerContract(html))
         {
             return Create(
@@ -171,9 +185,6 @@ internal static partial class RpolProtectedResourceUtility
                 "The protected probe response does not match the Dice Roller page contract.");
         }
 
-        // RPOL can retain an embedded login form in the authenticated page shell.
-        // The protected Dice Roller contract is the readiness signal; form markup
-        // alone must not override it after the exact protected resource is proven.
         return Create(
             RpolProtectedResourceKind.AuthenticatedProtectedContent,
             requestedUri,

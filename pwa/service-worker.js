@@ -9,6 +9,7 @@ if (!VERSION_METADATA) {
 const CACHE_VERSION = `player-assistant-pwa-${VERSION_METADATA.pwaVersion}-v${VERSION_METADATA.cacheRevision}`;
 const SHELL_CACHE = `${CACHE_VERSION}-shell`;
 const DATA_CACHE = `${CACHE_VERSION}-data`;
+const NAVIGATION_TIMEOUT_MS = 150;
 const CACHE_GENERATION_PATTERN = /^player-assistant-pwa-(\d+(?:\.\d+)*)-v(\d+)-(?:shell|data)$/;
 const SHELL_ASSETS = [
     './',
@@ -16,6 +17,7 @@ const SHELL_ASSETS = [
     `./version.js?v=${VERSION_METADATA.metadataRevision}`,
     `./styles.css?v=${VERSION_METADATA.stylesRevision}`,
     `./app.js?v=${VERSION_METADATA.appRevision}`,
+    `./service-worker-controller.js?v=${VERSION_METADATA.appRevision}`,
     `./modules/translator.js?v=${VERSION_METADATA.appRevision}`,
     `./modules/search.js?v=${VERSION_METADATA.appRevision}`,
     `./modules/dice.js?v=${VERSION_METADATA.appRevision}`,
@@ -32,18 +34,11 @@ const SHELL_ASSETS = [
     './party-funds.json',
     './level-progression.json'
 ];
-const OFFLINE_DATA_ASSETS = [
-    './data/orcish.json',
-    './data/elvish.json',
-    './data/ghukliak.json',
-    './campaign-search.json'
-];
 const canonicalRequestKey = (asset) => {
     const url = new URL(asset, self.location.href);
     return `${url.pathname}${url.search}`;
 };
 const SHELL_REQUEST_KEYS = new Set(SHELL_ASSETS.map(canonicalRequestKey));
-const OFFLINE_DATA_REQUEST_KEYS = new Set(OFFLINE_DATA_ASSETS.map(canonicalRequestKey));
 
 const parseCacheGeneration = (cacheName) => {
     const match = CACHE_GENERATION_PATTERN.exec(cacheName);
@@ -78,7 +73,14 @@ const deleteCurrentCaches = async () => {
 const cacheAssets = async (cacheName, assets) => {
     const cache = await caches.open(cacheName);
     try {
-        await cache.addAll(assets.map((asset) => new Request(asset, { cache: 'reload' })));
+        for (const asset of assets) {
+            const request = new Request(asset, { cache: 'reload' });
+            const response = await fetch(request);
+            if (!await isValidCachedResponse(request, response)) {
+                throw new Error(`Invalid mandatory precache response for ${asset}.`);
+            }
+            await cache.put(request, response.clone());
+        }
     } catch (error) {
         await caches.delete(cacheName);
         throw error;
@@ -172,11 +174,32 @@ const cacheResponseIfValid = async (cache, request, response) => {
     }
 };
 
+const fetchValidated = async (request) => {
+    const response = await fetch(request);
+    if (!await isValidCachedResponse(request, response)) {
+        throw new Error('Network response failed PWA content validation.');
+    }
+    return response;
+};
+
+const fetchNavigationWithTimeout = async (request) => {
+    let timer;
+    try {
+        return await Promise.race([
+            fetch(request),
+            new Promise((_, reject) => {
+                timer = setTimeout(() => reject(new Error('Navigation fetch timed out.')), NAVIGATION_TIMEOUT_MS);
+            })
+        ]);
+    } finally {
+        clearTimeout(timer);
+    }
+};
+
 self.addEventListener('install', (event) => {
     event.waitUntil(
         Promise.all([
-            cacheAssets(SHELL_CACHE, SHELL_ASSETS),
-            cacheAssets(DATA_CACHE, OFFLINE_DATA_ASSETS)
+            cacheAssets(SHELL_CACHE, SHELL_ASSETS)
         ])
             .catch(async (error) => {
                 await deleteCurrentCaches();
@@ -206,7 +229,7 @@ const cacheFirst = async (request, cacheName) => {
     } catch {
         cache = null;
     }
-    const response = await fetch(request);
+    const response = await fetchValidated(request);
     if (cache) await cacheResponseIfValid(cache, request, response);
     return response;
 };
@@ -214,7 +237,7 @@ const cacheFirst = async (request, cacheName) => {
 const networkFirstData = async (request) => {
     const cache = await caches.open(DATA_CACHE);
     try {
-        const response = await fetch(new Request(request, { cache: 'reload' }));
+        const response = await fetchValidated(new Request(request, { cache: 'reload' }));
         await cacheResponseIfValid(cache, request, response);
         return response;
     } catch {
@@ -228,7 +251,10 @@ const networkFirstData = async (request) => {
 const networkFirstNavigation = async (request) => {
     const cache = await caches.open(SHELL_CACHE);
     try {
-        const response = await fetch(request);
+        const response = await fetchNavigationWithTimeout(request);
+        if (!await isValidCachedResponse(request, response)) {
+            throw new Error('Network navigation failed PWA content validation.');
+        }
         await cacheResponseIfValid(cache, './index.html', response);
         return response;
     } catch {
@@ -264,17 +290,7 @@ self.addEventListener('fetch', (event) => {
         return;
     }
 
-    if (url.pathname.endsWith('/campaign-search.json')) {
-        event.respondWith(networkFirstData(request));
-        return;
-    }
-
-
     const requestKey = `${url.pathname}${url.search}`;
-    if (OFFLINE_DATA_REQUEST_KEYS.has(requestKey)) {
-        event.respondWith(cacheFirst(request, DATA_CACHE));
-        return;
-    }
 
     if (SHELL_REQUEST_KEYS.has(requestKey)) {
         event.respondWith(cacheFirst(request, SHELL_CACHE));

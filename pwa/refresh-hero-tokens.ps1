@@ -152,6 +152,7 @@ if ([string]::IsNullOrWhiteSpace($siteSlug)) {
 }
 
 $handler = [System.Net.Http.HttpClientHandler]::new()
+$handler.AllowAutoRedirect = $false
 $handler.AutomaticDecompression = [System.Net.DecompressionMethods]::All
 $client = [System.Net.Http.HttpClient]::new($handler)
 $client.Timeout = [TimeSpan]::FromSeconds(45)
