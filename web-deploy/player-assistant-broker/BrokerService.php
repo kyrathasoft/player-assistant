@@ -212,7 +212,7 @@ final class BrokerService
         if ($method === 'GET' && $route === '/v1/messages') {
             $current = $this->characterAuth()->requireCurrentAccount($session);
             $this->releaseSession($releaseSession);
-            return $this->response(200, $this->messages()->forAccount($current['account']));
+            return $this->response(200, $this->messages()->forAccount($current['account'], $query));
         }
 
         if ($method === 'POST' && $route === '/v1/messages') {
