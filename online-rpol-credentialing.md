@@ -1,5 +1,7 @@
 # Online RPOL Credentialing
 
+**Status:** Historical implementation log. Actionable remaining work was migrated to the repository `to-do.md`, which is the canonical implementation backlog. Do not use the remaining-steps checklist in this file to determine implementation status or order.
+
 Status date: 2026-07-23
 
 ## Objective

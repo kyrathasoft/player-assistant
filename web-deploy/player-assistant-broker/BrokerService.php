@@ -5,6 +5,7 @@ declare(strict_types=1);
 require_once __DIR__ . '/DatabaseMigrationService.php';
 require_once __DIR__ . '/BrokerAlertService.php';
 require_once __DIR__ . '/RevisionService.php';
+require_once __DIR__ . '/IdempotencyLedger.php';
 
 final class BrokerService
 {
@@ -22,6 +23,7 @@ final class BrokerService
     private $wordCountFetcher;
     private ?string $questDataPath;
     private ?MagicItemService $magicItems = null;
+    private ?IdempotencyLedger $idempotency = null;
 
     public function __construct(
         private readonly array $config,
@@ -63,7 +65,8 @@ final class BrokerService
         string $remoteAddress,
         array &$session,
         ?callable $regenerateSession = null,
-        ?callable $destroySession = null): array
+        ?callable $destroySession = null,
+        ?callable $releaseSession = null): array
     {
         if ($method === 'GET' && $route === '/v1/health') {
             return $this->response(200, [
@@ -110,7 +113,9 @@ final class BrokerService
         }
 
         if ($method === 'GET' && $route === '/v1/session') {
-            return $this->response(200, $this->characterAuth()->currentSession($session));
+            $response = $this->characterAuth()->currentSession($session);
+            $this->releaseSession($releaseSession);
+            return $this->response(200, $response);
         }
 
         if ($method === 'GET' && $route === '/v1/me') {
@@ -119,6 +124,7 @@ final class BrokerService
 
         if ($method === 'GET' && $route === '/v1/xp') {
             $current = $this->characterAuth()->requireCurrentAccount($session);
+            $this->releaseSession($releaseSession);
             return $this->response(
                 200,
                 $this->xpTracking()->getForAccount($current['account']));
@@ -126,22 +132,19 @@ final class BrokerService
 
         if ($method === 'POST' && $route === '/v1/xp-level-up-notifications/claim') {
             $current = $this->characterAuth()->requireMutationAccount($headers, $session);
-            return $this->response(
-                200,
-                $this->xpTracking()->claimLevelUpNotificationsForAccount($current['account']));
+            return $this->mutation($current, $method, $route, $body, $headers, fn(): array => $this->response(
+                200, $this->xpTracking()->claimLevelUpNotificationsForAccount($current['account'])));
         }
 
         if ($method === 'POST' && $route === '/v1/xp-level-up-notifications/acknowledge') {
             $current = $this->characterAuth()->requireMutationAccount($headers, $session);
-            return $this->response(
-                200,
-                $this->xpTracking()->acknowledgeLevelUpNotificationsForAccount(
-                    $current['account'],
-                    $body));
+            return $this->mutation($current, $method, $route, $body, $headers, fn(): array => $this->response(
+                200, $this->xpTracking()->acknowledgeLevelUpNotificationsForAccount($current['account'], $body)));
         }
 
         if ($method === 'GET' && $route === '/v1/xp-awards') {
             $current = $this->characterAuth()->requireCurrentAccount($session);
+            $this->releaseSession($releaseSession);
             return $this->response(
                 200,
                 $this->xpTracking()->getAwardsForAccount($current['account']));
@@ -149,6 +152,7 @@ final class BrokerService
 
         if ($method === 'GET' && $route === '/v1/word-counts') {
             $this->characterAuth()->requireCurrentAccount($session);
+            $this->releaseSession($releaseSession);
             return $this->response(200, $this->wordCounts()->latest());
         }
 
@@ -158,24 +162,26 @@ final class BrokerService
 
         if ($method === 'GET' && $route === '/v1/quests') {
             $current = $this->characterAuth()->requireCurrentAccount($session);
+            $this->releaseSession($releaseSession);
             return $this->response(200, $this->quests()->forAccount($current['account']));
         }
 
         if ($method === 'GET' && $route === '/v1/revisions') {
             $current = $this->characterAuth()->requireCurrentAccount($session);
+            $this->releaseSession($releaseSession);
             return $this->response(200, $this->revisions()->forAccount($current['account']));
         }
 
         if ($method === 'GET' && $route === '/v1/magic-items') {
             $current = $this->characterAuth()->requireCurrentAccount($session);
+            $this->releaseSession($releaseSession);
             return $this->response(200, $this->magicItems()->forAccount($current['account']));
         }
 
         if ($method === 'POST' && $route === '/v1/quest-requests') {
             $current = $this->characterAuth()->requireMutationAccount($headers, $session);
-            return $this->response(
-                201,
-                $this->quests()->requestInterest($current['account'], $body));
+            return $this->mutation($current, $method, $route, $body, $headers, fn(): array => $this->response(
+                201, $this->quests()->requestInterest($current['account'], $body)));
         }
 
         if ($method === 'POST'
@@ -184,9 +190,8 @@ final class BrokerService
                 $route,
                 $matches) === 1) {
             $current = $this->characterAuth()->requireMutationAccount($headers, $session);
-            return $this->response(
-                200,
-                $this->quests()->decide($current['account'], $matches[1], $body));
+            return $this->mutation($current, $method, $route, $body, $headers, fn(): array => $this->response(
+                200, $this->quests()->decide($current['account'], $matches[1], $body)));
         }
 
         if ($method === 'POST'
@@ -195,21 +200,20 @@ final class BrokerService
                 $route,
                 $matches) === 1) {
             $current = $this->characterAuth()->requireMutationAccount($headers, $session);
-            return $this->response(
-                200,
-                $this->quests()->acknowledge($current['account'], $matches[1]));
+            return $this->mutation($current, $method, $route, $body, $headers, fn(): array => $this->response(
+                200, $this->quests()->acknowledge($current['account'], $matches[1])));
         }
 
         if ($method === 'GET' && $route === '/v1/messages') {
             $current = $this->characterAuth()->requireCurrentAccount($session);
-            return $this->response(200, $this->messages()->forAccount($current['account']));
+            $this->releaseSession($releaseSession);
+            return $this->response(200, $this->messages()->forAccount($current['account'], $query));
         }
 
         if ($method === 'POST' && $route === '/v1/messages') {
             $current = $this->characterAuth()->requireMutationAccount($headers, $session);
-            return $this->response(
-                201,
-                $this->messages()->sendForAccount($current['account'], $body));
+            return $this->mutation($current, $method, $route, $body, $headers, fn(): array => $this->response(
+                201, $this->messages()->sendForAccount($current['account'], $body)));
         }
 
         if ($method === 'POST'
@@ -218,9 +222,8 @@ final class BrokerService
                 $route,
                 $matches) === 1) {
             $current = $this->characterAuth()->requireMutationAccount($headers, $session);
-            return $this->response(
-                200,
-                $this->messages()->markRead($current['account'], $matches[1]));
+            return $this->mutation($current, $method, $route, $body, $headers, fn(): array => $this->response(
+                200, $this->messages()->markRead($current['account'], $matches[1])));
         }
 
         if ($method === 'POST' && $route === '/v1/logout') {
@@ -330,6 +333,13 @@ final class BrokerService
         }
 
         throw new BrokerHttpException(404, 'not_found', 'The requested broker endpoint was not found.');
+    }
+
+    private function releaseSession(?callable $releaseSession): void
+    {
+        if ($releaseSession !== null) {
+            $releaseSession();
+        }
     }
 
     private function validateSnapshot(array $snapshot, bool $requireFresh): array
@@ -687,7 +697,8 @@ final class BrokerService
             'ix_quest_requests_status_time', 'ix_quest_requests_requester_status',
             'ix_broker_alert_events_type_time', 'ux_character_accounts_character_key',
             'ix_character_account_aliases_account',
-            'ix_level_up_notification_receipts_account_time',
+            'ix_level_up_notification_receipts_account_time', 'mutation_idempotency',
+            'ix_mutation_idempotency_expiry',
             'trg_character_accounts_alias_collision_insert',
             'trg_character_accounts_alias_collision_update',
             'trg_character_account_aliases_name_collision_insert',
@@ -747,6 +758,33 @@ final class BrokerService
                 (string)($this->config['magic_items']['source_path'] ?? __DIR__ . '/magic-items.json'));
         }
         return $this->magicItems;
+    }
+
+    private function idempotency(): IdempotencyLedger
+    {
+        return $this->idempotency ??= new IdempotencyLedger(
+            $this->database,
+            max(60, (int)($this->apiConfig['idempotency_retention_seconds'] ?? 604800)));
+    }
+
+    private function mutation(
+        array $current,
+        string $method,
+        string $route,
+        array $body,
+        array $headers,
+        callable $callback): array
+    {
+        $accountId = (string)($current['account']['id'] ?? '');
+        if ($accountId === '') {
+            throw new RuntimeException('The authenticated account identity is incomplete.');
+        }
+        $key = (string)($headers['idempotency-key'] ?? '');
+        if ($key === '') {
+            return $callback();
+        }
+        return $this->idempotency()->execute(
+            $accountId, $method, $route, $key, $body, $callback);
     }
 
     private function response(int $status, array $body): array

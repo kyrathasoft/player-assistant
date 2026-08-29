@@ -14,6 +14,22 @@ $requestId = bin2hex(random_bytes(8));
 header('X-Request-Id: ' . $requestId);
 $config = null;
 
+$method = strtoupper($_SERVER['REQUEST_METHOD'] ?? 'GET');
+$requestPath = parse_url((string)($_SERVER['REQUEST_URI'] ?? '/'), PHP_URL_PATH);
+$scriptPath = parse_url((string)($_SERVER['SCRIPT_NAME'] ?? ''), PHP_URL_PATH);
+$scriptDirectory = is_string($scriptPath) ? rtrim(str_replace('\\', '/', dirname($scriptPath)), '/') : '';
+$healthRoute = is_string($requestPath) && $scriptDirectory !== '' && str_starts_with($requestPath, $scriptDirectory . '/')
+    ? '/' . ltrim(substr($requestPath, strlen($scriptDirectory)), '/')
+    : '';
+if ($method === 'GET' && $healthRoute === '/v1/health') {
+    sendJson(200, [
+        'service' => 'player-assistant-broker',
+        'schema_version' => 7,
+        'status' => 'ok',
+    ]);
+    return;
+}
+
 try {
     requireHttps();
 
@@ -60,6 +76,7 @@ try {
     $sessionState = [];
     $regenerateSession = null;
     $destroySession = null;
+    $releaseSession = null;
     if (isCharacterSessionRoute($route)) {
         startCharacterSession(is_array($config['auth'] ?? null) ? $config['auth'] : []);
         $sessionState =& $_SESSION;
@@ -70,6 +87,11 @@ try {
         };
         $destroySession = static function (): void {
             destroyCharacterSession();
+        };
+        $releaseSession = static function (): void {
+            if (session_status() === PHP_SESSION_ACTIVE) {
+                session_write_close();
+            }
         };
     }
 
@@ -88,7 +110,8 @@ try {
         (string)($_SERVER['REMOTE_ADDR'] ?? 'unknown'),
         $sessionState,
         $regenerateSession,
-        $destroySession);
+        $destroySession,
+        $releaseSession);
 
     sendJson($response['status'], $response['body']);
 } catch (BrokerHttpException $exception) {
@@ -218,6 +241,7 @@ function getRequestHeadersForBroker(): array
         'admin-nonce' => (string)($_SERVER['HTTP_X_BROKER_ADMIN_NONCE'] ?? ''),
         'admin-signature' => (string)($_SERVER['HTTP_X_BROKER_ADMIN_SIGNATURE'] ?? ''),
         'csrf-token' => (string)($_SERVER['HTTP_X_CSRF_TOKEN'] ?? ''),
+        'idempotency-key' => (string)($_SERVER['HTTP_IDEMPOTENCY_KEY'] ?? ''),
         'origin' => (string)($_SERVER['HTTP_ORIGIN'] ?? ''),
     ];
 }

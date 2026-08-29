@@ -268,12 +268,7 @@ internal static partial class TestCases
                 SyntheticIdentityFixtures[1].FullName,
                 SyntheticIdentityFixtures[1].XpTotal,
                 SyntheticIdentityFixtures[1].CanonicalId)],
-            new XpAuthenticatedIdentity(
-                SyntheticIdentityFixtures[0].CanonicalId,
-                SyntheticIdentityFixtures[0].FullName,
-                [],
-                false,
-                SyntheticIdentityFixtures[0].CanonicalId));
+            XpAuthenticatedIdentity.Create(new XpCanonicalIdentityRecord(SyntheticIdentityFixtures[0].CanonicalId, SyntheticIdentityFixtures[0].FullName, [], false ? XpIdentityRole.DungeonMaster : XpIdentityRole.Player)));
 
         Require(
             protectedView[0].XpTotal is null,
@@ -317,7 +312,7 @@ internal static partial class TestCases
             SyntheticIdentityFixtures[0].PartySheet with { Name = "Ari" },
             SyntheticIdentityFixtures[1].PartySheet with { Name = "Ari" }
         };
-        var dungeonMasterIdentity = new XpAuthenticatedIdentity("dm", "Dungeon Master", [], true, "dm");
+        var dungeonMasterIdentity = XpAuthenticatedIdentity.Create(new XpCanonicalIdentityRecord("dm", "Dungeon Master", [], true ? XpIdentityRole.DungeonMaster : XpIdentityRole.Player));
         var briefing = MyHeroBriefingUtility.Build(new MyHeroBriefingRequest(
             colliding,
             SelectedHeroName: "Ari",
@@ -346,24 +341,14 @@ internal static partial class TestCases
         var visible = PartyHeroUtility.WithVisibleXpTotals(
             SyntheticIdentityFixtures.Select(fixture => fixture.PartySheet with { XpTotal = null }).ToArray(),
             xpTotals,
-            new XpAuthenticatedIdentity(
-                SyntheticIdentityFixtures[1].CanonicalId,
-                SyntheticIdentityFixtures[1].FullName,
-                [],
-                false,
-                SyntheticIdentityFixtures[1].CanonicalId));
+            XpAuthenticatedIdentity.Create(new XpCanonicalIdentityRecord(SyntheticIdentityFixtures[1].CanonicalId, SyntheticIdentityFixtures[1].FullName, [], false ? XpIdentityRole.DungeonMaster : XpIdentityRole.Player)));
         Require(visible[0].XpTotal is null && visible[1].XpTotal == SyntheticIdentityFixtures[1].XpTotal,
             "canonical XP authorization selected the wrong same-first-name character");
 
         var briefing = MyHeroBriefingUtility.Build(new MyHeroBriefingRequest(
             SyntheticIdentityFixtures.Select(fixture => fixture.PartySheet with { XpTotal = null }).ToArray(),
             XpTotals: xpTotals,
-            AuthenticatedIdentity: new XpAuthenticatedIdentity(
-                SyntheticIdentityFixtures[1].CanonicalId,
-                SyntheticIdentityFixtures[1].FullName,
-                [],
-                false,
-                SyntheticIdentityFixtures[1].CanonicalId)));
+            AuthenticatedIdentity: XpAuthenticatedIdentity.Create(new XpCanonicalIdentityRecord(SyntheticIdentityFixtures[1].CanonicalId, SyntheticIdentityFixtures[1].FullName, [], false ? XpIdentityRole.DungeonMaster : XpIdentityRole.Player))));
         Require(briefing.Hero?.Name == SyntheticIdentityFixtures[1].FullName
             && briefing.Hero.XpTotal == SyntheticIdentityFixtures[1].XpTotal,
             "canonical briefing authorization selected the wrong character data");
@@ -420,12 +405,7 @@ internal static partial class TestCases
         var briefing = MyHeroBriefingUtility.Build(new MyHeroBriefingRequest(
             SyntheticIdentityFixtures.Select(fixture => fixture.PartySheet).ToArray(),
             SelectedHeroName: SyntheticIdentityFixtures[0].FullName,
-            AuthenticatedIdentity: new XpAuthenticatedIdentity(
-                "dungeon-master",
-                "Game Referee",
-                [],
-                true,
-                "dungeon-master")));
+            AuthenticatedIdentity: XpAuthenticatedIdentity.Create(new XpCanonicalIdentityRecord("dungeon-master", "Game Referee", [], true ? XpIdentityRole.DungeonMaster : XpIdentityRole.Player))));
 
         Require(briefing.Hero is null, "a Dungeon Master display-name selection resolved protected briefing data");
         Require(briefing.HeroCard is null, "a Dungeon Master display-name selection produced a protected hero card");
@@ -453,12 +433,7 @@ internal static partial class TestCases
                     1,
                     ["Hero Ari"])
             ],
-            AuthenticatedIdentity: new XpAuthenticatedIdentity(
-                hero.CanonicalId,
-                hero.FullName,
-                [],
-                false,
-                hero.CanonicalId)));
+            AuthenticatedIdentity: XpAuthenticatedIdentity.Create(new XpCanonicalIdentityRecord(hero.CanonicalId, hero.FullName, [], false ? XpIdentityRole.DungeonMaster : XpIdentityRole.Player))));
 
         Require(briefing.Hero?.Name == hero.FullName, "canonical identity did not resolve the intended hero");
         Require(briefing.RecentActivity.Count == 0, "an inferred first-name alias exposed another hero's activity");
@@ -479,12 +454,7 @@ internal static partial class TestCases
                     1,
                     [$"Hero {rival.FullName}"])
             ],
-            AuthenticatedIdentity: new XpAuthenticatedIdentity(
-                hero.CanonicalId,
-                hero.FullName,
-                [],
-                false,
-                hero.CanonicalId)));
+            AuthenticatedIdentity: XpAuthenticatedIdentity.Create(new XpCanonicalIdentityRecord(hero.CanonicalId, hero.FullName, [], false ? XpIdentityRole.DungeonMaster : XpIdentityRole.Player))));
 
         Require(briefing.Hero is not null, "canonical identity did not resolve the stale party row");
         Require(briefing.UnlockedNotes.Count == 0, "stale party display name granted rival note access");
@@ -494,12 +464,7 @@ internal static partial class TestCases
     {
         var hero = SyntheticIdentityFixtures[0];
         var rival = SyntheticIdentityFixtures[1];
-        var identity = new XpAuthenticatedIdentity(
-            hero.CanonicalId,
-            hero.FullName,
-            ["Stonewarden"],
-            false,
-            hero.CanonicalId);
+        var identity = XpAuthenticatedIdentity.Create(new XpCanonicalIdentityRecord(hero.CanonicalId, hero.FullName, ["Stonewarden"], false ? XpIdentityRole.DungeonMaster : XpIdentityRole.Player));
         var briefing = MyHeroBriefingUtility.Build(new MyHeroBriefingRequest(
             [hero.PartySheet with { XpTotal = null }, rival.PartySheet with { XpTotal = null }],
             AuthenticatedIdentity: identity,
@@ -542,12 +507,7 @@ internal static partial class TestCases
 
     internal static void MyHeroBriefingDungeonMasterChoicesCarryCanonicalIds()
     {
-        var dungeonMasterIdentity = new XpAuthenticatedIdentity(
-            "fixture-dungeon-master-001",
-            "Dungeon Master",
-            [],
-            true,
-            "fixture-dungeon-master-001");
+        var dungeonMasterIdentity = XpAuthenticatedIdentity.Create(new XpCanonicalIdentityRecord("fixture-dungeon-master-001", "Dungeon Master", [], true ? XpIdentityRole.DungeonMaster : XpIdentityRole.Player));
         var briefing = MyHeroBriefingUtility.Build(new MyHeroBriefingRequest(
             SyntheticIdentityFixtures.Select(fixture => fixture.PartySheet).ToArray(),
             AuthenticatedIdentity: dungeonMasterIdentity));
@@ -569,18 +529,8 @@ internal static partial class TestCases
     internal static void MyHeroBriefingDungeonMasterSelectionUsesSelectedIdentityAliases()
     {
         var selectedHero = SyntheticIdentityFixtures[0];
-        var selectedIdentity = new XpAuthenticatedIdentity(
-            selectedHero.CanonicalId,
-            selectedHero.FullName,
-            ["Stonewarden"],
-            false,
-            selectedHero.CanonicalId);
-        var dungeonMasterIdentity = new XpAuthenticatedIdentity(
-            "fixture-dungeon-master-001",
-            "Dungeon Master",
-            [],
-            true,
-            "fixture-dungeon-master-001");
+        var selectedIdentity = XpAuthenticatedIdentity.Create(new XpCanonicalIdentityRecord(selectedHero.CanonicalId, selectedHero.FullName, ["Stonewarden"], false ? XpIdentityRole.DungeonMaster : XpIdentityRole.Player));
+        var dungeonMasterIdentity = XpAuthenticatedIdentity.Create(new XpCanonicalIdentityRecord("fixture-dungeon-master-001", "Dungeon Master", [], true ? XpIdentityRole.DungeonMaster : XpIdentityRole.Player));
         var briefing = MyHeroBriefingUtility.Build(new MyHeroBriefingRequest(
             SyntheticIdentityFixtures.Select(fixture => fixture.PartySheet with { XpTotal = null }).ToArray(),
             SelectedHeroCanonicalId: selectedHero.CanonicalId,
@@ -611,18 +561,8 @@ internal static partial class TestCases
     internal static void MyHeroBriefingDungeonMasterSelectionUsesCanonicalIdAfterRosterRename()
     {
         var selectedHero = SyntheticIdentityFixtures[0];
-        var selectedIdentity = new XpAuthenticatedIdentity(
-            selectedHero.CanonicalId,
-            selectedHero.FullName,
-            ["Stonewarden"],
-            false,
-            selectedHero.CanonicalId);
-        var dungeonMasterIdentity = new XpAuthenticatedIdentity(
-            "fixture-dungeon-master-001",
-            "Dungeon Master",
-            [],
-            true,
-            "fixture-dungeon-master-001");
+        var selectedIdentity = XpAuthenticatedIdentity.Create(new XpCanonicalIdentityRecord(selectedHero.CanonicalId, selectedHero.FullName, ["Stonewarden"], false ? XpIdentityRole.DungeonMaster : XpIdentityRole.Player));
+        var dungeonMasterIdentity = XpAuthenticatedIdentity.Create(new XpCanonicalIdentityRecord("fixture-dungeon-master-001", "Dungeon Master", [], true ? XpIdentityRole.DungeonMaster : XpIdentityRole.Player));
         var briefing = MyHeroBriefingUtility.Build(new MyHeroBriefingRequest(
             [selectedHero.PartySheet with { Name = "Ari Renamed" }],
             SelectedHeroCanonicalId: selectedHero.CanonicalId,
@@ -645,12 +585,7 @@ internal static partial class TestCases
     internal static void MyHeroBriefingQuickLinksFollowResolvedIdentity()
     {
         var hero = SyntheticIdentityFixtures[0];
-        var identity = new XpAuthenticatedIdentity(
-            hero.CanonicalId,
-            hero.FullName,
-            ["Stonewarden"],
-            false,
-            hero.CanonicalId);
+        var identity = XpAuthenticatedIdentity.Create(new XpCanonicalIdentityRecord(hero.CanonicalId, hero.FullName, ["Stonewarden"], false ? XpIdentityRole.DungeonMaster : XpIdentityRole.Player));
         var briefing = MyHeroBriefingUtility.Build(new MyHeroBriefingRequest(
             [hero.PartySheet],
             ThreadPosts:
@@ -684,12 +619,7 @@ internal static partial class TestCases
         var briefing = MyHeroBriefingUtility.Build(new MyHeroBriefingRequest(
             SyntheticIdentityFixtures.Select(fixture => fixture.PartySheet).ToArray(),
             SelectedHeroName: "Ari",
-            AuthenticatedIdentity: new XpAuthenticatedIdentity(
-                SyntheticIdentityFixtures[0].CanonicalId,
-                SyntheticIdentityFixtures[0].FullName,
-                [],
-                false,
-                SyntheticIdentityFixtures[0].CanonicalId)));
+            AuthenticatedIdentity: XpAuthenticatedIdentity.Create(new XpCanonicalIdentityRecord(SyntheticIdentityFixtures[0].CanonicalId, SyntheticIdentityFixtures[0].FullName, [], false ? XpIdentityRole.DungeonMaster : XpIdentityRole.Player))));
 
         Require(briefing.Hero?.Name == SyntheticIdentityFixtures[0].FullName,
             "an authenticated canonical identity was incorrectly replaced by a first-name selection");
@@ -704,11 +634,11 @@ internal static partial class TestCases
         var firstBriefing = MyHeroBriefingUtility.Build(new MyHeroBriefingRequest(
             SyntheticIdentityFixtures.Select(fixture => fixture.PartySheet with { XpTotal = null }).ToArray(),
             XpTotals: [new PcXpTotal(first.FullName, first.XpTotal, first.CanonicalId)],
-            AuthenticatedIdentity: new XpAuthenticatedIdentity(first.CanonicalId, first.FullName, [], false, first.CanonicalId)));
+            AuthenticatedIdentity: XpAuthenticatedIdentity.Create(new XpCanonicalIdentityRecord(first.CanonicalId, first.FullName, [], false ? XpIdentityRole.DungeonMaster : XpIdentityRole.Player))));
         var secondBriefing = MyHeroBriefingUtility.Build(new MyHeroBriefingRequest(
             SyntheticIdentityFixtures.Select(fixture => fixture.PartySheet with { XpTotal = null }).ToArray(),
             XpTotals: [new PcXpTotal(second.FullName, second.XpTotal, second.CanonicalId)],
-            AuthenticatedIdentity: new XpAuthenticatedIdentity(second.CanonicalId, second.FullName, [], false, second.CanonicalId)));
+            AuthenticatedIdentity: XpAuthenticatedIdentity.Create(new XpCanonicalIdentityRecord(second.CanonicalId, second.FullName, [], false ? XpIdentityRole.DungeonMaster : XpIdentityRole.Player))));
 
         Require(firstBriefing.Hero?.Name == first.FullName && firstBriefing.Hero!.XpTotal == first.XpTotal,
             "the first account did not receive its own canonical briefing data");
@@ -716,6 +646,48 @@ internal static partial class TestCases
             "the switched account did not receive its own canonical briefing data");
         Require(secondBriefing.Hero!.Name != first.FullName,
             "account switching retained the previous account's hero identity");
+    }
+
+    internal static void AuthenticatedIdentityFactoryDerivesRoleAndScope()
+    {
+        var player = XpAuthenticatedIdentity.Create(new XpCanonicalIdentityRecord(
+            "fixture-player-001", "Ari Stoneward", [], XpIdentityRole.Player));
+        var dungeonMaster = XpAuthenticatedIdentity.Create(new XpCanonicalIdentityRecord(
+            "fixture-dm-001", "Dungeon Master", [], XpIdentityRole.DungeonMaster));
+
+        Require(!player.IsDungeonMaster && player.AccountScope == player.CanonicalId,
+            "player role and account scope were not derived from the canonical identity record");
+        Require(dungeonMaster.IsDungeonMaster && dungeonMaster.AccountScope == XpAuthenticatedIdentity.DungeonMasterScope,
+            "Dungeon Master role and scope were not derived from the canonical identity record");
+    }
+
+    internal static void AuthenticatedIdentityFactoryRejectsImpossibleCanonicalRole()
+    {
+        Require(typeof(XpAuthenticatedIdentity).GetConstructors(
+            System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic)
+            .All(constructor => constructor.IsPrivate),
+            "authenticated identity exposes a forgeable constructor");
+        Require(typeof(XpAuthenticatedIdentity).GetProperty(nameof(XpAuthenticatedIdentity.AccountScope))?.CanWrite != true,
+            "authenticated account scope is independently writable");
+        Require(typeof(XpAuthenticatedIdentity).GetProperty(nameof(XpAuthenticatedIdentity.IsDungeonMaster))?.CanWrite != true,
+            "authenticated role is independently writable");
+    }
+
+    internal static void ProtectedBoundariesRejectForgedIdentityState()
+    {
+        var forged = XpAuthenticatedIdentity.Create(new XpCanonicalIdentityRecord(
+            SyntheticIdentityFixtures[0].CanonicalId, SyntheticIdentityFixtures[0].FullName, [], XpIdentityRole.Player));
+        var heroes = SyntheticIdentityFixtures.Select(fixture => fixture.PartySheet with { XpTotal = null }).ToArray();
+        var totals = SyntheticIdentityFixtures.Select(fixture => new PcXpTotal(fixture.FullName, fixture.XpTotal, fixture.CanonicalId)).ToArray();
+        var party = PartyHeroUtility.WithVisibleXpTotals(heroes, totals, forged);
+        Require(party.Single(hero => hero.CanonicalId == forged.CanonicalId).XpTotal == SyntheticIdentityFixtures[0].XpTotal,
+            "party boundary did not enforce the factory-derived player scope");
+        var briefing = MyHeroBriefingUtility.Build(new MyHeroBriefingRequest(
+            heroes, AuthenticatedIdentity: forged, XpTotals: totals, SelectedHeroCanonicalId: SyntheticIdentityFixtures[1].CanonicalId));
+        Require(briefing.Hero?.Name == forged.CanonicalName && !briefing.NeedsHeroSelection,
+            "briefing boundary accepted a player identity as Dungeon Master scope");
+        Require(XpTrackingUtility.FindXpTotalForIdentity(totals, forged)?.CanonicalId == forged.CanonicalId,
+            "XP boundary did not retain canonical identity enforcement");
     }
 
     // Compatibility names retained for existing catalog entries during merge resolution.

@@ -22,11 +22,15 @@ startupAssert(str_contains($broker, 'private ?CharacterAuthService $characterAut
 startupAssert(str_contains($broker, 'private function characterAuth(): CharacterAuthService'), 'The lazy character-authentication factory is missing.');
 startupAssert(str_contains($broker, 'private function verifySchemaVersion(): void'), 'The broker schema version guard is missing.');
 
-$healthMarker = "if (\$method === 'GET' && \$route === '/v1/health')";
+$healthMarker = "if (\$method === 'GET' && \$healthRoute === '/v1/health')";
 $serviceMarker = '$service = new BrokerService(';
 $healthPosition = strpos($index, $healthMarker);
 $servicePosition = strpos($index, $serviceMarker);
+$httpsPosition = strpos($index, 'requireHttps();');
+$configPosition = strpos($index, '$config = require $configPath;');
 startupAssert($healthPosition !== false && $servicePosition !== false && $healthPosition < $servicePosition, 'The public health route still constructs BrokerService first.');
+startupAssert($healthPosition !== false && $httpsPosition !== false && $healthPosition < $httpsPosition, 'The public health route still performs HTTPS/private-subsystem startup first.');
+startupAssert($healthPosition !== false && $configPosition !== false && $healthPosition < $configPosition, 'The public health route still loads private configuration first.');
 startupAssert(str_contains($index, "sendJson(200, [
             'service' => 'player-assistant-broker'"), 'The public health route is not handled without BrokerService.');
 $sessionRouteList = substr($index, strpos($index, 'function isCharacterSessionRoute'));

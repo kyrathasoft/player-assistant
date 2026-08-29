@@ -557,6 +557,7 @@ try {
         $identity['body']['account']['character_key'] === 'routing',
         'The protected identity route did not use the session account.');
 
+    $sessionReleaseCount = 0;
     $playerRevisions = $broker->dispatch(
         'GET',
         '/v1/revisions',
@@ -564,7 +565,12 @@ try {
         [],
         [],
         '192.0.2.30',
-        $session);
+        $session,
+        null,
+        null,
+        static function () use (&$sessionReleaseCount): void {
+            ++$sessionReleaseCount;
+        });
     routingAssert(
         $playerRevisions['status'] === 200
             && $playerRevisions['body']['schema_version'] === 1
@@ -573,6 +579,9 @@ try {
             && preg_match('/^[a-f0-9]{64}$/', $playerRevisions['body']['messages']['revision']) === 1
             && preg_match('/^[a-f0-9]{64}$/', $playerRevisions['body']['quests']['revision']) === 1,
         'The protected player revision route returned invalid or cross-account activity.');
+    routingAssert(
+        $sessionReleaseCount === 1,
+        'The protected revision route did not release the PHP session before the read.');
 
     $magicItems = $broker->dispatch(
         'GET',
@@ -587,6 +596,7 @@ try {
         array_column($magicItems['body']['items'], 'name') === ['Public Routing Item'],
         'The protected magic-item route returned an unexpected item set.');
 
+    $sessionReleaseCount = 0;
     $xp = $broker->dispatch(
         'GET',
         '/v1/xp',
@@ -594,8 +604,16 @@ try {
         [],
         [],
         '192.0.2.30',
-        $session);
+        $session,
+        null,
+        null,
+        static function () use (&$sessionReleaseCount): void {
+            ++$sessionReleaseCount;
+        });
     routingAssert($xp['status'] === 200, 'The protected XP route failed.');
+    routingAssert(
+        $sessionReleaseCount === 1,
+        'The protected XP route did not release the PHP session before the read.');
     routingAssert($xp['body']['scope'] === 'character', 'The player XP response had the wrong scope.');
     routingAssert($xp['body']['character']['xp_total'] === 12345, 'The player XP response had the wrong total.');
     routingAssert($xp['body']['character']['character_class'] === 'Ranger', 'The player XP response had the wrong class.');
@@ -940,6 +958,50 @@ try {
         $messageForDungeonMaster['status'] === 201
             && preg_match('/^[a-f0-9]{32}$/D', (string)$messageForDungeonMasterId) === 1,
         'The player could not send a message to the Dungeon Master.');
+    $secondMessageForDungeonMaster = $broker->dispatch(
+        'POST',
+        '/v1/messages',
+        [],
+        [
+            'recipient_role' => 'dm',
+            'message' => 'A second routing message for the Dungeon Master.',
+        ],
+        $playerMutationHeaders,
+        '192.0.2.30',
+        $session);
+    $secondMessageForDungeonMasterId = $secondMessageForDungeonMaster['body']['message']['id'] ?? '';
+    routingAssert(
+        $secondMessageForDungeonMaster['status'] === 201
+            && preg_match('/^[a-f0-9]{32}$/D', (string)$secondMessageForDungeonMasterId) === 1,
+        'The player could not send a second message to the Dungeon Master.');
+    try {
+        $broker->dispatch(
+            'GET',
+            '/v1/messages',
+            ['limit' => 'not-a-limit'],
+            [],
+            [],
+            '192.0.2.31',
+            $dungeonMasterSession);
+        throw new RuntimeException('The message route coerced a malformed limit.');
+    } catch (BrokerHttpException $exception) {
+        routingAssert(
+            $exception->status === 400 && $exception->errorName === 'invalid_message_limit',
+            'The message route returned the wrong malformed-limit response.');
+    }
+    $limitedDungeonMasterMessages = $broker->dispatch(
+        'GET',
+        '/v1/messages',
+        ['limit' => '1'],
+        [],
+        [],
+        '192.0.2.31',
+        $dungeonMasterSession);
+    routingAssert(
+        count($limitedDungeonMasterMessages['body']['messages']) === 1
+            && $limitedDungeonMasterMessages['body']['unread_count'] === 2
+            && is_string($limitedDungeonMasterMessages['body']['next_cursor']),
+        'The message route did not pass bounded pagination query parameters to the service.');
 
     $dungeonMasterMessages = $broker->dispatch(
         'GET',
@@ -951,12 +1013,15 @@ try {
         $dungeonMasterSession);
     routingAssert(
         $dungeonMasterMessages['status'] === 200
-            && count($dungeonMasterMessages['body']['messages']) === 1
+            && count($dungeonMasterMessages['body']['messages']) === 2
             && $dungeonMasterMessages['body']['schema_version'] === 3
             && count($dungeonMasterMessages['body']['player_recipients']) === 2
-            && $dungeonMasterMessages['body']['messages'][0]['id'] === $messageForDungeonMasterId
+            && count(array_intersect(
+                [$messageForDungeonMasterId, $secondMessageForDungeonMasterId],
+                array_column($dungeonMasterMessages['body']['messages'], 'id'))) === 2
             && $dungeonMasterMessages['body']['messages'][0]['sender_character_name'] === 'Routing Hero'
-            && $dungeonMasterMessages['body']['messages'][0]['read_at'] === null,
+            && $dungeonMasterMessages['body']['messages'][0]['read_at'] === null
+            && $dungeonMasterMessages['body']['messages'][1]['read_at'] === null,
         'The Dungeon Master did not receive the unread player message.');
 
     try {
@@ -986,6 +1051,14 @@ try {
     routingAssert(
         $readByDungeonMaster['body']['message']['status'] === 'read',
         'The Dungeon Master could not mark the player message as read.');
+    $broker->dispatch(
+        'POST',
+        '/v1/messages/' . $secondMessageForDungeonMasterId . '/read',
+        [],
+        [],
+        $dungeonMasterMutationHeaders,
+        '192.0.2.31',
+        $dungeonMasterSession);
     $dungeonMasterMessagesAfterRead = $broker->dispatch(
         'GET',
         '/v1/messages',

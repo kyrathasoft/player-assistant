@@ -1,5 +1,7 @@
 # To Do
 
+This file is the canonical implementation backlog. Other plans, reviews, and logs are historical reference only and must not be used to determine backlog status or implementation order.
+
 ## Security and delivery
 
 - [x] Remove legacy XP histories from the current public PWA and repository tree.
@@ -8,7 +10,7 @@
   - [x] Anonymous legacy XP requests return `404`, and the service worker no longer caches `/XP/` paths.
   - [x] Tracked deletions were committed and pushed; Git-history purging was intentionally deferred.
 - [x] Make the full regression suite a required CI gate.
-  - [x] Run all 435 desktop tests instead of only focused filters.
+  - [x] Run all 536 desktop tests instead of only focused filters.
   - [x] Run `pwa/verify-pwa.ps1` and the PHP broker suites.
   - [x] Add browser-level PWA smoke tests for authentication, translation, navigation, and offline startup.
 - [x] Replace stale hard-coded quest-count expectations in PHP broker and HTTP tests with fixture-derived expectations.
@@ -36,7 +38,7 @@
 
 - [x] Decompose `Form1` into feature controllers or presenters with injected services.
 - [x] **Split the custom regression harness into discoverable domain-focused test classes.**
-  - The 435-test catalog now delegates to partial application, campaign, release, shared, and translator test classes while preserving name-based filtering and failure aggregation.
+  - The 536-test catalog now delegates to partial application, campaign, release, shared, and translator test classes while preserving name-based filtering and failure aggregation.
   - `verify-test-harness-structure.ps1` enforces catalog uniqueness, domain file presence, and the runner/catalog boundary in PR smoke and full regression CI.
 - [x] Modularize `pwa/app.js` by feature without introducing an unnecessary framework.
 - [x] Make schema-rich lexicon data the canonical source for desktop, PWA, and web-translator artifacts.
@@ -332,28 +334,29 @@ Planned security correction: eliminate first-name equivalence from authenticatio
   - [x] Centralize the pinned DreamHost host key and require strict host-key checking for every deployment workflow and script.
   - [x] Correct the malformed Gitea mirror source credential expression and add semantic workflow validation plus a dry-run authenticated fetch.
 
-- [ ] Re-establish the broker startup and migration boundary.
-  - [ ] Keep ordered migrations in `migrate-broker.php` and deployment only; normal requests must verify the expected `PRAGMA user_version` and fail closed on mismatch.
-  - [ ] Lazily construct only the service required by the selected route.
-  - [ ] Keep public `/v1/health` independent of SQLite, migrations, private files, and unrelated service constructors.
-  - [ ] Remove `ensureSchema()` writes from `BrokerService`, `CharacterAuthService`, `XpTrackingService`, `QuestService`, and `MessageService` after migration fixtures cover their schemas.
-- [ ] Restore missing broker routing and session-concurrency contracts.
+- [x] Re-establish the broker startup and migration boundary.
+  - [x] Keep ordered migrations in `migrate-broker.php` and deployment only; normal requests verify the expected `PRAGMA user_version` and fail closed on mismatch.
+  - [x] Lazily construct only the service required by the selected route.
+  - [x] Keep public `/v1/health` independent of SQLite, migrations, private files, and unrelated service constructors; the route now exits before HTTPS/config/private broker startup.
+  - [x] Remove `ensureSchema()` writes from `BrokerService`, `CharacterAuthService`, `XpTrackingService`, `QuestService`, and `MessageService` after migration fixtures cover their schemas.
+  - [x] Verified with broker startup, schema-guard, migration, and direct no-config health-route tests.
+- [x] Restore missing broker routing and session-concurrency contracts.
   - [x] Wire authenticated `/v1/revisions` through the production entry point with account scoping, anonymous denial, and public HTTP coverage.
-  - [ ] Copy authorized identity state and release the PHP session lock before slow read-only XP, revision, message, and quest work.
-  - [ ] Prove logout/session inspection can complete while a same-cookie read request is blocked upstream.
-- [ ] Restore transactional, bounded message pagination and retention.
-  - [ ] Validate `limit`, composite keyset cursors, retention days, and per-recipient read-message caps without coercing malformed values.
-  - [ ] Read page rows and `unread_count` from one SQLite snapshot so concurrent inserts cannot produce mixed-generation metadata.
-  - [ ] Make acknowledgement plus recipient-scoped retention one transaction; never delete unread messages or another recipient's records.
-  - [ ] Pass the request query into `MessageService::forAccount` and preserve already-loaded browser pages when a continuation request fails.
-- [ ] Enforce mutation idempotency at the broker, not only in request headers.
-  - [ ] Persist a bounded account/method/route/idempotency-key ledger with a request-body hash and replay the original response transactionally.
-  - [ ] Reject reuse of one key with a different body and serialize concurrent duplicate submissions.
-  - [ ] Cover messages, quest requests/decisions, acknowledgements, and other authenticated mutations with replay and collision tests.
-- [ ] Make authenticated role and scope structurally unforgeable.
-  - [ ] Replace independently supplied `IsDungeonMaster` and `AccountScope` values with a validated role/scope derived by one identity factory from the canonical identity record.
-  - [ ] Reject impossible combinations such as a player canonical ID carrying Dungeon Master scope.
-  - [ ] Add negative tests at every protected desktop boundary that currently consumes `XpAuthenticatedIdentity`.
+  - [x] Copy authorized identity state and release the PHP session lock before slow read-only XP, revision, message, and quest work.
+  - [x] Prove logout/session inspection can complete while a same-cookie read request is blocked upstream.
+- [x] Restore transactional, bounded message pagination and retention.
+  - [x] Validate `limit`, composite keyset cursors, retention days, and per-recipient read-message caps without coercing malformed values.
+  - [x] Read page rows and `unread_count` from one SQLite snapshot so concurrent inserts cannot produce mixed-generation metadata.
+  - [x] Make acknowledgement plus recipient-scoped retention one transaction; never delete unread messages or another recipient's records.
+  - [x] Pass the request query into `MessageService::forAccount` and preserve already-loaded browser pages when a continuation request fails.
+- [x] Enforce mutation idempotency at the broker, not only in request headers.
+  - [x] Persist a bounded account/method/route/idempotency-key ledger with a request-body hash and replay the original response transactionally.
+  - [x] Reject reuse of one key with a different body and serialize concurrent duplicate submissions.
+  - [x] Cover messages, quest requests/decisions, acknowledgements, and other authenticated mutations with replay and collision tests.
+- [x] Make authenticated role and scope structurally unforgeable.
+  - [x] Replace independently supplied `IsDungeonMaster` and `AccountScope` values with a validated role/scope derived by one identity factory from the canonical identity record.
+  - [x] Reject impossible combinations such as a player canonical ID carrying Dungeon Master scope.
+  - [x] Add negative tests at every protected desktop boundary that currently consumes `XpAuthenticatedIdentity`.
 - [ ] Restore source-aware login throttling without enabling cross-address account lockout.
   - [ ] Scope progressive failures to account plus normalized source while retaining a separate address-wide abuse threshold.
   - [ ] Preserve address abuse history across successful logins and restore deterministic IPv4/IPv6 normalization tests.
@@ -391,6 +394,22 @@ Planned security correction: eliminate first-name equivalence from authenticatio
 - [ ] Make RPOL credential migration and WebView dispatch lifetime-safe.
   - [ ] Store username/password as one versioned credential record or compensate on partial write/delete so migration and plaintext removal are all-or-nothing.
   - [ ] Complete cancellation even when UI enqueue fails or the handle is destroyed; dispose registrations and recheck dialog viability after each await.
+- [ ] Prove RPOL authentication against the exact protected resource before capturing or reusing browser state.
+  - [ ] Define one canonical protected Dice Roller probe for game `80170` and use it for visible-browser verification, WebView verification, restored-state validation, and publisher preflight.
+  - [ ] Reject public campaign content, cookie presence, login redirects/forms, untrusted navigation, challenges, wrong paths, wrong game IDs, and unexpected protected-page shapes as authentication proof.
+  - [ ] Capture state only after the live probe succeeds, then restore it in a publisher-equivalent fresh browser process and repeat the probe before promotion.
+  - [ ] Add deterministic classifier, local browser-fixture, cancellation, timeout, and state-round-trip tests without storing credentials or cookie values.
+- [ ] Secure the external RPOL browser/CDP connection and verification lifetime.
+  - [ ] Eliminate available-port/release/rebind races and prevent unauthorized local processes from reading cookies or controlling the verification browser.
+  - [ ] Apply one end-to-end deadline across browser launch, CDP connection, verification, capture, publishing, disposal, and wrapper supervision; produce truthful timeout/crash results.
+  - [ ] Serialize verifier and publisher operations with an application-owned cross-process lock and clean every browser, profile, CDP, and temporary-state resource on every exit path.
+- [ ] Remove distributed RPOL administrator credentials after protected-page coverage passes.
+  - [ ] Verify every required approved RPOL page through the scheduled signed publisher and complete a clean-client run using only a revocable broker token.
+  - [ ] Remove administrator credentials from hosted, local, publish-time, and end-user settings/Credential Manager entries; rotate the administrator password afterward.
+  - [ ] Complete release verification for broker-only retrieval, credential-free client startup, diagnostics redaction, and Release/publish/installer parity.
+- [ ] Add a profile-bound RPOL state fallback only when publisher-equivalent round-trip testing proves storage-state reuse cannot work.
+  - [ ] Use a dedicated user-only persistent profile with restrictive ACLs, a single-process lock, exact protected-probe validation, and explicit reset behavior.
+  - [ ] Never copy the user’s normal browser profile or package, upload, log, or commit authenticated browser state.
 - [ ] Isolate network and update concurrency state.
   - [ ] Scope circuit breakers by network purpose and endpoint family so unrelated services sharing one authority cannot suppress or reset each other.
   - [ ] Serialize highest-trusted-version compare-and-write across processes and recompute the maximum while holding the lock.

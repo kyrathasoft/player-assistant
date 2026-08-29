@@ -12,3 +12,7 @@
 - As of 8/26/2026, the wiki contained 265,015 words; total IC words: 65,671; total OOC words: 28,506
 - As of 8/26/2026, the wiki contained 265,064 words; total IC words: 65,671; total OOC words: 28,506
 - As of 8/26/2026, the wiki contained 265,078 words; total IC words: 65,671; total OOC words: 28,506
+- As of 8/27/2026, the wiki contained 265,078 words; total IC words: 65,671; total OOC words: 28,506
+- As of 8/27/2026, the wiki contained 266,019 words; total IC words: 65,671; total OOC words: 28,506
+- As of 8/28/2026, the wiki contained 266,096 words; total IC words: 65,671; total OOC words: 28,506
+- As of 8/28/2026, the wiki contained 266,189 words; total IC words: 65,671; total OOC words: 28,506
