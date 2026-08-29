@@ -48,6 +48,8 @@ try {
     migrationAssert((int)$database->query("SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'broker_alert_events'")->fetchColumn() === 1, 'The alert-events migration did not run.');
     migrationAssert((int)$database->query("SELECT COUNT(*) FROM pragma_table_info('character_accounts') WHERE name = 'session_version'")->fetchColumn() === 1, 'The session-version upgrade did not run.');
     migrationAssert((int)$database->query("SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'character_account_aliases'")->fetchColumn() === 1, 'The account-alias migration did not run.');
+    migrationAssert((int)$database->query("SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'mutation_idempotency'")->fetchColumn() === 1, 'The mutation idempotency ledger migration did not run.');
+    migrationAssert((int)$database->query("SELECT COUNT(*) FROM sqlite_master WHERE type = 'index' AND name = 'ix_mutation_idempotency_expiry'")->fetchColumn() === 1, 'The mutation idempotency expiry index was not created.');
     migrationAssert((int)$database->query("SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'level_up_notification_receipts'")->fetchColumn() === 1, 'The level-up notification receipt migration did not run.');
     migrationAssert((int)$database->query("SELECT COUNT(*) FROM sqlite_master WHERE type = 'index' AND name = 'ix_level_up_notification_receipts_account_time'")->fetchColumn() === 1, 'The level-up notification receipt index was not created.');
     $receiptColumns = $database->query("PRAGMA table_info('level_up_notification_receipts')")->fetchAll(PDO::FETCH_ASSOC);
@@ -69,7 +71,7 @@ try {
             && strtoupper((string)$receiptForeignKeys[0]['on_delete']) === 'CASCADE',
         'The receipt table is not bound to character-account lifecycle.');
     $backups = glob($backupDirectory . '/broker-migration-*.sqlite') ?: [];
-    migrationAssert(count($backups) === 4, 'The upgrade did not create one pre-migration backup per upgrade step.');
+    migrationAssert(count($backups) === 5, 'The upgrade did not create one pre-migration backup per upgrade step.');
     $backup = new PDO('sqlite:' . $backups[0], null, null, [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]);
     migrationAssert((int)$backup->query('PRAGMA user_version')->fetchColumn() === 1, 'The pre-migration backup was not from the old version.');
 

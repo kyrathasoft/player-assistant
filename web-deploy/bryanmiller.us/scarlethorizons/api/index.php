@@ -241,6 +241,7 @@ function getRequestHeadersForBroker(): array
         'admin-nonce' => (string)($_SERVER['HTTP_X_BROKER_ADMIN_NONCE'] ?? ''),
         'admin-signature' => (string)($_SERVER['HTTP_X_BROKER_ADMIN_SIGNATURE'] ?? ''),
         'csrf-token' => (string)($_SERVER['HTTP_X_CSRF_TOKEN'] ?? ''),
+        'idempotency-key' => (string)($_SERVER['HTTP_IDEMPOTENCY_KEY'] ?? ''),
         'origin' => (string)($_SERVER['HTTP_ORIGIN'] ?? ''),
     ];
 }

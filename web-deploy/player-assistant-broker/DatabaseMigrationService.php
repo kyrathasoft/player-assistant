@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 final class DatabaseMigrationService
 {
-    public const LATEST_VERSION = 5;
+    public const LATEST_VERSION = 6;
 
     public function __construct(
         private readonly PDO $database,
@@ -71,6 +71,7 @@ final class DatabaseMigrationService
             3 => $this->migrationThree(),
             4 => $this->migrationFour(),
             5 => $this->migrationFive(),
+            6 => $this->migrationSix(),
             default => throw new RuntimeException("Unknown broker migration version: $version"),
         };
     }
@@ -300,4 +301,24 @@ final class DatabaseMigrationService
             CREATE INDEX IF NOT EXISTS ix_level_up_notification_receipts_account_time
                 ON level_up_notification_receipts(account_id, notified_at);');
     }
+    private function migrationSix(): void
+    {
+        $this->database->exec(
+            'CREATE TABLE IF NOT EXISTS mutation_idempotency (
+                account_id TEXT NOT NULL,
+                method TEXT NOT NULL,
+                route TEXT NOT NULL,
+                idempotency_key TEXT NOT NULL,
+                request_hash TEXT NOT NULL,
+                status INTEGER NULL,
+                response_json TEXT NULL,
+                created_at INTEGER NOT NULL,
+                expires_at INTEGER NOT NULL,
+                PRIMARY KEY (account_id, method, route, idempotency_key),
+                FOREIGN KEY (account_id) REFERENCES character_accounts(id) ON DELETE CASCADE
+            );
+            CREATE INDEX IF NOT EXISTS ix_mutation_idempotency_expiry
+                ON mutation_idempotency(expires_at);');
+    }
+
 }
