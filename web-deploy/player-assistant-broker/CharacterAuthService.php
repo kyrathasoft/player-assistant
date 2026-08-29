@@ -53,6 +53,7 @@ final class CharacterAuthService
         ?callable $regenerateSession = null): array
     {
         $this->requireExpectedOrigin($origin);
+        $remoteAddress = $this->normalizeRemoteAddress($remoteAddress);
         $displayName = $this->validateDisplayName((string)($body['character_name'] ?? ''));
         $normalizedName = $this->resolveLoginNameAlias($this->normalizeName($displayName));
         $password = (string)($body['password'] ?? '');
@@ -789,17 +790,29 @@ final class CharacterAuthService
 
     private function loginScopeHashes(string $normalizedName, string $remoteAddress): array
     {
-        $packedAddress = inet_pton($remoteAddress);
-        $addressScope = $packedAddress === false ? $remoteAddress : bin2hex($packedAddress);
+        $addressScope = bin2hex(inet_pton($this->normalizeRemoteAddress($remoteAddress)));
         return [
             hash('sha256', 'account-source:' . $normalizedName . "\0" . $addressScope),
             hash('sha256', 'address:' . $addressScope),
         ];
     }
 
+    private function normalizeRemoteAddress(string $remoteAddress): string
+    {
+        $remoteAddress = trim($remoteAddress);
+        $packedAddress = inet_pton($remoteAddress);
+        if ($packedAddress === false) {
+            throw new BrokerHttpException(
+                400,
+                'login_failed',
+                'The character name or password did not match.');
+        }
+        return inet_ntop($packedAddress);
+    }
+
     private function recordAuthAudit(?string $accountId, string $remoteAddress, string $event): void
     {
-        $address = substr($remoteAddress, 0, 64);
+        $address = $this->normalizeRemoteAddress($remoteAddress);
         if ($this->authConfig['audit_address_mode'] === 'hash') {
             $hashKey = (string)$this->authConfig['audit_address_hash_key'];
             if ($hashKey === '') {

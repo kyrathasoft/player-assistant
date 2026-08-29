@@ -8,6 +8,7 @@ internal static class TestCatalog
         new (string Name, Action Test)[]
 {
     ("orcish translator returns one-to-one english mapping", TestCases.OrcishTranslatorReturnsOneToOneEnglishMapping),
+    ("login throttling rejects malformed source at login boundary", TestCases.LoginThrottlingRejectsMalformedSourceAtLoginBoundary),
     ("orcish translator returns several english matches for one orcish word", TestCases.OrcishTranslatorReturnsSeveralEnglishMatchesForOneOrcishWord),
     ("orcish translator uses part of speech to disambiguate", TestCases.OrcishTranslatorUsesPartOfSpeechToDisambiguate),
     ("orcish translator filters human terms by register", TestCases.OrcishTranslatorFiltersHumanTermsByRegister),

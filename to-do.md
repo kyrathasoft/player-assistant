@@ -357,9 +357,9 @@ Planned security correction: eliminate first-name equivalence from authenticatio
   - [x] Replace independently supplied `IsDungeonMaster` and `AccountScope` values with a validated role/scope derived by one identity factory from the canonical identity record.
   - [x] Reject impossible combinations such as a player canonical ID carrying Dungeon Master scope.
   - [x] Add negative tests at every protected desktop boundary that currently consumes `XpAuthenticatedIdentity`.
-- [ ] Restore source-aware login throttling without enabling cross-address account lockout.
-  - [ ] Scope progressive failures to account plus normalized source while retaining a separate address-wide abuse threshold.
-  - [ ] Preserve address abuse history across successful logins and restore deterministic IPv4/IPv6 normalization tests.
+- [x] Restore source-aware login throttling without enabling cross-address account lockout.
+  - [x] Scope progressive failures to account plus normalized source while retaining a separate address-wide abuse threshold.
+  - [x] Preserve address abuse history across successful logins and restore deterministic IPv4/IPv6 normalization tests.
 - [ ] Make persistent multi-file refreshes crash-safe and monotonic.
   - [ ] Inventory XP progression, award-history, word-count, lexicon, and runtime-cache collections that can expose mixed generations.
   - [ ] Add per-collection locking, an explicit commit point or journal, durable promotion, and idempotent recovery where several files form one logical snapshot.

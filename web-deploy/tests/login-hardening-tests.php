@@ -184,6 +184,15 @@ try {
         $now += $expectedDelay;
     }
 
+    $malformedSourceSession = [];
+    loginHardeningExpect(
+        fn() => $service->login(
+            ['character_name' => 'Known Hero', 'password' => $password],
+            'not-an-ip-address',
+            'https://example.test',
+            $malformedSourceSession),
+        400);
+
     $ipv6Session = [];
     for ($attempt = 0; $attempt < 2; $attempt++) {
         loginHardeningExpect(
