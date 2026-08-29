@@ -372,12 +372,12 @@ Planned security correction: eliminate first-name equivalence from authenticatio
 
 ### P2 — Strengthen asynchronous and deployment edge cases
 
-- [ ] Expand authenticated PWA lifecycle fault injection.
-  - [ ] Prove empty, malformed, HTML, and stalled `401` responses invalidate the session before body parsing can block cleanup.
-  - [ ] Keep request timeout and cancellation active through response-body decoding, then recheck account generation before applying results.
-  - [ ] Prove late success or failure from a prior account generation cannot clear or repopulate a newly authenticated account.
-  - [ ] Keep observed and applied revision tokens separate through failed initial loads and sibling-resource partial failures.
-  - [ ] Test hidden/visible and offline/online transitions for exactly one immediate resume request and no duplicate polling intervals.
+- [x] Expand authenticated PWA lifecycle fault injection.
+  - [x] Prove empty, malformed, HTML, and stalled `401` responses invalidate the session before body parsing can block cleanup.
+  - [x] Keep request timeout and cancellation active through response-body decoding, then recheck account generation before applying results.
+  - [x] Prove late success or failure from a prior account generation cannot clear or repopulate a newly authenticated account.
+  - [x] Keep observed and applied revision tokens separate through failed initial loads and sibling-resource partial failures.
+  - [x] Test hidden/visible and offline/online transitions for exactly one immediate resume request and no duplicate polling intervals.
 - [ ] Restore optional packs to truly optional, reclaimable storage.
   - [ ] Remove optional datasets from install-time general precache and store them exclusively in content-addressed optional caches after demand loading.
   - [ ] Make failed manifest requests retryable and generation-guard load/remove so late completion cannot resurrect a removed pack.
