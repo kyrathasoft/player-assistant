@@ -360,10 +360,10 @@ Planned security correction: eliminate first-name equivalence from authenticatio
 - [x] Restore source-aware login throttling without enabling cross-address account lockout.
   - [x] Scope progressive failures to account plus normalized source while retaining a separate address-wide abuse threshold.
   - [x] Preserve address abuse history across successful logins and restore deterministic IPv4/IPv6 normalization tests.
-- [ ] Make persistent multi-file refreshes crash-safe and monotonic.
-  - [ ] Inventory XP progression, award-history, word-count, lexicon, and runtime-cache collections that can expose mixed generations.
-  - [ ] Add per-collection locking, an explicit commit point or journal, durable promotion, and idempotent recovery where several files form one logical snapshot.
-  - [ ] Add fault injection for stale-but-valid sources, equal-date events, partial promotion, concurrent refresh, replay, reset/decrease, and recovery interruption.
+- [x] Make persistent multi-file refreshes crash-safe and monotonic.
+  - [x] Inventory XP progression, award-history, word-count, lexicon, and runtime-cache collections that can expose mixed generations.
+  - [x] Add per-collection locking, an explicit commit point or journal, durable promotion, and idempotent recovery where several files form one logical snapshot.
+  - [x] Add fault injection for stale-but-valid sources, equal-date events, partial promotion, concurrent refresh, replay, reset/decrease, and recovery interruption.
 - [ ] Make the Windows keep-alive behavior truthful and observable.
   - [ ] Stop relying on a hard-coded repository path in the hidden launcher; install a validated absolute path appropriate to the current machine.
   - [ ] Treat failed `SetThreadExecutionState` or `SendInput` calls as task failures and write bounded diagnostic status.

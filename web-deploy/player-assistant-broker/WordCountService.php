@@ -21,6 +21,7 @@ final class WordCountService
             'status_path' => '',
             'signature_key_id' => '',
             'signature_public_key' => '',
+            'refresh_lock_path' => '',
         ], $wordCountConfig);
         $this->wordCountFetcher = $wordCountFetcher;
 
@@ -30,37 +31,55 @@ final class WordCountService
     public function store(array $body): array
     {
         $snapshot = $this->validate($body);
-        $uploadedAt = time();
-        $statement = $this->database->prepare(
-            'INSERT INTO word_count_snapshots (
-                id, schema_version, observed_at, counting_rule_version,
-                wiki_pages, wiki_words, ic_files, ic_words, ooc_files, ooc_words, uploaded_at
-             ) VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-             ON CONFLICT(id) DO UPDATE SET
-                schema_version = excluded.schema_version,
-                observed_at = excluded.observed_at,
-                counting_rule_version = excluded.counting_rule_version,
-                wiki_pages = excluded.wiki_pages,
-                wiki_words = excluded.wiki_words,
-                ic_files = excluded.ic_files,
-                ic_words = excluded.ic_words,
-                ooc_files = excluded.ooc_files,
-                ooc_words = excluded.ooc_words,
-                uploaded_at = excluded.uploaded_at');
-        $statement->execute([
-            $snapshot['schema_version'],
-            $snapshot['observed_at'],
-            $snapshot['counting_rule_version'],
-            $snapshot['wiki']['pages'],
-            $snapshot['wiki']['words'],
-            $snapshot['ic']['files'],
-            $snapshot['ic']['words'],
-            $snapshot['ooc']['files'],
-            $snapshot['ooc']['words'],
-            $uploadedAt,
-        ]);
+        return $this->withRefreshLock(function () use ($snapshot): array {
+            $this->database->exec('BEGIN IMMEDIATE');
+            try {
+                $current = $this->loadCachedSnapshot();
+                if ($current !== null
+                    && $this->generationTimestamp($snapshot['observed_at'])
+                        <= $this->generationTimestamp($current['observed_at'])) {
+                    $this->database->commit();
+                    return $current;
+                }
 
-        return $this->format($snapshot, $uploadedAt);
+                $uploadedAt = time();
+                $statement = $this->database->prepare(
+                    'INSERT INTO word_count_snapshots (
+                        id, schema_version, observed_at, counting_rule_version,
+                        wiki_pages, wiki_words, ic_files, ic_words, ooc_files, ooc_words, uploaded_at
+                     ) VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                     ON CONFLICT(id) DO UPDATE SET
+                        schema_version = excluded.schema_version,
+                        observed_at = excluded.observed_at,
+                        counting_rule_version = excluded.counting_rule_version,
+                        wiki_pages = excluded.wiki_pages,
+                        wiki_words = excluded.wiki_words,
+                        ic_files = excluded.ic_files,
+                        ic_words = excluded.ic_words,
+                        ooc_files = excluded.ooc_files,
+                        ooc_words = excluded.ooc_words,
+                        uploaded_at = excluded.uploaded_at');
+                $statement->execute([
+                    $snapshot['schema_version'],
+                    $snapshot['observed_at'],
+                    $snapshot['counting_rule_version'],
+                    $snapshot['wiki']['pages'],
+                    $snapshot['wiki']['words'],
+                    $snapshot['ic']['files'],
+                    $snapshot['ic']['words'],
+                    $snapshot['ooc']['files'],
+                    $snapshot['ooc']['words'],
+                    $uploadedAt,
+                ]);
+                $this->database->commit();
+                return $this->format($snapshot, $uploadedAt);
+            } catch (Throwable $error) {
+                if ($this->database->inTransaction()) {
+                    $this->database->rollBack();
+                }
+                throw $error;
+            }
+        });
     }
 
     public function latest(): array
@@ -427,6 +446,30 @@ final class WordCountService
                 throw new RuntimeException('The word-count signature key identifier is invalid.');
             }
         }
+    }
+
+    private function withRefreshLock(callable $action): mixed
+    {
+        $configuredPath = trim((string)$this->wordCountConfig['refresh_lock_path']);
+        $statusPath = trim((string)$this->wordCountConfig['status_path']);
+        $lockPath = $configuredPath !== '' ? $configuredPath : ($statusPath !== '' ? $statusPath . '.lock' : '');
+        if ($lockPath === '' || !is_dir(dirname($lockPath))) {
+            return $action();
+        }
+        $handle = fopen($lockPath, 'c');
+        if ($handle === false || !flock($handle, LOCK_EX)) {
+            if (is_resource($handle)) fclose($handle);
+            throw new RuntimeException('The word-count refresh lock could not be acquired.');
+        }
+        try { return $action(); }
+        finally { flock($handle, LOCK_UN); fclose($handle); }
+    }
+
+    private function generationTimestamp(string $observedAt): int
+    {
+        $timestamp = strtotime($observedAt);
+        if ($timestamp === false) throw new RuntimeException('The word-count generation timestamp is invalid.');
+        return $timestamp;
     }
 
     private function writeRefreshStatus(array $updates): void
