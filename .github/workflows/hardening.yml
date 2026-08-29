@@ -162,6 +162,12 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Setup PHP for desktop boundary tests
+        uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240 # v2
+        with:
+          php-version: '8.4'
+          extensions: curl, openssl, pdo_sqlite, sodium, sqlite3
+
       - name: Load canonical version metadata
         shell: pwsh
         run: |
