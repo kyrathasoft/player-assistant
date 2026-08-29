@@ -5,5 +5,5 @@ globalThis.PLAYER_ASSISTANT_VERSION_METADATA = Object.freeze({
     metadataRevision: 2,
     stylesRevision: 45,
     appRevision: 91,
-    cacheRevision: 112
+    cacheRevision: 113
 });

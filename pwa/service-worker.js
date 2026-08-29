@@ -9,6 +9,7 @@ if (!VERSION_METADATA) {
 const CACHE_VERSION = `player-assistant-pwa-${VERSION_METADATA.pwaVersion}-v${VERSION_METADATA.cacheRevision}`;
 const SHELL_CACHE = `${CACHE_VERSION}-shell`;
 const DATA_CACHE = `${CACHE_VERSION}-data`;
+const NAVIGATION_TIMEOUT_MS = 150;
 const CACHE_GENERATION_PATTERN = /^player-assistant-pwa-(\d+(?:\.\d+)*)-v(\d+)-(?:shell|data)$/;
 const SHELL_ASSETS = [
     './',
@@ -71,7 +72,14 @@ const deleteCurrentCaches = async () => {
 const cacheAssets = async (cacheName, assets) => {
     const cache = await caches.open(cacheName);
     try {
-        await cache.addAll(assets.map((asset) => new Request(asset, { cache: 'reload' })));
+        for (const asset of assets) {
+            const request = new Request(asset, { cache: 'reload' });
+            const response = await fetch(request);
+            if (!await isValidCachedResponse(request, response)) {
+                throw new Error(`Invalid mandatory precache response for ${asset}.`);
+            }
+            await cache.put(request, response.clone());
+        }
     } catch (error) {
         await caches.delete(cacheName);
         throw error;
@@ -165,6 +173,28 @@ const cacheResponseIfValid = async (cache, request, response) => {
     }
 };
 
+const fetchValidated = async (request) => {
+    const response = await fetch(request);
+    if (!await isValidCachedResponse(request, response)) {
+        throw new Error('Network response failed PWA content validation.');
+    }
+    return response;
+};
+
+const fetchNavigationWithTimeout = async (request) => {
+    let timer;
+    try {
+        return await Promise.race([
+            fetch(request),
+            new Promise((_, reject) => {
+                timer = setTimeout(() => reject(new Error('Navigation fetch timed out.')), NAVIGATION_TIMEOUT_MS);
+            })
+        ]);
+    } finally {
+        clearTimeout(timer);
+    }
+};
+
 self.addEventListener('install', (event) => {
     event.waitUntil(
         Promise.all([
@@ -198,7 +228,7 @@ const cacheFirst = async (request, cacheName) => {
     } catch {
         cache = null;
     }
-    const response = await fetch(request);
+    const response = await fetchValidated(request);
     if (cache) await cacheResponseIfValid(cache, request, response);
     return response;
 };
@@ -206,7 +236,7 @@ const cacheFirst = async (request, cacheName) => {
 const networkFirstData = async (request) => {
     const cache = await caches.open(DATA_CACHE);
     try {
-        const response = await fetch(new Request(request, { cache: 'reload' }));
+        const response = await fetchValidated(new Request(request, { cache: 'reload' }));
         await cacheResponseIfValid(cache, request, response);
         return response;
     } catch {
@@ -220,7 +250,10 @@ const networkFirstData = async (request) => {
 const networkFirstNavigation = async (request) => {
     const cache = await caches.open(SHELL_CACHE);
     try {
-        const response = await fetch(request);
+        const response = await fetchNavigationWithTimeout(request);
+        if (!await isValidCachedResponse(request, response)) {
+            throw new Error('Network navigation failed PWA content validation.');
+        }
         await cacheResponseIfValid(cache, './index.html', response);
         return response;
     } catch {

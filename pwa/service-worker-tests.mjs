@@ -16,15 +16,22 @@ class ScopeRequest extends Request {
 }
 
 class MemoryCache {
-    constructor(entries = [], { addAllError = null, putError = null } = {}) {
+    constructor(entries = [], { addAllError = null, putError = null, addAllFetch = null } = {}) {
         this.entries = new Map(entries.map(([request, response]) => [requestKey(request), response]));
         this.deleted = [];
         this.addAllError = addAllError;
         this.putError = putError;
+        this.addAllFetch = addAllFetch;
     }
 
-    async addAll() {
+    async addAll(requests) {
         if (this.addAllError) throw this.addAllError;
+        if (this.addAllFetch) {
+            for (const request of requests) {
+                const response = await this.addAllFetch(request);
+                this.entries.set(requestKey(request), response.clone());
+            }
+        }
     }
 
     async delete(request) {
@@ -80,7 +87,7 @@ const createHarness = ({ cacheEntries = {}, fetchImpl } = {}) => {
                 metadataRevision: 1,
                 stylesRevision: 43,
                 appRevision: 61,
-                cacheRevision: 75
+                cacheRevision: 113
             });
         },
         self
@@ -98,8 +105,8 @@ const createHarness = ({ cacheEntries = {}, fetchImpl } = {}) => {
     };
 };
 
-const currentDataCache = 'player-assistant-pwa-0.9.8-v75-data';
-const currentShellCache = 'player-assistant-pwa-0.9.8-v75-shell';
+const currentDataCache = 'player-assistant-pwa-0.9.8-v113-data';
+const currentShellCache = 'player-assistant-pwa-0.9.8-v113-shell';
 const translatorPayload = Object.freeze({
     schemaVersion: 1,
     language: 'Orcish',
@@ -217,9 +224,10 @@ const testOptionalPackRequestsBypassServiceWorker = async () => {
 const testPartialInstallDeletesVersionedCaches = async () => {
     const harness = createHarness({
         cacheEntries: {
-            [currentShellCache]: new MemoryCache([], { addAllError: new Error('Injected addAll failure.') }),
+            [currentShellCache]: new MemoryCache(),
             [currentDataCache]: new MemoryCache()
-        }
+        },
+        fetchImpl: async () => { throw new Error('Injected addAll failure.'); }
     });
     let installation;
 
@@ -258,8 +266,8 @@ const testQuotaFailureReturnsNetworkResponse = async () => {
 };
 
 const testObsoleteWorkerCannotDeleteNewerCaches = async () => {
-    const newerShell = 'player-assistant-pwa-0.9.8-v76-shell';
-    const newerData = 'player-assistant-pwa-0.9.8-v76-data';
+    const newerShell = 'player-assistant-pwa-0.9.8-v114-shell';
+    const newerData = 'player-assistant-pwa-0.9.8-v114-data';
     const harness = createHarness({
         cacheEntries: {
             [newerShell]: [],
@@ -278,7 +286,93 @@ const testObsoleteWorkerCannotDeleteNewerCaches = async () => {
     assert.equal(harness.clientsClaimed(), false);
 };
 
+const testHttpErrorPrefersValidCachedShell = async () => {
+    const request = new Request('https://example.test/scarlethorizons/pwa/styles.css?v=43');
+    const cached = new Response('body { color: blue; }', {
+        status: 200,
+        headers: { 'Content-Type': 'text/css' }
+    });
+    const harness = createHarness({
+        cacheEntries: { [currentShellCache]: [[request, cached]] },
+        fetchImpl: async () => new Response('temporarily unavailable', {
+            status: 503,
+            headers: { 'Content-Type': 'text/html' }
+        })
+    });
+    let responsePromise;
+    harness.dispatch('fetch', { request, respondWith(value) { responsePromise = Promise.resolve(value); } });
+    const response = await responsePromise;
+    assert.equal(response.status, 200);
+    assert.equal(await response.text(), 'body { color: blue; }');
+};
+
+const testMalformedJsonNetworkPrefersValidCachedData = async () => {
+    const request = new Request('https://example.test/scarlethorizons/pwa/party-funds.json');
+    const cached = new Response(JSON.stringify({ schema_version: 1, coins: { gold: 3 } }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' }
+    });
+    const harness = createHarness({
+        cacheEntries: { [currentDataCache]: [[request, cached]] },
+        fetchImpl: async () => new Response('{not-json', {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' }
+        })
+    });
+    let responsePromise;
+    harness.dispatch('fetch', { request, respondWith(value) { responsePromise = Promise.resolve(value); } });
+    const response = await responsePromise;
+    assert.equal(await response.text(), JSON.stringify({ schema_version: 1, coins: { gold: 3 } }));
+};
+
+const testMandatoryPrecacheRejectsInvalidJsonAndDeletesShell = async () => {
+    const invalid = new Response('<html>captive portal</html>', {
+        status: 200,
+        headers: { 'Content-Type': 'text/html' }
+    });
+    const harness = createHarness({
+        cacheEntries: {
+            [currentShellCache]: new MemoryCache([], {
+                addAllFetch: async (request) => request.url.endsWith('/party-funds.json') ? invalid.clone() : new Response('x', {
+                    status: 200,
+                    headers: { 'Content-Type': request.url.endsWith('.json') ? 'application/json' : 'text/html' }
+                })
+            }),
+            [currentDataCache]: new MemoryCache()
+        },
+        fetchImpl: async () => invalid.clone()
+    });
+    let installation;
+    harness.dispatch('install', { waitUntil(value) { installation = Promise.resolve(value); } });
+    await assert.rejects(installation, /invalid|precache|content/i);
+    assert.equal(harness.cacheMap.has(currentShellCache), false);
+    assert.equal(harness.cacheMap.has(currentDataCache), false);
+};
+
+const testNavigationFallsBackAfterBoundedNetworkTimeout = async () => {
+    const request = { method: 'GET', mode: 'navigate', url: 'https://example.test/scarlethorizons/pwa/#dashboard' };
+    const offline = new Response('<!doctype html><title>Offline</title>', {
+        status: 200,
+        headers: { 'Content-Type': 'text/html' }
+    });
+    const harness = createHarness({
+        cacheEntries: { [currentShellCache]: [['https://example.test/scarlethorizons/pwa/offline.html', offline]] },
+        fetchImpl: async () => new Promise(() => { })
+    });
+    let responsePromise;
+    harness.dispatch('fetch', { request, respondWith(value) { responsePromise = Promise.resolve(value); } });
+    const response = await Promise.race([
+        responsePromise,
+        new Promise((_, reject) => setTimeout(() => reject(new Error('navigation timeout was not bounded')), 250))
+    ]);
+    assert.equal(await response.text(), '<!doctype html><title>Offline</title>');
+};
+
 const tests = [
+    testHttpErrorPrefersValidCachedShell,
+    testMalformedJsonNetworkPrefersValidCachedData,
+    testMandatoryPrecacheRejectsInvalidJsonAndDeletesShell,
+    testNavigationFallsBackAfterBoundedNetworkTimeout,
     testWrongMimeCachedShellAssetIsDeletedAndRefetched,
     testEmptyCachedShellAssetIsDeletedAndRefetched,
     testCorruptNavigationFallbackUsesValidOfflineShell,

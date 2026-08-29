@@ -382,10 +382,10 @@ Planned security correction: eliminate first-name equivalence from authenticatio
   - [x] Remove optional datasets from install-time general precache and store them exclusively in content-addressed optional caches after demand loading.
   - [x] Make failed manifest requests retryable and generation-guard load/remove so late completion cannot resurrect a removed pack.
   - [x] Add both optional-pack suites to canonical CI and replace source-regex assertions with cache-key, request-byte, and removal behavior checks.
-- [ ] Validate service-worker responses semantically before use or commit.
-  - [ ] Prefer a valid cached response over HTTP errors, wrong MIME types, captive-portal HTML, malformed JSON, or otherwise invalid network content.
-  - [ ] Validate mandatory precache MIME, nonempty content, and JSON/schema before committing the installation cache; clean partial version caches on failure.
-  - [ ] Bound navigation fetch time before falling back to the cached shell.
+- [x] Validate service-worker responses semantically before use or commit.
+  - [x] Prefer a valid cached response over HTTP errors, wrong MIME types, captive-portal HTML, malformed JSON, or otherwise invalid network content.
+  - [x] Validate mandatory precache MIME, nonempty content, and JSON/schema before committing the installation cache; clean partial version caches on failure.
+  - [x] Bound navigation fetch time before falling back to the cached shell.
 - [ ] Make service-worker controller transitions deterministic in long-lived pages.
   - [ ] Avoid reloading on first controller acquisition, but reload exactly once when a later worker takes control in the same page.
 - [ ] Prevent trusted-network redirects from connecting to untrusted targets.
