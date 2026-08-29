@@ -353,10 +353,10 @@ Planned security correction: eliminate first-name equivalence from authenticatio
   - [x] Persist a bounded account/method/route/idempotency-key ledger with a request-body hash and replay the original response transactionally.
   - [x] Reject reuse of one key with a different body and serialize concurrent duplicate submissions.
   - [x] Cover messages, quest requests/decisions, acknowledgements, and other authenticated mutations with replay and collision tests.
-- [ ] Make authenticated role and scope structurally unforgeable.
-  - [ ] Replace independently supplied `IsDungeonMaster` and `AccountScope` values with a validated role/scope derived by one identity factory from the canonical identity record.
-  - [ ] Reject impossible combinations such as a player canonical ID carrying Dungeon Master scope.
-  - [ ] Add negative tests at every protected desktop boundary that currently consumes `XpAuthenticatedIdentity`.
+- [x] Make authenticated role and scope structurally unforgeable.
+  - [x] Replace independently supplied `IsDungeonMaster` and `AccountScope` values with a validated role/scope derived by one identity factory from the canonical identity record.
+  - [x] Reject impossible combinations such as a player canonical ID carrying Dungeon Master scope.
+  - [x] Add negative tests at every protected desktop boundary that currently consumes `XpAuthenticatedIdentity`.
 - [ ] Restore source-aware login throttling without enabling cross-address account lockout.
   - [ ] Scope progressive failures to account plus normalized source while retaining a separate address-wide abuse threshold.
   - [ ] Preserve address abuse history across successful logins and restore deterministic IPv4/IPv6 normalization tests.

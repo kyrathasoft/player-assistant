@@ -2960,7 +2960,7 @@ internal static partial class TestCases
             [
                 new MyHeroBriefingQuickLink("Party", "app://show/party")
             ],
-            AuthenticatedIdentity: new XpAuthenticatedIdentity("jelb", "Jelb Garrick", ["Jelb"], false, "jelb"));
+            AuthenticatedIdentity: XpAuthenticatedIdentity.Create(new XpCanonicalIdentityRecord("jelb", "Jelb Garrick", ["Jelb"], false ? XpIdentityRole.DungeonMaster : XpIdentityRole.Player)));
 
         var briefing = MyHeroBriefingUtility.Build(request);
 
@@ -3007,7 +3007,7 @@ internal static partial class TestCases
         var briefing = MyHeroBriefingUtility.Build(new MyHeroBriefingRequest(
             heroes,
             SelectedHeroCanonicalId: "kelpie",
-            AuthenticatedIdentity: new XpAuthenticatedIdentity("jelb", "Jelb Garrick", ["Jelb"], false, "jelb")));
+            AuthenticatedIdentity: XpAuthenticatedIdentity.Create(new XpCanonicalIdentityRecord("jelb", "Jelb Garrick", ["Jelb"], false ? XpIdentityRole.DungeonMaster : XpIdentityRole.Player))));
 
         AssertTrue(briefing.Hero is not null, "authenticated hero should resolve a briefing hero");
         AssertEqual("Jelb Garrick", briefing.Hero!.Name, "authenticated canonical identity should select Jelb");
@@ -3022,7 +3022,7 @@ internal static partial class TestCases
             new("Kelpie Lawfuller", null, "3", "Fighter", "12", "Kelpie sheet", CanonicalId: "kelpie"),
             new("Jelb Garrick", null, "3", "Illusionist", "8", "Jelb sheet", CanonicalId: "jelb")
         };
-        var dungeonMasterIdentity = new XpAuthenticatedIdentity("dm", "Dungeon Master", [], true, "dm");
+        var dungeonMasterIdentity = XpAuthenticatedIdentity.Create(new XpCanonicalIdentityRecord("dm", "Dungeon Master", [], true ? XpIdentityRole.DungeonMaster : XpIdentityRole.Player));
         var unresolved = MyHeroBriefingUtility.Build(new MyHeroBriefingRequest(
             heroes,
             AuthenticatedIdentity: dungeonMasterIdentity));
@@ -3154,7 +3154,7 @@ internal static partial class TestCases
                     "https://rpol.net/display.cgi?gi=80170&ti=7",
                     matchingPosts)
             ],
-            AuthenticatedIdentity: new XpAuthenticatedIdentity("jelb", "Jelb Garrick", ["Jelb"], false, "jelb")));
+            AuthenticatedIdentity: XpAuthenticatedIdentity.Create(new XpCanonicalIdentityRecord("jelb", "Jelb Garrick", ["Jelb"], false ? XpIdentityRole.DungeonMaster : XpIdentityRole.Player))));
 
         AssertEqual(10, briefing.RecentActivity.Count, "recent activity should be capped at ten matching posts");
         AssertEqual(15, briefing.RecentActivity[0].MessageNumber, "latest hero-authored post should appear first");
@@ -3207,7 +3207,7 @@ internal static partial class TestCases
                     "https://rpol.net/display.cgi?gi=80170&ti=8",
                     noHeroPostThread)
             ],
-            AuthenticatedIdentity: new XpAuthenticatedIdentity("jelb", "Jelb Garrick", ["Jelb"], false, "jelb")));
+            AuthenticatedIdentity: XpAuthenticatedIdentity.Create(new XpCanonicalIdentityRecord("jelb", "Jelb Garrick", ["Jelb"], false ? XpIdentityRole.DungeonMaster : XpIdentityRole.Player))));
 
         AssertEqual(2, briefing.LikelyResponseItems.Count, "only posts after the hero's latest post should be response candidates");
         AssertEqual(8, briefing.LikelyResponseItems[0].MessageNumber, "direct mention should rank first");
@@ -3267,7 +3267,7 @@ internal static partial class TestCases
         var briefing = MyHeroBriefingUtility.Build(new MyHeroBriefingRequest(
             heroes,
             EncryptedTextIndex: encryptedIndex,
-            AuthenticatedIdentity: new XpAuthenticatedIdentity("jelb", "Jelb Garrick", ["Jelb"], false, "jelb")));
+            AuthenticatedIdentity: XpAuthenticatedIdentity.Create(new XpCanonicalIdentityRecord("jelb", "Jelb Garrick", ["Jelb"], false ? XpIdentityRole.DungeonMaster : XpIdentityRole.Player))));
 
         AssertEqual(2, briefing.UnlockedNotes.Count, "only notes unlocked by hero tags should be surfaced");
         AssertTrue(
@@ -3296,7 +3296,7 @@ internal static partial class TestCases
 
         var briefing = MyHeroBriefingUtility.Build(new MyHeroBriefingRequest(
             heroes,
-            AuthenticatedIdentity: new XpAuthenticatedIdentity("dm", "Dungeon Master", [], true, "dm")));
+            AuthenticatedIdentity: XpAuthenticatedIdentity.Create(new XpCanonicalIdentityRecord("dm", "Dungeon Master", [], true ? XpIdentityRole.DungeonMaster : XpIdentityRole.Player))));
 
         AssertTrue(briefing.Hero is null, "briefing should not choose a hero before identity resolution exists");
         AssertTrue(briefing.NeedsHeroSelection, "briefing should request a hero selection");
@@ -3377,7 +3377,7 @@ internal static partial class TestCases
             ThreadPosts: posts,
             XpTotals: [new PcXpTotal("Jelb Garrick", 1234, "jelb")],
             EncryptedTextIndex: encryptedIndex,
-            AuthenticatedIdentity: new XpAuthenticatedIdentity("jelb", "Jelb Garrick", ["Jelb"], false, "jelb")));
+            AuthenticatedIdentity: XpAuthenticatedIdentity.Create(new XpCanonicalIdentityRecord("jelb", "Jelb Garrick", ["Jelb"], false ? XpIdentityRole.DungeonMaster : XpIdentityRole.Player))));
     }
 
     internal static void MyHeroBriefingEncryptedIndexLoaderToleratesMalformedJson()
@@ -3486,11 +3486,11 @@ internal static partial class TestCases
         var kelpieView = PartyHeroUtility.WithVisibleXpTotals(
             heroes,
             xpTotals,
-            new XpAuthenticatedIdentity("kelpie", "Kelpie Lawfuller", [], false, "kelpie"));
+            XpAuthenticatedIdentity.Create(new XpCanonicalIdentityRecord("kelpie", "Kelpie Lawfuller", [], false ? XpIdentityRole.DungeonMaster : XpIdentityRole.Player)));
         var dmView = PartyHeroUtility.WithVisibleXpTotals(
             heroes,
             xpTotals,
-            new XpAuthenticatedIdentity("dm", "Dungeon Master", [], true, "dm"));
+            XpAuthenticatedIdentity.Create(new XpCanonicalIdentityRecord("dm", "Dungeon Master", [], true ? XpIdentityRole.DungeonMaster : XpIdentityRole.Player)));
 
         AssertEqual(7062, kelpieView[0].XpTotal ?? -1, "authenticated hero should see their own XP");
         AssertTrue(kelpieView[1].XpTotal is null, "authenticated hero should not see another hero's XP");
@@ -3514,20 +3514,20 @@ internal static partial class TestCases
         var player = PartyHeroUtility.WithVisibleXpTotals(
             heroes,
             totals,
-            new XpAuthenticatedIdentity("ari-valesong", "Ari Valesong", [], false, "ari-valesong"));
+            XpAuthenticatedIdentity.Create(new XpCanonicalIdentityRecord("ari-valesong", "Ari Valesong", [], false ? XpIdentityRole.DungeonMaster : XpIdentityRole.Player)));
         AssertTrue(player[0].XpTotal is null, "a player must not receive another same-first-name hero's XP");
         AssertEqual(2375, player[1].XpTotal ?? -1, "player XP should resolve by canonical ID");
 
         var duplicateHeroIds = PartyHeroUtility.WithVisibleXpTotals(
             [heroes[0], heroes[0] with { Name = "Ari Valesong" }],
             totals,
-            new XpAuthenticatedIdentity("ari-stoneward", "Ari Stoneward", [], false, "ari-stoneward"));
+            XpAuthenticatedIdentity.Create(new XpCanonicalIdentityRecord("ari-stoneward", "Ari Stoneward", [], false ? XpIdentityRole.DungeonMaster : XpIdentityRole.Player)));
         AssertTrue(duplicateHeroIds.All(hero => hero.XpTotal is null), "duplicate roster identities must fail closed");
 
         var missingHeroIdentity = PartyHeroUtility.WithVisibleXpTotals(
             [heroes[0] with { CanonicalId = null }],
             totals,
-            new XpAuthenticatedIdentity("ari-stoneward", "Ari Stoneward", [], false, "ari-stoneward"));
+            XpAuthenticatedIdentity.Create(new XpCanonicalIdentityRecord("ari-stoneward", "Ari Stoneward", [], false ? XpIdentityRole.DungeonMaster : XpIdentityRole.Player)));
         AssertTrue(missingHeroIdentity[0].XpTotal is null, "a hero without canonical identity must not receive protected XP");
     }
 
@@ -3774,12 +3774,7 @@ internal static partial class TestCases
 
     internal static void XpIdentityLookupRejectsDuplicateCanonicalNames()
     {
-        var identity = new XpAuthenticatedIdentity(
-            "ari-stoneward",
-            "Ari Stoneward",
-            [],
-            false,
-            "ari-stoneward");
+        var identity = XpAuthenticatedIdentity.Create(new XpCanonicalIdentityRecord("ari-stoneward", "Ari Stoneward", [], false ? XpIdentityRole.DungeonMaster : XpIdentityRole.Player));
         var duplicateCanonicalIds = new PcXpTotal[]
         {
             new("Ari Stoneward", 1200, "ari-stoneward"),

@@ -402,12 +402,11 @@ namespace PlayerAssistant
                 || Aliases.Any(alias => string.Equals(NormalizeIdentityKey(alias), normalizedName, StringComparison.Ordinal));
 
             internal XpAuthenticatedIdentity ToAuthenticatedIdentity() =>
-                new(
+                XpAuthenticatedIdentity.Create(new XpCanonicalIdentityRecord(
                     CanonicalId,
                     CanonicalName,
                     Aliases,
-                    IsDungeonMaster,
-                    CanonicalId);
+                    IsDungeonMaster ? XpIdentityRole.DungeonMaster : XpIdentityRole.Player));
         }
 
         internal sealed record PasswordIdentityInput(
