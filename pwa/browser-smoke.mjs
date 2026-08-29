@@ -1309,24 +1309,26 @@ try {
 
     await page.locator('[data-view="translator"]').click();
 
-    const cachedUrls = await page.evaluate(async () => {
-        const urls = [];
+    const cachedEntries = await page.evaluate(async () => {
+        const entries = [];
         for (const cacheName of await caches.keys()) {
             const cache = await caches.open(cacheName);
-            urls.push(...(await cache.keys()).map((request) => request.url));
+            entries.push(...(await cache.keys()).map((request) => ({ cacheName, url: request.url })));
         }
-        return urls;
+        return entries;
     });
-    for (const requiredPath of [
-        '/data/orcish.json',
-        '/data/elvish.json',
-        '/campaign-search.json'
-    ]) {
-        if (!cachedUrls.some((url) => new URL(url).pathname.endsWith(requiredPath))) {
-            throw new Error(`Offline feature data was not cached: ${requiredPath}`);
+    const optionalEntries = cachedEntries.filter(({ cacheName }) => cacheName.startsWith('player-assistant-optional-pack-'));
+    for (const requiredPack of ['translator-orcish', 'translator-elvish', 'campaign-search']) {
+        if (!optionalEntries.some(({ cacheName, url }) => cacheName === `player-assistant-optional-pack-${requiredPack}`
+            && url.includes('pack-hash=') && !url.endsWith('pack-hash='))) {
+            throw new Error(`Validated optional pack was not content-addressed and cached: ${requiredPack}`);
         }
     }
-    if (!cachedUrls.some((url) => url.endsWith('/campaign-search-worker.js?v=91'))) {
+    if (cachedEntries.some(({ cacheName, url }) => !cacheName.startsWith('player-assistant-optional-pack-')
+        && /(?:orcish|elvish|ghukliak|campaign-search)\.json(?:[?#]|$)/u.test(url))) {
+        throw new Error('Optional pack was stored in the install shell or general data cache.');
+    }
+    if (!cachedEntries.some(({ url }) => url.endsWith('/campaign-search-worker.js?v=91'))) {
         throw new Error('Campaign search worker was not present in the offline shell cache.');
     }
     await page.evaluate(async () => {

@@ -32,18 +32,11 @@ const SHELL_ASSETS = [
     './party-funds.json',
     './level-progression.json'
 ];
-const OFFLINE_DATA_ASSETS = [
-    './data/orcish.json',
-    './data/elvish.json',
-    './data/ghukliak.json',
-    './campaign-search.json'
-];
 const canonicalRequestKey = (asset) => {
     const url = new URL(asset, self.location.href);
     return `${url.pathname}${url.search}`;
 };
 const SHELL_REQUEST_KEYS = new Set(SHELL_ASSETS.map(canonicalRequestKey));
-const OFFLINE_DATA_REQUEST_KEYS = new Set(OFFLINE_DATA_ASSETS.map(canonicalRequestKey));
 
 const parseCacheGeneration = (cacheName) => {
     const match = CACHE_GENERATION_PATTERN.exec(cacheName);
@@ -175,8 +168,7 @@ const cacheResponseIfValid = async (cache, request, response) => {
 self.addEventListener('install', (event) => {
     event.waitUntil(
         Promise.all([
-            cacheAssets(SHELL_CACHE, SHELL_ASSETS),
-            cacheAssets(DATA_CACHE, OFFLINE_DATA_ASSETS)
+            cacheAssets(SHELL_CACHE, SHELL_ASSETS)
         ])
             .catch(async (error) => {
                 await deleteCurrentCaches();
@@ -264,17 +256,7 @@ self.addEventListener('fetch', (event) => {
         return;
     }
 
-    if (url.pathname.endsWith('/campaign-search.json')) {
-        event.respondWith(networkFirstData(request));
-        return;
-    }
-
-
     const requestKey = `${url.pathname}${url.search}`;
-    if (OFFLINE_DATA_REQUEST_KEYS.has(requestKey)) {
-        event.respondWith(cacheFirst(request, DATA_CACHE));
-        return;
-    }
 
     if (SHELL_REQUEST_KEYS.has(requestKey)) {
         event.respondWith(cacheFirst(request, SHELL_CACHE));

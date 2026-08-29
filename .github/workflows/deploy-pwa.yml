@@ -28,7 +28,7 @@ jobs:
           try {
             $files = @(
               'index.html', 'styles.css', 'version.js', 'app.js', 'service-worker.js',
-              'translator-worker.js', 'campaign-search-worker.js', 'offline.html',
+              'translator-worker.js', 'campaign-search-worker.js', 'optional-pack-loader.js', 'optional-packs.json', 'offline.html',
               'manifest.webmanifest', 'icons/icon-192.png', 'icons/icon-512.png',
               'icons/dragon-mark.png', 'data/orcish.json', 'data/elvish.json',
               'data/ghukliak.json', 'data/heroes.json', 'level-progression.json',

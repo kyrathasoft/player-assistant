@@ -5,10 +5,11 @@
     const CACHE_PREFIX = 'player-assistant-optional-pack-';
     const manifestPromise = new Map();
     const loaded = new Map();
+    const generations = new Map();
 
     const sha256 = async (bytes) => {
         if (!globalThis.crypto?.subtle) throw new Error('This browser cannot verify optional packs.');
-        const digest = await crypto.subtle.digest('SHA-256', bytes);
+        const digest = await crypto.subtle.digest('SHA-256', new Uint8Array(bytes));
         return [...new Uint8Array(digest)].map((value) => value.toString(16).padStart(2, '0')).join('');
     };
 
@@ -42,6 +43,10 @@
                     const ids = new Set(manifest.packs.map((pack) => pack.id));
                     if (ids.size !== manifest.packs.length) throw new Error('Optional-pack manifest contains duplicate IDs.');
                     return manifest;
+                })
+                .catch((error) => {
+                    manifestPromise.delete(manifestUrl);
+                    throw error;
                 }));
         }
         return manifestPromise.get(manifestUrl);
@@ -67,7 +72,14 @@
 
     const loadPack = async (id, { manifestUrl = 'optional-packs.json', force = false, onStatus = () => {} } = {}) => {
         onStatus('loading', `Loading ${id} pack…`);
+        const generation = generations.get(id) || 0;
+        const assertCurrent = () => {
+            if ((generations.get(id) || 0) !== generation) {
+                throw new Error(`Optional pack '${id}' load was superseded or removed.`);
+            }
+        };
         const manifest = await getManifest(manifestUrl);
+        assertCurrent();
         const entry = manifest.packs.find((pack) => pack.id === id);
         if (!entry) throw new Error(`Optional pack '${id}' is not declared.`);
         const cacheName = `${CACHE_PREFIX}${id}`;
@@ -97,9 +109,14 @@
             validated = await read(await fetchPack(requestUrl, 3, (attempt, attempts) => {
                 onStatus('retrying', `Retrying ${id} pack (${attempt}/${attempts})…`);
             }));
+            assertCurrent();
             if (cache) {
                 try {
                     await cache.put(cacheKey, validated.response.clone());
+                    if ((generations.get(id) || 0) !== generation) {
+                        await cache.delete(cacheKey);
+                        throw new Error(`Optional pack '${id}' load was superseded or removed.`);
+                    }
                     const keys = await cache.keys();
                     await Promise.all(keys
                         .filter((key) => key.url.startsWith(requestUrl.origin + requestUrl.pathname)
@@ -108,6 +125,7 @@
                 } catch (error) { if (error?.name !== 'QuotaExceededError') throw error; }
             }
         }
+        assertCurrent();
         onStatus('ready', `${id} pack ready offline.`);
         const payload = validated.payload;
         loaded.set(id, payload);
@@ -115,6 +133,7 @@
     };
 
     const removePack = async (id) => {
+        generations.set(id, (generations.get(id) || 0) + 1);
         loaded.delete(id);
         if (globalThis.caches) await caches.delete(`${CACHE_PREFIX}${id}`);
     };

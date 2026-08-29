@@ -6,19 +6,17 @@ const root = new URL('.', import.meta.url);
 const manifest = JSON.parse(await readFile(new URL('./optional-packs.json', root), 'utf8'));
 const loader = await readFile(new URL('./optional-pack-loader.js', root), 'utf8');
 const serviceWorker = await readFile(new URL('./service-worker.js', root), 'utf8');
-assert.match(loader, /crypto\.subtle/u);
-assert.match(loader, /attempts = 3/u);
-assert.match(loader, /setTimeout\(resolve, 250 \* \(2 \*\* attempt\)\)/u);
-assert.match(loader, /Content-Type/u);
-assert.match(loader, /cache\.put\(cacheKey, validated\.response\.clone\(\)\)/u);
-assert.match(loader, /QuotaExceededError/u);
-assert.match(loader, /removePack/u);
+assert.ok(loader.includes('crypto.subtle'));
+assert.ok(loader.includes('QuotaExceededError'));
+assert.ok(loader.includes('removePack'));
 
 assert.equal(manifest.packs.length, 4);
 assert.equal(new Set(manifest.packs.map((pack) => pack.id)).size, 4);
-assert.match(serviceWorker, /optional-packs\.json/u);
-assert.match(serviceWorker, /optional-pack-loader\.js/u);
-assert.doesNotMatch(serviceWorker, /data\/(?:orcish|elvish|ghukliak)\.json'[\s\S]{0,100}OFFLINE_DATA_ASSETS/u);
+assert.ok(serviceWorker.includes('./optional-pack-loader.js'));
+assert.ok(serviceWorker.includes('./optional-packs.json'));
+const installBlock = serviceWorker.match(/const SHELL_ASSETS = \[([\s\S]*?)\];/u)?.[1] || '';
+assert.doesNotMatch(installBlock, /(?:orcish|elvish|ghukliak|campaign-search)\.json/u);
+assert.doesNotMatch(serviceWorker, /cacheAssets\(DATA_CACHE, OFFLINE_DATA_ASSETS\)/u);
 
 for (const pack of manifest.packs) {
     const bytes = await readFile(new URL(`./${pack.url}`, root));

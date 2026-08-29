@@ -95,6 +95,13 @@ jobs:
         shell: pwsh
         run: .\pwa\verify-pwa.ps1
 
+      - name: Run optional-pack focused suites
+        if: matrix.group == 'pwa'
+        shell: pwsh
+        run: |
+          node .\pwa\optional-pack-tests.mjs
+          node .\pwa\optional-pack-lifecycle-tests.mjs
+
       - name: Run PHP broker suites
         if: matrix.group == 'php'
         shell: pwsh

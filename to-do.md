@@ -378,10 +378,10 @@ Planned security correction: eliminate first-name equivalence from authenticatio
   - [x] Prove late success or failure from a prior account generation cannot clear or repopulate a newly authenticated account.
   - [x] Keep observed and applied revision tokens separate through failed initial loads and sibling-resource partial failures.
   - [x] Test hidden/visible and offline/online transitions for exactly one immediate resume request and no duplicate polling intervals.
-- [ ] Restore optional packs to truly optional, reclaimable storage.
-  - [ ] Remove optional datasets from install-time general precache and store them exclusively in content-addressed optional caches after demand loading.
-  - [ ] Make failed manifest requests retryable and generation-guard load/remove so late completion cannot resurrect a removed pack.
-  - [ ] Add both optional-pack suites to canonical CI and replace source-regex assertions with cache-key, request-byte, and removal behavior checks.
+- [x] Restore optional packs to truly optional, reclaimable storage.
+  - [x] Remove optional datasets from install-time general precache and store them exclusively in content-addressed optional caches after demand loading.
+  - [x] Make failed manifest requests retryable and generation-guard load/remove so late completion cannot resurrect a removed pack.
+  - [x] Add both optional-pack suites to canonical CI and replace source-regex assertions with cache-key, request-byte, and removal behavior checks.
 - [ ] Validate service-worker responses semantically before use or commit.
   - [ ] Prefer a valid cached response over HTTP errors, wrong MIME types, captive-portal HTML, malformed JSON, or otherwise invalid network content.
   - [ ] Validate mandatory precache MIME, nonempty content, and JSON/schema before committing the installation cache; clean partial version caches on failure.

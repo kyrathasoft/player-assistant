@@ -108,74 +108,6 @@ const translatorPayload = Object.freeze({
     terms: { hello: 'zug' }
 });
 
-const testCorruptCachedJsonIsDeletedAndRefetched = async () => {
-    const request = new Request('https://example.test/scarlethorizons/pwa/data/orcish.json');
-    const corrupt = new Response('{not-json', {
-        status: 200,
-        headers: { 'Content-Type': 'application/json' }
-    });
-    const fresh = Response.json(translatorPayload, {
-        status: 200,
-        headers: { 'Content-Type': 'application/json' }
-    });
-    const harness = createHarness({
-        cacheEntries: { [currentDataCache]: [[request, corrupt]] },
-        fetchImpl: async () => fresh.clone()
-    });
-    let responsePromise;
-
-    harness.dispatch('fetch', {
-        request,
-        respondWith(value) { responsePromise = Promise.resolve(value); }
-    });
-
-    const response = await responsePromise;
-    assert.deepEqual(await response.json(), translatorPayload);
-    const cache = harness.cacheMap.get(currentDataCache);
-    assert.deepEqual(cache.deleted, [request.url]);
-};
-
-const testSchemaInvalidCachedJsonIsDeletedAndRefetched = async () => {
-    const request = new Request('https://example.test/scarlethorizons/pwa/data/orcish.json');
-    const invalid = Response.json({ hello: 'stale' });
-    const fresh = Response.json(translatorPayload);
-    const harness = createHarness({
-        cacheEntries: { [currentDataCache]: [[request, invalid]] },
-        fetchImpl: async () => fresh.clone()
-    });
-    let responsePromise;
-
-    harness.dispatch('fetch', {
-        request,
-        respondWith(value) { responsePromise = Promise.resolve(value); }
-    });
-
-    const response = await responsePromise;
-    assert.deepEqual(await response.json(), translatorPayload);
-    const cache = harness.cacheMap.get(currentDataCache);
-    assert.deepEqual(cache.deleted, [request.url]);
-};
-
-const testSchemaInvalidNetworkResponseIsNotCached = async () => {
-    const request = new Request('https://example.test/scarlethorizons/pwa/data/orcish.json');
-    const invalid = Response.json({ hello: 'network-corruption' });
-    const harness = createHarness({
-        cacheEntries: { [currentDataCache]: [] },
-        fetchImpl: async () => invalid.clone()
-    });
-    let responsePromise;
-
-    harness.dispatch('fetch', {
-        request,
-        respondWith(value) { responsePromise = Promise.resolve(value); }
-    });
-
-    const response = await responsePromise;
-    assert.deepEqual(await response.json(), { hello: 'network-corruption' });
-    const cache = harness.cacheMap.get(currentDataCache);
-    assert.equal(cache.entries.size, 0);
-};
-
 const testWrongMimeCachedShellAssetIsDeletedAndRefetched = async () => {
     const request = new Request('https://example.test/scarlethorizons/pwa/styles.css?v=43');
     const corrupt = new Response('<html>not css</html>', {
@@ -230,28 +162,6 @@ const testEmptyCachedShellAssetIsDeletedAndRefetched = async () => {
     assert.deepEqual(cache.deleted, [request.url]);
 };
 
-const testCorruptNetworkFirstFallbackIsDeleted = async () => {
-    const request = new Request('https://example.test/scarlethorizons/pwa/campaign-search.json');
-    const corrupt = new Response('{not-json', {
-        status: 200,
-        headers: { 'Content-Type': 'application/json' }
-    });
-    const harness = createHarness({
-        cacheEntries: { [currentDataCache]: [[request, corrupt]] },
-        fetchImpl: async () => { throw new TypeError('Network unavailable.'); }
-    });
-    let responsePromise;
-
-    harness.dispatch('fetch', {
-        request,
-        respondWith(value) { responsePromise = Promise.resolve(value); }
-    });
-
-    await assert.rejects(responsePromise, /cached PWA data are unavailable/i);
-    const cache = harness.cacheMap.get(currentDataCache);
-    assert.deepEqual(cache.deleted, [request.url]);
-};
-
 const testCorruptNavigationFallbackUsesValidOfflineShell = async () => {
     const request = {
         method: 'GET',
@@ -285,6 +195,23 @@ const testCorruptNavigationFallbackUsesValidOfflineShell = async () => {
     assert.equal(await response.text(), '<!doctype html><title>Offline</title>');
     const cache = harness.cacheMap.get(currentShellCache);
     assert.deepEqual(cache.deleted, [indexRequest]);
+};
+
+const testOptionalPackRequestsBypassServiceWorker = async () => {
+    const optionalPaths = [
+        'https://example.test/scarlethorizons/pwa/data/orcish.json',
+        'https://example.test/scarlethorizons/pwa/data/elvish.json',
+        'https://example.test/scarlethorizons/pwa/campaign-search.json'
+    ];
+    for (const url of optionalPaths) {
+        const harness = createHarness({ fetchImpl: async () => { throw new Error('must not be intercepted'); } });
+        let responsePromise;
+        harness.dispatch('fetch', {
+            request: new Request(url),
+            respondWith(value) { responsePromise = Promise.resolve(value); }
+        });
+        assert.equal(responsePromise, undefined, `service worker must not own optional request ${url}`);
+    }
 };
 
 const testPartialInstallDeletesVersionedCaches = async () => {
@@ -352,13 +279,10 @@ const testObsoleteWorkerCannotDeleteNewerCaches = async () => {
 };
 
 const tests = [
-    testCorruptCachedJsonIsDeletedAndRefetched,
-    testSchemaInvalidCachedJsonIsDeletedAndRefetched,
-    testSchemaInvalidNetworkResponseIsNotCached,
     testWrongMimeCachedShellAssetIsDeletedAndRefetched,
     testEmptyCachedShellAssetIsDeletedAndRefetched,
-    testCorruptNetworkFirstFallbackIsDeleted,
     testCorruptNavigationFallbackUsesValidOfflineShell,
+    testOptionalPackRequestsBypassServiceWorker,
     testPartialInstallDeletesVersionedCaches,
     testQuotaFailureReturnsNetworkResponse,
     testObsoleteWorkerCannotDeleteNewerCaches

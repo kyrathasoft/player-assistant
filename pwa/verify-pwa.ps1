@@ -25,6 +25,9 @@ $requiredFiles = @(
     'app.js',
     'translator-worker.js',
     'service-worker.js',
+    'optional-pack-loader.js',
+    'optional-packs.json',
+    'campaign-search-worker.js',
     'manifest.webmanifest',
     'offline.html',
     'icons\icon-192.png',
@@ -266,6 +269,7 @@ $requestTranslationFunction = [regex]::Match(
     [System.Text.RegularExpressions.RegexOptions]::Singleline).Value
 $styles = Get-Content -Raw -LiteralPath (Join-Path $PwaRoot 'styles.css')
 $serviceWorker = Get-Content -Raw -LiteralPath (Join-Path $PwaRoot 'service-worker.js')
+$optionalLoader = Get-Content -Raw -LiteralPath (Join-Path $PwaRoot 'optional-pack-loader.js')
 $serviceWorkerTests = Get-Content -Raw -LiteralPath (Join-Path $PwaRoot 'service-worker-tests.mjs')
 $browserSmoke = Get-Content -Raw -LiteralPath (Join-Path $PwaRoot 'browser-smoke.mjs')
 $deploymentTest = Get-Content -Raw -LiteralPath (Join-Path $PwaRoot 'test-deployment.ps1')
@@ -338,9 +342,9 @@ Assert-Condition -Condition ($heroTokenStyle.Success -and $heroTokenStyle.Groups
 Assert-Condition -Condition (!$appScript.Contains('XP+Tracking') -and !$html.Contains('XP+Tracking')) -Message 'The XP source URL must remain outside the browser application.'
 Assert-Condition -Condition ($serviceWorker.Contains("url.pathname.startsWith('/scarlethorizons/api/')")) -Message 'The service worker must exclude protected API responses.'
 Assert-Condition -Condition ($serviceWorker.Contains("new Request(asset, { cache: 'reload' })")) -Message 'Service-worker upgrades must bypass stale browser shell caches.'
-Assert-Condition -Condition ($serviceWorker.Contains('OFFLINE_DATA_ASSETS') -and $serviceWorker.Contains("'./data/orcish.json'") -and $serviceWorker.Contains("'./data/elvish.json'") -and $serviceWorker.Contains("'./data/ghukliak.json'") -and $serviceWorker.Contains("'./campaign-search.json'")) -Message 'Offline translator and campaign-search data must be preloaded into the data cache.'
+Assert-Condition -Condition ($serviceWorker.Contains("'./optional-pack-loader.js'") -and $serviceWorker.Contains("'./optional-packs.json'") -and !$serviceWorker.Contains('OFFLINE_DATA_ASSETS') -and !$serviceWorker.Contains("cacheAssets(DATA_CACHE")) -Message 'Optional packs must be absent from install-time general precache.'
 Assert-Condition -Condition ($serviceWorker.Contains('networkFirstData') -and $serviceWorker.Contains("url.pathname.endsWith('/data/heroes.json')") -and $serviceWorker.Contains("url.pathname.includes('/data/hero-tokens/')")) -Message 'Hero-token manifests and images must refresh from the network before using cached copies.'
-Assert-Condition -Condition ($serviceWorker.Contains("url.pathname.endsWith('/campaign-search.json')") -and $serviceWorker.Contains("event.respondWith(networkFirstData(request))")) -Message 'Scheduled campaign-search data must refresh from the network before using its offline cache.'
+Assert-Condition -Condition ($optionalLoader.Contains('pack-hash=') -and $optionalLoader.Contains('cache.put(cacheKey') -and $optionalLoader.Contains('removePack') -and $optionalLoader.Contains('manifestPromise.delete(manifestUrl)')) -Message 'Optional packs must use content-addressed caches, retryable manifests, and explicit removal.'
 Assert-Condition -Condition ($appScript.Contains("updateViaCache: 'none'") -and $appScript.Contains('await registration.update()')) -Message 'The PWA must explicitly check for uncached service-worker updates.'
 Assert-Condition -Condition ($manifest.start_url -eq './#dashboard' -and $manifest.scope -eq './') -Message 'The manifest must keep navigation inside the deployed PWA directory.'
 Assert-Condition -Condition ($html.Contains('href="manifest.webmanifest"') -and $appScript.Contains('service-worker.js')) -Message 'The install manifest or service-worker registration is missing.'
@@ -373,7 +377,7 @@ Assert-Condition -Condition ($apacheConfig.Contains('campaign-search\.json')) -M
 Assert-Condition -Condition ($apacheConfig.Contains('data/heroes\.json|data/hero-tokens/[^/]+')) -Message 'Apache must require revalidation for hero-token metadata and images.'
 Assert-Condition -Condition ($html.Contains('id="update-banner"') -and $html.Contains('id="update-apply"') -and $appScript.Contains('SKIP_WAITING') -and $serviceWorker.Contains("event.data?.type === 'SKIP_WAITING'")) -Message 'The PWA must expose an explicit service-worker update prompt.'
 Assert-Condition -Condition ($serviceWorker.Contains('cacheAssets') -and $serviceWorker.Contains('deleteCurrentCaches') -and $serviceWorker.Contains('safeCachePut') -and $serviceWorker.Contains('isValidJsonPayload') -and $serviceWorker.Contains('rejectObsoleteWorker') -and !$serviceWorker.Contains('.then(() => self.skipWaiting())')) -Message 'Service-worker installation and cache reads must fail closed on interrupted, corrupt, quota-limited, or obsolete-worker paths.'
-Assert-Condition -Condition ($serviceWorkerTests.Contains('testPartialInstallDeletesVersionedCaches') -and $serviceWorkerTests.Contains('testQuotaFailureReturnsNetworkResponse') -and $serviceWorkerTests.Contains('testSchemaInvalidCachedJsonIsDeletedAndRefetched') -and $serviceWorkerTests.Contains('testCorruptNavigationFallbackUsesValidOfflineShell') -and $serviceWorkerTests.Contains('testObsoleteWorkerCannotDeleteNewerCaches')) -Message 'Service-worker failure-injection coverage is incomplete.'
+Assert-Condition -Condition ($serviceWorkerTests.Contains('testPartialInstallDeletesVersionedCaches') -and $serviceWorkerTests.Contains('testQuotaFailureReturnsNetworkResponse') -and $serviceWorkerTests.Contains('testOptionalPackRequestsBypassServiceWorker') -and $serviceWorkerTests.Contains('testCorruptNavigationFallbackUsesValidOfflineShell') -and $serviceWorkerTests.Contains('testObsoleteWorkerCannotDeleteNewerCaches')) -Message 'Service-worker failure-injection coverage is incomplete.'
 Assert-Condition -Condition ($html.Contains('id="xp-retry"') -and $html.Contains('id="quests-retry"') -and $html.Contains('id="xp-awards-retry"') -and $html.Contains('id="messages-retry"') -and $html.Contains('id="magic-items-freshness"') -and $html.Contains('id="party-funds-freshness"') -and $html.Contains('id="messages-freshness"') -and $appScript.Contains("void loadXpAwards(true)")) -Message 'Protected PWA views must expose freshness indicators and explicit retry controls.'
 
 Write-Output "PWA verified: $($lexiconCounts.orcish) Orcish terms, $($lexiconCounts.elvish) Elvish terms, $($lexiconCounts.ghukliak) Ghukliak terms, $(@($heroData.heroes).Count) player tokens and the Dungeon Master token, $($campaignSearch.pageCount) full-text campaign pages, install manifest and offline shell valid."
