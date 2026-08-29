@@ -661,11 +661,11 @@ namespace PlayerAssistant
             try
             {
                 var response = await WaitForPlaywrightAsync(
-                    page.GotoAsync(ProtectedDiceRollerUri.AbsoluteUri, new PageGotoOptions
+                    page.GotoAsync(RpolProtectedResourceUtility.CanonicalDiceRollerProbe.Uri.AbsoluteUri, new PageGotoOptions
                     {
                         WaitUntil = WaitUntilState.DOMContentLoaded,
                         Timeout = (float)PlaywrightOperationTimeout.TotalMilliseconds,
-                        Referer = AppSettingsUtility.GameForumUrl
+                        Referer = RpolProtectedResourceUtility.CanonicalDiceRollerProbe.Referer
                     }),
                     "loading the exact RPOL Dice Roller authentication probe",
                     cancellationToken);
@@ -724,7 +724,7 @@ namespace PlayerAssistant
                     : null;
                 var classification = RpolProtectedResourceUtility.ClassifyEvidence(
                     new RpolProtectedProbeEvidence(
-                        ProtectedDiceRollerUri,
+                        RpolProtectedResourceUtility.CanonicalDiceRollerProbe.Uri,
                         response is not null && Uri.TryCreate(response.Url, UriKind.Absolute, out var responseUri)
                             ? responseUri
                             : null,
@@ -1066,7 +1066,7 @@ namespace PlayerAssistant
                 "--no-first-run",
                 "--new-window",
                 new Uri(noticePath).AbsoluteUri,
-                RpolProtectedResourceUtility.ProtectedDiceRollerUri.AbsoluteUri
+                RpolProtectedResourceUtility.CanonicalDiceRollerProbe.Uri.AbsoluteUri
             ];
         }
 

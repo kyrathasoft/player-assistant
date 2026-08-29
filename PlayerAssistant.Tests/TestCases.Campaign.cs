@@ -92,6 +92,30 @@ internal static partial class TestCases
             "a non-POST credential request must be blocked");
     }
 
+    internal static void RpolCanonicalProbeRejectsEmbeddedLoginAndExposesExactIdentity()
+    {
+        var probe = RpolProtectedResourceUtility.CanonicalDiceRollerProbe;
+        AssertEqual(80170, probe.GameId, "the canonical RPOL probe must target game 80170");
+        AssertEqual("/usermodules/diceroller.cgi", probe.Uri.AbsolutePath, "the canonical probe path must be the Dice Roller resource");
+        AssertEqual("?gi=80170", probe.Uri.Query, "the canonical probe must use the exact game query");
+        var html = "<html><head><title>Dice Roller</title></head><body><form action='/login.cgi'><input name='username'><input name='password' type='password'></form><div>Step 1: Choose the Dice</div><div>Roll the Dice</div></body></html>";
+        var classification = RpolProtectedResourceUtility.Classify(
+            probe.Uri, probe.Uri, 200, "text/html", html);
+        AssertEqual(RpolProtectedResourceKind.LoginRequired, classification.Kind, "an embedded login form must never prove protected authentication");
+    }
+
+    internal static void RpolCanonicalProbeRejectsWrongGameAndCookieOnlyEvidence()
+    {
+        var probe = RpolProtectedResourceUtility.CanonicalDiceRollerProbe;
+        var wrongGame = new Uri("https://rpol.net/usermodules/diceroller.cgi?gi=99999");
+        var classification = RpolProtectedResourceUtility.Classify(
+            wrongGame, wrongGame, 200, "text/html", "<html><title>Dice Roller</title><body>Step 1: Choose the Dice Roll the Dice</body></html>");
+        AssertEqual(RpolProtectedResourceKind.UntrustedNavigation, classification.Kind, "a Dice Roller response for another game must not prove the canonical resource");
+        classification = RpolProtectedResourceUtility.Classify(
+            probe.Uri, probe.Uri, 200, "text/html", "<html><title>Dice Roller</title><body>Step 1: Choose the Dice Roll the Dice</body></html>");
+        AssertEqual(RpolProtectedResourceKind.AuthenticatedProtectedContent, classification.Kind, "only the live canonical page shape, not cookie presence, is proof");
+    }
+
     internal static void RpolProtectedProbeRejectsResponseOrSettledUrlChanges()
     {
         var requested = RpolAuthUtility.ProtectedDiceRollerUri;
@@ -928,9 +952,9 @@ internal static partial class TestCases
         var authenticated = RpolAuthUtility.ClassifyProtectedResource(
             protectedUri, protectedUri, 200, "text/html; charset=utf-8", authenticatedHtml);
         AssertEqual(
-            RpolProtectedResourceKind.AuthenticatedProtectedContent,
+            RpolProtectedResourceKind.LoginRequired,
             authenticated.Kind,
-            "the protected probe must accept authenticated content even when the page shell retains a login form");
+            "the protected probe must reject authenticated-looking content that retains a login form");
     }
 
     internal static void RpolProtectedProbeClassifiesMissingResponse()
@@ -993,9 +1017,9 @@ internal static partial class TestCases
             loginHtml);
 
         AssertEqual(
-            RpolProtectedResourceKind.UnexpectedContent,
+            RpolProtectedResourceKind.LoginRequired,
             result.Kind,
-            "Dice Roller-looking content without the complete contract must not prove authentication");
+            "Dice Roller-looking content with login controls must be classified as login-required");
     }
 
     internal static void RpolLoginClassifierHandlesHtmlAttributeVariants()

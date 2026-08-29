@@ -425,10 +425,10 @@ namespace PlayerAssistant
                 probe.WebResourceResponseReceived += OnResponse;
                 probe.NavigationCompleted += OnNavigationCompleted;
                 var request = probe.Environment.CreateWebResourceRequest(
-                    RpolAuthUtility.ProtectedDiceRollerUri.AbsoluteUri,
+                    RpolProtectedResourceUtility.CanonicalDiceRollerProbe.Uri.AbsoluteUri,
                     "GET",
                     null,
-                    $"Referer: {_request.GameForumUrl}\r\n");
+                    $"Referer: {RpolProtectedResourceUtility.CanonicalDiceRollerProbe.Referer}\r\n");
                 probe.NavigateWithWebResourceRequest(request);
                 await navigationCompletion.Task.WaitAsync(TimeSpan.FromSeconds(30), _lifetime.Token);
                 if (!_lifetime.IsAlive || IsDisposed) return null;
@@ -461,7 +461,7 @@ namespace PlayerAssistant
                 var settledHtml = stableNavigation.Html;
                 var classification = RpolProtectedResourceUtility.ClassifyEvidence(
                     new RpolProtectedProbeEvidence(
-                        RpolAuthUtility.ProtectedDiceRollerUri,
+                        RpolProtectedResourceUtility.CanonicalDiceRollerProbe.Uri,
                         responseUri,
                         settledUri,
                         responseStatus,
