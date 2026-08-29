@@ -99,6 +99,7 @@ internal static class TestCatalog
     ("to-orcish translates terms inside quotes", TestCases.ToOrcishTranslatesTermsInsideQuotes),
     ("to-orcish translates words after newlines", TestCases.ToOrcishTranslatesWordsAfterNewlines),
     ("app configuration validation accepts complete runtime", TestCases.AppConfigurationValidationAcceptsCompleteRuntime),
+    ("keep alive policy is truthful and observable", TestCases.KeepAlivePolicyIsTruthfulAndObservable),
     ("settings json accepts current schema version", TestCases.SettingsJsonAcceptsCurrentSchemaVersion),
     ("settings json rejects future schema version", TestCases.SettingsJsonRejectsFutureSchemaVersion),
     ("app settings loads hosted encrypted xp tracking url", TestCases.AppSettingsLoadsHostedEncryptedXpTrackingUrl),

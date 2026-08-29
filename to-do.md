@@ -364,11 +364,11 @@ Planned security correction: eliminate first-name equivalence from authenticatio
   - [x] Inventory XP progression, award-history, word-count, lexicon, and runtime-cache collections that can expose mixed generations.
   - [x] Add per-collection locking, an explicit commit point or journal, durable promotion, and idempotent recovery where several files form one logical snapshot.
   - [x] Add fault injection for stale-but-valid sources, equal-date events, partial promotion, concurrent refresh, replay, reset/decrease, and recovery interruption.
-- [ ] Make the Windows keep-alive behavior truthful and observable.
-  - [ ] Stop relying on a hard-coded repository path in the hidden launcher; install a validated absolute path appropriate to the current machine.
-  - [ ] Treat failed `SetThreadExecutionState` or `SendInput` calls as task failures and write bounded diagnostic status.
-  - [ ] Ensure the refresh cadence is shorter than the effective display timeout, including battery policy, or use a supervised long-running assertion.
-  - [ ] Separate display, system-sleep, and disk-idle requirements; use `ES_SYSTEM_REQUIRED` or explicit power-policy changes only when those behaviors are intentionally requested and tested.
+- [x] Make the Windows keep-alive behavior truthful and observable.
+  - [x] Stop relying on a hard-coded repository path in the hidden launcher; install a validated absolute path appropriate to the current machine.
+  - [x] Treat failed `SetThreadExecutionState` or `SendInput` calls as task failures and write bounded diagnostic status.
+  - [x] Ensure the refresh cadence is shorter than the effective display timeout, including battery policy, or use a supervised long-running assertion.
+  - [x] Separate display, system-sleep, and disk-idle requirements; use `ES_SYSTEM_REQUIRED` or explicit power-policy changes only when those behaviors are intentionally requested and tested.
 
 ### P2 — Strengthen asynchronous and deployment edge cases
 

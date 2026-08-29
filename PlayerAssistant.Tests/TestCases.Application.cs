@@ -19,6 +19,17 @@ namespace PlayerAssistant.Tests;
 
 internal static partial class TestCases
 {
+    internal static void KeepAlivePolicyIsTruthfulAndObservable()
+    {
+        var repoRoot = GetRepositoryRoot();
+        var verifier = Path.Combine(repoRoot, "verify-keep-alive.ps1");
+        using var process = Process.Start(new ProcessStartInfo("powershell.exe", $"-NoProfile -NonInteractive -ExecutionPolicy Bypass -File \"{verifier}\"") { RedirectStandardOutput = true, RedirectStandardError = true, UseShellExecute = false, CreateNoWindow = true });
+        AssertTrue(process is not null, "keep-alive verifier process should start");
+        process!.WaitForExit();
+        AssertEqual(0, process.ExitCode, (process.StandardOutput.ReadToEnd() + process.StandardError.ReadToEnd()).Trim());
+    }
+
+
     internal static void AppConfigurationValidationAcceptsCompleteRuntime()
     {
         using var directory = TemporaryDirectory.Create();
