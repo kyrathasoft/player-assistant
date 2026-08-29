@@ -101,6 +101,36 @@ internal static partial class TestCases
         AssertFalse(cancelledWait.GetAwaiter().GetResult(), "bounded guard teardown must fail closed without a request");
     }
 
+    internal static void RpolCredentialMigrationIsAtomicAtCredentialStoreBoundary()
+    {
+        var backend = new FaultInjectingCredentialStoreBackend(failOnOperation: 1);
+        using var scope = RuntimeSecretStoreUtility.UseBackendForTests(backend);
+
+        var exception = AssertThrows<InvalidOperationException>(
+            () => RuntimeSecretStoreUtility.SaveRpolCredentials("atomic-user", "atomic-password"));
+        AssertTrue(exception.Message.Contains("synthetic", StringComparison.Ordinal), "the injected credential-store fault must reach the test");
+        AssertFalse(
+            RuntimeSecretStoreUtility.TryGetRpolCredentials(out _, out _),
+            "a failed credential record write must not leave a readable partial credential");
+        AssertEqual(0, backend.StoredCount, "a failed record write must not leave partial credential-store records");
+    }
+
+    internal static void RpolWebViewDispatchCancellationFallsBackWhenEnqueueFails()
+    {
+        var cancellation = 0;
+        var disposed = 0;
+        var registration = RpolWebViewDispatchLifetime.Register(
+            () => Interlocked.Increment(ref cancellation),
+            _ => throw new InvalidOperationException("synthetic enqueue failure"),
+            () => Interlocked.Increment(ref disposed));
+
+        registration.Cancel();
+        registration.Dispose();
+
+        AssertEqual(1, cancellation, "UI enqueue failure must still complete cancellation synchronously");
+        AssertEqual(1, disposed, "dispatch cancellation registrations must be disposed");
+    }
+
     internal static void RpolProtectedProbeFixtureObservesRefererResponseAndDelayedDom()
     {
         RunProtectedProbeFixtureAsync().GetAwaiter().GetResult();

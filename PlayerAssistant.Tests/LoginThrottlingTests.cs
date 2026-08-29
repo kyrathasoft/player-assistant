@@ -4,9 +4,25 @@ namespace PlayerAssistant.Tests;
 
 internal static partial class TestCases
 {
+    internal static void RepositoryRootDiscoveryHandlesCiOutputLayout()
+    {
+        var expectedRoot = RepositoryRootDiscovery.Find(AppContext.BaseDirectory);
+        var ciLikeOutputDirectory = Path.Combine(
+            expectedRoot,
+            "PlayerAssistant.Tests",
+            "bin",
+            "Release",
+            "net10.0-windows");
+        var repositoryRoot = RepositoryRootDiscovery.Find(ciLikeOutputDirectory);
+        AssertEqual(
+            expectedRoot,
+            repositoryRoot,
+            "Repository root discovery must use repository markers rather than a fixed output depth.");
+    }
+
     internal static void LoginThrottlingRejectsMalformedSourceAtLoginBoundary()
     {
-        var repositoryRoot = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", ".."));
+        var repositoryRoot = RepositoryRootDiscovery.Find(AppContext.BaseDirectory);
         var script = Path.Combine(repositoryRoot, "web-deploy", "tests", "login-hardening-tests.php");
         var startInfo = new ProcessStartInfo("php")
         {

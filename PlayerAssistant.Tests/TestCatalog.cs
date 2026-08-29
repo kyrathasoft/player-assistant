@@ -8,6 +8,7 @@ internal static class TestCatalog
         new (string Name, Action Test)[]
 {
     ("orcish translator returns one-to-one english mapping", TestCases.OrcishTranslatorReturnsOneToOneEnglishMapping),
+    ("repository root discovery handles CI output layout", TestCases.RepositoryRootDiscoveryHandlesCiOutputLayout),
     ("login throttling rejects malformed source at login boundary", TestCases.LoginThrottlingRejectsMalformedSourceAtLoginBoundary),
     ("orcish translator returns several english matches for one orcish word", TestCases.OrcishTranslatorReturnsSeveralEnglishMatchesForOneOrcishWord),
     ("orcish translator uses part of speech to disambiguate", TestCases.OrcishTranslatorUsesPartOfSpeechToDisambiguate),
@@ -245,6 +246,8 @@ internal static class TestCatalog
     ("rpol navigation stability observes delayed redirect and dom replacement", TestCases.RpolNavigationStabilityObservesDelayedRedirectAndDomReplacement),
     ("rpol credential submission is behaviorally atomic against event mutation", TestCases.RpolCredentialSubmissionIsBehaviorallyAtomicAgainstEventMutation),
     ("rpol credential guard remains armed until request or bounded failure", TestCases.RpolCredentialGuardRemainsArmedUntilRequestOrBoundedFailure),
+    ("rpol credential migration is atomic at credential store boundary", TestCases.RpolCredentialMigrationIsAtomicAtCredentialStoreBoundary),
+    ("rpol webview dispatch cancellation falls back when enqueue fails", TestCases.RpolWebViewDispatchCancellationFallsBackWhenEnqueueFails),
     ("rpol protected probe fixture observes referer response and delayed dom", TestCases.RpolProtectedProbeFixtureObservesRefererResponseAndDelayedDom),
     ("rpol protected probe accepts dice roller shell without roll history", TestCases.RpolProtectedProbeAcceptsDiceRollerShellWithoutRollHistory),
     ("rpol publisher equivalent proof uses separate process architecture", TestCases.RpolPublisherEquivalentProofUsesSeparateProcessArchitecture),

@@ -133,14 +133,17 @@ namespace PlayerAssistant
             {
                 _cancellationRegistration = _lifetime.Token.Register(() =>
                 {
-                    if (!IsDisposed && IsHandleCreated)
-                    {
-                        BeginInvoke(() =>
+                    var registration = RpolWebViewDispatchLifetime.Register(
+                        () => { DialogResult = DialogResult.Cancel; Close(); },
+                        action =>
                         {
-                            DialogResult = DialogResult.Cancel;
-                            Close();
-                        });
-                    }
+                            if (IsDisposed || !IsHandleCreated) return false;
+                            BeginInvoke(action);
+                            return true;
+                        },
+                        static () => { });
+                    registration.Cancel();
+                    registration.Dispose();
                 });
 
                 _lifetime.ThrowIfNotAlive();
@@ -192,9 +195,11 @@ namespace PlayerAssistant
                 && NetworkUrlAllowlistUtility.IsTrustedRpolNavigationUri(currentUri))
             {
                 var submitted = await TryAutoSubmitLoginAsync();
+                if (!_lifetime.IsAlive || IsDisposed) return;
                 if (!submitted)
                 {
                     var classification = await TryVerifyProtectedResourceAsync();
+                    if (!_lifetime.IsAlive || IsDisposed) return;
                     _saveButton.Enabled = classification?.Kind == RpolProtectedResourceKind.AuthenticatedProtectedContent;
                 }
             }
@@ -346,6 +351,7 @@ namespace PlayerAssistant
             try
             {
                 var resultJson = await _webView.CoreWebView2.ExecuteScriptAsync(script);
+                if (!_lifetime.IsAlive || IsDisposed) return false;
                 if (!string.Equals(resultJson, "true", StringComparison.OrdinalIgnoreCase))
                 {
                     credentialGuard.Complete(false);
@@ -355,6 +361,7 @@ namespace PlayerAssistant
                 var requestValidated = await credentialGuard.WaitForRequestAsync(
                     TimeSpan.FromSeconds(30),
                     _lifetime.Token);
+                if (!_lifetime.IsAlive || IsDisposed) return false;
                 if (!requestValidated)
                 {
                     return false;
@@ -424,6 +431,7 @@ namespace PlayerAssistant
                     $"Referer: {_request.GameForumUrl}\r\n");
                 probe.NavigateWithWebResourceRequest(request);
                 await navigationCompletion.Task.WaitAsync(TimeSpan.FromSeconds(30), _lifetime.Token);
+                if (!_lifetime.IsAlive || IsDisposed) return null;
                 var stableNavigation = await RpolNavigationStability.WaitForStableAsync(
                     async token =>
                     {
@@ -448,6 +456,7 @@ namespace PlayerAssistant
                     maximumWait: TimeSpan.FromSeconds(20),
                     pollInterval: TimeSpan.FromMilliseconds(100),
                     cancellationToken: _lifetime.Token);
+                if (!_lifetime.IsAlive || IsDisposed) return null;
                 var settledUri = stableNavigation.Url;
                 var settledHtml = stableNavigation.Html;
                 var classification = RpolProtectedResourceUtility.ClassifyEvidence(
@@ -499,7 +508,9 @@ namespace PlayerAssistant
             try
             {
                 await TryAutoSubmitLoginAsync();
+                if (!_lifetime.IsAlive || IsDisposed) return;
                 await Task.Delay(TimeSpan.FromSeconds(2), _lifetime.Token);
+                if (!_lifetime.IsAlive || IsDisposed) return;
 
                 if (_webView.CoreWebView2.Source is not { } currentUriText
                                     || !Uri.TryCreate(currentUriText, UriKind.Absolute, out var currentUri)
@@ -510,6 +521,7 @@ namespace PlayerAssistant
                 }
 
                 var protectedClassification = await TryVerifyProtectedResourceAsync();
+                if (!_lifetime.IsAlive || IsDisposed) return;
                 if (protectedClassification?.Kind != RpolProtectedResourceKind.AuthenticatedProtectedContent)
                 {
                     return;

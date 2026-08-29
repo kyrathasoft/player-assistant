@@ -5,6 +5,28 @@ using System.Text;
 
 namespace PlayerAssistant.Tests;
 
+internal static class RepositoryRootDiscovery
+{
+    private const string ProjectMarker = "player-assistant.csproj";
+
+    internal static string Find(string startDirectory)
+    {
+        var directory = new DirectoryInfo(Path.GetFullPath(startDirectory));
+        while (directory is not null)
+        {
+            var projectMarker = Path.Combine(directory.FullName, ProjectMarker);
+            var regressionMarker = Path.Combine(directory.FullName, "web-deploy", "tests", "login-hardening-tests.php");
+            if (File.Exists(projectMarker) && File.Exists(regressionMarker))
+                return directory.FullName;
+
+            directory = directory.Parent;
+        }
+
+        throw new InvalidOperationException(
+            $"Unable to locate the Player Assistant repository from '{startDirectory}'.");
+    }
+}
+
 internal sealed class BlockingTranslatorService : ITranslatorService, IDisposable
 {
     public ManualResetEventSlim FirstTranslationStarted { get; } = new();
@@ -275,11 +297,8 @@ internal sealed class ThrowingWindowsCredentialStoreBackend : IWindowsCredential
 internal sealed class ObservedWindowsCredentialStoreBackend : IWindowsCredentialStoreBackend
 {
     private readonly Dictionary<string, StoredSecret> _secrets = new(StringComparer.Ordinal);
-
     public byte[]? LastWriteInputBytes { get; private set; }
-
     public byte[]? LastReadOutputBytes { get; private set; }
-
     public bool TryRead(string targetName, out StoredSecret? storedSecret)
     {
         if (_secrets.TryGetValue(targetName, out var existingSecret))
@@ -288,20 +307,51 @@ internal sealed class ObservedWindowsCredentialStoreBackend : IWindowsCredential
             storedSecret = new StoredSecret(LastReadOutputBytes, existingSecret.LastWritten);
             return true;
         }
+        LastReadOutputBytes = null; storedSecret = null; return false;
+    }
+    public void Write(string targetName, byte[] secretBytes, string? comment = null)
+    {
+        LastWriteInputBytes = secretBytes;
+        _secrets[targetName] = new StoredSecret([.. secretBytes], DateTimeOffset.UtcNow);
+    }
+    public void Delete(string targetName) => _secrets.Remove(targetName);
+}
 
-        LastReadOutputBytes = null;
+internal sealed class FaultInjectingCredentialStoreBackend : IWindowsCredentialStoreBackend
+{
+    private readonly Dictionary<string, StoredSecret> _secrets = new(StringComparer.Ordinal);
+    private readonly int _failOnOperation;
+    private int _operationCount;
+
+    internal FaultInjectingCredentialStoreBackend(int failOnOperation) => _failOnOperation = failOnOperation;
+    internal int StoredCount => _secrets.Count;
+
+    public bool TryRead(string targetName, out StoredSecret? storedSecret)
+    {
+        if (_secrets.TryGetValue(targetName, out var existing))
+        {
+            storedSecret = existing with { SecretBytes = [.. existing.SecretBytes] };
+            return true;
+        }
         storedSecret = null;
         return false;
     }
 
     public void Write(string targetName, byte[] secretBytes, string? comment = null)
     {
-        LastWriteInputBytes = secretBytes;
+        FaultIfNeeded();
         _secrets[targetName] = new StoredSecret([.. secretBytes], DateTimeOffset.UtcNow);
     }
 
     public void Delete(string targetName)
     {
+        FaultIfNeeded();
         _secrets.Remove(targetName);
+    }
+
+    private void FaultIfNeeded()
+    {
+        if (++_operationCount == _failOnOperation)
+            throw new InvalidOperationException("synthetic credential-store fault");
     }
 }

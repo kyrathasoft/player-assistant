@@ -395,6 +395,7 @@ Planned security correction: eliminate first-name equivalence from authenticatio
 - [ ] Make RPOL credential migration and WebView dispatch lifetime-safe.
   - [ ] Store username/password as one versioned credential record or compensate on partial write/delete so migration and plaintext removal are all-or-nothing.
   - [ ] Complete cancellation even when UI enqueue fails or the handle is destroyed; dispose registrations and recheck dialog viability after each await.
+  - Blocked pending the release-candidate self-test fixture `Release\\publish\\settings.local.json`, which is not present in this checkout; functional migration and dispatch regression coverage passes.
 - [ ] Prove RPOL authentication against the exact protected resource before capturing or reusing browser state.
   - [ ] Define one canonical protected Dice Roller probe for game `80170` and use it for visible-browser verification, WebView verification, restored-state validation, and publisher preflight.
   - [ ] Reject public campaign content, cookie presence, login redirects/forms, untrusted navigation, challenges, wrong paths, wrong game IDs, and unexpected protected-page shapes as authentication proof.
