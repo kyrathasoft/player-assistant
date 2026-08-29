@@ -87,7 +87,7 @@ const createHarness = ({ cacheEntries = {}, fetchImpl } = {}) => {
                 metadataRevision: 1,
                 stylesRevision: 43,
                 appRevision: 61,
-                cacheRevision: 113
+                cacheRevision: 114
             });
         },
         self
@@ -105,8 +105,8 @@ const createHarness = ({ cacheEntries = {}, fetchImpl } = {}) => {
     };
 };
 
-const currentDataCache = 'player-assistant-pwa-0.9.8-v113-data';
-const currentShellCache = 'player-assistant-pwa-0.9.8-v113-shell';
+const currentDataCache = 'player-assistant-pwa-0.9.8-v114-data';
+const currentShellCache = 'player-assistant-pwa-0.9.8-v114-shell';
 const translatorPayload = Object.freeze({
     schemaVersion: 1,
     language: 'Orcish',
@@ -266,8 +266,8 @@ const testQuotaFailureReturnsNetworkResponse = async () => {
 };
 
 const testObsoleteWorkerCannotDeleteNewerCaches = async () => {
-    const newerShell = 'player-assistant-pwa-0.9.8-v114-shell';
-    const newerData = 'player-assistant-pwa-0.9.8-v114-data';
+    const newerShell = 'player-assistant-pwa-0.9.8-v115-shell';
+    const newerData = 'player-assistant-pwa-0.9.8-v115-data';
     const harness = createHarness({
         cacheEntries: {
             [newerShell]: [],

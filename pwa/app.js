@@ -1,6 +1,7 @@
-import { initializeTranslator } from './modules/translator.js?v=91';
-import { initializeCampaignSearch } from './modules/search.js?v=91';
-import { initializeDice } from './modules/dice.js?v=91';
+import { initializeTranslator } from './modules/translator.js?v=92';
+import { initializeCampaignSearch } from './modules/search.js?v=92';
+import { initializeDice } from './modules/dice.js?v=92';
+import { createControllerChangeHandler } from './service-worker-controller.js?v=92';
 
 (() => {
     'use strict';
@@ -3037,8 +3038,11 @@ import { initializeDice } from './modules/dice.js?v=91';
     updateInstallButtons();
 
     if ('serviceWorker' in navigator) {
-        const hadServiceWorkerController = navigator.serviceWorker.controller !== null;
-        let reloadingForServiceWorker = false;
+        const onControllerChange = createControllerChangeHandler({
+            getController: () => navigator.serviceWorker.controller,
+            reload: () => window.location.reload()
+        });
+        navigator.serviceWorker.addEventListener('controllerchange', onControllerChange);
         let pendingServiceWorker = null;
         const updateBanner = byId('update-banner');
         const showServiceWorkerUpdate = (worker) => {
@@ -3051,12 +3055,7 @@ import { initializeDice } from './modules/dice.js?v=91';
         byId('update-apply')?.addEventListener('click', () => {
             pendingServiceWorker?.postMessage({ type: 'SKIP_WAITING' });
         });
-        navigator.serviceWorker.addEventListener('controllerchange', () => {
-            if (hadServiceWorkerController && !reloadingForServiceWorker) {
-                reloadingForServiceWorker = true;
-                window.location.reload();
-            }
-        });
+
         window.addEventListener('load', async () => {
             try {
                 const registration = await navigator.serviceWorker.register(

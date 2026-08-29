@@ -141,6 +141,7 @@ $runtimeFiles = [ordered]@{
     'modules/translator.js' = @('application/javascript', 'text/javascript')
     'modules/search.js' = @('application/javascript', 'text/javascript')
     'modules/dice.js' = @('application/javascript', 'text/javascript')
+    'service-worker-controller.js' = @('application/javascript', 'text/javascript')
     'translator-worker.js' = @('application/javascript', 'text/javascript')
     'campaign-search-worker.js' = @('application/javascript', 'text/javascript')
     'optional-pack-loader.js' = @('application/javascript', 'text/javascript')

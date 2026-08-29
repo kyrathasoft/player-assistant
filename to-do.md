@@ -386,8 +386,9 @@ Planned security correction: eliminate first-name equivalence from authenticatio
   - [x] Prefer a valid cached response over HTTP errors, wrong MIME types, captive-portal HTML, malformed JSON, or otherwise invalid network content.
   - [x] Validate mandatory precache MIME, nonempty content, and JSON/schema before committing the installation cache; clean partial version caches on failure.
   - [x] Bound navigation fetch time before falling back to the cached shell.
-- [ ] Make service-worker controller transitions deterministic in long-lived pages.
-  - [ ] Avoid reloading on first controller acquisition, but reload exactly once when a later worker takes control in the same page.
+- [x] Make service-worker controller transitions deterministic in long-lived pages.
+  - [x] Avoid reloading on first controller acquisition, but reload exactly once when a later worker takes control in the same page.
+  - [x] Cover duplicate controllerchange events, explicit SKIP_WAITING update prompts, and online/offline lifecycle transitions in focused and browser smoke tests.
 - [ ] Prevent trusted-network redirects from connecting to untrusted targets.
   - [ ] Disable automatic redirects and manually follow a bounded hop count, validating every parsed target against its purpose-specific allowlist before sending.
   - [ ] Prove a trusted endpoint redirecting to localhost or another disallowed authority sends zero requests to that target.

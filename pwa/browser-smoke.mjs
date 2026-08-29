@@ -1295,7 +1295,7 @@ try {
     await page.waitForFunction(() => document.querySelector('#search-guidance')?.textContent?.includes('pack ready offline'));
     await page.locator('#campaign-search').fill('Kirkilston');
     await page.locator('#search-results .search-result').first().waitFor({ state: 'visible' });
-    if (![...workerUrls].some((url) => url.includes('/campaign-search-worker.js?v=91'))) {
+    if (![...workerUrls].some((url) => url.includes('/campaign-search-worker.js?v=92'))) {
         throw new Error(`Campaign search did not start its dedicated worker: ${JSON.stringify([...workerUrls])}.`);
     }
 
@@ -1328,7 +1328,7 @@ try {
         && /(?:orcish|elvish|ghukliak|campaign-search)\.json(?:[?#]|$)/u.test(url))) {
         throw new Error('Optional pack was stored in the install shell or general data cache.');
     }
-    if (!cachedEntries.some(({ url }) => url.endsWith('/campaign-search-worker.js?v=91'))) {
+    if (!cachedEntries.some(({ url }) => url.endsWith('/campaign-search-worker.js?v=92'))) {
         throw new Error('Campaign search worker was not present in the offline shell cache.');
     }
     await page.evaluate(async () => {
