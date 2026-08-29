@@ -191,6 +191,8 @@ internal static class TestCatalog
     ("outbound network diagnostics records sanitized success endpoint", TestCases.OutboundNetworkDiagnosticsRecordsSanitizedSuccessEndpoint),
     ("outbound network diagnostics records failure counts", TestCases.OutboundNetworkDiagnosticsRecordsFailureCounts),
     ("network request rejects disallowed host before send", TestCases.NetworkRequestRejectsDisallowedHostBeforeSend),
+    ("network request follows allowed redirect at request boundary", TestCases.NetworkRequestFollowsAllowedRedirectAtRequestBoundary),
+    ("network request rejects disallowed redirect before send", TestCases.NetworkRequestRejectsDisallowedRedirectBeforeSend),
     ("network request does not retry unauthorized", TestCases.NetworkRequestDoesNotRetryUnauthorized),
     ("network circuit breaker opens after repeated terminal failures", TestCases.NetworkCircuitBreakerOpensAfterRepeatedTerminalFailures),
     ("network circuit breaker clears after success", TestCases.NetworkCircuitBreakerClearsAfterSuccess),

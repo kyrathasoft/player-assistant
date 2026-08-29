@@ -183,6 +183,7 @@ foreach ($hero in @($heroData.heroes) + @($heroData.dungeonMaster)) {
 }
 
 $handler = [System.Net.Http.HttpClientHandler]::new()
+$handler.AllowAutoRedirect = $false
 $handler.AutomaticDecompression = [System.Net.DecompressionMethods]::All
 $handler.CookieContainer = [System.Net.CookieContainer]::new()
 $client = [System.Net.Http.HttpClient]::new($handler)

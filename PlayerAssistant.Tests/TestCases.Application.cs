@@ -1374,6 +1374,53 @@ internal static partial class TestCases
         AssertEqual(0, attempts, "disallowed requests should be rejected before the HTTP handler runs");
     }
 
+    internal static void NetworkRequestFollowsAllowedRedirectAtRequestBoundary()
+    {
+        var requests = new List<Uri>();
+        using var httpClient = NetworkRequestUtility.CreateHttpClient(new ScriptedHttpMessageHandler((request, _) =>
+        {
+            requests.Add(request.RequestUri!);
+            return requests.Count == 1
+                ? Task.FromResult(new HttpResponseMessage(HttpStatusCode.Redirect)
+                {
+                    Headers = { Location = new Uri("https://rpol.net/game.php?gi=80170&redirected=true") }
+                })
+                : Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK));
+        }));
+
+        using var response = NetworkRequestUtility.SendAsync(
+            httpClient,
+            () => new HttpRequestMessage(HttpMethod.Get, "https://rpol.net/game.php?gi=80170"),
+            policy: new NetworkRequestPolicy(TimeSpan.FromSeconds(1), MaxAttempts: 1, TimeSpan.Zero),
+            purpose: NetworkUrlPurpose.Rpol).GetAwaiter().GetResult();
+
+        AssertEqual(HttpStatusCode.OK, response.StatusCode, "allowed redirect should return the final response");
+        AssertEqual(2, requests.Count, "allowed redirect should send one follow-up request");
+        AssertEqual("https://rpol.net/game.php?gi=80170&redirected=true", requests[1].AbsoluteUri, "unexpected redirect target");
+    }
+
+    internal static void NetworkRequestRejectsDisallowedRedirectBeforeSend()
+    {
+        var requests = new List<Uri>();
+        using var httpClient = NetworkRequestUtility.CreateHttpClient(new ScriptedHttpMessageHandler((request, _) =>
+        {
+            requests.Add(request.RequestUri!);
+            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.Redirect)
+            {
+                Headers = { Location = new Uri("http://127.0.0.1:1/private") }
+            });
+        }));
+
+        AssertThrows<InvalidOperationException>(() =>
+            NetworkRequestUtility.SendAsync(
+                httpClient,
+                () => new HttpRequestMessage(HttpMethod.Get, "https://rpol.net/game.php?gi=80170"),
+                policy: new NetworkRequestPolicy(TimeSpan.FromSeconds(1), MaxAttempts: 1, TimeSpan.Zero),
+                purpose: NetworkUrlPurpose.Rpol).GetAwaiter().GetResult());
+
+        AssertEqual(1, requests.Count, "disallowed redirect target must never reach the request handler");
+    }
+
     internal static void NetworkRequestDoesNotRetryUnauthorized()
     {
         var attempts = 0;

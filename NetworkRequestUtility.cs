@@ -63,6 +63,7 @@ namespace PlayerAssistant
     internal static class NetworkRequestUtility
     {
         private const int CopyBufferSize = 81920;
+        private const int MaxRedirects = 5;
         private const int CircuitBreakerFailureThreshold = 2;
         private static readonly TimeSpan CircuitBreakerCooldown = TimeSpan.FromMinutes(5);
         private static readonly object CircuitBreakerSyncRoot = new();
@@ -102,9 +103,11 @@ namespace PlayerAssistant
 
                     var circuitBreakerKey = GetCircuitBreakerKey(request);
                     ThrowIfCircuitOpen(circuitBreakerKey, DateTimeOffset.Now);
-                    var response = await httpClient.SendAsync(
+                    var response = await SendWithValidatedRedirectsAsync(
+                        httpClient,
                         request,
                         completionOption,
+                        purpose,
                         timeoutCancellation.Token).ConfigureAwait(false);
                     if (response.RequestMessage?.RequestUri is not null)
                     {
@@ -209,6 +212,7 @@ namespace PlayerAssistant
         {
             var handler = new HttpClientHandler
             {
+                AllowAutoRedirect = false,
                 ServerCertificateCustomValidationCallback = static (requestMessage, certificate, chain, sslPolicyErrors) =>
                     CertificatePinningUtility.ValidateServerCertificate(
                         requestMessage,
@@ -308,6 +312,88 @@ namespace PlayerAssistant
             };
             httpClient.DefaultRequestHeaders.UserAgent.ParseAdd("PlayerAssistant/1.0");
             return httpClient;
+        }
+
+        private static async Task<HttpResponseMessage> SendWithValidatedRedirectsAsync(
+            HttpClient httpClient,
+            HttpRequestMessage request,
+            HttpCompletionOption completionOption,
+            NetworkUrlPurpose purpose,
+            CancellationToken cancellationToken)
+        {
+            var currentRequest = request;
+            for (var redirectCount = 0; ; redirectCount++)
+            {
+                var response = await httpClient.SendAsync(
+                    currentRequest,
+                    completionOption,
+                    cancellationToken).ConfigureAwait(false);
+                if (!IsRedirect(response.StatusCode) || response.Headers.Location is not { } location)
+                {
+                    return response;
+                }
+
+                if (redirectCount >= MaxRedirects)
+                {
+                    response.Dispose();
+                    throw new InvalidOperationException($"Network request exceeded the {MaxRedirects}-redirect limit.");
+                }
+
+                var baseUri = currentRequest.RequestUri;
+                if (baseUri is null || !Uri.TryCreate(baseUri, location, out var redirectUri))
+                {
+                    response.Dispose();
+                    throw new InvalidOperationException("Network redirect target is not a valid URI.");
+                }
+
+                NetworkUrlAllowlistUtility.EnsureAllowed(redirectUri, purpose);
+                var nextRequest = await CloneRequestAsync(currentRequest, redirectUri, cancellationToken).ConfigureAwait(false);
+                if (!ReferenceEquals(currentRequest, request))
+                {
+                    currentRequest.Dispose();
+                }
+
+                response.Dispose();
+                currentRequest = nextRequest;
+            }
+        }
+
+        private static async Task<HttpRequestMessage> CloneRequestAsync(
+            HttpRequestMessage request,
+            Uri requestUri,
+            CancellationToken cancellationToken)
+        {
+            var clone = new HttpRequestMessage(request.Method, requestUri)
+            {
+                Version = request.Version,
+                VersionPolicy = request.VersionPolicy
+            };
+            foreach (var header in request.Headers)
+            {
+                clone.Headers.TryAddWithoutValidation(header.Key, header.Value);
+            }
+
+            if (request.Content is not null)
+            {
+                var content = new ByteArrayContent(await request.Content.ReadAsByteArrayAsync(cancellationToken).ConfigureAwait(false));
+                foreach (var header in request.Content.Headers)
+                {
+                    content.Headers.TryAddWithoutValidation(header.Key, header.Value);
+                }
+
+                clone.Content = content;
+            }
+
+            return clone;
+        }
+
+        private static bool IsRedirect(HttpStatusCode statusCode)
+        {
+            return statusCode is HttpStatusCode.Moved
+                or HttpStatusCode.Redirect
+                or HttpStatusCode.RedirectMethod
+                or HttpStatusCode.TemporaryRedirect
+                or HttpStatusCode.PermanentRedirect;
         }
 
         private static void ThrowIfContentLengthExceedsLimit(HttpContent content, NetworkResponseContentLimit limit)

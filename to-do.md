@@ -389,9 +389,9 @@ Planned security correction: eliminate first-name equivalence from authenticatio
 - [x] Make service-worker controller transitions deterministic in long-lived pages.
   - [x] Avoid reloading on first controller acquisition, but reload exactly once when a later worker takes control in the same page.
   - [x] Cover duplicate controllerchange events, explicit SKIP_WAITING update prompts, and online/offline lifecycle transitions in focused and browser smoke tests.
-- [ ] Prevent trusted-network redirects from connecting to untrusted targets.
-  - [ ] Disable automatic redirects and manually follow a bounded hop count, validating every parsed target against its purpose-specific allowlist before sending.
-  - [ ] Prove a trusted endpoint redirecting to localhost or another disallowed authority sends zero requests to that target.
+- [x] Prevent trusted-network redirects from connecting to untrusted targets.
+  - [x] Disable automatic redirects and manually follow a bounded hop count, validating every parsed target against its purpose-specific allowlist before sending.
+  - [x] Prove a trusted endpoint redirecting to localhost or another disallowed authority sends zero requests to that target.
 - [ ] Make RPOL credential migration and WebView dispatch lifetime-safe.
   - [ ] Store username/password as one versioned credential record or compensate on partial write/delete so migration and plaintext removal are all-or-nothing.
   - [ ] Complete cancellation even when UI enqueue fails or the handle is destroyed; dispose registrations and recheck dialog viability after each await.
