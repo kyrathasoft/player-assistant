@@ -31,4 +31,13 @@ assert.ok(polling.indexOf('void loadRevisions()') < polling.indexOf('window.setI
 assert.equal((polling.match(/window\.setInterval/g) || []).length, 1,
     'Revision lifecycle must install one polling interval.');
 
+const pageshow = source.indexOf("window.addEventListener('pageshow'");
+assert.ok(pageshow >= 0, 'Authentication must revalidate on pageshow.');
+const pageshowHandler = source.slice(pageshow, source.indexOf("\n    authDialog?.addEventListener", pageshow));
+assert.match(pageshowHandler, /failClosedBeforeAuthenticationRestore\(\)/u);
+assert.match(pageshowHandler, /void restoreAuthentication\(\)/u);
+assert.match(source, /const failClosedBeforeAuthenticationRestore = \(\) =>/u);
+assert.match(source, /accountSessionController\.setAccount\(null\)/u);
+assert.match(source, /data-protected-content/u);
+
 console.log('PASS authenticated lifecycle fault-injection contracts');

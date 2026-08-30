@@ -2756,6 +2756,24 @@ import { createUpdateLifecycleController } from './modules/update-lifecycle.js?v
         presenceController.start();
     };
 
+    const failClosedBeforeAuthenticationRestore = () => {
+        beginAuthenticationGeneration();
+        accountSessionController.setAccount(null);
+        authenticationCsrfToken = '';
+        clearProtectedFreshness();
+        authenticatedXpSnapshot = null;
+        authenticatedXpAwardsSnapshot = null;
+        authenticatedWordCountSnapshot = null;
+        authenticatedPresenceSnapshot = null;
+        authenticatedQuestSnapshot = null;
+        authenticatedMessageSnapshot = null;
+        authenticatedRevisionSnapshot = null;
+        messageLoading = false;
+        messageError = '';
+        document.querySelectorAll('[data-protected-content]').forEach((element) => { element.replaceChildren(); });
+        updateAuthenticationUi();
+    };
+
     const restoreAuthentication = async () => {
         const restoreGeneration = authenticationGeneration;
         try {
@@ -2842,6 +2860,12 @@ import { createUpdateLifecycleController } from './modules/update-lifecycle.js?v
     document.addEventListener('visibilitychange', updateRevisionPolling);
     window.addEventListener('online', updateRevisionPolling);
     window.addEventListener('offline', updateRevisionPolling);
+    window.addEventListener('pageshow', (event) => {
+        // A BFCache document can outlive the server session. Never reveal its
+        // protected snapshot while the current session is being revalidated.
+        failClosedBeforeAuthenticationRestore();
+        void restoreAuthentication();
+    });
     authDialog?.addEventListener('close', () => {
         void renderAuthenticatedHeroToken();
         showPendingLevelUpNotifications();
@@ -3029,7 +3053,6 @@ import { createUpdateLifecycleController } from './modules/update-lifecycle.js?v
     });
 
     updateAuthenticationUi();
-    restoreAuthentication();
 
     const isStandalone = () => window.matchMedia('(display-mode: standalone)').matches
         || window.navigator.standalone === true;

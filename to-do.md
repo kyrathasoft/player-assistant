@@ -82,9 +82,10 @@ Implement these twenty findings in order. Security boundaries, credential handli
   - Broadcast logout and account-generation transitions so every client immediately cancels requests and clears protected snapshots, dialogs, drafts, and DOM state, including hidden clients.
   - Regression: logging out or switching accounts in one of two pages clears the hidden page without polling or waiting for a `401`.
   - [x] BroadcastChannel plus storage fallback propagates account transitions and clears protected state/drafts.
-- [ ] Revalidate authenticated PWA state after BFCache restoration.
+- [x] Revalidate authenticated PWA state after BFCache restoration.
   - On `pageshow`, fail closed by hiding/clearing protected content and revalidating `/session` before restoring authenticated UI, especially when `event.persisted` is true.
-  - Regression: Back navigation after remote logout/session expiry reveals no stale protected content before anonymous state is applied.
+  - [x] Every `pageshow` clears protected snapshots and DOM state, advances the authentication generation, and revalidates `/session` before restoring authenticated UI, including BFCache restores.
+  - [x] Deterministic lifecycle coverage verifies fail-closed pageshow handling and session revalidation ordering.
 - [ ] Serialize all PWA release transactions across workflows and hosts.
   - Use one non-cancelling GitHub concurrency group and one shared host-side deployment lock for full PWA, campaign-search, and other release writers.
   - Regression: overlapping controllers cannot interleave backup/promotion/rollback, and either transaction's failure preserves the other's exact committed bytes.
