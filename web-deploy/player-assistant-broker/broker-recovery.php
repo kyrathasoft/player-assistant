@@ -23,6 +23,7 @@ $backupDirectory = (string)($options['backup-dir'] ?? $recovery['backup_director
 $statusPath = (string)($options['status-path'] ?? $recovery['status_path'] ?? __DIR__ . '/broker-recovery-status.json');
 $keep = max(1, (int)($options['keep'] ?? $recovery['retention_count'] ?? 14));
 $healthUrl = (string)($options['health-url'] ?? $recovery['health_url'] ?? 'https://bryanmiller.us/scarlethorizons/api/v1/health');
+$healthRequired = (bool)($recovery['health_required'] ?? false);
 $alertEmail = trim((string)($options['alert-email'] ?? $recovery['alert_email'] ?? ''));
 $observability = is_array($config['observability'] ?? null) ? $config['observability'] : [];
 $startedAt = microtime(true);
@@ -43,12 +44,17 @@ function writeRecoveryStatus(string $path, array $status): void
 {
     $directory = dirname($path);
     if (!is_dir($directory) && !mkdir($directory, 0700, true) && !is_dir($directory)) {
-        return;
+        throw new RuntimeException('Recovery status directory could not be created.');
     }
     $temporary = $path . '.tmp-' . bin2hex(random_bytes(6));
     if (file_put_contents($temporary, json_encode($status, JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR), LOCK_EX) !== false) {
         chmod($temporary, 0600);
-        rename($temporary, $path);
+        if (!rename($temporary, $path)) {
+            @unlink($temporary);
+            throw new RuntimeException('Recovery status promotion failed.');
+        }
+    } else {
+        throw new RuntimeException('Recovery status write failed.');
     }
 }
 
@@ -106,6 +112,14 @@ try {
     $status['backup_sha256'] = hash_file('sha256', $backupPath);
 
     $status['health_check'] = 'not_configured';
+    if ($healthRequired && $healthUrl === '') {
+        throw new RuntimeException('public_health_unavailable');
+    }
+    if ($healthUrl !== '' && !function_exists('curl_init')) {
+        if ($healthRequired) {
+            throw new RuntimeException('public_health_unavailable');
+        }
+    }
     if ($healthUrl !== '' && function_exists('curl_init')) {
         $curl = curl_init($healthUrl);
         curl_setopt_array($curl, [CURLOPT_RETURNTRANSFER => true, CURLOPT_TIMEOUT => 20, CURLOPT_CONNECTTIMEOUT => 10, CURLOPT_FAILONERROR => false]);
@@ -119,7 +133,7 @@ try {
             && (int)($health['schema_version'] ?? 0) === 7) ? 'ok' : 'failed';
         if ($status['health_check'] !== 'ok') {
             $alerts->recordHealthFailure('health_endpoint_failed', 'Broker health endpoint reported a failure.');
-            throw new RuntimeException('Broker health endpoint reported a failure.');
+            throw new RuntimeException('public_health_unavailable');
         }
     }
 
@@ -133,12 +147,22 @@ try {
     $status['retained_backups'] = count(array_filter(glob($backupDirectory . '/broker-*.sqlite') ?: [], 'is_file'));
     $status['status'] = 'ok';
 } catch (Throwable $exception) {
-    $status['error_code'] = preg_replace('/[^a-z0-9_]+/i', '_', strtolower($exception->getMessage())) ?: 'recovery_failed';
+    // Persist only stable, non-sensitive failure codes; never serialize exception text.
+    $status['error_code'] = $exception->getMessage() === 'public_health_unavailable'
+        ? 'public_health_unavailable'
+        : 'recovery_failed';
     if (isset($alerts) && $alerts instanceof BrokerAlertService) {
-        $alerts->recordHealthFailure('recovery_failed', $exception->getMessage());
+        try {
+            $alerts->recordHealthFailure($status['error_code'], 'Broker recovery failed.');
+        } catch (Throwable) {
+            // The primary status evidence remains the recovery contract.
+        }
     }
-    sendRecoveryAlert($alertEmail, $status);
-    writeRecoveryStatus($statusPath, $status);
+    try {
+        writeRecoveryStatus($statusPath, $status);
+    } catch (Throwable) {
+        // Do not replace the original failure with persistence details.
+    }
     fwrite(STDERR, "Broker recovery failed.\n");
     exit(1);
 }

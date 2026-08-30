@@ -429,11 +429,11 @@ Planned security correction: eliminate first-name equivalence from authenticatio
   - [ ] Verify rollback restores pre-existing files, removes newly introduced files, preserves mode-restricted recovery evidence on rollback failure, and never runs after finalization.
   - [ ] Verify source and packaged installer templates remain byte-contract compatible and that runtime/deployment manifests reject drift.
   - [!] Blocked: `pwa/test-deployment.ps1 -SkipRemote` fails the existing fail-closed deployment parity gate (`index.html does not match the local deployment file`); the PWA deployment transaction gate cannot be declared complete.
-- [ ] Make broker operations and recovery observable under concurrency and partial platform failure.
-  - [ ] Claim alert thresholds and cooldowns transactionally so concurrent failures emit at most one notification.
-  - [ ] Fail recovery when required public health cannot execute or atomic status persistence fails; preserve explicit failure evidence.
-  - [ ] Reuse one validated XP snapshot for award enrichment rather than issuing redundant live refreshes.
-  - [ ] Isolate inline FTPS configuration fixtures from ambient `BACKUP_FTPS_*` variables and restore the environment in `finally`.
+- [x] Make broker operations and recovery observable under concurrency and partial platform failure.
+  - [x] Claim alert thresholds and cooldowns transactionally so concurrent failures emit at most one notification.
+  - [x] Fail recovery when required public health cannot execute or atomic status persistence fails; preserve explicit failure evidence.
+  - [x] Reuse one validated XP snapshot for award enrichment rather than issuing redundant live refreshes.
+  - [x] Isolate inline FTPS configuration fixtures from ambient `BACKUP_FTPS_*` variables and restore the environment in `finally`.
 
 ### P3 — Reduce future regression surface
 
