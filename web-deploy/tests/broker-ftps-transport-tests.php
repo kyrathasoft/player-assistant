@@ -111,9 +111,11 @@ $operations = new BrokerOperations([
     ],
 ]);
 
-ftpsAssert(
-    $operations->healthStatus()['offsite_backup_configured'] === true,
-    'A complete FTPS destination was not reported as configured.');
+withFtpsEnvironment(['BACKUP_ENCRYPTION_KEY' => 'inline-ftps-test-encryption-key-with-sufficient-entropy'], static function () use ($operations): void {
+    ftpsAssert(
+        $operations->healthStatus()['offsite_backup_configured'] === true,
+        'A complete FTPS destination was not reported as configured.');
+});
 
 $environmentValues = [
     'BACKUP_FTPS_HOST' => 'environment-backup.example.com',
