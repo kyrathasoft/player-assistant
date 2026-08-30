@@ -96,10 +96,12 @@ namespace PlayerAssistant
                 try
                 {
                     using var request = createRequest();
-                    if (request.RequestUri is not null)
+                    if (request.RequestUri is null)
                     {
-                        NetworkUrlAllowlistUtility.EnsureAllowed(request.RequestUri, purpose);
+                        throw new InvalidOperationException("Network request URI is missing.");
                     }
+
+                    NetworkUrlAllowlistUtility.EnsureAllowed(request.RequestUri, purpose);
 
                     var circuitBreakerKey = GetCircuitBreakerKey(request, purpose);
                     ThrowIfCircuitOpen(circuitBreakerKey, DateTimeOffset.Now);

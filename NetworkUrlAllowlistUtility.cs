@@ -98,8 +98,10 @@ namespace PlayerAssistant
                     && PathEquals(uri, "/scarlethorizons/settings.local.json")),
             new(
                 NetworkUrlPurpose.PlayerAssistantBroker,
-                "Player Assistant broker requests must use bryanmiller.us under '/scarlethorizons/api/v1/'.",
-                uri => IsHost(uri, "bryanmiller.us", allowSubdomains: true)
+                "Player Assistant broker requests must use the exact HTTPS bryanmiller.us authority under '/scarlethorizons/api/v1/'.",
+                uri => uri.Scheme == Uri.UriSchemeHttps
+                    && uri.Port == 443
+                    && IsHost(uri, "bryanmiller.us", allowSubdomains: false)
                     && PathStartsWith(uri, "/scarlethorizons/api/v1/"))
         ];
 

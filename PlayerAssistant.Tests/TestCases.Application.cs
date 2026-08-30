@@ -1647,6 +1647,134 @@ internal static partial class TestCases
         AssertFalse(unrelatedUserModule.IsAllowed, "unrelated RPOL user-module URLs should remain blocked");
     }
 
+    internal static void BrokerAllowlistRequiresExactHttpsAuthorityAndBlocksSecretRedirects()
+    {
+        var exact = NetworkUrlAllowlistUtility.Validate(
+            "https://bryanmiller.us/scarlethorizons/api/v1/snapshots/page",
+            NetworkUrlPurpose.PlayerAssistantBroker);
+        var http = NetworkUrlAllowlistUtility.Validate(
+            "http://bryanmiller.us/scarlethorizons/api/v1/snapshots/page",
+            NetworkUrlPurpose.PlayerAssistantBroker);
+        var customPort = NetworkUrlAllowlistUtility.Validate(
+            "https://bryanmiller.us:8443/scarlethorizons/api/v1/snapshots/page",
+            NetworkUrlPurpose.PlayerAssistantBroker);
+        var subdomain = NetworkUrlAllowlistUtility.Validate(
+            "https://api.bryanmiller.us/scarlethorizons/api/v1/snapshots/page",
+            NetworkUrlPurpose.PlayerAssistantBroker);
+
+        AssertTrue(exact.IsAllowed, "the exact HTTPS broker authority should remain allowed");
+        AssertFalse(http.IsAllowed, "broker secrets must never be sent over HTTP");
+        AssertFalse(customPort.IsAllowed, "broker secrets must not be sent to an alternate port");
+        AssertFalse(subdomain.IsAllowed, "broker secrets must not be sent to a subdomain");
+
+        var blockedInitialAttempts = 0;
+        using (var blockedInitialClient = NetworkRequestUtility.CreateHttpClient(new ScriptedHttpMessageHandler((_, _) =>
+               {
+                   blockedInitialAttempts++;
+                   return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK));
+               })))
+        {
+            foreach (var forbiddenUrl in new[]
+                     {
+                         "http://bryanmiller.us/scarlethorizons/api/v1/session",
+                         "https://bryanmiller.us:8443/scarlethorizons/api/v1/session",
+                         "https://api.bryanmiller.us/scarlethorizons/api/v1/session",
+                         "https://bryanmiller.us.evil.example/scarlethorizons/api/v1/session",
+                         "https://user:password@bryanmiller.us/scarlethorizons/api/v1/session"
+                     })
+            {
+                AssertThrows<InvalidOperationException>(() =>
+                    NetworkRequestUtility.SendAsync(
+                        blockedInitialClient,
+                        () =>
+                        {
+                            var request = new HttpRequestMessage(HttpMethod.Get, forbiddenUrl);
+                            request.Headers.TryAddWithoutValidation("Authorization", "Bearer test-secret");
+                            return request;
+                        },
+                        policy: new NetworkRequestPolicy(TimeSpan.FromSeconds(1), MaxAttempts: 1, TimeSpan.Zero),
+                        purpose: NetworkUrlPurpose.PlayerAssistantBroker).GetAwaiter().GetResult());
+            }
+        }
+
+        AssertEqual(0, blockedInitialAttempts, "forbidden broker authorities must receive zero authenticated requests");
+
+        var nullUriAttempts = 0;
+        using (var baseAddressClient = NetworkRequestUtility.CreateHttpClient(new ScriptedHttpMessageHandler((_, _) =>
+               {
+                   nullUriAttempts++;
+                   return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK));
+               })))
+        {
+            baseAddressClient.BaseAddress = new Uri("https://evil.example/");
+            AssertThrows<InvalidOperationException>(() =>
+                NetworkRequestUtility.SendAsync(
+                    baseAddressClient,
+                    () =>
+                    {
+                        var request = new HttpRequestMessage(HttpMethod.Get, (Uri?)null);
+                        request.Headers.TryAddWithoutValidation("Authorization", "Bearer test-secret");
+                        return request;
+                    },
+                    policy: new NetworkRequestPolicy(TimeSpan.FromSeconds(1), MaxAttempts: 1, TimeSpan.Zero),
+                    purpose: NetworkUrlPurpose.PlayerAssistantBroker).GetAwaiter().GetResult());
+        }
+
+        AssertEqual(0, nullUriAttempts, "a null request URI must fail before HttpClient can resolve an untrusted BaseAddress");
+
+        var relativeRedirectRequests = new List<HttpRequestMessage>();
+        using (var relativeRedirectClient = NetworkRequestUtility.CreateHttpClient(new ScriptedHttpMessageHandler((request, _) =>
+               {
+                   relativeRedirectRequests.Add(request);
+                   return Task.FromResult(relativeRedirectRequests.Count == 1
+                       ? new HttpResponseMessage(HttpStatusCode.Redirect)
+                       {
+                           Headers = { Location = new Uri("/scarlethorizons/api/v1/session", UriKind.Relative) }
+                       }
+                       : new HttpResponseMessage(HttpStatusCode.OK));
+               })))
+        {
+            using var response = NetworkRequestUtility.SendAsync(
+                relativeRedirectClient,
+                () =>
+                {
+                    var request = new HttpRequestMessage(HttpMethod.Get, exact.Uri);
+                    request.Headers.TryAddWithoutValidation("Authorization", "Bearer test-secret");
+                    return request;
+                },
+                policy: new NetworkRequestPolicy(TimeSpan.FromSeconds(1), MaxAttempts: 1, TimeSpan.Zero),
+                purpose: NetworkUrlPurpose.PlayerAssistantBroker).GetAwaiter().GetResult();
+            AssertEqual(HttpStatusCode.OK, response.StatusCode, "an exact-authority relative redirect should remain allowed");
+        }
+
+        AssertEqual(2, relativeRedirectRequests.Count, "an exact-authority relative redirect should send one follow-up request");
+        AssertTrue(relativeRedirectRequests[1].Headers.Contains("Authorization"), "same-authority redirects should retain authenticated request headers");
+
+        var requests = new List<Uri>();
+        using var httpClient = NetworkRequestUtility.CreateHttpClient(new ScriptedHttpMessageHandler((request, _) =>
+        {
+            requests.Add(request.RequestUri!);
+            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.Redirect)
+            {
+                Headers = { Location = new Uri("https://api.bryanmiller.us/scarlethorizons/api/v1/snapshots/page") }
+            });
+        }));
+
+        AssertThrows<InvalidOperationException>(() =>
+            NetworkRequestUtility.SendAsync(
+                httpClient,
+                () =>
+                {
+                    var request = new HttpRequestMessage(HttpMethod.Post, exact.Uri);
+                    request.Headers.TryAddWithoutValidation("Authorization", "Bearer test-secret");
+                    return request;
+                },
+                policy: new NetworkRequestPolicy(TimeSpan.FromSeconds(1), MaxAttempts: 1, TimeSpan.Zero),
+                purpose: NetworkUrlPurpose.PlayerAssistantBroker).GetAwaiter().GetResult());
+
+        AssertEqual(1, requests.Count, "an authority-changing redirect must receive no authenticated follow-up request");
+    }
+
     internal static void RpolCredentialSubmissionRequiresExactTrustedHttpsOriginAndPath()
     {
         var trusted = new Uri("https://rpol.net/game.php?gi=80170");
