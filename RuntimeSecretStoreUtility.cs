@@ -1,6 +1,7 @@
 using System.IO.Compression;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 
 namespace PlayerAssistant
 {
@@ -403,7 +404,10 @@ namespace PlayerAssistant
             return destination.ToArray();
         }
 
-        private sealed record RpolCredentialRecord(int Version, string UserName, string Password);
+        private sealed record RpolCredentialRecord(
+            [property: JsonPropertyName("version")] int Version,
+            [property: JsonPropertyName("user_name")] string UserName,
+            [property: JsonPropertyName("password")] string Password);
 
         private static string DecompressUtf8(byte[] compressedBytes)
         {

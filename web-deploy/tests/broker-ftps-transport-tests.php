@@ -4,8 +4,6 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/../player-assistant-broker/BrokerOperations.php';
 
-putenv('BACKUP_ENCRYPTION_KEY=test-backup-encryption-key-with-sufficient-entropy');
-
 function ftpsAssert(bool $condition, string $message): void
 {
     if (!$condition) {
@@ -20,10 +18,17 @@ function ftpsAssert(bool $condition, string $message): void
 function withFtpsEnvironment(array $values, callable $callback): void
 {
     $originalValues = [];
+    $originalEnvironmentValues = [];
     foreach (array_keys($values) as $name) {
         $originalValues[$name] = getenv($name);
+        $originalEnvironmentValues[$name] = array_key_exists($name, $_ENV) ? $_ENV[$name] : null;
         $value = $values[$name];
         putenv($value === null ? $name : $name . '=' . $value);
+        if ($value === null) {
+            unset($_ENV[$name]);
+        } else {
+            $_ENV[$name] = $value;
+        }
     }
 
     try {
@@ -31,6 +36,11 @@ function withFtpsEnvironment(array $values, callable $callback): void
     } finally {
         foreach ($originalValues as $name => $value) {
             putenv($value === false ? $name : $name . '=' . $value);
+            if ($value === false) {
+                unset($_ENV[$name]);
+            } else {
+                $_ENV[$name] = $value;
+            }
         }
     }
 }
@@ -42,17 +52,6 @@ $ftpsEnvironmentNames = [
     'BACKUP_FTPS_PASSWORD',
     'BACKUP_FTPS_REMOTE_PATH',
 ];
-$callerFtpsEnvironment = [];
-foreach ($ftpsEnvironmentNames as $name) {
-    $callerFtpsEnvironment[$name] = getenv($name);
-    putenv($name);
-}
-register_shutdown_function(static function () use ($callerFtpsEnvironment): void {
-    foreach ($callerFtpsEnvironment as $name => $value) {
-        putenv($value === false ? $name : $name . '=' . $value);
-    }
-});
-
 final class InMemoryBrokerFtpsClient implements BrokerFtpsClient
 {
     public bool $corruptDownloads = false;
@@ -112,9 +111,11 @@ $operations = new BrokerOperations([
     ],
 ]);
 
-ftpsAssert(
-    $operations->healthStatus()['offsite_backup_configured'] === true,
-    'A complete FTPS destination was not reported as configured.');
+withFtpsEnvironment(['BACKUP_ENCRYPTION_KEY' => 'inline-ftps-test-encryption-key-with-sufficient-entropy'], static function () use ($operations): void {
+    ftpsAssert(
+        $operations->healthStatus()['offsite_backup_configured'] === true,
+        'A complete FTPS destination was not reported as configured.');
+});
 
 $environmentValues = [
     'BACKUP_FTPS_HOST' => 'environment-backup.example.com',
@@ -190,6 +191,7 @@ if (function_exists('curl_init')) {
 
 $root = sys_get_temp_dir() . '/pa-broker-ftps-' . bin2hex(random_bytes(6));
 mkdir($root, 0700, true);
+withFtpsEnvironment(['BACKUP_ENCRYPTION_KEY' => 'test-backup-encryption-key-with-sufficient-entropy'], static function () use ($root): void {
 try {
     $backupPath = $root . '/broker-20260805T150000Z-a1b2c3d4.sqlite';
     $metadataPath = $backupPath . '.json';
@@ -295,5 +297,6 @@ try {
     }
     rmdir($root);
 }
+});
 
 echo "Broker FTPS transport tests passed.\n";

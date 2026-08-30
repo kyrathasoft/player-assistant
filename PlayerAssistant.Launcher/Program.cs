@@ -59,16 +59,10 @@ namespace PlayerAssistant.Launcher
                        RegistryHive.LocalMachine,
                        RegistryView.Registry64,
                        @"SOFTWARE\dotnet\Setup\InstalledVersions\x64\sharedfx\Microsoft.WindowsDesktop.App")
-                   || HasInstalledRuntimeUnder(
-                       RegistryHive.LocalMachine,
-                       RegistryView.Registry32,
-                       @"SOFTWARE\dotnet\Setup\InstalledVersions\x86\sharedfx\Microsoft.WindowsDesktop.App")
-                   || HasInstalledRuntimeDirectory(
+                   || WindowsDesktopRuntimeUtility.HasInstalledRuntimeDirectory(
                        Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles),
-                       "dotnet")
-                   || HasInstalledRuntimeDirectory(
-                       Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86),
-                       "dotnet");
+                       "dotnet",
+                       isX64: true);
         }
 
         private static bool HasInstalledRuntimeUnder(RegistryHive hive, RegistryView view, string subKeyPath)
@@ -91,35 +85,6 @@ namespace PlayerAssistant.Launcher
             }
         }
 
-        private static bool HasInstalledRuntimeDirectory(string programFilesPath, string dotnetDirectoryName)
-        {
-            if (string.IsNullOrWhiteSpace(programFilesPath))
-            {
-                return false;
-            }
-
-            try
-            {
-                var sharedFxDirectory = Path.Combine(
-                    programFilesPath,
-                    dotnetDirectoryName,
-                    "shared",
-                    "Microsoft.WindowsDesktop.App");
-                if (!Directory.Exists(sharedFxDirectory))
-                {
-                    return false;
-                }
-
-                return Directory.EnumerateDirectories(sharedFxDirectory)
-                    .Select(Path.GetFileName)
-                    .Where(version => !string.IsNullOrWhiteSpace(version))
-                    .Any(version => IsRequiredRuntimeVersion(version!));
-            }
-            catch
-            {
-                return false;
-            }
-        }
 
         private static bool IsRequiredRuntimeVersion(string version)
         {

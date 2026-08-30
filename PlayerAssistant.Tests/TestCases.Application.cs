@@ -153,6 +153,22 @@ internal static partial class TestCases
             "hosted local settings should not be persisted after credential migration");
     }
 
+    internal static void RpolCredentialRecordUsesStableWirePropertyNames()
+    {
+        using var credentialStoreScope = RuntimeSecretStoreUtility.UseBackendForTests(new InMemoryWindowsCredentialStoreBackend());
+        RuntimeSecretStoreUtility.SaveRpolCredentials("fixture-user", "fixture-password");
+
+        AssertTrue(
+            WindowsCredentialManagerUtility.TryReadSecretUtf8(
+                "PlayerAssistant/RPOL/Credentials",
+                out var recordJson,
+                out _),
+            "versioned RPOL credential record should be persisted");
+        AssertTrue(recordJson!.Contains("\"version\"", StringComparison.Ordinal), "credential record version property should be stable");
+        AssertTrue(recordJson.Contains("\"user_name\"", StringComparison.Ordinal), "credential record user property should use the installer contract name");
+        AssertTrue(recordJson.Contains("\"password\"", StringComparison.Ordinal), "credential record password property should be stable");
+    }
+
     internal static void AppSettingsLoadsHostedEncryptedXpTrackingUrlFromFixtureServer()
     {
         using var directory = TemporaryDirectory.Create();
@@ -887,6 +903,16 @@ internal static partial class TestCases
         });
     }
 
+    internal static void RuntimePathUtilityUsesSystemTempForExternalBrowserProfile()
+    {
+        var expected = Path.GetFullPath(Path.GetTempPath());
+        var resolved = RuntimePathUtility.GetExternalBrowserTemporaryDirectory();
+
+        AssertTrue(
+            resolved.StartsWith(expected.TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase),
+            "external browser profiles must be created under the system user temporary directory");
+    }
+
     internal static void RuntimePathUtilityUsesUserDataRootForPublishedRuntime()
     {
         var publishedDirectory = Path.Combine(Path.GetTempPath(), "player-assistant-test", "Release", "publish");
@@ -1479,6 +1505,40 @@ internal static partial class TestCases
             AssertContains(File.ReadAllText(GetStartupLogPath()), "network circuit breaker");
             NetworkRequestUtility.ResetCircuitBreakersForTests();
         });
+    }
+
+    internal static void NetworkCircuitBreakerSeparatesPurposeAndEndpointFamily()
+    {
+        NetworkRequestUtility.ResetCircuitBreakersForTests();
+        using var overrideScope = NetworkUrlAllowlistUtility.UseValidationOverrideForTests((uri, _) =>
+            NetworkUrlAllowlistValidation.Allowed(uri));
+        var requests = new List<string>();
+        using var httpClient = NetworkRequestUtility.CreateHttpClient(new ScriptedHttpMessageHandler((request, _) =>
+        {
+            requests.Add(request.RequestUri!.AbsolutePath);
+            return Task.FromResult(request.RequestUri.AbsolutePath.Contains("failure", StringComparison.Ordinal)
+                ? new HttpResponseMessage(HttpStatusCode.ServiceUnavailable)
+                : new HttpResponseMessage(HttpStatusCode.OK));
+        }));
+
+        foreach (var path in new[] { "/failure-one", "/failure-two" })
+        {
+            using var response = NetworkRequestUtility.SendAsync(
+                httpClient,
+                () => new HttpRequestMessage(HttpMethod.Get, "https://shared.example.test" + path),
+                policy: new NetworkRequestPolicy(TimeSpan.FromSeconds(1), 1, TimeSpan.Zero),
+                purpose: NetworkUrlPurpose.Rpol).GetAwaiter().GetResult();
+        }
+
+        using var unrelated = NetworkRequestUtility.SendAsync(
+            httpClient,
+            () => new HttpRequestMessage(HttpMethod.Get, "https://shared.example.test/unrelated"),
+            policy: new NetworkRequestPolicy(TimeSpan.FromSeconds(1), 1, TimeSpan.Zero),
+            purpose: NetworkUrlPurpose.PlayerAssistantBroker).GetAwaiter().GetResult();
+
+        AssertEqual(HttpStatusCode.OK, unrelated.StatusCode, "an open breaker must not suppress a different purpose on the same authority");
+        AssertEqual(3, requests.Count, "unrelated endpoint family should reach the handler");
+        NetworkRequestUtility.ResetCircuitBreakersForTests();
     }
 
     internal static void NetworkCircuitBreakerClearsAfterSuccess()

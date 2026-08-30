@@ -6,6 +6,8 @@ final class MessageService
 {
     private int $retentionDays;
     private int $maxReadMessagesPerAccount;
+    private const SEND_WINDOW_SECONDS = 60;
+    private const MAX_SENDS_PER_WINDOW = 20;
 
     public function __construct(private readonly PDO $database, array $config = [])
     {
@@ -54,6 +56,7 @@ final class MessageService
             $now = time();
             $this->database->beginTransaction();
             try {
+                $this->enforceSendThrottle((string)($account['id'] ?? ''));
                 foreach ($recipients as $recipient) {
                     $statement->execute([
                         bin2hex(random_bytes(16)),
@@ -136,9 +139,13 @@ final class MessageService
                 'Only characters and the Dungeon Master may send messages.');
         }
 
-        $messageId = bin2hex(random_bytes(16));
-        $now = time();
-        $this->database->prepare(
+        $ownsTransaction = !$this->database->inTransaction();
+        if ($ownsTransaction) $this->database->beginTransaction();
+        try {
+            $this->enforceSendThrottle((string)($account['id'] ?? ''));
+            $messageId = bin2hex(random_bytes(16));
+            $now = time();
+            $this->database->prepare(
             'INSERT INTO message_notifications (
                 id,
                 sender_account_id,
@@ -147,13 +154,18 @@ final class MessageService
                 sent_at,
                 read_at
             ) VALUES (?, ?, ?, ?, ?, NULL)'
-        )->execute([
-            $messageId,
-            (string)($account['id'] ?? ''),
-            $recipientId,
-            $message,
-            $now,
-        ]);
+            )->execute([
+                $messageId,
+                (string)($account['id'] ?? ''),
+                $recipientId,
+                $message,
+                $now,
+            ]);
+            if ($ownsTransaction) $this->database->commit();
+        } catch (Throwable $exception) {
+            if ($ownsTransaction && $this->database->inTransaction()) $this->database->rollBack();
+            throw $exception;
+        }
 
         return [
             'schema_version' => 1,
@@ -312,6 +324,24 @@ final class MessageService
                 'status' => 'read',
             ],
         ];
+    }
+
+    private function enforceSendThrottle(string $accountId): void
+    {
+        $now = time();
+        $row = $this->database->prepare('SELECT window_started_at, send_count FROM message_send_rate_limits WHERE account_id = ?');
+        $row->execute([$accountId]);
+        $current = $row->fetch();
+        if (!is_array($current) || $now - (int)$current['window_started_at'] >= self::SEND_WINDOW_SECONDS) {
+            $this->database->prepare('INSERT INTO message_send_rate_limits(account_id, window_started_at, send_count) VALUES (?, ?, 1) ON CONFLICT(account_id) DO UPDATE SET window_started_at = excluded.window_started_at, send_count = 1')->execute([$accountId, $now]);
+            return;
+        }
+        if ((int)$current['send_count'] >= self::MAX_SENDS_PER_WINDOW) {
+            throw new BrokerHttpException(429, 'message_rate_limited', 'Message sending is temporarily rate limited.');
+        }
+        $updated = $this->database->prepare('UPDATE message_send_rate_limits SET send_count = send_count + 1 WHERE account_id = ? AND window_started_at = ? AND send_count < ?');
+        $updated->execute([$accountId, (int)$current['window_started_at'], self::MAX_SENDS_PER_WINDOW]);
+        if ($updated->rowCount() !== 1) throw new BrokerHttpException(429, 'message_rate_limited', 'Message sending is temporarily rate limited.');
     }
 
     private function loadDungeonMasterAccount(): ?array

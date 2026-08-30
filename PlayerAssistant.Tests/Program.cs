@@ -7,6 +7,16 @@ internal static class Program
 {
     private static int Main(string[] args)
     {
+        if (args is ["--trusted-update-child", var statePath, var versionText])
+        {
+            var version = Version.Parse(versionText);
+            var update = new PlayerAssistantUpdateInfo(version, versionText,
+                new Uri("https://bryanmiller.us/scarlethorizons/p-assist-" + versionText + ".zip"), new string('A', 64),
+                new Uri("https://bryanmiller.us/scarlethorizons/p-assist-" + versionText + ".exe"), new string('B', 64));
+            PlayerAssistantUpdateUtility.ApplyTrustedUpdateVersionPolicy(update, new Version(0, 9, 0), statePath);
+            return 0;
+        }
+
         if (args is ["--cancellation-child", var pidPath])
         {
             var temporaryPidPath = pidPath + ".tmp";

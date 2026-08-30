@@ -1,0 +1,11 @@
+import assert from 'node:assert/strict';
+import { readFile } from 'node:fs/promises';
+const budgets = JSON.parse(await readFile(new URL('../resource-budgets.json', import.meta.url)));
+for (const [name, value] of Object.entries(budgets.budgets)) assert.ok(Number.isInteger(value) && value > 0, `${name} must be a positive integer`);
+assert.ok(budgets.budgets.pwa_polling_seconds >= 15, 'PWA polling must not be more aggressive than 15 seconds');
+const enforce = (name, observed) => { if (observed > budgets.budgets[name]) throw new Error(`${name} exceeds budget`); };
+enforce('optional_pack_bytes', budgets.fixture.slow_io_ms);
+assert.throws(() => enforce('optional_pack_bytes', budgets.budgets.optional_pack_bytes + 1), /exceeds budget/);
+assert.equal(budgets.fixture.message_rows, budgets.budgets.message_table_rows);
+assert.equal(budgets.fixture.slow_io_ms, budgets.budgets.broker_query_latency_ms);
+console.log('PASS resource budget boundaries and slow-I/O fixture contract');

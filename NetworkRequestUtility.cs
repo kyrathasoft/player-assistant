@@ -101,7 +101,7 @@ namespace PlayerAssistant
                         NetworkUrlAllowlistUtility.EnsureAllowed(request.RequestUri, purpose);
                     }
 
-                    var circuitBreakerKey = GetCircuitBreakerKey(request);
+                    var circuitBreakerKey = GetCircuitBreakerKey(request, purpose);
                     ThrowIfCircuitOpen(circuitBreakerKey, DateTimeOffset.Now);
                     var response = await SendWithValidatedRedirectsAsync(
                         httpClient,
@@ -152,7 +152,7 @@ namespace PlayerAssistant
                             $"The network request timed out after {policy.Timeout.TotalSeconds:0.#} seconds.",
                             ex);
                         RecordOutboundFailureFromException(createRequest, purpose, exception);
-                        RecordCircuitFailureFromException(createRequest, exception);
+                        RecordCircuitFailureFromException(createRequest, purpose, exception);
                         throw exception;
                     }
 
@@ -176,7 +176,7 @@ namespace PlayerAssistant
                         $"The network request failed: {ex.Message}",
                         ex);
                     RecordOutboundFailureFromException(createRequest, purpose, exception);
-                    RecordCircuitFailureFromException(createRequest, exception);
+                    RecordCircuitFailureFromException(createRequest, purpose, exception);
                     throw exception;
                 }
                 catch (IOException ex)
@@ -186,7 +186,7 @@ namespace PlayerAssistant
                         $"The network request failed: {ex.Message}",
                         ex);
                     RecordOutboundFailureFromException(createRequest, purpose, exception);
-                    RecordCircuitFailureFromException(createRequest, exception);
+                    RecordCircuitFailureFromException(createRequest, purpose, exception);
                     throw exception;
                 }
             }
@@ -441,15 +441,17 @@ namespace PlayerAssistant
             }
         }
 
-        private static string GetCircuitBreakerKey(HttpRequestMessage request)
+        private static string GetCircuitBreakerKey(HttpRequestMessage request, NetworkUrlPurpose purpose)
         {
             var uri = request.RequestUri;
             if (uri is null || !uri.IsAbsoluteUri)
             {
-                return $"{request.Method.Method} <relative>";
+                return $"{purpose}:{request.Method.Method} <relative>";
             }
 
-            return $"{request.Method.Method} {uri.Scheme}://{uri.Authority}";
+            var path = uri.AbsolutePath.Trim('/');
+            var endpointFamily = path.Length == 0 ? "/" : "/" + path.Split('/', StringSplitOptions.RemoveEmptyEntries)[0];
+            return $"{purpose}:{request.Method.Method} {uri.Scheme}://{uri.Authority}{endpointFamily}";
         }
 
         private static void ThrowIfCircuitOpen(string circuitBreakerKey, DateTimeOffset now)
@@ -512,11 +514,12 @@ namespace PlayerAssistant
 
         private static void RecordCircuitFailureFromException(
             Func<HttpRequestMessage> createRequest,
+            NetworkUrlPurpose purpose,
             NetworkRequestException exception)
         {
             using var request = createRequest();
             RecordCircuitFailure(
-                GetCircuitBreakerKey(request),
+                GetCircuitBreakerKey(request, purpose),
                 exception.Message,
                 DateTimeOffset.Now);
         }

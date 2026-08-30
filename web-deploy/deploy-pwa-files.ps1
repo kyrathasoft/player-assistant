@@ -2,7 +2,7 @@
 param(
     [Parameter(Mandatory = $true)]
     [ValidateScript({
-        $valid = ($_ -match '^[A-Za-z0-9][A-Za-z0-9._/-]*$') `
+        $valid = (($_ -eq '.htaccess') -or ($_ -match '^[A-Za-z0-9][A-Za-z0-9._/-]*$')) `
             -and ($_ -notmatch '(^|/)\.\.($|/)') `
             -and (-not [IO.Path]::IsPathRooted($_))
         if (-not $valid) { throw "Unsafe PWA deployment path: $_" }

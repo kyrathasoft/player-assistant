@@ -53,27 +53,44 @@ final class BrokerAlertService
         $message = $this->sanitize($message, 500);
         $threshold = max(1, $threshold);
         $windowSeconds = max(1, $windowSeconds);
-        $statement = $this->database->prepare(
-            'INSERT INTO broker_alert_events (alert_type, occurred_at, error_code, message)
-             VALUES (?, ?, ?, ?)');
-        $statement->execute([$alertType, $now, $errorCode, $message]);
-        $countStatement = $this->database->prepare(
-            'SELECT COUNT(*) FROM broker_alert_events WHERE alert_type = ? AND occurred_at >= ?');
-        $countStatement->execute([$alertType, $now - $windowSeconds]);
-        $count = (int)$countStatement->fetchColumn();
-        $cooldownStatement = $this->database->prepare(
-            'SELECT COUNT(*) FROM broker_alert_events
-              WHERE alert_type = ? AND alert_sent_at IS NOT NULL AND alert_sent_at >= ?');
-        $cooldownStatement->execute([$alertType, $now - max(1, (int)$this->config['alert_cooldown_seconds'])]);
-        $cooldownActive = (int)$cooldownStatement->fetchColumn() > 0;
-        $alertTriggered = $count >= $threshold && !$cooldownActive;
         $emailSent = false;
+        $alertTriggered = false;
+        $count = 0;
+        $this->database->exec('BEGIN IMMEDIATE');
+        try {
+            $statement = $this->database->prepare(
+                'INSERT INTO broker_alert_events (alert_type, occurred_at, error_code, message)
+                 VALUES (?, ?, ?, ?)');
+            $statement->execute([$alertType, $now, $errorCode, $message]);
+            $eventId = (int)$this->database->lastInsertId();
+            $countStatement = $this->database->prepare(
+                'SELECT COUNT(*) FROM broker_alert_events WHERE alert_type = ? AND occurred_at >= ?');
+            $countStatement->execute([$alertType, $now - $windowSeconds]);
+            $count = (int)$countStatement->fetchColumn();
+            $cooldownStatement = $this->database->prepare(
+                'SELECT COUNT(*) FROM broker_alert_events
+                  WHERE alert_type = ? AND alert_sent_at IS NOT NULL AND alert_sent_at >= ?');
+            $cooldownStatement->execute([$alertType, $now - max(1, (int)$this->config['alert_cooldown_seconds'])]);
+            $cooldownActive = (int)$cooldownStatement->fetchColumn() > 0;
+            if ($count >= $threshold && !$cooldownActive) {
+                // Claim the cooldown inside the write transaction. BEGIN IMMEDIATE
+                // serializes competing threshold crossings before any email work.
+                $claim = $this->database->prepare(
+                    'UPDATE broker_alert_events SET alert_sent_at = ?
+                     WHERE id = ? AND alert_sent_at IS NULL');
+                $claim->execute([$now, $eventId]);
+                $alertTriggered = $claim->rowCount() === 1;
+            }
+            $this->database->commit();
+        } catch (Throwable $error) {
+            if ($this->database->inTransaction()) {
+                $this->database->rollBack();
+            }
+            throw $error;
+        }
         if ($alertTriggered) {
             $emailSent = $this->sendEmail($alertType, $errorCode, $message, $count);
-            $this->database->prepare('UPDATE broker_alert_events SET alert_sent_at = ? WHERE id = last_insert_rowid()')
-                ->execute([$now]);
         }
-
         return [
             'alert_type' => $alertType,
             'failure_count' => $count,

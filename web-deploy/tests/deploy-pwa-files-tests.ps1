@@ -38,8 +38,9 @@ try {
     if ($LASTEXITCODE -ne 0) { throw 'Finalization failed.' }
     & php $controllerPath finalize | Out-Null
     if ($LASTEXITCODE -ne 0) { throw 'Replay of finalization was not idempotent.' }
-    & php $controllerPath rollback 2>$null
-    if ($LASTEXITCODE -eq 0) { throw 'Rollback-after-finalization was incorrectly accepted.' }
+    $rollbackOutput = @(& cmd.exe /c "php `"$controllerPath`" rollback 2>&1")
+    $rollbackExitCode = $LASTEXITCODE
+    if ($rollbackExitCode -eq 0) { throw 'Rollback-after-finalization was incorrectly accepted.' }
     if (Test-Path -LiteralPath ($target + '.rollback-test-release-1')) { throw 'Finalization did not remove rollback evidence.' }
     Write-Output 'PWA deployment transaction tests passed.'
 }

@@ -4,7 +4,7 @@
   "version": "1.0.0",
   "type": "module",
   "scripts": {
-    "test": "node optional-pack-tests.mjs && node optional-pack-lifecycle-tests.mjs && node authenticated-lifecycle-tests.mjs && node controller-transition-tests.mjs && node service-worker-tests.mjs && node translator-worker-tests.mjs && node search-tests.mjs && node campaign-search-worker-tests.mjs && node browser-smoke.mjs"
+    "test": "node resource-budget-tests.mjs && node inbox-hardening-tests.mjs && node orchestration-boundary-tests.mjs && node optional-pack-tests.mjs && node optional-pack-lifecycle-tests.mjs && node authenticated-lifecycle-tests.mjs && node controller-transition-tests.mjs && node service-worker-tests.mjs && node translator-worker-tests.mjs && node search-tests.mjs && node campaign-search-worker-tests.mjs && node browser-smoke.mjs"
   },
   "devDependencies": {
     "playwright": "1.62.1"

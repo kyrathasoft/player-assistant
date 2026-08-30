@@ -2,6 +2,11 @@ import { initializeTranslator } from './modules/translator.js?v=92';
 import { initializeCampaignSearch } from './modules/search.js?v=92';
 import { initializeDice } from './modules/dice.js?v=92';
 import { createControllerChangeHandler } from './service-worker-controller.js?v=92';
+import { mergeInboxSnapshot, createMessageDraftStore } from './modules/inbox-state.js?v=92';
+import { createAccountSessionController } from './modules/account-session.js?v=92';
+import { createMessagesActivityController } from './modules/messages-activity.js?v=92';
+import { createPresenceController } from './modules/presence.js?v=92';
+import { createUpdateLifecycleController } from './modules/update-lifecycle.js?v=92';
 
 (() => {
     'use strict';
@@ -84,7 +89,7 @@ import { createControllerChangeHandler } from './service-worker-controller.js?v=
     let wordCountRequestId = 0;
     let authenticatedPresenceSnapshot = null;
     let presenceRequestId = 0;
-    let presencePollTimer = 0;
+
     let authenticatedQuestSnapshot = null;
     let questRequestId = 0;
     let questStateFilter = '';
@@ -93,6 +98,7 @@ import { createControllerChangeHandler } from './service-worker-controller.js?v=
     let messageRequestId = 0;
     let messageLoading = false;
     let messageError = '';
+    let messageDraftStore = null;
     let authenticatedRevisionSnapshot = null;
     let appliedMessageRevision = null;
     let appliedQuestRevision = null;
@@ -1729,6 +1735,8 @@ import { createControllerChangeHandler } from './service-worker-controller.js?v=
         }
     };
 
+    const RESOURCE_BUDGET_PWA_POLLING_SECONDS = 30;
+
     const updateRevisionPolling = () => {
         if (revisionPollTimer !== 0) {
             window.clearInterval(revisionPollTimer);
@@ -1737,7 +1745,7 @@ import { createControllerChangeHandler } from './service-worker-controller.js?v=
         revisionRequestId++;
         if (authenticatedAccount === null || document.hidden || !navigator.onLine) return;
         void loadRevisions();
-        revisionPollTimer = window.setInterval(() => void loadRevisions(), 30000);
+        revisionPollTimer = window.setInterval(() => void loadRevisions(), RESOURCE_BUDGET_PWA_POLLING_SECONDS * 1000);
     };
 
     const renderMessageNotifications = () => {
@@ -1823,13 +1831,8 @@ import { createControllerChangeHandler } from './service-worker-controller.js?v=
             const snapshot = validateMessageSnapshot(await requestAuthenticationApi(
                 cursor === null ? '/messages?limit=50' : `/messages?limit=50&cursor=${encodeURIComponent(cursor)}`));
             if (requestId !== messageRequestId || authenticatedAccount?.id !== accountId) return false;
-            const mergedMessages = [...new Map([
-                ...(authenticatedMessageSnapshot?.messages || []),
-                ...snapshot.messages
-            ].map((message) => [message.id, message])).values()];
-            authenticatedMessageSnapshot = cursor === null || mergedMessages.length > snapshot.unread_count
-                ? snapshot
-                : { ...snapshot, messages: mergedMessages };
+            authenticatedMessageSnapshot = mergeInboxSnapshot(
+                authenticatedMessageSnapshot, snapshot, cursor);
             messagesUpdatedAt = Date.now();
             updateAuthenticationUi();
             renderActivityUi();
@@ -1866,6 +1869,10 @@ import { createControllerChangeHandler } from './service-worker-controller.js?v=
         }
     };
 
+    const messagesActivityController = createMessagesActivityController({
+        load: () => loadMessages()
+    });
+
     const isMessageTextReady = (value) => String(value || '').trim().length >= 3;
 
     const updateMessageDmSubmitState = () => {
@@ -1893,6 +1900,8 @@ import { createControllerChangeHandler } from './service-worker-controller.js?v=
     };
 
     const renderMessageDmUi = () => {
+        const input = byId('message-dm-text');
+        if (input instanceof HTMLTextAreaElement && messageDraftStore) input.value = messageDraftStore.load();
         updateMessageDmSubmitState();
         const status = byId('message-dm-status');
         if (status) status.hidden = true;
@@ -1963,6 +1972,8 @@ import { createControllerChangeHandler } from './service-worker-controller.js?v=
     };
 
     const renderMessagePlayerUi = () => {
+        const input = byId('message-player-text');
+        if (input instanceof HTMLTextAreaElement && messageDraftStore) input.value = messageDraftStore.load();
         renderMessagePlayerRecipients();
         updateMessagePlayerSubmitState();
         const status = byId('message-player-status');
@@ -2005,6 +2016,8 @@ import { createControllerChangeHandler } from './service-worker-controller.js?v=
     });
 
     byId('message-dm-text')?.addEventListener('input', () => {
+        const input = byId('message-dm-text');
+        if (input instanceof HTMLTextAreaElement) messageDraftStore?.save(input.value);
         updateMessageDmSubmitState();
     });
     byId('message-dm-text')?.addEventListener('change', () => {
@@ -2041,6 +2054,7 @@ import { createControllerChangeHandler } from './service-worker-controller.js?v=
                 status.textContent = 'Your message was sent to the Dungeon Master.';
             }
             messageInput.value = '';
+            messageDraftStore?.clear();
             setTimeout(() => {
                 if (status) status.hidden = true;
             }, 2500);
@@ -2057,6 +2071,8 @@ import { createControllerChangeHandler } from './service-worker-controller.js?v=
         updateMessagePlayerSubmitState();
     });
     byId('message-player-text')?.addEventListener('input', () => {
+        const input = byId('message-player-text');
+        if (input instanceof HTMLTextAreaElement) messageDraftStore?.save(input.value);
         updateMessagePlayerSubmitState();
     });
     byId('message-player-text')?.addEventListener('change', () => {
@@ -2426,8 +2442,15 @@ import { createControllerChangeHandler } from './service-worker-controller.js?v=
         else activeAuthenticationControllers.delete(except);
     };
 
+    const accountSessionController = createAccountSessionController({
+        onChange: (account) => {
+            authenticatedAccount = account;
+        }
+    });
+
     const beginAuthenticationGeneration = (except = null) => {
         authenticationGeneration++;
+        accountSessionController.beginTransition();
         cancelAuthenticationRequests(except);
     };
 
@@ -2697,19 +2720,22 @@ import { createControllerChangeHandler } from './service-worker-controller.js?v=
         }
     };
 
+    const presenceController = createPresenceController({
+        canPoll: () => authenticatedAccount?.role === 'dm'
+            && activeView === 'dashboard'
+            && !document.hidden
+            && navigator.onLine,
+        refresh: loadPresence,
+        setInterval: window.setInterval.bind(window),
+        clearInterval: window.clearInterval.bind(window)
+    });
+
     const updatePresencePolling = () => {
-        if (presencePollTimer !== 0) {
-            window.clearInterval(presencePollTimer);
-            presencePollTimer = 0;
-        }
+        presenceController.stop();
         presenceRequestId++;
         authenticatedPresenceSnapshot = null;
         renderPresenceUi();
-        if (authenticatedAccount?.role !== 'dm'
-            || activeView !== 'dashboard'
-            || document.hidden
-            || !navigator.onLine) return;
-        void loadPresence();
+        presenceController.start();
     };
 
     const restoreAuthentication = async () => {
@@ -2717,10 +2743,13 @@ import { createControllerChangeHandler } from './service-worker-controller.js?v=
         try {
             const session = await requestAuthenticationApi('/session');
             if (restoreGeneration !== authenticationGeneration) return;
-            authenticatedAccount = session.authenticated ? session.account : null;
+            accountSessionController.setAccount(session.authenticated ? session.account : null);
             authenticationCsrfToken = session.authenticated ? String(session.csrf_token || '') : '';
         } catch {
             if (restoreGeneration !== authenticationGeneration) return;
+            messageDraftStore?.clear();
+            messageDraftStore = null;
+            document.querySelectorAll('#message-dm-text, #message-player-text').forEach((input) => { input.value = ''; });
             authenticatedAccount = null;
             authenticationCsrfToken = '';
         }
@@ -2782,14 +2811,14 @@ import { createControllerChangeHandler } from './service-worker-controller.js?v=
         messageDialog.showModal();
     });
     byId('messages-retry')?.addEventListener('click', () => {
-        void loadMessages();
+        void messagesActivityController.refresh();
     });
     byId('messages-next')?.addEventListener('click', () => {
         const cursor = authenticatedMessageSnapshot?.next_cursor;
         if (typeof cursor === 'string') void loadMessages(cursor);
     });
     byId('activity-refresh')?.addEventListener('click', async () => {
-        await Promise.all([loadMessages(), loadQuests(), loadRevisions()]);
+        await Promise.all([messagesActivityController.refresh(), loadQuests(), loadRevisions()]);
         renderActivityUi();
     });
     document.addEventListener('visibilitychange', updateRevisionPolling);
@@ -2827,7 +2856,7 @@ import { createControllerChangeHandler } from './service-worker-controller.js?v=
             });
             beginAuthenticationGeneration();
             authenticationCsrfToken = String(session.csrf_token || '');
-            authenticatedAccount = session.account;
+            accountSessionController.setAccount(session.account);
             clearProtectedFreshness();
             resetMagicItemState();
             authenticatedXpSnapshot = null;
@@ -2850,7 +2879,10 @@ import { createControllerChangeHandler } from './service-worker-controller.js?v=
             lastQuestAlertSignature = '';
             try {
                 const identity = await requestAuthenticationApi('/me');
-                authenticatedAccount = identity.account || authenticatedAccount;
+                accountSessionController.setAccount(identity.account || authenticatedAccount);
+                messageDraftStore = authenticatedAccount?.id
+                    ? createMessageDraftStore(localStorage, authenticatedAccount.id)
+                    : null;
             } catch {
                 // The login response is already bound to the same server session.
             }
@@ -2866,6 +2898,9 @@ import { createControllerChangeHandler } from './service-worker-controller.js?v=
                 // Login remains available when optional level-up notification delivery fails.
             }
         } catch (error) {
+            messageDraftStore?.clear();
+            messageDraftStore = null;
+            document.querySelectorAll('#message-dm-text, #message-player-text').forEach((input) => { input.value = ''; });
             authenticatedAccount = null;
             authenticationCsrfToken = '';
             clearProtectedFreshness();
@@ -2905,6 +2940,9 @@ import { createControllerChangeHandler } from './service-worker-controller.js?v=
         try {
             await requestAuthenticationApi('/logout', { method: 'POST', csrf: true });
             beginAuthenticationGeneration();
+            messageDraftStore?.clear();
+            messageDraftStore = null;
+            document.querySelectorAll('#message-dm-text, #message-player-text').forEach((input) => { input.value = ''; });
             authenticatedAccount = null;
             authenticationCsrfToken = '';
             clearProtectedFreshness();
@@ -3052,8 +3090,11 @@ import { createControllerChangeHandler } from './service-worker-controller.js?v=
         byId('update-dismiss')?.addEventListener('click', () => {
             if (updateBanner) updateBanner.hidden = true;
         });
+        const updateLifecycleController = createUpdateLifecycleController({
+            apply: () => pendingServiceWorker?.postMessage({ type: 'SKIP_WAITING' })
+        });
         byId('update-apply')?.addEventListener('click', () => {
-            pendingServiceWorker?.postMessage({ type: 'SKIP_WAITING' });
+            updateLifecycleController.requestApply();
         });
 
         window.addEventListener('load', async () => {

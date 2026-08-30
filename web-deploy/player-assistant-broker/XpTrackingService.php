@@ -128,9 +128,11 @@ final class XpTrackingService
         }
 
         $progressions = $this->loadAwardProgressionsWithLock($progressionKeys);
+        $validatedCurrentSnapshot = null;
         try {
             $snapshots = $this->parseSnapshots($this->fetchMarkdown(
                 (string)$this->xpConfig['source_url']));
+            $validatedCurrentSnapshot = $snapshots[array_key_last($snapshots)];
             $progressions = $this->withAwardLock(
                 $progressionKeys,
                 LOCK_EX,
@@ -161,8 +163,12 @@ final class XpTrackingService
         }
 
         $currentCharacters = [];
-        $cachedSnapshot = $this->loadCachedSnapshot();
-        foreach ($cachedSnapshot['characters'] ?? [] as $character) {
+        // The already parsed live source is the validated current snapshot for
+        // enrichment; do not perform a second live/cache refresh for the same response.
+        $currentSnapshot = is_array($validatedCurrentSnapshot)
+            ? $validatedCurrentSnapshot
+            : $this->loadCachedSnapshot();
+        foreach ($currentSnapshot['characters'] ?? [] as $character) {
             if (!is_array($character) || !isset($character['character_name'])) {
                 continue;
             }

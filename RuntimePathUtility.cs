@@ -45,6 +45,11 @@ namespace PlayerAssistant
             return CombineUnderBase(UserDataDirectory, relativeParts);
         }
 
+        internal static string GetExternalBrowserTemporaryDirectory()
+        {
+            return Path.GetFullPath(Path.GetTempPath());
+        }
+
         public static string GetApplicationPath(params string[] relativeParts)
         {
             return CombineUnderBase(ApplicationDirectory, relativeParts);

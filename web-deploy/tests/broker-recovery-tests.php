@@ -56,6 +56,16 @@ try {
     recoveryAssert($exitCode === 0, 'The third broker recovery command failed.');
     $backups = glob($backupDirectory . '/broker-*.sqlite') ?: [];
     recoveryAssert(count($backups) === 2, 'Retention exceeded the configured limit.');
+    $requiredHealthConfigPath = $root . '/required-health-config.php';
+    file_put_contents($requiredHealthConfigPath, "<?php return " . var_export([
+        'api' => ['database_path' => $databasePath],
+        'database_recovery' => ['backup_directory' => $backupDirectory, 'status_path' => $root . '/required-health-status.json', 'health_url' => 'http://127.0.0.1:1/health', 'health_required' => true],
+    ], true) . ";\n");
+    $requiredHealthCommand = escapeshellarg(PHP_BINARY) . ' ' . escapeshellarg($script) . ' --config=' . escapeshellarg($requiredHealthConfigPath);
+    exec($requiredHealthCommand . ' 2>&1', $requiredHealthOutput, $requiredHealthExitCode);
+    recoveryAssert($requiredHealthExitCode !== 0, 'Recovery succeeded when required public health was unavailable.');
+    $requiredHealthStatus = json_decode((string)file_get_contents($root . '/required-health-status.json'), true, 32, JSON_THROW_ON_ERROR);
+    recoveryAssert($requiredHealthStatus['error_code'] === 'public_health_unavailable', 'Required health failure evidence was not explicit and redacted.');
     echo "Broker recovery tests passed.\n";
 } finally {
     $files = glob($root . '/*') ?: [];

@@ -248,7 +248,16 @@ function Write-PortableEncryptedSettings {
     }
     finally {
         if ($plaintextBytes.Length -gt 0) {
-            [System.Security.Cryptography.CryptographicOperations]::ZeroMemory($plaintextBytes)
+            # Windows PowerShell 5.1 cannot resolve CryptographicOperations even
+            # though the same script also runs under modern PowerShell. Clear the
+            # managed byte array with the compatible primitive in that host.
+            $cryptoOperations = [type]::GetType('System.Security.Cryptography.CryptographicOperations')
+            if ($null -ne $cryptoOperations) {
+                $cryptoOperations.GetMethod('ZeroMemory', [type[]]@([byte[]])).Invoke($null, @($plaintextBytes))
+            }
+            else {
+                [Array]::Clear($plaintextBytes, 0, $plaintextBytes.Length)
+            }
         }
     }
 }

@@ -34,6 +34,21 @@ namespace PlayerAssistant
             return true;
         }
 
+        public bool Cancel(string phase)
+        {
+            ArgumentException.ThrowIfNullOrWhiteSpace(phase);
+            lock (_syncRoot)
+            {
+                if (!_runningTasks.TryGetValue(phase, out var handle))
+                {
+                    return false;
+                }
+
+                handle.Cancellation.Cancel();
+                return true;
+            }
+        }
+
         public bool IsRunning(string phase)
         {
             lock (_syncRoot)

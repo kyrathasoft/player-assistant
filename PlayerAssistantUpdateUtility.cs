@@ -1,6 +1,7 @@
 using System.Net;
 using System.Reflection;
 using System.Security.Cryptography;
+using System.Threading;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
@@ -246,11 +247,13 @@ namespace PlayerAssistant
             ArgumentNullException.ThrowIfNull(currentVersion);
 
             var statePath = ResolveTrustedUpdateStatePath(trustedUpdateStatePath);
+            using var updateLock = AcquireTrustedUpdateStateLock(statePath);
+            // Re-read after acquiring the inter-process lock; another process may have advanced the floor.
             var highestTrustedVersion = GetHighestTrustedVersion(statePath, currentVersion);
             if (latestUpdate is not null && latestUpdate.Version.CompareTo(highestTrustedVersion) < 0)
             {
                 throw new InvalidOperationException(
-                    $"Signed update channel downgrade detected. Highest trusted version {highestTrustedVersion} has already been observed, but the latest signed manifest version is {latestUpdate.VersionText}.");
+                    $"Signed update channel downgrade detected. Highest trusted version {highestTrustedVersion} has already been observed, but the newly fetched signed manifest version is {latestUpdate.VersionText}.");
             }
 
             if (latestUpdate is not null && latestUpdate.Version.CompareTo(highestTrustedVersion) > 0)
@@ -319,6 +322,22 @@ namespace PlayerAssistant
             return string.IsNullOrWhiteSpace(trustedUpdateStatePath)
                 ? RuntimePathUtility.GetUserDataPath(TrustedUpdateStateFileName)
                 : trustedUpdateStatePath;
+        }
+
+        private static IDisposable AcquireTrustedUpdateStateLock(string statePath)
+        {
+            var lockName = "PlayerAssistant.TrustedUpdate." + Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(Path.GetFullPath(statePath))));
+            var mutex = new Mutex(false, lockName);
+            try
+            {
+                mutex.WaitOne();
+                return new DelegateDisposable(() => { mutex.ReleaseMutex(); mutex.Dispose(); });
+            }
+            catch
+            {
+                mutex.Dispose();
+                throw;
+            }
         }
 
         private static Version GetHighestTrustedVersion(string statePath, Version currentVersion)
@@ -592,6 +611,11 @@ namespace PlayerAssistant
             [property: JsonPropertyName("sha256")] string Sha256,
             [property: JsonPropertyName("installer_url")] string InstallerUrl,
             [property: JsonPropertyName("installer_sha256")] string InstallerSha256);
+
+        private sealed class DelegateDisposable(Action onDispose) : IDisposable
+        {
+            public void Dispose() => onDispose();
+        }
 
         private sealed record TrustedUpdateState(
             [property: JsonPropertyName("schema_version")] int SchemaVersion,

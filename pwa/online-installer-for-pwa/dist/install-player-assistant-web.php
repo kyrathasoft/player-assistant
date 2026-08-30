@@ -287,6 +287,14 @@ function verifyMode(string $path, int $expected): void
     }
 }
 
+function interruptAtCommitBoundary(string $point): void
+{
+    $requested = getenv('PLAYER_ASSISTANT_FAULT_STAGE');
+    if ($requested === $point) {
+        throw new RuntimeException('Deterministic transaction interruption at ' . $point . '.');
+    }
+}
+
 function writeJson(string $path, array $value, int $mode = 0600): void
 {
     $temporary = $path . '.tmp-' . bin2hex(random_bytes(4));
@@ -686,12 +694,14 @@ function lintPhp(string $path): void
 
 function runMigration(string $stagedPrivate): void
 {
+    interruptAtCommitBoundary('before-migration');
     $output = [];
     $exit = 0;
     exec(escapeshellarg(PHP_BINARY) . ' ' . escapeshellarg($stagedPrivate . '/migrate-broker.php') . ' 2>&1', $output, $exit);
     if ($exit !== 0) {
         throw new RuntimeException('Broker database migration failed: ' . implode("\n", $output));
     }
+    interruptAtCommitBoundary('after-migration');
 }
 
 function snapshotDatabase(string $databasePath, string $backupPath): ?array
@@ -845,6 +855,7 @@ function fetchUrl(string $url): array
 
 function verifyHttpsInstall(array $packageManifest, string $origin): void
 {
+    interruptAtCommitBoundary('before-final-https-verification');
     foreach ($packageManifest['files'] as $entry) {
         $path = (string)$entry['path'];
         if (!str_starts_with($path, 'payload/public/scarlethorizons/pwa/')
@@ -876,6 +887,7 @@ function verifyHttpsInstall(array $packageManifest, string $origin): void
         || !str_contains((string)($session['headers']['cache-control'] ?? ''), 'no-store')) {
         throw new RuntimeException('The installed anonymous session endpoint failed verification.');
     }
+    interruptAtCommitBoundary('after-final-https-verification');
 }
 
 function installCron(string $privateRoot, string $transactionDirectory, array &$transaction): array
@@ -915,6 +927,7 @@ function installCron(string $privateRoot, string $transactionDirectory, array &$
         . ' >> ' . escapeshellarg($privateRoot . '/pwa-monitor-cron.log') . ' 2>&1';
     $temporary = tempnam(sys_get_temp_dir(), 'pa-installer-cron-');
     file_put_contents($temporary, implode("\n", $lines) . "\n", LOCK_EX);
+    interruptAtCommitBoundary('before-cron');
     $installOutput = [];
     $installExit = 0;
     exec('/usr/bin/crontab ' . escapeshellarg($temporary) . ' 2>&1', $installOutput, $installExit);
@@ -922,6 +935,7 @@ function installCron(string $privateRoot, string $transactionDirectory, array &$
     if ($installExit !== 0) {
         throw new RuntimeException('Unable to install the Player Assistant cron entries.');
     }
+    interruptAtCommitBoundary('after-cron');
     return $cronState;
 }
 
@@ -1411,7 +1425,9 @@ function runInstall(array $options): array
             && !hash_equals(hash_file('sha256', $configTarget), hash_file('sha256', $materializedConfig))) {
             reject('An existing private configuration differs from --config-source; update it explicitly before deployment.');
         }
+        interruptAtCommitBoundary('before-installer-replacement');
         $packageManifest = extractAndVerifyPackage($package, $stage);
+        interruptAtCommitBoundary('after-installer-replacement');
         writeJson($transactionDirectory . '/package-manifest.json', $packageManifest);
         $stagedPublic = $stage . '/payload/public/scarlethorizons';
         $stagedPrivate = $stage . '/payload/private';
@@ -1538,6 +1554,7 @@ function runInstall(array $options): array
         if (!$transaction['config_existed']) {
             $transaction['config_promotion_started'] = true;
             writeJson($transactionDirectory . '/manifest.json', $transaction);
+            interruptAtCommitBoundary('before-private-config');
             $temporaryConfig = $privateRoot . '/.config.php.install-' . $transactionId;
             copy($stagedPrivate . '/config.php', $temporaryConfig);
             @chmod($temporaryConfig, 0600);
@@ -1546,6 +1563,7 @@ function runInstall(array $options): array
             }
             $transaction['config_promoted'] = true;
             writeJson($transactionDirectory . '/manifest.json', $transaction);
+            interruptAtCommitBoundary('after-private-config');
         }
         @chmod($configTarget, 0600);
         @chmod($databasePath, 0600);
@@ -1572,6 +1590,11 @@ function runInstall(array $options): array
             }
             $transaction[$component . '_promotion_started'] = true;
             writeJson($transactionDirectory . '/manifest.json', $transaction);
+            if ($component === 'pwa') {
+                interruptAtCommitBoundary('before-public-loader-pwa');
+            } else {
+                interruptAtCommitBoundary('before-public-loader-api');
+            }
             if (!rename($stagedPublic . '/' . $component, $target)) {
                 throw new RuntimeException("Unable to promote the $component directory.");
             }
@@ -1580,6 +1603,11 @@ function runInstall(array $options): array
                 $transaction['api_maintenance_active'] = false;
             }
             writeJson($transactionDirectory . '/manifest.json', $transaction);
+            if ($component === 'pwa') {
+                interruptAtCommitBoundary('after-public-loader-pwa');
+            } else {
+                interruptAtCommitBoundary('after-public-loader-api');
+            }
         }
         $transaction['status'] = 'promoted';
         writeJson($transactionDirectory . '/manifest.json', $transaction);
@@ -1696,7 +1724,15 @@ function runInstall(array $options): array
                 || is_string($current['private_file_in_progress'] ?? null)
                 || ($current['cron']['managed'] ?? false);
             if ($mutated) {
-                rollbackTransaction($transactionDirectory, $current);
+                try {
+                    rollbackTransaction($transactionDirectory, $current);
+                } catch (Throwable $rollbackError) {
+                    $current['status'] = 'rollback-failed';
+                    $current['rollback_failure'] = $rollbackError->getMessage();
+                    $current['rollback_forbidden'] = false;
+                    writeJson($transactionPath, $current, 0600);
+                    throw new RuntimeException('Transaction rollback failed; recovery evidence preserved.', 0, $rollbackError);
+                }
             } else {
                 removeTree($transactionDirectory);
             }

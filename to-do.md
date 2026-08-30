@@ -392,43 +392,48 @@ Planned security correction: eliminate first-name equivalence from authenticatio
 - [x] Prevent trusted-network redirects from connecting to untrusted targets.
   - [x] Disable automatic redirects and manually follow a bounded hop count, validating every parsed target against its purpose-specific allowlist before sending.
   - [x] Prove a trusted endpoint redirecting to localhost or another disallowed authority sends zero requests to that target.
-- [ ] Make RPOL credential migration and WebView dispatch lifetime-safe.
-  - [ ] Store username/password as one versioned credential record or compensate on partial write/delete so migration and plaintext removal are all-or-nothing.
-  - [ ] Complete cancellation even when UI enqueue fails or the handle is destroyed; dispose registrations and recheck dialog viability after each await.
-  - Blocked pending the release-candidate self-test fixture `Release\\publish\\settings.local.json`, which is not present in this checkout; functional migration and dispatch regression coverage passes.
-- [ ] Prove RPOL authentication against the exact protected resource before capturing or reusing browser state.
-  - [ ] Define one canonical protected Dice Roller probe for game `80170` and use it for visible-browser verification, WebView verification, restored-state validation, and publisher preflight.
-  - [ ] Reject public campaign content, cookie presence, login redirects/forms, untrusted navigation, challenges, wrong paths, wrong game IDs, and unexpected protected-page shapes as authentication proof.
-  - [ ] Capture state only after the live probe succeeds, then restore it in a publisher-equivalent fresh browser process and repeat the probe before promotion.
-  - [ ] Add deterministic classifier, local browser-fixture, cancellation, timeout, and state-round-trip tests without storing credentials or cookie values.
-- [ ] Secure the external RPOL browser/CDP connection and verification lifetime.
-  - [ ] Eliminate available-port/release/rebind races and prevent unauthorized local processes from reading cookies or controlling the verification browser.
-  - [ ] Apply one end-to-end deadline across browser launch, CDP connection, verification, capture, publishing, disposal, and wrapper supervision; produce truthful timeout/crash results.
-  - [ ] Serialize verifier and publisher operations with an application-owned cross-process lock and clean every browser, profile, CDP, and temporary-state resource on every exit path.
+- [x] Make RPOL credential migration and WebView dispatch lifetime-safe.
+  - [x] Store username/password as one versioned credential record or compensate on partial write/delete so migration and plaintext removal are all-or-nothing.
+  - [x] Complete cancellation even when UI enqueue fails or the handle is destroyed; dispose registrations and recheck dialog viability after each await.
+  - Release-candidate self-test fixture regenerated through the documented publish path; migration and dispatch regression coverage passes.
+- [x] Prove RPOL authentication against the exact protected resource before capturing or reusing browser state.
+  - [x] Define one canonical protected Dice Roller probe for game `80170` and use it for visible-browser verification, WebView verification, restored-state validation, and publisher preflight.
+  - [x] Reject public campaign content, cookie presence, login redirects/forms, untrusted navigation, challenges, wrong paths, wrong game IDs, and unexpected protected-page shapes as authentication proof.
+  - [x] Capture state only after the live probe succeeds, then restore it in a publisher-equivalent fresh browser process and repeat the probe before promotion.
+  - [x] Add deterministic classifier, local browser-fixture, cancellation, timeout, and state-round-trip tests without storing credentials or cookie values.
+- [x] Secure the external RPOL browser/CDP connection and verification lifetime.
+  - [x] Eliminate available-port/release/rebind races and prevent unauthorized local processes from reading cookies or controlling the verification browser.
+  - [x] Apply one end-to-end deadline across browser launch, CDP connection, verification, capture, publishing, disposal, and wrapper supervision; produce truthful timeout/crash results.
+  - [x] Serialize verifier and publisher operations with an application-owned cross-process lock and clean every browser, profile, CDP, and temporary-state resource on every exit path.
 - [ ] Remove distributed RPOL administrator credentials after protected-page coverage passes.
   - [ ] Verify every required approved RPOL page through the scheduled signed publisher and complete a clean-client run using only a revocable broker token.
   - [ ] Remove administrator credentials from hosted, local, publish-time, and end-user settings/Credential Manager entries; rotate the administrator password afterward.
   - [ ] Complete release verification for broker-only retrieval, credential-free client startup, diagnostics redaction, and Release/publish/installer parity.
+  - [ ] Blocked 2026-08-29: the scheduled signed publisher discovered 21 approved RPOL targets but could not complete the next target because the temporary external browser exited before publishing its CDP endpoint; no credentials were removed or rotated.
+
 - [ ] Add a profile-bound RPOL state fallback only when publisher-equivalent round-trip testing proves storage-state reuse cannot work.
   - [ ] Use a dedicated user-only persistent profile with restrictive ACLs, a single-process lock, exact protected-probe validation, and explicit reset behavior.
   - [ ] Never copy the user’s normal browser profile or package, upload, log, or commit authenticated browser state.
-- [ ] Isolate network and update concurrency state.
-  - [ ] Scope circuit breakers by network purpose and endpoint family so unrelated services sharing one authority cannot suppress or reset each other.
-  - [ ] Serialize highest-trusted-version compare-and-write across processes and recompute the maximum while holding the lock.
-  - [ ] Require the x64 Windows Desktop Runtime for the win-x64 launcher; do not accept x86-only probes.
+- [x] Isolate network and update concurrency state.
+  - [x] Scope circuit breakers by network purpose and endpoint family so unrelated services sharing one authority cannot suppress or reset one another.
+  - [x] Serialize highest-trusted-version compare-and-write across processes and recompute the maximum while holding the lock.
+  - [x] Require the x64 Windows Desktop Runtime for the win-x64 launcher; do not accept x86-only probes.
+  - Implementation: purpose/family-scoped breakers, cross-process trusted-version locking, and x64-only launcher runtime probing; focused and full custom tests passed. The installer compatibility fallback for Windows PowerShell 5.1 also restored the required package/RC validation gates.
 - [ ] Harden inbox behavior against retries, concurrent mutation, and user-data loss.
   - [ ] Preserve unsent drafts across retryable failures and account-safe navigation while clearing them on identity transition.
   - [ ] Deduplicate accumulated pages by stable message ID and reset safely when server metadata shrinks after acknowledgements or retention.
   - [ ] Add bounded per-account message-send throttling and abuse-oriented fixtures without weakening legitimate DM broadcasts.
+  - [!] Blocked: `pwa/test-deployment.ps1 -SkipRemote` reaches the fail-closed parity gate but reports `index.html does not match the local deployment file`; deployment parity remains unresolved, so this item and subitems stay unchecked.
 - [ ] Extend release and deployment transaction fault injection.
   - [ ] Exercise interruption before and after each commit point for migrations, public-loader promotion, cron changes, private config, installer replacement, and final HTTPS verification.
   - [ ] Verify rollback restores pre-existing files, removes newly introduced files, preserves mode-restricted recovery evidence on rollback failure, and never runs after finalization.
   - [ ] Verify source and packaged installer templates remain byte-contract compatible and that runtime/deployment manifests reject drift.
-- [ ] Make broker operations and recovery observable under concurrency and partial platform failure.
-  - [ ] Claim alert thresholds and cooldowns transactionally so concurrent failures emit at most one notification.
-  - [ ] Fail recovery when required public health cannot execute or atomic status persistence fails; preserve explicit failure evidence.
-  - [ ] Reuse one validated XP snapshot for award enrichment rather than issuing redundant live refreshes.
-  - [ ] Isolate inline FTPS configuration fixtures from ambient `BACKUP_FTPS_*` variables and restore the environment in `finally`.
+  - [!] Blocked: `pwa/test-deployment.ps1 -SkipRemote` fails the existing fail-closed deployment parity gate (`index.html does not match the local deployment file`); the PWA deployment transaction gate cannot be declared complete.
+- [x] Make broker operations and recovery observable under concurrency and partial platform failure.
+  - [x] Claim alert thresholds and cooldowns transactionally so concurrent failures emit at most one notification.
+  - [x] Fail recovery when required public health cannot execute or atomic status persistence fails; preserve explicit failure evidence.
+  - [x] Reuse one validated XP snapshot for award enrichment rather than issuing redundant live refreshes.
+  - [x] Isolate inline FTPS configuration fixtures from ambient `BACKUP_FTPS_*` variables and restore the environment in `finally`.
 
 ### P3 — Reduce future regression surface
 
@@ -436,9 +441,11 @@ Planned security correction: eliminate first-name equivalence from authenticatio
   - [ ] Continue extracting account/session, messages/activity, presence, and update lifecycle logic from `pwa/app.js` while preserving browser behavior and offline cache contracts.
   - [ ] Continue reducing `Form1` event-handler orchestration into cancellable controllers with explicit single-flight and shutdown semantics.
   - [ ] Generate duplicated installer/deployment payloads from one canonical source and fail verification on source/dist drift.
+  - [!] Blocked: `pwa/test-deployment.ps1 -SkipRemote` still fails the existing fail-closed deployment parity gate because `index.html` does not match the local deployment file; PWA/deployment acceptance cannot be declared complete.
 - [ ] Add measurable resource budgets.
   - [ ] Set upper bounds for broker query latency, message-table growth, cache/backup retention, startup work, PWA polling, optional-pack storage, and diagnostic/log growth.
   - [ ] Add representative large-fixture and slow-I/O tests so performance and storage regressions become release-gate failures rather than production surprises.
+  - [!] Blocked 2026-08-29: implementation and focused/full local regression gates pass, but `pwa/test-deployment.ps1 -SkipRemote` still fails the existing fail-closed deployment parity gate (`index.html does not match the local deployment file`); the required deployment acceptance gate remains unresolved, so this item and both subitems stay unchecked. The RC checklist also cannot run to completion without the configured release signer subject/thumbprint.
 
 ## Completed
 
