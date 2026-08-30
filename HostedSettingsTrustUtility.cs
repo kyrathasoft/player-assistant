@@ -177,6 +177,23 @@ namespace PlayerAssistant
 
             var statePath = ResolveTrustedHostedSettingsStatePath(trustedHostedSettingsStatePath);
             using var stateLock = AcquireTrustedHostedSettingsStateLock(statePath);
+            ApplyTrustedHostedSettingsVersionPolicyUnderLock(version, statePath);
+        }
+
+        internal static void ApplyTrustedHostedSettingsVersionPolicyForChildProcess(
+            Version version, string statePath, string acquiredPath, string releasePath)
+        {
+            using var stateLock = AcquireTrustedHostedSettingsStateLock(statePath);
+            File.WriteAllText(acquiredPath, "acquired");
+            while (!File.Exists(releasePath)) Thread.Sleep(10);
+            ApplyTrustedHostedSettingsVersionPolicyUnderLock(version, statePath);
+        }
+
+        internal static IDisposable AcquireTrustedHostedSettingsStateLockForChildProcess(string statePath) =>
+            AcquireTrustedHostedSettingsStateLock(statePath);
+
+        private static void ApplyTrustedHostedSettingsVersionPolicyUnderLock(Version version, string statePath)
+        {
             // Re-read while holding the inter-process lock so concurrent readers cannot lower the floor.
             var highestTrustedVersion = TryReadTrustedHostedSettingsVersion(statePath);
             if (highestTrustedVersion is not null && version.CompareTo(highestTrustedVersion) < 0)
@@ -185,16 +202,9 @@ namespace PlayerAssistant
                     $"Hosted settings downgrade detected. Highest trusted hosted settings version {highestTrustedVersion} has already been observed, but the newly fetched signed hosted settings version is {version}.");
             }
 
-            if (highestTrustedVersion is not null && version.CompareTo(highestTrustedVersion) <= 0)
-            {
-                return;
-            }
-
-            var state = new TrustedHostedSettingsState(
-                TrustedHostedSettingsStateSchemaVersion,
-                version.ToString(),
-                DateTimeOffset.UtcNow.ToString("O"));
-            LocalSettingsUtility.SaveScopedProtectedJson(statePath, state);
+            if (highestTrustedVersion is not null && version.CompareTo(highestTrustedVersion) <= 0) return;
+            LocalSettingsUtility.SaveScopedProtectedJson(statePath, new TrustedHostedSettingsState(
+                TrustedHostedSettingsStateSchemaVersion, version.ToString(), DateTimeOffset.UtcNow.ToString("O")));
         }
 
         internal static Version? TryReadTrustedHostedSettingsVersion(string? trustedHostedSettingsStatePath = null)
@@ -427,7 +437,14 @@ namespace PlayerAssistant
             var mutex = new Mutex(false, lockName);
             try
             {
-                mutex.WaitOne();
+                try
+                {
+                    mutex.WaitOne();
+                }
+                catch (AbandonedMutexException)
+                {
+                    // An abandoned mutex is acquired by the waiter and is safe to recover.
+                }
                 return new DelegateDisposable(() =>
                 {
                     mutex.ReleaseMutex();

@@ -107,9 +107,9 @@ Implement these twenty findings in order. Security boundaries, credential handli
 - [ ] Recover translator and campaign-search workers after crashes or deserialization failures.
   - Handle `error` and `messageerror`, terminate failed workers, clear loading/pending state, reject stale results, expose retry, and recreate exactly one worker.
   - Regression: startup and mid-request failures recover through one retry and the next request succeeds without stale rendering.
-- [ ] Serialize the hosted-settings downgrade floor across processes.
+- [x] Serialize the hosted-settings downgrade floor across processes.
   - Lock the full read/compare/max/write transaction for `trusted-hosted-settings-state.json`, matching the updater's highest-trusted-version policy.
-  - [!] Added a path-derived named mutex and concurrent-writer coverage; child-process reverse-completion and abandoned-lock recovery coverage remain to complete this item.
+  - [x] Added a path-derived named mutex, concurrent-writer coverage, deterministic reverse-completing child-process coverage, and abandoned-lock recovery coverage.
 - [x] Wire documented message-retention settings into the production broker service.
   - Pass validated `config['messages']` values to `MessageService` instead of silently using the 90-day/500-message defaults.
   - Regression: broker-boundary tests prove non-default pruning and fail closed on malformed production values.

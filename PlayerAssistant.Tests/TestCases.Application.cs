@@ -309,6 +309,40 @@ internal static partial class TestCases
             "concurrent hosted-settings writers must preserve the maximum trusted version");
     }
 
+    internal static void HostedSettingsTrustedVersionIsSerializedAcrossReverseCompletingChildProcesses()
+    {
+        using var directory = TemporaryDirectory.Create();
+        var statePath = Path.Combine(directory.Path, "trusted-hosted-settings-state.json");
+        var acquiredPath = Path.Combine(directory.Path, "high-acquired");
+        var releasePath = Path.Combine(directory.Path, "release-high");
+        using var high = StartHostedSettingsChild("--hosted-settings-gated-child", statePath, "5.0", acquiredPath, releasePath);
+        WaitForFile(acquiredPath);
+        using var low = StartHostedSettingsChild("--hosted-settings-child", statePath, "2.0");
+        Thread.Sleep(100);
+        AssertTrue(!low.HasExited, "lower-version child should remain blocked behind the higher-version writer");
+        File.WriteAllText(releasePath, "release");
+        high.WaitForExit();
+        low.WaitForExit();
+        AssertEqual(0, high.ExitCode, ReadProcessOutput(high));
+        AssertTrue(low.ExitCode != 0, "lower-version child must be rejected after the higher version commits");
+        AssertEqual(new Version(5, 0), HostedSettingsTrustUtility.TryReadTrustedHostedSettingsVersion(statePath)!,
+            "reverse-completing child processes must preserve the higher trusted version");
+    }
+
+    internal static void HostedSettingsTrustedVersionRecoversFromAbandonedChildLock()
+    {
+        using var directory = TemporaryDirectory.Create();
+        var statePath = Path.Combine(directory.Path, "trusted-hosted-settings-state.json");
+        var acquiredPath = Path.Combine(directory.Path, "abandoned-lock-acquired");
+        using var child = StartHostedSettingsChild("--hosted-settings-abandon-lock", statePath, acquiredPath);
+        child.WaitForExit();
+        AssertEqual(0, child.ExitCode, ReadProcessOutput(child));
+        WaitForFile(acquiredPath);
+        HostedSettingsTrustUtility.ApplyTrustedHostedSettingsVersionPolicy(new Version(3, 0), statePath);
+        AssertEqual(new Version(3, 0), HostedSettingsTrustUtility.TryReadTrustedHostedSettingsVersion(statePath)!,
+            "an abandoned hosted-settings mutex must be recoverable by the next writer");
+    }
+
     internal static void HostedSettingsTrustedVersionRejectsTamperedPayload()
     {
         using var directory = TemporaryDirectory.Create();
@@ -3968,6 +4002,30 @@ internal static partial class TestCases
                     RuntimePathUtility.GetUserDataPath("trusted-hosted-settings-state.json"),
                     action)));
     }
+
+    private static Process StartHostedSettingsChild(params string[] arguments)
+    {
+        var process = Process.Start(new ProcessStartInfo
+        {
+            FileName = Environment.ProcessPath ?? throw new InvalidOperationException("test process path is unavailable"),
+            Arguments = string.Join(" ", arguments.Select(argument => $"\"{argument.Replace("\"", "\\\"")}\"")),
+            UseShellExecute = false,
+            CreateNoWindow = true,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true
+        });
+        return process ?? throw new InvalidOperationException("hosted-settings child process did not start");
+    }
+
+    private static void WaitForFile(string path)
+    {
+        var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(10);
+        while (!File.Exists(path) && DateTime.UtcNow < deadline) Thread.Sleep(10);
+        AssertTrue(File.Exists(path), $"child process did not create coordination file '{path}'");
+    }
+
+    private static string ReadProcessOutput(Process process) =>
+        (process.StandardOutput.ReadToEnd() + process.StandardError.ReadToEnd()).Trim();
 
     private static void WithPreservedStartupHealth(Action action)
     {
