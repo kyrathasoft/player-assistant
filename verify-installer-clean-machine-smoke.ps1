@@ -27,6 +27,7 @@ $UpdateInstallerFileName = "p-assist-$installerVersion.exe"
 $CredentialTargets = @(
     'PlayerAssistant/RPOL/UserName',
     'PlayerAssistant/RPOL/Password',
+    'PlayerAssistant/RPOL/Credentials',
     'PlayerAssistant/RPOL/StorageState'
 )
 $UserDataRelativeRoot = 'KyrathaSoft\player-assistant'
