@@ -46,9 +46,10 @@ Implement these twenty findings in order. Security boundaries, credential handli
 - [ ] Close the verified-installer launch time-of-check/time-of-use window.
   - Bind hash/signature verification to stable file identity through process creation, using an ACL-protected non-replaceable launch location or equivalent fail-closed mechanism.
   - Regression: a deterministic post-verification swap prevents launch; unchanged verified bytes launch and cancellation launches nothing.
-- [ ] Make RPOL profile cleanup reparse-point safe.
+- [x] Make RPOL profile cleanup reparse-point safe.
   - Reject root and descendant junctions/symlinks while scavenging `rpol-browser-verification-*`; delete links without traversing their targets, including under elevated scheduled execution.
   - Regression: target bytes outside the profile remain unchanged for root and nested file/directory reparse fixtures while ordinary stale profiles are removed.
+  - [x] Cleanup refuses reparse-point roots and deletes nested reparse links without traversing their targets.
 - [ ] Constrain remote broker-backup filenames before any SCP or local path construction.
   - Accept only the producer's exact `broker-YYYYMMDDTHHMMSSZ-<8hex>.sqlite` basename and canonical descendants of approved roots; reject separators, rooted paths, traversal, confusable names, and alternate extensions before I/O.
   - Regression: every malformed name causes zero SSH/SCP/filesystem mutation; a valid basename still verifies and copies.
