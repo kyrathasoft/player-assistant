@@ -100,18 +100,20 @@ Implement these twenty findings in order. Security boundaries, credential handli
 - [ ] Keep desktop network deadlines active through response-body consumption.
   - Carry the linked request-policy timeout through JSON decode, streaming copy, and disposal instead of ending it when headers arrive under `ResponseHeadersRead`.
   - Regression: a headers-then-stall fixture times out, disposes the response, removes partial files, and distinguishes policy timeout from caller cancellation.
-- [ ] Prevent arbitrary in-scope navigation responses from replacing the cached PWA shell.
+- [x] Prevent arbitrary in-scope navigation responses from replacing the cached PWA shell.
   - Promote network HTML to the canonical `index.html` cache key only for the normalized PWA root or `index.html`; serve other valid HTML without shell promotion.
   - Regression: visiting `offline.html` or another in-scope HTML path leaves cached shell bytes unchanged and offline root startup functional.
+  - [x] Navigation cache promotion is limited to the normalized PWA root and `index.html`; deterministic service-worker coverage proves `offline.html` cannot create a shell entry.
 - [ ] Recover translator and campaign-search workers after crashes or deserialization failures.
   - Handle `error` and `messageerror`, terminate failed workers, clear loading/pending state, reject stale results, expose retry, and recreate exactly one worker.
   - Regression: startup and mid-request failures recover through one retry and the next request succeeds without stale rendering.
 - [ ] Serialize the hosted-settings downgrade floor across processes.
   - Lock the full read/compare/max/write transaction for `trusted-hosted-settings-state.json`, matching the updater's highest-trusted-version policy.
   - Regression: reverse-completing child processes retain the maximum version; lower versions and abandoned-lock recovery cannot reduce it.
-- [ ] Wire documented message-retention settings into the production broker service.
+- [x] Wire documented message-retention settings into the production broker service.
   - Pass validated `config['messages']` values to `MessageService` instead of silently using the 90-day/500-message defaults.
   - Regression: broker-boundary tests prove non-default pruning and fail closed on malformed production values.
+  - [x] BrokerService now passes the validated `messages` configuration section into MessageService.
 - [ ] Pin and attest the Inno Setup compiler used by release CI.
   - Pin an approved Chocolatey/compiler version, verify package/compiler hash and publisher signature before execution, and record tool identity in release provenance.
   - Regression: unexpected version, hash, or signer fails before `ISCC`; the approved tool produces provenance containing its exact identity.

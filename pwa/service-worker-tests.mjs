@@ -368,7 +368,43 @@ const testNavigationFallsBackAfterBoundedNetworkTimeout = async () => {
     assert.equal(await response.text(), '<!doctype html><title>Offline</title>');
 };
 
+const testNonCanonicalNavigationDoesNotPromoteShell = async () => {
+    const shellRequest = 'https://example.test/scarlethorizons/pwa/index.html';
+    const originalShell = '<!doctype html><title>Original shell</title>';
+    const alternate = new Response('<!doctype html><title>Offline page</title>', {
+        status: 200,
+        headers: { 'Content-Type': 'text/html' }
+    });
+    let fetchCount = 0;
+    const harness = createHarness({
+        cacheEntries: {
+            [currentShellCache]: [[shellRequest, new Response(originalShell, {
+                status: 200,
+                headers: { 'Content-Type': 'text/html' }
+            })]]
+        },
+        fetchImpl: async () => {
+            fetchCount += 1;
+            return new Response('<!doctype html><title>Offline page</title>', {
+                status: 200,
+                headers: { 'Content-Type': 'text/html' }
+            });
+        }
+    });
+    let responsePromise;
+    harness.dispatch('fetch', {
+        request: { method: 'GET', mode: 'navigate', url: 'https://example.test/scarlethorizons/pwa/offline.html' },
+        respondWith(value) { responsePromise = Promise.resolve(value); }
+    });
+    assert.equal(await (await responsePromise).text(), originalShell);
+    assert.equal(fetchCount, 1, 'non-canonical navigation should still try the network');
+    const cache = harness.cacheMap.get(currentShellCache);
+    assert.equal(cache.entries.has(shellRequest), true, 'canonical shell cache entry must remain');
+    assert.equal(cache.entries.has('https://example.test/scarlethorizons/pwa/offline.html'), false, 'non-canonical page must not become shell');
+};
+
 const tests = [
+    testNonCanonicalNavigationDoesNotPromoteShell,
     testHttpErrorPrefersValidCachedShell,
     testMalformedJsonNetworkPrefersValidCachedData,
     testMandatoryPrecacheRejectsInvalidJsonAndDeletesShell,
