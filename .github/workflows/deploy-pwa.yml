@@ -27,7 +27,7 @@ jobs:
           [System.IO.File]::WriteAllText($keyPath, $env:DREAMHOST_SSH_PRIVATE_KEY, [System.Text.ASCIIEncoding]::new())
           try {
             $files = @(
-              'index.html', 'styles.css', 'version.js', 'app.js', 'service-worker.js',
+              '.htaccess', 'index.html', 'styles.css', 'version.js', 'app.js', 'service-worker.js',
               'translator-worker.js', 'campaign-search-worker.js', 'optional-pack-loader.js', 'optional-packs.json', 'offline.html',
               'manifest.webmanifest', 'icons/icon-192.png', 'icons/icon-512.png',
               'icons/dragon-mark.png', 'data/orcish.json', 'data/elvish.json',
