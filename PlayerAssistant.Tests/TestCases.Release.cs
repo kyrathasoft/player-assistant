@@ -811,6 +811,37 @@ internal static partial class TestCases
         AssertContains(exception.Message, "signer details changed");
     }
 
+    internal static void VerifiedInstallerLaunchRejectsPostVerificationByteSwap()
+    {
+        using var directory = TemporaryDirectory.Create();
+        var installerPath = Path.Combine(directory.Path, "p-assist-0.9.1.exe");
+        var installerBytes = System.Text.Encoding.UTF8.GetBytes("signed installer bytes");
+        var replacementBytes = System.Text.Encoding.UTF8.GetBytes("replacement installer bytes");
+        File.WriteAllBytes(installerPath, installerBytes);
+
+        var signature = new AuthenticodeSignatureInfo("Valid", "CN=KyrathaSoft LLC", "ABC123");
+        var download = new VerifiedInstallerDownloadResult(
+            installerPath,
+            Convert.ToHexString(SHA256.HashData(installerBytes)),
+            signature,
+            ReusedExistingFile: false);
+        var policy = new AuthenticodeSignaturePolicy("CN=KyrathaSoft", "ABC123");
+        var ticket = VerifiedInstallerLaunchUtility.CreateLaunchTicket(
+            download, policy, _ => signature, () => InstallerLaunchElevationContext.StandardUser);
+
+        var exception = AssertThrows<InvalidOperationException>(() =>
+            VerifiedInstallerLaunchUtility.CreateStartInfo(
+                ticket,
+                path =>
+                {
+                    File.WriteAllBytes(path, replacementBytes);
+                    return signature;
+                },
+                () => InstallerLaunchElevationContext.StandardUser));
+
+        AssertContains(exception.Message, "SHA256 changed");
+    }
+
     internal static void VerifiedInstallerLaunchRejectsElevationChangesAfterVerification()
     {
         using var directory = TemporaryDirectory.Create();

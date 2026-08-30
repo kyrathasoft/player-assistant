@@ -192,6 +192,16 @@ namespace PlayerAssistant
                 throw new InvalidOperationException(
                     "Verified installer signer details changed after verification.");
             }
+
+            // Signature inspection is another path-dependent read. Recheck the
+            // digest after it completes so a replacement during inspection cannot
+            // be mistaken for the bytes verified before inspection.
+            var digestAfterSignatureInspection = ComputeSha256(installerPath);
+            if (!string.Equals(digestAfterSignatureInspection, normalizedExpectedSha256, StringComparison.Ordinal))
+            {
+                throw new InvalidOperationException(
+                    $"Verified installer SHA256 changed from '{normalizedExpectedSha256}' to '{digestAfterSignatureInspection}' after verification.");
+            }
         }
 
         private static bool SignatureMatches(

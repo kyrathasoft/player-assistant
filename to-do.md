@@ -47,14 +47,17 @@ Implement these twenty findings in order. Security boundaries, credential handli
   - Bind hash/signature verification to stable file identity through process creation, using an ACL-protected non-replaceable launch location or equivalent fail-closed mechanism.
   - Regression: a deterministic post-verification swap prevents launch; unchanged verified bytes launch and cancellation launches nothing.
   - [x] Verified launch holds a non-delete-sharing file handle through process creation.
+  - [x] Added deterministic post-signature-inspection byte-swap coverage; the digest is rechecked before launch.
 - [x] Make RPOL profile cleanup reparse-point safe.
   - Reject root and descendant junctions/symlinks while scavenging `rpol-browser-verification-*`; delete links without traversing their targets, including under elevated scheduled execution.
   - Regression: target bytes outside the profile remain unchanged for root and nested file/directory reparse fixtures while ordinary stale profiles are removed.
   - [x] Cleanup refuses reparse-point roots and deletes nested reparse links without traversing their targets.
+  - [x] Added Windows symbolic-link fixtures covering root refusal, nested file/directory link deletion, target preservation, and ordinary stale-profile removal.
 - [x] Constrain remote broker-backup filenames before any SCP or local path construction.
   - Accept only the producer's exact `broker-YYYYMMDDTHHMMSSZ-<8hex>.sqlite` basename and canonical descendants of approved roots; reject separators, rooted paths, traversal, confusable names, and alternate extensions before I/O.
   - Regression: every malformed name causes zero SSH/SCP/filesystem mutation; a valid basename still verifies and copies.
   - [x] Recovery validates the exact producer basename before constructing remote or local paths.
+  - [x] Added malformed-separator, traversal, rooted-path, confusable-name, extension, and approved-root regression coverage.
 - [x] Require an idempotency key on every authenticated broker mutation.
   - Remove the direct-execution fallback in `BrokerService::mutation()` and return `400 invalid_idempotency_key` when the key is absent or malformed.
   - Regression: every protected mutation rejects a missing key, while a retried keyed request replays one durable result and creates one effect.

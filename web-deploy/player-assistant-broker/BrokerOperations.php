@@ -2,6 +2,29 @@
 
 declare(strict_types=1);
 
+final class BrokerBackupPathValidator
+{
+    private const BasenamePattern = '/^broker-[0-9]{8}T[0-9]{6}Z-[0-9a-fA-F]{8}\.sqlite$/D';
+
+    public static function assertProducerBasename(string $basename): void
+    {
+        if (preg_match(self::BasenamePattern, $basename) !== 1) {
+            throw new RuntimeException('The broker backup filename is not a valid producer basename.');
+        }
+    }
+
+    public static function assertApprovedPath(string $path, string $approvedRoot): void
+    {
+        self::assertProducerBasename(basename($path));
+        $root = realpath($approvedRoot);
+        $candidate = realpath($path);
+        if ($root === false || $candidate === false
+            || !str_starts_with($candidate, rtrim($root, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR)) {
+            throw new RuntimeException('The broker backup path is outside the approved root.');
+        }
+    }
+}
+
 interface BrokerFtpsClient
 {
     public function upload(string $localPath, string $remotePath): void;
@@ -566,6 +589,7 @@ final class BrokerOperations
 
     private function copyOffsite(string $backupPath, string $metadataPath): void
     {
+        BrokerBackupPathValidator::assertApprovedPath($backupPath, dirname($backupPath));
         $secret = (string)(getenv('BACKUP_ENCRYPTION_KEY') ?: '');
         if ($secret === '') {
             throw new RuntimeException('BACKUP_ENCRYPTION_KEY is required for offsite broker backups.');
