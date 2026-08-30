@@ -17,7 +17,7 @@ internal sealed record ReleaseState(
 internal static class ReleaseStateCompatibilityVerifier
 {
     internal const int CurrentSchemaVersion = 1;
-    private static readonly JsonSerializerOptions Options = new() { PropertyNameCaseInsensitive = true };
+    private static readonly JsonSerializerOptions Options = new() { PropertyNameCaseInsensitive = false, UnmappedMemberHandling = JsonUnmappedMemberHandling.Disallow };
 
     internal static ReleaseState ParseAndVerify(string json, ReleaseState? previous = null, DateTimeOffset? nowUtc = null)
     {
@@ -37,11 +37,18 @@ internal static class ReleaseStateCompatibilityVerifier
         if (string.IsNullOrWhiteSpace(state.ArtifactHash) || state.ArtifactHash.Length != 64 || !state.ArtifactHash.All(Uri.IsHexDigit)) throw new InvalidOperationException("Release state artifact hash is invalid.");
         if (!Guid.TryParse(state.CorrelationId, out _)) throw new InvalidOperationException("Release state correlation ID is invalid.");
         if (state.CreatedAtUtc.Offset != TimeSpan.Zero || state.UpdatedAtUtc.Offset != TimeSpan.Zero) throw new InvalidOperationException("Release state timestamps must be UTC.");
-        if (state.UpdatedAtUtc < state.CreatedAtUtc || state.UpdatedAtUtc > nowUtc) throw new InvalidOperationException("Release state timestamps are not valid.");
+        if (nowUtc.Offset != TimeSpan.Zero || state.UpdatedAtUtc < state.CreatedAtUtc || state.UpdatedAtUtc > nowUtc) throw new InvalidOperationException("Release state timestamps are not valid.");
         if (previous is null) return;
         if (state.Generation < previous.Generation) throw new InvalidOperationException("Release state generation rollback is not allowed.");
-        if (state.Generation == previous.Generation && StageRank(state.Stage) < StageRank(previous.Stage)) throw new InvalidOperationException("Release state transition rollback is not allowed.");
-        if (state.Generation > previous.Generation && state.Stage != ReleaseTransactionStage.Prepared) throw new InvalidOperationException("A new generation must begin in Prepared stage.");
+        if (state.Generation == previous.Generation)
+        {
+            if (!string.Equals(state.ArtifactHash, previous.ArtifactHash, StringComparison.OrdinalIgnoreCase)
+                || !string.Equals(state.CorrelationId, previous.CorrelationId, StringComparison.OrdinalIgnoreCase))
+                throw new InvalidOperationException("Release state identity cannot change within a generation.");
+            if (!IsAllowedTransition(previous.Stage, state.Stage)) throw new InvalidOperationException("Release state transition is not allowed.");
+        }
+        else if (state.Generation != previous.Generation + 1 || state.Stage != ReleaseTransactionStage.Prepared)
+            throw new InvalidOperationException("A new generation must begin at the next generation in Prepared stage.");
     }
 
     private static int StageRank(ReleaseTransactionStage stage) => stage switch
@@ -50,4 +57,15 @@ internal static class ReleaseStateCompatibilityVerifier
         ReleaseTransactionStage.Promoted => 4, ReleaseTransactionStage.Finalized => 5, ReleaseTransactionStage.RolledBack => 6,
         _ => throw new InvalidOperationException("Unknown release-state stage.")
     };
+
+    private static bool IsAllowedTransition(ReleaseTransactionStage from, ReleaseTransactionStage to) =>
+        from == to || (from, to) switch
+        {
+            (ReleaseTransactionStage.Prepared, ReleaseTransactionStage.Staged) => true,
+            (ReleaseTransactionStage.Staged, ReleaseTransactionStage.Verified) => true,
+            (ReleaseTransactionStage.Verified, ReleaseTransactionStage.Promoted) => true,
+            (ReleaseTransactionStage.Promoted, ReleaseTransactionStage.Finalized) => true,
+            (_, ReleaseTransactionStage.RolledBack) when from is not ReleaseTransactionStage.Finalized => true,
+            _ => false
+        };
 }
