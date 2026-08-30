@@ -29,6 +29,8 @@ $localArchive = "$localStage.tar"
 $remoteStage = "$RemoteDirectory/.release-$releaseId"
 $remoteArchive = "$remoteStage.tar"
 $remoteState = "$remoteStage/.transaction.json"
+$remoteLock = "$RemoteDirectory/.pwa-release-lock"
+$remoteLockAcquired = $false
 $pwaDirectory = Join-Path $PSScriptRoot '..\pwa'
 $sshExecutable = Join-Path $env:WINDIR 'System32\OpenSSH\ssh.exe'
 $scpExecutable = Join-Path $env:WINDIR 'System32\OpenSSH\scp.exe'
@@ -166,6 +168,9 @@ else { throw new RuntimeException('Unknown release action: '.$action); }
     }
     if (-not $uploaded) { throw 'Unable to upload the PWA release archive.' }
 
+    $lockExit = Invoke-RemoteSsh "if ! mkdir '$remoteLock'; then exit 75; fi"
+    if ($lockExit -ne 0) { throw 'Another PWA release transaction is active on the host.' }
+    $remoteLockAcquired = $true
     $prepareExit = Invoke-RemoteSsh "mkdir '$remoteStage' && tar -xf '$remoteArchive' -C '$remoteStage'"
     if ($prepareExit -ne 0) { throw 'Unable to prepare the PWA release transaction.' }
     $installExit = Invoke-RemoteSsh "/usr/bin/php '$remoteStage/install.php' install"
@@ -195,6 +200,9 @@ else { throw new RuntimeException('Unknown release action: '.$action); }
     if ($cleanupExit -ne 0) { throw 'Unable to clean up the finalized PWA release staging files.' }
 }
 finally {
+    if ($remoteLockAcquired) {
+        [void](Invoke-RemoteSsh "rmdir '$remoteLock'")
+    }
     $resolvedTemp = [IO.Path]::GetFullPath([IO.Path]::GetTempPath())
     $resolvedStage = [IO.Path]::GetFullPath($localStage)
     if ($resolvedStage.StartsWith($resolvedTemp, [StringComparison]::OrdinalIgnoreCase)) {

@@ -11,6 +11,10 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: pwa-release-transactions
+  cancel-in-progress: false
+
 jobs:
   deploy:
     name: Deploy campaign word count to DreamHost

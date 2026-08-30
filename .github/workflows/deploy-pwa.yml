@@ -6,6 +6,10 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: pwa-release-transactions
+  cancel-in-progress: false
+
 jobs:
   deploy:
     name: Deploy PWA to DreamHost

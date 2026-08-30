@@ -1,6 +1,13 @@
 $ErrorActionPreference = 'Stop'
 $scriptPath = Join-Path $PSScriptRoot '..\deploy-pwa-files.ps1'
 $scriptText = Get-Content -Raw -LiteralPath $scriptPath
+$deployWorkflow = Get-Content -Raw -LiteralPath (Join-Path $PSScriptRoot '..\..\.github\workflows\deploy-pwa.yml')
+$campaignDeployWorkflow = Get-Content -Raw -LiteralPath (Join-Path $PSScriptRoot '..\..\.github\workflows\pwa-campaign-word-count-deploy.yml')
+if ($deployWorkflow -notmatch '(?m)^concurrency:\s*$' -or $deployWorkflow -notmatch 'group:\s*pwa-release-transactions' -or $deployWorkflow -notmatch 'cancel-in-progress:\s*false') { throw 'Full PWA deployment is missing the shared non-cancelling concurrency group.' }
+if ($campaignDeployWorkflow -notmatch '(?m)^concurrency:\s*$' -or $campaignDeployWorkflow -notmatch 'group:\s*pwa-release-transactions' -or $campaignDeployWorkflow -notmatch 'cancel-in-progress:\s*false') { throw 'Campaign deployment is missing the shared non-cancelling concurrency group.' }
+if ($scriptText -notmatch '\$remoteLock = "\$RemoteDirectory/\.pwa-release-lock"') { throw 'Host-side PWA release lock is missing.' }
+if ($scriptText -notmatch 'mkdir ''\$remoteLock''') { throw 'Host-side PWA release lock acquisition is missing.' }
+if ($scriptText -notmatch 'rmdir ''\$remoteLock''') { throw 'Host-side PWA release lock release is missing.' }
 $match = [regex]::Match($scriptText, "(?s)\$controller = @'\r?\n(?<php>.*?)\r?\n'@\.Replace")
 if (-not $match.Success) { throw 'Could not extract the deployment controller template.' }
 $controllerTemplate = $match.Groups['php'].Value

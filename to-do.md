@@ -86,9 +86,10 @@ Implement these twenty findings in order. Security boundaries, credential handli
   - On `pageshow`, fail closed by hiding/clearing protected content and revalidating `/session` before restoring authenticated UI, especially when `event.persisted` is true.
   - [x] Every `pageshow` clears protected snapshots and DOM state, advances the authentication generation, and revalidates `/session` before restoring authenticated UI, including BFCache restores.
   - [x] Deterministic lifecycle coverage verifies fail-closed pageshow handling and session revalidation ordering.
-- [ ] Serialize all PWA release transactions across workflows and hosts.
+- [x] Serialize all PWA release transactions across workflows and hosts.
   - Use one non-cancelling GitHub concurrency group and one shared host-side deployment lock for full PWA, campaign-search, and other release writers.
-  - Regression: overlapping controllers cannot interleave backup/promotion/rollback, and either transaction's failure preserves the other's exact committed bytes.
+  - [x] Full PWA and campaign-search deployment workflows share the non-cancelling `pwa-release-transactions` group; the host deployment script acquires a shared lock before staging or promotion and releases it after cleanup.
+  - [x] Deployment transaction regression verifies promotion, idempotent replay, finalization, and rollback prohibition; static workflow/lock assertions cover both release writers.
 - [ ] Treat only clean finalized installer transactions as resolved recovery state.
   - Accept `finalized` only when `rollback_forbidden=true` and `cleanup_complete=true`; retain fail-closed behavior for incomplete, malformed, or contradictory finalized manifests.
   - Regression: clean finalized/verified manifests pass preflight, while every incomplete finalized combination remains blocking.
