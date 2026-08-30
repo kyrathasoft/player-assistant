@@ -887,6 +887,16 @@ internal static partial class TestCases
         });
     }
 
+    internal static void RuntimePathUtilityUsesSystemTempForExternalBrowserProfile()
+    {
+        var expected = Path.GetFullPath(Path.GetTempPath());
+        var resolved = RuntimePathUtility.GetExternalBrowserTemporaryDirectory();
+
+        AssertTrue(
+            resolved.StartsWith(expected.TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase),
+            "external browser profiles must be created under the system user temporary directory");
+    }
+
     internal static void RuntimePathUtilityUsesUserDataRootForPublishedRuntime()
     {
         var publishedDirectory = Path.Combine(Path.GetTempPath(), "player-assistant-test", "Release", "publish");

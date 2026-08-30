@@ -409,6 +409,8 @@ Planned security correction: eliminate first-name equivalence from authenticatio
   - [ ] Verify every required approved RPOL page through the scheduled signed publisher and complete a clean-client run using only a revocable broker token.
   - [ ] Remove administrator credentials from hosted, local, publish-time, and end-user settings/Credential Manager entries; rotate the administrator password afterward.
   - [ ] Complete release verification for broker-only retrieval, credential-free client startup, diagnostics redaction, and Release/publish/installer parity.
+  - [ ] Blocked 2026-08-29: the scheduled signed publisher discovered 21 approved RPOL targets but could not complete the next target because the temporary external browser exited before publishing its CDP endpoint; no credentials were removed or rotated.
+
 - [ ] Add a profile-bound RPOL state fallback only when publisher-equivalent round-trip testing proves storage-state reuse cannot work.
   - [ ] Use a dedicated user-only persistent profile with restrictive ACLs, a single-process lock, exact protected-probe validation, and explicit reset behavior.
   - [ ] Never copy the user’s normal browser profile or package, upload, log, or commit authenticated browser state.

@@ -174,6 +174,7 @@ internal static class TestCatalog
     ("startup health writes schema version", TestCases.StartupHealthWritesSchemaVersion),
     ("startup health records required phase failure", TestCases.StartupHealthRecordsRequiredPhaseFailure),
     ("startup health records optional phase failure without throwing", TestCases.StartupHealthRecordsOptionalPhaseFailureWithoutThrowing),
+    ("runtime path utility uses system temp for external browser profile", TestCases.RuntimePathUtilityUsesSystemTempForExternalBrowserProfile),
     ("runtime path utility uses user data root for published runtime", TestCases.RuntimePathUtilityUsesUserDataRootForPublishedRuntime),
     ("runtime housekeeping removes stale temp and atomic files", TestCases.RuntimeHousekeepingRemovesStaleTempAndAtomicFiles),
     ("runtime housekeeping preserves fresh and unrelated tmp files", TestCases.RuntimeHousekeepingPreservesFreshAndUnrelatedTmpFiles),

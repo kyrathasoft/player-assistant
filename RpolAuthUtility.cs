@@ -450,7 +450,7 @@ namespace PlayerAssistant
                 ?? throw new RpolAuthException(
                     RpolAuthFailureKind.PlaywrightUnavailable,
                     "RPOL browser verification requires installed Chrome or Microsoft Edge, but neither browser executable was found.");
-            var tempDirectory = RuntimePathUtility.GetUserDataPath("temp");
+            var tempDirectory = RuntimePathUtility.GetExternalBrowserTemporaryDirectory();
             Directory.CreateDirectory(tempDirectory);
             var staleProfileCleanupErrors = RpolExternalProfileCleanup.ScavengeStaleProfiles(
                 tempDirectory,
