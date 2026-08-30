@@ -123,6 +123,38 @@ namespace PlayerAssistant
             };
         }
 
+        public static Process Launch(
+            VerifiedInstallerLaunchTicket ticket,
+            CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var installerPath = Path.GetFullPath(ticket.InstallerPath);
+            // Deny delete/write sharing for the complete verify-to-create interval. On
+            // Windows this binds the verified bytes to the path until CreateProcess has
+            // opened it, closing the replacement window between verification and launch.
+            using var identityHandle = new FileStream(
+                installerPath, FileMode.Open, FileAccess.Read, FileShare.Read);
+            EnsureInstallerMatchesVerifiedState(
+                installerPath,
+                ticket.Sha256,
+                ticket.Signature,
+                ticket.SignaturePolicy,
+                AuthenticodeSignatureUtility.InspectSignature);
+            var currentElevationContext = GetCurrentProcessElevationContext();
+            if (currentElevationContext != ticket.ElevationContext)
+            {
+                throw new InvalidOperationException(
+                    $"Verified installer launch elevation context changed from '{ticket.ElevationContext}' to '{currentElevationContext}' after verification.");
+            }
+            cancellationToken.ThrowIfCancellationRequested();
+            return Process.Start(new ProcessStartInfo(installerPath)
+            {
+                UseShellExecute = true,
+                Verb = ticket.LaunchVerb,
+                WorkingDirectory = Path.GetDirectoryName(installerPath) ?? AppContext.BaseDirectory
+            }) ?? throw new InvalidOperationException("The verified installer process could not be started.");
+        }
+
         internal static InstallerLaunchElevationContext GetCurrentProcessElevationContext()
         {
             using var identity = WindowsIdentity.GetCurrent();

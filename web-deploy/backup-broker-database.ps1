@@ -23,6 +23,14 @@ if ([string]::IsNullOrWhiteSpace($env:BACKUP_ENCRYPTION_KEY) -or $env:BACKUP_ENC
     throw 'BACKUP_ENCRYPTION_KEY must be set to at least 32 characters.'
 }
 
+function Assert-ValidBrokerBackupName {
+    param([Parameter(Mandatory = $true)][string]$Name)
+    if ($Name -notmatch '^broker-\d{8}T\d{6}Z-[a-f0-9]{8}\.sqlite$' -or
+        [IO.Path]::GetFileName($Name) -cne $Name) {
+        throw 'Remote broker recovery returned an invalid backup filename.'
+    }
+}
+
 $remoteOutput = & $ssh -i $SshKeyPath -o BatchMode=yes -o IdentitiesOnly=yes -o ConnectTimeout=15 $remote "/usr/bin/php '$RemoteDirectory/broker-recovery.php'"
 if ($LASTEXITCODE -ne 0) {
     throw 'Remote broker recovery failed.'
@@ -32,6 +40,7 @@ if ($recovery.status -ne 'ok' -or [string]::IsNullOrWhiteSpace([string]$recovery
     throw 'Remote broker recovery did not report a successful backup.'
 }
 
+Assert-ValidBrokerBackupName -Name ([string]$recovery.backup_file)
 $remoteBackup = "$RemoteDirectory/backups/$($recovery.backup_file)"
 $remoteStatus = "$RemoteDirectory/broker-recovery-status.json"
 $stagingRoot = Join-Path ([IO.Path]::GetTempPath()) ('pa-broker-backup-' + [guid]::NewGuid().ToString('N'))

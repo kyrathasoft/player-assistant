@@ -79,6 +79,10 @@ internal static class RpolCleanupUtility
         if (bound <= TimeSpan.Zero) throw new ArgumentOutOfRangeException(nameof(bound));
         var deadline = DateTimeOffset.UtcNow + bound;
         if (!Directory.Exists(directory)) return;
+        if (IsReparsePoint(directory))
+        {
+            throw new IOException("RPOL cleanup refused to traverse a reparse-point profile root.");
+        }
 
         var pending = new Stack<string>(Directory.EnumerateFileSystemEntries(directory));
         while (pending.Count > 0)
@@ -88,6 +92,11 @@ internal static class RpolCleanupUtility
             var path = pending.Pop();
             if (Directory.Exists(path))
             {
+                if (IsReparsePoint(path))
+                {
+                    Directory.Delete(path);
+                    continue;
+                }
                 var children = Directory.EnumerateFileSystemEntries(path).ToArray();
                 if (children.Length > 0)
                 {
@@ -107,5 +116,10 @@ internal static class RpolCleanupUtility
 
         cancellationToken.ThrowIfCancellationRequested();
         Directory.Delete(directory);
+    }
+
+    private static bool IsReparsePoint(string path)
+    {
+        return (File.GetAttributes(path) & FileAttributes.ReparsePoint) != 0;
     }
 }
