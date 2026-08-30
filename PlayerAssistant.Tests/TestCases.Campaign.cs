@@ -528,6 +528,17 @@ internal static partial class TestCases
             () => PlayerAssistant.Program.GetRpolResultPathForTests(["--rpol-result-path", Path.Combine(AppContext.BaseDirectory, "rpol-results", runId, "..", "other.json")], runId));
     }
 
+    internal static void RpolPublisherWrapperPreservesReadableTerminalEvidenceOnContractMismatch()
+    {
+        var source = File.ReadAllText(Path.Combine(GetRepositoryRoot(), "publish-rpol-snapshots.ps1"));
+        AssertTrue(
+            source.Contains("Test-ResultEvidenceIdentity", StringComparison.Ordinal),
+            "publisher wrapper must identify readable terminal child evidence before writing a fallback");
+        AssertTrue(
+            source.Contains("$resultWasRead -and (Test-ResultEvidenceIdentity", StringComparison.Ordinal),
+            "publisher wrapper must not replace readable terminal child evidence with a misleading fallback");
+    }
+
     internal static void RpolPublisherWrapperContainsAtomicSupervisionContract()
     {
         var source = File.ReadAllText(Path.Combine(GetRepositoryRoot(), "publish-rpol-snapshots.ps1"));

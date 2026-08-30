@@ -271,6 +271,7 @@ internal static class TestCatalog
     ("rpol result rejects unknown discovery and count mismatch", TestCases.RpolResultRejectsUnknownDiscoveryAndCountMismatch),
     ("rpol result accepts wrapper timeout fallback", TestCases.RpolResultAcceptsWrapperTimeoutFallback),
     ("rpol result path rejects traversal and unrelated runtime overwrite", TestCases.RpolResultPathRejectsTraversalAndUnrelatedRuntimeOverwrite),
+    ("rpol publisher wrapper preserves readable terminal evidence on contract mismatch", TestCases.RpolPublisherWrapperPreservesReadableTerminalEvidenceOnContractMismatch),
     ("rpol publisher wrapper contains atomic supervision contract", TestCases.RpolPublisherWrapperContainsAtomicSupervisionContract),
     ("rpol publisher wrapper allows bounded clock skew", TestCases.RpolPublisherWrapperAllowsBoundedClockSkew),
     ("rpol protected probe does not require network idle", TestCases.RpolProtectedProbeDoesNotRequireNetworkIdle),
