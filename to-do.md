@@ -506,10 +506,10 @@ Planned security correction: eliminate first-name equivalence from authenticatio
   - [ ] Complete release verification for broker-only retrieval, credential-free client startup, diagnostics redaction, and Release/publish/installer parity.
   - [!] Externally unresolvable until a future RPOL run produces both successful protected-page coverage and clean-client broker-token-only verification. Keep the broker fail-closed when RPOL is unavailable. Do not use a profile-bound state fallback merely to force this criterion to pass.
 
-- [ ] Add a profile-bound RPOL state fallback only when publisher-equivalent round-trip testing proves storage-state reuse cannot work.
+- [x] Add a profile-bound RPOL state fallback only when publisher-equivalent round-trip testing proves storage-state reuse cannot work.
   - [ ] Use a dedicated user-only persistent profile with restrictive ACLs, a single-process lock, exact protected-probe validation, and explicit reset behavior.
   - [ ] Never copy the user’s normal browser profile or package, upload, log, or commit authenticated browser state.
-  - [!] Unnecessary at present: publisher-equivalent separate-process round-trip proof passes, so storage-state reuse remains the primary path and no persistent-profile fallback is justified.
+  - [x] No fallback added: publisher-equivalent separate-process round-trip proof passes, so storage-state reuse remains the primary path and a profile fallback is not justified.
 - [x] Isolate network and update concurrency state.
   - [x] Scope circuit breakers by network purpose and endpoint family so unrelated services sharing one authority cannot suppress or reset one another.
   - [x] Serialize highest-trusted-version compare-and-write across processes and recompute the maximum while holding the lock.
