@@ -2,6 +2,7 @@ import { initializeTranslator } from './modules/translator.js?v=92';
 import { initializeCampaignSearch } from './modules/search.js?v=92';
 import { initializeDice } from './modules/dice.js?v=92';
 import { createControllerChangeHandler } from './service-worker-controller.js?v=92';
+import { mergeInboxSnapshot, createMessageDraftStore } from './modules/inbox-state.js?v=92';
 
 (() => {
     'use strict';
@@ -93,6 +94,7 @@ import { createControllerChangeHandler } from './service-worker-controller.js?v=
     let messageRequestId = 0;
     let messageLoading = false;
     let messageError = '';
+    let messageDraftStore = null;
     let authenticatedRevisionSnapshot = null;
     let appliedMessageRevision = null;
     let appliedQuestRevision = null;
@@ -1823,13 +1825,8 @@ import { createControllerChangeHandler } from './service-worker-controller.js?v=
             const snapshot = validateMessageSnapshot(await requestAuthenticationApi(
                 cursor === null ? '/messages?limit=50' : `/messages?limit=50&cursor=${encodeURIComponent(cursor)}`));
             if (requestId !== messageRequestId || authenticatedAccount?.id !== accountId) return false;
-            const mergedMessages = [...new Map([
-                ...(authenticatedMessageSnapshot?.messages || []),
-                ...snapshot.messages
-            ].map((message) => [message.id, message])).values()];
-            authenticatedMessageSnapshot = cursor === null || mergedMessages.length > snapshot.unread_count
-                ? snapshot
-                : { ...snapshot, messages: mergedMessages };
+            authenticatedMessageSnapshot = mergeInboxSnapshot(
+                authenticatedMessageSnapshot, snapshot, cursor);
             messagesUpdatedAt = Date.now();
             updateAuthenticationUi();
             renderActivityUi();
@@ -1893,6 +1890,8 @@ import { createControllerChangeHandler } from './service-worker-controller.js?v=
     };
 
     const renderMessageDmUi = () => {
+        const input = byId('message-dm-text');
+        if (input instanceof HTMLTextAreaElement && messageDraftStore) input.value = messageDraftStore.load();
         updateMessageDmSubmitState();
         const status = byId('message-dm-status');
         if (status) status.hidden = true;
@@ -1963,6 +1962,8 @@ import { createControllerChangeHandler } from './service-worker-controller.js?v=
     };
 
     const renderMessagePlayerUi = () => {
+        const input = byId('message-player-text');
+        if (input instanceof HTMLTextAreaElement && messageDraftStore) input.value = messageDraftStore.load();
         renderMessagePlayerRecipients();
         updateMessagePlayerSubmitState();
         const status = byId('message-player-status');
@@ -2005,6 +2006,8 @@ import { createControllerChangeHandler } from './service-worker-controller.js?v=
     });
 
     byId('message-dm-text')?.addEventListener('input', () => {
+        const input = byId('message-dm-text');
+        if (input instanceof HTMLTextAreaElement) messageDraftStore?.save(input.value);
         updateMessageDmSubmitState();
     });
     byId('message-dm-text')?.addEventListener('change', () => {
@@ -2041,6 +2044,7 @@ import { createControllerChangeHandler } from './service-worker-controller.js?v=
                 status.textContent = 'Your message was sent to the Dungeon Master.';
             }
             messageInput.value = '';
+            messageDraftStore?.clear();
             setTimeout(() => {
                 if (status) status.hidden = true;
             }, 2500);
@@ -2057,6 +2061,8 @@ import { createControllerChangeHandler } from './service-worker-controller.js?v=
         updateMessagePlayerSubmitState();
     });
     byId('message-player-text')?.addEventListener('input', () => {
+        const input = byId('message-player-text');
+        if (input instanceof HTMLTextAreaElement) messageDraftStore?.save(input.value);
         updateMessagePlayerSubmitState();
     });
     byId('message-player-text')?.addEventListener('change', () => {
@@ -2721,6 +2727,9 @@ import { createControllerChangeHandler } from './service-worker-controller.js?v=
             authenticationCsrfToken = session.authenticated ? String(session.csrf_token || '') : '';
         } catch {
             if (restoreGeneration !== authenticationGeneration) return;
+            messageDraftStore?.clear();
+            messageDraftStore = null;
+            document.querySelectorAll('#message-dm-text, #message-player-text').forEach((input) => { input.value = ''; });
             authenticatedAccount = null;
             authenticationCsrfToken = '';
         }
@@ -2851,6 +2860,9 @@ import { createControllerChangeHandler } from './service-worker-controller.js?v=
             try {
                 const identity = await requestAuthenticationApi('/me');
                 authenticatedAccount = identity.account || authenticatedAccount;
+                messageDraftStore = authenticatedAccount?.id
+                    ? createMessageDraftStore(localStorage, authenticatedAccount.id)
+                    : null;
             } catch {
                 // The login response is already bound to the same server session.
             }
@@ -2866,6 +2878,9 @@ import { createControllerChangeHandler } from './service-worker-controller.js?v=
                 // Login remains available when optional level-up notification delivery fails.
             }
         } catch (error) {
+            messageDraftStore?.clear();
+            messageDraftStore = null;
+            document.querySelectorAll('#message-dm-text, #message-player-text').forEach((input) => { input.value = ''; });
             authenticatedAccount = null;
             authenticationCsrfToken = '';
             clearProtectedFreshness();
@@ -2905,6 +2920,9 @@ import { createControllerChangeHandler } from './service-worker-controller.js?v=
         try {
             await requestAuthenticationApi('/logout', { method: 'POST', csrf: true });
             beginAuthenticationGeneration();
+            messageDraftStore?.clear();
+            messageDraftStore = null;
+            document.querySelectorAll('#message-dm-text, #message-player-text').forEach((input) => { input.value = ''; });
             authenticatedAccount = null;
             authenticationCsrfToken = '';
             clearProtectedFreshness();

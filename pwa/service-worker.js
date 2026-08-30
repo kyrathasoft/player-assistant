@@ -21,6 +21,7 @@ const SHELL_ASSETS = [
     `./modules/translator.js?v=${VERSION_METADATA.appRevision}`,
     `./modules/search.js?v=${VERSION_METADATA.appRevision}`,
     `./modules/dice.js?v=${VERSION_METADATA.appRevision}`,
+    `./modules/inbox-state.js?v=${VERSION_METADATA.appRevision}`,
     `./translator-worker.js?v=${VERSION_METADATA.appRevision}`,
     `./campaign-search-worker.js?v=${VERSION_METADATA.appRevision}`,
     './optional-pack-loader.js',

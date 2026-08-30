@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 final class DatabaseMigrationService
 {
-    public const LATEST_VERSION = 6;
+    public const LATEST_VERSION = 7;
 
     public function __construct(
         private readonly PDO $database,
@@ -72,6 +72,7 @@ final class DatabaseMigrationService
             4 => $this->migrationFour(),
             5 => $this->migrationFive(),
             6 => $this->migrationSix(),
+            7 => $this->migrationSeven(),
             default => throw new RuntimeException("Unknown broker migration version: $version"),
         };
     }
@@ -301,6 +302,17 @@ final class DatabaseMigrationService
             CREATE INDEX IF NOT EXISTS ix_level_up_notification_receipts_account_time
                 ON level_up_notification_receipts(account_id, notified_at);');
     }
+    private function migrationSeven(): void
+    {
+        $this->database->exec(
+            'CREATE TABLE IF NOT EXISTS message_send_rate_limits (
+                account_id TEXT PRIMARY KEY,
+                window_started_at INTEGER NOT NULL,
+                send_count INTEGER NOT NULL CHECK(send_count >= 0),
+                FOREIGN KEY (account_id) REFERENCES character_accounts(id) ON DELETE CASCADE
+            );');
+    }
+
     private function migrationSix(): void
     {
         $this->database->exec(

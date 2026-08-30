@@ -1,0 +1,12 @@
+import fs from 'node:fs';
+assert.match(fs.readFileSync('./app.js','utf8'), /inbox-state/);
+import assert from 'node:assert/strict';
+import { mergeInboxSnapshot, createMessageDraftStore } from './modules/inbox-state.js';
+const msg = (id) => ({ id, message: id });
+const base = { unread_count: 3, messages: [msg('a'), msg('b')], next_cursor: 'c' };
+assert.deepEqual(mergeInboxSnapshot(base, { unread_count: 3, messages: [msg('b'), msg('c')], next_cursor: null }, 'c').messages.map(x => x.id), ['a', 'b', 'c']);
+assert.deepEqual(mergeInboxSnapshot(base, { unread_count: 1, messages: [msg('a')], next_cursor: null }, null).messages.map(x => x.id), ['a']);
+const storage = new Map();
+const adapter = { getItem: k => storage.get(k) ?? null, setItem: (k,v) => storage.set(k,v), removeItem: k => storage.delete(k) };
+const draft = createMessageDraftStore(adapter, 'account-a'); draft.save('unsent'); assert.equal(draft.load(), 'unsent'); draft.clear(); assert.equal(draft.load(), '');
+console.log('Inbox hardening tests passed.');

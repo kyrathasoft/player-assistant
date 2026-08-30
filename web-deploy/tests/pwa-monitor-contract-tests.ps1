@@ -19,15 +19,15 @@ function Assert-ThrowsMessage {
 }
 
 $now = [DateTimeOffset]::UtcNow.ToString('o')
-$validAnonymousSession = '{"authenticated":false}' | ConvertFrom-Json -DateKind String
+$validAnonymousSession = '{"authenticated":false}' | ConvertFrom-Json
 Assert-ProductionAnonymousSessionResponse -Payload $validAnonymousSession
 
-$stringAnonymousSession = '{"authenticated":"false"}' | ConvertFrom-Json -DateKind String
+$stringAnonymousSession = '{"authenticated":"false"}' | ConvertFrom-Json
 Assert-ThrowsMessage -ExpectedMessage 'The anonymous session response has an invalid authentication state.' -Action {
     Assert-ProductionAnonymousSessionResponse -Payload $stringAnonymousSession
 }
 
-$integerAnonymousSession = '{"authenticated":0}' | ConvertFrom-Json -DateKind String
+$integerAnonymousSession = '{"authenticated":0}' | ConvertFrom-Json
 Assert-ThrowsMessage -ExpectedMessage 'The anonymous session response has an invalid authentication state.' -Action {
     Assert-ProductionAnonymousSessionResponse -Payload $integerAnonymousSession
 }
@@ -74,7 +74,7 @@ $validLogin = (@{
     csrf_token = 'abcdefghijklmnopqrstuvwxyzABCDEFGH123456789_-'
     idle_expires_at = [DateTimeOffset]::UtcNow.AddMinutes(10).ToString('o')
     absolute_expires_at = [DateTimeOffset]::UtcNow.AddHours(1).ToString('o')
-} | ConvertTo-Json -Depth 5 | ConvertFrom-Json -DateKind String)
+} | ConvertTo-Json -Depth 5 | ConvertFrom-Json)
 Assert-ProductionLoginResponse -Payload $validLogin
 
 $stringAuthenticatedLogin = $validLogin.PSObject.Copy()
@@ -86,7 +86,7 @@ Assert-ThrowsMessage -ExpectedMessage 'The authenticated login response has an i
 $validIdentity = (@{
     authenticated = $true
     account = $validLogin.account
-} | ConvertTo-Json -Depth 5 | ConvertFrom-Json -DateKind String)
+} | ConvertTo-Json -Depth 5 | ConvertFrom-Json)
 Assert-ProductionIdentityResponse -Payload $validIdentity -ExpectedAccountId $accountId
 
 $stringAuthenticatedIdentity = $validIdentity.PSObject.Copy()
@@ -117,7 +117,7 @@ $validXp = ([pscustomobject]@{
     stale = $false
     scope = 'character'
     character = $validCharacter
-} | ConvertTo-Json -Depth 5 | ConvertFrom-Json -DateKind String)
+} | ConvertTo-Json -Depth 5 | ConvertFrom-Json)
 Assert-ProductionXpResponse -Payload $validXp -MaximumAgeSeconds 86400
 
 $validPartyXp = (@{
@@ -127,7 +127,7 @@ $validPartyXp = (@{
     stale = $false
     scope = 'party'
     characters = @($validCharacter, $validCharacter)
-} | ConvertTo-Json -Depth 5 | ConvertFrom-Json -DateKind String)
+} | ConvertTo-Json -Depth 5 | ConvertFrom-Json)
 Assert-ProductionXpResponse -Payload $validPartyXp -MaximumAgeSeconds 86400
 
 $stringSchemaXp = $validXp.PSObject.Copy()
@@ -198,7 +198,7 @@ $validWordCounts = ([pscustomobject]@{
     wiki = [pscustomobject]@{ pages = 990; words = 233048 }
     ic = [pscustomobject]@{ files = 8; words = 15099 }
     ooc = [pscustomobject]@{ files = 6; words = 18753 }
-} | ConvertTo-Json -Depth 5 | ConvertFrom-Json -DateKind String)
+} | ConvertTo-Json -Depth 5 | ConvertFrom-Json)
 Assert-ProductionWordCountResponse -Payload $validWordCounts -MaximumAgeSeconds 604800
 
 $whitespaceCountingRule = $validWordCounts.PSObject.Copy()

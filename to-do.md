@@ -423,6 +423,7 @@ Planned security correction: eliminate first-name equivalence from authenticatio
   - [ ] Preserve unsent drafts across retryable failures and account-safe navigation while clearing them on identity transition.
   - [ ] Deduplicate accumulated pages by stable message ID and reset safely when server metadata shrinks after acknowledgements or retention.
   - [ ] Add bounded per-account message-send throttling and abuse-oriented fixtures without weakening legitimate DM broadcasts.
+  - [!] Blocked: `pwa/test-deployment.ps1 -SkipRemote` reaches the fail-closed parity gate but reports `index.html does not match the local deployment file`; deployment parity remains unresolved, so this item and subitems stay unchecked.
 - [ ] Extend release and deployment transaction fault injection.
   - [ ] Exercise interruption before and after each commit point for migrations, public-loader promotion, cron changes, private config, installer replacement, and final HTTPS verification.
   - [ ] Verify rollback restores pre-existing files, removes newly introduced files, preserves mode-restricted recovery evidence on rollback failure, and never runs after finalization.
