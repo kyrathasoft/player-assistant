@@ -326,6 +326,17 @@ internal static partial class TestCases
         AssertThrows<InvalidDataException>(() => RpolExternalBrowserConnection.ReadEndpoint(temporary.Path));
     }
 
+    internal static void RpolExternalBrowserContinuesAfterLauncherParentExit()
+    {
+        var source = File.ReadAllText(Path.Combine(GetRepositoryRoot(), "RpolAuthUtility.cs"));
+        var connectStart = source.IndexOf("ConnectToExternalBrowserAsync", StringComparison.Ordinal);
+        var connectEnd = source.IndexOf("WaitForExternalBrowserAuthenticationAsync", connectStart, StringComparison.Ordinal);
+        AssertTrue(connectStart >= 0 && connectEnd > connectStart, "the external-browser connection method must remain present");
+        var connectSource = source[connectStart..connectEnd];
+        AssertFalse(connectSource.Contains("verificationProcess.HasExited", StringComparison.Ordinal), "launcher-parent exit must not abort the browser-owned CDP rendezvous");
+        AssertTrue(connectSource.Contains("ReadEndpoint(profileDirectory)", StringComparison.Ordinal), "connection must continue polling the browser-owned endpoint");
+    }
+
     internal static void RpolOperationDeadlineExposesOneMonotonicBudget()
     {
         using var deadline = RpolOperationDeadline.Create(TimeSpan.FromSeconds(2), TimeSpan.FromSeconds(1));

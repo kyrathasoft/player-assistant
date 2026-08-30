@@ -264,6 +264,7 @@ internal static class TestCatalog
     ("rpol credential store rollback proof uses normal active loader", TestCases.RpolCredentialStoreRollbackProofUsesNormalActiveLoader),
     ("rpol external browser uses ephemeral port and authenticated endpoint", TestCases.RpolExternalBrowserUsesEphemeralPortAndAuthenticatedEndpoint),
     ("rpol external browser rejects forged or malformed endpoint", TestCases.RpolExternalBrowserRejectsForgedOrMalformedEndpoint),
+    ("rpol external browser continues after launcher parent exit", TestCases.RpolExternalBrowserContinuesAfterLauncherParentExit),
     ("rpol operation deadline exposes one monotonic budget", TestCases.RpolOperationDeadlineExposesOneMonotonicBudget),
     ("rpol cross-process lock excludes concurrent run", TestCases.RpolCrossProcessLockExcludesConcurrentRun),
     ("rpol result rejects stale or mismatched run", TestCases.RpolResultRejectsStaleOrMismatchedRun),
