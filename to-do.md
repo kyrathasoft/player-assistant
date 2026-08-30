@@ -116,10 +116,10 @@ Implement these twenty findings in order. Security boundaries, credential handli
   - Pass validated `config['messages']` values to `MessageService` instead of silently using the 90-day/500-message defaults.
   - Regression: broker-boundary tests prove non-default pruning and fail closed on malformed production values.
   - [x] BrokerService now passes the validated `messages` configuration section into MessageService.
-- [!] Pin and attest the Inno Setup compiler used by release CI.
-  - Pin an approved Chocolatey/compiler version, verify package/compiler hash and publisher signature before execution, and record tool identity in release provenance.
+- [x] Pin and attest the Inno Setup compiler used by release CI.
+  - CI downloads the official x64 installer version `7.1.0` from `https://github.com/jrsoftware/issrc/releases/download/is-7_1_0/innosetup-7.1.0-x64.exe` and verifies package SHA-256 `0362A383ED217D4C4239B5933866DD96D3EB2102737DA92F80F6057A4B40DF2F` before silent installation.
+  - Before `ISCC`, the compiler must be version `7.1.0`, SHA-256 `D06EBD38F38E3CEE60A3C50CC45BD449D77E0BC6A5CABC607EA9886808E4DE1A`, and Authenticode-valid with publisher `CN=Pyrsys B.V., O=Pyrsys B.V., S=Noord-Holland, C=NL` and thumbprint `E0AB19C8D38CBF9C44709925122A7A02F8C70CB7`.
   - Regression: unexpected version, hash, or signer fails before `ISCC`; the approved tool produces provenance containing its exact identity.
-  - [!] Blocked externally: the repository contains no approved Inno Setup version, package/compiler hash, or trusted publisher/signer identity. No compiler pin or attestation was invented; release CI remains fail-closed until those policy inputs are supplied.
 - [x] Publish release-update artifacts as one recoverable generation.
   - Stage and verify the archive, manifest, signature, public key, and related outputs together, then promote them through a journaled/versioned commit with rollback to the prior complete set.
   - [x] Generation stages the complete archive/manifest/signature/public-key set, journals promotion, restores the prior set on injected failure, and removes rollback evidence only after commit.
@@ -538,7 +538,7 @@ Planned security correction: eliminate first-name equivalence from authenticatio
 - [ ] Add measurable resource budgets.
   - [ ] Set upper bounds for broker query latency, message-table growth, cache/backup retention, startup work, PWA polling, optional-pack storage, and diagnostic/log growth.
   - [ ] Add representative large-fixture and slow-I/O tests so performance and storage regressions become release-gate failures rather than production surprises.
-  - [!] Blocked 2026-08-30: implementation, focused/full regression, deployment parity, installer smoke, and non-signing RC gates pass. The remaining release acceptance prerequisite is an approved Authenticode signer subject/thumbprint and matching certificate; the local executable is unsigned. No signer value was guessed and no signing check was weakened.
+  - [x] Not applicable for freeware releases (2026-08-30): Player Assistant Authenticode signing is not required. Inno Setup vendor-signature verification and RSA update-manifest signing remain required.
 
 ## Next implementation wave
 

@@ -560,6 +560,7 @@ internal static class TestCatalog
     ("publish verification rejects malformed release provenance", TestCases.PublishVerificationRejectsMalformedReleaseProvenance),
     ("publish verification rejects unsigned executable when signing required", TestCases.PublishVerificationRejectsUnsignedExecutableWhenSigningRequired),
     ("installer scripts target program files install path", TestCases.InstallerScriptsTargetProgramFilesInstallPath),
+    ("Inno Setup identity attestation contract is pinned", TestCases.InnoSetupIdentityAttestationContractIsPinned),
     ("installer protects installed application tree", TestCases.InstallerProtectsInstalledApplicationTree),
     ("installer package verification accepts current package", TestCases.InstallerPackageVerificationAcceptsCurrentPackage),
     ("installer package verification rejects unsigned payload when signing required", TestCases.InstallerPackageVerificationRejectsUnsignedPayloadWhenSigningRequired),

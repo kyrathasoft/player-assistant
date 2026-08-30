@@ -233,9 +233,15 @@ jobs:
       - name: Verify canonical version metadata
         run: python .\verify-version-metadata.py
 
-      - name: Install Inno Setup
+      - name: Install pinned Inno Setup 7.1.0 x64
         shell: pwsh
-        run: choco install innosetup --no-progress --yes
+        run: |
+          $packagePath = Join-Path $env:RUNNER_TEMP 'innosetup-7.1.0-x64.exe'
+          Invoke-WebRequest -Uri 'https://github.com/jrsoftware/issrc/releases/download/is-7_1_0/innosetup-7.1.0-x64.exe' -OutFile $packagePath
+          .\verify-inno-setup.ps1 -PackagePath $packagePath -PackageOnly
+          $process = Start-Process -FilePath $packagePath -ArgumentList '/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART' -Wait -PassThru
+          if ($process.ExitCode -ne 0) { throw "Inno Setup installer failed with exit code $($process.ExitCode)." }
+          .\verify-inno-setup.ps1 -CompilerPath "$env:ProgramFiles\Inno Setup 7\ISCC.exe" -PackagePath $packagePath
 
       - name: Build Release app
         shell: pwsh
