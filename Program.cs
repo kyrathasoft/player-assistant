@@ -107,6 +107,8 @@ namespace PlayerAssistant
 
             _ = OrcishTranslatorWarmupUtility.StartPreloading();
             _ = ElvenTranslatorWarmupUtility.StartPreloading();
+            var startupBudget = ResourceBudgetPolicy.Load(Path.Combine(AppContext.BaseDirectory, "resource-budgets.json"));
+            var startupTimer = System.Diagnostics.Stopwatch.StartNew();
 
             // To customize application configuration such as set high DPI settings or default font,
             // see https://aka.ms/applicationconfiguration.
@@ -139,6 +141,8 @@ namespace PlayerAssistant
                     return Task.CompletedTask;
                 }).GetAwaiter().GetResult();
             ApplicationConfiguration.Initialize();
+            startupTimer.Stop();
+            startupBudget.EnsureWithin("startup_ms", startupTimer.ElapsedMilliseconds);
             var suppressHeroImages = args.Any(arg =>
                 string.Equals(arg, SuppressHeroImagesArgument, StringComparison.OrdinalIgnoreCase))
                 || UserPreferencesUtility.SkipHeroImageParadeAtStartup;

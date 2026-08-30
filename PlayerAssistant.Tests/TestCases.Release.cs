@@ -39,7 +39,7 @@ internal static partial class TestCases
     internal static void ResourceBudgetsAcceptRepresentativeFixtureAndSlowIo()
     {
         var budgets = ResourceBudgetPolicy.Load(Path.Combine(AppContext.BaseDirectory, "resource-budgets.json"));
-        var fixtureRows = Enumerable.Range(0, (int)Math.Min(budgets.MessageTableRows, 10000)).ToArray();
+        var fixtureRows = Enumerable.Range(0, checked((int)budgets.MessageTableRows)).ToArray();
         var slowIoMilliseconds = budgets.BrokerQueryLatencyMilliseconds;
         budgets.EnsureWithin("message_table_rows", fixtureRows.Length);
         budgets.EnsureWithin("broker_query_latency_ms", slowIoMilliseconds);
