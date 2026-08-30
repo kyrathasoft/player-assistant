@@ -254,7 +254,8 @@ namespace PlayerAssistant
             response.EnsureSuccessStatusCode();
             var fileContentsUtf8 = NetworkRequestUtility.ReadBytesAsync(
                 response.Content,
-                NetworkResponseContentLimit.JsonCache).GetAwaiter().GetResult();
+                NetworkResponseContentLimit.JsonCache,
+                HostedLocalSettingsRequestPolicy.Timeout).GetAwaiter().GetResult();
             return HostedSettingsTrustUtility.LoadAndVerifyHostedSettings(
                 fileContentsUtf8,
                 hostedLocalSettingsUrl);

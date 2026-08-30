@@ -207,6 +207,7 @@ internal static class TestCatalog
     ("network circuit breaker clears after success", TestCases.NetworkCircuitBreakerClearsAfterSuccess),
     ("network circuit breaker separates purpose and endpoint family", TestCases.NetworkCircuitBreakerSeparatesPurposeAndEndpointFamily),
     ("startup dependency matrix classifies terminal network failure", TestCases.StartupDependencyMatrixClassifiesTerminalNetworkFailure),
+    ("network response body deadline cancels stalled read", TestCases.NetworkResponseBodyDeadlineCancelsStalledRead),
     ("network request wraps timeout", TestCases.NetworkRequestWrapsTimeout),
     ("network request preserves caller cancellation", TestCases.NetworkRequestPreservesCallerCancellation),
     ("network allowlist rejects credentialed and escaped hosts", TestCases.NetworkAllowlistRejectsCredentialedAndEscapedHosts),

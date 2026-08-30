@@ -250,6 +250,28 @@ namespace PlayerAssistant
             return destination.ToArray();
         }
 
+        public static async Task<byte[]> ReadBytesAsync(
+            HttpContent content,
+            NetworkResponseContentLimit limit,
+            TimeSpan timeout,
+            CancellationToken cancellationToken = default)
+        {
+            ArgumentOutOfRangeException.ThrowIfLessThanOrEqual(timeout, TimeSpan.Zero);
+            using var timeoutCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            timeoutCancellation.CancelAfter(timeout);
+            try
+            {
+                return await ReadBytesAsync(content, limit, timeoutCancellation.Token).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException ex) when (!cancellationToken.IsCancellationRequested)
+            {
+                throw new NetworkRequestException(
+                    NetworkFailureKind.TimedOut,
+                    $"The network response body timed out after {timeout.TotalSeconds:0.#} seconds.",
+                    ex);
+            }
+        }
+
         public static async Task CopyToAsync(
             HttpContent content,
             Stream destination,

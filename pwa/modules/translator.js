@@ -8,9 +8,7 @@ const textEncoder = new TextEncoder();
 export const initializeTranslator = ({ byId }) => {
     let translatorRequestId = 0;
     let translatorDebounce = 0;
-    const worker = typeof Worker !== 'undefined'
-        ? new Worker('translator-worker.js?v=92')
-        : null;
+    let worker = null;
 
     const input = byId('translator-input');
     const output = byId('translator-output');
@@ -135,7 +133,7 @@ export const initializeTranslator = ({ byId }) => {
         }, delay);
     };
 
-    worker?.addEventListener('message', (event) => {
+    const handleWorkerMessage = (event) => {
         const message = event.data || {};
         if (message.type === 'status') {
             const status = byId('lexicon-status');
@@ -162,10 +160,34 @@ export const initializeTranslator = ({ byId }) => {
         setTranslationLoading(false);
         updateTranslationCounts();
         updateExportState();
-    });
+    };
+
+    const recoverWorker = (error) => {
+        const failedWorker = worker;
+        worker = null;
+        translatorRequestId++;
+        setTranslationLoading(false, 'Translator worker failed. Retry to continue.');
+        failedWorker?.terminate();
+        worker = createWorker();
+        const status = byId('lexicon-status');
+        if (status) {
+            status.dataset.state = 'unavailable';
+            if (status.lastElementChild) status.lastElementChild.textContent = error.message;
+        }
+        if (retryPackButton) retryPackButton.hidden = false;
+    };
+
+    const createWorker = () => {
+        if (typeof Worker === 'undefined') return null;
+        const nextWorker = new Worker('translator-worker.js?v=92');
+        nextWorker.addEventListener('message', handleWorkerMessage);
+        nextWorker.addEventListener('messageerror', () => recoverWorker(new Error('Translator worker message could not be deserialized.')));
+        nextWorker.addEventListener('error', () => recoverWorker(new Error('Translator worker stopped unexpectedly.')));
+        return nextWorker;
+    };
+    worker = createWorker();
 
     const resetTranslator = () => {
-        window.clearTimeout(translatorDebounce);
         translatorRequestId++;
         if (input instanceof HTMLTextAreaElement) input.value = '';
         if (output instanceof HTMLTextAreaElement) output.value = '';
