@@ -28,11 +28,18 @@ internal static class StartupTransactionRecovery
         if (!File.Exists(journal.TargetPath)) return false;
         return string.Equals(Convert.ToHexStringLower(SHA256.HashData(File.ReadAllBytes(journal.TargetPath))), journal.ExpectedHash, StringComparison.OrdinalIgnoreCase);
     }
-    internal static void Recover(string directory, Action<StartupTransactionJournal> resume, Action<StartupTransactionJournal> rollback)
+    internal static void Recover(string directory, Action<StartupTransactionJournal> resume, Action<StartupTransactionJournal> rollback, IClock? clock = null)
     {
+        var root = Path.GetFullPath(directory).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar) + Path.DirectorySeparatorChar;
+        var now = (clock ?? new SystemClock()).UtcNow;
+        DateBoundary.RequireUtc(now, "clock");
         foreach (var path in Discover(directory))
         {
             var journal = Read(path);
+            if (!Path.GetFullPath(journal.TargetPath).StartsWith(root, StringComparison.OrdinalIgnoreCase))
+                throw new InvalidOperationException("Transaction journal target is outside the transaction directory; journal evidence was retained.");
+            if (journal.CreatedAtUtc > now)
+                throw new InvalidOperationException("Transaction journal timestamp is in the future; journal evidence was retained.");
             if (journal.Stage is "prepared" or "staged")
             {
                 if (!TargetMatches(journal)) throw new InvalidOperationException("Ambiguous startup transaction cannot be recovered; journal evidence was retained.");
