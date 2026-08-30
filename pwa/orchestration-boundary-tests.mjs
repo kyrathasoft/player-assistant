@@ -39,6 +39,16 @@ const testPresenceStopsPollingWhenNotEligible = () => {
     assert.equal(timers, 0);
 };
 
+const testAccountControllerOwnsCurrentIdentity = () => {
+    const states = [];
+    const controller = createAccountSessionController({ onChange: (state) => states.push(state) });
+    controller.setAccount({ id: 'account-1' });
+    assert.deepEqual(controller.account(), { id: 'account-1' });
+    controller.beginTransition();
+    assert.equal(controller.account(), null);
+    assert.deepEqual(states, [{ id: 'account-1' }]);
+};
+
 const testUpdateLifecycleCancelsOnShutdown = () => {
     let updates = 0;
     const controller = createUpdateLifecycleController({ apply: () => { updates++; } });
@@ -49,6 +59,7 @@ const testUpdateLifecycleCancelsOnShutdown = () => {
 };
 
 await testAccountGenerationRejectsStaleRestore();
+testAccountControllerOwnsCurrentIdentity();
 await testMessagesRefreshIsSingleFlight();
 testPresenceStopsPollingWhenNotEligible();
 testUpdateLifecycleCancelsOnShutdown();

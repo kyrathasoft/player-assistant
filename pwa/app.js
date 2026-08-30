@@ -89,7 +89,7 @@ import { createUpdateLifecycleController } from './modules/update-lifecycle.js?v
     let wordCountRequestId = 0;
     let authenticatedPresenceSnapshot = null;
     let presenceRequestId = 0;
-    let presencePollTimer = 0;
+
     let authenticatedQuestSnapshot = null;
     let questRequestId = 0;
     let questStateFilter = '';
@@ -1867,6 +1867,10 @@ import { createUpdateLifecycleController } from './modules/update-lifecycle.js?v
         }
     };
 
+    const messagesActivityController = createMessagesActivityController({
+        load: () => loadMessages()
+    });
+
     const isMessageTextReady = (value) => String(value || '').trim().length >= 3;
 
     const updateMessageDmSubmitState = () => {
@@ -2436,8 +2440,15 @@ import { createUpdateLifecycleController } from './modules/update-lifecycle.js?v
         else activeAuthenticationControllers.delete(except);
     };
 
+    const accountSessionController = createAccountSessionController({
+        onChange: (account) => {
+            authenticatedAccount = account;
+        }
+    });
+
     const beginAuthenticationGeneration = (except = null) => {
         authenticationGeneration++;
+        accountSessionController.beginTransition();
         cancelAuthenticationRequests(except);
     };
 
@@ -2707,19 +2718,22 @@ import { createUpdateLifecycleController } from './modules/update-lifecycle.js?v
         }
     };
 
+    const presenceController = createPresenceController({
+        canPoll: () => authenticatedAccount?.role === 'dm'
+            && activeView === 'dashboard'
+            && !document.hidden
+            && navigator.onLine,
+        refresh: loadPresence,
+        setInterval: window.setInterval.bind(window),
+        clearInterval: window.clearInterval.bind(window)
+    });
+
     const updatePresencePolling = () => {
-        if (presencePollTimer !== 0) {
-            window.clearInterval(presencePollTimer);
-            presencePollTimer = 0;
-        }
+        presenceController.stop();
         presenceRequestId++;
         authenticatedPresenceSnapshot = null;
         renderPresenceUi();
-        if (authenticatedAccount?.role !== 'dm'
-            || activeView !== 'dashboard'
-            || document.hidden
-            || !navigator.onLine) return;
-        void loadPresence();
+        presenceController.start();
     };
 
     const restoreAuthentication = async () => {
@@ -2727,7 +2741,7 @@ import { createUpdateLifecycleController } from './modules/update-lifecycle.js?v
         try {
             const session = await requestAuthenticationApi('/session');
             if (restoreGeneration !== authenticationGeneration) return;
-            authenticatedAccount = session.authenticated ? session.account : null;
+            accountSessionController.setAccount(session.authenticated ? session.account : null);
             authenticationCsrfToken = session.authenticated ? String(session.csrf_token || '') : '';
         } catch {
             if (restoreGeneration !== authenticationGeneration) return;
@@ -2795,14 +2809,14 @@ import { createUpdateLifecycleController } from './modules/update-lifecycle.js?v
         messageDialog.showModal();
     });
     byId('messages-retry')?.addEventListener('click', () => {
-        void loadMessages();
+        void messagesActivityController.refresh();
     });
     byId('messages-next')?.addEventListener('click', () => {
         const cursor = authenticatedMessageSnapshot?.next_cursor;
         if (typeof cursor === 'string') void loadMessages(cursor);
     });
     byId('activity-refresh')?.addEventListener('click', async () => {
-        await Promise.all([loadMessages(), loadQuests(), loadRevisions()]);
+        await Promise.all([messagesActivityController.refresh(), loadQuests(), loadRevisions()]);
         renderActivityUi();
     });
     document.addEventListener('visibilitychange', updateRevisionPolling);
@@ -2840,7 +2854,7 @@ import { createUpdateLifecycleController } from './modules/update-lifecycle.js?v
             });
             beginAuthenticationGeneration();
             authenticationCsrfToken = String(session.csrf_token || '');
-            authenticatedAccount = session.account;
+            accountSessionController.setAccount(session.account);
             clearProtectedFreshness();
             resetMagicItemState();
             authenticatedXpSnapshot = null;
@@ -2863,7 +2877,7 @@ import { createUpdateLifecycleController } from './modules/update-lifecycle.js?v
             lastQuestAlertSignature = '';
             try {
                 const identity = await requestAuthenticationApi('/me');
-                authenticatedAccount = identity.account || authenticatedAccount;
+                accountSessionController.setAccount(identity.account || authenticatedAccount);
                 messageDraftStore = authenticatedAccount?.id
                     ? createMessageDraftStore(localStorage, authenticatedAccount.id)
                     : null;
@@ -3074,8 +3088,11 @@ import { createUpdateLifecycleController } from './modules/update-lifecycle.js?v
         byId('update-dismiss')?.addEventListener('click', () => {
             if (updateBanner) updateBanner.hidden = true;
         });
+        const updateLifecycleController = createUpdateLifecycleController({
+            apply: () => pendingServiceWorker?.postMessage({ type: 'SKIP_WAITING' })
+        });
         byId('update-apply')?.addEventListener('click', () => {
-            pendingServiceWorker?.postMessage({ type: 'SKIP_WAITING' });
+            updateLifecycleController.requestApply();
         });
 
         window.addEventListener('load', async () => {

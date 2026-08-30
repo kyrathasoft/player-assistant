@@ -3,6 +3,10 @@ export function createAccountSessionController({ restore, onChange = () => {} })
     let currentAccount = null;
     return {
         account: () => currentAccount,
+        setAccount(account) {
+            currentAccount = account;
+            onChange(account);
+        },
         beginTransition() { generation += 1; currentAccount = null; },
         async restoreSession() {
             const startedAt = generation;
