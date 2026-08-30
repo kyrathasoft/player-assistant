@@ -8,6 +8,9 @@ if ($campaignDeployWorkflow -notmatch '(?m)^concurrency:\s*$' -or $campaignDeplo
 if ($scriptText -notmatch '\$remoteLock = "\$RemoteDirectory/\.pwa-release-lock"') { throw 'Host-side PWA release lock is missing.' }
 if ($scriptText -notmatch 'mkdir ''\$remoteLock''') { throw 'Host-side PWA release lock acquisition is missing.' }
 if ($scriptText -notmatch 'rmdir ''\$remoteLock''') { throw 'Host-side PWA release lock release is missing.' }
+if (-not $scriptText.Contains("'rollback_forbidden'=>`$rollbackForbidden")) { throw 'Transaction state does not persist rollback finalization status.' }
+if (-not $scriptText.Contains("'cleanup_complete'=>`$cleanupComplete")) { throw 'Transaction state does not persist cleanup finalization status.' }
+if (-not $scriptText.Contains("write_state(`$data, 'finalized', [], true, true)")) { throw 'Finalization does not require clean rollback evidence.' }
 $match = [regex]::Match($scriptText, "(?s)\$controller = @'\r?\n(?<php>.*?)\r?\n'@\.Replace")
 if (-not $match.Success) { throw 'Could not extract the deployment controller template.' }
 $controllerTemplate = $match.Groups['php'].Value
@@ -36,6 +39,7 @@ try {
     if ((Get-Content -Raw $target) -ne '{"version":2,"entries":["new"]}') { throw 'Promotion did not publish the staged bytes.' }
     $firstState = Get-Content -Raw $state | ConvertFrom-Json
     if ($firstState.state -ne 'promoted') { throw 'Promotion did not persist promoted state.' }
+    if ($firstState.rollback_forbidden -ne $false -or $firstState.cleanup_complete -ne $false) { throw 'Promoted state incorrectly claims clean finalization.' }
 
     & php $controllerPath install | Out-Null
     if ($LASTEXITCODE -ne 0) { throw 'Replay of a promoted install was not idempotent.' }
@@ -43,6 +47,8 @@ try {
 
     & php $controllerPath finalize | Out-Null
     if ($LASTEXITCODE -ne 0) { throw 'Finalization failed.' }
+    $finalState = Get-Content -Raw $state | ConvertFrom-Json
+    if ($finalState.rollback_forbidden -ne $true -or $finalState.cleanup_complete -ne $true) { throw 'Finalized state did not prove clean rollback cleanup.' }
     & php $controllerPath finalize | Out-Null
     if ($LASTEXITCODE -ne 0) { throw 'Replay of finalization was not idempotent.' }
     $rollbackOutput = @(& cmd.exe /c "php `"$controllerPath`" rollback 2>&1")
