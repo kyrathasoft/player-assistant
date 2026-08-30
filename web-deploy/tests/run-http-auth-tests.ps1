@@ -269,6 +269,7 @@ try {
         -Headers @{
             Origin = 'https://example.test'
             'X-CSRF-Token' = [string]$loginBody.csrf_token
+            'Idempotency-Key' = [guid]::NewGuid().ToString('N')
         } `
         -WebSession $localWebSession
     Assert-Condition -Condition ($claimResponse.StatusCode -eq 503) -Message 'The authenticated level-up claim route did not retain the character session.'
@@ -281,6 +282,7 @@ try {
         -Headers @{
             Origin = 'https://example.test'
             'X-CSRF-Token' = [string]$loginBody.csrf_token
+            'Idempotency-Key' = [guid]::NewGuid().ToString('N')
         } `
         -ContentType 'application/json' `
         -Body '{"notifications":[]}' `
@@ -358,6 +360,7 @@ try {
         -Headers @{
             Origin = 'https://example.test'
             'X-CSRF-Token' = [string]$sessionBody.csrf_token
+            'Idempotency-Key' = [guid]::NewGuid().ToString('N')
         } `
         -WebSession $localWebSession `
         -ContentType 'application/json' `
@@ -372,6 +375,7 @@ try {
         -Headers @{
             Origin = 'https://example.test'
             'X-CSRF-Token' = [string]$sessionBody.csrf_token
+            'Idempotency-Key' = [guid]::NewGuid().ToString('N')
         } `
         -WebSession $localWebSession `
         -ContentType 'application/json' `

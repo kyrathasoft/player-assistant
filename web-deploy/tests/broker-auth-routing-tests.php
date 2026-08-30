@@ -42,6 +42,12 @@ function routingAdminHeaders(string $method, string $route, array $body, string 
     ];
 }
 
+function routingMutationHeaders(array $headers): array
+{
+    $headers['idempotency-key'] = bin2hex(random_bytes(16));
+    return $headers;
+}
+
 $databasePath = tempnam(sys_get_temp_dir(), 'pa-broker-route-');
 $snapshotDirectory = sys_get_temp_dir() . '/pa-broker-snapshots-' . bin2hex(random_bytes(6));
 $snapshotSigningKey = random_bytes(32);
@@ -631,6 +637,7 @@ try {
         [
             'origin' => 'https://example.test',
             'csrf-token' => $restored['body']['csrf_token'],
+            'idempotency-key' => bin2hex(random_bytes(16)),
         ],
         '192.0.2.30',
         $session);
@@ -649,6 +656,7 @@ try {
             [
                 'origin' => 'https://example.test',
                 'csrf-token' => $restored['body']['csrf_token'],
+            'idempotency-key' => bin2hex(random_bytes(16)),
             ],
             '192.0.2.30',
             $session);
@@ -793,13 +801,14 @@ try {
     $playerMutationHeaders = [
         'origin' => 'https://example.test',
         'csrf-token' => $restored['body']['csrf_token'],
+            'idempotency-key' => bin2hex(random_bytes(16)),
     ];
     $interest = $broker->dispatch(
         'POST',
         '/v1/quest-requests',
         [],
         ['quest_id' => 'plumb-lost-caverns'],
-        $playerMutationHeaders,
+        routingMutationHeaders($playerMutationHeaders),
         '192.0.2.30',
         $session);
     routingAssert(
@@ -819,7 +828,7 @@ try {
             '/v1/quest-requests',
             [],
             ['quest_id' => 'map-kharaz-ankor-entrance'],
-            $playerMutationHeaders,
+            routingMutationHeaders($playerMutationHeaders),
             '192.0.2.30',
             $session);
         throw new RuntimeException('A player requested a prerequisite-locked quest.');
@@ -835,7 +844,7 @@ try {
             '/v1/quest-requests/' . $questRequestId . '/decision',
             [],
             ['decision' => 'approved'],
-            $playerMutationHeaders,
+            routingMutationHeaders($playerMutationHeaders),
             '192.0.2.30',
             $session);
         throw new RuntimeException('A player account decided its own quest request.');
@@ -950,7 +959,7 @@ try {
             'recipient_role' => 'dm',
             'message' => 'A routing message for the Dungeon Master.',
         ],
-        $playerMutationHeaders,
+        routingMutationHeaders($playerMutationHeaders),
         '192.0.2.30',
         $session);
     $messageForDungeonMasterId = $messageForDungeonMaster['body']['message']['id'] ?? '';
@@ -966,7 +975,7 @@ try {
             'recipient_role' => 'dm',
             'message' => 'A second routing message for the Dungeon Master.',
         ],
-        $playerMutationHeaders,
+        routingMutationHeaders($playerMutationHeaders),
         '192.0.2.30',
         $session);
     $secondMessageForDungeonMasterId = $secondMessageForDungeonMaster['body']['message']['id'] ?? '';
@@ -1030,7 +1039,7 @@ try {
             '/v1/messages/' . $messageForDungeonMasterId . '/read',
             [],
             [],
-            $playerMutationHeaders,
+            routingMutationHeaders($playerMutationHeaders),
             '192.0.2.30',
             $session);
         throw new RuntimeException('A player marked another account message as read.');
@@ -1045,7 +1054,7 @@ try {
         '/v1/messages/' . $messageForDungeonMasterId . '/read',
         [],
         [],
-        $dungeonMasterMutationHeaders,
+        routingMutationHeaders($dungeonMasterMutationHeaders),
         '192.0.2.31',
         $dungeonMasterSession);
     routingAssert(
@@ -1056,7 +1065,7 @@ try {
         '/v1/messages/' . $secondMessageForDungeonMasterId . '/read',
         [],
         [],
-        $dungeonMasterMutationHeaders,
+        routingMutationHeaders($dungeonMasterMutationHeaders),
         '192.0.2.31',
         $dungeonMasterSession);
     $dungeonMasterMessagesAfterRead = $broker->dispatch(
@@ -1093,7 +1102,7 @@ try {
             'recipient_account_id' => $createdSecondPlayer['body']['id'],
             'message' => 'A routing message from one player to another.',
         ],
-        $playerMutationHeaders,
+        routingMutationHeaders($playerMutationHeaders),
         '192.0.2.30',
         $session);
     $messageForSecondPlayerId = $messageForSecondPlayer['body']['message']['id'] ?? '';
@@ -1116,7 +1125,7 @@ try {
         '/v1/messages/' . $messageForSecondPlayerId . '/read',
         [],
         [],
-        $secondPlayerMutationHeaders,
+        routingMutationHeaders($secondPlayerMutationHeaders),
         '192.0.2.32',
         $secondPlayerSession);
 
@@ -1128,7 +1137,7 @@ try {
             'recipient_account_id' => $created['body']['id'],
             'message' => 'A routing message for the player.',
         ],
-        $dungeonMasterMutationHeaders,
+        routingMutationHeaders($dungeonMasterMutationHeaders),
         '192.0.2.31',
         $dungeonMasterSession);
     $messageForPlayerId = $messageForPlayer['body']['message']['id'] ?? '';
@@ -1157,7 +1166,7 @@ try {
         '/v1/messages/' . $messageForPlayerId . '/read',
         [],
         [],
-        $playerMutationHeaders,
+        routingMutationHeaders($playerMutationHeaders),
         '192.0.2.30',
         $session);
     routingAssert(
@@ -1183,7 +1192,7 @@ try {
             'recipient_role' => 'all_players',
             'message' => 'A routing message for every player.',
         ],
-        $dungeonMasterMutationHeaders,
+        routingMutationHeaders($dungeonMasterMutationHeaders),
         '192.0.2.31',
         $dungeonMasterSession);
     routingAssert(
@@ -1252,7 +1261,7 @@ try {
             '/v1/quest-requests',
             [],
             ['quest_id' => 'reclaim-keep-on-borderlands'],
-            $dungeonMasterMutationHeaders,
+            routingMutationHeaders($dungeonMasterMutationHeaders),
             '192.0.2.31',
             $dungeonMasterSession);
         throw new RuntimeException('The Dungeon Master requested a quest.');
@@ -1268,7 +1277,7 @@ try {
         '/v1/quest-requests/' . $questRequestId . '/decision',
         [],
         ['decision' => 'approved'],
-        $dungeonMasterMutationHeaders,
+        routingMutationHeaders($dungeonMasterMutationHeaders),
         '192.0.2.31',
         $dungeonMasterSession);
     routingAssert(
@@ -1300,7 +1309,7 @@ try {
         '/v1/quest-requests/' . $questRequestId . '/acknowledge',
         [],
         [],
-        $playerMutationHeaders,
+        routingMutationHeaders($playerMutationHeaders),
         '192.0.2.30',
         $session);
     routingAssert(
@@ -1324,7 +1333,7 @@ try {
             '/v1/quest-requests',
             [],
             ['quest_id' => 'plumb-lost-caverns'],
-            $playerMutationHeaders,
+            routingMutationHeaders($playerMutationHeaders),
             '192.0.2.30',
             $session);
         throw new RuntimeException('An active quest accepted another interest request.');
@@ -1339,7 +1348,7 @@ try {
         '/v1/quest-requests',
         [],
         ['quest_id' => 'reclaim-keep-on-borderlands'],
-        $playerMutationHeaders,
+        routingMutationHeaders($playerMutationHeaders),
         '192.0.2.30',
         $session);
     $denied = $broker->dispatch(
@@ -1347,7 +1356,7 @@ try {
         '/v1/quest-requests/' . $denialInterest['body']['request']['id'] . '/decision',
         [],
         ['decision' => 'denied'],
-        $dungeonMasterMutationHeaders,
+        routingMutationHeaders($dungeonMasterMutationHeaders),
         '192.0.2.31',
         $dungeonMasterSession);
     routingAssert(
@@ -1378,6 +1387,7 @@ try {
         [
             'origin' => 'https://example.test',
             'csrf-token' => $restored['body']['csrf_token'],
+            'idempotency-key' => bin2hex(random_bytes(16)),
         ],
         '192.0.2.30',
         $session,

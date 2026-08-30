@@ -55,6 +55,7 @@ Implement these twenty findings in order. Security boundaries, credential handli
 - [x] Require an idempotency key on every authenticated broker mutation.
   - Remove the direct-execution fallback in `BrokerService::mutation()` and return `400 invalid_idempotency_key` when the key is absent or malformed.
   - Regression: every protected mutation rejects a missing key, while a retried keyed request replays one durable result and creates one effect.
+  - [x] Authenticated PHP and PowerShell fixtures now provide a fresh valid key for each legitimate mutation call.
 - [ ] Close the idempotency ledger's mutation/finalization crash window.
   - Commit SQLite effects and the terminal ledger response atomically where possible; otherwise preserve an explicit recoverable ambiguous state and never delete evidence after a potentially committed effect.
   - Regression: fault injection after each mutation/ledger commit boundary cannot duplicate effects, strand a key permanently, or lose the replayable response.
