@@ -246,6 +246,10 @@ $featureModulePaths = @(
     'modules/translator.js',
     'modules/search.js',
     'modules/dice.js',
+    'modules/account-session.js',
+    'modules/messages-activity.js',
+    'modules/presence.js',
+    'modules/update-lifecycle.js',
     'service-worker-controller.js'
 )
 $versionedFeatureModulePaths = @($featureModulePaths | ForEach-Object {

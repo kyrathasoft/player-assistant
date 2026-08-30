@@ -187,6 +187,7 @@ internal static class TestCatalog
     ("background task supervisor suppresses duplicate phases", TestCases.BackgroundTaskSupervisorSuppressesDuplicatePhases),
     ("background task supervisor logs failures", TestCases.BackgroundTaskSupervisorLogsFailures),
     ("background task supervisor cancels running tasks on dispose", TestCases.BackgroundTaskSupervisorCancelsRunningTasksOnDispose),
+    ("background task supervisor cancels one phase", TestCases.BackgroundTaskSupervisorCancelsOnePhase),
     ("atomic file promotion preserves existing destination on locked replacement", TestCases.AtomicFilePromotionPreservesExistingDestinationOnLockedReplacement),
     ("atomic file promotion creates bounded runtime backups", TestCases.AtomicFilePromotionCreatesBoundedRuntimeBackups),
     ("network request retries transient failures", TestCases.NetworkRequestRetriesTransientFailures),

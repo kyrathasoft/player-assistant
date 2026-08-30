@@ -52,6 +52,17 @@ installerAssert(
 installerAssert(
     substr_count($installerSource, 'verifyRollbackEvidenceAgainstLive(') >= 2,
     'Private-runtime rollback evidence is not reverified against the live target before promotion.');
+$sourceManifestPath = $root . '/installer-source-manifest.json';
+installerAssert(is_file($sourceManifestPath), 'The installer source manifest is missing.');
+$sourceManifest = json_decode((string)file_get_contents($sourceManifestPath), true, 512, JSON_THROW_ON_ERROR);
+installerAssert(($sourceManifest['schema_version'] ?? null) === 1, 'The installer source manifest schema is invalid.');
+installerAssert(is_file($root . '/' . ($sourceManifest['generator'] ?? '')), 'The installer distribution generator is missing.');
+foreach ($sourceManifest['files'] ?? [] as $entry) {
+    $source = $root . '/' . $entry['source'];
+    $dist = $root . '/' . $entry['distribution'];
+    installerAssert(is_file($source) && is_file($dist), 'Installer source/distribution file is missing.');
+    installerAssert(hash_file('sha256', $source) === hash_file('sha256', $dist), 'Installer source/dist drift detected: ' . $entry['source']);
+}
 foreach (['install-player-assistant-web.php', 'config.template.php', 'README.md'] as $distributedFile) {
     installerAssert(
         is_file($root . '/dist/' . $distributedFile)

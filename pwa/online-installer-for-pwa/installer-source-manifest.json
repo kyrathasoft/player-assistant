@@ -1,0 +1,18 @@
+{
+  "schema_version": 1,
+  "generator": "sync-distribution.ps1",
+  "files": [
+    {
+      "source": "install-player-assistant-web.php",
+      "distribution": "dist/install-player-assistant-web.php"
+    },
+    {
+      "source": "config.template.php",
+      "distribution": "dist/config.template.php"
+    },
+    {
+      "source": "README.md",
+      "distribution": "dist/README.md"
+    }
+  ]
+}

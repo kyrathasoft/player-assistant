@@ -441,6 +441,7 @@ Planned security correction: eliminate first-name equivalence from authenticatio
   - [ ] Continue extracting account/session, messages/activity, presence, and update lifecycle logic from `pwa/app.js` while preserving browser behavior and offline cache contracts.
   - [ ] Continue reducing `Form1` event-handler orchestration into cancellable controllers with explicit single-flight and shutdown semantics.
   - [ ] Generate duplicated installer/deployment payloads from one canonical source and fail verification on source/dist drift.
+  - [!] Blocked: `pwa/test-deployment.ps1 -SkipRemote` still fails the existing fail-closed deployment parity gate because `index.html` does not match the local deployment file; PWA/deployment acceptance cannot be declared complete.
 - [ ] Add measurable resource budgets.
   - [ ] Set upper bounds for broker query latency, message-table growth, cache/backup retention, startup work, PWA polling, optional-pack storage, and diagnostic/log growth.
   - [ ] Add representative large-fixture and slow-I/O tests so performance and storage regressions become release-gate failures rather than production surprises.

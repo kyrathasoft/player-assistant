@@ -3,6 +3,10 @@ import { initializeCampaignSearch } from './modules/search.js?v=92';
 import { initializeDice } from './modules/dice.js?v=92';
 import { createControllerChangeHandler } from './service-worker-controller.js?v=92';
 import { mergeInboxSnapshot, createMessageDraftStore } from './modules/inbox-state.js?v=92';
+import { createAccountSessionController } from './modules/account-session.js?v=92';
+import { createMessagesActivityController } from './modules/messages-activity.js?v=92';
+import { createPresenceController } from './modules/presence.js?v=92';
+import { createUpdateLifecycleController } from './modules/update-lifecycle.js?v=92';
 
 (() => {
     'use strict';
