@@ -743,7 +743,9 @@ final class BrokerService
     }
     private function messages(): MessageService
     {
-        return $this->messages ??= new MessageService($this->database);
+        return $this->messages ??= new MessageService(
+            $this->database,
+            is_array($this->config['messages'] ?? null) ? $this->config['messages'] : []);
     }
     private function revisions(): RevisionService
     {

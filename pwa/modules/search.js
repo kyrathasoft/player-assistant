@@ -59,9 +59,7 @@ export const initializeCampaignSearch = ({ byId }) => {
     const guidance = byId('search-guidance');
     const removePackButton = byId('campaign-search-remove-pack');
     const retryPackButton = byId('campaign-search-retry-pack');
-    const worker = typeof Worker !== 'undefined'
-        ? new Worker('campaign-search-worker.js?v=92')
-        : null;
+    let worker = null;
     let searchRequestId = 0;
     let searchDebounce = 0;
 
@@ -94,7 +92,7 @@ export const initializeCampaignSearch = ({ byId }) => {
         results.append(fragment);
     };
 
-    worker?.addEventListener('message', (event) => {
+    const handleWorkerMessage = (event) => {
         const message = event.data || {};
         if (message.type === 'pack-status') {
             if (guidance) guidance.textContent = message.message;
@@ -112,10 +110,29 @@ export const initializeCampaignSearch = ({ byId }) => {
         if (!(searchInput instanceof HTMLInputElement) || results === null) return;
         const queryTerms = [...new Set(normalizeSearchQuery(searchInput.value).split(' ').filter(Boolean))];
         renderMatches(message.results || [], queryTerms, searchInput.value.trim());
-    });
+    };
+
+    const recoverWorker = (error) => {
+        const failedWorker = worker;
+        if (!failedWorker) return;
+        worker = null;
+        searchRequestId++;
+        failedWorker?.terminate();
+        worker = createWorker();
+        if (guidance) guidance.textContent = `Campaign search worker failed: ${error.message || String(error)}`;
+        if (retryPackButton) retryPackButton.hidden = false;
+    };
+    const createWorker = () => {
+        if (typeof Worker === 'undefined') return null;
+        const nextWorker = new Worker('campaign-search-worker.js?v=92');
+        nextWorker.addEventListener('message', handleWorkerMessage);
+        nextWorker.addEventListener('messageerror', () => recoverWorker(new Error('Campaign search worker message could not be deserialized.')));
+        nextWorker.addEventListener('error', () => recoverWorker(new Error('Campaign search worker stopped unexpectedly.')));
+        return nextWorker;
+    };
+    worker = createWorker();
 
     const renderSearchResults = () => {
-        if (!(searchInput instanceof HTMLInputElement) || results === null) return;
         const query = searchInput.value.trim();
         const normalizedQuery = normalizeSearchQuery(query);
         const requestId = ++searchRequestId;

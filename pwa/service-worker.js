@@ -253,6 +253,12 @@ const networkFirstData = async (request) => {
     }
 };
 
+const isCanonicalShellNavigation = (request) => {
+    const pathname = new URL(request.url, self.location.href).pathname.replace(/\\/+$/u, '/');
+    const rootPath = new URL('./', self.location.href).pathname.replace(/\\/+$/u, '/');
+    return pathname === rootPath || pathname === `${rootPath}index.html`;
+};
+
 const networkFirstNavigation = async (request) => {
     const cache = await caches.open(SHELL_CACHE);
     try {
@@ -260,7 +266,9 @@ const networkFirstNavigation = async (request) => {
         if (!await isValidCachedResponse(request, response)) {
             throw new Error('Network navigation failed PWA content validation.');
         }
-        await cacheResponseIfValid(cache, './index.html', response);
+        if (isCanonicalShellNavigation(request)) {
+            await cacheResponseIfValid(cache, './index.html', response);
+        }
         return response;
     } catch {
         for (const fallbackRequest of ['./index.html', './offline.html']) {

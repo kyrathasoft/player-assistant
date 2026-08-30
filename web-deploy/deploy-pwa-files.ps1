@@ -29,6 +29,8 @@ $localArchive = "$localStage.tar"
 $remoteStage = "$RemoteDirectory/.release-$releaseId"
 $remoteArchive = "$remoteStage.tar"
 $remoteState = "$remoteStage/.transaction.json"
+$remoteLock = "$RemoteDirectory/.pwa-release-lock"
+$remoteLockAcquired = $false
 $pwaDirectory = Join-Path $PSScriptRoot '..\pwa'
 $sshExecutable = Join-Path $env:WINDIR 'System32\OpenSSH\ssh.exe'
 $scpExecutable = Join-Path $env:WINDIR 'System32\OpenSSH\scp.exe'
@@ -51,7 +53,12 @@ function Invoke-RemoteRecovery {
     $status = Get-RemoteStatus
     switch ($status.state) {
         'promoted' { return $status }
-        'finalized' { return $status }
+            'finalized' {
+            if ($status.rollback_forbidden -ne $true -or $status.cleanup_complete -ne $true) {
+                throw "PWA release $releaseId has an incomplete finalized state; manual transaction recovery is required."
+            }
+            return $status
+        }
         'preparing' {
             $resumeExit = Invoke-RemoteSsh "/usr/bin/php '$remoteStage/install.php' resume"
             if ($resumeExit -ne 0) { throw "PWA release $releaseId remains in preparing state and could not be resumed." }
@@ -83,9 +90,9 @@ try {
 <?php
 $data = json_decode(base64_decode('__MANIFEST__'), true, 32, JSON_THROW_ON_ERROR);
 $statePath = $data['state'];
-function write_state(array $data, string $state, array $installed): void {
+function write_state(array $data, string $state, array $installed, bool $rollbackForbidden = false, bool $cleanupComplete = false): void {
     global $statePath;
-    $payload = json_encode(['release_id'=>$data['release_id'], 'state'=>$state, 'installed'=>$installed], JSON_THROW_ON_ERROR);
+    $payload = json_encode(['release_id'=>$data['release_id'], 'state'=>$state, 'installed'=>$installed, 'rollback_forbidden'=>$rollbackForbidden, 'cleanup_complete'=>$cleanupComplete], JSON_THROW_ON_ERROR);
     $tmp = $statePath . '.tmp';
     if (file_put_contents($tmp, $payload, LOCK_EX) === false || !rename($tmp, $statePath)) { throw new RuntimeException('Transaction state could not be persisted.'); }
 }
@@ -107,7 +114,11 @@ function rollback_release(array $data, array $installed): void {
 }
 function install_release(array $data): void {
     $state = read_state();
-    if ($state['state'] === 'promoted' || $state['state'] === 'finalized') { return; }
+    if ($state['state'] === 'promoted') { return; }
+    if ($state['state'] === 'finalized') {
+        if (($state['rollback_forbidden'] ?? false) !== true || ($state['cleanup_complete'] ?? false) !== true) { throw new RuntimeException('Finalized transaction is not clean.'); }
+        return;
+    }
     if ($state['state'] === 'rolled_back') { throw new RuntimeException('Transaction was rolled back.'); }
     foreach ($data['files'] as $file) {
         $candidate = $data['stage'].'/'.$file;
@@ -140,10 +151,16 @@ $action = $argv[1] ?? 'status';
 if ($action === 'status') { echo json_encode(read_state(), JSON_THROW_ON_ERROR); }
 elseif ($action === 'install' || $action === 'resume') { install_release($data); echo json_encode(read_state(), JSON_THROW_ON_ERROR); }
 elseif ($action === 'finalize') {
-    $state = read_state(); if ($state['state'] === 'finalized') { echo json_encode($state, JSON_THROW_ON_ERROR); exit; }
+    $state = read_state(); if ($state['state'] === 'finalized') {
+        if (($state['rollback_forbidden'] ?? false) !== true || ($state['cleanup_complete'] ?? false) !== true) { throw new RuntimeException('Finalized transaction is not clean.'); }
+        echo json_encode($state, JSON_THROW_ON_ERROR); exit;
+    }
     if ($state['state'] !== 'promoted') { throw new RuntimeException('Only a promoted transaction may be finalized.'); }
-    foreach ($data['files'] as $file) { @unlink($data['directory'].'/'.$file.'.rollback-'.$data['release_id']); }
-    write_state($data, 'finalized', []); echo json_encode(read_state(), JSON_THROW_ON_ERROR);
+    foreach ($data['files'] as $file) {
+        @unlink($data['directory'].'/'.$file.'.rollback-'.$data['release_id']);
+        if (is_file($data['directory'].'/'.$file.'.rollback-'.$data['release_id'])) { throw new RuntimeException('Rollback evidence cleanup was incomplete.'); }
+    }
+    write_state($data, 'finalized', [], true, true); echo json_encode(read_state(), JSON_THROW_ON_ERROR);
 }
 elseif ($action === 'rollback') {
     $state = read_state(); if ($state['state'] === 'finalized') { throw new RuntimeException('A finalized transaction cannot be rolled back.'); }
@@ -166,6 +183,9 @@ else { throw new RuntimeException('Unknown release action: '.$action); }
     }
     if (-not $uploaded) { throw 'Unable to upload the PWA release archive.' }
 
+    $lockExit = Invoke-RemoteSsh "if ! mkdir '$remoteLock'; then exit 75; fi"
+    if ($lockExit -ne 0) { throw 'Another PWA release transaction is active on the host.' }
+    $remoteLockAcquired = $true
     $prepareExit = Invoke-RemoteSsh "mkdir '$remoteStage' && tar -xf '$remoteArchive' -C '$remoteStage'"
     if ($prepareExit -ne 0) { throw 'Unable to prepare the PWA release transaction.' }
     $installExit = Invoke-RemoteSsh "/usr/bin/php '$remoteStage/install.php' install"
@@ -195,6 +215,9 @@ else { throw new RuntimeException('Unknown release action: '.$action); }
     if ($cleanupExit -ne 0) { throw 'Unable to clean up the finalized PWA release staging files.' }
 }
 finally {
+    if ($remoteLockAcquired) {
+        [void](Invoke-RemoteSsh "rmdir '$remoteLock'")
+    }
     $resolvedTemp = [IO.Path]::GetFullPath([IO.Path]::GetTempPath())
     $resolvedStage = [IO.Path]::GetFullPath($localStage)
     if ($resolvedStage.StartsWith($resolvedTemp, [StringComparison]::OrdinalIgnoreCase)) {

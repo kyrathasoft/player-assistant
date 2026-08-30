@@ -17,6 +17,26 @@ internal static class Program
             return 0;
         }
 
+        if (args is ["--hosted-settings-child", var hostedChildStatePath, var hostedChildVersionText])
+        {
+            HostedSettingsTrustUtility.ApplyTrustedHostedSettingsVersionPolicy(new Version(hostedChildVersionText!), hostedChildStatePath!);
+            return 0;
+        }
+
+        if (args is ["--hosted-settings-gated-child", var gatedStatePath, var gatedVersionText, var gatedAcquiredPath, var gatedReleasePath])
+        {
+            HostedSettingsTrustUtility.ApplyTrustedHostedSettingsVersionPolicyForChildProcess(
+                new Version(gatedVersionText!), gatedStatePath!, gatedAcquiredPath!, gatedReleasePath!);
+            return 0;
+        }
+
+        if (args is ["--hosted-settings-abandon-lock", var abandonedStatePath, var abandonedAcquiredPath])
+        {
+            using var abandonedLock = HostedSettingsTrustUtility.AcquireTrustedHostedSettingsStateLockForChildProcess(abandonedStatePath!);
+            File.WriteAllText(abandonedAcquiredPath!, "acquired");
+            Environment.Exit(0);
+        }
+
         if (args is ["--cancellation-child", var pidPath])
         {
             var temporaryPidPath = pidPath + ".tmp";
