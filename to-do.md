@@ -97,18 +97,18 @@ Implement these twenty findings in order. Security boundaries, credential handli
 
 ### P2 — resilience, configuration, and supply chain
 
-- [ ] Keep desktop network deadlines active through response-body consumption.
+- [x] Keep desktop network deadlines active through response-body consumption.
   - Carry the linked request-policy timeout through JSON decode, streaming copy, and disposal instead of ending it when headers arrive under `ResponseHeadersRead`.
   - Regression: a headers-then-stall fixture times out, disposes the response, removes partial files, and distinguishes policy timeout from caller cancellation.
-  - [x] Hosted-settings response-body reads now retain the request-policy timeout and translate policy cancellation into a typed timeout failure; the broader response-consumer audit remains.
+  - [x] All desktop response-body consumers use bounded body reads/copies, preserving caller cancellation versus policy timeout; headers-then-stall coverage verifies timeout cleanup behavior.
 - [x] Prevent arbitrary in-scope navigation responses from replacing the cached PWA shell.
   - Promote network HTML to the canonical `index.html` cache key only for the normalized PWA root or `index.html`; serve other valid HTML without shell promotion.
   - Regression: visiting `offline.html` or another in-scope HTML path leaves cached shell bytes unchanged and offline root startup functional.
   - [x] Navigation cache promotion is limited to the normalized PWA root and `index.html`; deterministic service-worker coverage proves `offline.html` cannot create a shell entry.
-- [ ] Recover translator and campaign-search workers after crashes or deserialization failures.
+- [x] Recover translator and campaign-search workers after crashes or deserialization failures.
   - Handle `error` and `messageerror`, terminate failed workers, clear loading/pending state, reject stale results, expose retry, and recreate exactly one worker.
   - Regression: startup and mid-request failures recover through one retry and the next request succeeds without stale rendering.
-  - [x] Both PWA controllers now terminate failed workers, invalidate pending request IDs, expose retry state, and recreate one worker on `error` or `messageerror`; controller crash/retry regression coverage remains.
+  - [x] Both PWA controllers terminate failed workers, invalidate pending request IDs, expose retry state, and recreate one worker on `error` or `messageerror`; worker runtime regressions cover malformed payload recovery and stale-request rejection.
 - [x] Serialize the hosted-settings downgrade floor across processes.
   - Lock the full read/compare/max/write transaction for `trusted-hosted-settings-state.json`, matching the updater's highest-trusted-version policy.
   - [x] Added a path-derived named mutex, concurrent-writer coverage, deterministic reverse-completing child-process coverage, and abandoned-lock recovery coverage.
@@ -120,9 +120,10 @@ Implement these twenty findings in order. Security boundaries, credential handli
   - Pin an approved Chocolatey/compiler version, verify package/compiler hash and publisher signature before execution, and record tool identity in release provenance.
   - Regression: unexpected version, hash, or signer fails before `ISCC`; the approved tool produces provenance containing its exact identity.
   - [!] Blocked externally: the repository contains no approved Inno Setup version, package/compiler hash, or trusted publisher/signer identity. No compiler pin or attestation was invented; release CI remains fail-closed until those policy inputs are supplied.
-- [ ] Publish release-update artifacts as one recoverable generation.
+- [x] Publish release-update artifacts as one recoverable generation.
   - Stage and verify the archive, manifest, signature, public key, and related outputs together, then promote them through a journaled/versioned commit with rollback to the prior complete set.
-  - Regression: injected failure after every generation step leaves the old set byte-identical; success exposes only one complete verified new set.
+  - [x] Generation stages the complete archive/manifest/signature/public-key set, journals promotion, restores the prior set on injected failure, and removes rollback evidence only after commit.
+  - [x] Regression: injected failure after every generation step leaves the old set byte-identical; success exposes only one complete verified new set.
 
 ## Architecture and maintainability
 

@@ -164,6 +164,7 @@ export const initializeTranslator = ({ byId }) => {
 
     const recoverWorker = (error) => {
         const failedWorker = worker;
+        if (!failedWorker) return;
         worker = null;
         translatorRequestId++;
         setTranslationLoading(false, 'Translator worker failed. Retry to continue.');

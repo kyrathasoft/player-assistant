@@ -234,6 +234,16 @@ namespace PlayerAssistant
             return GetEncoding(content).GetString(bytes);
         }
 
+        public static async Task<string> ReadStringAsync(
+            HttpContent content,
+            NetworkResponseContentLimit limit,
+            TimeSpan timeout,
+            CancellationToken cancellationToken = default)
+        {
+            var bytes = await ReadBytesAsync(content, limit, timeout, cancellationToken).ConfigureAwait(false);
+            return GetEncoding(content).GetString(bytes);
+        }
+
         public static async Task<byte[]> ReadBytesAsync(
             HttpContent content,
             NetworkResponseContentLimit limit,
@@ -313,6 +323,29 @@ namespace PlayerAssistant
                 }
 
                 await destination.WriteAsync(buffer.AsMemory(0, bytesRead), cancellationToken).ConfigureAwait(false);
+            }
+        }
+
+        public static async Task CopyToAsync(
+            Stream source,
+            Stream destination,
+            NetworkResponseContentLimit limit,
+            TimeSpan timeout,
+            CancellationToken cancellationToken = default)
+        {
+            ArgumentOutOfRangeException.ThrowIfLessThanOrEqual(timeout, TimeSpan.Zero);
+            using var timeoutCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            timeoutCancellation.CancelAfter(timeout);
+            try
+            {
+                await CopyToAsync(source, destination, limit, timeoutCancellation.Token).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException ex) when (!cancellationToken.IsCancellationRequested)
+            {
+                throw new NetworkRequestException(
+                    NetworkFailureKind.TimedOut,
+                    $"The network response body timed out after {timeout.TotalSeconds:0.#} seconds.",
+                    ex);
             }
         }
 

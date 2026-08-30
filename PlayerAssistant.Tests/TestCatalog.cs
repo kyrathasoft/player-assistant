@@ -564,6 +564,7 @@ internal static class TestCatalog
     ("installer package verification accepts current package", TestCases.InstallerPackageVerificationAcceptsCurrentPackage),
     ("installer package verification rejects unsigned payload when signing required", TestCases.InstallerPackageVerificationRejectsUnsignedPayloadWhenSigningRequired),
     ("release update artifact verification accepts generated signed manifest", TestCases.ReleaseUpdateArtifactVerificationAcceptsGeneratedSignedManifest),
+    ("release update artifact generation rolls back injected failures", TestCases.ReleaseUpdateArtifactGenerationRollsBackInjectedFailures),
     ("release update artifact verification rejects manifest hash mismatch", TestCases.ReleaseUpdateArtifactVerificationRejectsManifestHashMismatch),
     ("hardening workflow builds and uploads signed release update artifacts", TestCases.HardeningWorkflowBuildsAndUploadsSignedReleaseUpdateArtifacts),
     ("published health verification accepts current output", TestCases.PublishedHealthVerificationAcceptsCurrentOutput),

@@ -270,7 +270,7 @@ $appScript = @($appScriptEntry) + $featureModuleScripts -join [Environment]::New
 $translatorWorker = Get-Content -Raw -LiteralPath (Join-Path $PwaRoot 'translator-worker.js')
 $requestTranslationFunction = [regex]::Match(
     $appScript,
-    'const requestTranslation = \(event\) => \{.*?worker\?\.addEventListener',
+    'const requestTranslation = \(event\) => \{.*?\n\s*\};\s*\n\s*input\?\.addEventListener',
     [System.Text.RegularExpressions.RegexOptions]::Singleline).Value
 $styles = Get-Content -Raw -LiteralPath (Join-Path $PwaRoot 'styles.css')
 $serviceWorker = Get-Content -Raw -LiteralPath (Join-Path $PwaRoot 'service-worker.js')

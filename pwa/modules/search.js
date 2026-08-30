@@ -114,6 +114,7 @@ export const initializeCampaignSearch = ({ byId }) => {
 
     const recoverWorker = (error) => {
         const failedWorker = worker;
+        if (!failedWorker) return;
         worker = null;
         searchRequestId++;
         failedWorker?.terminate();

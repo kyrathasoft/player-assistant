@@ -1234,6 +1234,34 @@ internal static partial class TestCases
         });
     }
 
+    internal static void ReleaseUpdateArtifactGenerationRollsBackInjectedFailures()
+    {
+        WithCopiedPublishDirectory(publishDirectory =>
+        {
+            using var outputDirectory = TemporaryDirectory.Create();
+            var installerVersion = GetCanonicalVersion().Split('-', '+')[0];
+            var installerPath = Path.Combine(outputDirectory.Path, $"p-assist-{installerVersion}.exe");
+            File.Copy(Path.Combine(publishDirectory, "player-assistant.exe"), installerPath, overwrite: true);
+            var builder = Path.Combine(GetRepositoryRoot(), "build-release-update-artifacts.ps1");
+            var commonArgs = new[] { "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", builder,
+                "-OutputDir", outputDirectory.Path, "-PublishDir", publishDirectory,
+                "-InstallerPath", installerPath, "-GenerateEphemeralSigningKey" };
+            AssertEqual(0, RunPowerShell(commonArgs, TimeSpan.FromSeconds(60)).ExitCode, "baseline generation should pass");
+            var names = new[] { Path.Combine(outputDirectory.Path, $"p-assist-{installerVersion}.zip"), installerPath,
+                Path.Combine(outputDirectory.Path, "p-assist-updates.json"),
+                Path.Combine(outputDirectory.Path, "p-assist-updates.json.sig"),
+                Path.Combine(outputDirectory.Path, "p-assist-updates.public-key.xml") };
+            var before = names.Select(File.ReadAllBytes).Select(Convert.ToHexString).ToArray();
+            foreach (var step in new[] { "archive", "manifest", "signature", "public-key", "promotion" })
+            {
+                var args = commonArgs.Concat(new[] { "-FaultAfterStep", step }).ToArray();
+                AssertTrue(RunPowerShell(args, TimeSpan.FromSeconds(60)).ExitCode != 0, $"fault injection '{step}' should fail");
+                var after = names.Select(File.ReadAllBytes).Select(Convert.ToHexString).ToArray();
+                AssertTrue(before.SequenceEqual(after), $"fault injection '{step}' must preserve the prior complete artifact set");
+            }
+        });
+    }
+
     internal static void ReleaseUpdateArtifactVerificationRejectsManifestHashMismatch()
     {
         WithCopiedPublishDirectory(publishDirectory =>
