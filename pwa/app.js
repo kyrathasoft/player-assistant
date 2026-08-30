@@ -2444,7 +2444,25 @@ import { createUpdateLifecycleController } from './modules/update-lifecycle.js?v
 
     const accountSessionController = createAccountSessionController({
         onChange: (account) => {
+            const changed = authenticatedAccount?.id !== account?.id;
             authenticatedAccount = account;
+            if (!changed) return;
+            authenticationCsrfToken = '';
+            clearProtectedFreshness();
+            resetMagicItemState();
+            authenticatedXpSnapshot = null;
+            authenticatedXpAwardsSnapshot = null;
+            xpAwardsLoading = null;
+            xpAwardsError = '';
+            authenticatedWordCountSnapshot = null;
+            authenticatedPresenceSnapshot = null;
+            authenticatedQuestSnapshot = null;
+            authenticatedMessageSnapshot = null;
+            authenticatedRevisionSnapshot = null;
+            messageDraftStore?.clear();
+            messageDraftStore = null;
+            document.querySelectorAll('#message-dm-text, #message-player-text').forEach((input) => { input.value = ''; });
+            document.querySelectorAll('[data-protected-content]').forEach((element) => { element.replaceChildren(); });
         }
     });
 

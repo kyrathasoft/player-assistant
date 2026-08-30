@@ -310,7 +310,21 @@ final class DatabaseMigrationService
                 window_started_at INTEGER NOT NULL,
                 send_count INTEGER NOT NULL CHECK(send_count >= 0),
                 FOREIGN KEY (account_id) REFERENCES character_accounts(id) ON DELETE CASCADE
-            );');
+            );
+            CREATE TABLE IF NOT EXISTS admin_mutation_idempotency (
+                account_id TEXT NOT NULL,
+                method TEXT NOT NULL,
+                route TEXT NOT NULL,
+                idempotency_key TEXT NOT NULL,
+                request_hash TEXT NOT NULL,
+                status INTEGER NULL,
+                response_json TEXT NULL,
+                created_at INTEGER NOT NULL,
+                expires_at INTEGER NOT NULL,
+                PRIMARY KEY (account_id, method, route, idempotency_key)
+            );
+            CREATE INDEX IF NOT EXISTS ix_admin_mutation_idempotency_expiry
+                ON admin_mutation_idempotency(expires_at);');
     }
 
     private function migrationSix(): void

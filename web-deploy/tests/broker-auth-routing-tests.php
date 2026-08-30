@@ -25,6 +25,7 @@ function routingAdminHeaders(string $method, string $route, array $body, string 
 {
     $timestamp = (string)time();
     $nonce = bin2hex(random_bytes(16));
+    $operationId = bin2hex(random_bytes(16));
     $bodyJson = json_encode(
         $body,
         JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_PRESERVE_ZERO_FRACTION | JSON_THROW_ON_ERROR);
@@ -34,10 +35,12 @@ function routingAdminHeaders(string $method, string $route, array $body, string 
         strtoupper($method),
         $route,
         hash('sha256', $bodyJson),
+        $operationId,
     ]);
     return [
         'admin-timestamp' => $timestamp,
         'admin-nonce' => $nonce,
+        'admin-operation-id' => $operationId,
         'admin-signature' => hash_hmac('sha256', $canonical, $key),
     ];
 }
