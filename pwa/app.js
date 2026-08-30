@@ -1735,6 +1735,8 @@ import { createUpdateLifecycleController } from './modules/update-lifecycle.js?v
         }
     };
 
+    const RESOURCE_BUDGET_PWA_POLLING_SECONDS = 30;
+
     const updateRevisionPolling = () => {
         if (revisionPollTimer !== 0) {
             window.clearInterval(revisionPollTimer);
@@ -1743,7 +1745,7 @@ import { createUpdateLifecycleController } from './modules/update-lifecycle.js?v
         revisionRequestId++;
         if (authenticatedAccount === null || document.hidden || !navigator.onLine) return;
         void loadRevisions();
-        revisionPollTimer = window.setInterval(() => void loadRevisions(), 30000);
+        revisionPollTimer = window.setInterval(() => void loadRevisions(), RESOURCE_BUDGET_PWA_POLLING_SECONDS * 1000);
     };
 
     const renderMessageNotifications = () => {

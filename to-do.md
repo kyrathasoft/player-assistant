@@ -445,6 +445,7 @@ Planned security correction: eliminate first-name equivalence from authenticatio
 - [ ] Add measurable resource budgets.
   - [ ] Set upper bounds for broker query latency, message-table growth, cache/backup retention, startup work, PWA polling, optional-pack storage, and diagnostic/log growth.
   - [ ] Add representative large-fixture and slow-I/O tests so performance and storage regressions become release-gate failures rather than production surprises.
+  - [!] Blocked 2026-08-29: implementation and focused/full local regression gates pass, but `pwa/test-deployment.ps1 -SkipRemote` still fails the existing fail-closed deployment parity gate (`index.html does not match the local deployment file`); the required deployment acceptance gate remains unresolved, so this item and both subitems stay unchecked. The RC checklist also cannot run to completion without the configured release signer subject/thumbprint.
 
 ## Completed
 

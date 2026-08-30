@@ -30,7 +30,7 @@ namespace PlayerAssistant
         {
             try
             {
-                File.AppendAllText(GetLogPath(), FormatLogEntry(phase, ex));
+                AppendBounded(FormatLogEntry(phase, ex));
             }
             catch
             {
@@ -41,7 +41,7 @@ namespace PlayerAssistant
         {
             try
             {
-                File.AppendAllText(GetLogPath(), FormatLogEntry(phase, message));
+                AppendBounded(FormatLogEntry(phase, message));
             }
             catch
             {
@@ -52,7 +52,7 @@ namespace PlayerAssistant
         {
             try
             {
-                await File.AppendAllTextAsync(GetLogPath(), FormatLogEntry(phase, ex));
+                await AppendBoundedAsync(FormatLogEntry(phase, ex));
             }
             catch
             {
@@ -63,7 +63,7 @@ namespace PlayerAssistant
         {
             try
             {
-                await File.AppendAllTextAsync(GetLogPath(), FormatLogEntry(phase, message));
+                await AppendBoundedAsync(FormatLogEntry(phase, message));
             }
             catch
             {
@@ -138,6 +138,21 @@ namespace PlayerAssistant
                 await AppendAsync(phase, ex);
                 throw;
             }
+        }
+
+        private static void AppendBounded(string entry)
+        {
+            var path = GetLogPath();
+            var existing = File.Exists(path) ? File.ReadAllText(path) : string.Empty;
+            var combined = existing + entry;
+            var limit = (int)ResourceBudgetPolicy.Load(Path.Combine(AppContext.BaseDirectory, "resource-budgets.json")).DiagnosticBytes;
+            File.WriteAllText(path, combined.Length <= limit ? combined : combined[^limit..]);
+        }
+
+        private static Task AppendBoundedAsync(string entry)
+        {
+            AppendBounded(entry);
+            return Task.CompletedTask;
         }
 
         private static string GetLogPath()

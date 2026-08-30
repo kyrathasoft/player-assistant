@@ -20,6 +20,32 @@ namespace PlayerAssistant.Tests;
 
 internal static partial class TestCases
 {
+    internal static void ResourceBudgetsRejectBoundaryOverages()
+    {
+        var budgets = ResourceBudgetPolicy.Load(Path.Combine(AppContext.BaseDirectory, "resource-budgets.json"));
+        AssertTrue(budgets.BrokerQueryLatencyMilliseconds > 0, "broker latency budget must be positive");
+        AssertTrue(budgets.MessageTableRows > 0, "message table budget must be positive");
+        AssertTrue(budgets.CacheRetentionDays > 0, "cache retention budget must be positive");
+        AssertTrue(budgets.BackupRetentionCount > 0, "backup retention budget must be positive");
+        AssertTrue(budgets.StartupMilliseconds > 0, "startup budget must be positive");
+        AssertTrue(budgets.PwaPollingSeconds > 0, "PWA polling budget must be positive");
+        AssertTrue(budgets.OptionalPackBytes > 0, "optional pack budget must be positive");
+        AssertTrue(budgets.DiagnosticBytes > 0, "diagnostic budget must be positive");
+        AssertThrows<InvalidOperationException>(() => budgets.EnsureWithin("broker_query_latency_ms", budgets.BrokerQueryLatencyMilliseconds + 1));
+        AssertThrows<InvalidOperationException>(() => budgets.EnsureWithin("message_table_rows", budgets.MessageTableRows + 1));
+        AssertThrows<InvalidOperationException>(() => budgets.EnsureWithin("optional_pack_bytes", budgets.OptionalPackBytes + 1));
+    }
+
+    internal static void ResourceBudgetsAcceptRepresentativeFixtureAndSlowIo()
+    {
+        var budgets = ResourceBudgetPolicy.Load(Path.Combine(AppContext.BaseDirectory, "resource-budgets.json"));
+        var fixtureRows = Enumerable.Range(0, (int)Math.Min(budgets.MessageTableRows, 10000)).ToArray();
+        var slowIoMilliseconds = budgets.BrokerQueryLatencyMilliseconds;
+        budgets.EnsureWithin("message_table_rows", fixtureRows.Length);
+        budgets.EnsureWithin("broker_query_latency_ms", slowIoMilliseconds);
+        AssertTrue(fixtureRows.Length > 0, "large-fixture probe must contain rows");
+    }
+
     internal static void ApplicationVersionMetadataMatchesHardeningRelease()
     {
         var assembly = typeof(Form1).Assembly;

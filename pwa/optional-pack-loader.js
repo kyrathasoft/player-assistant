@@ -82,6 +82,10 @@
         assertCurrent();
         const entry = manifest.packs.find((pack) => pack.id === id);
         if (!entry) throw new Error(`Optional pack '${id}' is not declared.`);
+        const optionalPackBudgetBytes = 12000000;
+        if (!Number.isInteger(entry.byteSize) || entry.byteSize <= 0 || entry.byteSize > optionalPackBudgetBytes) {
+            throw new Error(`Optional pack '${id}' exceeds the storage budget.`);
+        }
         const cacheName = `${CACHE_PREFIX}${id}`;
         if (!force && loaded.has(id)) return loaded.get(id);
         const requestUrl = new URL(entry.url, new URL(manifestUrl, globalThis.location?.href || entry.url));

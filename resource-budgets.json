@@ -1,0 +1,17 @@
+{
+  "schema_version": 1,
+  "budgets": {
+    "broker_query_latency_ms": 2000,
+    "message_table_rows": 100000,
+    "cache_retention_days": 30,
+    "backup_retention_count": 14,
+    "startup_ms": 5000,
+    "pwa_polling_seconds": 30,
+    "optional_pack_bytes": 12000000,
+    "diagnostic_bytes": 5242880
+  },
+  "fixture": {
+    "message_rows": 100000,
+    "slow_io_ms": 2000
+  }
+}

@@ -166,6 +166,8 @@ internal static class TestCatalog
     ("startup dependency matrix reports bad config and sidecars", TestCases.StartupDependencyMatrixReportsBadConfigAndSidecars),
     ("startup dependency matrix ignores corrupt optional local settings", TestCases.StartupDependencyMatrixIgnoresCorruptOptionalLocalSettings),
     ("application version metadata matches hardening release", TestCases.ApplicationVersionMetadataMatchesHardeningRelease),
+    ("resource budgets reject boundary overages", TestCases.ResourceBudgetsRejectBoundaryOverages),
+    ("resource budgets accept representative fixture and slow IO", TestCases.ResourceBudgetsAcceptRepresentativeFixtureAndSlowIo),
     ("application version argument returns version text", TestCases.ApplicationVersionArgumentReturnsVersionText),
     ("startup manifest status distinguishes skipped and failed", TestCases.StartupManifestStatusDistinguishesSkippedAndFailed),
     ("startup error log entry includes phase and exception", TestCases.StartupErrorLogEntryIncludesPhaseAndException),
