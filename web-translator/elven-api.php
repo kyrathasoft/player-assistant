@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/ElvenTranslator.php';
+require_once __DIR__ . '/TranslatorApiGuard.php';
 
 header('Content-Type: application/json; charset=utf-8');
 header('Cache-Control: no-store');
@@ -21,30 +22,22 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
 }
 
 $contentType = isset($_SERVER['CONTENT_TYPE']) ? strtolower((string)$_SERVER['CONTENT_TYPE']) : '';
-$input = '';
-
-if (strpos($contentType, 'application/json') === 0) {
-    try {
-        $body = json_decode((string)file_get_contents('php://input'), true, 32, JSON_THROW_ON_ERROR);
-        $input = is_array($body) && isset($body['english']) ? trim((string)$body['english']) : '';
-    } catch (JsonException $exception) {
-        respondElven(['error' => 'The request body is not valid JSON.'], 400);
-    }
-} else {
-    $input = isset($_POST['english']) ? trim((string)$_POST['english']) : '';
-}
-
-if ($input === '') {
-    respondElven(['error' => 'The English text is required.'], 400);
-}
+TranslatorApiGuard::enforceRateLimit((string)($_SERVER['REMOTE_ADDR'] ?? 'unknown'));
+$input = TranslatorApiGuard::englishFromBody(
+    TranslatorApiGuard::enforceRequestBodyLimit(),
+    $contentType);
 
 if (ElvenTranslator::countWords($input) > ElvenTranslator::MAX_INPUT_WORDS) {
     respondElven(['error' => 'Please limit the English text to 5,000 words.'], 413);
 }
 
 try {
-    $translator = new ElvenTranslator(__DIR__ . '/elvish-lexicon.json');
+    /** @var ElvenTranslator $translator */
+    $translator = TranslatorApiGuard::translator('elven', __DIR__ . '/elvish-lexicon.json');
     $result = $translator->translateSentenceWithUnknownWords($input);
+    if (strlen($result['translation']) > TranslatorApiGuard::MAX_OUTPUT_BYTES) {
+        respondElven(['error' => 'The translation result is too large.'], 413);
+    }
     respondElven([
         'english' => $input,
         'elvish' => $result['translation'],

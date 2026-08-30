@@ -392,6 +392,10 @@ Planned security correction: eliminate first-name equivalence from authenticatio
 - [x] Prevent trusted-network redirects from connecting to untrusted targets.
   - [x] Disable automatic redirects and manually follow a bounded hop count, validating every parsed target against its purpose-specific allowlist before sending.
   - [x] Prove a trusted endpoint redirecting to localhost or another disallowed authority sends zero requests to that target.
+- [x] Bound and rate-limit the public translator APIs.
+  - [x] Enforce request-body byte limits before reading/parsing the complete body, cap decoded input and output, and apply an application-level per-source rate limit.
+  - [x] Avoid rebuilding large lexicons for every request where safe while preserving translation correctness and bounded resource use.
+  - [x] Add oversized-body, malformed-JSON, maximum-valid-input, concurrent-burst, rate-limit-recovery, and memory/CPU-boundary tests.
 - [x] Make RPOL credential migration and WebView dispatch lifetime-safe.
   - [x] Store username/password as one versioned credential record or compensate on partial write/delete so migration and plaintext removal are all-or-nothing.
   - [x] Complete cancellation even when UI enqueue fails or the handle is destroyed; dispose registrations and recheck dialog viability after each await.
