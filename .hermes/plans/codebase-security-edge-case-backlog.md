@@ -133,3 +133,33 @@
 - `verify-test-harness-structure.ps1:45-53`: validate an exact authoritative catalog and resolve every registered target, not merely a lower-bound count.
 - `.github/workflows/hardening.yml:219-220`: pin and integrity-verify the Inno Setup compiler/toolchain.
 - `.github/workflows/pwa-campaign-word-count-deploy.yml:4-8,23-46`: run canonical generated-data/schema/parity verification before deploying tracked campaign data.
+
+## 2026-08-30 follow-up review — twenty prioritized findings
+
+This follow-up reviewed `origin/master` at `8b46c50c25eedcff49aea68296429d4864f13033` across desktop/launcher, PWA/browser, PHP broker/API, and deployment/recovery boundaries. The canonical implementation order is the matching section in `to-do.md`; this plan preserves review evidence and acceptance detail.
+
+### P1 — security and integrity boundaries
+
+1. **Exact broker HTTPS authority.** `NetworkUrlAllowlistUtility.cs:98-176` permits HTTP, custom ports, and subdomains while `RpolSnapshotUtility.cs:820-1025` sends HMAC/bearer material. Pin exact HTTPS authority/path and prove forbidden targets receive zero authenticated traffic.
+2. **Verified-installer launch TOCTOU.** `VerifiedInstallerLaunchUtility.cs:103-123` returns a path after closing verification handles and `Form1.cs:2147-2149` launches later. Bind verification to stable file identity through launch and fault-inject a post-verification swap.
+3. **Reparse-safe RPOL cleanup.** `RpolExternalProfileCleanup.cs:65-111` and `RpolCleanupUtility.cs:73-109` recursively delete stale profiles without rejecting junctions/symlinks. Never traverse reparse targets; prove outside bytes survive root and nested link fixtures.
+4. **Backup filename confinement.** `web-deploy/backup-broker-database.ps1:30-63` trusts remote `recovery.backup_file` for SCP and local joins. Enforce the exact backup basename grammar and canonical descendants before any I/O.
+5. **Mandatory mutation idempotency keys.** `BrokerService::mutation()` at `BrokerService.php:770-787` directly executes when the header is absent. Reject missing keys and prove all protected mutations replay one durable result.
+6. **Atomic/recoverable idempotency finalization.** `IdempotencyLedger.php:54-88` separates pending-row, effect, and response transactions and deletes evidence after exceptions. Eliminate duplicate/stranded outcomes under commit-boundary fault injection.
+7. **Recoverable signed-admin mutations.** `BrokerService.php:239-286,608-650` consumes nonces before account/token/word-count/snapshot responses are safely replayable. Persist signed operation IDs, request hashes, and terminal responses.
+8. **Optional-pack URL confinement.** `pwa/optional-pack-loader.js:36-49,91-127` resolves manifest URLs without origin/path confinement and uses default credentials. Allow only ID-specific static paths with `credentials: 'omit'` and prove invalid paths cause no fetch/cache write.
+9. **Complete v7 schema guard.** `DatabaseMigrationService.php:305-313` creates `message_send_rate_limits`, but `BrokerService.php:679-713` omits it from required objects while `MessageService.php:329-344` queries it. Partial v7 databases must fail at startup.
+10. **Cross-tab protected-state invalidation.** `pwa/app.js:2457-2494,2935-2990` clears only the current document and has no cross-client signal. Broadcast account transitions and prove hidden pages clear immediately.
+11. **BFCache session revalidation.** `pwa/app.js` restores authentication only at startup and lacks `pageshow` handling. Hide/clear protected state and revalidate `/session` before rendering a restored page.
+12. **Serialized PWA release writers.** Deployment workflows lack a shared concurrency group and `web-deploy/deploy-pwa-files.ps1:26-151` lacks a host-wide lock. Serialize all release writers and prove rollback cannot overwrite another transaction.
+13. **Correct finalized-transaction discovery.** The installer retains clean `finalized` manifests (`install-player-assistant-web.php:1031-1058`), while `restore_dreamhost_pwa.py:382-386` treats them as unknown. Accept only finalized plus rollback-forbidden and cleanup-complete.
+
+### P2 — resilience, configuration, and supply chain
+
+14. **Response-body deadlines.** `NetworkRequestUtility.cs:93-111,235-312` ends policy timeout after headers while body reads use an infinite client timeout. Carry deadline through decode/copy and test headers-then-stall cleanup.
+15. **Canonical shell-cache promotion.** `pwa/service-worker.js:256-284` stores any valid in-scope navigation response under `index.html`. Promote only root/index navigations and prove `offline.html` cannot poison the shell.
+16. **Worker crash recovery.** `pwa/modules/translator.js` and `search.js` lack `error`/`messageerror` recovery. End loading state, terminate/recreate one worker, reject stale replies, and verify retry succeeds.
+17. **Hosted-settings downgrade serialization.** `HostedSettingsTrustUtility.cs:172-195` performs an unlocked read/compare/write. Use a cross-process max-version transaction and prove reverse completion cannot lower trust.
+18. **Production message-retention wiring.** `MessageService.php:12-23` accepts retention config, but `BrokerService.php:732-735` constructs it without `config['messages']`. Test non-default pruning through the broker boundary.
+19. **Pinned/attested Inno Setup.** `.github/workflows/hardening.yml:236-238` installs mutable Chocolatey `innosetup`. Pin and verify version/hash/signer before `ISCC`, and record provenance.
+20. **Atomic release-update generations.** `build-release-update-artifacts.ps1:196-244` replaces archive, manifest, signature, and key independently. Stage/verify/promote one recoverable generation and fault-inject every boundary.
