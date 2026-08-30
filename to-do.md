@@ -34,6 +34,76 @@ This file is the canonical implementation backlog. Other plans, reviews, and log
   - [x] Deploy the refreshed public index through the protected DreamHost SSH workflow using the `DREAMHOST_SSH_PRIVATE_KEY` repository secret.
   - [x] Verify the live artifact with SHA-256 and run the production PWA deployment verifier.
 
+## 2026-08-30 security and edge-case review
+
+Implement these twenty findings in order. Security boundaries, credential handling, authorization, destructive filesystem behavior, and transactional integrity precede availability and maintainability work.
+
+### P1 — security and integrity boundaries
+
+- [ ] Require an exact HTTPS authority for every secret-bearing broker request.
+  - Restrict `NetworkUrlPurpose.PlayerAssistantBroker` to `https://bryanmiller.us:443/scarlethorizons/api/v1/`; reject HTTP, alternate ports, user-info, sibling/subdomain authorities, and authority-changing redirects without forwarding authentication headers.
+  - Regression: forbidden authorities and redirects receive zero bearer/HMAC-authenticated requests; exact-authority relative redirects remain valid.
+- [ ] Close the verified-installer launch time-of-check/time-of-use window.
+  - Bind hash/signature verification to stable file identity through process creation, using an ACL-protected non-replaceable launch location or equivalent fail-closed mechanism.
+  - Regression: a deterministic post-verification swap prevents launch; unchanged verified bytes launch and cancellation launches nothing.
+- [ ] Make RPOL profile cleanup reparse-point safe.
+  - Reject root and descendant junctions/symlinks while scavenging `rpol-browser-verification-*`; delete links without traversing their targets, including under elevated scheduled execution.
+  - Regression: target bytes outside the profile remain unchanged for root and nested file/directory reparse fixtures while ordinary stale profiles are removed.
+- [ ] Constrain remote broker-backup filenames before any SCP or local path construction.
+  - Accept only the producer's exact `broker-YYYYMMDDTHHMMSSZ-<8hex>.sqlite` basename and canonical descendants of approved roots; reject separators, rooted paths, traversal, confusable names, and alternate extensions before I/O.
+  - Regression: every malformed name causes zero SSH/SCP/filesystem mutation; a valid basename still verifies and copies.
+- [ ] Require an idempotency key on every authenticated broker mutation.
+  - Remove the direct-execution fallback in `BrokerService::mutation()` and return `400 invalid_idempotency_key` when the key is absent or malformed.
+  - Regression: every protected mutation rejects a missing key, while a retried keyed request replays one durable result and creates one effect.
+- [ ] Close the idempotency ledger's mutation/finalization crash window.
+  - Commit SQLite effects and the terminal ledger response atomically where possible; otherwise preserve an explicit recoverable ambiguous state and never delete evidence after a potentially committed effect.
+  - Regression: fault injection after each mutation/ledger commit boundary cannot duplicate effects, strand a key permanently, or lose the replayable response.
+- [ ] Add recoverable idempotency to signed administrator mutations.
+  - Sign and persist an operation ID plus request hash and terminal response for account import/update, token issue/revoke, word-count, and snapshot mutations; replay exact duplicates and reject body collisions.
+  - Regression: disconnects before and after each admin commit neither repeat effects nor make successful token issuance unrecoverable.
+- [ ] Constrain optional-pack URLs before credentialed fetch or cache writes.
+  - Require exact same-origin, ID-specific static paths; reject API, traversal-normalized, protocol-relative, query-lookalike, and cross-origin URLs; fetch packs with `credentials: 'omit'`.
+  - Regression: invalid paths cause zero pack fetches/cache writes, and only the four declared static pack paths are accepted.
+- [ ] Require schema verification to include the v7 message-throttle table.
+  - Add `message_send_rate_limits` to the required migrated-object contract so a forged or partial `user_version=7` database fails during startup/deployment rather than on message send.
+  - Regression: a v7 fixture missing the table fails closed with a schema diagnostic; a complete v7 fixture starts and throttles normally.
+- [ ] Invalidate protected PWA state across tabs and windows.
+  - Broadcast logout and account-generation transitions so every client immediately cancels requests and clears protected snapshots, dialogs, drafts, and DOM state, including hidden clients.
+  - Regression: logging out or switching accounts in one of two pages clears the hidden page without polling or waiting for a `401`.
+- [ ] Revalidate authenticated PWA state after BFCache restoration.
+  - On `pageshow`, fail closed by hiding/clearing protected content and revalidating `/session` before restoring authenticated UI, especially when `event.persisted` is true.
+  - Regression: Back navigation after remote logout/session expiry reveals no stale protected content before anonymous state is applied.
+- [ ] Serialize all PWA release transactions across workflows and hosts.
+  - Use one non-cancelling GitHub concurrency group and one shared host-side deployment lock for full PWA, campaign-search, and other release writers.
+  - Regression: overlapping controllers cannot interleave backup/promotion/rollback, and either transaction's failure preserves the other's exact committed bytes.
+- [ ] Treat only clean finalized installer transactions as resolved recovery state.
+  - Accept `finalized` only when `rollback_forbidden=true` and `cleanup_complete=true`; retain fail-closed behavior for incomplete, malformed, or contradictory finalized manifests.
+  - Regression: clean finalized/verified manifests pass preflight, while every incomplete finalized combination remains blocking.
+
+### P2 — resilience, configuration, and supply chain
+
+- [ ] Keep desktop network deadlines active through response-body consumption.
+  - Carry the linked request-policy timeout through JSON decode, streaming copy, and disposal instead of ending it when headers arrive under `ResponseHeadersRead`.
+  - Regression: a headers-then-stall fixture times out, disposes the response, removes partial files, and distinguishes policy timeout from caller cancellation.
+- [ ] Prevent arbitrary in-scope navigation responses from replacing the cached PWA shell.
+  - Promote network HTML to the canonical `index.html` cache key only for the normalized PWA root or `index.html`; serve other valid HTML without shell promotion.
+  - Regression: visiting `offline.html` or another in-scope HTML path leaves cached shell bytes unchanged and offline root startup functional.
+- [ ] Recover translator and campaign-search workers after crashes or deserialization failures.
+  - Handle `error` and `messageerror`, terminate failed workers, clear loading/pending state, reject stale results, expose retry, and recreate exactly one worker.
+  - Regression: startup and mid-request failures recover through one retry and the next request succeeds without stale rendering.
+- [ ] Serialize the hosted-settings downgrade floor across processes.
+  - Lock the full read/compare/max/write transaction for `trusted-hosted-settings-state.json`, matching the updater's highest-trusted-version policy.
+  - Regression: reverse-completing child processes retain the maximum version; lower versions and abandoned-lock recovery cannot reduce it.
+- [ ] Wire documented message-retention settings into the production broker service.
+  - Pass validated `config['messages']` values to `MessageService` instead of silently using the 90-day/500-message defaults.
+  - Regression: broker-boundary tests prove non-default pruning and fail closed on malformed production values.
+- [ ] Pin and attest the Inno Setup compiler used by release CI.
+  - Pin an approved Chocolatey/compiler version, verify package/compiler hash and publisher signature before execution, and record tool identity in release provenance.
+  - Regression: unexpected version, hash, or signer fails before `ISCC`; the approved tool produces provenance containing its exact identity.
+- [ ] Publish release-update artifacts as one recoverable generation.
+  - Stage and verify the archive, manifest, signature, public key, and related outputs together, then promote them through a journaled/versioned commit with rollback to the prior complete set.
+  - Regression: injected failure after every generation step leaves the old set byte-identical; success exposes only one complete verified new set.
+
 ## Architecture and maintainability
 
 - [x] Decompose `Form1` into feature controllers or presenters with injected services.
