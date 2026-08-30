@@ -159,6 +159,7 @@ internal static class TestCatalog
     ("app settings loads rpol credentials from local settings sidecar", TestCases.AppSettingsLoadsRpolCredentialsFromLocalSettingsSidecar),
     ("app settings uses local rpol credentials when credential store is unavailable", TestCases.AppSettingsUsesLocalRpolCredentialsWhenCredentialStoreIsUnavailable),
     ("app settings migrate hosted rpol credentials into credential manager", TestCases.AppSettingsMigrateHostedRpolCredentialsIntoCredentialManager),
+    ("rpol credential record uses stable wire property names", TestCases.RpolCredentialRecordUsesStableWirePropertyNames),
     ("app configuration validation accepts valid release manifest", TestCases.AppConfigurationValidationAcceptsValidReleaseManifest),
     ("app configuration validation rejects missing manifest file", TestCases.AppConfigurationValidationRejectsMissingManifestFile),
     ("app configuration validation rejects manifest hash mismatch", TestCases.AppConfigurationValidationRejectsManifestHashMismatch),

@@ -153,6 +153,22 @@ internal static partial class TestCases
             "hosted local settings should not be persisted after credential migration");
     }
 
+    internal static void RpolCredentialRecordUsesStableWirePropertyNames()
+    {
+        using var credentialStoreScope = RuntimeSecretStoreUtility.UseBackendForTests(new InMemoryWindowsCredentialStoreBackend());
+        RuntimeSecretStoreUtility.SaveRpolCredentials("fixture-user", "fixture-password");
+
+        AssertTrue(
+            WindowsCredentialManagerUtility.TryReadSecretUtf8(
+                "PlayerAssistant/RPOL/Credentials",
+                out var recordJson,
+                out _),
+            "versioned RPOL credential record should be persisted");
+        AssertTrue(recordJson!.Contains("\"version\"", StringComparison.Ordinal), "credential record version property should be stable");
+        AssertTrue(recordJson.Contains("\"user_name\"", StringComparison.Ordinal), "credential record user property should use the installer contract name");
+        AssertTrue(recordJson.Contains("\"password\"", StringComparison.Ordinal), "credential record password property should be stable");
+    }
+
     internal static void AppSettingsLoadsHostedEncryptedXpTrackingUrlFromFixtureServer()
     {
         using var directory = TemporaryDirectory.Create();
