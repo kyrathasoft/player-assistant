@@ -13,6 +13,10 @@
     <ProjectReference Include="..\player-assistant.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Compile Include="..\PlayerAssistant.Launcher\WindowsDesktopRuntimeUtility.cs" Link="WindowsDesktopRuntimeUtility.cs" />
+  </ItemGroup>
+
   <Target Name="RemoveUnusedWebView2WpfReference" BeforeTargets="ResolveAssemblyReferences">
     <ItemGroup>
       <Reference Remove="@(Reference)" Condition="'%(Reference.Filename)' == 'Microsoft.Web.WebView2.Wpf'" />

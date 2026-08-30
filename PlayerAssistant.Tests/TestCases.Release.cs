@@ -397,6 +397,46 @@ internal static partial class TestCases
         AssertEqual(new Version(0, 9, 2), storedVersion!, "expected highest trusted version to be recorded");
     }
 
+    internal static void LauncherAcceptsOnlyX64DesktopRuntimeProbe()
+    {
+        using var directory = TemporaryDirectory.Create();
+        var sharedFx = Path.Combine(directory.Path, "dotnet", "shared", "Microsoft.WindowsDesktop.App");
+        Directory.CreateDirectory(Path.Combine(sharedFx, "10.0.1"));
+        AssertTrue(PlayerAssistant.Launcher.WindowsDesktopRuntimeUtility.HasInstalledRuntimeDirectory(directory.Path, "dotnet", isX64: true),
+            "x64 desktop runtime directory should satisfy the launcher probe");
+        AssertFalse(PlayerAssistant.Launcher.WindowsDesktopRuntimeUtility.HasInstalledRuntimeDirectory(directory.Path, "dotnet", isX64: false),
+            "x86-only runtime probes must not satisfy the win-x64 launcher");
+    }
+
+    internal static void UpdateCheckCompareAndWriteRetainsMaximumAcrossConcurrentProcesses()
+    {
+        using var directory = TemporaryDirectory.Create();
+        var statePath = Path.Combine(directory.Path, "trusted-update-state.json");
+        var testProcess = Environment.ProcessPath ?? throw new InvalidOperationException("test process path unavailable");
+        var children = new[] { "0.9.2", "0.9.7", "0.9.4" }.Select(version =>
+        {
+            var process = Process.Start(new ProcessStartInfo
+            {
+                FileName = testProcess,
+                Arguments = $"--trusted-update-child \"{statePath}\" {version}",
+                UseShellExecute = false,
+                CreateNoWindow = true
+            }) ?? throw new InvalidOperationException("could not start trusted-version child");
+            return process;
+        }).ToArray();
+        foreach (var child in children)
+        {
+            child.WaitForExit();
+            // Lower concurrent observations may be rejected after the higher floor is committed.
+            AssertTrue(child.ExitCode == 0 || child.ExitCode == unchecked((int)0xE0434352),
+                "trusted-version child should either commit or fail closed on downgrade");
+            child.Dispose();
+        }
+
+        AssertEqual(new Version(0, 9, 7), PlayerAssistantUpdateUtility.TryReadTrustedUpdateVersion(statePath)!,
+            "concurrent compare-and-write must retain the maximum observed version");
+    }
+
     internal static void UpdateCheckRejectsSignedManifestRollbackBelowTrustedVersionFloor()
     {
         using var directory = TemporaryDirectory.Create();

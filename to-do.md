@@ -414,10 +414,11 @@ Planned security correction: eliminate first-name equivalence from authenticatio
 - [ ] Add a profile-bound RPOL state fallback only when publisher-equivalent round-trip testing proves storage-state reuse cannot work.
   - [ ] Use a dedicated user-only persistent profile with restrictive ACLs, a single-process lock, exact protected-probe validation, and explicit reset behavior.
   - [ ] Never copy the user’s normal browser profile or package, upload, log, or commit authenticated browser state.
-- [ ] Isolate network and update concurrency state.
-  - [ ] Scope circuit breakers by network purpose and endpoint family so unrelated services sharing one authority cannot suppress or reset each other.
-  - [ ] Serialize highest-trusted-version compare-and-write across processes and recompute the maximum while holding the lock.
-  - [ ] Require the x64 Windows Desktop Runtime for the win-x64 launcher; do not accept x86-only probes.
+- [x] Isolate network and update concurrency state.
+  - [x] Scope circuit breakers by network purpose and endpoint family so unrelated services sharing one authority cannot suppress or reset one another.
+  - [x] Serialize highest-trusted-version compare-and-write across processes and recompute the maximum while holding the lock.
+  - [x] Require the x64 Windows Desktop Runtime for the win-x64 launcher; do not accept x86-only probes.
+  - Implementation: purpose/family-scoped breakers, cross-process trusted-version locking, and x64-only launcher runtime probing; focused and full custom tests passed. The installer compatibility fallback for Windows PowerShell 5.1 also restored the required package/RC validation gates.
 - [ ] Harden inbox behavior against retries, concurrent mutation, and user-data loss.
   - [ ] Preserve unsent drafts across retryable failures and account-safe navigation while clearing them on identity transition.
   - [ ] Deduplicate accumulated pages by stable message ID and reset safely when server metadata shrinks after acknowledgements or retention.

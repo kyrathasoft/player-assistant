@@ -1491,6 +1491,40 @@ internal static partial class TestCases
         });
     }
 
+    internal static void NetworkCircuitBreakerSeparatesPurposeAndEndpointFamily()
+    {
+        NetworkRequestUtility.ResetCircuitBreakersForTests();
+        using var overrideScope = NetworkUrlAllowlistUtility.UseValidationOverrideForTests((uri, _) =>
+            NetworkUrlAllowlistValidation.Allowed(uri));
+        var requests = new List<string>();
+        using var httpClient = NetworkRequestUtility.CreateHttpClient(new ScriptedHttpMessageHandler((request, _) =>
+        {
+            requests.Add(request.RequestUri!.AbsolutePath);
+            return Task.FromResult(request.RequestUri.AbsolutePath.Contains("failure", StringComparison.Ordinal)
+                ? new HttpResponseMessage(HttpStatusCode.ServiceUnavailable)
+                : new HttpResponseMessage(HttpStatusCode.OK));
+        }));
+
+        foreach (var path in new[] { "/failure-one", "/failure-two" })
+        {
+            using var response = NetworkRequestUtility.SendAsync(
+                httpClient,
+                () => new HttpRequestMessage(HttpMethod.Get, "https://shared.example.test" + path),
+                policy: new NetworkRequestPolicy(TimeSpan.FromSeconds(1), 1, TimeSpan.Zero),
+                purpose: NetworkUrlPurpose.Rpol).GetAwaiter().GetResult();
+        }
+
+        using var unrelated = NetworkRequestUtility.SendAsync(
+            httpClient,
+            () => new HttpRequestMessage(HttpMethod.Get, "https://shared.example.test/unrelated"),
+            policy: new NetworkRequestPolicy(TimeSpan.FromSeconds(1), 1, TimeSpan.Zero),
+            purpose: NetworkUrlPurpose.PlayerAssistantBroker).GetAwaiter().GetResult();
+
+        AssertEqual(HttpStatusCode.OK, unrelated.StatusCode, "an open breaker must not suppress a different purpose on the same authority");
+        AssertEqual(3, requests.Count, "unrelated endpoint family should reach the handler");
+        NetworkRequestUtility.ResetCircuitBreakersForTests();
+    }
+
     internal static void NetworkCircuitBreakerClearsAfterSuccess()
     {
         NetworkRequestUtility.ResetCircuitBreakersForTests();
