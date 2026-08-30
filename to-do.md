@@ -47,6 +47,7 @@ Implement these twenty findings in order. Security boundaries, credential handli
   - Bind hash/signature verification to stable file identity through process creation, using an ACL-protected non-replaceable launch location or equivalent fail-closed mechanism.
   - Regression: a deterministic post-verification swap prevents launch; unchanged verified bytes launch and cancellation launches nothing.
   - [x] Verified launch holds a non-delete-sharing file handle through process creation.
+  - [x] Added deterministic post-signature-inspection byte-swap coverage; the digest is rechecked before launch.
 - [x] Make RPOL profile cleanup reparse-point safe.
   - Reject root and descendant junctions/symlinks while scavenging `rpol-browser-verification-*`; delete links without traversing their targets, including under elevated scheduled execution.
   - Regression: target bytes outside the profile remain unchanged for root and nested file/directory reparse fixtures while ordinary stale profiles are removed.

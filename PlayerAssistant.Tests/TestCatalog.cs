@@ -457,6 +457,7 @@ internal static class TestCatalog
     ("verified updater rejects installer sha256 mismatch", TestCases.VerifiedUpdaterRejectsInstallerSha256Mismatch),
     ("verified updater rejects installer signer mismatch", TestCases.VerifiedUpdaterRejectsInstallerSignerMismatch),
     ("verified installer launch re-verifies before execution", TestCases.VerifiedInstallerLaunchReverifiesBeforeExecution),
+    ("verified installer launch rejects post-verification byte swap", TestCases.VerifiedInstallerLaunchRejectsPostVerificationByteSwap),
     ("verified installer launch rejects signer changes after verification", TestCases.VerifiedInstallerLaunchRejectsSignerChangesAfterVerification),
     ("verified installer launch rejects elevation changes after verification", TestCases.VerifiedInstallerLaunchRejectsElevationChangesAfterVerification),
     ("verified installer launch honors cancellation before execution", TestCases.VerifiedInstallerLaunchHonorsCancellationBeforeExecution),
