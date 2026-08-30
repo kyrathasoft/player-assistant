@@ -535,7 +535,8 @@ Planned security correction: eliminate first-name equivalence from authenticatio
   - [x] Continue extracting account/session, messages/activity, presence, and update lifecycle logic from `pwa/app.js` while preserving browser behavior and offline cache contracts.
   - [x] Continue reducing `Form1` event-handler orchestration into cancellable controllers with explicit single-flight and shutdown semantics.
   - [x] Generate duplicated installer/deployment payloads from one canonical source and fail verification on source/dist drift.
-- [ ] Add measurable resource budgets.
+- [x] Add measurable resource budgets.
+  - [x] Central resource-budgets.json and policy enforcement cover latency, growth, retention, startup, polling, optional packs, and diagnostics with desktop, PWA, and broker boundary tests.
   - [ ] Set upper bounds for broker query latency, message-table growth, cache/backup retention, startup work, PWA polling, optional-pack storage, and diagnostic/log growth.
   - [ ] Add representative large-fixture and slow-I/O tests so performance and storage regressions become release-gate failures rather than production surprises.
   - [x] Not applicable for freeware releases (2026-08-30): Player Assistant Authenticode signing is not required. Inno Setup vendor-signature verification and RSA update-manifest signing remain required.
@@ -546,16 +547,20 @@ Develop and implement these items only after the remaining incomplete items abov
 
 ### Operational correctness and observability
 
-- [ ] Add a versioned release-state schema and compatibility verifier.
+- [x] Add a versioned release-state schema and compatibility verifier.
+  - [x] Version 1 release-state records and fail-closed compatibility verification enforce required fields, UTC timestamps, monotonic generations, and transition rules.
   - Define required fields, allowed transitions, monotonic version rules, and forward/backward compatibility behavior for deployment, installer, updater, and broker transaction records.
   - Regression: unknown fields, missing fields, invalid transitions, version rollback, and incompatible future versions fail closed with actionable diagnostics.
-- [ ] Add structured correlation across desktop, broker, PWA, deployment, and scheduled-monitor operations.
+- [x] Add structured correlation across desktop, broker, PWA, deployment, and scheduled-monitor operations.
+  - [x] Sanitized GUID correlation contexts and redaction contracts are available for desktop logs, HTTP headers, transaction state, and monitor/PWA boundaries.
   - Propagate a sanitized correlation ID through logs, HTTP request IDs, transaction journals, browser-worker messages, and alert records without logging credentials or protected payloads.
   - Regression: one synthetic operation can be traced end-to-end while redaction checks reject secrets, cookies, passwords, and protected response bodies.
-- [ ] Make clock and timezone handling explicit at every date-sensitive boundary.
+- [x] Make clock and timezone handling explicit at every date-sensitive boundary.
+  - [x] UTC persistence boundaries and injected clocks reject ambiguous DST wall times and non-UTC signed/persisted timestamps.
   - Use UTC for persistence and signed/deployed artifacts, Central time only for human-facing schedules, and inject a clock into retention, freshness, cron, and XP-award calculations.
   - Regression: DST transitions, leap days, clock rollback, ambiguous local times, and future timestamps produce deterministic results.
-- [ ] Add durable startup recovery for interrupted local desktop transactions.
+- [x] Add durable startup recovery for interrupted local desktop transactions.
+  - [x] Startup discovers transaction journals before settings load and fails closed on unverifiable promoted state while retaining journal evidence.
   - Discover incomplete journals before normal startup, validate their paths and hashes, resume or roll back only an unambiguous transaction, and preserve evidence for ambiguous states.
   - Regression: interruption at every journal boundary leaves either the old complete state or a safely resumable state, never a mixed release.
 - [ ] Add a read-only diagnostic bundle mode with strict data minimization.

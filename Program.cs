@@ -112,6 +112,13 @@ namespace PlayerAssistant
             // see https://aka.ms/applicationconfiguration.
             StartupHealthUtility.Reset();
             OutboundNetworkDiagnosticsUtility.Reset();
+            StartupLoggingUtility.RunRequiredPhase("transaction recovery", () =>
+            {
+                StartupTransactionRecovery.Recover(
+                    RuntimePathUtility.GetWritableRuntimePath("transactions"),
+                    _ => { },
+                    _ => { });
+            });
             StartupLoggingUtility.RunRequiredPhase("settings load", AppSettingsUtility.Load);
             UserPreferencesUtility.Load();
             FileDownloadCounters.Reset();

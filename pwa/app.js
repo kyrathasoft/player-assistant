@@ -7,11 +7,14 @@ import { createAccountSessionController } from './modules/account-session.js?v=9
 import { createMessagesActivityController } from './modules/messages-activity.js?v=92';
 import { createPresenceController } from './modules/presence.js?v=92';
 import { createUpdateLifecycleController } from './modules/update-lifecycle.js?v=92';
+import { createCorrelationContext, correlationHeaders } from './correlation.js?v=92';
 
 (() => {
     'use strict';
 
     const APP_NAME = 'Player Assistant';
+    const CORRELATION_CONTEXT = createCorrelationContext();
+    const CORRELATION_HEADERS = correlationHeaders(CORRELATION_CONTEXT);
     const APP_VERSION = globalThis.PLAYER_ASSISTANT_VERSION_METADATA?.pwaVersion;
     if (!APP_VERSION) {
         throw new Error('Player Assistant version metadata is unavailable.');

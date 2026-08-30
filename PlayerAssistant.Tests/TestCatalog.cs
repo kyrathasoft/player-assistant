@@ -7,6 +7,10 @@ internal static class TestCatalog
     internal static (string Name, Action Test)[] Create() =>
         new (string Name, Action Test)[]
 {
+    ("release state compatibility rejects rollback and future schema", TestCases.ReleaseStateCompatibilityRejectsRollbackAndFutureSchema),
+    ("correlation context rejects secrets and accepts safe IDs", TestCases.CorrelationContextRejectsSecretsAndAcceptsSafeIds),
+    ("date boundary rejects ambiguous and non UTC values", TestCases.DateBoundaryRejectsAmbiguousAndNonUtcValues),
+    ("startup recovery rejects ambiguous verified journal", TestCases.StartupRecoveryRejectsAmbiguousVerifiedJournal),
     ("orcish translator returns one-to-one english mapping", TestCases.OrcishTranslatorReturnsOneToOneEnglishMapping),
     ("repository root discovery handles CI output layout", TestCases.RepositoryRootDiscoveryHandlesCiOutputLayout),
     ("login throttling rejects malformed source at login boundary", TestCases.LoginThrottlingRejectsMalformedSourceAtLoginBoundary),
