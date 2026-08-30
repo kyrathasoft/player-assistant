@@ -60,6 +60,20 @@ foreach (['install-player-assistant-web.php', 'config.template.php', 'README.md'
                 (string)hash_file('sha256', $root . '/dist/' . $distributedFile)),
         "The checked-in distributable is stale: $distributedFile");
 }
+$faultStages = [
+    'migration', 'private-config', 'public-loader-pwa', 'public-loader-api',
+    'cron', 'installer-replacement', 'final-https-verification',
+];
+installerAssert(str_contains($installerSource, 'function interruptAtCommitBoundary'), 'Installer lacks deterministic commit-boundary fault injection.');
+foreach ($faultStages as $faultStage) {
+    installerAssert(
+        str_contains($installerSource, "interruptAtCommitBoundary('before-$faultStage')")
+            && str_contains($installerSource, "interruptAtCommitBoundary('after-$faultStage')"),
+        "Installer lacks before/after fault boundaries for $faultStage.");
+}
+installerAssert(str_contains($installerSource, 'rollback-failed'), 'Rollback failure must preserve explicit recovery evidence.');
+installerAssert(str_contains($installerSource, 'rollback_forbidden'), 'Finalization must forbid rollback before cleanup.');
+
 $command = escapeshellarg(PHP_BINARY) . ' ' . escapeshellarg($installer) . ' --help 2>&1';
 $output = [];
 $exitCode = 0;
@@ -315,7 +329,7 @@ $installResult = json_decode((string)end($installOutput), true, 16, JSON_THROW_O
 installerAssert($installResult['status'] === 'installed_pending_https_verification', 'The local-only install returned the wrong status.');
 installerAssert(is_file($installResult['report_path'] ?? ''), 'The machine-readable installation report is missing.');
 $pendingReport = json_decode((string)file_get_contents($installResult['report_path']), true, 32, JSON_THROW_ON_ERROR);
-installerAssert($pendingReport['migration_version'] === 4, 'The installation report omitted the migrated schema version.');
+installerAssert($pendingReport['migration_version'] === 7, 'The installation report omitted the migrated schema version.');
 installerAssert(($pendingReport['verification']['local'] ?? null) === true, 'The installation report omitted local verification success.');
 installerAssert(count($pendingReport['promoted_file_sha256'] ?? []) > 30, 'The installation report omitted promoted file hashes.');
 installerAssert(is_file($publicRoot . '/scarlethorizons/pwa/index.html'), 'The complete PWA was not promoted.');
@@ -328,7 +342,7 @@ installerAssert(is_file($privateRoot . '/BrokerService.php'), 'The private broke
 installerAssert(is_file($privateRoot . '/config.php'), 'The private configuration was not installed.');
 installerAssert(is_file($privateRoot . '/broker.sqlite'), 'The migrated broker database was not created.');
 $installedDatabase = new PDO('sqlite:' . $privateRoot . '/broker.sqlite');
-installerAssert((int)$installedDatabase->query('PRAGMA user_version')->fetchColumn() === 4, 'The installed broker database has the wrong schema version.');
+installerAssert((int)$installedDatabase->query('PRAGMA user_version')->fetchColumn() === 7, 'The installed broker database has the wrong schema version.');
 $installedDatabase = null;
 installerAssert(is_string($installResult['transaction_id'] ?? null), 'The pending install did not return a transaction ID.');
 $transactionManifestPath = $accountHome . '/.player-assistant-installer-transactions/' . $installResult['transaction_id'] . '/manifest.json';
@@ -727,7 +741,7 @@ installerAssert(str_contains((string)file_get_contents($publicRoot . '/scarletho
 installerAssert(str_contains((string)file_get_contents($privateRoot . '/BrokerService.php'), 'legacy-broker'), 'Migration-failure rollback changed private runtime code.');
 $failureDatabase = new PDO('sqlite:' . $privateRoot . '/broker.sqlite');
 installerAssert((string)$failureDatabase->query('PRAGMA integrity_check')->fetchColumn() === 'ok', 'Migration-failure rollback damaged the database.');
-installerAssert((int)$failureDatabase->query('PRAGMA user_version')->fetchColumn() === 4, 'Migration-failure rollback restored the wrong database version.');
+installerAssert((int)$failureDatabase->query('PRAGMA user_version')->fetchColumn() === 7, 'Migration-failure rollback restored the wrong database version.');
 installerAssert(strtolower((string)$failureDatabase->query('PRAGMA journal_mode')->fetchColumn()) === 'wal', 'Migration-failure rollback did not restore WAL journal mode.');
 $failureDatabase = null;
 

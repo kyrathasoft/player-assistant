@@ -428,6 +428,7 @@ Planned security correction: eliminate first-name equivalence from authenticatio
   - [ ] Exercise interruption before and after each commit point for migrations, public-loader promotion, cron changes, private config, installer replacement, and final HTTPS verification.
   - [ ] Verify rollback restores pre-existing files, removes newly introduced files, preserves mode-restricted recovery evidence on rollback failure, and never runs after finalization.
   - [ ] Verify source and packaged installer templates remain byte-contract compatible and that runtime/deployment manifests reject drift.
+  - [!] Blocked: `pwa/test-deployment.ps1 -SkipRemote` fails the existing fail-closed deployment parity gate (`index.html does not match the local deployment file`); the PWA deployment transaction gate cannot be declared complete.
 - [ ] Make broker operations and recovery observable under concurrency and partial platform failure.
   - [ ] Claim alert thresholds and cooldowns transactionally so concurrent failures emit at most one notification.
   - [ ] Fail recovery when required public health cannot execute or atomic status persistence fails; preserve explicit failure evidence.
