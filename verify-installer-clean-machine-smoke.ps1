@@ -534,10 +534,21 @@ try {
             throw "Installed app did not fetch hosted settings from the fixture server."
         }
 
-        $storedUserName = Read-CredentialSecret -Target 'PlayerAssistant/RPOL/UserName'
-        $storedPassword = Read-CredentialSecret -Target 'PlayerAssistant/RPOL/Password'
-        if ($storedUserName -ne 'fixture-user' -or $storedPassword -ne 'fixture-password') {
-            throw "Hosted settings credential migration did not store the expected RPOL credentials."
+        $storedCredentialRecordJson = Read-CredentialSecret -Target 'PlayerAssistant/RPOL/Credentials'
+        try {
+            $storedCredentialRecord = $storedCredentialRecordJson | ConvertFrom-Json
+        }
+        catch {
+            throw "Hosted settings credential migration did not store a valid versioned RPOL credential record."
+        }
+        if ($storedCredentialRecord.version -ne 1 -or
+            $storedCredentialRecord.user_name -ne 'fixture-user' -or
+            $storedCredentialRecord.password -ne 'fixture-password') {
+            throw "Hosted settings credential migration did not store the expected versioned RPOL credentials."
+        }
+        if ($null -ne (Read-CredentialSecret -Target 'PlayerAssistant/RPOL/UserName') -or
+            $null -ne (Read-CredentialSecret -Target 'PlayerAssistant/RPOL/Password')) {
+            throw 'Hosted settings credential migration retained legacy split RPOL credentials.'
         }
 
         $updatePreflightResult = Invoke-AppCommand `
