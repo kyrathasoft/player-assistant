@@ -18,6 +18,7 @@ Upload the complete contents of `web-translator/` to a PHP-enabled directory. Th
 - `elven-api.php`
 - `OrcishTranslator.php`
 - `ElvenTranslator.php`
+- `TranslatorApiGuard.php`
 - `translator.js`
 - `styles.css`
 - `orcish-lexicon.json`

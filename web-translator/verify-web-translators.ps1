@@ -23,6 +23,7 @@ $requiredFiles = @(
     'elven-api.php',
     'OrcishTranslator.php',
     'ElvenTranslator.php',
+    'TranslatorApiGuard.php',
     'translator.js',
     'styles.css',
     'orcish-lexicon.json',

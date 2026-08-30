@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/OrcishTranslator.php';
+require_once __DIR__ . '/TranslatorApiGuard.php';
 
 header('Content-Type: application/json; charset=utf-8');
 header('Cache-Control: no-store');
@@ -21,30 +22,22 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
 }
 
 $contentType = isset($_SERVER['CONTENT_TYPE']) ? strtolower((string)$_SERVER['CONTENT_TYPE']) : '';
-$input = '';
-
-if (strpos($contentType, 'application/json') === 0) {
-    try {
-        $body = json_decode((string)file_get_contents('php://input'), true, 32, JSON_THROW_ON_ERROR);
-        $input = is_array($body) && isset($body['english']) ? trim((string)$body['english']) : '';
-    } catch (JsonException $exception) {
-        respond(['error' => 'The request body is not valid JSON.'], 400);
-    }
-} else {
-    $input = isset($_POST['english']) ? trim((string)$_POST['english']) : '';
-}
-
-if ($input === '') {
-    respond(['error' => 'The English text is required.'], 400);
-}
+TranslatorApiGuard::enforceRateLimit((string)($_SERVER['REMOTE_ADDR'] ?? 'unknown'));
+$input = TranslatorApiGuard::englishFromBody(
+    TranslatorApiGuard::enforceRequestBodyLimit(),
+    $contentType);
 
 if (OrcishTranslator::countWords($input) > OrcishTranslator::MAX_INPUT_WORDS) {
     respond(['error' => 'Please limit the English text to 5,000 words.'], 413);
 }
 
 try {
-    $translator = new OrcishTranslator(__DIR__ . '/orcish-lexicon.json');
+    /** @var OrcishTranslator $translator */
+    $translator = TranslatorApiGuard::translator('orcish', __DIR__ . '/orcish-lexicon.json');
     $result = $translator->translateSentenceWithUnknownWords($input);
+    if (strlen($result['translation']) > TranslatorApiGuard::MAX_OUTPUT_BYTES) {
+        respond(['error' => 'The translation result is too large.'], 413);
+    }
     respond([
         'english' => $input,
         'orcish' => $result['translation'],

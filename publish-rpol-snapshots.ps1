@@ -93,6 +93,25 @@ function Assert-ResultContract {
     if ($status -notin @('success', 'failure')) { throw 'RPOL terminal status is invalid.' }
 }
 
+function Test-ResultEvidenceIdentity {
+    param(
+        [Parameter(Mandatory)] $Result,
+        [Parameter(Mandatory)] [string] $ExpectedRunId,
+        [Parameter(Mandatory)] [DateTimeOffset] $StartedAt
+    )
+
+    if ($null -eq $Result -or [string]$Result.run_id -cne $ExpectedRunId) { return $false }
+    if ([string]$Result.terminal_status -notin @('success', 'failure', 'timeout', 'crash')) { return $false }
+    try {
+        $resultStartedAt = [DateTimeOffset]::Parse([string]$Result.started_at)
+        $resultEndedAt = [DateTimeOffset]::Parse([string]$Result.ended_at)
+        return $resultStartedAt -ge $StartedAt.AddSeconds(-5) -and $resultEndedAt -ge $resultStartedAt
+    }
+    catch {
+        return $false
+    }
+}
+
 if ($InstallScheduledTask) {
     $timeZone = Get-TimeZone
     if ($timeZone.Id -ne 'Central Standard Time') {
@@ -129,6 +148,7 @@ New-Item -ItemType Directory -Path $runDirectory -Force | Out-Null
 $process = $null
 $result = $null
 $resultIsValid = $false
+$resultWasRead = $false
 try {
     $process = Start-Process -FilePath $executablePath -ArgumentList @('--publish-rpol-snapshots', '--rpol-run-id', $runId, '--rpol-result-path', $resultPath) -PassThru -WindowStyle Hidden
     $deadline = [DateTimeOffset]::UtcNow.AddSeconds($TimeoutSeconds)
@@ -164,6 +184,7 @@ try {
     }
 
     $result = Get-Content -LiteralPath $resultPath -Raw | ConvertFrom-Json
+    $resultWasRead = $true
     Assert-ResultContract -Result $result -ExpectedRunId $runId -StartedAt $startedAt
     $resultIsValid = $true
     $result
@@ -172,7 +193,7 @@ try {
     }
 }
 catch {
-    if (-not $resultIsValid) {
+    if (-not $resultIsValid -and -not ($resultWasRead -and (Test-ResultEvidenceIdentity -Result $result -ExpectedRunId $runId -StartedAt $startedAt))) {
         $result = New-TerminalFallbackResult -RunId $runId -StartedAt $startedAt.ToString('O') -Status 'crash' -Stage 'wrapper-invalid-result' -Message ('The RPOL wrapper rejected or could not read the child result: ' + $_.Exception.Message)
         try { Write-AtomicJsonResult -Value $result -Path $resultPath } catch { }
     }

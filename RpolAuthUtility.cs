@@ -485,7 +485,6 @@ namespace PlayerAssistant
                 browser = await ConnectToExternalBrowserAsync(
                     playwright,
                     profileDirectory,
-                    verificationProcess,
                     cancellationToken);
                 var endpoint = RpolExternalBrowserConnection.ReadEndpoint(profileDirectory);
                 StartupLoggingUtility.Append("RPOL authentication stage", "stage=cdp_connected");
@@ -563,7 +562,6 @@ namespace PlayerAssistant
         private static async Task<IBrowser> ConnectToExternalBrowserAsync(
             IPlaywright playwright,
             string profileDirectory,
-            Process verificationProcess,
             CancellationToken cancellationToken)
         {
             Exception? lastException = null;
@@ -571,11 +569,12 @@ namespace PlayerAssistant
             while (DateTimeOffset.UtcNow < deadline)
             {
                 cancellationToken.ThrowIfCancellationRequested();
-                if (verificationProcess.HasExited)
-                    throw new RpolAuthException(RpolAuthFailureKind.PlaywrightUnavailable,
-                        "The external RPOL browser exited before publishing its CDP endpoint.");
                 try
                 {
+                    // Chrome/Edge may return from the launcher process before the
+                    // browser child publishes DevToolsActivePort. The endpoint is
+                    // the authoritative rendezvous; parent-process exit alone is
+                    // not proof that the browser failed.
                     var endpoint = RpolExternalBrowserConnection.ReadEndpoint(profileDirectory);
                     var browser = await WaitForPlaywrightAsync(
                         playwright.Chromium.ConnectOverCDPAsync(endpoint.AbsoluteUri),

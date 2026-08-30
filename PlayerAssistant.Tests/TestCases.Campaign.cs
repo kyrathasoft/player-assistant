@@ -326,6 +326,17 @@ internal static partial class TestCases
         AssertThrows<InvalidDataException>(() => RpolExternalBrowserConnection.ReadEndpoint(temporary.Path));
     }
 
+    internal static void RpolExternalBrowserContinuesAfterLauncherParentExit()
+    {
+        var source = File.ReadAllText(Path.Combine(GetRepositoryRoot(), "RpolAuthUtility.cs"));
+        var connectStart = source.IndexOf("ConnectToExternalBrowserAsync", StringComparison.Ordinal);
+        var connectEnd = source.IndexOf("WaitForExternalBrowserAuthenticationAsync", connectStart, StringComparison.Ordinal);
+        AssertTrue(connectStart >= 0 && connectEnd > connectStart, "the external-browser connection method must remain present");
+        var connectSource = source[connectStart..connectEnd];
+        AssertFalse(connectSource.Contains("verificationProcess.HasExited", StringComparison.Ordinal), "launcher-parent exit must not abort the browser-owned CDP rendezvous");
+        AssertTrue(connectSource.Contains("ReadEndpoint(profileDirectory)", StringComparison.Ordinal), "connection must continue polling the browser-owned endpoint");
+    }
+
     internal static void RpolOperationDeadlineExposesOneMonotonicBudget()
     {
         using var deadline = RpolOperationDeadline.Create(TimeSpan.FromSeconds(2), TimeSpan.FromSeconds(1));
@@ -515,6 +526,17 @@ internal static partial class TestCases
             () => PlayerAssistant.Program.GetRpolResultPathForTests(["--rpol-result-path", Path.Combine(AppContext.BaseDirectory, "rpol-results", Guid.NewGuid().ToString("N"), "result.json")], runId));
         AssertThrows<InvalidOperationException>(
             () => PlayerAssistant.Program.GetRpolResultPathForTests(["--rpol-result-path", Path.Combine(AppContext.BaseDirectory, "rpol-results", runId, "..", "other.json")], runId));
+    }
+
+    internal static void RpolPublisherWrapperPreservesReadableTerminalEvidenceOnContractMismatch()
+    {
+        var source = File.ReadAllText(Path.Combine(GetRepositoryRoot(), "publish-rpol-snapshots.ps1"));
+        AssertTrue(
+            source.Contains("Test-ResultEvidenceIdentity", StringComparison.Ordinal),
+            "publisher wrapper must identify readable terminal child evidence before writing a fallback");
+        AssertTrue(
+            source.Contains("$resultWasRead -and (Test-ResultEvidenceIdentity", StringComparison.Ordinal),
+            "publisher wrapper must not replace readable terminal child evidence with a misleading fallback");
     }
 
     internal static void RpolPublisherWrapperContainsAtomicSupervisionContract()
