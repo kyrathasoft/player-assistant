@@ -61,10 +61,10 @@ function Get-ProductionStaticResponse {
     param(
         [Parameter(Mandatory = $true)][System.Net.Http.HttpClient]$Client,
         [Parameter(Mandatory = $true)][uri]$RequestUri,
-        [ValidateRange(1, 6)][int]$MaximumAttempts = 4
+        [ValidateRange(1, 6)][int]$MaximumAttempts = 5
     )
 
-    $backoffSeconds = @(2, 5, 10, 20, 30)
+    $backoffSeconds = @(2, 5, 10, 20, 620)
     $lastError = $null
     for ($attempt = 1; $attempt -le $MaximumAttempts; $attempt++) {
         $response = $null
