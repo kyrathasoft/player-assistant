@@ -15,6 +15,23 @@
 
     const isRecord = (value) => value !== null && typeof value === 'object' && !Array.isArray(value);
     const expectedMime = (url) => url.endsWith('.json') ? 'application/json' : '';
+    const expectedPackPaths = Object.freeze({
+        'translator-orcish': 'data/orcish.json',
+        'translator-elvish': 'data/elvish.json',
+        'translator-ghukliak': 'data/ghukliak.json',
+        'campaign-search': 'campaign-search.json'
+    });
+    const validatePackUrl = (id, value, baseUrl = globalThis.location?.href) => {
+        if (typeof value !== 'string' || value !== expectedPackPaths[id]) throw new Error(`Optional pack '${id}' has no approved URL.`);
+        const base = new URL(baseUrl || value, globalThis.location?.href || value);
+        const url = new URL(value, base);
+        const origin = globalThis.location?.origin || url.origin;
+        if (url.origin !== origin || url.search !== '' || url.hash !== ''
+            || url.username !== '' || url.password !== '') {
+            throw new Error(`Optional pack '${id}' has an unapproved URL.`);
+        }
+        return url;
+    };
     const validatePayload = (entry, payload) => {
         if (!isRecord(payload) || payload.schemaVersion !== entry.schemaVersion) return false;
         if (entry.kind === 'translator') {
@@ -33,7 +50,7 @@
 
     const getManifest = async (manifestUrl = 'optional-packs.json') => {
         if (!manifestPromise.has(manifestUrl)) {
-            manifestPromise.set(manifestUrl, fetch(manifestUrl, { cache: 'no-store' })
+            manifestPromise.set(manifestUrl, fetch(manifestUrl, { cache: 'no-store', credentials: 'omit' })
                 .then(async (response) => {
                     if (!response.ok || !(response.headers.get('Content-Type') || '').includes('json')) {
                         throw new Error(`Optional-pack manifest returned ${response.status}.`);
@@ -56,7 +73,7 @@
         let lastError;
         for (let attempt = 0; attempt < attempts; attempt += 1) {
             try {
-                const response = await fetch(requestUrl, { cache: 'no-store' });
+                const response = await fetch(requestUrl, { cache: 'no-store', credentials: 'omit' });
                 if (response.ok || ![408, 429, 500, 502, 503, 504].includes(response.status)) return response;
                 lastError = new Error(`Optional pack returned ${response.status}.`);
             } catch (error) {
@@ -88,7 +105,7 @@
         }
         const cacheName = `${CACHE_PREFIX}${id}`;
         if (!force && loaded.has(id)) return loaded.get(id);
-        const requestUrl = new URL(entry.url, new URL(manifestUrl, globalThis.location?.href || entry.url));
+        const requestUrl = validatePackUrl(id, entry.url, new URL(manifestUrl, globalThis.location?.href || entry.url).href);
         const cacheKey = `${requestUrl.href}?pack-hash=${entry.contentHash}`;
         const cache = globalThis.caches ? await caches.open(cacheName) : null;
         const read = async (response) => {
@@ -142,5 +159,5 @@
         if (globalThis.caches) await caches.delete(`${CACHE_PREFIX}${id}`);
     };
 
-    globalThis.PlayerAssistantPackLoader = Object.freeze({ getManifest, loadPack, removePack, validatePayload });
+    globalThis.PlayerAssistantPackLoader = Object.freeze({ getManifest, loadPack, removePack, validatePayload, validatePackUrl });
 })();

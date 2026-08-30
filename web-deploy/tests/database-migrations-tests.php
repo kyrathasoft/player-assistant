@@ -51,6 +51,7 @@ try {
     migrationAssert((int)$database->query("SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'mutation_idempotency'")->fetchColumn() === 1, 'The mutation idempotency ledger migration did not run.');
     migrationAssert((int)$database->query("SELECT COUNT(*) FROM sqlite_master WHERE type = 'index' AND name = 'ix_mutation_idempotency_expiry'")->fetchColumn() === 1, 'The mutation idempotency expiry index was not created.');
     migrationAssert((int)$database->query("SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'message_send_rate_limits'")->fetchColumn() === 1, 'The message throttle migration did not run.');
+    migrationAssert((int)$database->query("SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'admin_mutation_idempotency'")->fetchColumn() === 1, 'The admin idempotency migration did not run.');
     migrationAssert((int)$database->query("SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'level_up_notification_receipts'")->fetchColumn() === 1, 'The level-up notification receipt migration did not run.');
     migrationAssert((int)$database->query("SELECT COUNT(*) FROM sqlite_master WHERE type = 'index' AND name = 'ix_level_up_notification_receipts_account_time'")->fetchColumn() === 1, 'The level-up notification receipt index was not created.');
     $receiptColumns = $database->query("PRAGMA table_info('level_up_notification_receipts')")->fetchAll(PDO::FETCH_ASSOC);

@@ -58,4 +58,26 @@ foreach (['', 'bad key', str_repeat('x', 129)] as $invalidKey) {
         idempotencyAssert($exception->status === 400 && $exception->errorName === 'invalid_idempotency_key', 'Invalid keys must be rejected at the broker boundary.');
     }
 }
+$faultDatabase = new PDO('sqlite::memory:', null, null, [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]);
+$faultDatabase->exec('CREATE TABLE mutation_idempotency (account_id TEXT NOT NULL, method TEXT NOT NULL, route TEXT NOT NULL, idempotency_key TEXT NOT NULL, request_hash TEXT NOT NULL, status INTEGER NULL, response_json TEXT NULL, created_at INTEGER NOT NULL, expires_at INTEGER NOT NULL, PRIMARY KEY (account_id, method, route, idempotency_key))');
+$faultCount = 0;
+$faultLedger = new IdempotencyLedger($faultDatabase, 3600, 20, static function (): void { throw new RuntimeException('injected finalization disconnect'); });
+try {
+    $faultLedger->execute('account-1', 'POST', '/v1/messages', 'fault-key', [], function () use (&$faultCount): array {
+        $faultCount++;
+        return ['status' => 201, 'body' => ['ok' => true]];
+    });
+    throw new RuntimeException('Finalization fault was not surfaced.');
+} catch (RuntimeException $exception) {
+    idempotencyAssert($exception->getMessage() === 'injected finalization disconnect', 'The finalization fault was not propagated.');
+}
+idempotencyAssert($faultCount === 1, 'A finalization fault must not rerun the mutation.');
+idempotencyAssert((int)$faultDatabase->query("SELECT COUNT(*) FROM mutation_idempotency WHERE idempotency_key = 'fault-key'")->fetchColumn() === 1, 'Finalization failure deleted replay evidence.');
+try {
+    $faultLedger->execute('account-1', 'POST', '/v1/messages', 'fault-key', [], static fn(): array => ['status' => 201, 'body' => []]);
+    throw new RuntimeException('An ambiguous mutation was silently rerun.');
+} catch (BrokerHttpException $exception) {
+    idempotencyAssert($exception->errorName === 'idempotency_in_progress', 'An ambiguous mutation did not remain recoverable.');
+}
+
 echo "Idempotency tests passed.\n";

@@ -49,12 +49,20 @@ try {
     $database->exec('DROP INDEX ix_level_up_notification_receipts_account_time');
     try {
         new BrokerService($config, new RpolClient($config['rpol']));
-        throw new RuntimeException('A version-5 database missing the receipt index was accepted.');
+        throw new RuntimeException('A database missing the receipt index was accepted.');
+    } catch (RuntimeException $exception) {
+        schemaGuardAssert(str_contains($exception->getMessage(), 'ix_level_up_notification_receipts_account_time'), 'Missing receipt index did not fail closed.');
+    }
+    $database->exec('CREATE INDEX ix_level_up_notification_receipts_account_time ON level_up_notification_receipts(account_id, notified_at)');
+    $database->exec('DROP TABLE message_send_rate_limits');
+    try {
+        new BrokerService($config, new RpolClient($config['rpol']));
+        throw new RuntimeException('A v7 database missing message throttling was accepted.');
     } catch (RuntimeException $exception) {
         schemaGuardAssert(
-            str_contains($exception->getMessage(), 'ix_level_up_notification_receipts_account_time')
+            str_contains($exception->getMessage(), 'message_send_rate_limits')
                 && str_contains($exception->getMessage(), 'run migrate-broker.php'),
-            'The incomplete level-up receipt schema did not fail closed with an actionable error.');
+            'The incomplete v7 message-throttle schema did not fail closed with an actionable error.');
     }
 
     echo "Broker schema guard tests passed.\n";

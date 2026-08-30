@@ -24,6 +24,7 @@ final class BrokerService
     private ?string $questDataPath;
     private ?MagicItemService $magicItems = null;
     private ?IdempotencyLedger $idempotency = null;
+    private ?IdempotencyLedger $adminIdempotency = null;
 
     public function __construct(
         private readonly array $config,
@@ -237,13 +238,13 @@ final class BrokerService
         }
 
         if ($route === '/v1/admin/character-accounts/import' && $method === 'POST') {
-            $this->requireAdminSignature($method, $route, $body, $headers);
-            return $this->response(200, $this->characterAuth()->importLegacyAccounts($body));
+            $operationId = $this->requireAdminSignature($method, $route, $body, $headers);
+            return $this->adminMutation($operationId, $method, $route, $body, fn(): array => $this->response(200, $this->characterAuth()->importLegacyAccounts($body)));
         }
 
         if ($route === '/v1/admin/word-counts' && $method === 'PUT') {
-            $this->requireAdminSignature($method, $route, $body, $headers);
-            return $this->response(201, $this->wordCounts()->store($body));
+            $operationId = $this->requireAdminSignature($method, $route, $body, $headers);
+            return $this->adminMutation($operationId, $method, $route, $body, fn(): array => $this->response(201, $this->wordCounts()->store($body)));
         }
 
         if ($route === '/v1/admin/character-accounts' && $method === 'GET') {
@@ -252,31 +253,32 @@ final class BrokerService
         }
 
         if ($route === '/v1/admin/character-accounts' && $method === 'POST') {
-            $this->requireAdminSignature($method, $route, $body, $headers);
-            return $this->response(201, $this->characterAuth()->createAccount($body));
+            $operationId = $this->requireAdminSignature($method, $route, $body, $headers);
+            return $this->adminMutation($operationId, $method, $route, $body, fn(): array => $this->response(201, $this->characterAuth()->createAccount($body)));
         }
 
         if ($method === 'PATCH'
             && preg_match('#^/v1/admin/character-accounts/([a-f0-9]{32})$#', $route, $matches) === 1) {
-            $this->requireAdminSignature($method, $route, $body, $headers);
-            return $this->response(
-                200,
-                $this->characterAuth()->updateAccount($matches[1], $body));
+            $operationId = $this->requireAdminSignature($method, $route, $body, $headers);
+            return $this->adminMutation($operationId, $method, $route, $body, fn(): array => $this->response(200, $this->characterAuth()->updateAccount($matches[1], $body)));
         }
 
         if ($method === 'POST' && $route === '/v1/tokens') {
-            $this->requireAdminSignature($method, $route, $body, $headers);
-            return $this->response(201, $this->issueToken($body));
+            $operationId = $this->requireAdminSignature($method, $route, $body, $headers);
+            return $this->adminMutation($operationId, $method, $route, $body, fn(): array => $this->response(201, $this->issueToken($body)));
         }
 
         if ($method === 'DELETE' && preg_match('#^/v1/tokens/([a-f0-9]{32})$#', $route, $matches) === 1) {
-            $this->requireAdminSignature($method, $route, $body, $headers);
-            $this->revokeToken($matches[1]);
-            return $this->response(200, ['revoked' => true, 'token_id' => $matches[1]]);
+            $operationId = $this->requireAdminSignature($method, $route, $body, $headers);
+            return $this->adminMutation($operationId, $method, $route, $body, function () use ($matches): array {
+                $this->revokeToken($matches[1]);
+                return $this->response(200, ['revoked' => true, 'token_id' => $matches[1]]);
+            });
         }
 
         if ($method === 'PUT' && $route === '/v1/snapshots/page') {
-            $this->requireAdminSignature($method, $route, $body, $headers);
+            $operationId = $this->requireAdminSignature($method, $route, $body, $headers);
+            return $this->adminMutation($operationId, $method, $route, $body, function () use ($body): array {
             $snapshot = $this->validateSnapshot($body, false);
             $this->storeSnapshot($snapshot);
             return $this->response(201, [
@@ -284,6 +286,7 @@ final class BrokerService
                 'source_url' => $snapshot['source_url'],
                 'fetched_at' => $snapshot['fetched_at'],
             ]);
+            });
         }
 
         if ($method === 'GET' && $route === '/v1/snapshots/page') {
@@ -609,17 +612,19 @@ final class BrokerService
         string $method,
         string $route,
         array $body,
-        array $headers): void
+        array $headers): string
     {
         $configuredKey = (string)($this->apiConfig['admin_key'] ?? '');
         $timestamp = (string)($headers['admin-timestamp'] ?? '');
         $nonce = strtolower((string)($headers['admin-nonce'] ?? ''));
         $providedSignature = strtolower((string)($headers['admin-signature'] ?? ''));
+        $operationId = (string)($headers['admin-operation-id'] ?? '');
         if ($configuredKey === '' || str_starts_with($configuredKey, 'CHANGE_ME')
             || !preg_match('/^[0-9]{10}$/', $timestamp)
             || abs(time() - (int)$timestamp) > 120
             || preg_match('/^[a-f0-9]{32}$/', $nonce) !== 1
-            || preg_match('/^[a-f0-9]{64}$/', $providedSignature) !== 1) {
+            || preg_match('/^[a-f0-9]{64}$/', $providedSignature) !== 1
+            || preg_match('/^[A-Za-z0-9][A-Za-z0-9._~:-]{0,127}$/D', $operationId) !== 1) {
             throw new BrokerHttpException(403, 'admin_forbidden', 'Broker administration is not authorized.');
         }
 
@@ -632,6 +637,7 @@ final class BrokerService
             strtoupper($method),
             $route,
             hash('sha256', $bodyJson),
+            $operationId,
         ]);
         $expectedSignature = hash_hmac('sha256', $canonical, $configuredKey);
         if (!hash_equals($expectedSignature, $providedSignature)) {
@@ -662,6 +668,12 @@ final class BrokerService
             }
             throw $exception;
         }
+        return $operationId;
+    }
+
+    private function adminMutation(string $operationId, string $method, string $route, array $body, callable $callback): array
+    {
+        return $this->adminIdempotency()->execute('administrator', $method, $route, $operationId, $body, $callback);
     }
 
     private function rpolCredentialsConfigured(): bool
@@ -698,7 +710,7 @@ final class BrokerService
             'ix_broker_alert_events_type_time', 'ux_character_accounts_character_key',
             'ix_character_account_aliases_account',
             'ix_level_up_notification_receipts_account_time', 'mutation_idempotency',
-            'ix_mutation_idempotency_expiry',
+            'ix_mutation_idempotency_expiry', 'admin_mutation_idempotency', 'ix_admin_mutation_idempotency_expiry', 'message_send_rate_limits',
             'trg_character_accounts_alias_collision_insert',
             'trg_character_accounts_alias_collision_update',
             'trg_character_account_aliases_name_collision_insert',
@@ -765,6 +777,16 @@ final class BrokerService
         return $this->idempotency ??= new IdempotencyLedger(
             $this->database,
             max(60, (int)($this->apiConfig['idempotency_retention_seconds'] ?? 604800)));
+    }
+
+    private function adminIdempotency(): IdempotencyLedger
+    {
+        return $this->adminIdempotency ??= new IdempotencyLedger(
+            $this->database,
+            max(60, (int)($this->apiConfig['idempotency_retention_seconds'] ?? 604800)),
+            5000,
+            null,
+            'admin_mutation_idempotency');
     }
 
     private function mutation(

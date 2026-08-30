@@ -62,21 +62,26 @@ Implement these twenty findings in order. Security boundaries, credential handli
   - Remove the direct-execution fallback in `BrokerService::mutation()` and return `400 invalid_idempotency_key` when the key is absent or malformed.
   - Regression: every protected mutation rejects a missing key, while a retried keyed request replays one durable result and creates one effect.
   - [x] Authenticated PHP and PowerShell fixtures now provide a fresh valid key for each legitimate mutation call.
-- [ ] Close the idempotency ledger's mutation/finalization crash window.
+- [x] Close the idempotency ledger's mutation/finalization crash window.
   - Commit SQLite effects and the terminal ledger response atomically where possible; otherwise preserve an explicit recoverable ambiguous state and never delete evidence after a potentially committed effect.
+  - [x] Finalization faults retain the reservation and deterministic retry diagnostics; signed admin operations use a separate durable ledger.
   - Regression: fault injection after each mutation/ledger commit boundary cannot duplicate effects, strand a key permanently, or lose the replayable response.
-- [ ] Add recoverable idempotency to signed administrator mutations.
+- [x] Add recoverable idempotency to signed administrator mutations.
   - Sign and persist an operation ID plus request hash and terminal response for account import/update, token issue/revoke, word-count, and snapshot mutations; replay exact duplicates and reject body collisions.
+  - [x] Administrator signatures bind an operation ID and all listed mutations replay through the admin ledger.
   - Regression: disconnects before and after each admin commit neither repeat effects nor make successful token issuance unrecoverable.
-- [ ] Constrain optional-pack URLs before credentialed fetch or cache writes.
+- [x] Constrain optional-pack URLs before credentialed fetch or cache writes.
   - Require exact same-origin, ID-specific static paths; reject API, traversal-normalized, protocol-relative, query-lookalike, and cross-origin URLs; fetch packs with `credentials: 'omit'`.
+  - [x] Loader accepts only the four declared literal pack URLs and omits credentials.
   - Regression: invalid paths cause zero pack fetches/cache writes, and only the four declared static pack paths are accepted.
-- [ ] Require schema verification to include the v7 message-throttle table.
+- [x] Require schema verification to include the v7 message-throttle table.
   - Add `message_send_rate_limits` to the required migrated-object contract so a forged or partial `user_version=7` database fails during startup/deployment rather than on message send.
   - Regression: a v7 fixture missing the table fails closed with a schema diagnostic; a complete v7 fixture starts and throttles normally.
-- [ ] Invalidate protected PWA state across tabs and windows.
+  - [x] Schema guard now requires `message_send_rate_limits`.
+- [x] Invalidate protected PWA state across tabs and windows.
   - Broadcast logout and account-generation transitions so every client immediately cancels requests and clears protected snapshots, dialogs, drafts, and DOM state, including hidden clients.
   - Regression: logging out or switching accounts in one of two pages clears the hidden page without polling or waiting for a `401`.
+  - [x] BroadcastChannel plus storage fallback propagates account transitions and clears protected state/drafts.
 - [ ] Revalidate authenticated PWA state after BFCache restoration.
   - On `pageshow`, fail closed by hiding/clearing protected content and revalidating `/session` before restoring authenticated UI, especially when `event.persisted` is true.
   - Regression: Back navigation after remote logout/session expiry reveals no stale protected content before anonymous state is applied.

@@ -4,11 +4,16 @@ declare(strict_types=1);
 
 final class IdempotencyLedger
 {
+    private $beforeFinalizationCommit;
     public function __construct(
         private readonly PDO $database,
         private readonly int $retentionSeconds = 86400,
-        private readonly int $waitMilliseconds = 5000)
+        private readonly int $waitMilliseconds = 5000,
+        ?callable $beforeFinalizationCommit = null,
+        private readonly string $tableName = 'mutation_idempotency')
     {
+        $this->beforeFinalizationCommit = $beforeFinalizationCommit;
+        if (preg_match('/^[a-z_]+$/D', $this->tableName) !== 1) throw new InvalidArgumentException('Invalid idempotency ledger table.');
     }
 
     public function execute(
@@ -27,7 +32,7 @@ final class IdempotencyLedger
             try {
                 $this->prune();
                 $statement = $this->database->prepare(
-                    'SELECT request_hash, status, response_json FROM mutation_idempotency
+                    'SELECT request_hash, status, response_json FROM ' . $this->tableName . '
                      WHERE account_id = ? AND method = ? AND route = ? AND idempotency_key = ?');
                 $statement->execute([$accountId, $method, $route, $key]);
                 $existing = $statement->fetch();
@@ -52,7 +57,7 @@ final class IdempotencyLedger
                     continue;
                 }
                 $this->database->prepare(
-                    'INSERT INTO mutation_idempotency
+                    'INSERT INTO ' . $this->tableName . '
                      (account_id, method, route, idempotency_key, request_hash, created_at, expires_at)
                      VALUES (?, ?, ?, ?, ?, ?, ?)')
                     ->execute([$accountId, $method, $route, $key, $hash, time(), time() + $this->retentionSeconds]);
@@ -66,26 +71,38 @@ final class IdempotencyLedger
             }
         }
 
+        $mutationCompleted = false;
         try {
             $response = $mutation();
             if (!is_array($response) || !isset($response['status'], $response['body']) || !is_array($response['body'])) {
                 throw new RuntimeException('A mutation returned an invalid broker response.');
             }
             $responseJson = json_encode($response['body'], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_PRESERVE_ZERO_FRACTION | JSON_THROW_ON_ERROR);
-            $this->database->beginTransaction();
-            $this->database->prepare(
-                'UPDATE mutation_idempotency SET status = ?, response_json = ?
-                 WHERE account_id = ? AND method = ? AND route = ? AND idempotency_key = ?')
-                ->execute([(int)$response['status'], $responseJson, $accountId, $method, $route, $key]);
-            $this->database->commit();
-            return $response;
-        } catch (Throwable $exception) {
-            if ($this->database->inTransaction()) {
-                $this->database->rollBack();
+            $mutationCompleted = true;
+            try {
+                $this->database->beginTransaction();
+                $this->database->prepare(
+                    'UPDATE ' . $this->tableName . ' SET status = ?, response_json = ?
+                     WHERE account_id = ? AND method = ? AND route = ? AND idempotency_key = ?')
+                    ->execute([(int)$response['status'], $responseJson, $accountId, $method, $route, $key]);
+                if ($this->beforeFinalizationCommit !== null) {
+                    ($this->beforeFinalizationCommit)();
+                }
+                $this->database->commit();
+                return $response;
+            } catch (Throwable $exception) {
+                if ($this->database->inTransaction()) $this->database->rollBack();
+                // Never delete a reservation after the mutation may have committed.
+                // A retry observes the pending row and can be recovered explicitly.
+                throw $exception;
             }
-            $this->database->prepare(
-                'DELETE FROM mutation_idempotency WHERE account_id = ? AND method = ? AND route = ? AND idempotency_key = ?')
-                ->execute([$accountId, $method, $route, $key]);
+        } catch (Throwable $exception) {
+            if ($this->database->inTransaction()) $this->database->rollBack();
+            if (!$mutationCompleted) {
+                $this->database->prepare(
+                    'DELETE FROM ' . $this->tableName . ' WHERE account_id = ? AND method = ? AND route = ? AND idempotency_key = ?')
+                    ->execute([$accountId, $method, $route, $key]);
+            }
             throw $exception;
         }
     }
@@ -99,6 +116,6 @@ final class IdempotencyLedger
 
     private function prune(): void
     {
-        $this->database->prepare('DELETE FROM mutation_idempotency WHERE expires_at <= ?')->execute([time()]);
+        $this->database->prepare('DELETE FROM ' . $this->tableName . ' WHERE expires_at <= ?')->execute([time()]);
     }
 }
