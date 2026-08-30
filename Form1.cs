@@ -2145,7 +2145,7 @@ namespace PlayerAssistant
                 }
 
                 EnsureFormOperationActive(cancellationToken);
-                Process.Start(VerifiedInstallerLaunchUtility.CreateStartInfo(installerLaunchTicket, cancellationToken));
+                VerifiedInstallerLaunchUtility.Launch(installerLaunchTicket, cancellationToken);
                 SetStatusBarMessage($"Launching verified installer: {update.VersionText}.");
             }
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)

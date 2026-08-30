@@ -43,9 +43,10 @@ Implement these twenty findings in order. Security boundaries, credential handli
 - [x] Require an exact HTTPS authority for every secret-bearing broker request.
   - [x] `NetworkUrlPurpose.PlayerAssistantBroker` now accepts only `https://bryanmiller.us:443/scarlethorizons/api/v1/`; HTTP, alternate ports, user-info, subdomains, and authority-changing redirects fail before authenticated follow-up traffic.
   - [x] Focused redirect/authority coverage and the complete 562-test Release harness pass.
-- [ ] Close the verified-installer launch time-of-check/time-of-use window.
+- [x] Close the verified-installer launch time-of-check/time-of-use window.
   - Bind hash/signature verification to stable file identity through process creation, using an ACL-protected non-replaceable launch location or equivalent fail-closed mechanism.
   - Regression: a deterministic post-verification swap prevents launch; unchanged verified bytes launch and cancellation launches nothing.
+  - [x] Verified launch holds a non-delete-sharing file handle through process creation.
 - [x] Make RPOL profile cleanup reparse-point safe.
   - Reject root and descendant junctions/symlinks while scavenging `rpol-browser-verification-*`; delete links without traversing their targets, including under elevated scheduled execution.
   - Regression: target bytes outside the profile remain unchanged for root and nested file/directory reparse fixtures while ordinary stale profiles are removed.
