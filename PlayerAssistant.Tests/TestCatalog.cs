@@ -289,6 +289,7 @@ internal static class TestCatalog
     ("rpol webview lifetime honors max wait and disposal", TestCases.RpolWebViewLifetimeHonorsMaxWaitAndDisposal),
     ("rpol webview credential script revalidates before submit", TestCases.RpolWebViewCredentialScriptRevalidatesBeforeSubmit),
     ("rpol external profile cleanup uses independent deadline ownership", TestCases.RpolExternalProfileCleanupUsesIndependentDeadlineOwnership),
+    ("rpol cleanup protects targets of reparse fixtures", TestCases.RpolCleanupProtectsTargetsOfReparseFixtures),
     ("rpol external profile scavenger skips active locked profiles", TestCases.RpolExternalProfileScavengerSkipsActiveLockedProfiles),
     ("rpol upload recovery faults remain truthful", TestCases.RpolUploadRecoveryFaultsRemainTruthful),
     ("rpol publish recovery reconciles before upload", TestCases.RpolPublishRecoveryReconcilesBeforeUpload),

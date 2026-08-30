@@ -52,6 +52,7 @@ Implement these twenty findings in order. Security boundaries, credential handli
   - Reject root and descendant junctions/symlinks while scavenging `rpol-browser-verification-*`; delete links without traversing their targets, including under elevated scheduled execution.
   - Regression: target bytes outside the profile remain unchanged for root and nested file/directory reparse fixtures while ordinary stale profiles are removed.
   - [x] Cleanup refuses reparse-point roots and deletes nested reparse links without traversing their targets.
+  - [x] Added Windows symbolic-link fixtures covering root refusal, nested file/directory link deletion, target preservation, and ordinary stale-profile removal.
 - [x] Constrain remote broker-backup filenames before any SCP or local path construction.
   - Accept only the producer's exact `broker-YYYYMMDDTHHMMSSZ-<8hex>.sqlite` basename and canonical descendants of approved roots; reject separators, rooted paths, traversal, confusable names, and alternate extensions before I/O.
   - Regression: every malformed name causes zero SSH/SCP/filesystem mutation; a valid basename still verifies and copies.

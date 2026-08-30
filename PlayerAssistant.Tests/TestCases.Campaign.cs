@@ -760,6 +760,31 @@ internal static partial class TestCases
         AssertFalse(Directory.Exists(profile), "profile deletion must use independent cleanup ownership instead of the canceled operation token");
     }
 
+    internal static void RpolCleanupProtectsTargetsOfReparseFixtures()
+    {
+        using var directory = TemporaryDirectory.Create();
+        var target = Path.Combine(directory.Path, "outside-target");
+        Directory.CreateDirectory(target);
+        var targetFile = Path.Combine(target, "keep.txt");
+        File.WriteAllText(targetFile, "must remain");
+        var rootLink = Path.Combine(directory.Path, RpolExternalProfileCleanup.ProfilePrefix + "root-link");
+        Directory.CreateSymbolicLink(rootLink, target);
+        AssertThrows<IOException>(() => RpolCleanupUtility.DeleteDirectoryBounded(rootLink, TimeSpan.FromSeconds(1), CancellationToken.None));
+        AssertTrue(File.Exists(targetFile), "reparse-point profile roots must not traverse their targets");
+        Directory.Delete(rootLink);
+        var profile = Path.Combine(directory.Path, RpolExternalProfileCleanup.ProfilePrefix + "nested");
+        Directory.CreateDirectory(profile);
+        Directory.CreateSymbolicLink(Path.Combine(profile, "nested-link"), target);
+        File.CreateSymbolicLink(Path.Combine(profile, "file-link"), targetFile);
+        RpolCleanupUtility.DeleteDirectoryBounded(profile, TimeSpan.FromSeconds(1), CancellationToken.None);
+        AssertTrue(File.Exists(targetFile), "nested reparse links must be deleted without traversing their targets");
+        var stale = Path.Combine(directory.Path, RpolExternalProfileCleanup.ProfilePrefix + "ordinary");
+        Directory.CreateDirectory(stale);
+        File.WriteAllText(Path.Combine(stale, "stale.txt"), "remove");
+        RpolCleanupUtility.DeleteDirectoryBounded(stale, TimeSpan.FromSeconds(1), CancellationToken.None);
+        AssertFalse(Directory.Exists(stale), "ordinary stale profiles must still be removed");
+    }
+
     internal static void RpolExternalProfileScavengerSkipsActiveLockedProfiles()
     {
         using var directory = TemporaryDirectory.Create();
