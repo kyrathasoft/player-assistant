@@ -106,6 +106,7 @@ internal static class TestCatalog
     ("app settings loads hosted encrypted xp tracking url", TestCases.AppSettingsLoadsHostedEncryptedXpTrackingUrl),
     ("app settings loads hosted encrypted xp tracking url from fixture server", TestCases.AppSettingsLoadsHostedEncryptedXpTrackingUrlFromFixtureServer),
     ("hosted settings trusted version is encrypted at rest", TestCases.HostedSettingsTrustedVersionIsEncryptedAtRest),
+    ("hosted settings trusted version is serialized across concurrent writers", TestCases.HostedSettingsTrustedVersionIsSerializedAcrossConcurrentWriters),
     ("hosted settings trusted version rejects tampered payload", TestCases.HostedSettingsTrustedVersionRejectsTamperedPayload),
     ("hosted settings rejects rollback below trusted version floor", TestCases.HostedSettingsRejectsRollbackBelowTrustedVersionFloor),
     ("hosted settings rejects unexpected signed content identity", TestCases.HostedSettingsRejectsUnexpectedSignedContentIdentity),

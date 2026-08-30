@@ -109,7 +109,7 @@ Implement these twenty findings in order. Security boundaries, credential handli
   - Regression: startup and mid-request failures recover through one retry and the next request succeeds without stale rendering.
 - [ ] Serialize the hosted-settings downgrade floor across processes.
   - Lock the full read/compare/max/write transaction for `trusted-hosted-settings-state.json`, matching the updater's highest-trusted-version policy.
-  - Regression: reverse-completing child processes retain the maximum version; lower versions and abandoned-lock recovery cannot reduce it.
+  - [!] Added a path-derived named mutex and concurrent-writer coverage; child-process reverse-completion and abandoned-lock recovery coverage remain to complete this item.
 - [x] Wire documented message-retention settings into the production broker service.
   - Pass validated `config['messages']` values to `MessageService` instead of silently using the 90-day/500-message defaults.
   - Regression: broker-boundary tests prove non-default pruning and fail closed on malformed production values.

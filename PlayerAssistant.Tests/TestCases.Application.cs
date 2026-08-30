@@ -296,6 +296,19 @@ internal static partial class TestCases
         AssertFalse(encryptedJson.Contains("1.0.1", StringComparison.Ordinal), "trusted hosted settings version should not be stored in plaintext");
     }
 
+    internal static void HostedSettingsTrustedVersionIsSerializedAcrossConcurrentWriters()
+    {
+        using var directory = TemporaryDirectory.Create();
+        var statePath = Path.Combine(directory.Path, "trusted-hosted-settings-state.json");
+        Parallel.Invoke(
+            () => HostedSettingsTrustUtility.ApplyTrustedHostedSettingsVersionPolicy(new Version(2, 0), statePath),
+            () => HostedSettingsTrustUtility.ApplyTrustedHostedSettingsVersionPolicy(new Version(5, 0), statePath));
+
+        var highest = HostedSettingsTrustUtility.TryReadTrustedHostedSettingsVersion(statePath);
+        AssertTrue(highest is not null && highest == new Version(5, 0),
+            "concurrent hosted-settings writers must preserve the maximum trusted version");
+    }
+
     internal static void HostedSettingsTrustedVersionRejectsTamperedPayload()
     {
         using var directory = TemporaryDirectory.Create();

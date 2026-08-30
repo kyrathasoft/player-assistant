@@ -176,6 +176,8 @@ namespace PlayerAssistant
             ArgumentNullException.ThrowIfNull(version);
 
             var statePath = ResolveTrustedHostedSettingsStatePath(trustedHostedSettingsStatePath);
+            using var stateLock = AcquireTrustedHostedSettingsStateLock(statePath);
+            // Re-read while holding the inter-process lock so concurrent readers cannot lower the floor.
             var highestTrustedVersion = TryReadTrustedHostedSettingsVersion(statePath);
             if (highestTrustedVersion is not null && version.CompareTo(highestTrustedVersion) < 0)
             {
@@ -416,6 +418,27 @@ namespace PlayerAssistant
             return string.IsNullOrWhiteSpace(trustedHostedSettingsStatePath)
                 ? RuntimePathUtility.GetUserDataPath(TrustedHostedSettingsStateFileName)
                 : trustedHostedSettingsStatePath;
+        }
+
+        private static IDisposable AcquireTrustedHostedSettingsStateLock(string statePath)
+        {
+            var lockName = "PlayerAssistant.TrustedHostedSettings." + Convert.ToHexStringLower(
+                SHA256.HashData(Encoding.UTF8.GetBytes(Path.GetFullPath(statePath))));
+            var mutex = new Mutex(false, lockName);
+            try
+            {
+                mutex.WaitOne();
+                return new DelegateDisposable(() =>
+                {
+                    mutex.ReleaseMutex();
+                    mutex.Dispose();
+                });
+            }
+            catch
+            {
+                mutex.Dispose();
+                throw;
+            }
         }
 
         private static readonly JsonSerializerOptions JsonOptions = new()
