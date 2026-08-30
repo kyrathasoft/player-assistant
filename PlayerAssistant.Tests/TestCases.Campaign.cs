@@ -303,6 +303,37 @@ internal static partial class TestCases
             "rollback proof must fail when the read-back pointer does not match the captured prior pointer");
     }
 
+    internal static void RpolExternalBrowserUsesEphemeralPortAndAuthenticatedEndpoint()
+    {
+        using var temporary = TemporaryDirectory.Create();
+        var args = RpolExternalBrowserConnection.CreateLaunchArguments(temporary.Path, "C:/notice.html");
+        AssertTrue(args.Contains("--remote-debugging-port=0", StringComparer.Ordinal), "external browser must choose its own CDP port while holding the profile lease");
+        AssertTrue(args.Contains("--remote-debugging-address=127.0.0.1", StringComparer.Ordinal), "external browser CDP must bind only to loopback");
+        AssertFalse(args.Any(argument => argument.StartsWith("--remote-debugging-port=") && !argument.Equals("--remote-debugging-port=0", StringComparison.Ordinal)), "the caller must not preallocate and release a port");
+
+        File.WriteAllText(Path.Combine(temporary.Path, "DevToolsActivePort"), "54808\n/devtools/browser/test-token\n");
+        var endpoint = RpolExternalBrowserConnection.ReadEndpoint(temporary.Path);
+        AssertEqual("http://127.0.0.1:54808/", endpoint.AbsoluteUri, "the endpoint must be derived from the browser-owned active-port file");
+        AssertTrue(RpolExternalBrowserConnection.IsLoopbackEndpoint(endpoint), "only loopback CDP endpoints are accepted");
+    }
+
+    internal static void RpolExternalBrowserRejectsForgedOrMalformedEndpoint()
+    {
+        using var temporary = TemporaryDirectory.Create();
+        File.WriteAllText(Path.Combine(temporary.Path, "DevToolsActivePort"), "54808\n/devtools/browser/test-token\n");
+        AssertThrows<InvalidDataException>(() => RpolExternalBrowserConnection.ValidateEndpoint(new Uri("http://10.0.0.5:54808/")));
+        File.WriteAllText(Path.Combine(temporary.Path, "DevToolsActivePort"), "not-a-port\n");
+        AssertThrows<InvalidDataException>(() => RpolExternalBrowserConnection.ReadEndpoint(temporary.Path));
+    }
+
+    internal static void RpolOperationDeadlineExposesOneMonotonicBudget()
+    {
+        using var deadline = RpolOperationDeadline.Create(TimeSpan.FromSeconds(2), TimeSpan.FromSeconds(1));
+        AssertTrue(deadline.RemainingOperation > TimeSpan.Zero, "the operation budget must be observable");
+        AssertTrue(deadline.CleanupDeadlineUtc > deadline.OperationDeadlineUtc, "cleanup must have a separate bounded margin");
+        AssertThrows<TimeoutException>(() => deadline.ThrowIfExpired(DateTimeOffset.UtcNow.AddSeconds(3)));
+    }
+
     internal static void RpolCrossProcessLockExcludesConcurrentRun()
     {
         var lockName = $"PlayerAssistant.Tests.Rpol.{Guid.NewGuid():N}";

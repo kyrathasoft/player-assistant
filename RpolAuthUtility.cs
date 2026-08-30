@@ -2,7 +2,6 @@ using System.Diagnostics;
 using System.ComponentModel;
 using System.Collections.Concurrent;
 using System.Net;
-using System.Net.Sockets;
 using System.Runtime.ExceptionServices;
 using System.Text;
 using System.Text.Json;
@@ -469,7 +468,6 @@ namespace PlayerAssistant
                 tempDirectory,
                 $"rpol-browser-verification-{Guid.NewGuid():N}.html");
             Directory.CreateDirectory(profileDirectory);
-            var remoteDebuggingPort = GetAvailableLoopbackPort();
 
             IBrowser? browser = null;
             Process? verificationProcess = null;
@@ -480,14 +478,16 @@ namespace PlayerAssistant
                 File.WriteAllText(noticePath, CreateExternalBrowserNoticeHtml(), Encoding.UTF8);
                 verificationProcess = StartExternalBrowserForManualVerification(
                     browserPath,
-                    remoteDebuggingPort,
                     profileDirectory,
                     noticePath);
+                RpolExternalBrowserConnection.EnsureAuthorizedProcess(verificationProcess, browserPath, profileDirectory);
                 StartupLoggingUtility.Append("RPOL authentication stage", "stage=external_browser_started");
                 browser = await ConnectToExternalBrowserAsync(
                     playwright,
-                    remoteDebuggingPort,
+                    profileDirectory,
+                    verificationProcess,
                     cancellationToken);
+                var endpoint = RpolExternalBrowserConnection.ReadEndpoint(profileDirectory);
                 StartupLoggingUtility.Append("RPOL authentication stage", "stage=cdp_connected");
                 var context = browser.Contexts.FirstOrDefault()
                     ?? throw new RpolAuthException(
@@ -499,7 +499,7 @@ namespace PlayerAssistant
                     context,
                     cancellationToken,
                     lockOwner,
-                    $"http://127.0.0.1:{remoteDebuggingPort}");
+                    endpoint.AbsoluteUri);
                 StartupLoggingUtility.Append("RPOL authentication stage", "stage=state_persisted");
                 DeleteTemporaryStorageStateFile(noticePath);
                 return new RpolBrowserSession(
@@ -517,7 +517,7 @@ namespace PlayerAssistant
                 if (browser is not null)
                 {
                     cleanupErrors.AddRange(await RpolCleanupUtility.DisposeAsyncIndependently(
-                        cancellationToken,
+                        CancellationToken.None,
                         ("external browser", () => browser.CloseAsync())));
                 }
                 if (verificationProcess is not null)
@@ -562,32 +562,36 @@ namespace PlayerAssistant
 
         private static async Task<IBrowser> ConnectToExternalBrowserAsync(
             IPlaywright playwright,
-            int remoteDebuggingPort,
+            string profileDirectory,
+            Process verificationProcess,
             CancellationToken cancellationToken)
         {
-            var endpoint = $"http://127.0.0.1:{remoteDebuggingPort}";
-            var startedAt = DateTimeOffset.UtcNow;
             Exception? lastException = null;
-            while (DateTimeOffset.UtcNow - startedAt < PlaywrightOperationTimeout)
+            var deadline = DateTimeOffset.UtcNow + PlaywrightOperationTimeout;
+            while (DateTimeOffset.UtcNow < deadline)
             {
                 cancellationToken.ThrowIfCancellationRequested();
+                if (verificationProcess.HasExited)
+                    throw new RpolAuthException(RpolAuthFailureKind.PlaywrightUnavailable,
+                        "The external RPOL browser exited before publishing its CDP endpoint.");
                 try
                 {
-                    return await WaitForPlaywrightAsync(
-                        playwright.Chromium.ConnectOverCDPAsync(endpoint),
+                    var endpoint = RpolExternalBrowserConnection.ReadEndpoint(profileDirectory);
+                    var browser = await WaitForPlaywrightAsync(
+                        playwright.Chromium.ConnectOverCDPAsync(endpoint.AbsoluteUri),
                         "connecting to the external RPOL browser",
                         cancellationToken);
+                    return browser;
                 }
-                catch (Exception ex) when (ex is PlaywrightException or TimeoutException or IOException)
+                catch (Exception ex) when (ex is PlaywrightException or TimeoutException or IOException or InvalidDataException)
                 {
                     lastException = ex;
-                    await Task.Delay(TimeSpan.FromMilliseconds(500), cancellationToken);
+                    await Task.Delay(TimeSpan.FromMilliseconds(250), cancellationToken);
                 }
             }
-
             throw new RpolAuthException(
                 RpolAuthFailureKind.PlaywrightUnavailable,
-                $"RPOL browser verification could not connect to the external browser: {lastException?.Message ?? "connection timed out"}.",
+                $"RPOL browser verification could not connect to the browser-owned CDP endpoint: {lastException?.Message ?? "connection timed out"}.",
                 lastException);
         }
 
@@ -1034,7 +1038,6 @@ namespace PlayerAssistant
 
         private static Process StartExternalBrowserForManualVerification(
             string browserPath,
-            int remoteDebuggingPort,
             string profileDirectory,
             string noticePath)
         {
@@ -1044,7 +1047,6 @@ namespace PlayerAssistant
                 UseShellExecute = false
             };
             foreach (var argument in CreateExternalBrowserVerificationArguments(
-                remoteDebuggingPort,
                 profileDirectory,
                 noticePath))
             {
@@ -1055,19 +1057,26 @@ namespace PlayerAssistant
         }
 
         internal static string[] CreateExternalBrowserVerificationArguments(
-            int remoteDebuggingPort,
             string profileDirectory,
             string noticePath)
         {
-            return
-            [
+            return RpolExternalBrowserConnection.CreateLaunchArguments(profileDirectory, noticePath);
+        }
+
+        // Compatibility overload retained for existing deterministic argument tests;
+        // production startup uses the browser-owned ephemeral-port overload above.
+        internal static string[] CreateExternalBrowserVerificationArguments(
+            int remoteDebuggingPort, string profileDirectory, string noticePath)
+        {
+            if (remoteDebuggingPort is < 1 or > 65535) throw new ArgumentOutOfRangeException(nameof(remoteDebuggingPort));
+            return [
                 $"--remote-debugging-port={remoteDebuggingPort}",
+                "--remote-debugging-address=127.0.0.1",
                 $"--user-data-dir={profileDirectory}",
                 "--no-first-run",
                 "--new-window",
                 new Uri(noticePath).AbsoluteUri,
-                RpolProtectedResourceUtility.CanonicalDiceRollerProbe.Uri.AbsoluteUri
-            ];
+                RpolProtectedResourceUtility.CanonicalDiceRollerProbe.Uri.AbsoluteUri];
         }
 
         private static Process StartExternalBrowserProcess(ProcessStartInfo startInfo)
@@ -1198,20 +1207,6 @@ namespace PlayerAssistant
             };
 
             return candidates.FirstOrDefault(File.Exists);
-        }
-
-        private static int GetAvailableLoopbackPort()
-        {
-            var listener = new TcpListener(IPAddress.Loopback, 0);
-            try
-            {
-                listener.Start();
-                return ((IPEndPoint)listener.LocalEndpoint).Port;
-            }
-            finally
-            {
-                listener.Stop();
-            }
         }
 
         private static void DeleteTemporaryDirectory(string path, CancellationToken cancellationToken = default)

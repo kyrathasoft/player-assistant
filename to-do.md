@@ -392,19 +392,19 @@ Planned security correction: eliminate first-name equivalence from authenticatio
 - [x] Prevent trusted-network redirects from connecting to untrusted targets.
   - [x] Disable automatic redirects and manually follow a bounded hop count, validating every parsed target against its purpose-specific allowlist before sending.
   - [x] Prove a trusted endpoint redirecting to localhost or another disallowed authority sends zero requests to that target.
-- [ ] Make RPOL credential migration and WebView dispatch lifetime-safe.
-  - [ ] Store username/password as one versioned credential record or compensate on partial write/delete so migration and plaintext removal are all-or-nothing.
-  - [ ] Complete cancellation even when UI enqueue fails or the handle is destroyed; dispose registrations and recheck dialog viability after each await.
-  - Blocked pending the release-candidate self-test fixture `Release\\publish\\settings.local.json`, which is not present in this checkout; functional migration and dispatch regression coverage passes.
-- [ ] Prove RPOL authentication against the exact protected resource before capturing or reusing browser state.
-  - [ ] Define one canonical protected Dice Roller probe for game `80170` and use it for visible-browser verification, WebView verification, restored-state validation, and publisher preflight.
-  - [ ] Reject public campaign content, cookie presence, login redirects/forms, untrusted navigation, challenges, wrong paths, wrong game IDs, and unexpected protected-page shapes as authentication proof.
-  - [ ] Capture state only after the live probe succeeds, then restore it in a publisher-equivalent fresh browser process and repeat the probe before promotion.
-  - [ ] Add deterministic classifier, local browser-fixture, cancellation, timeout, and state-round-trip tests without storing credentials or cookie values.
-- [ ] Secure the external RPOL browser/CDP connection and verification lifetime.
-  - [ ] Eliminate available-port/release/rebind races and prevent unauthorized local processes from reading cookies or controlling the verification browser.
-  - [ ] Apply one end-to-end deadline across browser launch, CDP connection, verification, capture, publishing, disposal, and wrapper supervision; produce truthful timeout/crash results.
-  - [ ] Serialize verifier and publisher operations with an application-owned cross-process lock and clean every browser, profile, CDP, and temporary-state resource on every exit path.
+- [x] Make RPOL credential migration and WebView dispatch lifetime-safe.
+  - [x] Store username/password as one versioned credential record or compensate on partial write/delete so migration and plaintext removal are all-or-nothing.
+  - [x] Complete cancellation even when UI enqueue fails or the handle is destroyed; dispose registrations and recheck dialog viability after each await.
+  - Release-candidate self-test fixture regenerated through the documented publish path; migration and dispatch regression coverage passes.
+- [x] Prove RPOL authentication against the exact protected resource before capturing or reusing browser state.
+  - [x] Define one canonical protected Dice Roller probe for game `80170` and use it for visible-browser verification, WebView verification, restored-state validation, and publisher preflight.
+  - [x] Reject public campaign content, cookie presence, login redirects/forms, untrusted navigation, challenges, wrong paths, wrong game IDs, and unexpected protected-page shapes as authentication proof.
+  - [x] Capture state only after the live probe succeeds, then restore it in a publisher-equivalent fresh browser process and repeat the probe before promotion.
+  - [x] Add deterministic classifier, local browser-fixture, cancellation, timeout, and state-round-trip tests without storing credentials or cookie values.
+- [x] Secure the external RPOL browser/CDP connection and verification lifetime.
+  - [x] Eliminate available-port/release/rebind races and prevent unauthorized local processes from reading cookies or controlling the verification browser.
+  - [x] Apply one end-to-end deadline across browser launch, CDP connection, verification, capture, publishing, disposal, and wrapper supervision; produce truthful timeout/crash results.
+  - [x] Serialize verifier and publisher operations with an application-owned cross-process lock and clean every browser, profile, CDP, and temporary-state resource on every exit path.
 - [ ] Remove distributed RPOL administrator credentials after protected-page coverage passes.
   - [ ] Verify every required approved RPOL page through the scheduled signed publisher and complete a clean-client run using only a revocable broker token.
   - [ ] Remove administrator credentials from hosted, local, publish-time, and end-user settings/Credential Manager entries; rotate the administrator password afterward.
