@@ -413,7 +413,7 @@ Planned security correction: eliminate first-name equivalence from authenticatio
   - [ ] Verify every required approved RPOL page through the scheduled signed publisher and complete a clean-client run using only a revocable broker token.
   - [ ] Remove administrator credentials from hosted, local, publish-time, and end-user settings/Credential Manager entries; rotate the administrator password afterward.
   - [ ] Complete release verification for broker-only retrieval, credential-free client startup, diagnostics redaction, and Release/publish/installer parity.
-  - [!] Blocked: the launcher-rendezvous defect was fixed and pushed, but the required scheduled signed publisher coverage and clean-client broker-only run have not yet been completed; no credentials were removed or rotated.
+  - [!] Blocked after retry: the launcher-rendezvous defect is fixed and pushed, but the scheduled signed publisher still timed out before producing protected-page coverage; no credentials were removed or rotated.
 
 - [ ] Add a profile-bound RPOL state fallback only when publisher-equivalent round-trip testing proves storage-state reuse cannot work.
   - [ ] Use a dedicated user-only persistent profile with restrictive ACLs, a single-process lock, exact protected-probe validation, and explicit reset behavior.
@@ -446,7 +446,7 @@ Planned security correction: eliminate first-name equivalence from authenticatio
 - [ ] Add measurable resource budgets.
   - [ ] Set upper bounds for broker query latency, message-table growth, cache/backup retention, startup work, PWA polling, optional-pack storage, and diagnostic/log growth.
   - [ ] Add representative large-fixture and slow-I/O tests so performance and storage regressions become release-gate failures rather than production surprises.
-  - [!] Blocked 2026-08-29: implementation and focused/full local regression gates pass, but `pwa/test-deployment.ps1 -SkipRemote` still fails the existing fail-closed deployment parity gate (`index.html does not match the local deployment file`); the required deployment acceptance gate remains unresolved, so this item and both subitems stay unchecked. The RC checklist also cannot run to completion without the configured release signer subject/thumbprint.
+  - [!] Blocked 2026-08-30: implementation, focused/full regression, deployment parity, installer smoke, and non-signing RC gates pass. The remaining release acceptance prerequisite is an approved Authenticode signer subject/thumbprint and matching certificate; the local executable is unsigned. No signer value was guessed and no signing check was weakened.
 
 ## Completed
 
