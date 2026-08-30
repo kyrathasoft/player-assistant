@@ -500,11 +500,11 @@ Planned security correction: eliminate first-name equivalence from authenticatio
   - [x] Eliminate available-port/release/rebind races and prevent unauthorized local processes from reading cookies or controlling the verification browser.
   - [x] Apply one end-to-end deadline across browser launch, CDP connection, verification, capture, publishing, disposal, and wrapper supervision; produce truthful timeout/crash results.
   - [x] Serialize verifier and publisher operations with an application-owned cross-process lock and clean every browser, profile, CDP, and temporary-state resource on every exit path.
-- [ ] Remove distributed RPOL administrator credentials after protected-page coverage passes.
+- [!] Remove distributed RPOL administrator credentials after protected-page coverage passes.
   - [ ] Verify every required approved RPOL page through the scheduled signed publisher and complete a clean-client run using only a revocable broker token.
   - [ ] Remove administrator credentials from hosted, local, publish-time, and end-user settings/Credential Manager entries; rotate the administrator password afterward.
   - [ ] Complete release verification for broker-only retrieval, credential-free client startup, diagnostics redaction, and Release/publish/installer parity.
-  - [!] Blocked after retry: the launcher-rendezvous defect is fixed and pushed, but the scheduled signed publisher still timed out before producing protected-page coverage; no credentials were removed or rotated.
+  - [!] Externally unresolvable until a future RPOL run produces both successful protected-page coverage and clean-client broker-token-only verification. Keep the broker fail-closed when RPOL is unavailable. Do not use a profile-bound state fallback merely to force this criterion to pass.
 
 - [ ] Add a profile-bound RPOL state fallback only when publisher-equivalent round-trip testing proves storage-state reuse cannot work.
   - [ ] Use a dedicated user-only persistent profile with restrictive ACLs, a single-process lock, exact protected-probe validation, and explicit reset behavior.
