@@ -18,4 +18,12 @@ internal static class DateBoundary
         if (zone.IsAmbiguousTime(value)) throw new ArgumentException($"{name} is ambiguous in its timezone.", name);
         return new DateTimeOffset(value, zone.GetUtcOffset(value)).ToUniversalTime();
     }
+
+    internal static DateTimeOffset ParseUtc(string value, string name)
+    {
+        if (!DateTimeOffset.TryParse(value, System.Globalization.CultureInfo.InvariantCulture,
+            System.Globalization.DateTimeStyles.RoundtripKind, out var parsed))
+            throw new ArgumentException($"{name} is not an ISO timestamp.", name);
+        return RequireUtc(parsed, name);
+    }
 }

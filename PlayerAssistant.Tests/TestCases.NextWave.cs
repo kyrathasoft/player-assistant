@@ -36,6 +36,8 @@ internal static partial class TestCases
         AssertThrows<ArgumentException>(() => DateBoundary.ToUtc(new DateTime(2026, 11, 1, 1, 30, 0, DateTimeKind.Unspecified), central, "schedule"));
         var utc = DateBoundary.ToUtc(new DateTime(2026, 2, 1, 1, 30, 0, DateTimeKind.Unspecified), central, "schedule");
         AssertEqual(TimeSpan.Zero, utc.Offset, "date boundary must produce UTC");
+        AssertEqual(new DateTimeOffset(2028, 2, 29, 7, 30, 0, TimeSpan.Zero), DateBoundary.ParseUtc("2028-02-29T07:30:00Z", "signed_at"), "leap-day UTC parsing must be deterministic");
+        AssertThrows<ArgumentException>(() => DateBoundary.ParseUtc("2026-02-01T01:30:00-06:00", "signed_at"));
     }
 
     internal static void StartupRecoveryRejectsAmbiguousVerifiedJournal()
