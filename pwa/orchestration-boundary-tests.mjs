@@ -15,6 +15,7 @@ const testAccountGenerationRejectsStaleRestore = async () => {
     await pending;
     assert.equal(controller.account(), null);
     assert.equal(states.length, 0);
+    controller.shutdown();
 };
 
 const testMessagesRefreshIsSingleFlight = async () => {
@@ -30,6 +31,7 @@ const testMessagesRefreshIsSingleFlight = async () => {
     release();
     await first;
     assert.equal(calls, 1);
+    controller.shutdown();
 };
 
 const testPresenceStopsPollingWhenNotEligible = () => {
@@ -37,6 +39,7 @@ const testPresenceStopsPollingWhenNotEligible = () => {
     const controller = createPresenceController({ canPoll: () => false, setInterval: () => { timers++; return 1; }, clearInterval: () => {} });
     controller.start();
     assert.equal(timers, 0);
+    controller.shutdown();
 };
 
 const testAccountControllerOwnsCurrentIdentity = () => {
@@ -47,6 +50,7 @@ const testAccountControllerOwnsCurrentIdentity = () => {
     controller.beginTransition();
     assert.equal(controller.account(), null);
     assert.deepEqual(states, [{ id: 'account-1' }]);
+    controller.shutdown();
 };
 
 const testUpdateLifecycleCancelsOnShutdown = () => {

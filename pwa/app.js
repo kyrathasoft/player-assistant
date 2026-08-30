@@ -2873,8 +2873,8 @@ import { createUpdateLifecycleController } from './modules/update-lifecycle.js?v
                 }
             });
             beginAuthenticationGeneration();
-            authenticationCsrfToken = String(session.csrf_token || '');
             accountSessionController.setAccount(session.account);
+            authenticationCsrfToken = String(session.csrf_token || '');
             clearProtectedFreshness();
             resetMagicItemState();
             authenticatedXpSnapshot = null;
