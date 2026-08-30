@@ -2522,7 +2522,8 @@ import { createCorrelationContext, correlationHeaders } from './correlation.js?v
             : createApiRequestId();
         const headers = new Headers({
             Accept: 'application/json',
-            'X-Request-Id': requestId
+            'X-Request-Id': requestId,
+            ...CORRELATION_HEADERS
         });
         if (options.body !== undefined) headers.set('Content-Type', 'application/json');
         if (options.csrf === true && authenticationCsrfToken) {

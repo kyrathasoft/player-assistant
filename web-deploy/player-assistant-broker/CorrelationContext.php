@@ -12,4 +12,9 @@ final class CorrelationContext
     {
         return preg_replace('/(?i)(password|token|cookie|authorization|set-cookie)\\s*[:=]\\s*[^\\s,;]+/', '$1=[REDACTED]', $value) ?? '[REDACTED]';
     }
+
+    public static function fromRequest(array $server): string
+    {
+        return self::create(isset($server['HTTP_X_CORRELATION_ID']) ? (string)$server['HTTP_X_CORRELATION_ID'] : null);
+    }
 }
