@@ -40,9 +40,9 @@ Implement these twenty findings in order. Security boundaries, credential handli
 
 ### P1 — security and integrity boundaries
 
-- [ ] Require an exact HTTPS authority for every secret-bearing broker request.
-  - Restrict `NetworkUrlPurpose.PlayerAssistantBroker` to `https://bryanmiller.us:443/scarlethorizons/api/v1/`; reject HTTP, alternate ports, user-info, sibling/subdomain authorities, and authority-changing redirects without forwarding authentication headers.
-  - Regression: forbidden authorities and redirects receive zero bearer/HMAC-authenticated requests; exact-authority relative redirects remain valid.
+- [x] Require an exact HTTPS authority for every secret-bearing broker request.
+  - [x] `NetworkUrlPurpose.PlayerAssistantBroker` now accepts only `https://bryanmiller.us:443/scarlethorizons/api/v1/`; HTTP, alternate ports, user-info, subdomains, and authority-changing redirects fail before authenticated follow-up traffic.
+  - [x] Focused redirect/authority coverage and the complete 562-test Release harness pass.
 - [ ] Close the verified-installer launch time-of-check/time-of-use window.
   - Bind hash/signature verification to stable file identity through process creation, using an ACL-protected non-replaceable launch location or equivalent fail-closed mechanism.
   - Regression: a deterministic post-verification swap prevents launch; unchanged verified bytes launch and cancellation launches nothing.

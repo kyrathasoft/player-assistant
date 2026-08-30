@@ -207,6 +207,7 @@ internal static class TestCatalog
     ("network request wraps timeout", TestCases.NetworkRequestWrapsTimeout),
     ("network request preserves caller cancellation", TestCases.NetworkRequestPreservesCallerCancellation),
     ("network allowlist rejects credentialed and escaped hosts", TestCases.NetworkAllowlistRejectsCredentialedAndEscapedHosts),
+    ("broker allowlist requires exact https authority and blocks secret redirects", TestCases.BrokerAllowlistRequiresExactHttpsAuthorityAndBlocksSecretRedirects),
     ("rpol credential submission requires exact trusted https origin and path", TestCases.RpolCredentialSubmissionRequiresExactTrustedHttpsOriginAndPath),
     ("rpol webview navigation requires approved https path", TestCases.RpolWebViewNavigationRequiresApprovedHttpsPath),
     ("rpol webview navigation starting guard cancels untrusted urls", TestCases.RpolWebViewNavigationStartingGuardCancelsUntrustedUrls),
