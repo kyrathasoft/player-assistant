@@ -781,7 +781,7 @@ final class BrokerService
         }
         $key = (string)($headers['idempotency-key'] ?? '');
         if ($key === '') {
-            return $callback();
+            throw new BrokerHttpException(400, 'invalid_idempotency_key', 'The Idempotency-Key header is required for authenticated mutations.');
         }
         return $this->idempotency()->execute(
             $accountId, $method, $route, $key, $body, $callback);

@@ -52,7 +52,7 @@ Implement these twenty findings in order. Security boundaries, credential handli
 - [ ] Constrain remote broker-backup filenames before any SCP or local path construction.
   - Accept only the producer's exact `broker-YYYYMMDDTHHMMSSZ-<8hex>.sqlite` basename and canonical descendants of approved roots; reject separators, rooted paths, traversal, confusable names, and alternate extensions before I/O.
   - Regression: every malformed name causes zero SSH/SCP/filesystem mutation; a valid basename still verifies and copies.
-- [ ] Require an idempotency key on every authenticated broker mutation.
+- [x] Require an idempotency key on every authenticated broker mutation.
   - Remove the direct-execution fallback in `BrokerService::mutation()` and return `400 invalid_idempotency_key` when the key is absent or malformed.
   - Regression: every protected mutation rejects a missing key, while a retried keyed request replays one durable result and creates one effect.
 - [ ] Close the idempotency ledger's mutation/finalization crash window.
