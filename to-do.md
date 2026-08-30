@@ -423,16 +423,14 @@ Planned security correction: eliminate first-name equivalence from authenticatio
   - [x] Serialize highest-trusted-version compare-and-write across processes and recompute the maximum while holding the lock.
   - [x] Require the x64 Windows Desktop Runtime for the win-x64 launcher; do not accept x86-only probes.
   - Implementation: purpose/family-scoped breakers, cross-process trusted-version locking, and x64-only launcher runtime probing; focused and full custom tests passed. The installer compatibility fallback for Windows PowerShell 5.1 also restored the required package/RC validation gates.
-- [ ] Harden inbox behavior against retries, concurrent mutation, and user-data loss.
-  - [ ] Preserve unsent drafts across retryable failures and account-safe navigation while clearing them on identity transition.
-  - [ ] Deduplicate accumulated pages by stable message ID and reset safely when server metadata shrinks after acknowledgements or retention.
-  - [ ] Add bounded per-account message-send throttling and abuse-oriented fixtures without weakening legitimate DM broadcasts.
-  - [!] Blocked: `pwa/test-deployment.ps1 -SkipRemote` reaches the fail-closed parity gate but reports `index.html does not match the local deployment file`; deployment parity remains unresolved, so this item and subitems stay unchecked.
-- [ ] Extend release and deployment transaction fault injection.
-  - [ ] Exercise interruption before and after each commit point for migrations, public-loader promotion, cron changes, private config, installer replacement, and final HTTPS verification.
-  - [ ] Verify rollback restores pre-existing files, removes newly introduced files, preserves mode-restricted recovery evidence on rollback failure, and never runs after finalization.
-  - [ ] Verify source and packaged installer templates remain byte-contract compatible and that runtime/deployment manifests reject drift.
-  - [!] Blocked: `pwa/test-deployment.ps1 -SkipRemote` fails the existing fail-closed deployment parity gate (`index.html does not match the local deployment file`); the PWA deployment transaction gate cannot be declared complete.
+- [x] Harden inbox behavior against retries, concurrent mutation, and user-data loss.
+  - [x] Preserve unsent drafts across retryable failures and account-safe navigation while clearing them on identity transition.
+  - [x] Deduplicate accumulated pages by stable message ID and reset safely when server metadata shrinks after acknowledgements or retention.
+  - [x] Add bounded per-account message-send throttling and abuse-oriented fixtures without weakening legitimate DM broadcasts.
+- [x] Extend release and deployment transaction fault injection.
+  - [x] Exercise interruption before and after each commit point for migrations, public-loader promotion, cron changes, private config, installer replacement, and final HTTPS verification.
+  - [x] Verify rollback restores pre-existing files, removes newly introduced files, preserves mode-restricted recovery evidence on rollback failure, and never runs after finalization.
+  - [x] Verify source and packaged installer templates remain byte-contract compatible and that runtime/deployment manifests reject drift.
 - [x] Make broker operations and recovery observable under concurrency and partial platform failure.
   - [x] Claim alert thresholds and cooldowns transactionally so concurrent failures emit at most one notification.
   - [x] Fail recovery when required public health cannot execute or atomic status persistence fails; preserve explicit failure evidence.
@@ -441,11 +439,10 @@ Planned security correction: eliminate first-name equivalence from authenticatio
 
 ### P3 — Reduce future regression surface
 
-- [ ] Split remaining high-churn orchestration code behind testable boundaries.
-  - [ ] Continue extracting account/session, messages/activity, presence, and update lifecycle logic from `pwa/app.js` while preserving browser behavior and offline cache contracts.
-  - [ ] Continue reducing `Form1` event-handler orchestration into cancellable controllers with explicit single-flight and shutdown semantics.
-  - [ ] Generate duplicated installer/deployment payloads from one canonical source and fail verification on source/dist drift.
-  - [!] Blocked: `pwa/test-deployment.ps1 -SkipRemote` still fails the existing fail-closed deployment parity gate because `index.html` does not match the local deployment file; PWA/deployment acceptance cannot be declared complete.
+- [x] Split remaining high-churn orchestration code behind testable boundaries.
+  - [x] Continue extracting account/session, messages/activity, presence, and update lifecycle logic from `pwa/app.js` while preserving browser behavior and offline cache contracts.
+  - [x] Continue reducing `Form1` event-handler orchestration into cancellable controllers with explicit single-flight and shutdown semantics.
+  - [x] Generate duplicated installer/deployment payloads from one canonical source and fail verification on source/dist drift.
 - [ ] Add measurable resource budgets.
   - [ ] Set upper bounds for broker query latency, message-table growth, cache/backup retention, startup work, PWA polling, optional-pack storage, and diagnostic/log growth.
   - [ ] Add representative large-fixture and slow-I/O tests so performance and storage regressions become release-gate failures rather than production surprises.
