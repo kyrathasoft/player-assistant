@@ -5,6 +5,7 @@ import { createControllerChangeHandler } from './service-worker-controller.js?v=
 import { mergeInboxSnapshot, createMessageDraftStore } from './modules/inbox-state.js?v=100';
 import { createAccountSessionController } from './modules/account-session.js?v=100';
 import { createMessagesActivityController } from './modules/messages-activity.js?v=100';
+import { assertXpRecords, assertAwardRecords, assertScopedMessages } from './data-invariants.js?v=100';
 import { createPresenceController } from './modules/presence.js?v=100';
 import { createUpdateLifecycleController } from './modules/update-lifecycle.js?v=100';
 import { createCorrelationContext, correlationHeaders } from './correlation.js?v=100';
@@ -731,6 +732,7 @@ import { createCorrelationContext, correlationHeaders } from './correlation.js?v
             && Number.isSafeInteger(entry.level_after_award)
             && entry.level_after_award >= 0;
         if (!payload.every(validEntry)) throw new Error('An XP progression file was invalid.');
+        assertAwardRecords(payload);
         const characterName = payload[0].character_name;
         if (!payload.every((entry) => entry.character_name === characterName)) {
             throw new Error('An XP progression file contained multiple characters.');
@@ -1621,6 +1623,7 @@ import { createCorrelationContext, correlationHeaders } from './correlation.js?v
             || !payload.player_recipients.every(validRecipient)) {
             throw new Error('The message service returned an invalid response.');
         }
+        assertScopedMessages(payload.messages, authenticatedAccount?.id ?? '');
         return payload;
     };
 

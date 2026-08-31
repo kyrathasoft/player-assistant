@@ -61,6 +61,10 @@ jobs:
         shell: pwsh
         run: php .\web-deploy\tests\migration-rehearsal-tests.php
 
+      - name: Run data invariant contract fixtures
+        shell: pwsh
+        run: php .\web-deploy\tests\data-invariant-contract-tests.php
+
       - name: Check browser smoke script syntax
         shell: pwsh
         run: node --check .\pwa\browser-smoke.mjs

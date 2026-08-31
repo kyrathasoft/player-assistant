@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/ProtectedResourceContract.php';
+require_once __DIR__ . '/DataInvariantContract.php';
 
 require_once __DIR__ . '/CapabilityPolicy.php';
 require_once __DIR__ . '/DatabaseMigrationService.php';

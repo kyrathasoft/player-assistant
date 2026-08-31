@@ -2,6 +2,8 @@
 
 declare(strict_types=1);
 
+require_once __DIR__ . '/DataInvariantContract.php';
+
 final class WordCountService
 {
     private array $wordCountConfig;
@@ -213,7 +215,7 @@ final class WordCountService
             }
         }
 
-        return [
+        $validated = [
             'schema_version' => 1,
             'observed_at' => $observedAt,
             'counting_rule_version' => $ruleVersion,
@@ -221,6 +223,8 @@ final class WordCountService
             'ic' => ['files' => $body['ic']['files'], 'words' => $body['ic']['words']],
             'ooc' => ['files' => $body['ooc']['files'], 'words' => $body['ooc']['words']],
         ];
+        DataInvariantContract::assertWordCounts($validated);
+        return $validated;
     }
 
     private function refreshFromSource(): array

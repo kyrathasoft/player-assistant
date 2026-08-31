@@ -14,6 +14,7 @@ $SelfTestRoot = Join-Path $PSScriptRoot '.rc-self-tests'
 $DependencyInventoryPath = Join-Path $PSScriptRoot 'codex-scratch\rc-dependency-inventory.json'
 $ProtectedDataNegativeSpaceScriptPath = Join-Path $PSScriptRoot 'verify-protected-data-negative-space.ps1'
 $MigrationRehearsalTestPath = Join-Path $PSScriptRoot 'web-deploy\tests\migration-rehearsal-tests.php'
+$DataInvariantTestPath = Join-Path $PSScriptRoot 'web-deploy\tests\data-invariant-contract-tests.php'
 
 function Resolve-FullPath {
     param(
@@ -656,6 +657,11 @@ try {
         -FileName ((Get-Command php -ErrorAction Stop).Source) `
         -Arguments @($MigrationRehearsalTestPath) `
         -ExpectedText 'Migration rehearsal tests passed.'
+    Assert-CommandPasses `
+        -Name 'data invariant contract' `
+        -FileName ((Get-Command php -ErrorAction Stop).Source) `
+        -Arguments @($DataInvariantTestPath) `
+        -ExpectedText 'Data invariant contract tests passed.'
 }
 finally {
     if (Test-Path -LiteralPath $SelfTestRoot) {

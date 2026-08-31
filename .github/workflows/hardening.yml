@@ -128,6 +128,11 @@ jobs:
         shell: pwsh
         run: php .\web-deploy\tests\migration-rehearsal-tests.php
 
+      - name: Run data invariant contract fixtures
+        if: matrix.group == 'php'
+        shell: pwsh
+        run: php .\web-deploy\tests\data-invariant-contract-tests.php
+
       - name: Run browser-level PWA smoke tests
         if: matrix.group == 'browser'
         shell: pwsh

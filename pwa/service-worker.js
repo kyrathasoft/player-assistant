@@ -17,6 +17,7 @@ const SHELL_ASSETS = [
     `./version.js?v=${VERSION_METADATA.metadataRevision}`,
     `./styles.css?v=${VERSION_METADATA.stylesRevision}`,
     `./app.js?v=${VERSION_METADATA.appRevision}`,
+    `./data-invariants.js?v=${VERSION_METADATA.appRevision}`,
     `./service-worker-controller.js?v=${VERSION_METADATA.appRevision}`,
     `./modules/translator.js?v=${VERSION_METADATA.appRevision}`,
     `./modules/search.js?v=${VERSION_METADATA.appRevision}`,

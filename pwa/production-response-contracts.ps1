@@ -182,6 +182,23 @@ function Assert-ProductionProtectedResourceEnvelope {
     Assert-ProductionResponseCondition -Condition (($expiresAt - $issuedAt).TotalSeconds -le 305) -Message 'The protected response envelope lifetime is too long.'
 }
 
+function Assert-ProductionDataInvariant {
+    param([Parameter(Mandatory = $true)]$Payload, [Parameter(Mandatory = $true)][ValidateSet('xp','word-count','quests','messages')][string]$Kind)
+    if ($Kind -eq 'xp') {
+        Assert-ProductionResponseCondition -Condition ($null -ne $Payload.scope) -Message 'Invariant failed: xp.protected-scope.'
+        if ([string]$Payload.scope -eq 'party') { Assert-ProductionResponseCondition -Condition ($Payload.characters -is [array]) -Message 'Invariant failed: xp.authoritative-shape.' }
+        else { Assert-ProductionResponseCondition -Condition ($null -ne $Payload.character) -Message 'Invariant failed: xp.authoritative-shape.' }
+    }
+    elseif ($Kind -eq 'word-count') {
+        Assert-ProductionResponseCondition -Condition ($Payload.wiki.words -ge 0 -and $Payload.ic.words -ge 0 -and $Payload.ooc.words -ge 0) -Message 'Invariant failed: word-count.bounded-shape.'
+    }
+    elseif ($Kind -eq 'quests') {
+        Assert-ProductionResponseCondition -Condition ($Payload.quests -is [array]) -Message 'Invariant failed: quests.shape.'
+    }
+    else {
+        Assert-ProductionResponseCondition -Condition ($Payload.messages -is [array]) -Message 'Invariant failed: messages.shape.'
+    }
+}
 function Assert-ProductionXpResponse {
     param(
         [Parameter(Mandatory = $true)]$Payload,
@@ -189,6 +206,7 @@ function Assert-ProductionXpResponse {
         [string]$ExpectedAccountId = ''
     )
 
+    Assert-ProductionDataInvariant -Payload $Payload -Kind 'xp'
     if ($ExpectedAccountId -ne '') { Assert-ProductionProtectedResourceEnvelope -Payload $Payload -ExpectedAccountId $ExpectedAccountId }
     Assert-ProductionResponseCondition -Condition ((Test-ProductionInteger $Payload.schema_version) -and [decimal]$Payload.schema_version -eq 1) -Message 'The authorized XP response schema is not version 1.'
     Assert-ProductionResponseCondition -Condition ($Payload.stale -is [bool] -and [bool]$Payload.stale -eq $false) -Message 'XP source snapshot is stale.'

@@ -603,9 +603,9 @@ Develop and implement these items only after the remaining incomplete items abov
   - [x] Inventory supported broker schema boundaries v0 through v8 and rehearse every v0–v7 upgrade to v8 using isolated synthetic SQLite fixtures with representative account data.
   - [x] Inject deterministic failures at migration apply/commit and backup-promotion boundaries; verify transactional rollback, unchanged schema version, integrity, and exact pre-existing fixture state.
   - [x] Reject unsupported versions, corrupted backups, partial backup artifacts, and incompatible backup versions before mutation; run rehearsal in PR smoke, full hardening, and release self-test gates.
-- [ ] Add invariant checks for XP, awards, word counts, quests, messages, and roster identity joins.
-  - Define monotonicity, uniqueness, ownership, referential, and bounded-retention invariants and run them before publication and after recovery.
-  - Regression: corrupted, duplicated, reset, out-of-order, and cross-account fixtures fail closed with the offending invariant named.
+- [x] Add invariant checks for XP, awards, word counts, quests, messages, and roster identity joins.
+  - [x] Define monotonicity, uniqueness, ownership, referential, and bounded-retention invariants and run them before publication and after recovery.
+  - [x] Regression: corrupted, duplicated, reset, out-of-order, and cross-account fixtures fail closed with the offending invariant named.
 - [ ] Add bounded repair tooling that never guesses protected ownership.
   - Support dry-run inspection and explicit operator-approved repairs for recoverable metadata defects, requiring canonical IDs and before/after hashes for every changed record or file.
   - Regression: ambiguous ownership, missing identity, malformed input, and partial repair failures produce no mutation and retain an auditable journal.
