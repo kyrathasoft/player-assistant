@@ -13,6 +13,7 @@ $RuntimeSidecarScriptPath = Join-Path $PSScriptRoot 'verify-runtime-sidecars.ps1
 $SelfTestRoot = Join-Path $PSScriptRoot '.rc-self-tests'
 $DependencyInventoryPath = Join-Path $PSScriptRoot 'codex-scratch\rc-dependency-inventory.json'
 $ProtectedDataNegativeSpaceScriptPath = Join-Path $PSScriptRoot 'verify-protected-data-negative-space.ps1'
+$MigrationRehearsalTestPath = Join-Path $PSScriptRoot 'web-deploy\tests\migration-rehearsal-tests.php'
 
 function Resolve-FullPath {
     param(
@@ -650,6 +651,11 @@ try {
     Invoke-DependencyVulnerabilitySelfTest
     Invoke-DependencyFreshnessSelfTest
     Invoke-RuntimeSidecarSelfTest
+    Assert-CommandPasses `
+        -Name 'broker migration rehearsal' `
+        -FileName ((Get-Command php -ErrorAction Stop).Source) `
+        -Arguments @($MigrationRehearsalTestPath) `
+        -ExpectedText 'Migration rehearsal tests passed.'
 }
 finally {
     if (Test-Path -LiteralPath $SelfTestRoot) {

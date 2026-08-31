@@ -5,10 +5,12 @@ declare(strict_types=1);
 final class DatabaseMigrationService
 {
     public const LATEST_VERSION = 8;
+    public const SUPPORTED_PRIOR_VERSIONS = [0, 1, 2, 3, 4, 5, 6, 7];
 
     public function __construct(
         private readonly PDO $database,
-        private readonly string $backupDirectory)
+        private readonly string $backupDirectory,
+        private readonly ?Closure $faultInjector = null)
     {
         $this->database->exec('PRAGMA foreign_keys = ON');
         $this->database->exec('PRAGMA busy_timeout = 5000');
@@ -16,8 +18,9 @@ final class DatabaseMigrationService
 
     public function migrate(): array
     {
+        $this->assertNoInterruptedBackup();
         $currentVersion = (int)$this->database->query('PRAGMA user_version')->fetchColumn();
-        if ($currentVersion < 0 || $currentVersion > self::LATEST_VERSION) {
+        if (!in_array($currentVersion, array_merge(self::SUPPORTED_PRIOR_VERSIONS, [self::LATEST_VERSION]), true)) {
             throw new RuntimeException('The broker database schema version is unsupported.');
         }
         $applied = [];
@@ -26,7 +29,9 @@ final class DatabaseMigrationService
             $this->database->beginTransaction();
             try {
                 $this->applyMigration($version);
+                $this->fault('migration-apply', $version);
                 $this->database->exec('PRAGMA user_version = ' . $version);
+                $this->fault('migration-commit', $version);
                 $this->database->commit();
                 $currentVersion = $version;
                 $applied[] = $version;
@@ -57,10 +62,53 @@ final class DatabaseMigrationService
             . '-' . bin2hex(random_bytes(4)) . '.sqlite';
         $temporary = $path . '.tmp';
         $this->database->exec('VACUUM INTO ' . $this->database->quote($temporary));
-        if (!is_file($temporary) || filesize($temporary) === 0 || !rename($temporary, $path)) {
+        if (!is_file($temporary) || filesize($temporary) === 0) {
+            throw new RuntimeException('The pre-migration backup could not be promoted.');
+        }
+        $this->fault('backup-promotion', $targetVersion);
+        if (!rename($temporary, $path)) {
             throw new RuntimeException('The pre-migration backup could not be promoted.');
         }
         chmod($path, 0600);
+        self::validatePreMigrationBackup($path, $currentVersion);
+    }
+
+    /** @return list<int> */
+    public static function supportedPriorVersions(): array
+    {
+        return self::SUPPORTED_PRIOR_VERSIONS;
+    }
+
+    public static function validatePreMigrationBackup(string $path, int $expectedVersion): void
+    {
+        if (!is_file($path) || filesize($path) === 0) {
+            throw new RuntimeException('The migration backup is missing or empty.');
+        }
+        try {
+            $backup = new PDO('sqlite:' . $path, null, null, [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]);
+            $integrity = (string)$backup->query('PRAGMA integrity_check')->fetchColumn();
+            $version = (int)$backup->query('PRAGMA user_version')->fetchColumn();
+        } catch (Throwable $exception) {
+            throw new RuntimeException('The migration backup is corrupted.', 0, $exception);
+        }
+        if ($integrity !== 'ok' || $version !== $expectedVersion) {
+            throw new RuntimeException('The migration backup is incompatible or corrupted.');
+        }
+    }
+
+    private function fault(string $point, int $version): void
+    {
+        if ($this->faultInjector !== null) {
+            ($this->faultInjector)($point, $version);
+        }
+    }
+
+    private function assertNoInterruptedBackup(): void
+    {
+        if (is_dir($this->backupDirectory) && glob($this->backupDirectory . '/*.tmp') !== false
+            && glob($this->backupDirectory . '/*.tmp')) {
+            throw new RuntimeException('An interrupted migration backup requires recovery.');
+        }
     }
 
     private function applyMigration(int $version): void

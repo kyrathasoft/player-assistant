@@ -599,9 +599,10 @@ Develop and implement these items only after the remaining incomplete items abov
 - [x] Add schema drift detection between local fixtures, release packages, and production broker metadata.
   - Compare migration order, expected user versions, required objects, indexes, constraints, and trigger definitions without exposing production rows.
   - Regression: missing, reordered, weakened, or extra security-relevant schema elements are reported before deployment.
-- [ ] Add deterministic migration rehearsal and rollback fixtures for every supported upgrade path.
-  - Run migrations from each supported prior version on representative data, verify invariants, and prove backups restore byte-identical pre-migration state when a step fails.
-  - Regression: injected failure at every migration boundary leaves a valid recoverable database and never commits a partial version.
+- [x] Add deterministic migration rehearsal and rollback fixtures for every supported upgrade path.
+  - [x] Inventory supported broker schema boundaries v0 through v8 and rehearse every v0–v7 upgrade to v8 using isolated synthetic SQLite fixtures with representative account data.
+  - [x] Inject deterministic failures at migration apply/commit and backup-promotion boundaries; verify transactional rollback, unchanged schema version, integrity, and exact pre-existing fixture state.
+  - [x] Reject unsupported versions, corrupted backups, partial backup artifacts, and incompatible backup versions before mutation; run rehearsal in PR smoke, full hardening, and release self-test gates.
 - [ ] Add invariant checks for XP, awards, word counts, quests, messages, and roster identity joins.
   - Define monotonicity, uniqueness, ownership, referential, and bounded-retention invariants and run them before publication and after recovery.
   - Regression: corrupted, duplicated, reset, out-of-order, and cross-account fixtures fail closed with the offending invariant named.

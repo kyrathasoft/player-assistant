@@ -81,6 +81,8 @@ Assert-Condition -Condition ($workflow.Contains('.\verify-secret-lifecycle.ps1')
 Assert-Condition -Condition ($workflow.Contains('.\PlayerAssistant.Tests\bin\Release\net10.0-windows\PlayerAssistant.Tests.exe')) -Message 'The required job must run the complete desktop harness without a filter.'
 Assert-Condition -Condition (!$workflow.Contains('Verify hosted settings fetch and decrypt path') -and !$workflow.Contains('Verify hosted settings negative paths')) -Message 'Focused desktop filters must not substitute for the complete harness.'
 Assert-Condition -Condition ($workflow.Contains('.\pwa\verify-pwa.ps1')) -Message 'The required job must run the PWA verifier.'
+Assert-Condition -Condition ($workflow.Contains('migration-rehearsal-tests.php')) -Message 'The required CI paths must run deterministic broker migration rehearsal coverage.'
+Assert-Condition -Condition (Test-Path -LiteralPath (Join-Path $RepoRoot 'web-deploy\tests\migration-rehearsal-tests.php') -PathType Leaf) -Message 'The deterministic broker migration rehearsal suite is missing.'
 Assert-Condition -Condition ($workflow.Contains('python .\verify-lexicon-artifacts.py')) -Message 'The required job must verify canonical lexicon projections.'
 Assert-Condition -Condition (Test-Path -LiteralPath $lexiconVerifierPath -PathType Leaf) -Message 'The canonical lexicon verifier is missing.'
 Assert-Condition -Condition ($workflow.Contains('Load canonical version metadata') -and $workflow.Contains('.\version-metadata.ps1')) -Message 'The required job must load canonical version metadata for release artifact paths.'

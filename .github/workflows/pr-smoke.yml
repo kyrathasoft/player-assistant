@@ -57,6 +57,10 @@ jobs:
         shell: pwsh
         run: php .\web-deploy\tests\schema-drift-tests.php
 
+      - name: Rehearse broker migrations and rollback boundaries
+        shell: pwsh
+        run: php .\web-deploy\tests\migration-rehearsal-tests.php
+
       - name: Check browser smoke script syntax
         shell: pwsh
         run: node --check .\pwa\browser-smoke.mjs
