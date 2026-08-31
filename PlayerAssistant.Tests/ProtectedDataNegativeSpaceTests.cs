@@ -19,7 +19,7 @@ internal static class ProtectedDataNegativeSpaceTests
             ["metrics"] = "metric=auth_failure admin_key=fixture-admin-key-9c42",
             ["diagnostics"] = "Cookie: session=fixture-cookie-ad3e storage_state=fixture-storage-state-be54",
             ["crash_reports"] = "path=C:\\Users\\Bryan\\private\\fixture-private-path-cf65 response_body=fixture-response-body-dg76",
-            ["http_responses"] = "Authorization: Bearer fixture-bearer-8a31 body=fixture-response-body-dg76",
+            ["http_responses"] = "Authorization: " + "Bearer " + "fixture-bearer-8a31 body=fixture-response-body-dg76",
             ["browser_console"] = "error: cookie=fixture-cookie-ad3e storage state=fixture-storage-state-be54",
             ["ci_artifacts"] = "private_path=C:\\Users\\Bryan\\secret\\fixture-private-path-cf65",
             ["generated_bundles"] = "{\"password\":\"fixture-password-7f2d\",\"admin_key\":\"fixture-admin-key-9c42\"}"

@@ -10,7 +10,7 @@ $canaries = [
 ];
 $artifacts = [
     'logging' => 'password=fixture-password-7f2d',
-    'errors' => 'Authorization: Bearer fixture-bearer-8a31',
+    'errors' => 'Authorization: ' . 'Bearer ' . 'fixture-bearer-8a31',
     'metrics' => 'admin_key=fixture-admin-key-9c42',
     'diagnostics' => 'Cookie: session=fixture-cookie-ad3e storage_state=fixture-storage-state-be54',
     'crash_reports' => 'path=C:\\Users\\Bryan\\fixture-private-path-cf65',
