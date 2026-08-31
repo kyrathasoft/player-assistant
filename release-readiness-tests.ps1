@@ -1,7 +1,7 @@
 $ErrorActionPreference = 'Stop'
 $Root = $PSScriptRoot
 $Aggregator = Join-Path $Root 'release-readiness-aggregate.ps1'
-$Scratch = Join-Path $Root 'codex-scratch\release-readiness-fixtures'
+$Scratch = Join-Path ([IO.Path]::GetTempPath()) ('release-readiness-fixtures-' + [Guid]::NewGuid().ToString('N'))
 $Now = [datetimeoffset]'2026-08-31T12:00:00+00:00'
 $Revision = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'
 $Branch = 'fix/pwa-pageshow-auth'
@@ -25,7 +25,8 @@ function Invoke-Case($name,$doc,$expected) {
   if ($expected -eq 'pass') { if ($LASTEXITCODE -ne 0 -or !(Test-Path $output)) { throw "$name should pass." }; return }
   if ($LASTEXITCODE -eq 0) { throw "$name should fail closed." }
 }
-if (Test-Path $Scratch) { Remove-Item $Scratch -Recurse -Force }; New-Item $Scratch -ItemType Directory | Out-Null
+try {
+  if (Test-Path $Scratch) { Remove-Item $Scratch -Recurse -Force }; New-Item $Scratch -ItemType Directory | Out-Null
 Invoke-Case 'positive' (New-Document) 'pass'
 $d=New-Document; $d.records=@($d.records | Where-Object name -ne 'backup'); Invoke-Case 'missing-evidence' $d 'fail'
 $d=New-Document; $d.generated_at='2026-08-28T12:00:00+00:00'; Invoke-Case 'stale-evidence' $d 'fail'
@@ -39,3 +40,6 @@ if ($report.status -ne 'blocked' -or $report.readiness -ne $false) { throw 'Acce
 $all = Get-ChildItem $Scratch -Filter '*.json' -File | Where-Object Name -notlike '*.report.json'
 if ($all.Count -ne 8) { throw "Expected 8 deterministic fixtures, found $($all.Count)." }
 Write-Output 'Release readiness evidence fixtures passed.'
+} finally {
+  if (Test-Path $Scratch) { Remove-Item $Scratch -Recurse -Force }
+}

@@ -48,7 +48,8 @@
     "**/*-token.*"
   ],
   "allowed": [
-    "pwa/data/hero-tokens/**"
+    "pwa/data/hero-tokens/**",
+    "Release/installer/*/payload/settings.local.json"
   ],
   "source_package_pairs": [
     { "source": "pwa/online-installer-for-pwa/install-player-assistant-web.php", "distribution": "pwa/online-installer-for-pwa/dist/install-player-assistant-web.php" },

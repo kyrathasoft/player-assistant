@@ -4,14 +4,16 @@ $root = Join-Path ([IO.Path]::GetTempPath()) ('release-manifest-tests-' + [Guid]
 $manifest = Join-Path $root 'Release\release-manifest.json'
 $inventory = Join-Path $root 'inventory.json'
 try {
-    New-Item -ItemType Directory -Force -Path (Join-Path $root 'Release\publish'), (Join-Path $root 'pwa\online-installer-for-pwa\dist') | Out-Null
+    New-Item -ItemType Directory -Force -Path (Join-Path $root 'Release\publish'), (Join-Path $root 'Release\installer\player-assistant-0.9.5\payload'), (Join-Path $root 'pwa\online-installer-for-pwa\dist') | Out-Null
     'runtime' | Set-Content -LiteralPath (Join-Path $root 'Release\publish\player-assistant.exe') -NoNewline
+    'encrypted installer sidecar' | Set-Content -LiteralPath (Join-Path $root 'Release\installer\player-assistant-0.9.5\payload\settings.local.json') -NoNewline
     'shell' | Set-Content -LiteralPath (Join-Path $root 'pwa\index.html') -NoNewline
     'same bytes' | Set-Content -LiteralPath (Join-Path $root 'pwa\online-installer-for-pwa\install-player-assistant-web.php') -NoNewline
     'same bytes' | Set-Content -LiteralPath (Join-Path $root 'pwa\online-installer-for-pwa\dist\install-player-assistant-web.php') -NoNewline
     @{
-        schema_version = 1; hash_algorithm = 'SHA256'; roots = @('Release/publish','pwa')
-        exclude = @('Release/release-manifest.json'); mutable = @(); forbidden = @('**/*secret*')
+        schema_version = 1; hash_algorithm = 'SHA256'; roots = @('Release/publish','Release/installer','pwa')
+        exclude = @('Release/release-manifest.json'); mutable = @(); forbidden = @('**/settings.local.json','**/*secret*')
+        allowed = @('Release/installer/*/payload/settings.local.json')
         source_package_pairs = @(@{ source = 'pwa/online-installer-for-pwa/install-player-assistant-web.php'; distribution = 'pwa/online-installer-for-pwa/dist/install-player-assistant-web.php' })
     } | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $inventory
     function Invoke-Manifest([string]$mode) {
@@ -47,6 +49,8 @@ try {
     'same bytes' | Set-Content -LiteralPath (Join-Path $root 'pwa\online-installer-for-pwa\dist\install-player-assistant-web.php') -NoNewline
     'secret' | Set-Content -LiteralPath (Join-Path $root 'pwa\client-secret.txt') -NoNewline; Assert-Fails { Invoke-Manifest 'Verify' } 'forbidden private file'
     Remove-Item (Join-Path $root 'pwa\client-secret.txt')
+    'plaintext settings' | Set-Content -LiteralPath (Join-Path $root 'pwa\settings.local.json') -NoNewline; Assert-Fails { Invoke-Manifest 'Verify' } 'forbidden settings file'
+    Remove-Item (Join-Path $root 'pwa\settings.local.json')
     if ((Invoke-Manifest 'Verify') -ne 0) { throw 'final verification failed' }
     Write-Output 'Release manifest deterministic tests passed.'
 }
