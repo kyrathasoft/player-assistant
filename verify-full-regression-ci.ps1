@@ -35,6 +35,7 @@ function Assert-WorkflowRunCommand {
 }
 
 $workflowPath = Join-Path $RepoRoot '.github\workflows\hardening.yml'
+$deployWorkflowPath = Join-Path $RepoRoot '.github\workflows\deploy-pwa.yml'
 $browserPackagePath = Join-Path $RepoRoot 'pwa\package.json'
 $browserTestPath = Join-Path $RepoRoot 'pwa\browser-smoke.mjs'
 $translatorWorkerTestPath = Join-Path $RepoRoot 'pwa\translator-worker-tests.mjs'
@@ -42,6 +43,8 @@ $serviceWorkerTestPath = Join-Path $RepoRoot 'pwa\service-worker-tests.mjs'
 $httpAuthTestPath = Join-Path $RepoRoot 'web-deploy\tests\run-http-auth-tests.ps1'
 $nativeFailFastVerifierPath = Join-Path $RepoRoot 'verify-native-test-fail-fast.ps1'
 $brokerOperationsPath = Join-Path $RepoRoot 'web-deploy\player-assistant-broker\BrokerOperations.php'
+$boundedRepairPath = Join-Path $RepoRoot 'web-deploy\player-assistant-broker\BoundedRepairService.php'
+$boundedRepairTestPath = Join-Path $RepoRoot 'web-deploy\tests\bounded-repair-tests.php'
 $operationsConfigExamplePath = Join-Path $RepoRoot 'web-deploy\player-assistant-broker\config.operations.example.php'
 $wordCountDeploymentPath = Join-Path $RepoRoot 'web-deploy\deploy-word-count-refresh.ps1'
 $directoryBuildPropsPath = Join-Path $RepoRoot 'Directory.Build.props'
@@ -65,6 +68,7 @@ $requiredLockFiles = @(
 Assert-Condition -Condition (Test-Path -LiteralPath $workflowPath -PathType Leaf) -Message 'The full-regression workflow is missing.'
 
 $workflow = Get-Content -Raw -LiteralPath $workflowPath
+$deployWorkflow = Get-Content -Raw -LiteralPath $deployWorkflowPath
 $httpAuthTest = Get-Content -Raw -LiteralPath $httpAuthTestPath
 $nativeFailFastVerifier = Get-Content -Raw -LiteralPath $nativeFailFastVerifierPath
 $launcherProject = Get-Content -Raw -LiteralPath $launcherProjectPath
@@ -82,6 +86,10 @@ Assert-Condition -Condition ($workflow.Contains('.\PlayerAssistant.Tests\bin\Rel
 Assert-Condition -Condition (!$workflow.Contains('Verify hosted settings fetch and decrypt path') -and !$workflow.Contains('Verify hosted settings negative paths')) -Message 'Focused desktop filters must not substitute for the complete harness.'
 Assert-Condition -Condition ($workflow.Contains('.\pwa\verify-pwa.ps1')) -Message 'The required job must run the PWA verifier.'
 Assert-Condition -Condition ($workflow.Contains('migration-rehearsal-tests.php')) -Message 'The required CI paths must run deterministic broker migration rehearsal coverage.'
+Assert-Condition -Condition (Test-Path -LiteralPath $boundedRepairPath -PathType Leaf) -Message 'Bounded repair tooling is missing.'
+Assert-Condition -Condition (Test-Path -LiteralPath $boundedRepairTestPath -PathType Leaf) -Message 'Bounded repair deterministic coverage is missing.'
+Assert-Condition -Condition ($workflow.Contains('bounded-repair-tests.php')) -Message 'Canonical CI must run bounded repair coverage.'
+Assert-Condition -Condition ($deployWorkflow.Contains('pwa-release-transactions') -and $deployWorkflow.Contains('cancel-in-progress: false')) -Message 'Release workflow must retain serialized PWA release transactions.'
 Assert-Condition -Condition (Test-Path -LiteralPath (Join-Path $RepoRoot 'web-deploy\tests\migration-rehearsal-tests.php') -PathType Leaf) -Message 'The deterministic broker migration rehearsal suite is missing.'
 Assert-Condition -Condition ($workflow.Contains('python .\verify-lexicon-artifacts.py')) -Message 'The required job must verify canonical lexicon projections.'
 Assert-Condition -Condition (Test-Path -LiteralPath $lexiconVerifierPath -PathType Leaf) -Message 'The canonical lexicon verifier is missing.'

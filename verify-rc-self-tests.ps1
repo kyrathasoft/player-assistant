@@ -15,6 +15,7 @@ $DependencyInventoryPath = Join-Path $PSScriptRoot 'codex-scratch\rc-dependency-
 $ProtectedDataNegativeSpaceScriptPath = Join-Path $PSScriptRoot 'verify-protected-data-negative-space.ps1'
 $MigrationRehearsalTestPath = Join-Path $PSScriptRoot 'web-deploy\tests\migration-rehearsal-tests.php'
 $DataInvariantTestPath = Join-Path $PSScriptRoot 'web-deploy\tests\data-invariant-contract-tests.php'
+$BoundedRepairTestPath = Join-Path $PSScriptRoot 'web-deploy\tests\bounded-repair-tests.php'
 
 function Resolve-FullPath {
     param(
@@ -662,6 +663,11 @@ try {
         -FileName ((Get-Command php -ErrorAction Stop).Source) `
         -Arguments @($DataInvariantTestPath) `
         -ExpectedText 'Data invariant contract tests passed.'
+    Assert-CommandPasses `
+        -Name 'bounded repair' `
+        -FileName ((Get-Command php -ErrorAction Stop).Source) `
+        -Arguments @($BoundedRepairTestPath) `
+        -ExpectedText 'Bounded repair tests passed.'
 }
 finally {
     if (Test-Path -LiteralPath $SelfTestRoot) {

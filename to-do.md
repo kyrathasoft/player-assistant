@@ -606,9 +606,9 @@ Develop and implement these items only after the remaining incomplete items abov
 - [x] Add invariant checks for XP, awards, word counts, quests, messages, and roster identity joins.
   - [x] Define monotonicity, uniqueness, ownership, referential, and bounded-retention invariants and run them before publication and after recovery.
   - [x] Regression: corrupted, duplicated, reset, out-of-order, and cross-account fixtures fail closed with the offending invariant named.
-- [ ] Add bounded repair tooling that never guesses protected ownership.
-  - Support dry-run inspection and explicit operator-approved repairs for recoverable metadata defects, requiring canonical IDs and before/after hashes for every changed record or file.
-  - Regression: ambiguous ownership, missing identity, malformed input, and partial repair failures produce no mutation and retain an auditable journal.
+- [x] Add bounded repair tooling that never guesses protected ownership.
+  - `BoundedRepairService` requires explicit operator approval, canonical account/resource ownership, generation matches, confined paths, bounded operations/bytes, expected before/after hashes, dry-run mode, atomic promotion, cancellation, rollback, and redacted hash-linked audit journals; unsupported or ambiguous ownership is rejected before I/O.
+  - Deterministic coverage verifies owned repair/idempotency, dry-run, ambiguous/missing/cross-account identity, malformed requests, traversal, stale/mixed generations, limits, cancellation, and rollback; PHP suites and canonical CI/RC gates invoke it.
 - [ ] Add backup restore-point selection and expiration verification.
   - Record backup provenance, schema version, source hash, creation time, retention class, and restore-test result; refuse promotion of expired or unverifiable recovery points.
   - Regression: tampered, incomplete, wrong-generation, and expired backups are rejected while a valid point restores and passes integrity checks.

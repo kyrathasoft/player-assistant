@@ -132,6 +132,7 @@ jobs:
         if: matrix.group == 'php'
         shell: pwsh
         run: php .\web-deploy\tests\data-invariant-contract-tests.php
+          php .\web-deploy\tests\bounded-repair-tests.php
 
       - name: Run browser-level PWA smoke tests
         if: matrix.group == 'browser'

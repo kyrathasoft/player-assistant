@@ -64,6 +64,7 @@ jobs:
       - name: Run data invariant contract fixtures
         shell: pwsh
         run: php .\web-deploy\tests\data-invariant-contract-tests.php
+          php .\web-deploy\tests\bounded-repair-tests.php
 
       - name: Check browser smoke script syntax
         shell: pwsh
