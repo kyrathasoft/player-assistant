@@ -623,9 +623,10 @@ Develop and implement these items only after the remaining incomplete items abov
   - [x] PR smoke and full hardening CI run the deterministic suite and generate/verify the complete release manifest without requiring freeware Authenticode signing.
   - [x] Generate one canonical manifest for source-derived assets, binaries, installer payloads, PWA files, migrations, sidecars, and deployment scripts, including hashes and generation inputs.
   - [x] Regression: clean rebuilds reproduce the manifest; omitted, extra, or changed files fail the package gate.
-- [ ] Add downgrade and rollback compatibility tests across desktop, installer, updater, broker, and PWA versions.
-  - Exercise interrupted upgrades, supported rollbacks, stale clients, schema boundaries, cache revisions, and old transaction records with explicit compatibility policy.
-  - Regression: unsupported downgrade fails before mutation, while supported rollback restores a complete verified generation.
+- [x] Add downgrade and rollback compatibility tests across desktop, installer, updater, broker, and PWA versions.
+  - [x] `compatibility-boundaries.json` inventories desktop/installer/updater/broker/PWA version, schema, protocol, signature, cache-generation, transaction, rollback, and downgrade-floor boundaries.
+  - [x] Deterministic coverage exercises compatible rollback, unsafe downgrade rejection, mixed generations, stale signatures, schema incompatibility, partial promotion, interrupted recovery, cache/version drift, and exact pre-existing-state restoration.
+  - [x] PR smoke, full regression policy, hardening, release-manifest, PWA, and RC gates execute the compatibility verifier without weakening fail-closed behavior or requiring freeware Authenticode.
 - [ ] Add browser accessibility acceptance for all authenticated and error states.
   - Verify keyboard-only navigation, focus restoration, labels, live-region announcements, contrast, reduced motion, zoom, screen-reader names, and 320px layouts across loading, empty, stale, retry, and failure states.
   - Regression: automated browser assertions cover each protected view and prevent inaccessible failure paths from shipping.

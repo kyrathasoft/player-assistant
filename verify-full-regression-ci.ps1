@@ -58,6 +58,7 @@ $hygieneVerifierPath = Join-Path $RepoRoot 'verify-repository-hygiene.ps1'
 $secretLifecycleVerifierPath = Join-Path $RepoRoot 'verify-secret-lifecycle.ps1'
 $lexiconVerifierPath = Join-Path $RepoRoot 'verify-lexicon-artifacts.py'
 $versionVerifierPath = Join-Path $RepoRoot 'verify-version-metadata.py'
+$compatibilityVerifierPath = Join-Path $RepoRoot 'verify-downgrade-rollback-compatibility.ps1'
 $requiredLockFiles = @(
     'packages.lock.json',
     'ToOrcish\packages.lock.json',
@@ -100,6 +101,8 @@ Assert-Condition -Condition (Test-Path -LiteralPath (Join-Path $RepoRoot 'releas
 Assert-Condition -Condition ($workflow.Contains('Load canonical version metadata') -and $workflow.Contains('.\version-metadata.ps1')) -Message 'The required job must load canonical version metadata for release artifact paths.'
 Assert-Condition -Condition ($workflow.Contains('python .\verify-version-metadata.py')) -Message 'The required job must verify canonical version projections.'
 Assert-Condition -Condition (Test-Path -LiteralPath $versionVerifierPath -PathType Leaf) -Message 'The canonical version verifier is missing.'
+Assert-Condition -Condition (Test-Path -LiteralPath $compatibilityVerifierPath -PathType Leaf) -Message 'The downgrade and rollback compatibility verifier is missing.'
+Assert-Condition -Condition ($workflow.Contains('.\verify-downgrade-rollback-compatibility.ps1') -and (Test-Path -LiteralPath (Join-Path $RepoRoot 'compatibility-boundaries.json') -PathType Leaf)) -Message 'The required job must run downgrade and rollback compatibility coverage.'
 Assert-Condition -Condition ($workflow.Contains("Get-ChildItem -LiteralPath .\web-deploy\tests -Filter '*-tests.php' -File") -and $workflow.Contains('ForEach-Object {')) -Message 'The required job must run all PHP broker test suites.'
 Assert-Condition -Condition ($workflow.Contains('throw "PHP suite ''$($suite.Name)'' failed with exit code $exitCode."')) -Message 'Each PHP suite must fail the workflow immediately and identify the failing suite.'
 Assert-Condition -Condition ($workflow.Contains('throw "Verification ''$Name'' failed with exit code $exitCode."')) -Message 'Sequential PowerShell/native verification commands must fail immediately and identify the failing suite.'

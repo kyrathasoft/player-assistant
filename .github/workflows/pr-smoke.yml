@@ -74,6 +74,10 @@ jobs:
         shell: pwsh
         run: .\release-manifest-tests.ps1
 
+      - name: Verify downgrade and rollback compatibility boundaries
+        shell: pwsh
+        run: .\verify-downgrade-rollback-compatibility.ps1
+
       - name: Check browser smoke script syntax
         shell: pwsh
         run: node --check .\pwa\browser-smoke.mjs

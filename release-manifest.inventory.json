@@ -14,7 +14,9 @@
     "publish-player-assistant.ps1",
     "build-installer.ps1",
     "build-release-update-artifacts.ps1",
-    "verify-release-update-artifacts.ps1"
+    "verify-release-update-artifacts.ps1",
+    "compatibility-boundaries.json",
+    "verify-downgrade-rollback-compatibility.ps1"
   ],
   "exclude": [
     "pwa/node_modules/**",

@@ -95,6 +95,10 @@ jobs:
         shell: pwsh
         run: .\pwa\verify-pwa.ps1
 
+      - name: Verify downgrade and rollback compatibility boundaries
+        shell: pwsh
+        run: .\verify-downgrade-rollback-compatibility.ps1
+
       - name: Run optional-pack focused suites
         if: matrix.group == 'pwa'
         shell: pwsh
