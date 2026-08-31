@@ -596,7 +596,7 @@ Develop and implement these items only after the remaining incomplete items abov
 
 ### Data integrity and migration safety
 
-- [ ] Add schema drift detection between local fixtures, release packages, and production broker metadata.
+- [x] Add schema drift detection between local fixtures, release packages, and production broker metadata.
   - Compare migration order, expected user versions, required objects, indexes, constraints, and trigger definitions without exposing production rows.
   - Regression: missing, reordered, weakened, or extra security-relevant schema elements are reported before deployment.
 - [ ] Add deterministic migration rehearsal and rollback fixtures for every supported upgrade path.

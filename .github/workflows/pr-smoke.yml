@@ -53,6 +53,10 @@ jobs:
           Get-ChildItem -LiteralPath .\web-deploy -Recurse -Filter '*.php' -File |
             ForEach-Object { php -l $_.FullName }
 
+      - name: Verify broker schema drift contract
+        shell: pwsh
+        run: php .\web-deploy\tests\schema-drift-tests.php
+
       - name: Check browser smoke script syntax
         shell: pwsh
         run: node --check .\pwa\browser-smoke.mjs

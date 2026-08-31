@@ -6,6 +6,7 @@ require_once __DIR__ . '/ProtectedResourceContract.php';
 
 require_once __DIR__ . '/CapabilityPolicy.php';
 require_once __DIR__ . '/DatabaseMigrationService.php';
+require_once __DIR__ . '/BrokerSchemaContract.php';
 require_once __DIR__ . '/BrokerAlertService.php';
 require_once __DIR__ . '/RevisionService.php';
 require_once __DIR__ . '/IdempotencyLedger.php';
@@ -59,6 +60,7 @@ final class BrokerService
         $this->wordCountFetcher = $wordCountFetcher;
         $this->questDataPath = $questDataPath;
         $this->verifySchemaVersion();
+        BrokerSchemaContract::assert($this->database);
     }
 
     public function dispatch(
@@ -348,6 +350,16 @@ final class BrokerService
                     'The broker could not retrieve the requested RPOL page.',
                     $exception);
             }
+        }
+
+        if ($method === 'GET' && $route === '/v1/admin/schema') {
+            $this->requireAdminSignature($method, $route, $body, $headers);
+            $metadata = BrokerSchemaContract::inspect($this->database);
+            return $this->response(200, [
+                'contract_version' => BrokerSchemaContract::load()['contract_version'],
+                'migration_version' => $metadata['migration_version'],
+                'objects' => $metadata['objects'],
+            ]);
         }
 
         throw new BrokerHttpException(404, 'not_found', 'The requested broker endpoint was not found.');

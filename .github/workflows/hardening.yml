@@ -118,6 +118,11 @@ jobs:
               }
             }
 
+      - name: Verify broker schema drift contract
+        if: matrix.group == 'php'
+        shell: pwsh
+        run: php .\web-deploy\tests\schema-drift-tests.php
+
       - name: Run browser-level PWA smoke tests
         if: matrix.group == 'browser'
         shell: pwsh
