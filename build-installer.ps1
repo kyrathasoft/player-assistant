@@ -286,11 +286,6 @@ function Resolve-InnoCompilerPath {
         return [System.IO.Path]::GetFullPath($RequestedPath)
     }
 
-    $command = Get-Command ISCC.exe -ErrorAction SilentlyContinue
-    if ($command) {
-        return $command.Source
-    }
-
     $candidatePaths = @(
         (Join-Path $env:ProgramFiles 'Inno Setup 7\ISCC.exe'),
         (Join-Path ${env:ProgramFiles(x86)} 'Inno Setup 7\ISCC.exe'),
@@ -302,6 +297,11 @@ function Resolve-InnoCompilerPath {
         if (![string]::IsNullOrWhiteSpace($candidatePath) -and (Test-Path -LiteralPath $candidatePath -PathType Leaf)) {
             return [System.IO.Path]::GetFullPath($candidatePath)
         }
+    }
+
+    $command = Get-Command ISCC.exe -ErrorAction SilentlyContinue
+    if ($command) {
+        return $command.Source
     }
 
     return $null
