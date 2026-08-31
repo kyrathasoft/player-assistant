@@ -16,6 +16,7 @@ $ProtectedDataNegativeSpaceScriptPath = Join-Path $PSScriptRoot 'verify-protecte
 $MigrationRehearsalTestPath = Join-Path $PSScriptRoot 'web-deploy\tests\migration-rehearsal-tests.php'
 $DataInvariantTestPath = Join-Path $PSScriptRoot 'web-deploy\tests\data-invariant-contract-tests.php'
 $BoundedRepairTestPath = Join-Path $PSScriptRoot 'web-deploy\tests\bounded-repair-tests.php'
+$CompatibilityVerifierPath = Join-Path $PSScriptRoot 'verify-downgrade-rollback-compatibility.ps1'
 
 function Resolve-FullPath {
     param(
@@ -668,6 +669,11 @@ try {
         -FileName ((Get-Command php -ErrorAction Stop).Source) `
         -Arguments @($BoundedRepairTestPath) `
         -ExpectedText 'Bounded repair tests passed.'
+    Assert-CommandPasses `
+        -Name 'downgrade and rollback compatibility' `
+        -FileName $PowerShellExecutable `
+        -Arguments @('-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', $CompatibilityVerifierPath) `
+        -ExpectedText 'Downgrade and rollback compatibility tests passed.'
 }
 finally {
     if (Test-Path -LiteralPath $SelfTestRoot) {
