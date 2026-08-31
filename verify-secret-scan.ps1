@@ -55,7 +55,7 @@ $AllowedFixtureMatches = @(
         LinePattern = 'OPENAI_API_KEY=sk-test-abcdefghijklmnopqrstuvwxyz123456'
     },
     [pscustomobject]@{
-        PathPattern = '^(PlayerAssistant/Tests/ProtectedDataNegativeSpaceTests[.]cs|web-deploy/tests/protected-data-negative-space-tests[.]php)$'
+        PathPattern = '^(PlayerAssistant[.]Tests/ProtectedDataNegativeSpaceTests[.]cs|web-deploy/tests/protected-data-negative-space-tests[.]php)$'
         LinePattern = 'Authorization:'
     }
 )
