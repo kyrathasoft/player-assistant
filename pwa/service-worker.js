@@ -1,16 +1,16 @@
 'use strict';
 
-importScripts('./version.js?v=2');
+importScripts('./version.js?v=3');
 
 const VERSION_METADATA = globalThis.PLAYER_ASSISTANT_VERSION_METADATA;
 if (!VERSION_METADATA) {
     throw new Error('Player Assistant version metadata is unavailable.');
 }
-const CACHE_VERSION = `player-assistant-pwa-${VERSION_METADATA.pwaVersion}-v${VERSION_METADATA.cacheRevision}`;
+const CACHE_VERSION = `player-assistant-pwa-${VERSION_METADATA.pwaVersion}-v${VERSION_METADATA.cacheRevision}-app${VERSION_METADATA.appRevision}`;
 const SHELL_CACHE = `${CACHE_VERSION}-shell`;
 const DATA_CACHE = `${CACHE_VERSION}-data`;
 const NAVIGATION_TIMEOUT_MS = 150;
-const CACHE_GENERATION_PATTERN = /^player-assistant-pwa-(\d+(?:\.\d+)*)-v(\d+)-(?:shell|data)$/;
+const CACHE_GENERATION_PATTERN = /^player-assistant-pwa-(\d+(?:\.\d+)*)-v(\d+)(?:-app(\d+))?-(?:shell|data)$/;
 const SHELL_ASSETS = [
     './',
     './index.html',
@@ -26,6 +26,7 @@ const SHELL_ASSETS = [
     `./modules/messages-activity.js?v=${VERSION_METADATA.appRevision}`,
     `./modules/presence.js?v=${VERSION_METADATA.appRevision}`,
     `./modules/update-lifecycle.js?v=${VERSION_METADATA.appRevision}`,
+    `./correlation.js?v=${VERSION_METADATA.appRevision}`,
     `./translator-worker.js?v=${VERSION_METADATA.appRevision}`,
     `./campaign-search-worker.js?v=${VERSION_METADATA.appRevision}`,
     './optional-pack-loader.js',

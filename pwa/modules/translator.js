@@ -180,7 +180,7 @@ export const initializeTranslator = ({ byId }) => {
 
     const createWorker = () => {
         if (typeof Worker === 'undefined') return null;
-        const nextWorker = new Worker('translator-worker.js?v=92');
+        const nextWorker = new Worker(`translator-worker.js?v=${globalThis.PLAYER_ASSISTANT_VERSION_METADATA?.appRevision}`);
         nextWorker.addEventListener('message', handleWorkerMessage);
         nextWorker.addEventListener('messageerror', () => recoverWorker(new Error('Translator worker message could not be deserialized.')));
         nextWorker.addEventListener('error', () => recoverWorker(new Error('Translator worker stopped unexpectedly.')));

@@ -1,13 +1,13 @@
-import { initializeTranslator } from './modules/translator.js?v=92';
-import { initializeCampaignSearch } from './modules/search.js?v=92';
-import { initializeDice } from './modules/dice.js?v=92';
-import { createControllerChangeHandler } from './service-worker-controller.js?v=92';
-import { mergeInboxSnapshot, createMessageDraftStore } from './modules/inbox-state.js?v=92';
-import { createAccountSessionController } from './modules/account-session.js?v=92';
-import { createMessagesActivityController } from './modules/messages-activity.js?v=92';
-import { createPresenceController } from './modules/presence.js?v=92';
-import { createUpdateLifecycleController } from './modules/update-lifecycle.js?v=92';
-import { createCorrelationContext, correlationHeaders } from './correlation.js?v=92';
+import { initializeTranslator } from './modules/translator.js?v=100';
+import { initializeCampaignSearch } from './modules/search.js?v=100';
+import { initializeDice } from './modules/dice.js?v=100';
+import { createControllerChangeHandler } from './service-worker-controller.js?v=100';
+import { mergeInboxSnapshot, createMessageDraftStore } from './modules/inbox-state.js?v=100';
+import { createAccountSessionController } from './modules/account-session.js?v=100';
+import { createMessagesActivityController } from './modules/messages-activity.js?v=100';
+import { createPresenceController } from './modules/presence.js?v=100';
+import { createUpdateLifecycleController } from './modules/update-lifecycle.js?v=100';
+import { createCorrelationContext, correlationHeaders } from './correlation.js?v=100';
 
 (() => {
     'use strict';
@@ -253,6 +253,11 @@ import { createCorrelationContext, correlationHeaders } from './correlation.js?v
     });
 
     window.addEventListener('popstate', () => setView(location.hash.slice(1), false));
+    window.addEventListener('hashchange', () => setView(location.hash.slice(1), false));
+    window.addEventListener('load', () => {
+        const requestedView = location.hash.slice(1) || 'dashboard';
+        if (!protectedNavViews.has(requestedView)) setView(requestedView, false);
+    });
 
     const updateConnectionStatus = () => {
         const online = navigator.onLine;
@@ -2258,6 +2263,11 @@ import { createCorrelationContext, correlationHeaders } from './correlation.js?v
         if (!canViewXpAwards(authenticatedAccount) && activeView === 'xp-awards') {
             setView('dashboard', false);
         }
+        const requestedPublicView = location.hash.slice(1);
+        if (!authenticated && requestedPublicView && !protectedNavViews.has(requestedPublicView)
+            && views.has(requestedPublicView) && activeView !== requestedPublicView) {
+            setView(requestedPublicView, false);
+        }
         const protectedStatus = byId('protected-player-status');
         if (protectedStatus) {
             protectedStatus.textContent = authenticated
@@ -2776,6 +2786,8 @@ import { createCorrelationContext, correlationHeaders } from './correlation.js?v
         messageError = '';
         document.querySelectorAll('[data-protected-content]').forEach((element) => { element.replaceChildren(); });
         updateAuthenticationUi();
+        const requestedView = location.hash.slice(1) || 'dashboard';
+        if (!protectedNavViews.has(requestedView)) setView(requestedView, false);
     };
 
     const restoreAuthentication = async () => {
@@ -2815,6 +2827,10 @@ import { createCorrelationContext, correlationHeaders } from './correlation.js?v
         questStateFilter = '';
         lastQuestAlertSignature = '';
         updateAuthenticationUi();
+        // Authentication UI may have failed closed to the dashboard. Reapply
+        // the URL-selected view only after the session has been validated;
+        // setView also enforces role and authorization boundaries.
+        setView(location.hash.slice(1) || 'dashboard', false);
         updateRevisionPolling();
         if (authenticatedAccount !== null) {
             await Promise.all([loadXpSummary(), loadWordCountSummary(), loadQuests(), loadMessages()]);
@@ -2869,6 +2885,16 @@ import { createCorrelationContext, correlationHeaders } from './correlation.js?v
         // protected snapshot while the current session is being revalidated.
         failClosedBeforeAuthenticationRestore();
         void restoreAuthentication();
+        const restorePublicHashView = () => {
+            const currentView = location.hash.slice(1);
+            if (!currentView) return false;
+            if (!protectedNavViews.has(currentView)) setView(currentView, false);
+            return true;
+        };
+        const restoreTimer = window.setInterval(() => {
+            if (restorePublicHashView()) window.clearInterval(restoreTimer);
+        }, 50);
+        window.setTimeout(() => window.clearInterval(restoreTimer), 2000);
     });
     authDialog?.addEventListener('close', () => {
         void renderAuthenticatedHeroToken();
@@ -3178,6 +3204,13 @@ import { createCorrelationContext, correlationHeaders } from './correlation.js?v
     initializeTranslator({ byId });
     initializeDice({ byId });
 
-    setView(location.hash.slice(1) || 'dashboard', false);
+    window.setTimeout(() => setView(location.hash.slice(1) || 'dashboard', false), 0);
+    const initialHashRestoreTimer = window.setInterval(() => {
+        const requestedView = location.hash.slice(1);
+        if (!requestedView || protectedNavViews.has(requestedView) || !views.has(requestedView)) return;
+        if (activeView !== requestedView) setView(requestedView, false);
+        else window.clearInterval(initialHashRestoreTimer);
+    }, 50);
+    window.setTimeout(() => window.clearInterval(initialHashRestoreTimer), 30000);
     console.info(`${APP_NAME} ${APP_VERSION} initialized.`);
 })();
