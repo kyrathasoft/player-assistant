@@ -609,9 +609,10 @@ Develop and implement these items only after the remaining incomplete items abov
 - [x] Add bounded repair tooling that never guesses protected ownership.
   - `BoundedRepairService` requires explicit operator approval, canonical account/resource ownership, generation matches, confined paths, bounded operations/bytes, expected before/after hashes, dry-run mode, atomic promotion, cancellation, rollback, and redacted hash-linked audit journals; unsupported or ambiguous ownership is rejected before I/O.
   - Deterministic coverage verifies owned repair/idempotency, dry-run, ambiguous/missing/cross-account identity, malformed requests, traversal, stale/mixed generations, limits, cancellation, and rollback; PHP suites and canonical CI/RC gates invoke it.
-- [ ] Add backup restore-point selection and expiration verification.
-  - Record backup provenance, schema version, source hash, creation time, retention class, and restore-test result; refuse promotion of expired or unverifiable recovery points.
-  - Regression: tampered, incomplete, wrong-generation, and expired backups are rejected while a valid point restores and passes integrity checks.
+- [x] Add backup restore-point selection and expiration verification.
+  - Record backup provenance, schema version, source hash, creation time, retention class, expiration, and restore-test result; refuse promotion of expired or unverifiable recovery points.
+  - Deterministic selection verifies metadata, exact size/hash, generation, expiration, and unique timestamps; corrupt, incomplete, pending, ambiguous, and mismatched points remain preserved as rollback evidence.
+  - Regression: isolated fixtures cover tampering/hash mismatch, incomplete metadata, duplicate timestamps, wrong generation, expiration boundaries, and valid-point selection; restore staging remains disposable and never mutates production data.
 
 ### Release, client, and PWA quality
 
