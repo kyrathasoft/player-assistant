@@ -588,7 +588,9 @@ Develop and implement these items only after the remaining incomplete items abov
   - Regression: representative secrets and protected fields injected into failures never appear in emitted observability artifacts.
   - [x] Added deterministic desktop, PHP, and PWA coverage for credentials, passwords, bearer/admin keys, cookies, storage state, private paths, and protected response bodies across logging, errors, metrics, diagnostics, crash reports, HTTP responses, browser console, CI artifacts, and generated bundles.
   - [x] Integrated the verifier into PR smoke, full hardening, and release self-test gates; focused checks pass.
-- [ ] Add capability-scoped APIs for administrative and publishing operations.
+- [x] Add capability-scoped APIs for administrative and publishing operations.
+  - [x] Added explicit route-to-capability mapping, structured least-privilege grants, resource/account scoping, expiry, revocation, and fail-closed bearer enforcement.
+  - [x] Added deterministic positive/negative coverage for confusion, cross-account/resource use, unscoped/wildcard/duplicate grants, anonymous access, route mismatch, migration, and existing token revocation/expiry paths.
   - Replace broad administrator checks with narrowly named capabilities for each mutation, require explicit capability-to-route mapping, and reject unused or overbroad grants.
   - Regression: each capability permits only its intended operation and impossible role/capability combinations fail before side effects.
 

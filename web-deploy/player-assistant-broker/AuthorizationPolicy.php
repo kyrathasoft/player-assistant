@@ -2,6 +2,8 @@
 
 declare(strict_types=1);
 
+require_once __DIR__ . '/CapabilityPolicy.php';
+
 /** Canonical protected-surface classification shared by the HTTP boundary. */
 final class AuthorizationPolicy
 {
@@ -41,11 +43,13 @@ final class AuthorizationPolicy
         return ($method === 'GET' && in_array($route, ['/v1/snapshots/page', '/v1/rpol/page'], true));
     }
 
+    public static function capabilityForRoute(string $method, string $route): ?string
+    {
+        return CapabilityPolicy::forRoute($method, $route);
+    }
+
     public static function isAdminRoute(string $method, string $route): bool
     {
-        return str_starts_with($route, '/v1/admin/')
-            || ($method === 'POST' && $route === '/v1/tokens')
-            || ($method === 'DELETE' && preg_match('#^/v1/tokens/[a-f0-9]{32}$#', $route) === 1)
-            || ($method === 'PUT' && $route === '/v1/snapshots/page');
+        return self::capabilityForRoute($method, $route) !== null;
     }
 }

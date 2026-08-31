@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/ProtectedResourceContract.php';
 
+require_once __DIR__ . '/CapabilityPolicy.php';
 require_once __DIR__ . '/DatabaseMigrationService.php';
 require_once __DIR__ . '/BrokerAlertService.php';
 require_once __DIR__ . '/RevisionService.php';
@@ -306,9 +307,8 @@ final class BrokerService
         }
 
         if ($method === 'GET' && $route === '/v1/snapshots/page') {
-            $token = $this->authenticateBearerToken($headers);
-            $this->enforceRateLimit($token['id']);
             $url = is_string($query['url'] ?? null) ? $query['url'] : '';
+            $token = $this->authenticateBearerToken($headers, 'snapshots.read', $url);
             try {
                 $this->rpolClient->validateTargetUrl($url);
             } catch (InvalidArgumentException $exception) {
@@ -321,9 +321,8 @@ final class BrokerService
         }
 
         if ($method === 'GET' && $route === '/v1/rpol/page') {
-            $token = $this->authenticateBearerToken($headers);
-            $this->enforceRateLimit($token['id']);
             $url = is_string($query['url'] ?? null) ? $query['url'] : '';
+            $token = $this->authenticateBearerToken($headers, 'rpol.read', $url);
             if ($url === '') {
                 throw new BrokerHttpException(400, 'missing_url', 'The RPOL URL is required.');
             }
@@ -518,7 +517,15 @@ final class BrokerService
         if ($label === '' || strlen($label) > 100) {
             throw new BrokerHttpException(400, 'invalid_label', 'A token label of 1-100 characters is required.');
         }
-
+        try {
+            $capabilities = CapabilityPolicy::validateGrants($body['capabilities'] ?? null);
+        } catch (InvalidArgumentException $exception) {
+            throw new BrokerHttpException(400, 'invalid_capabilities', $exception->getMessage(), $exception);
+        }
+        $accountScope = $body['account_scope'] ?? null;
+        if ($accountScope !== null && (!is_string($accountScope) || !preg_match('/^[a-f0-9]{32}$/', $accountScope))) {
+            throw new BrokerHttpException(400, 'invalid_account_scope', 'The token account scope is invalid.');
+        }
         $requestedDays = filter_var(
             $body['expires_in_days'] ?? $this->apiConfig['default_token_lifetime_days'],
             FILTER_VALIDATE_INT,
@@ -532,8 +539,8 @@ final class BrokerService
         $now = time();
         $expiresAt = $now + ((int)$requestedDays * 86400);
         $statement = $this->database->prepare(
-            'INSERT INTO api_tokens (id, label, token_hash, created_at, expires_at) VALUES (?, ?, ?, ?, ?)');
-        $statement->execute([$tokenId, $label, hash('sha256', $token), $now, $expiresAt]);
+            'INSERT INTO api_tokens (id, label, token_hash, created_at, expires_at, capabilities_json, account_scope) VALUES (?, ?, ?, ?, ?, ?, ?)');
+        $statement->execute([$tokenId, $label, hash('sha256', $token), $now, $expiresAt, json_encode($capabilities, JSON_THROW_ON_ERROR), $accountScope]);
 
         return [
             'token_id' => $tokenId,
@@ -552,26 +559,30 @@ final class BrokerService
         }
     }
 
-    private function authenticateBearerToken(array $headers): array
+    private function authenticateBearerToken(array $headers, string $operation, ?string $resource = null): array
     {
         $authorization = trim((string)($headers['authorization'] ?? ''));
         if (preg_match('/^Bearer\s+(pa_[A-Za-z0-9_-]{43})$/', $authorization, $matches) !== 1) {
             throw new BrokerHttpException(401, 'invalid_token', 'A valid bearer token is required.');
         }
-
-        $tokenHash = hash('sha256', $matches[1]);
         $statement = $this->database->prepare(
-            'SELECT id, expires_at, revoked_at FROM api_tokens WHERE token_hash = ? LIMIT 1');
-        $statement->execute([$tokenHash]);
+            'SELECT id, expires_at, revoked_at, account_scope, capabilities_json FROM api_tokens WHERE token_hash = ? LIMIT 1');
+        $statement->execute([hash('sha256', $matches[1])]);
         $token = $statement->fetch();
-        if (!is_array($token)
-            || $token['revoked_at'] !== null
-            || (int)$token['expires_at'] <= time()) {
+        $grants = is_array($token) ? json_decode((string)($token['capabilities_json'] ?? ''), true) : null;
+        if (!is_array($token) || !is_array($grants) || $token['revoked_at'] !== null || (int)$token['expires_at'] <= time()) {
             throw new BrokerHttpException(401, 'invalid_token', 'A valid bearer token is required.');
         }
-
-        $this->database->prepare('UPDATE api_tokens SET last_used_at = ? WHERE id = ?')
-            ->execute([time(), $token['id']]);
+        $allowed = false;
+        foreach ($grants as $grant) {
+            if (is_array($grant) && CapabilityPolicy::permits($grant, $operation, $resource, (string)($token['account_scope'] ?? ''))) {
+                $allowed = true;
+                break;
+            }
+        }
+        if (!$allowed) throw new BrokerHttpException(403, 'capability_denied', 'The bearer token lacks the required capability.');
+        $this->enforceRateLimit((string)$token['id']);
+        $this->database->prepare('UPDATE api_tokens SET last_used_at = ? WHERE id = ?')->execute([time(), $token['id']]);
         return $token;
     }
 
@@ -684,6 +695,10 @@ final class BrokerService
             }
             throw $exception;
         }
+        $capability = CapabilityPolicy::forRoute($method, $route);
+        if ($capability === null) {
+            throw new BrokerHttpException(403, 'capability_route_mismatch', 'The requested administrative route has no capability mapping.');
+        }
         return $operationId;
     }
 
@@ -737,6 +752,13 @@ final class BrokerService
             $statement->execute([$object]);
             if ($statement->fetchColumn() === false) {
                 throw new RuntimeException("The broker database is missing migrated object '$object'; deploy and run migrate-broker.php before serving requests.");
+            }
+        }
+        $tokenColumns = $this->database->query('PRAGMA table_info(api_tokens)')->fetchAll();
+        $tokenColumnNames = array_map(static fn(array $column): string => (string)$column['name'], $tokenColumns);
+        foreach (['capabilities_json', 'account_scope'] as $column) {
+            if (!in_array($column, $tokenColumnNames, true)) {
+                throw new RuntimeException("The broker api_tokens table is missing capability column '$column'; deploy and run migrate-broker.php before serving requests.");
             }
         }
     }

@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 final class DatabaseMigrationService
 {
-    public const LATEST_VERSION = 7;
+    public const LATEST_VERSION = 8;
 
     public function __construct(
         private readonly PDO $database,
@@ -73,6 +73,7 @@ final class DatabaseMigrationService
             5 => $this->migrationFive(),
             6 => $this->migrationSix(),
             7 => $this->migrationSeven(),
+            8 => $this->migrationEight(),
             default => throw new RuntimeException("Unknown broker migration version: $version"),
         };
     }
@@ -345,6 +346,28 @@ final class DatabaseMigrationService
             );
             CREATE INDEX IF NOT EXISTS ix_mutation_idempotency_expiry
                 ON mutation_idempotency(expires_at);');
+    }
+
+    private function migrationEight(): void
+    {
+        $this->database->exec(
+            'CREATE TABLE IF NOT EXISTS api_tokens (
+                id TEXT PRIMARY KEY,
+                label TEXT NOT NULL,
+                token_hash TEXT NOT NULL UNIQUE,
+                created_at INTEGER NOT NULL,
+                expires_at INTEGER NOT NULL,
+                revoked_at INTEGER NULL,
+                last_used_at INTEGER NULL
+            )');
+        $columns = $this->database->query('PRAGMA table_info(api_tokens)')->fetchAll();
+        $names = array_map(static fn(array $column): string => (string)$column['name'], $columns);
+        if (!in_array('capabilities_json', $names, true)) {
+            $this->database->exec("ALTER TABLE api_tokens ADD COLUMN capabilities_json TEXT NOT NULL DEFAULT '[]'");
+        }
+        if (!in_array('account_scope', $names, true)) {
+            $this->database->exec('ALTER TABLE api_tokens ADD COLUMN account_scope TEXT NULL');
+        }
     }
 
 }

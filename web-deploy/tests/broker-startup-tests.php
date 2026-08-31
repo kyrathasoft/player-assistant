@@ -33,8 +33,7 @@ $configPosition = strpos($index, '$config = require $configPath;');
 startupAssert($healthPosition !== false && $servicePosition !== false && $healthPosition < $servicePosition, 'The public health route still constructs BrokerService first.');
 startupAssert($healthPosition !== false && $httpsPosition !== false && $healthPosition < $httpsPosition, 'The public health route still performs HTTPS/private-subsystem startup first.');
 startupAssert($healthPosition !== false && $configPosition !== false && $healthPosition < $configPosition, 'The public health route still loads private configuration first.');
-startupAssert(str_contains($index, "sendJson(200, [
-            'service' => 'player-assistant-broker'"), 'The public health route is not handled without BrokerService.');
+startupAssert(preg_match("/sendJson\\(200, \\[\\s+'service' => 'player-assistant-broker'/", $index) === 1, 'The public health route is not handled without BrokerService.');
 $sessionRouteList = substr($index, strpos($index, 'function isCharacterSessionRoute'));
 startupAssert(str_contains($sessionRouteList, 'AuthorizationPolicy::isCharacterSessionRoute'), 'The HTTP boundary does not use the canonical session policy.');
 startupAssert(str_contains($authorizationPolicy, "'/v1/magic-items'"), 'The canonical policy omits the magic-item route.');

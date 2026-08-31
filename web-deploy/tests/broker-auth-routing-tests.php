@@ -298,11 +298,11 @@ try {
         'POST',
         '/v1/tokens',
         [],
-        ['label' => 'snapshot route validation'],
+        ['label' => 'snapshot route validation', 'capabilities' => [['name' => 'snapshots.read', 'resource' => 'https://rpol.net/display.cgi?gi=80170&ti=3&unsupported=1']]],
         routingAdminHeaders(
             'POST',
             '/v1/tokens',
-            ['label' => 'snapshot route validation'],
+            ['label' => 'snapshot route validation', 'capabilities' => [['name' => 'snapshots.read', 'resource' => 'https://rpol.net/display.cgi?gi=80170&ti=3&unsupported=1']]],
             $config['api']['admin_key']),
         '192.0.2.30',
         $session);
