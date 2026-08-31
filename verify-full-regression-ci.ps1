@@ -69,6 +69,7 @@ $requiredLockFiles = @(
 Assert-Condition -Condition (Test-Path -LiteralPath $workflowPath -PathType Leaf) -Message 'The full-regression workflow is missing.'
 
 $workflow = Get-Content -Raw -LiteralPath $workflowPath
+$browserSmoke = Get-Content -Raw -LiteralPath $browserTestPath
 $deployWorkflow = Get-Content -Raw -LiteralPath $deployWorkflowPath
 $httpAuthTest = Get-Content -Raw -LiteralPath $httpAuthTestPath
 $nativeFailFastVerifier = Get-Content -Raw -LiteralPath $nativeFailFastVerifierPath
@@ -118,6 +119,7 @@ Assert-Condition -Condition ($brokerOperations.Contains('BACKUP_FTPS_PASSWORD') 
 Assert-Condition -Condition (!$wordCountDeployment.Contains("copy(`$configPath, `$configPath . '.bak-deploy-'") -and $wordCountDeployment.Contains("`$config['operations']['offsite'] = [")) -Message 'Deployment must scrub FTPS credentials and avoid retaining config.php copies that could contain them.'
 Assert-Condition -Condition ($wordCountDeployment.Contains("`$configBackupPatterns = [") -and $wordCountDeployment.Contains("'config.php.bak-deploy-*'") -and $wordCountDeployment.Contains("'config.php.bak-word-count-refresh-*'")) -Message 'Deployment must remove legacy config backups that may contain serialized FTPS credentials.'
 Assert-Condition -Condition ($workflow.Contains('npm ci --prefix .\pwa') -and $workflow.Contains('npm --prefix .\pwa test')) -Message 'The required job must install and run the browser-level PWA smoke tests.'
+Assert-Condition -Condition ($browserSmoke.Contains('const assertAuthenticatedAccessibility = async') -and $browserSmoke.Contains('protectedState: true') -and $browserSmoke.Contains('mobile: true') -and $browserSmoke.Contains('Failed-login error announcement contract failed')) -Message 'The browser smoke gate must enforce authenticated/error accessibility acceptance.'
 Assert-Condition -Condition ([regex]::IsMatch($workflow, "- name: Build ephemeral release update artifacts for untrusted events[\x0D\x0A]+\s+if: github[.]event_name != 'push'[\x0D\x0A]")) -Message 'Pull-request and manually dispatched builds must use an explicit ephemeral update-manifest signing key step.'
 Assert-Condition -Condition ([regex]::IsMatch($workflow, "- name: Build signed release update artifacts[\x0D\x0A]+\s+if: github[.]event_name == 'push'[\x0D\x0A]")) -Message 'The secret-bearing release signing step must run only for protected push events.'
 $workflowLines = @($workflow -split "`n")

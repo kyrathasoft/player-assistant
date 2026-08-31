@@ -627,9 +627,9 @@ Develop and implement these items only after the remaining incomplete items abov
   - [x] `compatibility-boundaries.json` inventories desktop/installer/updater/broker/PWA version, schema, protocol, signature, cache-generation, transaction, rollback, and downgrade-floor boundaries.
   - [x] Deterministic coverage exercises compatible rollback, unsafe downgrade rejection, mixed generations, stale signatures, schema incompatibility, partial promotion, interrupted recovery, cache/version drift, and exact pre-existing-state restoration.
   - [x] PR smoke, full regression policy, hardening, release-manifest, PWA, and RC gates execute the compatibility verifier without weakening fail-closed behavior or requiring freeware Authenticode.
-- [ ] Add browser accessibility acceptance for all authenticated and error states.
-  - Verify keyboard-only navigation, focus restoration, labels, live-region announcements, contrast, reduced motion, zoom, screen-reader names, and 320px layouts across loading, empty, stale, retry, and failure states.
-  - Regression: automated browser assertions cover each protected view and prevent inaccessible failure paths from shipping.
+- [x] Add browser accessibility acceptance for all authenticated and error states.
+  - [x] Deterministic Playwright acceptance inventories authenticated and logged-out protected views, dialogs, forms, tables, notifications, loading/retry/failure states, account transitions, offline behavior, reduced motion, focus containment/restoration, semantic names/labels/live regions, contrast tokens, and 320px layouts.
+  - [x] PR smoke, canonical PWA verification, full regression, and RC validation retain the browser accessibility contract; failed-login announcements and stale protected content fail closed.
 - [ ] Add offline conflict and reconnection semantics for queued user actions.
   - Define which actions may queue, bind queues to account generation and idempotency keys, surface conflicts, and discard protected actions safely on logout or revocation.
   - Regression: reconnect, duplicate delivery, account switch, server rejection, and stale-generation fixtures never duplicate or misapply an action.
