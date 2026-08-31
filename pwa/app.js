@@ -9,6 +9,7 @@ import { assertXpRecords, assertAwardRecords, assertScopedMessages } from './dat
 import { createPresenceController } from './modules/presence.js?v=100';
 import { createUpdateLifecycleController } from './modules/update-lifecycle.js?v=100';
 import { createCorrelationContext, correlationHeaders } from './correlation.js?v=100';
+import { createOfflineActionQueue, MUTATING_METHODS, QUEUE_STATES } from './modules/offline-action-queue.js?v=100';
 
 (() => {
     'use strict';
@@ -2462,6 +2463,9 @@ import { createCorrelationContext, correlationHeaders } from './correlation.js?v
 
     const accountSessionController = createAccountSessionController({
         onChange: (account) => {
+            if (authenticatedAccount?.id && authenticatedAccount.id !== account?.id) {
+                offlineActionQueue.clearForIdentity(authenticatedAccount.id);
+            }
             const changed = authenticatedAccount?.id !== account?.id;
             authenticatedAccount = account;
             if (!changed) return;
@@ -2531,6 +2535,36 @@ import { createCorrelationContext, correlationHeaders } from './correlation.js?v
         updateRevisionPolling();
     };
 
+    const offlineActionQueue = createOfflineActionQueue({
+        onState: ({ state, reason }) => {
+            const status = byId('connection-status');
+            if (!(status instanceof HTMLElement)) return;
+            status.dataset.queueState = state;
+            status.title = state === 'completed'
+                ? 'Queued action completed after reconnecting.'
+                : state === QUEUE_STATES.CONFLICT
+                    ? `Queued action needs review: ${reason}.`
+                    : state === QUEUE_STATES.EXHAUSTED
+                        ? 'A queued action could not be delivered after the retry limit.'
+                        : state === QUEUE_STATES.QUEUED ? 'An action is queued until the connection returns.' : '';
+            const label = byId('connection-label');
+            if (label && [QUEUE_STATES.QUEUED, QUEUE_STATES.CONFLICT, QUEUE_STATES.EXHAUSTED].includes(state)) {
+                label.textContent = state === QUEUE_STATES.CONFLICT ? 'Action conflict' : state === QUEUE_STATES.EXHAUSTED ? 'Action failed' : 'Action queued';
+            }
+        }
+    });
+    const renderQueuedActionState = () => {
+        const label = byId('connection-label');
+        if (!(label instanceof HTMLElement)) return;
+        const pending = offlineActionQueue.list().filter((item) => [QUEUE_STATES.QUEUED, QUEUE_STATES.CONFLICT, QUEUE_STATES.EXHAUSTED].includes(item.state));
+        label.textContent = pending.some((item) => item.state === QUEUE_STATES.CONFLICT)
+            ? 'Action conflict'
+            : pending.some((item) => item.state === QUEUE_STATES.EXHAUSTED)
+                ? 'Action failed'
+                : pending.length > 0 ? 'Action queued' : navigator.onLine ? 'Online' : 'Offline';
+    };
+    renderQueuedActionState();
+
     const requestAuthenticationApi = async (path, options = {}) => {
         const method = String(options.method || 'GET').toUpperCase();
         const requestGeneration = authenticationGeneration;
@@ -2582,7 +2616,7 @@ import { createCorrelationContext, correlationHeaders } from './correlation.js?v
                 });
             } catch (error) {
                 const cancelled = controller.signal.aborted;
-                throw new AuthenticationApiError(
+                const apiError = new AuthenticationApiError(
                     timedOut
                         ? 'The character login request timed out.'
                         : cancelled ? 'The character login request was cancelled.' : 'The character login service is unavailable.',
@@ -2591,6 +2625,30 @@ import { createCorrelationContext, correlationHeaders } from './correlation.js?v
                         requestId,
                         retryable: true
                     });
+                const queueable = options.allowQueue !== false
+                    && MUTATING_METHODS.has(method)
+                    && !['/login', '/logout'].includes(path)
+                    && authenticatedAccount !== null
+                    && !cancelled
+                    && (apiError.code === 'network_error' || apiError.code === 'request_timeout');
+                if (queueable) {
+                    const idempotencyKey = headers.get('Idempotency-Key');
+                    const queued = offlineActionQueue.enqueue({
+                        accountId: authenticatedAccount.id,
+                        generation: String(authenticationGeneration),
+                        method,
+                        route: path.split('?')[0],
+                        idempotencyKey,
+                        body: options.body === undefined ? null : options.body
+                    });
+                    return {
+                        schema_version: 1,
+                        queued: true,
+                        queue_state: queued.state,
+                        request_id: requestId
+                    };
+                }
+                throw apiError;
             }
             const responseRequestId = response.headers.get('X-Request-Id') || requestId;
             if (response.status === 401 && path !== '/login') {
@@ -2686,6 +2744,29 @@ import { createCorrelationContext, correlationHeaders } from './correlation.js?v
             }
         }
     };
+
+    const flushQueuedActions = async () => {
+        if (!navigator.onLine || authenticatedAccount === null) return 0;
+        return offlineActionQueue.flush({
+            accountId: authenticatedAccount.id,
+            generation: String(authenticationGeneration),
+            send: async (item) => {
+                try {
+                    await requestAuthenticationApi(item.route, {
+                        method: item.method,
+                        body: item.body,
+                        csrf: true,
+                        idempotencyKey: item.idempotencyKey,
+                        allowQueue: false
+                    });
+                    return { status: 200 };
+                } catch (error) {
+                    return { status: error.status || 0, error: error.code || 'network_error' };
+                }
+            }
+        });
+    };
+    window.addEventListener('online', () => { void flushQueuedActions(); });
 
     const validatePresenceSnapshot = (payload) => {
         const validUser = (user) => user

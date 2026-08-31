@@ -108,6 +108,12 @@ The included `.htaccess` supplies the important Apache MIME and cache headers wh
 
 After loading the secure URL, supported browsers expose an install prompt. The always-visible **Install app** button invokes the browser prompt when available and otherwise shows platform-appropriate installation instructions.
 
+## Offline mutations
+
+Authenticated `POST`, `PUT`, `PATCH`, and `DELETE` actions that cannot reach the broker are retained in the bounded `player-assistant:offline-actions:v1` local-storage journal. Each entry is owned by the account identity and authentication generation, has a stable idempotency key and request-body hash, and replays in sequence order after `online`. Login and logout never queue. Successful responses (including broker idempotency replays) are removed; non-retryable responses become visible `conflict` entries; network failures stop at the retry limit as `exhausted`. Account changes, logout, revocation, and stale generations discard protected entries without replay. Duplicate keys with a different body are fail-closed collisions. Retention is seven days and at most 100 entries are retained.
+
+The deterministic contract is covered by `offline-action-queue-tests.mjs` for disconnect/reconnect, duplicate delivery, account/generation changes, server conflicts, partial completion, retry exhaustion, cancellation, and recovery.
+
 ## Caching
 
 The service worker immediately caches only the app shell. Large translator dictionaries are fetched and cached the first time they are prepared. This keeps the initial install responsive while allowing previously loaded languages to work offline.

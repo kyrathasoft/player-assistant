@@ -630,9 +630,9 @@ Develop and implement these items only after the remaining incomplete items abov
 - [x] Add browser accessibility acceptance for all authenticated and error states.
   - [x] Deterministic Playwright acceptance inventories authenticated and logged-out protected views, dialogs, forms, tables, notifications, loading/retry/failure states, account transitions, offline behavior, reduced motion, focus containment/restoration, semantic names/labels/live regions, contrast tokens, and 320px layouts.
   - [x] PR smoke, canonical PWA verification, full regression, and RC validation retain the browser accessibility contract; failed-login announcements and stale protected content fail closed.
-- [ ] Add offline conflict and reconnection semantics for queued user actions.
-  - Define which actions may queue, bind queues to account generation and idempotency keys, surface conflicts, and discard protected actions safely on logout or revocation.
-  - Regression: reconnect, duplicate delivery, account switch, server rejection, and stale-generation fixtures never duplicate or misapply an action.
+- [x] Add offline conflict and reconnection semantics for queued user actions.
+  - Authenticated mutating actions use the bounded, account/generation-owned local journal with stable idempotency keys, ordered replay, collision detection, cancellation, seven-day/100-entry retention, retry exhaustion, conflict states, and fail-closed discard on identity transitions.
+  - Deterministic PWA coverage exercises disconnect/reconnect, duplicate delivery, account switch, stale generations, server conflicts, partial completion, retry exhaustion, and recovery.
 - [ ] Add release readiness evidence aggregation without weakening individual gates.
   - Collect focused tests, full regression, package parity, signing, deployment, live HTTP, browser, backup, and rollback evidence into a signed or hash-linked report with explicit blocked prerequisites.
   - Regression: missing, stale, contradictory, or locally fabricated evidence prevents release readiness and identifies the exact failed gate.

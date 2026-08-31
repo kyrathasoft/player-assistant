@@ -27,6 +27,7 @@ const SHELL_ASSETS = [
     `./modules/messages-activity.js?v=${VERSION_METADATA.appRevision}`,
     `./modules/presence.js?v=${VERSION_METADATA.appRevision}`,
     `./modules/update-lifecycle.js?v=${VERSION_METADATA.appRevision}`,
+    `./modules/offline-action-queue.js?v=${VERSION_METADATA.appRevision}`,
     `./correlation.js?v=${VERSION_METADATA.appRevision}`,
     `./translator-worker.js?v=${VERSION_METADATA.appRevision}`,
     `./campaign-search-worker.js?v=${VERSION_METADATA.appRevision}`,
