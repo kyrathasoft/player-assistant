@@ -47,6 +47,9 @@
     "**/*-cookie.*",
     "**/*-token.*"
   ],
+  "allowed": [
+    "pwa/data/hero-tokens/**"
+  ],
   "source_package_pairs": [
     { "source": "pwa/online-installer-for-pwa/install-player-assistant-web.php", "distribution": "pwa/online-installer-for-pwa/dist/install-player-assistant-web.php" },
     { "source": "pwa/online-installer-for-pwa/config.template.php", "distribution": "pwa/online-installer-for-pwa/dist/config.template.php" },

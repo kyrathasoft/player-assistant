@@ -61,6 +61,8 @@ function Test-Excluded([string]$Path, $Inventory) {
 }
 function Assert-NoForbiddenFiles($Inventory) {
     foreach ($relative in Get-CandidatePaths $Inventory) {
+        $allowed = @($Inventory.allowed | Where-Object { Test-Glob $relative ([string]$_) })
+        if ($allowed.Count -gt 0) { continue }
         foreach ($pattern in @($Inventory.forbidden)) {
             if (Test-Glob $relative ([string]$pattern)) { throw "Forbidden private or secret-shaped file is in the release inventory: $relative" }
         }
