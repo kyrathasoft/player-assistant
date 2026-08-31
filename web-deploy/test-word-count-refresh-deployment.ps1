@@ -102,7 +102,7 @@ $metadata = Get-Content -Raw -LiteralPath $SigningMetadataPath | ConvertFrom-Jso
 if (-not (Test-Path -LiteralPath $PhpPath -PathType Leaf)) {
     throw "PHP signing runtime not found: $PhpPath"
 }
-$deployFiles = @('BrokerService.php', 'BrokerAlertService.php', 'BrokerOperations.php', 'DatabaseMigrationService.php', 'QuestService.php', 'WordCountService.php', 'refresh-word-counts.php', 'broker-maintenance.php')
+$deployFiles = @('AuthorizationPolicy.php', 'BrokerService.php', 'BrokerAlertService.php', 'BrokerOperations.php', 'DatabaseMigrationService.php', 'QuestService.php', 'WordCountService.php', 'refresh-word-counts.php', 'broker-maintenance.php')
 $localHashes = @{}
 foreach ($file in $deployFiles) {
     $localHashes[$file] = (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $PSScriptRoot "player-assistant-broker\$file")).Hash.ToLowerInvariant()
@@ -110,7 +110,7 @@ foreach ($file in $deployFiles) {
 
 $remoteCode = @'
 $directory = '__PRIVATE_DIRECTORY__';
-$files = ['BrokerService.php', 'BrokerAlertService.php', 'BrokerOperations.php', 'DatabaseMigrationService.php', 'QuestService.php', 'WordCountService.php', 'refresh-word-counts.php', 'broker-maintenance.php'];
+$files = ['AuthorizationPolicy.php', 'BrokerService.php', 'BrokerAlertService.php', 'BrokerOperations.php', 'DatabaseMigrationService.php', 'QuestService.php', 'WordCountService.php', 'refresh-word-counts.php', 'broker-maintenance.php'];
 $result = ['files' => [], 'config' => [], 'backups' => [], 'cron' => ''];
 foreach ($files as $file) {
     $path = $directory . '/' . $file;

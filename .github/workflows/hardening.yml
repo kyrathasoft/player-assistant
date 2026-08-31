@@ -146,6 +146,8 @@ jobs:
           Invoke-CheckedVerification 'backup encryption' './web-deploy/tests/backup-encryption-tests.ps1'
           Invoke-CheckedVerification 'published word counts' './web-deploy/tests/publish-word-counts-tests.ps1'
           Invoke-CheckedVerification 'PWA monitor contract' './web-deploy/tests/pwa-monitor-contract-tests.ps1'
+          & (Get-Command php).Source './web-deploy/tests/authorization-policy-tests.php'
+          if (-not $?) { throw "Verification 'authorization policy' failed with exit code $LASTEXITCODE." }
           Invoke-CheckedVerification 'HTTP authentication' './web-deploy/tests/run-http-auth-tests.ps1' -Parameters @{ PhpPath = (Get-Command php).Source }
 
   # Keep this job name aligned with the required GitHub Actions check on master.

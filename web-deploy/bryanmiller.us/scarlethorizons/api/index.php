@@ -38,6 +38,7 @@ try {
 
     $privateDirectory = dirname(__DIR__, 3) . '/player-assistant-broker';
     require_once $privateDirectory . '/BrokerHttpException.php';
+    require_once $privateDirectory . '/AuthorizationPolicy.php';
     require_once $privateDirectory . '/RpolClient.php';
     require_once $privateDirectory . '/CharacterAuthService.php';
     require_once $privateDirectory . '/XpTrackingService.php';
@@ -252,32 +253,7 @@ function getRequestHeadersForBroker(): array
 
 function isCharacterSessionRoute(string $route): bool
 {
-    return in_array(
-        $route,
-        [
-            '/v1/login',
-            '/v1/session',
-            '/v1/me',
-            '/v1/xp',
-            '/v1/xp-awards',
-            '/v1/xp-level-up-notifications/claim',
-            '/v1/xp-level-up-notifications/acknowledge',
-            '/v1/word-counts',
-            '/v1/presence',
-            '/v1/quests',
-            '/v1/revisions',
-            '/v1/magic-items',
-            '/v1/quest-requests',
-            '/v1/messages',
-            '/v1/logout',
-        ],
-        true)
-        || preg_match(
-            '#^/v1/quest-requests/[a-f0-9]{32}/(?:decision|acknowledge)$#',
-            $route) === 1
-        || preg_match(
-            '#^/v1/messages/[a-f0-9]{32}/read$#',
-            $route) === 1;
+    return AuthorizationPolicy::isCharacterSessionRoute($route);
 }
 
 function startCharacterSession(array $authConfig): void

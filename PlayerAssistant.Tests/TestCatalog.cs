@@ -134,6 +134,7 @@ internal static class TestCatalog
     ("authenticated identity factory derives role and scope", TestCases.AuthenticatedIdentityFactoryDerivesRoleAndScope),
     ("authenticated identity factory rejects impossible canonical role", TestCases.AuthenticatedIdentityFactoryRejectsImpossibleCanonicalRole),
     ("protected boundaries reject forged identity state", TestCases.ProtectedBoundariesRejectForgedIdentityState),
+    ("canonical authorization matrix covers protected desktop services", TestCases.CanonicalAuthorizationMatrixCoversProtectedDesktopServices),
     ("account switching returns the new canonical identity", TestCases.AccountSwitchingReturnsNewCanonicalIdentity),
     ("dungeon master scope uses stable canonical ID", TestCases.DungeonMasterScopeUsesStableCanonicalId),
     ("opaque Dungeon Master canonical ID preserves scope", TestCases.OpaqueDungeonMasterCanonicalIdPreservesScope),
