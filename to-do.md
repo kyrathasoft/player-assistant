@@ -579,9 +579,10 @@ Develop and implement these items only after the remaining incomplete items abov
   - [x] Added a signed protected-response envelope bound to account identity, session generation, schema, expiry, revision, and replay nonce; PWA rejects stale, downgraded, cross-account, tampered, and replayed responses before rendering.
   - Bind signed snapshots, cached protected responses, and mutation receipts to account identity, resource generation, schema version, and an expiration or revocation boundary.
   - Regression: stale, replayed, cross-account, downgraded, and post-revocation artifacts are rejected without rendering or mutating state.
-- [ ] Formalize secret lifecycle inventory and revocation verification.
-  - Enumerate where each credential, token, signing key, and host key may exist; document creation, use, rotation, revocation, deletion, and evidence without copying secret material.
-  - Regression: a disposable fixture credential can be revoked and every configured consumer reports denial; inventory checks detect undeclared storage locations.
+- [x] Formalize secret lifecycle inventory and revocation verification.
+  - [x] `secret-lifecycle-inventory.json` enumerates application credentials, broker/admin/bearer credentials, signing keys, deployment keys, certificate pins, ownership, storage boundaries, lifetimes, creation/use/rotation/revocation/deletion paths, evidence, and fail-closed behavior without secret values.
+  - [x] `verify-secret-lifecycle.ps1` validates declared locations, rejects secret-shaped inventory material, exercises disposable revocation denial for every configured consumer, and covers redaction/approved-identifier negative space.
+  - [x] Deterministic desktop redaction coverage is registered in the full test harness; PWA, PHP, PowerShell, release, formatting, and static policy gates were exercised. Existing unrelated desktop publish-fixture failures remain documented in verification results.
 - [ ] Add a protected-data negative-space test suite for logs, errors, metrics, and crash reports.
   - Exercise malformed authentication, authorization, network, parser, and deployment failures and assert diagnostics contain only approved identifiers and redacted summaries.
   - Regression: representative secrets and protected fields injected into failures never appear in emitted observability artifacts.

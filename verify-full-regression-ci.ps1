@@ -52,6 +52,7 @@ $launcherProjectPath = Join-Path $RepoRoot 'PlayerAssistant.Launcher\PlayerAssis
 $dependencyReviewWorkflowPath = Join-Path $RepoRoot '.github\workflows\dependency-review.yml'
 $dependabotPath = Join-Path $RepoRoot '.github\dependabot.yml'
 $hygieneVerifierPath = Join-Path $RepoRoot 'verify-repository-hygiene.ps1'
+$secretLifecycleVerifierPath = Join-Path $RepoRoot 'verify-secret-lifecycle.ps1'
 $lexiconVerifierPath = Join-Path $RepoRoot 'verify-lexicon-artifacts.py'
 $versionVerifierPath = Join-Path $RepoRoot 'verify-version-metadata.py'
 $requiredLockFiles = @(
@@ -75,6 +76,8 @@ Assert-WorkflowRunCommand -WorkflowText $workflow -Command 'dotnet build .\Playe
 Assert-WorkflowRunCommand -WorkflowText $workflow -Command 'dotnet format .\player-assistant.slnx --verify-no-changes --no-restore' -Message 'The required job must reject unformatted .NET source without performing another restore.'
 Assert-WorkflowRunCommand -WorkflowText $workflow -Command '.\verify-repository-hygiene.ps1' -Message 'The required job must verify local corpus and Hermes scratch-file hygiene.'
 Assert-Condition -Condition (Test-Path -LiteralPath $hygieneVerifierPath -PathType Leaf) -Message 'The repository hygiene verifier is missing.'
+Assert-Condition -Condition (Test-Path -LiteralPath $secretLifecycleVerifierPath -PathType Leaf) -Message 'The secret lifecycle verifier is missing.'
+Assert-Condition -Condition ($workflow.Contains('.\verify-secret-lifecycle.ps1')) -Message 'The required job must verify secret lifecycle inventory and revocation.'
 Assert-Condition -Condition ($workflow.Contains('.\PlayerAssistant.Tests\bin\Release\net10.0-windows\PlayerAssistant.Tests.exe')) -Message 'The required job must run the complete desktop harness without a filter.'
 Assert-Condition -Condition (!$workflow.Contains('Verify hosted settings fetch and decrypt path') -and !$workflow.Contains('Verify hosted settings negative paths')) -Message 'Focused desktop filters must not substitute for the complete harness.'
 Assert-Condition -Condition ($workflow.Contains('.\pwa\verify-pwa.ps1')) -Message 'The required job must run the PWA verifier.'

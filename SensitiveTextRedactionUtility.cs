@@ -19,6 +19,7 @@ namespace PlayerAssistant
             redacted = CookieHeaderPattern().Replace(redacted, $"$1{RedactedValue}");
             redacted = JsonSensitiveValuePattern().Replace(redacted, $"$1\"{RedactedValue}\"");
             redacted = RpolCredentialPattern().Replace(redacted, $"$1{RedactedValue}");
+            redacted = GenericSecretAssignmentPattern().Replace(redacted, $"$1{RedactedValue}");
             return redacted;
         }
 
@@ -39,5 +40,8 @@ namespace PlayerAssistant
 
         [GeneratedRegex("(RPOL (?:password|user name)\\s*[:=]\\s*)\\S+", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
         private static partial Regex RpolCredentialPattern();
+
+        [GeneratedRegex("((?:api[_-]?key|access[_-]?token|client[_-]?secret|password|secret|token)\\s*[:=]\\s*)[^\\s,;]+", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
+        private static partial Regex GenericSecretAssignmentPattern();
     }
 }

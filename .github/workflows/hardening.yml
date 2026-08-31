@@ -508,6 +508,10 @@ jobs:
         shell: pwsh
         run: .\verify-secret-scan.ps1 -RepoRoot $env:GITHUB_WORKSPACE -IncludeHistory
 
+      - name: Secret lifecycle inventory and revocation verification
+        shell: pwsh
+        run: .\verify-secret-lifecycle.ps1 -RepoRoot $env:GITHUB_WORKSPACE
+
       - name: RC self-tests
         shell: pwsh
         run: .\verify-rc-self-tests.ps1 -ReleaseDir $env:RELEASE_DIR -PublishDir $env:PUBLISH_DIR

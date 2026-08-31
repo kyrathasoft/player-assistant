@@ -7,6 +7,7 @@ internal static class TestCatalog
     internal static (string Name, Action Test)[] Create() =>
         new (string Name, Action Test)[]
 {
+    ("secret lifecycle inventory redacts values and preserves safe identifiers", SecretLifecycleTests.InventoryRedactsSecretsAndRejectsNegativeSpace),
     ("release state compatibility rejects rollback and future schema", TestCases.ReleaseStateCompatibilityRejectsRollbackAndFutureSchema),
     ("correlation context rejects secrets and accepts safe IDs", TestCases.CorrelationContextRejectsSecretsAndAcceptsSafeIds),
     ("date boundary rejects ambiguous and non UTC values", TestCases.DateBoundaryRejectsAmbiguousAndNonUtcValues),
