@@ -59,6 +59,8 @@ $secretLifecycleVerifierPath = Join-Path $RepoRoot 'verify-secret-lifecycle.ps1'
 $lexiconVerifierPath = Join-Path $RepoRoot 'verify-lexicon-artifacts.py'
 $versionVerifierPath = Join-Path $RepoRoot 'verify-version-metadata.py'
 $compatibilityVerifierPath = Join-Path $RepoRoot 'verify-downgrade-rollback-compatibility.ps1'
+$releaseReadinessAggregatorPath = Join-Path $RepoRoot 'release-readiness-aggregate.ps1'
+$releaseReadinessTestsPath = Join-Path $RepoRoot 'release-readiness-tests.ps1'
 $requiredLockFiles = @(
     'packages.lock.json',
     'ToOrcish\packages.lock.json',
@@ -96,6 +98,9 @@ Assert-Condition -Condition (Test-Path -LiteralPath (Join-Path $RepoRoot 'web-de
 Assert-Condition -Condition ($workflow.Contains('python .\verify-lexicon-artifacts.py')) -Message 'The required job must verify canonical lexicon projections.'
 Assert-Condition -Condition (Test-Path -LiteralPath $lexiconVerifierPath -PathType Leaf) -Message 'The canonical lexicon verifier is missing.'
 Assert-Condition -Condition ($workflow.Contains('.\release-manifest-tests.ps1') -and $workflow.Contains('.\release-manifest.ps1 -Mode Generate') -and $workflow.Contains('.\release-manifest.ps1 -Mode Verify')) -Message 'The required job must run deterministic release-manifest tests and generate/verify the complete release inventory.'
+Assert-Condition -Condition (Test-Path -LiteralPath $releaseReadinessAggregatorPath -PathType Leaf) -Message 'The release-readiness evidence aggregator is missing.'
+Assert-Condition -Condition (Test-Path -LiteralPath $releaseReadinessTestsPath -PathType Leaf) -Message 'The release-readiness evidence fixtures are missing.'
+Assert-Condition -Condition ($workflow.Contains('release-readiness-tests.ps1')) -Message 'The required job must run deterministic release-readiness evidence fixtures.'
 Assert-Condition -Condition (Test-Path -LiteralPath (Join-Path $RepoRoot 'release-manifest.inventory.json') -PathType Leaf) -Message 'The canonical release-manifest inventory is missing.'
 Assert-Condition -Condition (Test-Path -LiteralPath (Join-Path $RepoRoot 'release-manifest.ps1') -PathType Leaf) -Message 'The canonical release-manifest generator/verifier is missing.'
 Assert-Condition -Condition (Test-Path -LiteralPath (Join-Path $RepoRoot 'release-manifest-tests.ps1') -PathType Leaf) -Message 'The deterministic release-manifest regression suite is missing.'

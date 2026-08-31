@@ -67,12 +67,17 @@ jobs:
 
       - name: Run data invariant contract fixtures
         shell: pwsh
-        run: php .\web-deploy\tests\data-invariant-contract-tests.php
+        run: |
+          php .\web-deploy\tests\data-invariant-contract-tests.php
           php .\web-deploy\tests\bounded-repair-tests.php
 
       - name: Run deterministic release manifest tests
         shell: pwsh
         run: .\release-manifest-tests.ps1
+
+      - name: Run release readiness evidence fixtures
+        shell: pwsh
+        run: .\release-readiness-tests.ps1
 
       - name: Verify downgrade and rollback compatibility boundaries
         shell: pwsh

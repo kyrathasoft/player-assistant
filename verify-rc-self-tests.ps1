@@ -17,6 +17,7 @@ $MigrationRehearsalTestPath = Join-Path $PSScriptRoot 'web-deploy\tests\migratio
 $DataInvariantTestPath = Join-Path $PSScriptRoot 'web-deploy\tests\data-invariant-contract-tests.php'
 $BoundedRepairTestPath = Join-Path $PSScriptRoot 'web-deploy\tests\bounded-repair-tests.php'
 $CompatibilityVerifierPath = Join-Path $PSScriptRoot 'verify-downgrade-rollback-compatibility.ps1'
+$ReleaseReadinessTestsPath = Join-Path $PSScriptRoot 'release-readiness-tests.ps1'
 
 function Resolve-FullPath {
     param(
@@ -119,6 +120,8 @@ function Invoke-ExternalCommand {
 $PowerShellExecutable = Get-PowerShellExecutable
 & $PowerShellExecutable -NoProfile -NonInteractive -ExecutionPolicy Bypass -File $ProtectedDataNegativeSpaceScriptPath -RepoRoot $PSScriptRoot
 if ($LASTEXITCODE -ne 0) { throw 'Protected-data negative-space release gate failed.' }
+& $PowerShellExecutable -NoProfile -NonInteractive -ExecutionPolicy Bypass -File $ReleaseReadinessTestsPath
+if ($LASTEXITCODE -ne 0) { throw 'Release-readiness evidence aggregation gate failed.' }
 
 
 function Assert-CommandFailsWith {

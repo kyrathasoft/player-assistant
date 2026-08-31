@@ -530,6 +530,10 @@ jobs:
         shell: pwsh
         run: .\release-manifest-tests.ps1
 
+      - name: Run release readiness evidence fixtures
+        shell: pwsh
+        run: ./release-readiness-tests.ps1
+
       - name: Generate and verify complete release manifest
         shell: pwsh
         run: |

@@ -633,9 +633,10 @@ Develop and implement these items only after the remaining incomplete items abov
 - [x] Add offline conflict and reconnection semantics for queued user actions.
   - Authenticated mutating actions use the bounded, account/generation-owned local journal with stable idempotency keys, ordered replay, collision detection, cancellation, seven-day/100-entry retention, retry exhaustion, conflict states, and fail-closed discard on identity transitions.
   - Deterministic PWA coverage exercises disconnect/reconnect, duplicate delivery, account switch, stale generations, server conflicts, partial completion, retry exhaustion, and recovery.
-- [ ] Add release readiness evidence aggregation without weakening individual gates.
-  - Collect focused tests, full regression, package parity, signing, deployment, live HTTP, browser, backup, and rollback evidence into a signed or hash-linked report with explicit blocked prerequisites.
-  - Regression: missing, stale, contradictory, or locally fabricated evidence prevents release readiness and identifies the exact failed gate.
+- [x] Add release readiness evidence aggregation without weakening individual gates.
+  - [x] `release-readiness-aggregate.ps1` requires exact Git source revision/branch, fresh UTC hash-linked gate records, complete verified artifacts, and explicit external exceptions; it fails closed on missing, stale, contradictory, failed, unsigned, unverified, or mismatched evidence and redacts protected fields.
+  - [x] Deterministic fixtures cover missing evidence, stale evidence, branch mismatch, failed checks, partial artifacts, conflicting statuses, and accepted external blockers.
+  - [x] PR smoke, full regression, and RC self-test/checklist gates execute the aggregator fixtures without weakening individual gates.
 
 ## Completed
 
