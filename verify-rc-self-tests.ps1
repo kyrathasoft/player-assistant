@@ -12,6 +12,7 @@ $PublishRuntimeIntegrityScriptPath = Join-Path $PSScriptRoot 'verify-publish-run
 $RuntimeSidecarScriptPath = Join-Path $PSScriptRoot 'verify-runtime-sidecars.ps1'
 $SelfTestRoot = Join-Path $PSScriptRoot '.rc-self-tests'
 $DependencyInventoryPath = Join-Path $PSScriptRoot 'codex-scratch\rc-dependency-inventory.json'
+$ProtectedDataNegativeSpaceScriptPath = Join-Path $PSScriptRoot 'verify-protected-data-negative-space.ps1'
 
 function Resolve-FullPath {
     param(
@@ -112,6 +113,9 @@ function Invoke-ExternalCommand {
 }
 
 $PowerShellExecutable = Get-PowerShellExecutable
+& $PowerShellExecutable -NoProfile -NonInteractive -ExecutionPolicy Bypass -File $ProtectedDataNegativeSpaceScriptPath -RepoRoot $PSScriptRoot
+if ($LASTEXITCODE -ne 0) { throw 'Protected-data negative-space release gate failed.' }
+
 
 function Assert-CommandFailsWith {
     param(

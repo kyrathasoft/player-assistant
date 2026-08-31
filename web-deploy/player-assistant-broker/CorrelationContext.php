@@ -10,7 +10,15 @@ final class CorrelationContext
     }
     public static function redact(string $value): string
     {
-        return preg_replace('/(?i)(password|token|cookie|authorization|set-cookie)\\s*[:=]\\s*[^\\s,;]+/', '$1=[REDACTED]', $value) ?? '[REDACTED]';
+        $patterns = [
+            '/(?i)(authorization\\s*:\\s*bearer\\s+)[^\\s,;]+/',
+            '/(?i)(cookie\\s*:\\s*)[^\\r\\n]+/',
+            '/(?i)((?:password|token|secret|admin[_-]?key|x-admin-key|storage[_-]?state|private[_-]?path|response[_-]?body|body|path|file|directory|profile)\\s*[:=]\\s*)[^\\s,;]+/',
+        ];
+        foreach ($patterns as $pattern) {
+            $value = preg_replace($pattern, '$1[REDACTED]', $value) ?? '[REDACTED]';
+        }
+        return $value;
     }
 
     public static function fromRequest(array $server): string

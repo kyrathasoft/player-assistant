@@ -583,9 +583,11 @@ Develop and implement these items only after the remaining incomplete items abov
   - [x] `secret-lifecycle-inventory.json` enumerates application credentials, broker/admin/bearer credentials, signing keys, deployment keys, certificate pins, ownership, storage boundaries, lifetimes, creation/use/rotation/revocation/deletion paths, evidence, and fail-closed behavior without secret values.
   - [x] `verify-secret-lifecycle.ps1` validates declared locations, rejects secret-shaped inventory material, exercises disposable revocation denial for every configured consumer, and covers redaction/approved-identifier negative space.
   - [x] Deterministic desktop redaction coverage is registered in the full test harness; PWA, PHP, PowerShell, release, formatting, and static policy gates were exercised. Existing unrelated desktop publish-fixture failures remain documented in verification results.
-- [ ] Add a protected-data negative-space test suite for logs, errors, metrics, and crash reports.
+- [x] Add a protected-data negative-space test suite for logs, errors, metrics, and crash reports.
   - Exercise malformed authentication, authorization, network, parser, and deployment failures and assert diagnostics contain only approved identifiers and redacted summaries.
   - Regression: representative secrets and protected fields injected into failures never appear in emitted observability artifacts.
+  - [x] Added deterministic desktop, PHP, and PWA coverage for credentials, passwords, bearer/admin keys, cookies, storage state, private paths, and protected response bodies across logging, errors, metrics, diagnostics, crash reports, HTTP responses, browser console, CI artifacts, and generated bundles.
+  - [x] Integrated the verifier into PR smoke, full hardening, and release self-test gates; focused checks pass.
 - [ ] Add capability-scoped APIs for administrative and publishing operations.
   - Replace broad administrator checks with narrowly named capabilities for each mutation, require explicit capability-to-route mapping, and reject unused or overbroad grants.
   - Regression: each capability permits only its intended operation and impossible role/capability combinations fail before side effects.

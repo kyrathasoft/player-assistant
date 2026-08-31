@@ -683,8 +683,8 @@ try {
     page.on('worker', (worker) => workerUrls.add(worker.url()));
     context.on('serviceworker', (worker) => {
         void worker.evaluate(() => {
-            self.addEventListener('error', (event) => console.error(`service-worker-error:${event.message}`));
-            self.addEventListener('unhandledrejection', (event) => console.error(`service-worker-rejection:${event.reason}`));
+            self.addEventListener('error', (event) => console.error('service-worker-error'));
+            self.addEventListener('unhandledrejection', (event) => console.error('service-worker-rejection'));
         });
     });
 

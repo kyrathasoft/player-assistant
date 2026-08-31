@@ -8,6 +8,8 @@ internal static class TestCatalog
         new (string Name, Action Test)[]
 {
     ("secret lifecycle inventory redacts values and preserves safe identifiers", SecretLifecycleTests.InventoryRedactsSecretsAndRejectsNegativeSpace),
+    ("protected observability artifacts never contain protected data", ProtectedDataNegativeSpaceTests.ObservabilityArtifactsNeverContainProtectedData),
+    ("safe observability identifiers remain unchanged", ProtectedDataNegativeSpaceTests.SafeIdentifiersRemainInObservabilityArtifacts),
     ("release state compatibility rejects rollback and future schema", TestCases.ReleaseStateCompatibilityRejectsRollbackAndFutureSchema),
     ("correlation context rejects secrets and accepts safe IDs", TestCases.CorrelationContextRejectsSecretsAndAcceptsSafeIds),
     ("date boundary rejects ambiguous and non UTC values", TestCases.DateBoundaryRejectsAmbiguousAndNonUtcValues),

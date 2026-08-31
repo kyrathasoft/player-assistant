@@ -65,6 +65,10 @@ jobs:
         shell: pwsh
         run: .\web-deploy\tests\pwa-monitor-contract-tests.ps1
 
+      - name: Protected-data negative-space verification
+        shell: pwsh
+        run: .\verify-protected-data-negative-space.ps1 -RepoRoot $env:GITHUB_WORKSPACE
+
       - name: Run PWA browser smoke tests
         shell: pwsh
         run: npm --prefix .\pwa test

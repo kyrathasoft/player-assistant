@@ -512,6 +512,10 @@ jobs:
         shell: pwsh
         run: .\verify-secret-lifecycle.ps1 -RepoRoot $env:GITHUB_WORKSPACE
 
+      - name: Protected-data negative-space verification
+        shell: pwsh
+        run: .\verify-protected-data-negative-space.ps1 -RepoRoot $env:GITHUB_WORKSPACE
+
       - name: RC self-tests
         shell: pwsh
         run: .\verify-rc-self-tests.ps1 -ReleaseDir $env:RELEASE_DIR -PublishDir $env:PUBLISH_DIR
