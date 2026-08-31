@@ -18,10 +18,23 @@ function Normalize-Sha256([string]$Value) {
     return ($Value -replace '\s', '').ToUpperInvariant()
 }
 
+function Get-Sha256HashText {
+    param([string]$Path)
+    $algorithm = [System.Security.Cryptography.SHA256]::Create()
+    $stream = [System.IO.File]::OpenRead($Path)
+    try {
+        return ([System.BitConverter]::ToString($algorithm.ComputeHash($stream)) -replace '-', '')
+    }
+    finally {
+        $stream.Dispose()
+        $algorithm.Dispose()
+    }
+}
+
 function Assert-ExactHash {
     param([string]$Path, [string]$Expected, [string]$Description)
     if (!(Test-Path -LiteralPath $Path -PathType Leaf)) { throw "$Description is missing: $Path" }
-    $actual = (Get-FileHash -LiteralPath $Path -Algorithm SHA256).Hash
+    $actual = Get-Sha256HashText -Path $Path
     if ((Normalize-Sha256 $actual) -ne (Normalize-Sha256 $Expected)) {
         throw "$Description SHA256 '$actual' did not match approved SHA256 '$Expected'."
     }
