@@ -78,6 +78,7 @@ try {
     foreach ($fixtures as $version => $path) {
         seedRepresentativeData($path, $version);
         $before = rehearsalSnapshot(rehearsalPdo($path));
+        $beforeBytes = hash_file('sha256', $path);
         $backupDir = $root . '/fault-backups-v' . $version;
         mkdir($backupDir, 0700, true);
         foreach (['backup-promotion', 'migration-apply', 'migration-commit'] as $point) {
@@ -103,6 +104,7 @@ try {
             $failed = rehearsalPdo($faultPath);
             rehearsalAssert((int)$failed->query('PRAGMA user_version')->fetchColumn() === $version, "Partial version committed at v$version/$point.");
             rehearsalAssert(rehearsalSnapshot($failed) === $before, "Pre-existing state changed at v$version/$point.");
+            rehearsalAssert(hash_file('sha256', $faultPath) === $beforeBytes, "Pre-existing bytes changed at v$version/$point.");
             $failed = null;
             foreach (glob($faultBackups . '/*.tmp') ?: [] as $temporary) {
                 @unlink($temporary);
