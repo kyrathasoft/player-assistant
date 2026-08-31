@@ -4,12 +4,12 @@ namespace PlayerAssistant
 {
     internal sealed class ResourceBudgetPolicy
     {
-            private static readonly string[] RequiredNames =
-            [
-                "broker_query_latency_ms", "message_table_rows", "cache_retention_days",
+        private static readonly string[] RequiredNames =
+        [
+            "broker_query_latency_ms", "message_table_rows", "cache_retention_days",
                 "backup_retention_count", "startup_ms", "pwa_polling_seconds",
                 "optional_pack_bytes", "diagnostic_bytes"
-            ];
+        ];
         private readonly IReadOnlyDictionary<string, long> _budgets;
         public long BrokerQueryLatencyMilliseconds => Get("broker_query_latency_ms");
         public long MessageTableRows => Get("message_table_rows");

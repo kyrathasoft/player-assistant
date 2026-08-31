@@ -53,8 +53,12 @@ internal static class ReleaseStateCompatibilityVerifier
 
     private static int StageRank(ReleaseTransactionStage stage) => stage switch
     {
-        ReleaseTransactionStage.Prepared => 1, ReleaseTransactionStage.Staged => 2, ReleaseTransactionStage.Verified => 3,
-        ReleaseTransactionStage.Promoted => 4, ReleaseTransactionStage.Finalized => 5, ReleaseTransactionStage.RolledBack => 6,
+        ReleaseTransactionStage.Prepared => 1,
+        ReleaseTransactionStage.Staged => 2,
+        ReleaseTransactionStage.Verified => 3,
+        ReleaseTransactionStage.Promoted => 4,
+        ReleaseTransactionStage.Finalized => 5,
+        ReleaseTransactionStage.RolledBack => 6,
         _ => throw new InvalidOperationException("Unknown release-state stage.")
     };
 
