@@ -42,6 +42,23 @@ const contentTypes = new Map([
 ]);
 
 const jsonResponse = (response, status, payload, headers = {}) => {
+    if (activeProtectedAccount !== null && status >= 200 && status < 300) {
+        const issuedAt = new Date();
+        const expiresAt = new Date(issuedAt.getTime() + 120000);
+        payload = {
+            ...payload,
+            _protected_resource: {
+                schema_version: 1,
+                account_id: activeProtectedAccount.id,
+                resource: '/v1/protected',
+                generation: '1'.repeat(64),
+                issued_at: issuedAt.toISOString(),
+                expires_at: expiresAt.toISOString(),
+                resource_revision: '1'.repeat(64),
+                nonce: `${activeProtectedAccount.id.slice(0, 16)}${String(++activeProtectedNonceCounter).padStart(16, '0')}`
+            }
+        };
+    }
     response.writeHead(status, {
         'Cache-Control': 'no-store',
         'Content-Type': 'application/json; charset=utf-8',
@@ -79,6 +96,9 @@ const magicItemFixture = Object.freeze({
         'viewable-by': viewers
     }))
 });
+let activeProtectedAccount = null;
+let activeProtectedGeneration = 1;
+let activeProtectedNonceCounter = 0;
 let xpAwardsProjected = false;
 const levelUpNotificationClaims = new Map();
 const levelUpNotificationAcknowledgements = new Map();
@@ -102,7 +122,10 @@ const readJsonBody = async (request) => {
 };
 
 const requireSession = (request, response) => {
-    if (hasSession(request)) return sessionAccount(request);
+    if (hasSession(request)) {
+        activeProtectedAccount = sessionAccount(request);
+        return activeProtectedAccount;
+    }
     jsonResponse(response, 401, { message: 'Authentication required.' }, expectedErrorResponse);
     return null;
 };
@@ -257,7 +280,7 @@ const serveApi = async (request, response, pathname) => {
     if (route === '/session' && request.method === 'GET') {
         const authenticated = hasSession(request);
         jsonResponse(response, 200, authenticated
-            ? { authenticated: true, account: sessionAccount(request), csrf_token: 'ci-csrf-token' }
+            ? { authenticated: true, account: sessionAccount(request), csrf_token: 'ci-csrf-token', resource_generation: '1'.repeat(64) }
             : { authenticated: false, account: null, csrf_token: '' });
         return;
     }
@@ -276,7 +299,7 @@ const serveApi = async (request, response, pathname) => {
             ? dungeonMasterAccount
             : isSecondPlayer ? secondPlayerAccount : playerAccount;
         const session = isDungeonMaster ? 'dm' : isSecondPlayer ? 'player-b' : 'player-a';
-        jsonResponse(response, 200, { account: selectedAccount, csrf_token: 'ci-csrf-token' }, {
+        jsonResponse(response, 200, { account: selectedAccount, csrf_token: 'ci-csrf-token', resource_generation: '1'.repeat(64) }, {
             'Set-Cookie': `ci-session=${session}; HttpOnly; SameSite=Strict; Path=/scarlethorizons/`
         });
         return;

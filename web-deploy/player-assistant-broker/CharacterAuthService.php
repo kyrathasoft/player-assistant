@@ -615,6 +615,11 @@ final class CharacterAuthService
             'authenticated' => true,
             'account' => $this->publicAccount($account),
             'csrf_token' => (string)$session['csrf_token'],
+            'resource_generation' => hash('sha256', implode('|', [
+                (string)$account['id'],
+                (int)$session['session_version'],
+                (int)$session['issued_at'],
+            ])),
             'idle_expires_at' => gmdate(
                 DATE_ATOM,
                 (int)$session['last_seen_at'] + (int)$this->authConfig['idle_timeout_seconds']),

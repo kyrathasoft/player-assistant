@@ -575,7 +575,8 @@ Develop and implement these items only after the remaining incomplete items abov
   - [x] Wired the policy contract into desktop authorization predicates and the broker HTTP session boundary; focused desktop, broker routing, policy, package, harness, and secret gates pass.
   - [x] Generate a matrix of identity, role, account scope, resource owner, alias, and anonymous cases from one policy fixture rather than duplicating ad hoc assertions.
   - [x] Regression: every protected endpoint has positive same-scope coverage and negative cross-account, role-confusion, alias, and missing-identity coverage.
-- [ ] Add explicit protected-resource freshness and replay protection.
+- [x] Add explicit protected-resource freshness and replay protection.
+  - [x] Added a signed protected-response envelope bound to account identity, session generation, schema, expiry, revision, and replay nonce; PWA rejects stale, downgraded, cross-account, tampered, and replayed responses before rendering.
   - Bind signed snapshots, cached protected responses, and mutation receipts to account identity, resource generation, schema version, and an expiration or revocation boundary.
   - Regression: stale, replayed, cross-account, downgraded, and post-revocation artifacts are rejected without rendering or mutating state.
 - [ ] Formalize secret lifecycle inventory and revocation verification.

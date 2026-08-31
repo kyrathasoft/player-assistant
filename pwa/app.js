@@ -109,6 +109,8 @@ import { createCorrelationContext, correlationHeaders } from './correlation.js?v
     let revisionPollTimer = 0;
     let revisionsUpdatedAt = 0;
     let authenticationGeneration = 0;
+    const seenProtectedResponseNonces = new Set();
+    let authenticatedResourceGeneration = '';
     const activeAuthenticationControllers = new Set();
     const AUTH_REQUEST_TIMEOUT_MS = 15000;
     let magicItemSnapshot = null;
@@ -2481,6 +2483,8 @@ import { createCorrelationContext, correlationHeaders } from './correlation.js?v
 
     const beginAuthenticationGeneration = (except = null) => {
         authenticationGeneration++;
+        seenProtectedResponseNonces.clear();
+        authenticatedResourceGeneration = '';
         accountSessionController.beginTransition();
         cancelAuthenticationRequests(except);
     };
@@ -2624,6 +2628,34 @@ import { createCorrelationContext, correlationHeaders } from './correlation.js?v
                 throw new AuthenticationApiError(
                     'The character login response was superseded by an account change.',
                     { code: 'stale_generation', requestId: responseRequestId, retryable: true });
+            }
+            if (path !== '/login' && path !== '/logout' && response.ok) {
+                const protectedResource = payload?._protected_resource;
+                const expiresAt = protectedResource && Date.parse(protectedResource.expires_at);
+                const issuedAt = protectedResource && Date.parse(protectedResource.issued_at);
+                const nonce = protectedResource?.nonce;
+                if (!protectedResource
+                    || protectedResource.schema_version !== 1
+                    || protectedResource.account_id !== authenticatedAccount?.id
+                    || protectedResource.generation !== authenticatedResourceGeneration
+                    || protectedResource.resource !== '/v1/protected'
+                    || !/^[a-f0-9]{64}$/u.test(String(protectedResource.generation || ''))
+                    || !/^[a-f0-9]{64}$/u.test(String(protectedResource.resource_revision || ''))
+                    || !/^[a-f0-9]{32}$/u.test(String(nonce || ''))
+                    || !Number.isFinite(issuedAt)
+                    || !Number.isFinite(expiresAt)
+                    || issuedAt > Date.now() + 5000
+                    || expiresAt <= Date.now()
+                    || expiresAt - issuedAt > 305000
+                    || seenProtectedResponseNonces.has(nonce)) {
+                    throw new AuthenticationApiError(
+                        'The protected response was stale, replayed, or bound to another account.',
+                        { code: 'protected_response_rejected', requestId: responseRequestId, retryable: true });
+                }
+                seenProtectedResponseNonces.add(nonce);
+                if (seenProtectedResponseNonces.size > 512) {
+                    seenProtectedResponseNonces.delete(seenProtectedResponseNonces.values().next().value);
+                }
             }
             if (!response.ok) {
                 throw new AuthenticationApiError(
@@ -2796,6 +2828,9 @@ import { createCorrelationContext, correlationHeaders } from './correlation.js?v
             const session = await requestAuthenticationApi('/session');
             if (restoreGeneration !== authenticationGeneration) return;
             accountSessionController.setAccount(session.authenticated ? session.account : null);
+            authenticatedResourceGeneration = session.authenticated
+                && typeof session.resource_generation === 'string'
+                ? session.resource_generation : '';
             authenticationCsrfToken = session.authenticated ? String(session.csrf_token || '') : '';
         } catch {
             if (restoreGeneration !== authenticationGeneration) return;
@@ -2928,6 +2963,8 @@ import { createCorrelationContext, correlationHeaders } from './correlation.js?v
             });
             beginAuthenticationGeneration();
             accountSessionController.setAccount(session.account);
+            authenticatedResourceGeneration = typeof session.resource_generation === 'string'
+                ? session.resource_generation : '';
             authenticationCsrfToken = String(session.csrf_token || '');
             clearProtectedFreshness();
             resetMagicItemState();

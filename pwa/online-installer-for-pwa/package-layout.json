@@ -48,6 +48,7 @@
     "CharacterAuthService.php",
     "DatabaseMigrationService.php",
     "MessageService.php",
+    "ProtectedResourceContract.php",
     "PwaSyntheticMonitor.php",
     "QuestService.php",
     "RevisionService.php",
