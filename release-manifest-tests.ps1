@@ -15,12 +15,14 @@ try {
         source_package_pairs = @(@{ source = 'pwa/online-installer-for-pwa/install-player-assistant-web.php'; distribution = 'pwa/online-installer-for-pwa/dist/install-player-assistant-web.php' })
     } | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $inventory
     function Invoke-Manifest([string]$mode) {
-        $stderr = Join-Path $root ('stderr-' + [Guid]::NewGuid().ToString('N') + '.txt')
+        $previousPreference = $ErrorActionPreference
         try {
-            $args = @('-NoProfile','-ExecutionPolicy','Bypass','-File',$script,'-Mode',$mode,'-Root',$root,'-ManifestPath',$manifest,'-InventoryPath',$inventory,'-SourceRevision','test-revision')
-            $process = Start-Process -FilePath 'powershell.exe' -ArgumentList $args -Wait -PassThru -WindowStyle Hidden -RedirectStandardError $stderr
-            return $process.ExitCode
-        } finally { if (Test-Path $stderr) { Remove-Item $stderr -Force } }
+            $ErrorActionPreference = 'Continue'
+            $hostCommand = Get-Command pwsh.exe -ErrorAction SilentlyContinue
+            if ($null -eq $hostCommand) { $hostCommand = Get-Command powershell.exe -ErrorAction Stop }
+            & $hostCommand.Source -NoProfile -ExecutionPolicy Bypass -File $script -Mode $mode -Root $root -ManifestPath $manifest -InventoryPath $inventory -SourceRevision 'test-revision' 2>&1 | Out-Null
+            return $LASTEXITCODE
+        } finally { $ErrorActionPreference = $previousPreference }
     }
     function Assert-Fails([scriptblock]$action, [string]$name) {
         $code = & $action
