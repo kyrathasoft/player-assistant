@@ -580,6 +580,7 @@ internal static class TestCatalog
     ("release publish parity accepts current output", TestCases.ReleasePublishParityAcceptsCurrentOutput),
     ("release publish parity rejects mismatched sidecar", TestCases.ReleasePublishParityRejectsMismatchedSidecar),
     ("diagnostic bundle redacts sensitive values", TestCases.DiagnosticBundleRedactsSensitiveValues),
+    ("diagnostic bundle requires explicit initiation", TestCases.DiagnosticBundleRequiresExplicitInitiation),
     ("diagnostic bundle verify only rejects forbidden auth state", TestCases.DiagnosticBundleVerifyOnlyRejectsForbiddenAuthState),
     ("diagnostic retention cleanup removes old diagnostics and preserves unrelated scratch files", TestCases.DiagnosticRetentionCleanupRemovesOldDiagnosticsAndPreservesUnrelatedScratchFiles)
         };

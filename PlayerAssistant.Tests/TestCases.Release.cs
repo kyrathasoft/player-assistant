@@ -1575,6 +1575,7 @@ internal static partial class TestCases
             var entries = GetZipEntryNames(zipPath);
             var expectedEntries = new[]
             {
+                "bundle-manifest.json",
                 "metadata.json",
                 "version-metadata.json",
                 "runtime-sidecars.json",
@@ -1640,6 +1641,21 @@ internal static partial class TestCases
             var verifyOutput = RunDiagnosticsVerification(outputPath, zipPath);
             AssertEqual(0, verifyOutput.ExitCode, $"diagnostic verify-only should pass. Output: {verifyOutput.Output}");
             AssertContains(verifyOutput.Output, "Diagnostic bundle verification passed:");
+        });
+    }
+
+    internal static void DiagnosticBundleRequiresExplicitInitiation()
+    {
+        WithTemporaryDiagnosticsRuntime((rootPath, releasePath, publishPath, outputPath) =>
+        {
+            var output = RunDiagnosticsCollectionWithoutConfirmation(
+                releasePath,
+                publishPath,
+                outputPath,
+                "-NoPublishVerification",
+                "-NoPlanOutputs");
+            AssertFalse(output.ExitCode == 0, "diagnostic export should require explicit initiation");
+            AssertContains(output.Output, "-ConfirmExport");
         });
     }
 

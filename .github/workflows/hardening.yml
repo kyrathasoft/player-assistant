@@ -512,7 +512,7 @@ jobs:
 
       - name: Collect diagnostics bundle
         shell: pwsh
-        run: .\collect-diagnostics.ps1 -ReleaseDir $env:RELEASE_DIR -PublishDir $env:PUBLISH_DIR -OutputDir $env:DIAGNOSTICS_DIR
+        run: .\collect-diagnostics.ps1 -ReleaseDir $env:RELEASE_DIR -PublishDir $env:PUBLISH_DIR -OutputDir $env:DIAGNOSTICS_DIR -ConfirmExport
 
       - name: Verify diagnostics bundle
         shell: pwsh
@@ -555,7 +555,7 @@ jobs:
       - name: Collect failed-run diagnostics
         if: failure()
         shell: pwsh
-        run: .\collect-diagnostics.ps1 -ReleaseDir $env:RELEASE_DIR -PublishDir $env:PUBLISH_DIR -OutputDir $env:DIAGNOSTICS_DIR -KeepStaging
+        run: .\collect-diagnostics.ps1 -ReleaseDir $env:RELEASE_DIR -PublishDir $env:PUBLISH_DIR -OutputDir $env:DIAGNOSTICS_DIR -KeepStaging -ConfirmExport
 
       - name: Upload failed-run hardening artifacts
         if: failure()

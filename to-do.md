@@ -563,9 +563,10 @@ Develop and implement these items only after the remaining incomplete items abov
   - [x] Startup discovers transaction journals before settings load and fails closed on unverifiable promoted state while retaining journal evidence.
   - [x] Incomplete journals validate canonical in-directory paths, hashes, UTC timestamps, and resume/rollback only unambiguous transactions.
   - [x] Regression covers journal-boundary ambiguity, outside-root targets, and evidence retention.
-- [ ] Add a read-only diagnostic bundle mode with strict data minimization.
+- [x] Add a read-only diagnostic bundle mode with strict data minimization.
   - Collect version, feature, health, transaction, and verifier summaries while excluding credentials, tokens, cookie values, private notes, and protected response bodies; require explicit user initiation for export.
   - Regression: bundle inspection and secret scanning prove sensitive values cannot enter the archive or its manifest.
+  - [x] `collect-diagnostics.ps1 -ConfirmExport` emits a minimized manifest, enforces explicit export initiation, redacts runtime/settings copies, excludes protected artifacts, and verifies the archive before returning.
 
 ### Authorization and protected-data boundaries
 
