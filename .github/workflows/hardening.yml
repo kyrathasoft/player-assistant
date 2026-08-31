@@ -522,6 +522,16 @@ jobs:
             -PublicKeyXmlPath $env:UPDATE_MANIFEST_PUBLIC_KEY_PATH `
             -ExpectedPublicKeyXmlPath $publicKeyPath
 
+      - name: Run deterministic release manifest tests
+        shell: pwsh
+        run: .\release-manifest-tests.ps1
+
+      - name: Generate and verify complete release manifest
+        shell: pwsh
+        run: |
+          .\release-manifest.ps1 -Mode Generate -Root $env:GITHUB_WORKSPACE -ManifestPath (Join-Path $env:RELEASE_DIR 'release-manifest.json')
+          .\release-manifest.ps1 -Mode Verify -Root $env:GITHUB_WORKSPACE -ManifestPath (Join-Path $env:RELEASE_DIR 'release-manifest.json')
+
       - name: Secret scan
         shell: pwsh
         run: .\verify-secret-scan.ps1 -RepoRoot $env:GITHUB_WORKSPACE -IncludeHistory

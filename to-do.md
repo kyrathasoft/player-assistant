@@ -616,9 +616,13 @@ Develop and implement these items only after the remaining incomplete items abov
 
 ### Release, client, and PWA quality
 
-- [ ] Add a reproducible release manifest covering every shipped byte.
-  - Generate one canonical manifest for source-derived assets, binaries, installer payloads, PWA files, migrations, sidecars, and deployment scripts, including hashes and generation inputs.
-  - Regression: clean rebuilds reproduce the manifest; omitted, extra, or changed files fail the package gate.
+- [x] Add a reproducible release manifest covering every shipped byte.
+  - [x] `release-manifest.inventory.json` defines canonical roots for desktop Release/publish and installer outputs, PWA/public deployment files, broker deployment artifacts, installer/runtime scripts, generated data, update artifacts, provenance, and version metadata; secrets and mutable state are excluded or rejected.
+  - [x] `release-manifest.ps1` emits deterministic UTF-8/LF JSON with source revision, tool identities, exact normalized paths, byte sizes, SHA-256 hashes, canonical ordering, manifest self-reference exclusion, and source/package parity checks.
+  - [x] `release-manifest-tests.ps1` covers missing, extra, renamed, modified, reordered, line-ending, self-reference, source/package drift, forbidden private files, and reproducibility failures.
+  - [x] PR smoke and full hardening CI run the deterministic suite and generate/verify the complete release manifest without requiring freeware Authenticode signing.
+  - [x] Generate one canonical manifest for source-derived assets, binaries, installer payloads, PWA files, migrations, sidecars, and deployment scripts, including hashes and generation inputs.
+  - [x] Regression: clean rebuilds reproduce the manifest; omitted, extra, or changed files fail the package gate.
 - [ ] Add downgrade and rollback compatibility tests across desktop, installer, updater, broker, and PWA versions.
   - Exercise interrupted upgrades, supported rollbacks, stale clients, schema boundaries, cache revisions, and old transaction records with explicit compatibility policy.
   - Regression: unsupported downgrade fails before mutation, while supported rollback restores a complete verified generation.

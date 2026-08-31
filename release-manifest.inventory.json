@@ -1,0 +1,53 @@
+{
+  "schema_version": 1,
+  "hash_algorithm": "SHA256",
+  "roots": [
+    "Release/publish",
+    "Release/installer",
+    "pwa",
+    "web-deploy",
+    "Installer",
+    "release-manifest.ps1",
+    "release-manifest.inventory.json",
+    "version.props",
+    "version-metadata.ps1",
+    "publish-player-assistant.ps1",
+    "build-installer.ps1",
+    "build-release-update-artifacts.ps1",
+    "verify-release-update-artifacts.ps1"
+  ],
+  "exclude": [
+    "pwa/node_modules/**",
+    "pwa/test-results/**",
+    "pwa/playwright-report/**",
+    "web-deploy/tests/**",
+    "**/*.log",
+    "**/settings.local.json",
+    "**/rpol-storage-state.json",
+    "**/*-private.*",
+    "**/*-secret.*",
+    "**/*-token.*",
+    "**/.DS_Store",
+    "**/Thumbs.db"
+  ],
+  "mutable": [
+    "Release/publish/startup-health.json",
+    "Release/publish/startup-errors.log",
+    "Release/publish/outbound-network-diagnostics.json",
+    "Release/publish/last-crash.json",
+    "Release/publish/temp/**"
+  ],
+  "forbidden": [
+    "**/settings.local.json",
+    "**/rpol-storage-state.json",
+    "**/*-private.*",
+    "**/*-secret.*",
+    "**/*-cookie.*",
+    "**/*-token.*"
+  ],
+  "source_package_pairs": [
+    { "source": "pwa/online-installer-for-pwa/install-player-assistant-web.php", "distribution": "pwa/online-installer-for-pwa/dist/install-player-assistant-web.php" },
+    { "source": "pwa/online-installer-for-pwa/config.template.php", "distribution": "pwa/online-installer-for-pwa/dist/config.template.php" },
+    { "source": "pwa/online-installer-for-pwa/README.md", "distribution": "pwa/online-installer-for-pwa/dist/README.md" }
+  ]
+}
