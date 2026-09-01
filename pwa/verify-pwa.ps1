@@ -246,6 +246,7 @@ $featureModulePaths = @(
     'modules/translator.js',
     'modules/search.js',
     'modules/dice.js',
+    'modules/inbox-state.js',
     'modules/account-session.js',
     'modules/messages-activity.js',
     'modules/presence.js',
@@ -369,6 +370,7 @@ Assert-Condition -Condition ($requestTranslationFunction.IndexOf('const id = ++t
 Assert-Condition -Condition (!$serviceWorker.Contains("url.pathname.includes('/XP/')")) -Message 'The service worker must never fetch or cache legacy public XP data.'
 Assert-Condition -Condition ($html.Contains('class="magic-items-dashboard message-player-form"') -and $styles.Contains('.message-player-form > #message-player-recipient') -and $styles.Contains('margin-block: 5px;') -and $styles.Contains('.message-player-form > #message-player-text') -and $styles.Contains('margin-top: 5px;') -and $styles.Contains('.message-player-form > .magic-items-source-row') -and $styles.Contains('margin-top: 10px;')) -Message 'The Message a Player form must preserve the requested spacing between its labels, fields, and submit row.'
 Assert-Condition -Condition ($serviceWorker.Contains("'./party-funds.json'")) -Message 'The PWA shell must preload party-funds data.'
+Assert-Condition -Condition ($appScriptEntry.Contains("fetch('data/party-funds.json'")) -Message 'The Party Funds view must load its canonical data path.'
 $apacheConfig = Get-Content -Raw -LiteralPath (Join-Path $PwaRoot '.htaccess')
 Assert-Condition -Condition ($apacheConfig.Contains('RewriteRule ^XP(?:/|$) - [R=404,L,NC]')) -Message 'Apache must deny legacy public XP paths.'
 Assert-Condition -Condition (!(Test-Path -LiteralPath (Join-Path $PwaRoot 'XP'))) -Message 'Legacy XP histories must not remain in the public PWA tree.'

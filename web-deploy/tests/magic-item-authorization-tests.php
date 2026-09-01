@@ -58,6 +58,12 @@ try {
     magicItemAssert(in_array('Other Item', $otherNames, true), 'The second exact owner ID did not receive its item.');
     magicItemAssert(!in_array('Owner Item', $otherNames, true), 'Account switching leaked the first account item.');
 
+    $dmItems = $service->forAccount(['id' => str_repeat('d', 32), 'role' => 'dm']);
+    $dmNames = array_column($dmItems['items'], 'name');
+    magicItemAssert(count($dmNames) === 4, 'The Dungeon Master did not receive all public and protected magic items.');
+    magicItemAssert(in_array('Owner Item', $dmNames, true) && in_array('Other Item', $dmNames, true), 'The Dungeon Master did not receive protected magic items.');
+    magicItemAssert(in_array('Substring Collision', $dmNames, true), 'The Dungeon Master did not receive every valid magic-item record.');
+
     file_put_contents($sourcePath, json_encode([
         'schema_version' => 2,
         'source' => 'private-test-source',

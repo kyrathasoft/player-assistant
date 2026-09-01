@@ -141,6 +141,7 @@ $runtimeFiles = [ordered]@{
     'modules/translator.js' = @('application/javascript', 'text/javascript')
     'modules/search.js' = @('application/javascript', 'text/javascript')
     'modules/dice.js' = @('application/javascript', 'text/javascript')
+    'modules/inbox-state.js' = @('application/javascript', 'text/javascript')
     'modules/account-session.js' = @('application/javascript', 'text/javascript')
     'modules/messages-activity.js' = @('application/javascript', 'text/javascript')
     'modules/presence.js' = @('application/javascript', 'text/javascript')
@@ -163,6 +164,7 @@ $runtimeFiles = [ordered]@{
     'level-progression.json' = @('application/json', 'text/json')
     'magic-items.json' = @('application/json', 'text/json')
     'party-funds.json' = @('application/json', 'text/json')
+    'data/party-funds.json' = @('application/json', 'text/json')
     'quests.json' = @('application/json', 'text/json')
     'campaign-search.json' = @('application/json', 'text/json')
 }

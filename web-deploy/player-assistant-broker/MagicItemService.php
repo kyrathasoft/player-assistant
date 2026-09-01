@@ -21,12 +21,13 @@ final class MagicItemService
         if (preg_match('/^[a-f0-9]{32}$/', $accountId) !== 1) {
             throw new BrokerHttpException(500, 'invalid_account_identity', 'The authenticated account identity is invalid.');
         }
+        $isDungeonMaster = ($account['role'] ?? null) === 'dm';
 
         $payload = $this->loadSource();
         $items = [];
         foreach ($payload['items'] as $item) {
             $viewers = $this->viewers((string)$item['viewable-by']);
-            if (in_array('all', $viewers, true) || in_array($accountId, $viewers, true)) {
+            if ($isDungeonMaster || in_array('all', $viewers, true) || in_array($accountId, $viewers, true)) {
                 $item['viewable-by'] = 'all';
                 $items[] = $item;
             }
