@@ -6,6 +6,7 @@ $inventory = Join-Path $root 'inventory.json'
 try {
     New-Item -ItemType Directory -Force -Path (Join-Path $root 'Release\publish'), (Join-Path $root 'Release\installer\player-assistant-0.9.5\payload'), (Join-Path $root 'pwa\online-installer-for-pwa\dist') | Out-Null
     'runtime' | Set-Content -LiteralPath (Join-Path $root 'Release\publish\player-assistant.exe') -NoNewline
+    'encrypted published sidecar' | Set-Content -LiteralPath (Join-Path $root 'Release\publish\settings.local.json') -NoNewline
     'encrypted installer sidecar' | Set-Content -LiteralPath (Join-Path $root 'Release\installer\player-assistant-0.9.5\payload\settings.local.json') -NoNewline
     'shell' | Set-Content -LiteralPath (Join-Path $root 'pwa\index.html') -NoNewline
     'same bytes' | Set-Content -LiteralPath (Join-Path $root 'pwa\online-installer-for-pwa\install-player-assistant-web.php') -NoNewline
@@ -13,7 +14,7 @@ try {
     @{
         schema_version = 1; hash_algorithm = 'SHA256'; roots = @('Release/publish','Release/installer','pwa')
         exclude = @('Release/release-manifest.json'); mutable = @(); forbidden = @('**/settings.local.json','**/*secret*')
-        allowed = @('Release/installer/*/payload/settings.local.json')
+        allowed = @('Release/publish/settings.local.json','Release/installer/*/payload/settings.local.json')
         source_package_pairs = @(@{ source = 'pwa/online-installer-for-pwa/install-player-assistant-web.php'; distribution = 'pwa/online-installer-for-pwa/dist/install-player-assistant-web.php' })
     } | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $inventory
     function Invoke-Manifest([string]$mode) {

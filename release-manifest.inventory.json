@@ -49,6 +49,7 @@
   ],
   "allowed": [
     "pwa/data/hero-tokens/**",
+    "Release/publish/settings.local.json",
     "Release/installer/*/payload/settings.local.json"
   ],
   "source_package_pairs": [
