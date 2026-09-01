@@ -3,9 +3,9 @@
     <PlayerAssistantVersion>0.9.5</PlayerAssistantVersion>
     <PlayerAssistantAssemblyVersion>0.9.5.0</PlayerAssistantAssemblyVersion>
     <PlayerAssistantPwaVersion>0.9.8</PlayerAssistantPwaVersion>
-    <PlayerAssistantPwaMetadataRevision>2</PlayerAssistantPwaMetadataRevision>
+    <PlayerAssistantPwaMetadataRevision>3</PlayerAssistantPwaMetadataRevision>
     <PlayerAssistantPwaStylesRevision>45</PlayerAssistantPwaStylesRevision>
-    <PlayerAssistantPwaAppRevision>92</PlayerAssistantPwaAppRevision>
-    <PlayerAssistantPwaCacheRevision>114</PlayerAssistantPwaCacheRevision>
+    <PlayerAssistantPwaAppRevision>100</PlayerAssistantPwaAppRevision>
+    <PlayerAssistantPwaCacheRevision>115</PlayerAssistantPwaCacheRevision>
   </PropertyGroup>
 </Project>

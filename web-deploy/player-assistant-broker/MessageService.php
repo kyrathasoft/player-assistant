@@ -2,6 +2,8 @@
 
 declare(strict_types=1);
 
+require_once __DIR__ . '/DataInvariantContract.php';
+
 final class MessageService
 {
     private int $retentionDays;
@@ -215,6 +217,11 @@ final class MessageService
             $statement->execute($parameters);
 
             $rows = $statement->fetchAll();
+            $invariantRows = array_map(static function (array $row) use ($accountId): array {
+                return ['id' => (string)$row['id'], 'message' => (string)$row['message'],
+                    'sent_at' => (int)$row['sent_at'], 'recipient_account_id' => $accountId];
+            }, $rows);
+            DataInvariantContract::assertMessages($invariantRows, $accountId);
             $hasMore = count($rows) > $limit;
             if ($hasMore) {
                 array_pop($rows);

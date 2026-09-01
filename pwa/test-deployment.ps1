@@ -337,13 +337,13 @@ try {
             $xpPayload = $protectedXpResponse.Content.ReadAsStringAsync().GetAwaiter().GetResult() | ConvertFrom-Json
             Assert-Condition -Condition $protectedXpResponse.IsSuccessStatusCode -Message 'The authorized XP endpoint is unavailable.'
             Assert-Condition -Condition ((Get-HeaderValue $protectedXpResponse 'Cache-Control') -match 'no-store') -Message 'Authorized XP responses must use Cache-Control: no-store.'
-            Assert-ProductionXpResponse -Payload $xpPayload -MaximumAgeSeconds $MaximumXpAgeSeconds
+            Assert-ProductionXpResponse -Payload $xpPayload -MaximumAgeSeconds $MaximumXpAgeSeconds -ExpectedAccountId $loginPayload.account.id
 
             $protectedWordCountResponse = $client.GetAsync([uri]::new($apiBaseUri, 'word-counts')).GetAwaiter().GetResult()
             $wordCountPayload = $protectedWordCountResponse.Content.ReadAsStringAsync().GetAwaiter().GetResult() | ConvertFrom-Json
             Assert-Condition -Condition $protectedWordCountResponse.IsSuccessStatusCode -Message 'The authorized word-count endpoint is unavailable.'
             Assert-Condition -Condition ((Get-HeaderValue $protectedWordCountResponse 'Cache-Control') -match 'no-store') -Message 'Authorized word-count responses must use Cache-Control: no-store.'
-            Assert-ProductionWordCountResponse -Payload $wordCountPayload -MaximumAgeSeconds $MaximumWordCountAgeSeconds
+            Assert-ProductionWordCountResponse -Payload $wordCountPayload -MaximumAgeSeconds $MaximumWordCountAgeSeconds -ExpectedAccountId $loginPayload.account.id
         }
         catch {
             $protectedFailure = $_

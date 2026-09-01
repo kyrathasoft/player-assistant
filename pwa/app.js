@@ -1,17 +1,22 @@
-import { initializeTranslator } from './modules/translator.js?v=92';
-import { initializeCampaignSearch } from './modules/search.js?v=92';
-import { initializeDice } from './modules/dice.js?v=92';
-import { createControllerChangeHandler } from './service-worker-controller.js?v=92';
-import { mergeInboxSnapshot, createMessageDraftStore } from './modules/inbox-state.js?v=92';
-import { createAccountSessionController } from './modules/account-session.js?v=92';
-import { createMessagesActivityController } from './modules/messages-activity.js?v=92';
-import { createPresenceController } from './modules/presence.js?v=92';
-import { createUpdateLifecycleController } from './modules/update-lifecycle.js?v=92';
+import { initializeTranslator } from './modules/translator.js?v=100';
+import { initializeCampaignSearch } from './modules/search.js?v=100';
+import { initializeDice } from './modules/dice.js?v=100';
+import { createControllerChangeHandler } from './service-worker-controller.js?v=100';
+import { mergeInboxSnapshot, createMessageDraftStore } from './modules/inbox-state.js?v=100';
+import { createAccountSessionController } from './modules/account-session.js?v=100';
+import { createMessagesActivityController } from './modules/messages-activity.js?v=100';
+import { assertXpRecords, assertAwardRecords, assertScopedMessages } from './data-invariants.js?v=100';
+import { createPresenceController } from './modules/presence.js?v=100';
+import { createUpdateLifecycleController } from './modules/update-lifecycle.js?v=100';
+import { createCorrelationContext, correlationHeaders } from './correlation.js?v=100';
+import { createOfflineActionQueue, MUTATING_METHODS, QUEUE_STATES } from './modules/offline-action-queue.js?v=100';
 
 (() => {
     'use strict';
 
     const APP_NAME = 'Player Assistant';
+    const CORRELATION_CONTEXT = createCorrelationContext();
+    const CORRELATION_HEADERS = correlationHeaders(CORRELATION_CONTEXT);
     const APP_VERSION = globalThis.PLAYER_ASSISTANT_VERSION_METADATA?.pwaVersion;
     if (!APP_VERSION) {
         throw new Error('Player Assistant version metadata is unavailable.');
@@ -106,6 +111,8 @@ import { createUpdateLifecycleController } from './modules/update-lifecycle.js?v
     let revisionPollTimer = 0;
     let revisionsUpdatedAt = 0;
     let authenticationGeneration = 0;
+    const seenProtectedResponseNonces = new Set();
+    let authenticatedResourceGeneration = '';
     const activeAuthenticationControllers = new Set();
     const AUTH_REQUEST_TIMEOUT_MS = 15000;
     let magicItemSnapshot = null;
@@ -250,6 +257,11 @@ import { createUpdateLifecycleController } from './modules/update-lifecycle.js?v
     });
 
     window.addEventListener('popstate', () => setView(location.hash.slice(1), false));
+    window.addEventListener('hashchange', () => setView(location.hash.slice(1), false));
+    window.addEventListener('load', () => {
+        const requestedView = location.hash.slice(1) || 'dashboard';
+        if (!protectedNavViews.has(requestedView)) setView(requestedView, false);
+    });
 
     const updateConnectionStatus = () => {
         const online = navigator.onLine;
@@ -721,6 +733,7 @@ import { createUpdateLifecycleController } from './modules/update-lifecycle.js?v
             && Number.isSafeInteger(entry.level_after_award)
             && entry.level_after_award >= 0;
         if (!payload.every(validEntry)) throw new Error('An XP progression file was invalid.');
+        assertAwardRecords(payload);
         const characterName = payload[0].character_name;
         if (!payload.every((entry) => entry.character_name === characterName)) {
             throw new Error('An XP progression file contained multiple characters.');
@@ -1611,6 +1624,7 @@ import { createUpdateLifecycleController } from './modules/update-lifecycle.js?v
             || !payload.player_recipients.every(validRecipient)) {
             throw new Error('The message service returned an invalid response.');
         }
+        assertScopedMessages(payload.messages, authenticatedAccount?.id ?? '');
         return payload;
     };
 
@@ -2255,6 +2269,11 @@ import { createUpdateLifecycleController } from './modules/update-lifecycle.js?v
         if (!canViewXpAwards(authenticatedAccount) && activeView === 'xp-awards') {
             setView('dashboard', false);
         }
+        const requestedPublicView = location.hash.slice(1);
+        if (!authenticated && requestedPublicView && !protectedNavViews.has(requestedPublicView)
+            && views.has(requestedPublicView) && activeView !== requestedPublicView) {
+            setView(requestedPublicView, false);
+        }
         const protectedStatus = byId('protected-player-status');
         if (protectedStatus) {
             protectedStatus.textContent = authenticated
@@ -2444,6 +2463,9 @@ import { createUpdateLifecycleController } from './modules/update-lifecycle.js?v
 
     const accountSessionController = createAccountSessionController({
         onChange: (account) => {
+            if (authenticatedAccount?.id && authenticatedAccount.id !== account?.id) {
+                offlineActionQueue.clearForIdentity(authenticatedAccount.id);
+            }
             const changed = authenticatedAccount?.id !== account?.id;
             authenticatedAccount = account;
             if (!changed) return;
@@ -2468,6 +2490,8 @@ import { createUpdateLifecycleController } from './modules/update-lifecycle.js?v
 
     const beginAuthenticationGeneration = (except = null) => {
         authenticationGeneration++;
+        seenProtectedResponseNonces.clear();
+        authenticatedResourceGeneration = '';
         accountSessionController.beginTransition();
         cancelAuthenticationRequests(except);
     };
@@ -2511,6 +2535,36 @@ import { createUpdateLifecycleController } from './modules/update-lifecycle.js?v
         updateRevisionPolling();
     };
 
+    const offlineActionQueue = createOfflineActionQueue({
+        onState: ({ state, reason }) => {
+            const status = byId('connection-status');
+            if (!(status instanceof HTMLElement)) return;
+            status.dataset.queueState = state;
+            status.title = state === 'completed'
+                ? 'Queued action completed after reconnecting.'
+                : state === QUEUE_STATES.CONFLICT
+                    ? `Queued action needs review: ${reason}.`
+                    : state === QUEUE_STATES.EXHAUSTED
+                        ? 'A queued action could not be delivered after the retry limit.'
+                        : state === QUEUE_STATES.QUEUED ? 'An action is queued until the connection returns.' : '';
+            const label = byId('connection-label');
+            if (label && [QUEUE_STATES.QUEUED, QUEUE_STATES.CONFLICT, QUEUE_STATES.EXHAUSTED].includes(state)) {
+                label.textContent = state === QUEUE_STATES.CONFLICT ? 'Action conflict' : state === QUEUE_STATES.EXHAUSTED ? 'Action failed' : 'Action queued';
+            }
+        }
+    });
+    const renderQueuedActionState = () => {
+        const label = byId('connection-label');
+        if (!(label instanceof HTMLElement)) return;
+        const pending = offlineActionQueue.list().filter((item) => [QUEUE_STATES.QUEUED, QUEUE_STATES.CONFLICT, QUEUE_STATES.EXHAUSTED].includes(item.state));
+        label.textContent = pending.some((item) => item.state === QUEUE_STATES.CONFLICT)
+            ? 'Action conflict'
+            : pending.some((item) => item.state === QUEUE_STATES.EXHAUSTED)
+                ? 'Action failed'
+                : pending.length > 0 ? 'Action queued' : navigator.onLine ? 'Online' : 'Offline';
+    };
+    renderQueuedActionState();
+
     const requestAuthenticationApi = async (path, options = {}) => {
         const method = String(options.method || 'GET').toUpperCase();
         const requestGeneration = authenticationGeneration;
@@ -2519,7 +2573,8 @@ import { createUpdateLifecycleController } from './modules/update-lifecycle.js?v
             : createApiRequestId();
         const headers = new Headers({
             Accept: 'application/json',
-            'X-Request-Id': requestId
+            'X-Request-Id': requestId,
+            ...CORRELATION_HEADERS
         });
         if (options.body !== undefined) headers.set('Content-Type', 'application/json');
         if (options.csrf === true && authenticationCsrfToken) {
@@ -2561,7 +2616,7 @@ import { createUpdateLifecycleController } from './modules/update-lifecycle.js?v
                 });
             } catch (error) {
                 const cancelled = controller.signal.aborted;
-                throw new AuthenticationApiError(
+                const apiError = new AuthenticationApiError(
                     timedOut
                         ? 'The character login request timed out.'
                         : cancelled ? 'The character login request was cancelled.' : 'The character login service is unavailable.',
@@ -2570,6 +2625,30 @@ import { createUpdateLifecycleController } from './modules/update-lifecycle.js?v
                         requestId,
                         retryable: true
                     });
+                const queueable = options.allowQueue !== false
+                    && MUTATING_METHODS.has(method)
+                    && !['/login', '/logout'].includes(path)
+                    && authenticatedAccount !== null
+                    && !cancelled
+                    && (apiError.code === 'network_error' || apiError.code === 'request_timeout');
+                if (queueable) {
+                    const idempotencyKey = headers.get('Idempotency-Key');
+                    const queued = offlineActionQueue.enqueue({
+                        accountId: authenticatedAccount.id,
+                        generation: String(authenticationGeneration),
+                        method,
+                        route: path.split('?')[0],
+                        idempotencyKey,
+                        body: options.body === undefined ? null : options.body
+                    });
+                    return {
+                        schema_version: 1,
+                        queued: true,
+                        queue_state: queued.state,
+                        request_id: requestId
+                    };
+                }
+                throw apiError;
             }
             const responseRequestId = response.headers.get('X-Request-Id') || requestId;
             if (response.status === 401 && path !== '/login') {
@@ -2611,6 +2690,34 @@ import { createUpdateLifecycleController } from './modules/update-lifecycle.js?v
                     'The character login response was superseded by an account change.',
                     { code: 'stale_generation', requestId: responseRequestId, retryable: true });
             }
+            if (path !== '/login' && path !== '/logout' && response.ok) {
+                const protectedResource = payload?._protected_resource;
+                const expiresAt = protectedResource && Date.parse(protectedResource.expires_at);
+                const issuedAt = protectedResource && Date.parse(protectedResource.issued_at);
+                const nonce = protectedResource?.nonce;
+                if (!protectedResource
+                    || protectedResource.schema_version !== 1
+                    || protectedResource.account_id !== authenticatedAccount?.id
+                    || protectedResource.generation !== authenticatedResourceGeneration
+                    || protectedResource.resource !== '/v1/protected'
+                    || !/^[a-f0-9]{64}$/u.test(String(protectedResource.generation || ''))
+                    || !/^[a-f0-9]{64}$/u.test(String(protectedResource.resource_revision || ''))
+                    || !/^[a-f0-9]{32}$/u.test(String(nonce || ''))
+                    || !Number.isFinite(issuedAt)
+                    || !Number.isFinite(expiresAt)
+                    || issuedAt > Date.now() + 5000
+                    || expiresAt <= Date.now()
+                    || expiresAt - issuedAt > 305000
+                    || seenProtectedResponseNonces.has(nonce)) {
+                    throw new AuthenticationApiError(
+                        'The protected response was stale, replayed, or bound to another account.',
+                        { code: 'protected_response_rejected', requestId: responseRequestId, retryable: true });
+                }
+                seenProtectedResponseNonces.add(nonce);
+                if (seenProtectedResponseNonces.size > 512) {
+                    seenProtectedResponseNonces.delete(seenProtectedResponseNonces.values().next().value);
+                }
+            }
             if (!response.ok) {
                 throw new AuthenticationApiError(
                     typeof payload.message === 'string' && payload.message !== ''
@@ -2637,6 +2744,29 @@ import { createUpdateLifecycleController } from './modules/update-lifecycle.js?v
             }
         }
     };
+
+    const flushQueuedActions = async () => {
+        if (!navigator.onLine || authenticatedAccount === null) return 0;
+        return offlineActionQueue.flush({
+            accountId: authenticatedAccount.id,
+            generation: String(authenticationGeneration),
+            send: async (item) => {
+                try {
+                    await requestAuthenticationApi(item.route, {
+                        method: item.method,
+                        body: item.body,
+                        csrf: true,
+                        idempotencyKey: item.idempotencyKey,
+                        allowQueue: false
+                    });
+                    return { status: 200 };
+                } catch (error) {
+                    return { status: error.status || 0, error: error.code || 'network_error' };
+                }
+            }
+        });
+    };
+    window.addEventListener('online', () => { void flushQueuedActions(); });
 
     const validatePresenceSnapshot = (payload) => {
         const validUser = (user) => user
@@ -2772,6 +2902,8 @@ import { createUpdateLifecycleController } from './modules/update-lifecycle.js?v
         messageError = '';
         document.querySelectorAll('[data-protected-content]').forEach((element) => { element.replaceChildren(); });
         updateAuthenticationUi();
+        const requestedView = location.hash.slice(1) || 'dashboard';
+        if (!protectedNavViews.has(requestedView)) setView(requestedView, false);
     };
 
     const restoreAuthentication = async () => {
@@ -2780,6 +2912,9 @@ import { createUpdateLifecycleController } from './modules/update-lifecycle.js?v
             const session = await requestAuthenticationApi('/session');
             if (restoreGeneration !== authenticationGeneration) return;
             accountSessionController.setAccount(session.authenticated ? session.account : null);
+            authenticatedResourceGeneration = session.authenticated
+                && typeof session.resource_generation === 'string'
+                ? session.resource_generation : '';
             authenticationCsrfToken = session.authenticated ? String(session.csrf_token || '') : '';
         } catch {
             if (restoreGeneration !== authenticationGeneration) return;
@@ -2811,6 +2946,10 @@ import { createUpdateLifecycleController } from './modules/update-lifecycle.js?v
         questStateFilter = '';
         lastQuestAlertSignature = '';
         updateAuthenticationUi();
+        // Authentication UI may have failed closed to the dashboard. Reapply
+        // the URL-selected view only after the session has been validated;
+        // setView also enforces role and authorization boundaries.
+        setView(location.hash.slice(1) || 'dashboard', false);
         updateRevisionPolling();
         if (authenticatedAccount !== null) {
             await Promise.all([loadXpSummary(), loadWordCountSummary(), loadQuests(), loadMessages()]);
@@ -2865,6 +3004,16 @@ import { createUpdateLifecycleController } from './modules/update-lifecycle.js?v
         // protected snapshot while the current session is being revalidated.
         failClosedBeforeAuthenticationRestore();
         void restoreAuthentication();
+        const restorePublicHashView = () => {
+            const currentView = location.hash.slice(1);
+            if (!currentView) return false;
+            if (!protectedNavViews.has(currentView)) setView(currentView, false);
+            return true;
+        };
+        const restoreTimer = window.setInterval(() => {
+            if (restorePublicHashView()) window.clearInterval(restoreTimer);
+        }, 50);
+        window.setTimeout(() => window.clearInterval(restoreTimer), 2000);
     });
     authDialog?.addEventListener('close', () => {
         void renderAuthenticatedHeroToken();
@@ -2898,6 +3047,8 @@ import { createUpdateLifecycleController } from './modules/update-lifecycle.js?v
             });
             beginAuthenticationGeneration();
             accountSessionController.setAccount(session.account);
+            authenticatedResourceGeneration = typeof session.resource_generation === 'string'
+                ? session.resource_generation : '';
             authenticationCsrfToken = String(session.csrf_token || '');
             clearProtectedFreshness();
             resetMagicItemState();
@@ -3174,6 +3325,13 @@ import { createUpdateLifecycleController } from './modules/update-lifecycle.js?v
     initializeTranslator({ byId });
     initializeDice({ byId });
 
-    setView(location.hash.slice(1) || 'dashboard', false);
+    window.setTimeout(() => setView(location.hash.slice(1) || 'dashboard', false), 0);
+    const initialHashRestoreTimer = window.setInterval(() => {
+        const requestedView = location.hash.slice(1);
+        if (!requestedView || protectedNavViews.has(requestedView) || !views.has(requestedView)) return;
+        if (activeView !== requestedView) setView(requestedView, false);
+        else window.clearInterval(initialHashRestoreTimer);
+    }, 50);
+    window.setTimeout(() => window.clearInterval(initialHashRestoreTimer), 30000);
     console.info(`${APP_NAME} ${APP_VERSION} initialized.`);
 })();

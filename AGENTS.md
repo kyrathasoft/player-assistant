@@ -22,6 +22,7 @@
 - Read `to-do.md` at the start of every coding session.
 - Use it for priorities, hardening status, and backlog context.
 - If a backlog task updates `to-do.md`, include it in the commit.
+- Verified Inno Setup 7.1.0 x64 release metadata is stored in `HermesVault\90 Hermes Memory\Facts\Inno Setup 7.1.0 Release Compiler.md`.
 - If a user question includes the word `Jelenneth`, read `jelenneth.md` before answering.
 - Read `magic-item-tracking.md` before changing magic-item data or packaging. `pwa\magic-items.json` is the canonical offline fallback and must be copied beside the executable in `Release\` and included with other critical installer files.
 

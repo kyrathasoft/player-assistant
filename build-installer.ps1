@@ -3,6 +3,7 @@ param(
     [string]$PublishDir = (Join-Path $PSScriptRoot 'Release\publish'),
     [string]$Version,
     [string]$InnoCompilerPath,
+    [string]$InnoPackagePath,
     [string]$ExpectedSignerSubject = $env:PLAYER_ASSISTANT_RELEASE_SIGNER_SUBJECT,
     [string]$ExpectedSignerThumbprint = $env:PLAYER_ASSISTANT_RELEASE_SIGNER_THUMBPRINT,
     [switch]$RequireCodeSigning,
@@ -285,11 +286,6 @@ function Resolve-InnoCompilerPath {
         return [System.IO.Path]::GetFullPath($RequestedPath)
     }
 
-    $command = Get-Command ISCC.exe -ErrorAction SilentlyContinue
-    if ($command) {
-        return $command.Source
-    }
-
     $candidatePaths = @(
         (Join-Path $env:ProgramFiles 'Inno Setup 7\ISCC.exe'),
         (Join-Path ${env:ProgramFiles(x86)} 'Inno Setup 7\ISCC.exe'),
@@ -301,6 +297,11 @@ function Resolve-InnoCompilerPath {
         if (![string]::IsNullOrWhiteSpace($candidatePath) -and (Test-Path -LiteralPath $candidatePath -PathType Leaf)) {
             return [System.IO.Path]::GetFullPath($candidatePath)
         }
+    }
+
+    $command = Get-Command ISCC.exe -ErrorAction SilentlyContinue
+    if ($command) {
+        return $command.Source
     }
 
     return $null
@@ -349,6 +350,31 @@ function Assert-AuthenticodeSignatureMatchesPolicy {
             throw "$Description signer thumbprint '$actualThumbprint' did not match expected thumbprint '$expectedThumbprint'."
         }
     }
+}
+
+function Get-InnoSetupAttestation {
+    param([Parameter(Mandatory = $true)][string]$CompilerPath)
+    $arguments = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File',
+        (Join-Path $PSScriptRoot 'verify-inno-setup.ps1'), '-CompilerPath', $CompilerPath)
+    if (![string]::IsNullOrWhiteSpace($InnoPackagePath)) {
+        $arguments += @('-PackagePath', $InnoPackagePath)
+    }
+    $output = & powershell.exe @arguments
+    if ($LASTEXITCODE -ne 0) { throw 'Inno Setup compiler attestation failed.' }
+    try { return ($output -join "`n") | ConvertFrom-Json }
+    catch { throw 'Inno Setup compiler attestation returned invalid JSON.' }
+}
+
+function Write-InnoSetupProvenance {
+    param(
+        [Parameter(Mandatory = $true)][string]$Directory,
+        [Parameter(Mandatory = $true)][object]$Attestation
+    )
+    $path = Join-Path $Directory 'release-provenance.json'
+    if (!(Test-Path -LiteralPath $path -PathType Leaf)) { throw "Release provenance is missing: $path" }
+    $provenance = Get-Content -Raw -LiteralPath $path | ConvertFrom-Json
+    $provenance | Add-Member -NotePropertyName inno_setup -NotePropertyValue $Attestation -Force
+    $provenance | ConvertTo-Json -Depth 12 | Set-Content -LiteralPath $path -Encoding UTF8
 }
 
 if (!$SkipPublish) {
@@ -431,6 +457,7 @@ Write-Output "Installer package created: $packagePath"
 
 $resolvedInnoCompilerPath = Resolve-InnoCompilerPath -RequestedPath $InnoCompilerPath
 if ($resolvedInnoCompilerPath) {
+    $innoAttestation = Get-InnoSetupAttestation -CompilerPath $resolvedInnoCompilerPath
     Assert-RequiredFile -Path $InnoScriptPath -Description 'Inno Setup script'
     $innoOutputPath = Join-Path $OutputDir $InnoOutputFileName
     if (Test-Path -LiteralPath $innoOutputPath) {
@@ -449,6 +476,7 @@ if ($resolvedInnoCompilerPath) {
 
     Assert-RequiredFile -Path $innoOutputPath -Description 'Inno Setup installer'
     Assert-AuthenticodeSignatureMatchesPolicy -Path $innoOutputPath -Description 'Inno Setup installer'
+    Write-InnoSetupProvenance -Directory $PublishDir -Attestation $innoAttestation
     Write-Output "Inno Setup installer created: $innoOutputPath"
 }
 else {

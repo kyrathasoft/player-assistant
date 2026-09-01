@@ -42,6 +42,23 @@ const contentTypes = new Map([
 ]);
 
 const jsonResponse = (response, status, payload, headers = {}) => {
+    if (activeProtectedAccount !== null && status >= 200 && status < 300) {
+        const issuedAt = new Date();
+        const expiresAt = new Date(issuedAt.getTime() + 120000);
+        payload = {
+            ...payload,
+            _protected_resource: {
+                schema_version: 1,
+                account_id: activeProtectedAccount.id,
+                resource: '/v1/protected',
+                generation: '1'.repeat(64),
+                issued_at: issuedAt.toISOString(),
+                expires_at: expiresAt.toISOString(),
+                resource_revision: '1'.repeat(64),
+                nonce: `${activeProtectedAccount.id.slice(0, 16)}${String(++activeProtectedNonceCounter).padStart(16, '0')}`
+            }
+        };
+    }
     response.writeHead(status, {
         'Cache-Control': 'no-store',
         'Content-Type': 'application/json; charset=utf-8',
@@ -79,6 +96,9 @@ const magicItemFixture = Object.freeze({
         'viewable-by': viewers
     }))
 });
+let activeProtectedAccount = null;
+let activeProtectedGeneration = 1;
+let activeProtectedNonceCounter = 0;
 let xpAwardsProjected = false;
 const levelUpNotificationClaims = new Map();
 const levelUpNotificationAcknowledgements = new Map();
@@ -102,7 +122,10 @@ const readJsonBody = async (request) => {
 };
 
 const requireSession = (request, response) => {
-    if (hasSession(request)) return sessionAccount(request);
+    if (hasSession(request)) {
+        activeProtectedAccount = sessionAccount(request);
+        return activeProtectedAccount;
+    }
     jsonResponse(response, 401, { message: 'Authentication required.' }, expectedErrorResponse);
     return null;
 };
@@ -257,7 +280,7 @@ const serveApi = async (request, response, pathname) => {
     if (route === '/session' && request.method === 'GET') {
         const authenticated = hasSession(request);
         jsonResponse(response, 200, authenticated
-            ? { authenticated: true, account: sessionAccount(request), csrf_token: 'ci-csrf-token' }
+            ? { authenticated: true, account: sessionAccount(request), csrf_token: 'ci-csrf-token', resource_generation: '1'.repeat(64) }
             : { authenticated: false, account: null, csrf_token: '' });
         return;
     }
@@ -276,7 +299,7 @@ const serveApi = async (request, response, pathname) => {
             ? dungeonMasterAccount
             : isSecondPlayer ? secondPlayerAccount : playerAccount;
         const session = isDungeonMaster ? 'dm' : isSecondPlayer ? 'player-b' : 'player-a';
-        jsonResponse(response, 200, { account: selectedAccount, csrf_token: 'ci-csrf-token' }, {
+        jsonResponse(response, 200, { account: selectedAccount, csrf_token: 'ci-csrf-token', resource_generation: '1'.repeat(64) }, {
             'Set-Cookie': `ci-session=${session}; HttpOnly; SameSite=Strict; Path=/scarlethorizons/`
         });
         return;
@@ -594,6 +617,69 @@ const address = server.address();
 if (!address || typeof address === 'string') throw new Error('Unable to start the browser fixture server.');
 const origin = `http://127.0.0.1:${address.port}`;
 
+const assertAuthenticatedAccessibility = async (page, { protectedState = false, mobile = false } = {}) => {
+    const contract = await page.evaluate(({ protectedState: expectProtected, mobile: expectMobile }) => {
+        const visible = (element) => {
+            if (!(element instanceof HTMLElement)) return false;
+            const style = getComputedStyle(element);
+            return !element.hidden && !element.closest('[hidden]') && style.display !== 'none'
+                && style.visibility !== 'hidden';
+        };
+        const text = (element) => (element.textContent || '').replace(/\s+/gu, ' ').trim();
+        const labelledBy = (element) => (element.getAttribute('aria-labelledby') || '').split(/\s+/u)
+            .filter(Boolean).map((id) => text(document.getElementById(id))).filter(Boolean).join(' ');
+        const labelFor = (element) => element.id
+            ? [...document.querySelectorAll(`label[for="${CSS.escape(element.id)}"]`)].map(text).join(' ')
+            : element.closest('label') ? text(element.closest('label')) : '';
+        const name = (element) => element.getAttribute('aria-label') || labelledBy(element)
+            || labelFor(element) || text(element) || element.getAttribute('title') || '';
+        const controls = [...document.querySelectorAll('button, a[href], input, select, textarea, summary')]
+            .filter(visible);
+        const unnamedControls = controls.filter((element) => !name(element)).map((element) => `${element.tagName}#${element.id}`);
+        const fieldsWithoutLabels = [...document.querySelectorAll('input, select, textarea')]
+            .filter(visible).filter((element) => !name(element)).map((element) => `${element.tagName}#${element.id}`);
+        const visibleViews = [...document.querySelectorAll('[data-view-panel]')].filter(visible);
+        const missingViewHeadings = visibleViews.filter((view) => {
+            const id = view.getAttribute('aria-labelledby');
+            return !id || !document.getElementById(id) || !text(document.getElementById(id));
+        }).map((view) => view.id);
+        const liveRegions = [...document.querySelectorAll('[role="status"], [role="alert"], [aria-live]')]
+            .filter(visible).filter((element) => !element.getAttribute('aria-live') && !element.getAttribute('role'));
+        const protectedNodes = [...document.querySelectorAll(
+            '#xp-character-summary, #xp-party-summary, #xp-awards-list, #quest-list, #activity-list, #magic-item-list, #party-funds-total, #auth-account-panel, #auth-dashboard-token')];
+        const staleProtectedContent = !expectProtected && protectedNodes.some((element) => visible(element)
+            && text(element) && !['—'].includes(text(element)));
+        const style = getComputedStyle(document.documentElement);
+        const focus = document.createElement('button');
+        focus.type = 'button';
+        focus.style.cssText = 'position:fixed;left:-10000px;top:-10000px';
+        document.body.append(focus); focus.focus();
+        const focusStyle = getComputedStyle(focus);
+        focus.remove();
+        const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)').matches
+            ? [...document.querySelectorAll('*')].filter((element) => visible(element)).every((element) => {
+                const computed = getComputedStyle(element);
+                return [computed.animationDuration, computed.transitionDuration].every((value) => value.split(',').every((duration) => {
+                    const numeric = Number.parseFloat(duration.trim());
+                    return Number.isFinite(numeric) && (duration.trim().endsWith('ms') ? numeric <= 0.01 : numeric <= 0.00001);
+                }));
+            }) : true;
+        const viewport = document.documentElement.clientWidth;
+        const content = document.documentElement.scrollWidth;
+        return {
+            unnamedControls, fieldsWithoutLabels, missingViewHeadings, liveRegions: liveRegions.map((e) => e.id),
+            staleProtectedContent, focusOutline: `${focusStyle.outlineStyle}/${focusStyle.outlineWidth}`,
+            reducedMotion, contrastContract: style.getPropertyValue('--ink').trim() && style.getPropertyValue('--background').trim(),
+            mobileOverflow: expectMobile && content > viewport + 1 ? `${content}/${viewport}` : ''
+        };
+    }, { protectedState, mobile });
+    if (contract.unnamedControls.length || contract.fieldsWithoutLabels.length || contract.missingViewHeadings.length
+        || contract.liveRegions.length || contract.staleProtectedContent || !contract.contrastContract
+        || contract.focusOutline.startsWith('none/') || !contract.reducedMotion || contract.mobileOverflow) {
+        throw new Error(`Browser accessibility contract failed: ${JSON.stringify(contract)}.`);
+    }
+};
+
 let browser;
 try {
     browser = await chromium.launch({ headless: true });
@@ -660,8 +746,8 @@ try {
     page.on('worker', (worker) => workerUrls.add(worker.url()));
     context.on('serviceworker', (worker) => {
         void worker.evaluate(() => {
-            self.addEventListener('error', (event) => console.error(`service-worker-error:${event.message}`));
-            self.addEventListener('unhandledrejection', (event) => console.error(`service-worker-rejection:${event.reason}`));
+            self.addEventListener('error', (event) => console.error('service-worker-error'));
+            self.addEventListener('unhandledrejection', (event) => console.error('service-worker-rejection'));
         });
     });
 
@@ -691,6 +777,8 @@ try {
     if (!Number.isFinite(navigationTiming) || navigationTiming > 5000) {
         throw new Error(`PWA startup exceeded the 5-second smoke budget: ${navigationTiming}ms.`);
     }
+    await assertAuthenticatedAccessibility(page, { protectedState: false });
+
     const accessibilityContract = await page.evaluate(() => {
         const controls = [...document.querySelectorAll('button, input, select, textarea, a[href]')];
         return controls.filter((element) => {
@@ -783,6 +871,14 @@ try {
         return text !== '' && text !== 'Signing in…';
     });
     const failedLoginMessage = await page.locator('#auth-message').textContent();
+    await assertAuthenticatedAccessibility(page, { protectedState: false });
+    const authMessageAccessibility = await page.locator('#auth-message').evaluate((element) => ({
+        role: element.getAttribute('role'), live: element.getAttribute('aria-live'), text: element.textContent
+    }));
+    if (authMessageAccessibility.role !== 'status' || authMessageAccessibility.live !== 'polite'
+        || !authMessageAccessibility.text.includes('Invalid CI credentials.')) {
+        throw new Error(`Failed-login error announcement contract failed: ${JSON.stringify(authMessageAccessibility)}.`);
+    }
     if (!failedLoginMessage.includes('Invalid CI credentials.')) {
         throw new Error(`Failed-login smoke did not expose the expected error: ${failedLoginMessage}`);
     }
@@ -799,6 +895,7 @@ try {
     if (await page.locator('#auth-account-panel').isHidden()) {
         throw new Error('Authentication smoke failed: the signed-in account panel stayed hidden.');
     }
+    await assertAuthenticatedAccessibility(page, { protectedState: true });
     if (presenceRequests !== presenceRequestsBeforePlayerLogin) {
         throw new Error(`Player login started DM presence polling: ${presenceRequests}.`);
     }
@@ -1029,6 +1126,7 @@ try {
         content: document.documentElement.scrollWidth,
         tableViewport: document.querySelector('#xp-awards-list table')?.getBoundingClientRect().width || 0
     }));
+    await assertAuthenticatedAccessibility(page, { protectedState: true, mobile: true });
     if (protectedMobileLayout.content > protectedMobileLayout.viewport + 1
         || protectedMobileLayout.tableViewport <= 0) {
         throw new Error(`Protected narrow mobile layout overflows horizontally: ${JSON.stringify(protectedMobileLayout)}.`);
@@ -1090,6 +1188,7 @@ try {
     if (!(await page.locator('#auth-account-panel').isHidden())) {
         throw new Error('Logout left the account panel visible.');
     }
+    await assertAuthenticatedAccessibility(page, { protectedState: false });
 
     await page.locator('#auth-button').click();
     await page.locator('#auth-character-name').fill('Max');
@@ -1295,7 +1394,8 @@ try {
     await page.waitForFunction(() => document.querySelector('#search-guidance')?.textContent?.includes('pack ready offline'));
     await page.locator('#campaign-search').fill('Kirkilston');
     await page.locator('#search-results .search-result').first().waitFor({ state: 'visible' });
-    if (![...workerUrls].some((url) => url.includes('/campaign-search-worker.js?v=92'))) {
+    const pwaAppRevision = await page.evaluate(() => globalThis.PLAYER_ASSISTANT_VERSION_METADATA?.appRevision);
+    if (![...workerUrls].some((url) => url.includes(`/campaign-search-worker.js?v=${pwaAppRevision}`))) {
         throw new Error(`Campaign search did not start its dedicated worker: ${JSON.stringify([...workerUrls])}.`);
     }
 
@@ -1328,9 +1428,19 @@ try {
         && /(?:orcish|elvish|ghukliak|campaign-search)\.json(?:[?#]|$)/u.test(url))) {
         throw new Error('Optional pack was stored in the install shell or general data cache.');
     }
-    if (!cachedEntries.some(({ url }) => url.endsWith('/campaign-search-worker.js?v=92'))) {
+    if (!cachedEntries.some(({ url }) => url.endsWith(`/campaign-search-worker.js?v=${pwaAppRevision}`))) {
         throw new Error('Campaign search worker was not present in the offline shell cache.');
     }
+    await page.waitForFunction(async (revision) => {
+        const requests = [];
+        for (const cacheName of await caches.keys()) {
+            const cache = await caches.open(cacheName);
+            requests.push(...await cache.keys());
+        }
+        const requiredShellModules = ['/app.js', '/correlation.js'];
+        return requiredShellModules.every((path) => requests.some((request) => new URL(request.url).pathname.endsWith(path)
+            && new URL(request.url).search === `?v=${revision}`));
+    }, pwaAppRevision);
     await page.evaluate(async () => {
         await fetch('/scarlethorizons/api/v1/session');
         await fetch('/scarlethorizons/pwa/protected-future-data.json');
@@ -1422,7 +1532,7 @@ try {
         throw new Error(`Unexpected PWA HTTP response: ${unexpectedResponses[0]}`);
     }
 
-    console.log('PWA browser smoke passed: diagnostics, player/DM authorization, logout/session expiry, navigation, and online/offline features.');
+    console.log('PWA browser smoke passed: authenticated/error accessibility contracts, authorization, logout/session expiry, navigation, and online/offline features.');
     await context.close();
 } finally {
     if (browser) await browser.close();

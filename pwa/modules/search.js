@@ -124,7 +124,7 @@ export const initializeCampaignSearch = ({ byId }) => {
     };
     const createWorker = () => {
         if (typeof Worker === 'undefined') return null;
-        const nextWorker = new Worker('campaign-search-worker.js?v=92');
+        const nextWorker = new Worker(`campaign-search-worker.js?v=${globalThis.PLAYER_ASSISTANT_VERSION_METADATA?.appRevision}`);
         nextWorker.addEventListener('message', handleWorkerMessage);
         nextWorker.addEventListener('messageerror', () => recoverWorker(new Error('Campaign search worker message could not be deserialized.')));
         nextWorker.addEventListener('error', () => recoverWorker(new Error('Campaign search worker stopped unexpectedly.')));

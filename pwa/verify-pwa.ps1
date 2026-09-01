@@ -277,6 +277,7 @@ $serviceWorker = Get-Content -Raw -LiteralPath (Join-Path $PwaRoot 'service-work
 $optionalLoader = Get-Content -Raw -LiteralPath (Join-Path $PwaRoot 'optional-pack-loader.js')
 $serviceWorkerTests = Get-Content -Raw -LiteralPath (Join-Path $PwaRoot 'service-worker-tests.mjs')
 $browserSmoke = Get-Content -Raw -LiteralPath (Join-Path $PwaRoot 'browser-smoke.mjs')
+Assert-Condition -Condition ($browserSmoke.Contains('const assertAuthenticatedAccessibility = async') -and $browserSmoke.Contains('protectedState: false') -and $browserSmoke.Contains('protectedState: true') -and $browserSmoke.Contains('mobile: true') -and $browserSmoke.Contains('Failed-login error announcement contract failed')) -Message 'Browser smoke must enforce accessibility acceptance for authenticated, error, logged-out, and narrow-layout states.'
 $deploymentTest = Get-Content -Raw -LiteralPath (Join-Path $PwaRoot 'test-deployment.ps1')
 $productionResponseContracts = Get-Content -Raw -LiteralPath (Join-Path $PwaRoot 'production-response-contracts.ps1')
 $monitorScript = Get-Content -Raw -LiteralPath (Join-Path $PwaRoot '..\web-deploy\monitor-pwa.ps1')

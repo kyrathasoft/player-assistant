@@ -506,6 +506,7 @@ function requiredPackagePaths(): array
         'payload/public/scarlethorizons/pwa/service-worker.js',
         'payload/public/scarlethorizons/api/.htaccess',
         'payload/public/scarlethorizons/api/index.php.template',
+        'payload/private/AuthorizationPolicy.php',
         'payload/private/DatabaseMigrationService.php',
         'payload/private/migrate-broker.php',
         'payload/private/BrokerService.php',

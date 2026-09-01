@@ -1,0 +1,10 @@
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+const source = fs.readFileSync(new URL('./app.js', import.meta.url), 'utf8');
+assert.match(source, /seenProtectedResponseNonces/);
+assert.match(source, /protected_response_rejected/);
+assert.match(source, /protectedResource\.account_id !== authenticatedAccount\?\.id/);
+assert.match(source, /expiresAt <= Date\.now\(\)/);
+assert.match(source, /seenProtectedResponseNonces\.has\(nonce\)/);
+assert.match(source, /seenProtectedResponseNonces\.clear\(\)/);
+console.log('Protected resource PWA contract tests passed.');

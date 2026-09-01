@@ -1,0 +1,974 @@
+{
+  "contract_version": 1,
+  "migration_version": 8,
+  "broker_api_schema_version": 7,
+  "compatibility_exceptions": {
+    "extra_objects": [],
+    "missing_objects": [],
+    "extra_columns": []
+  },
+  "objects": [
+    {
+      "type": "index",
+      "name": "ix_admin_mutation_idempotency_expiry",
+      "columns": [
+        "expires_at"
+      ]
+    },
+    {
+      "type": "index",
+      "name": "ix_audit_events_token_time",
+      "columns": [
+        "token_id",
+        "occurred_at"
+      ]
+    },
+    {
+      "type": "index",
+      "name": "ix_auth_audit_account_time",
+      "columns": [
+        "account_id",
+        "occurred_at"
+      ]
+    },
+    {
+      "type": "index",
+      "name": "ix_broker_alert_events_type_time",
+      "columns": [
+        "alert_type",
+        "occurred_at"
+      ]
+    },
+    {
+      "type": "index",
+      "name": "ix_character_account_aliases_account",
+      "columns": [
+        "account_id"
+      ]
+    },
+    {
+      "type": "index",
+      "name": "ix_character_presence_activity",
+      "columns": [
+        "last_seen_at",
+        "absolute_expires_at"
+      ]
+    },
+    {
+      "type": "index",
+      "name": "ix_level_up_notification_receipts_account_time",
+      "columns": [
+        "account_id",
+        "notified_at"
+      ]
+    },
+    {
+      "type": "index",
+      "name": "ix_message_notifications_recipient_read",
+      "columns": [
+        "recipient_account_id",
+        "read_at",
+        "sent_at"
+      ]
+    },
+    {
+      "type": "index",
+      "name": "ix_mutation_idempotency_expiry",
+      "columns": [
+        "expires_at"
+      ]
+    },
+    {
+      "type": "index",
+      "name": "ix_quest_requests_requester_status",
+      "columns": [
+        "requester_account_id",
+        "status"
+      ]
+    },
+    {
+      "type": "index",
+      "name": "ix_quest_requests_status_time",
+      "columns": [
+        "status",
+        "created_at"
+      ]
+    },
+    {
+      "type": "index",
+      "name": "ux_character_accounts_character_key",
+      "columns": [
+        "character_key"
+      ]
+    },
+    {
+      "type": "index",
+      "name": "ux_quest_requests_pending",
+      "columns": [
+        "quest_id",
+        "requester_account_id"
+      ]
+    },
+    {
+      "type": "table",
+      "name": "admin_mutation_idempotency",
+      "columns": [
+        {
+          "name": "account_id",
+          "type": "TEXT",
+          "notnull": 1,
+          "pk": 1
+        },
+        {
+          "name": "method",
+          "type": "TEXT",
+          "notnull": 1,
+          "pk": 2
+        },
+        {
+          "name": "route",
+          "type": "TEXT",
+          "notnull": 1,
+          "pk": 3
+        },
+        {
+          "name": "idempotency_key",
+          "type": "TEXT",
+          "notnull": 1,
+          "pk": 4
+        },
+        {
+          "name": "request_hash",
+          "type": "TEXT",
+          "notnull": 1,
+          "pk": 0
+        },
+        {
+          "name": "status",
+          "type": "INTEGER",
+          "notnull": 0,
+          "pk": 0
+        },
+        {
+          "name": "response_json",
+          "type": "TEXT",
+          "notnull": 0,
+          "pk": 0
+        },
+        {
+          "name": "created_at",
+          "type": "INTEGER",
+          "notnull": 1,
+          "pk": 0
+        },
+        {
+          "name": "expires_at",
+          "type": "INTEGER",
+          "notnull": 1,
+          "pk": 0
+        }
+      ],
+      "definition": "CREATE TABLE admin_mutation_idempotency ( account_id TEXT NOT NULL, method TEXT NOT NULL, route TEXT NOT NULL, idempotency_key TEXT NOT NULL, request_hash TEXT NOT NULL, status INTEGER NULL, response_json TEXT NULL, created_at INTEGER NOT NULL, expires_at INTEGER NOT NULL, PRIMARY KEY (account_id, method, route, idempotency_key) )"
+    },
+    {
+      "type": "table",
+      "name": "admin_request_nonces",
+      "columns": [
+        {
+          "name": "nonce",
+          "type": "TEXT",
+          "notnull": 0,
+          "pk": 1
+        },
+        {
+          "name": "used_at",
+          "type": "INTEGER",
+          "notnull": 1,
+          "pk": 0
+        }
+      ],
+      "definition": "CREATE TABLE admin_request_nonces ( nonce TEXT PRIMARY KEY, used_at INTEGER NOT NULL )"
+    },
+    {
+      "type": "table",
+      "name": "api_tokens",
+      "columns": [
+        {
+          "name": "id",
+          "type": "TEXT",
+          "notnull": 0,
+          "pk": 1
+        },
+        {
+          "name": "label",
+          "type": "TEXT",
+          "notnull": 1,
+          "pk": 0
+        },
+        {
+          "name": "token_hash",
+          "type": "TEXT",
+          "notnull": 1,
+          "pk": 0
+        },
+        {
+          "name": "created_at",
+          "type": "INTEGER",
+          "notnull": 1,
+          "pk": 0
+        },
+        {
+          "name": "expires_at",
+          "type": "INTEGER",
+          "notnull": 1,
+          "pk": 0
+        },
+        {
+          "name": "revoked_at",
+          "type": "INTEGER",
+          "notnull": 0,
+          "pk": 0
+        },
+        {
+          "name": "last_used_at",
+          "type": "INTEGER",
+          "notnull": 0,
+          "pk": 0
+        },
+        {
+          "name": "capabilities_json",
+          "type": "TEXT",
+          "notnull": 1,
+          "pk": 0
+        },
+        {
+          "name": "account_scope",
+          "type": "TEXT",
+          "notnull": 0,
+          "pk": 0
+        }
+      ],
+      "definition": "CREATE TABLE api_tokens ( id TEXT PRIMARY KEY, label TEXT NOT NULL, token_hash TEXT NOT NULL UNIQUE, created_at INTEGER NOT NULL, expires_at INTEGER NOT NULL, revoked_at INTEGER NULL, last_used_at INTEGER NULL , capabilities_json TEXT NOT NULL DEFAULT '[]', account_scope TEXT NULL)"
+    },
+    {
+      "type": "table",
+      "name": "audit_events",
+      "columns": [
+        {
+          "name": "id",
+          "type": "INTEGER",
+          "notnull": 0,
+          "pk": 1
+        },
+        {
+          "name": "token_id",
+          "type": "TEXT",
+          "notnull": 1,
+          "pk": 0
+        },
+        {
+          "name": "occurred_at",
+          "type": "INTEGER",
+          "notnull": 1,
+          "pk": 0
+        },
+        {
+          "name": "remote_address",
+          "type": "TEXT",
+          "notnull": 1,
+          "pk": 0
+        },
+        {
+          "name": "target_path",
+          "type": "TEXT",
+          "notnull": 1,
+          "pk": 0
+        },
+        {
+          "name": "outcome",
+          "type": "TEXT",
+          "notnull": 1,
+          "pk": 0
+        }
+      ],
+      "definition": "CREATE TABLE audit_events ( id INTEGER PRIMARY KEY AUTOINCREMENT, token_id TEXT NOT NULL, occurred_at INTEGER NOT NULL, remote_address TEXT NOT NULL, target_path TEXT NOT NULL, outcome TEXT NOT NULL, FOREIGN KEY (token_id) REFERENCES api_tokens(id) ON DELETE CASCADE )"
+    },
+    {
+      "type": "table",
+      "name": "auth_audit_events",
+      "columns": [
+        {
+          "name": "id",
+          "type": "INTEGER",
+          "notnull": 0,
+          "pk": 1
+        },
+        {
+          "name": "account_id",
+          "type": "TEXT",
+          "notnull": 0,
+          "pk": 0
+        },
+        {
+          "name": "occurred_at",
+          "type": "INTEGER",
+          "notnull": 1,
+          "pk": 0
+        },
+        {
+          "name": "remote_address",
+          "type": "TEXT",
+          "notnull": 1,
+          "pk": 0
+        },
+        {
+          "name": "event",
+          "type": "TEXT",
+          "notnull": 1,
+          "pk": 0
+        }
+      ],
+      "definition": "CREATE TABLE auth_audit_events ( id INTEGER PRIMARY KEY AUTOINCREMENT, account_id TEXT NULL, occurred_at INTEGER NOT NULL, remote_address TEXT NOT NULL, event TEXT NOT NULL, FOREIGN KEY (account_id) REFERENCES character_accounts(id) ON DELETE SET NULL )"
+    },
+    {
+      "type": "table",
+      "name": "auth_rate_limits",
+      "columns": [
+        {
+          "name": "scope_hash",
+          "type": "TEXT",
+          "notnull": 0,
+          "pk": 1
+        },
+        {
+          "name": "window_start",
+          "type": "INTEGER",
+          "notnull": 1,
+          "pk": 0
+        },
+        {
+          "name": "failure_count",
+          "type": "INTEGER",
+          "notnull": 1,
+          "pk": 0
+        },
+        {
+          "name": "blocked_until",
+          "type": "INTEGER",
+          "notnull": 1,
+          "pk": 0
+        }
+      ],
+      "definition": "CREATE TABLE auth_rate_limits ( scope_hash TEXT PRIMARY KEY, window_start INTEGER NOT NULL, failure_count INTEGER NOT NULL, blocked_until INTEGER NOT NULL )"
+    },
+    {
+      "type": "table",
+      "name": "broker_alert_events",
+      "columns": [
+        {
+          "name": "id",
+          "type": "INTEGER",
+          "notnull": 0,
+          "pk": 1
+        },
+        {
+          "name": "alert_type",
+          "type": "TEXT",
+          "notnull": 1,
+          "pk": 0
+        },
+        {
+          "name": "occurred_at",
+          "type": "INTEGER",
+          "notnull": 1,
+          "pk": 0
+        },
+        {
+          "name": "error_code",
+          "type": "TEXT",
+          "notnull": 1,
+          "pk": 0
+        },
+        {
+          "name": "message",
+          "type": "TEXT",
+          "notnull": 1,
+          "pk": 0
+        },
+        {
+          "name": "alert_sent_at",
+          "type": "INTEGER",
+          "notnull": 0,
+          "pk": 0
+        }
+      ],
+      "definition": "CREATE TABLE broker_alert_events ( id INTEGER PRIMARY KEY AUTOINCREMENT, alert_type TEXT NOT NULL, occurred_at INTEGER NOT NULL, error_code TEXT NOT NULL, message TEXT NOT NULL, alert_sent_at INTEGER NULL )"
+    },
+    {
+      "type": "table",
+      "name": "character_account_aliases",
+      "columns": [
+        {
+          "name": "account_id",
+          "type": "TEXT",
+          "notnull": 1,
+          "pk": 1
+        },
+        {
+          "name": "normalized_alias",
+          "type": "TEXT",
+          "notnull": 1,
+          "pk": 2
+        },
+        {
+          "name": "display_alias",
+          "type": "TEXT",
+          "notnull": 1,
+          "pk": 0
+        },
+        {
+          "name": "created_at",
+          "type": "INTEGER",
+          "notnull": 1,
+          "pk": 0
+        }
+      ],
+      "definition": "CREATE TABLE character_account_aliases ( account_id TEXT NOT NULL, normalized_alias TEXT NOT NULL UNIQUE, display_alias TEXT NOT NULL, created_at INTEGER NOT NULL, PRIMARY KEY (account_id, normalized_alias), FOREIGN KEY (account_id) REFERENCES character_accounts(id) ON DELETE CASCADE )"
+    },
+    {
+      "type": "table",
+      "name": "character_accounts",
+      "columns": [
+        {
+          "name": "id",
+          "type": "TEXT",
+          "notnull": 0,
+          "pk": 1
+        },
+        {
+          "name": "normalized_name",
+          "type": "TEXT",
+          "notnull": 1,
+          "pk": 0
+        },
+        {
+          "name": "display_name",
+          "type": "TEXT",
+          "notnull": 1,
+          "pk": 0
+        },
+        {
+          "name": "character_key",
+          "type": "TEXT",
+          "notnull": 1,
+          "pk": 0
+        },
+        {
+          "name": "role",
+          "type": "TEXT",
+          "notnull": 1,
+          "pk": 0
+        },
+        {
+          "name": "enabled",
+          "type": "INTEGER",
+          "notnull": 1,
+          "pk": 0
+        },
+        {
+          "name": "password_hash",
+          "type": "TEXT",
+          "notnull": 0,
+          "pk": 0
+        },
+        {
+          "name": "legacy_algorithm",
+          "type": "TEXT",
+          "notnull": 0,
+          "pk": 0
+        },
+        {
+          "name": "legacy_iterations",
+          "type": "INTEGER",
+          "notnull": 0,
+          "pk": 0
+        },
+        {
+          "name": "legacy_salt",
+          "type": "TEXT",
+          "notnull": 0,
+          "pk": 0
+        },
+        {
+          "name": "legacy_hash",
+          "type": "TEXT",
+          "notnull": 0,
+          "pk": 0
+        },
+        {
+          "name": "created_at",
+          "type": "INTEGER",
+          "notnull": 1,
+          "pk": 0
+        },
+        {
+          "name": "password_changed_at",
+          "type": "INTEGER",
+          "notnull": 1,
+          "pk": 0
+        },
+        {
+          "name": "last_login_at",
+          "type": "INTEGER",
+          "notnull": 0,
+          "pk": 0
+        },
+        {
+          "name": "session_version",
+          "type": "INTEGER",
+          "notnull": 1,
+          "pk": 0
+        }
+      ],
+      "definition": "CREATE TABLE character_accounts ( id TEXT PRIMARY KEY, normalized_name TEXT NOT NULL UNIQUE, display_name TEXT NOT NULL, character_key TEXT NOT NULL, role TEXT NOT NULL CHECK(role IN ('player', 'dm')), enabled INTEGER NOT NULL CHECK(enabled IN (0, 1)), password_hash TEXT NULL, legacy_algorithm TEXT NULL, legacy_iterations INTEGER NULL, legacy_salt TEXT NULL, legacy_hash TEXT NULL, created_at INTEGER NOT NULL, password_changed_at INTEGER NOT NULL, last_login_at INTEGER NULL, session_version INTEGER NOT NULL DEFAULT 1, CHECK(password_hash IS NOT NULL OR legacy_hash IS NOT NULL) )"
+    },
+    {
+      "type": "table",
+      "name": "character_session_presence",
+      "columns": [
+        {
+          "name": "presence_id",
+          "type": "TEXT",
+          "notnull": 0,
+          "pk": 1
+        },
+        {
+          "name": "account_id",
+          "type": "TEXT",
+          "notnull": 1,
+          "pk": 0
+        },
+        {
+          "name": "last_seen_at",
+          "type": "INTEGER",
+          "notnull": 1,
+          "pk": 0
+        },
+        {
+          "name": "absolute_expires_at",
+          "type": "INTEGER",
+          "notnull": 1,
+          "pk": 0
+        }
+      ],
+      "definition": "CREATE TABLE character_session_presence ( presence_id TEXT PRIMARY KEY, account_id TEXT NOT NULL, last_seen_at INTEGER NOT NULL, absolute_expires_at INTEGER NOT NULL, FOREIGN KEY (account_id) REFERENCES character_accounts(id) ON DELETE CASCADE )"
+    },
+    {
+      "type": "table",
+      "name": "level_up_notification_receipts",
+      "columns": [
+        {
+          "name": "account_id",
+          "type": "TEXT",
+          "notnull": 1,
+          "pk": 1
+        },
+        {
+          "name": "progression_key",
+          "type": "TEXT",
+          "notnull": 1,
+          "pk": 2
+        },
+        {
+          "name": "target_level",
+          "type": "INTEGER",
+          "notnull": 1,
+          "pk": 3
+        },
+        {
+          "name": "target_xp",
+          "type": "INTEGER",
+          "notnull": 1,
+          "pk": 0
+        },
+        {
+          "name": "notified_at",
+          "type": "INTEGER",
+          "notnull": 0,
+          "pk": 0
+        }
+      ],
+      "definition": "CREATE TABLE level_up_notification_receipts ( account_id TEXT NOT NULL, progression_key TEXT NOT NULL, target_level INTEGER NOT NULL CHECK(target_level >= 1 AND target_level <= 1000), target_xp INTEGER NOT NULL CHECK(target_xp >= 0), notified_at INTEGER NULL, PRIMARY KEY (account_id, progression_key, target_level), FOREIGN KEY (account_id) REFERENCES character_accounts(id) ON DELETE CASCADE )"
+    },
+    {
+      "type": "table",
+      "name": "message_notifications",
+      "columns": [
+        {
+          "name": "id",
+          "type": "TEXT",
+          "notnull": 0,
+          "pk": 1
+        },
+        {
+          "name": "sender_account_id",
+          "type": "TEXT",
+          "notnull": 1,
+          "pk": 0
+        },
+        {
+          "name": "recipient_account_id",
+          "type": "TEXT",
+          "notnull": 1,
+          "pk": 0
+        },
+        {
+          "name": "message",
+          "type": "TEXT",
+          "notnull": 1,
+          "pk": 0
+        },
+        {
+          "name": "sent_at",
+          "type": "INTEGER",
+          "notnull": 1,
+          "pk": 0
+        },
+        {
+          "name": "read_at",
+          "type": "INTEGER",
+          "notnull": 0,
+          "pk": 0
+        }
+      ],
+      "definition": "CREATE TABLE message_notifications ( id TEXT PRIMARY KEY, sender_account_id TEXT NOT NULL, recipient_account_id TEXT NOT NULL, message TEXT NOT NULL, sent_at INTEGER NOT NULL, read_at INTEGER NULL, FOREIGN KEY (sender_account_id) REFERENCES character_accounts(id) ON DELETE CASCADE, FOREIGN KEY (recipient_account_id) REFERENCES character_accounts(id) ON DELETE CASCADE )"
+    },
+    {
+      "type": "table",
+      "name": "message_send_rate_limits",
+      "columns": [
+        {
+          "name": "account_id",
+          "type": "TEXT",
+          "notnull": 0,
+          "pk": 1
+        },
+        {
+          "name": "window_started_at",
+          "type": "INTEGER",
+          "notnull": 1,
+          "pk": 0
+        },
+        {
+          "name": "send_count",
+          "type": "INTEGER",
+          "notnull": 1,
+          "pk": 0
+        }
+      ],
+      "definition": "CREATE TABLE message_send_rate_limits ( account_id TEXT PRIMARY KEY, window_started_at INTEGER NOT NULL, send_count INTEGER NOT NULL CHECK(send_count >= 0), FOREIGN KEY (account_id) REFERENCES character_accounts(id) ON DELETE CASCADE )"
+    },
+    {
+      "type": "table",
+      "name": "mutation_idempotency",
+      "columns": [
+        {
+          "name": "account_id",
+          "type": "TEXT",
+          "notnull": 1,
+          "pk": 1
+        },
+        {
+          "name": "method",
+          "type": "TEXT",
+          "notnull": 1,
+          "pk": 2
+        },
+        {
+          "name": "route",
+          "type": "TEXT",
+          "notnull": 1,
+          "pk": 3
+        },
+        {
+          "name": "idempotency_key",
+          "type": "TEXT",
+          "notnull": 1,
+          "pk": 4
+        },
+        {
+          "name": "request_hash",
+          "type": "TEXT",
+          "notnull": 1,
+          "pk": 0
+        },
+        {
+          "name": "status",
+          "type": "INTEGER",
+          "notnull": 0,
+          "pk": 0
+        },
+        {
+          "name": "response_json",
+          "type": "TEXT",
+          "notnull": 0,
+          "pk": 0
+        },
+        {
+          "name": "created_at",
+          "type": "INTEGER",
+          "notnull": 1,
+          "pk": 0
+        },
+        {
+          "name": "expires_at",
+          "type": "INTEGER",
+          "notnull": 1,
+          "pk": 0
+        }
+      ],
+      "definition": "CREATE TABLE mutation_idempotency ( account_id TEXT NOT NULL, method TEXT NOT NULL, route TEXT NOT NULL, idempotency_key TEXT NOT NULL, request_hash TEXT NOT NULL, status INTEGER NULL, response_json TEXT NULL, created_at INTEGER NOT NULL, expires_at INTEGER NOT NULL, PRIMARY KEY (account_id, method, route, idempotency_key), FOREIGN KEY (account_id) REFERENCES character_accounts(id) ON DELETE CASCADE )"
+    },
+    {
+      "type": "table",
+      "name": "quest_requests",
+      "columns": [
+        {
+          "name": "id",
+          "type": "TEXT",
+          "notnull": 0,
+          "pk": 1
+        },
+        {
+          "name": "quest_id",
+          "type": "TEXT",
+          "notnull": 1,
+          "pk": 0
+        },
+        {
+          "name": "requester_account_id",
+          "type": "TEXT",
+          "notnull": 1,
+          "pk": 0
+        },
+        {
+          "name": "status",
+          "type": "TEXT",
+          "notnull": 1,
+          "pk": 0
+        },
+        {
+          "name": "created_at",
+          "type": "INTEGER",
+          "notnull": 1,
+          "pk": 0
+        },
+        {
+          "name": "decided_at",
+          "type": "INTEGER",
+          "notnull": 0,
+          "pk": 0
+        },
+        {
+          "name": "decided_by_account_id",
+          "type": "TEXT",
+          "notnull": 0,
+          "pk": 0
+        },
+        {
+          "name": "requester_acknowledged_at",
+          "type": "INTEGER",
+          "notnull": 0,
+          "pk": 0
+        }
+      ],
+      "definition": "CREATE TABLE quest_requests ( id TEXT PRIMARY KEY, quest_id TEXT NOT NULL, requester_account_id TEXT NOT NULL, status TEXT NOT NULL CHECK(status IN ('pending', 'approved', 'denied')), created_at INTEGER NOT NULL, decided_at INTEGER NULL, decided_by_account_id TEXT NULL, requester_acknowledged_at INTEGER NULL, FOREIGN KEY (requester_account_id) REFERENCES character_accounts(id) ON DELETE CASCADE, FOREIGN KEY (decided_by_account_id) REFERENCES character_accounts(id) ON DELETE SET NULL )"
+    },
+    {
+      "type": "table",
+      "name": "quest_state_overrides",
+      "columns": [
+        {
+          "name": "quest_id",
+          "type": "TEXT",
+          "notnull": 0,
+          "pk": 1
+        },
+        {
+          "name": "base_state",
+          "type": "TEXT",
+          "notnull": 1,
+          "pk": 0
+        },
+        {
+          "name": "state",
+          "type": "TEXT",
+          "notnull": 1,
+          "pk": 0
+        },
+        {
+          "name": "updated_at",
+          "type": "INTEGER",
+          "notnull": 1,
+          "pk": 0
+        },
+        {
+          "name": "updated_by_account_id",
+          "type": "TEXT",
+          "notnull": 1,
+          "pk": 0
+        }
+      ],
+      "definition": "CREATE TABLE quest_state_overrides ( quest_id TEXT PRIMARY KEY, base_state TEXT NOT NULL, state TEXT NOT NULL CHECK(state = 'active'), updated_at INTEGER NOT NULL, updated_by_account_id TEXT NOT NULL, FOREIGN KEY (updated_by_account_id) REFERENCES character_accounts(id) ON DELETE RESTRICT )"
+    },
+    {
+      "type": "table",
+      "name": "rate_limits",
+      "columns": [
+        {
+          "name": "token_id",
+          "type": "TEXT",
+          "notnull": 1,
+          "pk": 1
+        },
+        {
+          "name": "window_start",
+          "type": "INTEGER",
+          "notnull": 1,
+          "pk": 2
+        },
+        {
+          "name": "request_count",
+          "type": "INTEGER",
+          "notnull": 1,
+          "pk": 0
+        }
+      ],
+      "definition": "CREATE TABLE rate_limits ( token_id TEXT NOT NULL, window_start INTEGER NOT NULL, request_count INTEGER NOT NULL, PRIMARY KEY (token_id, window_start), FOREIGN KEY (token_id) REFERENCES api_tokens(id) ON DELETE CASCADE )"
+    },
+    {
+      "type": "table",
+      "name": "word_count_snapshots",
+      "columns": [
+        {
+          "name": "id",
+          "type": "INTEGER",
+          "notnull": 0,
+          "pk": 1
+        },
+        {
+          "name": "schema_version",
+          "type": "INTEGER",
+          "notnull": 1,
+          "pk": 0
+        },
+        {
+          "name": "observed_at",
+          "type": "TEXT",
+          "notnull": 1,
+          "pk": 0
+        },
+        {
+          "name": "counting_rule_version",
+          "type": "TEXT",
+          "notnull": 1,
+          "pk": 0
+        },
+        {
+          "name": "wiki_pages",
+          "type": "INTEGER",
+          "notnull": 1,
+          "pk": 0
+        },
+        {
+          "name": "wiki_words",
+          "type": "INTEGER",
+          "notnull": 1,
+          "pk": 0
+        },
+        {
+          "name": "ic_files",
+          "type": "INTEGER",
+          "notnull": 1,
+          "pk": 0
+        },
+        {
+          "name": "ic_words",
+          "type": "INTEGER",
+          "notnull": 1,
+          "pk": 0
+        },
+        {
+          "name": "ooc_files",
+          "type": "INTEGER",
+          "notnull": 1,
+          "pk": 0
+        },
+        {
+          "name": "ooc_words",
+          "type": "INTEGER",
+          "notnull": 1,
+          "pk": 0
+        },
+        {
+          "name": "uploaded_at",
+          "type": "INTEGER",
+          "notnull": 1,
+          "pk": 0
+        }
+      ],
+      "definition": "CREATE TABLE word_count_snapshots ( id INTEGER PRIMARY KEY CHECK (id = 1), schema_version INTEGER NOT NULL, observed_at TEXT NOT NULL, counting_rule_version TEXT NOT NULL, wiki_pages INTEGER NOT NULL, wiki_words INTEGER NOT NULL, ic_files INTEGER NOT NULL, ic_words INTEGER NOT NULL, ooc_files INTEGER NOT NULL, ooc_words INTEGER NOT NULL, uploaded_at INTEGER NOT NULL )"
+    },
+    {
+      "type": "table",
+      "name": "xp_tracking_cache",
+      "columns": [
+        {
+          "name": "cache_key",
+          "type": "TEXT",
+          "notnull": 0,
+          "pk": 1
+        },
+        {
+          "name": "fetched_at",
+          "type": "INTEGER",
+          "notnull": 1,
+          "pk": 0
+        },
+        {
+          "name": "payload_json",
+          "type": "TEXT",
+          "notnull": 1,
+          "pk": 0
+        },
+        {
+          "name": "content_sha256",
+          "type": "TEXT",
+          "notnull": 1,
+          "pk": 0
+        }
+      ],
+      "definition": "CREATE TABLE xp_tracking_cache ( cache_key TEXT PRIMARY KEY, fetched_at INTEGER NOT NULL, payload_json TEXT NOT NULL, content_sha256 TEXT NOT NULL )"
+    },
+    {
+      "type": "trigger",
+      "name": "trg_character_account_aliases_name_collision_insert",
+      "definition": "CREATE TRIGGER trg_character_account_aliases_name_collision_insert BEFORE INSERT ON character_account_aliases WHEN EXISTS (SELECT 1 FROM character_accounts WHERE normalized_name = NEW.normalized_alias) BEGIN SELECT RAISE(ABORT, 'normalized alias is already an account name'); END"
+    },
+    {
+      "type": "trigger",
+      "name": "trg_character_account_aliases_name_collision_update",
+      "definition": "CREATE TRIGGER trg_character_account_aliases_name_collision_update BEFORE UPDATE OF normalized_alias ON character_account_aliases WHEN EXISTS (SELECT 1 FROM character_accounts WHERE normalized_name = NEW.normalized_alias) BEGIN SELECT RAISE(ABORT, 'normalized alias is already an account name'); END"
+    },
+    {
+      "type": "trigger",
+      "name": "trg_character_accounts_alias_collision_insert",
+      "definition": "CREATE TRIGGER trg_character_accounts_alias_collision_insert BEFORE INSERT ON character_accounts WHEN EXISTS (SELECT 1 FROM character_account_aliases WHERE normalized_alias = NEW.normalized_name) BEGIN SELECT RAISE(ABORT, 'normalized account name is already an alias'); END"
+    },
+    {
+      "type": "trigger",
+      "name": "trg_character_accounts_alias_collision_update",
+      "definition": "CREATE TRIGGER trg_character_accounts_alias_collision_update BEFORE UPDATE OF normalized_name ON character_accounts WHEN EXISTS (SELECT 1 FROM character_account_aliases WHERE normalized_alias = NEW.normalized_name AND account_id <> OLD.id) BEGIN SELECT RAISE(ABORT, 'normalized account name is already an alias'); END"
+    }
+  ]
+}
