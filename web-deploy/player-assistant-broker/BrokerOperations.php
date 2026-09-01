@@ -282,6 +282,83 @@ final class CurlBrokerFtpsClient implements BrokerFtpsClient
     }
 }
 
+final class BrokerRestorePointSelector
+{
+    public static function select(string $directory, DateTimeImmutable $now, int $retentionSeconds = 1209600, ?string $expectedSourceHash = null): array
+    {
+        if (!is_dir($directory)) {
+            throw new RuntimeException('The broker backup directory does not exist.');
+        }
+        $points = [];
+        foreach (glob(rtrim($directory, '/\\') . '/broker-*.sqlite') ?: [] as $path) {
+            $points[] = self::verify($path, $directory, $now, $retentionSeconds, $expectedSourceHash);
+        }
+        if ($points === []) {
+            throw new RuntimeException('No verified broker restore point is available.');
+        }
+        $valid = array_values(array_filter($points, static fn(array $point): bool => !$point['expired']));
+        if ($valid === []) {
+            throw new RuntimeException('All broker restore points are expired.');
+        }
+        $timestamps = [];
+        foreach ($valid as $point) {
+            $timestamps[$point['created_at']] = ($timestamps[$point['created_at']] ?? 0) + 1;
+        }
+        if (in_array(2, $timestamps, true)) {
+            throw new RuntimeException('Broker restore-point timestamps are ambiguous.');
+        }
+        usort($valid, static fn(array $left, array $right): int => [$right['created_at'], $right['file']] <=> [$left['created_at'], $left['file']]);
+        return $valid[0];
+    }
+
+    public static function verify(string $path, string $directory, DateTimeImmutable $now, int $retentionSeconds = 1209600, ?string $expectedSourceHash = null, bool $requireRestoreTest = true): array
+    {
+        BrokerBackupPathValidator::assertApprovedPath($path, $directory);
+        $metadataPath = $path . '.json';
+        if (!is_file($metadataPath)) {
+            throw new RuntimeException('The broker restore point metadata is incomplete.');
+        }
+        try {
+            $metadata = json_decode((string)file_get_contents($metadataPath), true, 16, JSON_THROW_ON_ERROR);
+        } catch (Throwable) {
+            throw new RuntimeException('The broker restore point metadata is invalid.');
+        }
+        foreach (['schema_version', 'created_at', 'file', 'bytes', 'sha256', 'source_sha256', 'retention_class', 'restore_test', 'expires_at'] as $key) {
+            if (!array_key_exists($key, $metadata)) {
+                throw new RuntimeException('The broker restore point metadata is incomplete.');
+            }
+        }
+        if ((int)$metadata['schema_version'] !== 2 || $metadata['file'] !== basename($path)
+            || !is_int($metadata['bytes']) || $metadata['bytes'] <= 0
+            || !is_string($metadata['sha256']) || preg_match('/^[a-f0-9]{64}$/D', $metadata['sha256']) !== 1
+            || !is_string($metadata['source_sha256']) || preg_match('/^[a-f0-9]{64}$/D', $metadata['source_sha256']) !== 1
+            || !is_string($metadata['retention_class']) || trim($metadata['retention_class']) === ''
+            || ($requireRestoreTest && $metadata['restore_test'] !== 'ok')
+            || (!$requireRestoreTest && !in_array($metadata['restore_test'], ['ok', 'pending'], true))) {
+            throw new RuntimeException('The broker restore point metadata does not match its contract.');
+        }
+        if ($expectedSourceHash !== null && !hash_equals(strtolower($expectedSourceHash), $metadata['source_sha256'])) {
+            throw new RuntimeException('The broker restore point source hash does not match the requested generation.');
+        }
+        $size = filesize($path);
+        $actualHash = hash_file('sha256', $path);
+        if ($size === false || $size !== $metadata['bytes'] || $actualHash === false || !hash_equals($metadata['sha256'], $actualHash)) {
+            throw new RuntimeException('The broker restore point hash or size does not match its metadata.');
+        }
+        $created = DateTimeImmutable::createFromFormat(DATE_ATOM, (string)$metadata['created_at'], new DateTimeZone('UTC'));
+        $errors = DateTimeImmutable::getLastErrors();
+        if ($created === false || ($errors !== false && ($errors['warning_count'] > 0 || $errors['error_count'] > 0))) {
+            throw new RuntimeException('The broker restore point creation time is invalid.');
+        }
+        $expires = $created->modify('+' . max(1, $retentionSeconds) . ' seconds');
+        if (!is_string($metadata['expires_at']) || $metadata['expires_at'] !== $expires->format(DATE_ATOM)) {
+            throw new RuntimeException('The broker restore point expiration does not match its provenance.');
+        }
+        return ['path' => $path, 'file' => basename($path), 'metadata' => $metadata,
+            'created_at' => $created->format(DATE_ATOM), 'expires_at' => $expires->format(DATE_ATOM), 'expired' => $now >= $expires];
+    }
+}
+
 final class BrokerOperations
 {
     private array $operationsConfig;
@@ -299,6 +376,7 @@ final class BrokerOperations
             'status_path' => dirname($this->databasePath) . '/broker-operations-status.json',
             'environment_file' => dirname(dirname($this->databasePath)) . '/.player-assistant-ftps.env',
             'retention_count' => 14,
+            'retention_seconds' => 1209600,
             'server_error_threshold' => 5,
             'server_error_window_seconds' => 900,
             'alert_cooldown_seconds' => 3600,
@@ -417,6 +495,8 @@ final class BrokerOperations
             if ($restore !== 'ok') {
                 throw new RuntimeException('The broker backup restore test failed.');
             }
+            $this->copyOffsite($backup['path'], $backup['path'] . '.json');
+            $this->pruneBackups((string)$this->operationsConfig['backup_directory']);
 
             $completedAt = gmdate(DATE_ATOM);
             $this->updateStatus(static function (array $status) use ($completedAt): array {
@@ -519,17 +599,20 @@ final class BrokerOperations
                 throw new RuntimeException('The newly created broker database backup failed integrity validation.');
             }
 
+            $createdAt = gmdate(DATE_ATOM);
             $metadata = [
-                'schema_version' => 1,
-                'created_at' => gmdate(DATE_ATOM),
+                'schema_version' => 2,
+                'created_at' => $createdAt,
                 'file' => basename($backupPath),
                 'bytes' => filesize($backupPath),
                 'sha256' => hash_file('sha256', $backupPath),
+                'source_sha256' => hash_file('sha256', $this->databasePath),
+                'retention_class' => 'standard',
+                'restore_test' => 'pending',
+                'expires_at' => gmdate(DATE_ATOM, strtotime($createdAt) + $this->retentionSeconds()),
             ];
             $metadataPath = $backupPath . '.json';
             $this->writePrivateJson($metadataPath, $metadata);
-            $this->copyOffsite($backupPath, $metadataPath);
-            $this->pruneBackups($directory);
             $this->updateStatus(static function (array $status) use ($metadata): array {
                 $status['last_backup_at'] = $metadata['created_at'];
                 $status['last_backup_status'] = 'success';
@@ -559,6 +642,14 @@ final class BrokerOperations
     private function restoreTest(string $backupPath): string
     {
         $directory = $this->prepareDirectory((string)$this->operationsConfig['restore_test_directory']);
+        $restorePoint = BrokerRestorePointSelector::verify(
+            $backupPath,
+            (string)$this->operationsConfig['backup_directory'],
+            new DateTimeImmutable('now', new DateTimeZone('UTC')),
+            $this->retentionSeconds(), null, false);
+        if ($restorePoint['expired']) {
+            throw new RuntimeException('The broker restore point is expired.');
+        }
         $restorePath = $directory . '/restore-' . gmdate('Ymd\THis\Z') . '-' . bin2hex(random_bytes(4)) . '.sqlite';
         if (!copy($backupPath, $restorePath)) {
             throw new RuntimeException('Unable to stage the broker backup for restore testing.');
@@ -569,6 +660,10 @@ final class BrokerOperations
             if ($result !== 'ok') {
                 throw new RuntimeException('The restored broker database failed integrity validation.');
             }
+            $metadataPath = $backupPath . '.json';
+            $metadata = json_decode((string)file_get_contents($metadataPath), true, 16, JSON_THROW_ON_ERROR);
+            $metadata['restore_test'] = 'ok';
+            $this->writePrivateJson($metadataPath, $metadata);
             $this->updateStatus(static function (array $status): array {
                 $status['last_restore_test_at'] = gmdate(DATE_ATOM);
                 $status['last_restore_test_status'] = 'success';
@@ -611,6 +706,18 @@ final class BrokerOperations
                 'file' => basename($encryptedPath),
                 'bytes' => $encryption['bytes'],
                 'sha256' => $encryption['sha256'],
+                'source_sha256' => is_array($plaintextMetadata)
+                    ? ($plaintextMetadata['source_sha256'] ?? '')
+                    : '',
+                'retention_class' => is_array($plaintextMetadata)
+                    ? ($plaintextMetadata['retention_class'] ?? 'standard')
+                    : 'standard',
+                'restore_test' => is_array($plaintextMetadata)
+                    ? ($plaintextMetadata['restore_test'] ?? 'ok')
+                    : 'ok',
+                'expires_at' => is_array($plaintextMetadata)
+                    ? ($plaintextMetadata['expires_at'] ?? gmdate(DATE_ATOM))
+                    : gmdate(DATE_ATOM),
                 'encryption' => [
                     'format' => $encryption['format'],
                     'algorithm' => $encryption['algorithm'],
@@ -785,11 +892,27 @@ final class BrokerOperations
     private function pruneBackups(string $directory): void
     {
         $retention = max(1, (int)$this->operationsConfig['retention_count']);
-        $files = glob($directory . '/broker-*.sqlite') ?: [];
-        usort($files, static fn(string $left, string $right): int => filemtime($right) <=> filemtime($left));
-        foreach (array_slice($files, $retention) as $obsolete) {
-            @unlink($obsolete);
-            @unlink($obsolete . '.json');
+        $verified = [];
+        foreach (glob($directory . '/broker-*.sqlite') ?: [] as $file) {
+            try {
+                $verified[] = BrokerRestorePointSelector::verify(
+                    $file, $directory, new DateTimeImmutable('now', new DateTimeZone('UTC')), $this->retentionSeconds());
+            } catch (Throwable) {
+                // Preserve unverifiable files as rollback evidence; never delete them.
+            }
+        }
+        usort($verified, static fn(array $left, array $right): int => [$right['created_at'], $right['file']] <=> [$left['created_at'], $left['file']]);
+        foreach (array_slice($verified, $retention) as $obsolete) {
+            if (!$obsolete['expired']) {
+                continue;
+            }
+            // Re-verify immediately before deletion to close the check/delete window.
+            $verifiedAgain = BrokerRestorePointSelector::verify(
+                $obsolete['path'], $directory, new DateTimeImmutable('now', new DateTimeZone('UTC')), $this->retentionSeconds());
+            if ($verifiedAgain['expired']) {
+                unlink($obsolete['path']);
+                unlink($obsolete['path'] . '.json');
+            }
         }
     }
 
@@ -953,6 +1076,11 @@ final class BrokerOperations
     private function alertCooldownSeconds(): int
     {
         return max(60, (int)$this->operationsConfig['alert_cooldown_seconds']);
+    }
+
+    private function retentionSeconds(): int
+    {
+        return max(1, (int)$this->operationsConfig['retention_seconds']);
     }
 
     private function sanitizeErrorCode(string $value): string

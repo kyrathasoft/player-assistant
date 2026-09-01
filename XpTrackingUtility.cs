@@ -45,7 +45,7 @@ namespace PlayerAssistant
             ArgumentNullException.ThrowIfNull(identity);
 
             var matches = totals.Where(row =>
-                string.Equals(row.CanonicalId, identity.CanonicalId, StringComparison.Ordinal)).ToArray();
+                AuthorizationPolicy.CanReadOwnedResource(identity, row.CanonicalId)).ToArray();
             return matches.Length == 1 ? matches[0] : null;
         }
 

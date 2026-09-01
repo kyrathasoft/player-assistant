@@ -2,6 +2,8 @@
 
 declare(strict_types=1);
 
+require_once __DIR__ . '/DataInvariantContract.php';
+
 final class XpTrackingService
 {
     private const CACHE_KEY = 'current';
@@ -666,6 +668,7 @@ final class XpTrackingService
                 'xp_awards_unavailable',
                 'An XP award progression does not match its configured character.');
         }
+        DataInvariantContract::assertAwards($entries, $progressionKey);
         return $entries;
     }
 
@@ -1339,6 +1342,7 @@ final class XpTrackingService
                 'characters' => $parsed['characters'],
                 'fetched_at' => $now,
             ];
+            DataInvariantContract::assertXpSnapshot($snapshot['characters']);
             $this->storeCachedSnapshot($snapshot);
             return $snapshot + ['stale' => false];
         } catch (Throwable $exception) {
