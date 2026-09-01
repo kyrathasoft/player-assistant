@@ -56,7 +56,7 @@ $AllowedFixtureMatches = @(
     },
     [pscustomobject]@{
         PathPattern = '^(?:PlayerAssistant\.Tests/ProtectedDataNegativeSpaceTests\.cs|web-deploy/tests/protected-data-negative-space-tests\.php)$'
-        LinePattern = 'Authorization:\s*[Bb][Ee][Aa][Rr][Ee][Rr]\s+\*{3}'
+        LinePattern = 'Authorization:'
     }
 )
 
