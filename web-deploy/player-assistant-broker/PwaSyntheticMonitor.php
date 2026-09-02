@@ -2,6 +2,8 @@
 
 declare(strict_types=1);
 
+require_once __DIR__ . '/CorrelationContext.php';
+
 final class PwaMonitorFailure extends RuntimeException
 {
     public function __construct(public readonly string $errorCode, string $message)
@@ -17,9 +19,11 @@ final class PwaSyntheticMonitor
     private $mailer;
     private $clock;
     private string $cookie = '';
+    private string $correlationId;
 
     public function __construct(array $config, ?callable $requester = null, ?callable $mailer = null, ?callable $clock = null)
     {
+        $this->correlationId = CorrelationContext::create();
         $this->config = array_replace([
             'base_url' => 'https://bryanmiller.us/scarlethorizons',
             'character_name' => '',
@@ -230,6 +234,7 @@ final class PwaSyntheticMonitor
         if ($this->cookie !== '') {
             $headers['Cookie'] = $this->cookie;
         }
+        $headers['X-Correlation-ID'] = $this->correlationId;
         $response = ($this->requester)($method, $url, $headers, $body);
         if (!is_array($response) || !isset($response['status'], $response['headers'], $response['body'])) {
             throw new PwaMonitorFailure('transport_invalid', 'The monitor transport returned an invalid response.');

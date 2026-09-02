@@ -21,6 +21,7 @@ return [
         'backup_directory' => '/home/DREAMHOST_USER/player-assistant-broker/backups',
         'status_path' => '/home/DREAMHOST_USER/player-assistant-broker/broker-recovery-status.json',
         'retention_count' => 14,
+        'retention_seconds' => 1209600,
         'health_url' => 'https://bryanmiller.us/scarlethorizons/api/v1/health',
         'alert_email' => 'alerts@example.invalid',
     ],

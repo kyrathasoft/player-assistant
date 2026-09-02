@@ -718,7 +718,8 @@ internal static partial class TestCases
             "-PublishDir",
             publishDirectory,
             "-OutputDir",
-            outputDirectory
+            outputDirectory,
+            "-ConfirmExport"
         };
         arguments.AddRange(extraArguments);
         return RunPowerShell(arguments, TimeSpan.FromSeconds(45));
@@ -739,6 +740,30 @@ internal static partial class TestCases
                 zipPath
             ],
             TimeSpan.FromSeconds(30));
+    }
+
+    private static (int ExitCode, string Output) RunDiagnosticsCollectionWithoutConfirmation(
+        string releaseDirectory,
+        string publishDirectory,
+        string outputDirectory,
+        params string[] extraArguments)
+    {
+        var arguments = new List<string>
+        {
+            "-NoProfile",
+            "-ExecutionPolicy",
+            "Bypass",
+            "-File",
+            Path.Combine(GetRepositoryRoot(), "collect-diagnostics.ps1"),
+            "-ReleaseDir",
+            releaseDirectory,
+            "-PublishDir",
+            publishDirectory,
+            "-OutputDir",
+            outputDirectory
+        };
+        arguments.AddRange(extraArguments);
+        return RunPowerShell(arguments, TimeSpan.FromSeconds(30));
     }
 
     internal static (int ExitCode, string Output) RunDiagnosticsRetentionCleanup(string scratchDirectory, params string[] extraArguments)
