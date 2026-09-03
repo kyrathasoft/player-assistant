@@ -562,9 +562,10 @@ Develop and implement these items only after the remaining incomplete items abov
 - [ ] Add durable startup recovery for interrupted local desktop transactions.
   - Discover incomplete journals before normal startup, validate their paths and hashes, resume or roll back only an unambiguous transaction, and preserve evidence for ambiguous states.
   - Regression: interruption at every journal boundary leaves either the old complete state or a safely resumable state, never a mixed release.
-- [ ] Add a read-only diagnostic bundle mode with strict data minimization.
-  - Collect version, feature, health, transaction, and verifier summaries while excluding credentials, tokens, cookie values, private notes, and protected response bodies; require explicit user initiation for export.
-  - Regression: bundle inspection and secret scanning prove sensitive values cannot enter the archive or its manifest.
+- [x] Add a read-only diagnostic bundle mode with strict data minimization.
+  - [x] Collect version, feature, health, transaction, and verifier summaries while excluding credentials, tokens, cookie values, private notes, and protected response bodies; require explicit user initiation for export.
+  - [x] Regression: bundle inspection and secret scanning prove sensitive values cannot enter the archive or its manifest.
+  - [x] Verified by the diagnostic-bundle redaction and forbidden-auth-state tests.
 
 ### Authorization and protected-data boundaries
 
@@ -604,15 +605,17 @@ Develop and implement these items only after the remaining incomplete items abov
 
 ### Release, client, and PWA quality
 
-- [ ] Add a reproducible release manifest covering every shipped byte.
-  - Generate one canonical manifest for source-derived assets, binaries, installer payloads, PWA files, migrations, sidecars, and deployment scripts, including hashes and generation inputs.
-  - Regression: clean rebuilds reproduce the manifest; omitted, extra, or changed files fail the package gate.
+- [x] Add a reproducible release manifest covering every shipped byte.
+  - [x] Generate one canonical manifest for source-derived assets, binaries, installer payloads, PWA files, migrations, sidecars, and deployment scripts, including hashes and generation inputs.
+  - [x] Regression: clean rebuilds reproduce the manifest; omitted, extra, or changed files fail the package gate.
+  - [x] Verified by release-manifest acceptance, health validation, and stale-manifest rejection tests.
 - [ ] Add downgrade and rollback compatibility tests across desktop, installer, updater, broker, and PWA versions.
   - Exercise interrupted upgrades, supported rollbacks, stale clients, schema boundaries, cache revisions, and old transaction records with explicit compatibility policy.
   - Regression: unsupported downgrade fails before mutation, while supported rollback restores a complete verified generation.
-- [ ] Add browser accessibility acceptance for all authenticated and error states.
-  - Verify keyboard-only navigation, focus restoration, labels, live-region announcements, contrast, reduced motion, zoom, screen-reader names, and 320px layouts across loading, empty, stale, retry, and failure states.
-  - Regression: automated browser assertions cover each protected view and prevent inaccessible failure paths from shipping.
+- [x] Add browser accessibility acceptance for all authenticated and error states.
+  - [x] Verify keyboard-only navigation, focus restoration, labels, live-region announcements, contrast, reduced motion, zoom, screen-reader names, and 320px layouts across loading, empty, stale, retry, and failure states.
+  - [x] Regression: automated browser assertions cover each protected view and prevent inaccessible failure paths from shipping.
+  - [x] Verified by the canonical PWA verifier and browser-smoke accessibility contracts.
 - [ ] Add offline conflict and reconnection semantics for queued user actions.
   - Define which actions may queue, bind queues to account generation and idempotency keys, surface conflicts, and discard protected actions safely on logout or revocation.
   - Regression: reconnect, duplicate delivery, account switch, server rejection, and stale-generation fixtures never duplicate or misapply an action.
