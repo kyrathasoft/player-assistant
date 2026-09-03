@@ -641,6 +641,9 @@ These additional items were derived from the current source, tests, deployment s
 - [ ] Enforce capability-scoped administrator and publishing routes before side effects.
   - Bind principal, capability, resource/account scope, operation ID, method, route, and body hash; reject unscoped or overbroad grants before nonce consumption.
   - Regression: a complete route/grant matrix proves least privilege for account, token, word-count, snapshot, schema, and health operations.
+- [ ] Add real-browser protected-envelope lifecycle coverage.
+  - Exercise login, session restoration, protected reads and mutations, account switching, logout, revocation, and stale-response rejection through the actual PWA boundary.
+  - Regression: no protected response renders without a valid current envelope, and anonymous or cross-account responses remain denied.
 
 ### Phase 2 — Repair client lifecycle and offline actions
 
