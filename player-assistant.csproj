@@ -130,7 +130,7 @@
 
   <ItemGroup>
     <PackageReference Include="Microsoft.Playwright" Version="1.62.0" />
-    <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.4022.49" />
+    <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.4191.47" />
     <PackageReference Include="SkiaSharp" Version="4.151.1" />
   </ItemGroup>
 
