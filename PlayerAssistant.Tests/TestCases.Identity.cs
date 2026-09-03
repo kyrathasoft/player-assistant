@@ -690,6 +690,67 @@ internal static partial class TestCases
             "XP boundary did not retain canonical identity enforcement");
     }
 
+    internal static void CanonicalAuthorizationMatrixCoversProtectedDesktopServices()
+    {
+        var first = SyntheticIdentityFixtures[0];
+        var second = SyntheticIdentityFixtures[1];
+        var player = XpAuthenticatedIdentity.Create(new XpCanonicalIdentityRecord(
+            first.CanonicalId, first.FullName, ["Ari"], XpIdentityRole.Player));
+        var otherPlayer = XpAuthenticatedIdentity.Create(new XpCanonicalIdentityRecord(
+            second.CanonicalId, second.FullName, [], XpIdentityRole.Player));
+        var dungeonMaster = XpAuthenticatedIdentity.Create(new XpCanonicalIdentityRecord(
+            "fixture-dm-authorization-003", "Dungeon Master", [], XpIdentityRole.DungeonMaster));
+        var cases = new[]
+        {
+            (Name: "anonymous", Identity: (XpAuthenticatedIdentity?)null),
+            (Name: "owner", Identity: player),
+            (Name: "cross-account", Identity: otherPlayer),
+            (Name: "role-scoped", Identity: dungeonMaster),
+        };
+        foreach (var testCase in cases)
+        {
+            var ownsFirst = AuthorizationPolicy.CanReadOwnedResource(testCase.Identity, first.CanonicalId);
+            var ownsSecond = AuthorizationPolicy.CanReadOwnedResource(testCase.Identity, second.CanonicalId);
+            Require(ownsFirst == (testCase.Name == "owner"), $"owner policy mismatch for {testCase.Name}");
+            Require(ownsSecond == (testCase.Name == "cross-account"), $"cross-account policy mismatch for {testCase.Name}");
+            Require(AuthorizationPolicy.CanReadOwnedResource(testCase.Identity, "Ari") == false,
+                $"display alias granted protected access for {testCase.Name}");
+            Require(AuthorizationPolicy.CanReadDungeonMasterResource(testCase.Identity) == (testCase.Name == "role-scoped"),
+                $"role/scope policy mismatch for {testCase.Name}");
+        }
+
+        var totals = new[]
+        {
+            new PcXpTotal(first.FullName, first.XpTotal, first.CanonicalId),
+            new PcXpTotal(second.FullName, second.XpTotal, second.CanonicalId),
+        };
+        Require(XpTrackingUtility.FindXpTotalForIdentity(totals, player)?.CanonicalId == first.CanonicalId,
+            "XP service denied same-scope identity");
+        Require(XpTrackingUtility.FindXpTotalForIdentity(totals, otherPlayer)?.CanonicalId == second.CanonicalId,
+            "XP service did not retain the other canonical scope");
+
+        var heroes = SyntheticIdentityFixtures.Select(fixture => fixture.PartySheet with { XpTotal = null }).ToArray();
+        var visibleToOwner = PartyHeroUtility.WithVisibleXpTotals(heroes, totals, player);
+        Require(visibleToOwner.Single(hero => hero.CanonicalId == first.CanonicalId).XpTotal == first.XpTotal
+            && visibleToOwner.Single(hero => hero.CanonicalId == second.CanonicalId).XpTotal is null,
+            "party service crossed the account boundary");
+        var missingIdentity = AssertThrows<ArgumentNullException>(() =>
+            PartyHeroUtility.WithVisibleXpTotals(heroes, totals, null!));
+        Require(missingIdentity is not null, "party service accepted a missing identity");
+
+        var briefing = MyHeroBriefingUtility.Build(new MyHeroBriefingRequest(
+            heroes, AuthenticatedIdentity: player, XpTotals: totals));
+        Require(briefing.Hero?.Name == first.FullName && briefing.Hero.XpTotal == first.XpTotal,
+            "briefing service denied same-scope identity");
+        var crossBriefing = MyHeroBriefingUtility.Build(new MyHeroBriefingRequest(
+            heroes, AuthenticatedIdentity: player, AuthenticatedHeroCanonicalId: second.CanonicalId, XpTotals: totals));
+        Require(crossBriefing.Hero?.Name != second.FullName,
+            "briefing service accepted a cross-account identity selection");
+        var anonymousBriefing = MyHeroBriefingUtility.Build(new MyHeroBriefingRequest(heroes, XpTotals: totals));
+        Require(anonymousBriefing.Hero is null && !anonymousBriefing.NeedsHeroSelection,
+            "briefing service exposed protected data without identity");
+    }
+
     // Compatibility names retained for existing catalog entries during merge resolution.
     internal static void XpIdentityRejectsSameFirstNameCrossAccountPassword()
         => CrossAccountPasswordAccessIsDenied();

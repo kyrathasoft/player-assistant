@@ -12,6 +12,12 @@ $PublishRuntimeIntegrityScriptPath = Join-Path $PSScriptRoot 'verify-publish-run
 $RuntimeSidecarScriptPath = Join-Path $PSScriptRoot 'verify-runtime-sidecars.ps1'
 $SelfTestRoot = Join-Path $PSScriptRoot '.rc-self-tests'
 $DependencyInventoryPath = Join-Path $PSScriptRoot 'codex-scratch\rc-dependency-inventory.json'
+$ProtectedDataNegativeSpaceScriptPath = Join-Path $PSScriptRoot 'verify-protected-data-negative-space.ps1'
+$MigrationRehearsalTestPath = Join-Path $PSScriptRoot 'web-deploy\tests\migration-rehearsal-tests.php'
+$DataInvariantTestPath = Join-Path $PSScriptRoot 'web-deploy\tests\data-invariant-contract-tests.php'
+$BoundedRepairTestPath = Join-Path $PSScriptRoot 'web-deploy\tests\bounded-repair-tests.php'
+$CompatibilityVerifierPath = Join-Path $PSScriptRoot 'verify-downgrade-rollback-compatibility.ps1'
+$ReleaseReadinessTestsPath = Join-Path $PSScriptRoot 'release-readiness-tests.ps1'
 
 function Resolve-FullPath {
     param(
@@ -112,6 +118,11 @@ function Invoke-ExternalCommand {
 }
 
 $PowerShellExecutable = Get-PowerShellExecutable
+& $PowerShellExecutable -NoProfile -NonInteractive -ExecutionPolicy Bypass -File $ProtectedDataNegativeSpaceScriptPath -RepoRoot $PSScriptRoot
+if ($LASTEXITCODE -ne 0) { throw 'Protected-data negative-space release gate failed.' }
+& $PowerShellExecutable -NoProfile -NonInteractive -ExecutionPolicy Bypass -File $ReleaseReadinessTestsPath
+if ($LASTEXITCODE -ne 0) { throw 'Release-readiness evidence aggregation gate failed.' }
+
 
 function Assert-CommandFailsWith {
     param(
@@ -646,6 +657,26 @@ try {
     Invoke-DependencyVulnerabilitySelfTest
     Invoke-DependencyFreshnessSelfTest
     Invoke-RuntimeSidecarSelfTest
+    Assert-CommandPasses `
+        -Name 'broker migration rehearsal' `
+        -FileName ((Get-Command php -ErrorAction Stop).Source) `
+        -Arguments @($MigrationRehearsalTestPath) `
+        -ExpectedText 'Migration rehearsal tests passed.'
+    Assert-CommandPasses `
+        -Name 'data invariant contract' `
+        -FileName ((Get-Command php -ErrorAction Stop).Source) `
+        -Arguments @($DataInvariantTestPath) `
+        -ExpectedText 'Data invariant contract tests passed.'
+    Assert-CommandPasses `
+        -Name 'bounded repair' `
+        -FileName ((Get-Command php -ErrorAction Stop).Source) `
+        -Arguments @($BoundedRepairTestPath) `
+        -ExpectedText 'Bounded repair tests passed.'
+    Assert-CommandPasses `
+        -Name 'downgrade and rollback compatibility' `
+        -FileName $PowerShellExecutable `
+        -Arguments @('-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', $CompatibilityVerifierPath) `
+        -ExpectedText 'Downgrade and rollback compatibility tests passed.'
 }
 finally {
     if (Test-Path -LiteralPath $SelfTestRoot) {

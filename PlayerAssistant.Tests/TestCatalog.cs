@@ -7,6 +7,13 @@ internal static class TestCatalog
     internal static (string Name, Action Test)[] Create() =>
         new (string Name, Action Test)[]
 {
+    ("secret lifecycle inventory redacts values and preserves safe identifiers", SecretLifecycleTests.InventoryRedactsSecretsAndRejectsNegativeSpace),
+    ("protected observability artifacts never contain protected data", ProtectedDataNegativeSpaceTests.ObservabilityArtifactsNeverContainProtectedData),
+    ("safe observability identifiers remain unchanged", ProtectedDataNegativeSpaceTests.SafeIdentifiersRemainInObservabilityArtifacts),
+    ("release state compatibility rejects rollback and future schema", TestCases.ReleaseStateCompatibilityRejectsRollbackAndFutureSchema),
+    ("correlation context rejects secrets and accepts safe IDs", TestCases.CorrelationContextRejectsSecretsAndAcceptsSafeIds),
+    ("date boundary rejects ambiguous and non UTC values", TestCases.DateBoundaryRejectsAmbiguousAndNonUtcValues),
+    ("startup recovery rejects ambiguous verified journal", TestCases.StartupRecoveryRejectsAmbiguousVerifiedJournal),
     ("orcish translator returns one-to-one english mapping", TestCases.OrcishTranslatorReturnsOneToOneEnglishMapping),
     ("repository root discovery handles CI output layout", TestCases.RepositoryRootDiscoveryHandlesCiOutputLayout),
     ("login throttling rejects malformed source at login boundary", TestCases.LoginThrottlingRejectsMalformedSourceAtLoginBoundary),
@@ -130,6 +137,7 @@ internal static class TestCatalog
     ("authenticated identity factory derives role and scope", TestCases.AuthenticatedIdentityFactoryDerivesRoleAndScope),
     ("authenticated identity factory rejects impossible canonical role", TestCases.AuthenticatedIdentityFactoryRejectsImpossibleCanonicalRole),
     ("protected boundaries reject forged identity state", TestCases.ProtectedBoundariesRejectForgedIdentityState),
+    ("canonical authorization matrix covers protected desktop services", TestCases.CanonicalAuthorizationMatrixCoversProtectedDesktopServices),
     ("account switching returns the new canonical identity", TestCases.AccountSwitchingReturnsNewCanonicalIdentity),
     ("dungeon master scope uses stable canonical ID", TestCases.DungeonMasterScopeUsesStableCanonicalId),
     ("opaque Dungeon Master canonical ID preserves scope", TestCases.OpaqueDungeonMasterCanonicalIdPreservesScope),
@@ -560,6 +568,7 @@ internal static class TestCatalog
     ("publish verification rejects malformed release provenance", TestCases.PublishVerificationRejectsMalformedReleaseProvenance),
     ("publish verification rejects unsigned executable when signing required", TestCases.PublishVerificationRejectsUnsignedExecutableWhenSigningRequired),
     ("installer scripts target program files install path", TestCases.InstallerScriptsTargetProgramFilesInstallPath),
+    ("Inno Setup identity attestation contract is pinned", TestCases.InnoSetupIdentityAttestationContractIsPinned),
     ("installer protects installed application tree", TestCases.InstallerProtectsInstalledApplicationTree),
     ("installer package verification accepts current package", TestCases.InstallerPackageVerificationAcceptsCurrentPackage),
     ("installer package verification rejects unsigned payload when signing required", TestCases.InstallerPackageVerificationRejectsUnsignedPayloadWhenSigningRequired),
@@ -575,6 +584,7 @@ internal static class TestCatalog
     ("release publish parity accepts current output", TestCases.ReleasePublishParityAcceptsCurrentOutput),
     ("release publish parity rejects mismatched sidecar", TestCases.ReleasePublishParityRejectsMismatchedSidecar),
     ("diagnostic bundle redacts sensitive values", TestCases.DiagnosticBundleRedactsSensitiveValues),
+    ("diagnostic bundle requires explicit initiation", TestCases.DiagnosticBundleRequiresExplicitInitiation),
     ("diagnostic bundle verify only rejects forbidden auth state", TestCases.DiagnosticBundleVerifyOnlyRejectsForbiddenAuthState),
     ("diagnostic retention cleanup removes old diagnostics and preserves unrelated scratch files", TestCases.DiagnosticRetentionCleanupRemovesOldDiagnosticsAndPreservesUnrelatedScratchFiles)
         };

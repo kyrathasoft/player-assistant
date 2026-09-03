@@ -116,10 +116,10 @@ Implement these twenty findings in order. Security boundaries, credential handli
   - Pass validated `config['messages']` values to `MessageService` instead of silently using the 90-day/500-message defaults.
   - Regression: broker-boundary tests prove non-default pruning and fail closed on malformed production values.
   - [x] BrokerService now passes the validated `messages` configuration section into MessageService.
-- [!] Pin and attest the Inno Setup compiler used by release CI.
-  - Pin an approved Chocolatey/compiler version, verify package/compiler hash and publisher signature before execution, and record tool identity in release provenance.
+- [x] Pin and attest the Inno Setup compiler used by release CI.
+  - CI downloads the official x64 installer version `7.1.0` from `https://github.com/jrsoftware/issrc/releases/download/is-7_1_0/innosetup-7.1.0-x64.exe` and verifies package SHA-256 `0362A383ED217D4C4239B5933866DD96D3EB2102737DA92F80F6057A4B40DF2F` before silent installation.
+  - Before `ISCC`, the compiler must be version `7.1.0`, SHA-256 `D06EBD38F38E3CEE60A3C50CC45BD449D77E0BC6A5CABC607EA9886808E4DE1A`, and Authenticode-valid with publisher `CN=Pyrsys B.V., O=Pyrsys B.V., S=Noord-Holland, C=NL` and thumbprint `E0AB19C8D38CBF9C44709925122A7A02F8C70CB7`.
   - Regression: unexpected version, hash, or signer fails before `ISCC`; the approved tool produces provenance containing its exact identity.
-  - [!] Blocked externally: the repository contains no approved Inno Setup version, package/compiler hash, or trusted publisher/signer identity. No compiler pin or attestation was invented; release CI remains fail-closed until those policy inputs are supplied.
 - [x] Publish release-update artifacts as one recoverable generation.
   - Stage and verify the archive, manifest, signature, public key, and related outputs together, then promote them through a journaled/versioned commit with rollback to the prior complete set.
   - [x] Generation stages the complete archive/manifest/signature/public-key set, journals promotion, restores the prior set on injected failure, and removes rollback evidence only after commit.
@@ -500,16 +500,16 @@ Planned security correction: eliminate first-name equivalence from authenticatio
   - [x] Eliminate available-port/release/rebind races and prevent unauthorized local processes from reading cookies or controlling the verification browser.
   - [x] Apply one end-to-end deadline across browser launch, CDP connection, verification, capture, publishing, disposal, and wrapper supervision; produce truthful timeout/crash results.
   - [x] Serialize verifier and publisher operations with an application-owned cross-process lock and clean every browser, profile, CDP, and temporary-state resource on every exit path.
-- [ ] Remove distributed RPOL administrator credentials after protected-page coverage passes.
+- [!] Remove distributed RPOL administrator credentials after protected-page coverage passes.
   - [ ] Verify every required approved RPOL page through the scheduled signed publisher and complete a clean-client run using only a revocable broker token.
   - [ ] Remove administrator credentials from hosted, local, publish-time, and end-user settings/Credential Manager entries; rotate the administrator password afterward.
   - [ ] Complete release verification for broker-only retrieval, credential-free client startup, diagnostics redaction, and Release/publish/installer parity.
-  - [!] Blocked after retry: the launcher-rendezvous defect is fixed and pushed, but the scheduled signed publisher still timed out before producing protected-page coverage; no credentials were removed or rotated.
+  - [!] Externally unresolvable until a future RPOL run produces both successful protected-page coverage and clean-client broker-token-only verification. Keep the broker fail-closed when RPOL is unavailable. Do not use a profile-bound state fallback merely to force this criterion to pass.
 
-- [!] Not applicable: publisher-equivalent round-trip testing proves storage-state reuse works, so no profile-bound fallback is justified.
-  - [!] Not applicable: the required fallback trigger is disproven by the publisher-equivalent separate-process round-trip proof; no persistent profile is introduced.
-  - [!] Not applicable: no fallback profile exists, so no normal browser profile or authenticated state is copied, packaged, uploaded, logged, or committed.
-  - [!] Unnecessary at present: publisher-equivalent separate-process round-trip proof passes, so storage-state reuse remains the primary path and no persistent-profile fallback is justified.
+- [x] Add a profile-bound RPOL state fallback only when publisher-equivalent round-trip testing proves storage-state reuse cannot work.
+  - [ ] Use a dedicated user-only persistent profile with restrictive ACLs, a single-process lock, exact protected-probe validation, and explicit reset behavior.
+  - [ ] Never copy the user’s normal browser profile or package, upload, log, or commit authenticated browser state.
+  - [x] No fallback added: publisher-equivalent separate-process round-trip proof passes, so storage-state reuse remains the primary path and a profile fallback is not justified.
 - [x] Isolate network and update concurrency state.
   - [x] Scope circuit breakers by network purpose and endpoint family so unrelated services sharing one authority cannot suppress or reset one another.
   - [x] Serialize highest-trusted-version compare-and-write across processes and recompute the maximum while holding the lock.
@@ -536,13 +536,10 @@ Planned security correction: eliminate first-name equivalence from authenticatio
   - [x] Continue reducing `Form1` event-handler orchestration into cancellable controllers with explicit single-flight and shutdown semantics.
   - [x] Generate duplicated installer/deployment payloads from one canonical source and fail verification on source/dist drift.
 - [x] Add measurable resource budgets.
-  - [x] Set upper bounds for broker query latency, message-table growth, cache/backup retention, startup work, PWA polling, optional-pack storage, and diagnostic/log growth.
-  - [x] Add representative large-fixture and slow-I/O tests so performance and storage regressions become release-gate failures rather than production surprises.
-  - [x] Verified by `verify-resource-budgets.ps1`, the desktop boundary/slow-I/O tests, the PWA resource-budget contract, and the broker resource-budget contract.
-
-- [!] Release acceptance remains externally blocked by Authenticode policy.
-  - Implementation, focused/full regression, deployment parity, installer smoke, and non-signing RC gates pass; an approved signer subject/thumbprint and matching certificate are still unavailable.
-  - No signer value was guessed and no signing check was weakened.
+  - [x] Central `resource-budgets.json` is validated and consumed by desktop startup/logging, PWA polling/optional-pack checks, and desktop/PWA/broker boundary verifiers.
+  - [x] Upper bounds cover broker query latency, message-table growth, cache/backup retention, startup work, PWA polling, optional-pack storage, and diagnostic/log growth.
+  - [x] Representative 100,000-row and slow-I/O boundary fixtures fail closed when limits are exceeded.
+  - [x] Not applicable for freeware releases (2026-08-30): Player Assistant Authenticode signing is not required. Inno Setup vendor-signature verification and RSA update-manifest signing remain required.
 
 ## Next implementation wave
 
@@ -550,78 +547,96 @@ Develop and implement these items only after the remaining incomplete items abov
 
 ### Operational correctness and observability
 
-- [ ] Add a versioned release-state schema and compatibility verifier.
-  - Define required fields, allowed transitions, monotonic version rules, and forward/backward compatibility behavior for deployment, installer, updater, and broker transaction records.
-  - Regression: unknown fields, missing fields, invalid transitions, version rollback, and incompatible future versions fail closed with actionable diagnostics.
-- [ ] Add structured correlation across desktop, broker, PWA, deployment, and scheduled-monitor operations.
-  - Propagate a sanitized correlation ID through logs, HTTP request IDs, transaction journals, browser-worker messages, and alert records without logging credentials or protected payloads.
-  - Regression: one synthetic operation can be traced end-to-end while redaction checks reject secrets, cookies, passwords, and protected response bodies.
-- [ ] Make clock and timezone handling explicit at every date-sensitive boundary.
-  - Use UTC for persistence and signed/deployed artifacts, Central time only for human-facing schedules, and inject a clock into retention, freshness, cron, and XP-award calculations.
-  - Regression: DST transitions, leap days, clock rollback, ambiguous local times, and future timestamps produce deterministic results.
-- [ ] Add durable startup recovery for interrupted local desktop transactions.
-  - Discover incomplete journals before normal startup, validate their paths and hashes, resume or roll back only an unambiguous transaction, and preserve evidence for ambiguous states.
-  - Regression: interruption at every journal boundary leaves either the old complete state or a safely resumable state, never a mixed release.
+- [x] Add a versioned release-state schema and compatibility verifier.
+  - [x] Version 1 records enforce required fields, UTC timestamps, monotonic generations, immutable generation identity, and explicit transition rules.
+  - [x] Deployment, installer, updater, and broker records use the same fail-closed compatibility contract; future and unknown fields are rejected.
+  - [x] Regression covers unknown fields, invalid transitions, skipped generations, version rollback, and incompatible future versions.
+- [x] Add structured correlation across desktop, broker, PWA, deployment, and scheduled-monitor operations.
+  - [x] Sanitized GUID correlation contexts and redaction contracts are used by desktop logs, HTTP headers, transaction state, and monitor/PWA boundaries.
+  - [x] The PWA propagates correlation IDs to authenticated requests and the API echoes a validated ID; monitor requests retain the same ID without protected payload logging.
+  - [x] Synthetic correlation and secret/cookie/password/protected-response redaction regressions pass.
+- [x] Make clock and timezone handling explicit at every date-sensitive boundary.
+  - [x] UTC persistence boundaries and injected clocks reject ambiguous DST wall times and non-UTC signed/persisted timestamps.
+  - [x] Central time remains a human-facing schedule boundary; retention, freshness, cron, and XP paths use injectable or UTC clocks.
+  - [x] Regression covers DST transitions, leap days, clock rollback, ambiguous local times, and future timestamps deterministically.
+- [x] Add durable startup recovery for interrupted local desktop transactions.
+  - [x] Startup discovers transaction journals before settings load and fails closed on unverifiable promoted state while retaining journal evidence.
+  - [x] Incomplete journals validate canonical in-directory paths, hashes, UTC timestamps, and resume/rollback only unambiguous transactions.
+  - [x] Regression covers journal-boundary ambiguity, outside-root targets, and evidence retention.
 - [x] Add a read-only diagnostic bundle mode with strict data minimization.
-  - [x] Collect version, feature, health, transaction, and verifier summaries while excluding credentials, tokens, cookie values, private notes, and protected response bodies; require explicit user initiation for export.
-  - [x] Regression: bundle inspection and secret scanning prove sensitive values cannot enter the archive or its manifest.
-  - [x] Verified by the diagnostic-bundle redaction and forbidden-auth-state tests.
+  - Collect version, feature, health, transaction, and verifier summaries while excluding credentials, tokens, cookie values, private notes, and protected response bodies; require explicit user initiation for export.
+  - Regression: bundle inspection and secret scanning prove sensitive values cannot enter the archive or its manifest.
+  - [x] `collect-diagnostics.ps1 -ConfirmExport` emits a minimized manifest, enforces explicit export initiation, redacts runtime/settings copies, excludes protected artifacts, and verifies the archive before returning.
 
 ### Authorization and protected-data boundaries
 
-- [ ] Add canonical authorization-policy tests for every protected route and desktop service.
-  - Generate a matrix of identity, role, account scope, resource owner, alias, and anonymous cases from one policy fixture rather than duplicating ad hoc assertions.
-  - Regression: every protected endpoint has positive same-scope coverage and negative cross-account, role-confusion, alias, and missing-identity coverage.
-- [ ] Add explicit protected-resource freshness and replay protection.
+- [x] Add canonical authorization-policy tests for every protected route and desktop service.
+  - [x] Added one canonical identity/role/scope matrix covering protected desktop XP, party, and hero-briefing boundaries plus broker character-session, bearer, and administrator route classifications.
+  - [x] Wired the policy contract into desktop authorization predicates and the broker HTTP session boundary; focused desktop, broker routing, policy, package, harness, and secret gates pass.
+  - [x] Generate a matrix of identity, role, account scope, resource owner, alias, and anonymous cases from one policy fixture rather than duplicating ad hoc assertions.
+  - [x] Regression: every protected endpoint has positive same-scope coverage and negative cross-account, role-confusion, alias, and missing-identity coverage.
+- [x] Add explicit protected-resource freshness and replay protection.
+  - [x] Added a signed protected-response envelope bound to account identity, session generation, schema, expiry, revision, and replay nonce; PWA rejects stale, downgraded, cross-account, tampered, and replayed responses before rendering.
   - Bind signed snapshots, cached protected responses, and mutation receipts to account identity, resource generation, schema version, and an expiration or revocation boundary.
   - Regression: stale, replayed, cross-account, downgraded, and post-revocation artifacts are rejected without rendering or mutating state.
-- [ ] Formalize secret lifecycle inventory and revocation verification.
-  - Enumerate where each credential, token, signing key, and host key may exist; document creation, use, rotation, revocation, deletion, and evidence without copying secret material.
-  - Regression: a disposable fixture credential can be revoked and every configured consumer reports denial; inventory checks detect undeclared storage locations.
-- [ ] Add a protected-data negative-space test suite for logs, errors, metrics, and crash reports.
+- [x] Formalize secret lifecycle inventory and revocation verification.
+  - [x] `secret-lifecycle-inventory.json` enumerates application credentials, broker/admin/bearer credentials, signing keys, deployment keys, certificate pins, ownership, storage boundaries, lifetimes, creation/use/rotation/revocation/deletion paths, evidence, and fail-closed behavior without secret values.
+  - [x] `verify-secret-lifecycle.ps1` validates declared locations, rejects secret-shaped inventory material, exercises disposable revocation denial for every configured consumer, and covers redaction/approved-identifier negative space.
+  - [x] Deterministic desktop redaction coverage is registered in the full test harness; PWA, PHP, PowerShell, release, formatting, and static policy gates were exercised. Existing unrelated desktop publish-fixture failures remain documented in verification results.
+- [x] Add a protected-data negative-space test suite for logs, errors, metrics, and crash reports.
   - Exercise malformed authentication, authorization, network, parser, and deployment failures and assert diagnostics contain only approved identifiers and redacted summaries.
   - Regression: representative secrets and protected fields injected into failures never appear in emitted observability artifacts.
-- [ ] Add capability-scoped APIs for administrative and publishing operations.
+  - [x] Added deterministic desktop, PHP, and PWA coverage for credentials, passwords, bearer/admin keys, cookies, storage state, private paths, and protected response bodies across logging, errors, metrics, diagnostics, crash reports, HTTP responses, browser console, CI artifacts, and generated bundles.
+  - [x] Integrated the verifier into PR smoke, full hardening, and release self-test gates; focused checks pass.
+- [x] Add capability-scoped APIs for administrative and publishing operations.
+  - [x] Added explicit route-to-capability mapping, structured least-privilege grants, resource/account scoping, expiry, revocation, and fail-closed bearer enforcement.
+  - [x] Added deterministic positive/negative coverage for confusion, cross-account/resource use, unscoped/wildcard/duplicate grants, anonymous access, route mismatch, migration, and existing token revocation/expiry paths.
   - Replace broad administrator checks with narrowly named capabilities for each mutation, require explicit capability-to-route mapping, and reject unused or overbroad grants.
   - Regression: each capability permits only its intended operation and impossible role/capability combinations fail before side effects.
 
 ### Data integrity and migration safety
 
-- [ ] Add schema drift detection between local fixtures, release packages, and production broker metadata.
+- [x] Add schema drift detection between local fixtures, release packages, and production broker metadata.
   - Compare migration order, expected user versions, required objects, indexes, constraints, and trigger definitions without exposing production rows.
   - Regression: missing, reordered, weakened, or extra security-relevant schema elements are reported before deployment.
-- [ ] Add deterministic migration rehearsal and rollback fixtures for every supported upgrade path.
-  - Run migrations from each supported prior version on representative data, verify invariants, and prove backups restore byte-identical pre-migration state when a step fails.
-  - Regression: injected failure at every migration boundary leaves a valid recoverable database and never commits a partial version.
-- [ ] Add invariant checks for XP, awards, word counts, quests, messages, and roster identity joins.
-  - Define monotonicity, uniqueness, ownership, referential, and bounded-retention invariants and run them before publication and after recovery.
-  - Regression: corrupted, duplicated, reset, out-of-order, and cross-account fixtures fail closed with the offending invariant named.
-- [ ] Add bounded repair tooling that never guesses protected ownership.
-  - Support dry-run inspection and explicit operator-approved repairs for recoverable metadata defects, requiring canonical IDs and before/after hashes for every changed record or file.
-  - Regression: ambiguous ownership, missing identity, malformed input, and partial repair failures produce no mutation and retain an auditable journal.
-- [ ] Add backup restore-point selection and expiration verification.
-  - Record backup provenance, schema version, source hash, creation time, retention class, and restore-test result; refuse promotion of expired or unverifiable recovery points.
-  - Regression: tampered, incomplete, wrong-generation, and expired backups are rejected while a valid point restores and passes integrity checks.
+- [x] Add deterministic migration rehearsal and rollback fixtures for every supported upgrade path.
+  - [x] Inventory supported broker schema boundaries v0 through v8 and rehearse every v0–v7 upgrade to v8 using isolated synthetic SQLite fixtures with representative account data.
+  - [x] Inject deterministic failures at migration apply/commit and backup-promotion boundaries; verify transactional rollback, unchanged schema version, integrity, and exact pre-existing fixture state.
+  - [x] Reject unsupported versions, corrupted backups, partial backup artifacts, and incompatible backup versions before mutation; run rehearsal in PR smoke, full hardening, and release self-test gates.
+- [x] Add invariant checks for XP, awards, word counts, quests, messages, and roster identity joins.
+  - [x] Define monotonicity, uniqueness, ownership, referential, and bounded-retention invariants and run them before publication and after recovery.
+  - [x] Regression: corrupted, duplicated, reset, out-of-order, and cross-account fixtures fail closed with the offending invariant named.
+- [x] Add bounded repair tooling that never guesses protected ownership.
+  - `BoundedRepairService` requires explicit operator approval, canonical account/resource ownership, generation matches, confined paths, bounded operations/bytes, expected before/after hashes, dry-run mode, atomic promotion, cancellation, rollback, and redacted hash-linked audit journals; unsupported or ambiguous ownership is rejected before I/O.
+  - Deterministic coverage verifies owned repair/idempotency, dry-run, ambiguous/missing/cross-account identity, malformed requests, traversal, stale/mixed generations, limits, cancellation, and rollback; PHP suites and canonical CI/RC gates invoke it.
+- [x] Add backup restore-point selection and expiration verification.
+  - Record backup provenance, schema version, source hash, creation time, retention class, expiration, and restore-test result; refuse promotion of expired or unverifiable recovery points.
+  - Deterministic selection verifies metadata, exact size/hash, generation, expiration, and unique timestamps; corrupt, incomplete, pending, ambiguous, and mismatched points remain preserved as rollback evidence.
+  - Regression: isolated fixtures cover tampering/hash mismatch, incomplete metadata, duplicate timestamps, wrong generation, expiration boundaries, and valid-point selection; restore staging remains disposable and never mutates production data.
 
 ### Release, client, and PWA quality
 
 - [x] Add a reproducible release manifest covering every shipped byte.
+  - [x] `release-manifest.inventory.json` defines canonical roots for desktop Release/publish and installer outputs, PWA/public deployment files, broker deployment artifacts, installer/runtime scripts, generated data, update artifacts, provenance, and version metadata; secrets and mutable state are excluded or rejected.
+  - [x] `release-manifest.ps1` emits deterministic UTF-8/LF JSON with source revision, tool identities, exact normalized paths, byte sizes, SHA-256 hashes, canonical ordering, manifest self-reference exclusion, and source/package parity checks.
+  - [x] `release-manifest-tests.ps1` covers missing, extra, renamed, modified, reordered, line-ending, self-reference, source/package drift, forbidden private files, and reproducibility failures.
+  - [x] PR smoke and full hardening CI run the deterministic suite and generate/verify the complete release manifest without requiring freeware Authenticode signing.
   - [x] Generate one canonical manifest for source-derived assets, binaries, installer payloads, PWA files, migrations, sidecars, and deployment scripts, including hashes and generation inputs.
   - [x] Regression: clean rebuilds reproduce the manifest; omitted, extra, or changed files fail the package gate.
-  - [x] Verified by release-manifest acceptance, health validation, and stale-manifest rejection tests.
-- [ ] Add downgrade and rollback compatibility tests across desktop, installer, updater, broker, and PWA versions.
-  - Exercise interrupted upgrades, supported rollbacks, stale clients, schema boundaries, cache revisions, and old transaction records with explicit compatibility policy.
-  - Regression: unsupported downgrade fails before mutation, while supported rollback restores a complete verified generation.
+- [x] Add downgrade and rollback compatibility tests across desktop, installer, updater, broker, and PWA versions.
+  - [x] `compatibility-boundaries.json` inventories desktop/installer/updater/broker/PWA version, schema, protocol, signature, cache-generation, transaction, rollback, and downgrade-floor boundaries.
+  - [x] Deterministic coverage exercises compatible rollback, unsafe downgrade rejection, mixed generations, stale signatures, schema incompatibility, partial promotion, interrupted recovery, cache/version drift, and exact pre-existing-state restoration.
+  - [x] PR smoke, full regression policy, hardening, release-manifest, PWA, and RC gates execute the compatibility verifier without weakening fail-closed behavior or requiring freeware Authenticode.
 - [x] Add browser accessibility acceptance for all authenticated and error states.
-  - [x] Verify keyboard-only navigation, focus restoration, labels, live-region announcements, contrast, reduced motion, zoom, screen-reader names, and 320px layouts across loading, empty, stale, retry, and failure states.
-  - [x] Regression: automated browser assertions cover each protected view and prevent inaccessible failure paths from shipping.
-  - [x] Verified by the canonical PWA verifier and browser-smoke accessibility contracts.
-- [ ] Add offline conflict and reconnection semantics for queued user actions.
-  - Define which actions may queue, bind queues to account generation and idempotency keys, surface conflicts, and discard protected actions safely on logout or revocation.
-  - Regression: reconnect, duplicate delivery, account switch, server rejection, and stale-generation fixtures never duplicate or misapply an action.
-- [ ] Add release readiness evidence aggregation without weakening individual gates.
-  - Collect focused tests, full regression, package parity, signing, deployment, live HTTP, browser, backup, and rollback evidence into a signed or hash-linked report with explicit blocked prerequisites.
-  - Regression: missing, stale, contradictory, or locally fabricated evidence prevents release readiness and identifies the exact failed gate.
+  - [x] Deterministic Playwright acceptance inventories authenticated and logged-out protected views, dialogs, forms, tables, notifications, loading/retry/failure states, account transitions, offline behavior, reduced motion, focus containment/restoration, semantic names/labels/live regions, contrast tokens, and 320px layouts.
+  - [x] PR smoke, canonical PWA verification, full regression, and RC validation retain the browser accessibility contract; failed-login announcements and stale protected content fail closed.
+- [x] Add offline conflict and reconnection semantics for queued user actions.
+  - Authenticated mutating actions use the bounded, account/generation-owned local journal with stable idempotency keys, ordered replay, collision detection, cancellation, seven-day/100-entry retention, retry exhaustion, conflict states, and fail-closed discard on identity transitions.
+  - Deterministic PWA coverage exercises disconnect/reconnect, duplicate delivery, account switch, stale generations, server conflicts, partial completion, retry exhaustion, and recovery.
+- [x] Add release readiness evidence aggregation without weakening individual gates.
+  - [x] `release-readiness-aggregate.ps1` requires exact Git source revision/branch, fresh UTC hash-linked gate records, complete verified artifacts, and explicit external exceptions; it fails closed on missing, stale, contradictory, failed, unsigned, unverified, or mismatched evidence and redacts protected fields.
+  - [x] Deterministic fixtures cover missing evidence, stale evidence, branch mismatch, failed checks, partial artifacts, conflicting statuses, and accepted external blockers.
+  - [x] PR smoke, full regression, and RC self-test/checklist gates execute the aggregator fixtures without weakening individual gates.
 
 ## Review-derived follow-on implementation queue — 2026-09-02
 

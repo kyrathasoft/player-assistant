@@ -39,5 +39,18 @@ assert.match(pageshowHandler, /void restoreAuthentication\(\)/u);
 assert.match(source, /const failClosedBeforeAuthenticationRestore = \(\) =>/u);
 assert.match(source, /accountSessionController\.setAccount\(null\)/u);
 assert.match(source, /data-protected-content/u);
+const failClosedStart = source.indexOf('const failClosedBeforeAuthenticationRestore = () =>');
+const clearProtectedDom = source.indexOf("document.querySelectorAll('[data-protected-content]')", failClosedStart);
+const failClosedUi = source.indexOf('updateAuthenticationUi();', clearProtectedDom);
+assert.ok(clearProtectedDom > failClosedStart && failClosedUi > clearProtectedDom,
+    'Pageshow must clear protected DOM state before rendering fail-closed UI.');
+
+const restoreStart = source.indexOf('const restoreAuthentication = async () =>');
+const restoreEnd = source.indexOf("\n    authButton?.addEventListener", restoreStart);
+const restore = source.slice(restoreStart, restoreEnd);
+assert.match(restore, /setView\(location\.hash\.slice\(1\) \|\| 'dashboard', false\)/u);
+assert.ok(restore.indexOf('updateAuthenticationUi();') < restore.indexOf('setView(location.hash.slice(1) || \'dashboard\', false)'),
+    'The URL-selected view must be restored only after authentication UI is updated.');
+assert.ok(restoreStart >= 0 && restoreEnd > restoreStart, 'Session restore lifecycle must be present.');
 
 console.log('PASS authenticated lifecycle fault-injection contracts');
