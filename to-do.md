@@ -638,6 +638,85 @@ Develop and implement these items only after the remaining incomplete items abov
   - [x] Deterministic fixtures cover missing evidence, stale evidence, branch mismatch, failed checks, partial artifacts, conflicting statuses, and accepted external blockers.
   - [x] PR smoke, full regression, and RC self-test/checklist gates execute the aggregator fixtures without weakening individual gates.
 
+## Review-derived follow-on implementation queue — 2026-09-02
+
+These additional items were derived from the current source, tests, deployment scripts, and the latest backlog implementation state. They follow the existing queue and are ordered from protected-request contracts through client behavior, packaging, publication, and test-harness evidence.
+
+### Phase 1 — Complete protected request contracts
+
+- [ ] Complete protected-response decoration at the real broker dispatch boundary.
+  - Pass the resolved session identity explicitly to every protected success response while preserving the unauthenticated session exception.
+  - Regression: every protected GET and mutation has the expected envelope and missing-context requests fail closed.
+- [ ] Bind protected envelopes to the exact HTTP request and cryptographic key generation.
+  - Sign method, route, account, session generation, body digest, nonce, issue/expiry times, and schema with a pinned verifiable key; reject unknown algorithms and canonicalization changes.
+  - Regression: route, method, body, account, replay, downgrade, and key-rotation tampering never renders or mutates state.
+- [ ] Separate response freshness from session issuance time.
+  - Issue each response at creation time, cap lifetime at five minutes and absolute session expiry, and reject responses after session revocation.
+  - Regression: immediate, 301-second, near-expiry, and revoked-session responses are classified deterministically.
+- [ ] Re-envelope idempotent mutation replays for each delivery.
+  - Persist semantic result/effect identity separately from delivery nonce and freshness metadata, replaying without rerunning the mutation.
+  - Regression: lost responses, expired envelopes, concurrent duplicates, account transitions, and body collisions remain safe.
+- [ ] Enforce capability-scoped administrator and publishing routes before side effects.
+  - Bind principal, capability, resource/account scope, operation ID, method, route, and body hash; reject unscoped or overbroad grants before nonce consumption.
+  - Regression: a complete route/grant matrix proves least privilege for account, token, word-count, snapshot, schema, and health operations.
+- [ ] Add real-browser protected-envelope lifecycle coverage.
+  - Exercise login, session restoration, protected reads and mutations, account switching, logout, revocation, and stale-response rejection through the actual PWA boundary.
+  - Regression: no protected response renders without a valid current envelope, and anonymous or cross-account responses remain denied.
+
+### Phase 2 — Repair client lifecycle and offline actions
+
+- [ ] Compare the complete PWA generation before service-worker activation deletes caches.
+  - Include app revision in semantic generation ordering with legacy-cache compatibility and prevent older workers from claiming clients or deleting newer caches.
+  - Regression: app-only, equal, upgrade, downgrade, and rollback interleavings are covered.
+- [ ] Replace the short navigation race with an aborting multi-second deadline.
+  - Use a realistic bounded network deadline, abort the losing request, and retain the canonical shell fallback for true offline navigation.
+  - Regression: a response just beyond 150 ms is promoted, a stalled request is aborted, and offline startup remains bounded.
+- [ ] Recover persisted offline mutations interrupted during sending.
+  - Normalize interrupted entries to retryable queued state, preserve idempotency keys and attempts, and use durable completion receipts to prevent duplicate effects.
+  - Regression: reload-before-dispatch, interruption during dispatch, and server-commit recovery converge correctly.
+- [ ] Distinguish queued, sent, conflicted, and exhausted mutation states in the UI.
+  - Preserve drafts until queue events establish completion and expose actionable retry/conflict status rather than treating queue acceptance as HTTP success.
+  - Regression: offline submission, reload, replay success, conflict, and retry exhaustion are rendered distinctly.
+- [ ] Scope message drafts by canonical account and destination.
+  - Separate DM, exact-recipient, and broadcast drafts; restore, send, and clear only the matching destination across account transitions.
+  - Regression: player/DM, broadcast, recipient-change, switch, and logout cases cannot leak or delete another draft.
+
+### Phase 3 — Make packaging and deployment exact-set operations
+
+- [ ] Validate the online installer against complete browser and PHP dependency graphs.
+  - Require exact TAR inventory parity for imports, workers, broker classes, API loaders, configuration templates, and static assets, then exercise an isolated install fixture.
+  - Regression: removing any runtime dependency fails packaging before installation.
+- [ ] Generate one canonical runtime inventory for deployment and verification.
+  - Drive workflows, deployers, package builders, service-worker checks, and HTTPS verification from the same public/private file set, including `.htaccess`.
+  - Regression: omission and extra-file fixtures fail before SSH promotion and deployed-browser smoke covers the complete set.
+- [ ] Publish campaign-search data and its content-addressed manifest atomically.
+  - Couple exact-byte hash, size, page count, and validation metadata to the same generation and require both files in path filters and promotion.
+  - Regression: stale-manifest promotion fails and online/offline search verifies live parity.
+- [ ] Aggregate real release evidence before artifact upload.
+  - Hash-link gate results and artifacts to the exact revision/ref, then reject stale, contradictory, tampered, wrong-revision, or externally incomplete candidates.
+  - Regression: the aggregator consumes actual gate output rather than synthetic readiness fixtures.
+
+### Phase 4 — Finish desktop launch and publication reliability
+
+- [ ] Preserve launcher arguments with Windows-native structured argument handling.
+  - Use one `ArgumentList` entry per original argument and round-trip empty, Unicode, quoted, trailing-slash, UNC, and result-path arguments without injection.
+  - Regression: child-process capture proves byte-for-byte argument preservation without sensitive-value logging.
+- [ ] Package `PlayerAssistantLauncher.exe` as the installed and portable entry point.
+  - Ship it beside the application, update shortcuts and post-install launch, and verify manifests, hashes, upgrades, missing-runtime guidance, and uninstall behavior.
+  - Regression: healthy and missing-runtime clean-machine fixtures exercise both package forms.
+- [ ] Report scheduled publisher completion rather than task dispatch acceptance.
+  - Capture prior run state, poll for a new completed run, and require task-specific broker/readback or publish-report evidence.
+  - Regression: queued, running, completed, failed, timed-out, and partial two-task outcomes are distinct.
+- [ ] Reconcile the RPOL queue with authoritative discovery and fair retry scheduling.
+  - Retire renamed/deleted targets only after complete discovery, preserve fixed targets, bound per-target failures, and prevent starvation.
+  - Regression: incomplete discovery, transient/permanent failures, recovery, restart, cursor changes, and idempotent journals are covered.
+
+### Phase 5 — Make custom CI evidence durable
+
+- [ ] Add exact selection, per-test watchdogs, and durable partial results to the .NET harness.
+  - Print selected count/names, reject zero or ambiguous filters, support exact-name child mode, terminate owned process trees on timeout, and continue remaining tests.
+  - Regression: intentional hangs, leaked handles, teardown, incremental JSON/JUnit output, and workflow timeout fallback return nonzero with `TIMEOUT <name>` evidence.
+
 ## Completed
 
 - [x] Schedule fail-closed full wiki and local IC/OOC recounts at 4:00 AM and 8:30 PM Central with authenticated publication verification.
