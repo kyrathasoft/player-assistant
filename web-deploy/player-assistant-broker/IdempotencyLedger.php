@@ -29,6 +29,7 @@ final class IdempotencyLedger
         $started = microtime(true);
         while (true) {
             $this->database->exec('BEGIN IMMEDIATE');
+            $transactionStarted = true;
             try {
                 $this->prune();
                 $statement = $this->database->prepare(
@@ -88,10 +89,11 @@ final class IdempotencyLedger
                 if ($this->beforeFinalizationCommit !== null) {
                     ($this->beforeFinalizationCommit)();
                 }
-                $this->database->commit();
+                $this->database->exec('COMMIT');
+                $transactionStarted = false;
                 return $response;
             } catch (Throwable $exception) {
-                if ($this->database->inTransaction()) $this->database->rollBack();
+                if ($transactionStarted) $this->database->exec('ROLLBACK');
                 // Never delete a reservation after the mutation may have committed.
                 // A retry observes the pending row and can be recovered explicitly.
                 throw $exception;

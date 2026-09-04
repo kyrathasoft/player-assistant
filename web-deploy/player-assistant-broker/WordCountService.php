@@ -33,12 +33,14 @@ final class WordCountService
         $snapshot = $this->validate($body);
         return $this->withRefreshLock(function () use ($snapshot): array {
             $this->database->exec('BEGIN IMMEDIATE');
+            $transactionStarted = true;
             try {
                 $current = $this->loadCachedSnapshot();
                 if ($current !== null
                     && $this->generationTimestamp($snapshot['observed_at'])
                         <= $this->generationTimestamp($current['observed_at'])) {
-                    $this->database->commit();
+                    $this->database->exec('COMMIT');
+                    $transactionStarted = false;
                     return $current;
                 }
 
@@ -71,11 +73,12 @@ final class WordCountService
                     $snapshot['ooc']['words'],
                     $uploadedAt,
                 ]);
-                $this->database->commit();
+                $this->database->exec('COMMIT');
+                $transactionStarted = false;
                 return $this->format($snapshot, $uploadedAt);
             } catch (Throwable $error) {
-                if ($this->database->inTransaction()) {
-                    $this->database->rollBack();
+                if ($transactionStarted) {
+                    $this->database->exec('ROLLBACK');
                 }
                 throw $error;
             }
