@@ -550,9 +550,10 @@ Develop and implement these items only after the remaining incomplete items abov
 
 ### Operational correctness and observability
 
-- [ ] Add a versioned release-state schema and compatibility verifier.
+- [x] Add a versioned release-state schema and compatibility verifier.
   - Define required fields, allowed transitions, monotonic version rules, and forward/backward compatibility behavior for deployment, installer, updater, and broker transaction records.
   - Regression: unknown fields, missing fields, invalid transitions, version rollback, and incompatible future versions fail closed with actionable diagnostics.
+  - [x] Added the shared fail-closed PowerShell release-state schema verifier and deterministic transition/compatibility tests.
 - [ ] Add structured correlation across desktop, broker, PWA, deployment, and scheduled-monitor operations.
   - Propagate a sanitized correlation ID through logs, HTTP request IDs, transaction journals, browser-worker messages, and alert records without logging credentials or protected payloads.
   - Regression: one synthetic operation can be traced end-to-end while redaction checks reject secrets, cookies, passwords, and protected response bodies.
