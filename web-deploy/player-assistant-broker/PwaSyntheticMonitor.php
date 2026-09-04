@@ -42,6 +42,7 @@ final class PwaSyntheticMonitor
 
     public function run(): array
     {
+        $this->correlationId = CorrelationContext::create();
         $previous = $this->readStatus();
         $now = ($this->clock)();
         try {
@@ -62,7 +63,11 @@ final class PwaSyntheticMonitor
                 $this->recordAlert($status, 'recovered', 'The authenticated production PWA monitor recovered.', $now);
             }
             $this->writeStatus($status);
-            return ['status' => 'ok', 'checked_at' => $status['last_run_at']];
+            return [
+                'status' => 'ok',
+                'checked_at' => $status['last_run_at'],
+                'correlation_id' => $this->correlationId,
+            ];
         } catch (Throwable $error) {
             if ($error instanceof PwaMonitorFailure && $error->errorCode === 'status_write_failed') {
                 throw $error;
@@ -235,6 +240,7 @@ final class PwaSyntheticMonitor
             $headers['Cookie'] = $this->cookie;
         }
         $headers['X-Correlation-ID'] = $this->correlationId;
+        $headers['X-Request-ID'] = $this->correlationId;
         $response = ($this->requester)($method, $url, $headers, $body);
         if (!is_array($response) || !isset($response['status'], $response['headers'], $response['body'])) {
             throw new PwaMonitorFailure('transport_invalid', 'The monitor transport returned an invalid response.');
