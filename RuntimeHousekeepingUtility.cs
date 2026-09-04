@@ -9,12 +9,13 @@ namespace PlayerAssistant
         public static RuntimeHousekeepingReport Clean(
             string runtimeDirectory,
             DateTimeOffset? now = null,
-            RuntimeHousekeepingOptions? options = null)
+            RuntimeHousekeepingOptions? options = null,
+            IPlayerAssistantClock? clock = null)
         {
             ArgumentException.ThrowIfNullOrWhiteSpace(runtimeDirectory);
 
             var resolvedOptions = options ?? RuntimeHousekeepingOptions.Default;
-            var resolvedNow = now ?? DateTimeOffset.Now;
+            var resolvedNow = ClockUtility.Utc(now ?? (clock ?? SystemPlayerAssistantClock.Instance).UtcNow);
             var rootDirectory = Path.GetFullPath(runtimeDirectory);
             var report = new RuntimeHousekeepingReport();
 

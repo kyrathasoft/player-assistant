@@ -149,7 +149,7 @@ namespace PlayerAssistant
         internal static bool IsPossiblyStale(RpolSnapshotPayload payload, DateTimeOffset now)
         {
             ArgumentNullException.ThrowIfNull(payload);
-            return !DateTimeOffset.TryParse(payload.FetchedAt, out var fetchedAt)
+            return !ClockUtility.TryParseUtc(payload.FetchedAt, out var fetchedAt)
                 || fetchedAt > now.AddMinutes(5)
                 || now - fetchedAt >= StartupFreshnessInterval;
         }

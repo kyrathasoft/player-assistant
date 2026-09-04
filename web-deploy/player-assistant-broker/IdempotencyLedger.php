@@ -2,17 +2,23 @@
 
 declare(strict_types=1);
 
+require_once __DIR__ . '/PlayerAssistantClock.php';
+
 final class IdempotencyLedger
 {
     private $beforeFinalizationCommit;
+    private $clock;
+
     public function __construct(
         private readonly PDO $database,
         private readonly int $retentionSeconds = 86400,
         private readonly int $waitMilliseconds = 5000,
         ?callable $beforeFinalizationCommit = null,
-        private readonly string $tableName = 'mutation_idempotency')
+        private readonly string $tableName = 'mutation_idempotency',
+        ?callable $clock = null)
     {
         $this->beforeFinalizationCommit = $beforeFinalizationCommit;
+        $this->clock = $clock ?? static fn(): int => PlayerAssistantClock::nowUnix();
         if (preg_match('/^[a-z_]+$/D', $this->tableName) !== 1) throw new InvalidArgumentException('Invalid idempotency ledger table.');
     }
 
@@ -29,6 +35,7 @@ final class IdempotencyLedger
         $started = microtime(true);
         while (true) {
             $this->database->exec('BEGIN IMMEDIATE');
+            $transactionStarted = true;
             try {
                 $this->prune();
                 $statement = $this->database->prepare(
@@ -56,11 +63,12 @@ final class IdempotencyLedger
                     usleep(25000);
                     continue;
                 }
+                $now = ($this->clock)();
                 $this->database->prepare(
                     'INSERT INTO ' . $this->tableName . '
                      (account_id, method, route, idempotency_key, request_hash, created_at, expires_at)
                      VALUES (?, ?, ?, ?, ?, ?, ?)')
-                    ->execute([$accountId, $method, $route, $key, $hash, time(), time() + $this->retentionSeconds]);
+                    ->execute([$accountId, $method, $route, $key, $hash, $now, $now + $this->retentionSeconds]);
                 $this->database->exec('COMMIT');
                 break;
             } catch (Throwable $exception) {
@@ -88,10 +96,11 @@ final class IdempotencyLedger
                 if ($this->beforeFinalizationCommit !== null) {
                     ($this->beforeFinalizationCommit)();
                 }
-                $this->database->commit();
+                $this->database->exec('COMMIT');
+                $transactionStarted = false;
                 return $response;
             } catch (Throwable $exception) {
-                if ($this->database->inTransaction()) $this->database->rollBack();
+                if ($transactionStarted) $this->database->exec('ROLLBACK');
                 // Never delete a reservation after the mutation may have committed.
                 // A retry observes the pending row and can be recovered explicitly.
                 throw $exception;
@@ -114,8 +123,9 @@ final class IdempotencyLedger
         }
     }
 
+
     private function prune(): void
     {
-        $this->database->prepare('DELETE FROM ' . $this->tableName . ' WHERE expires_at <= ?')->execute([time()]);
+        $this->database->prepare('DELETE FROM ' . $this->tableName . ' WHERE expires_at <= ?')->execute([($this->clock)()]);
     }
 }

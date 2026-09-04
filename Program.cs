@@ -105,6 +105,12 @@ namespace PlayerAssistant
                 return;
             }
 
+            var recoveryStatus = DesktopTransactionRecoveryUtility.RecoverDiscovered(RuntimePathUtility.WritableRuntimeDirectory);
+            if (recoveryStatus == DesktopTransactionRecoveryUtility.RecoveryStatus.Ambiguous)
+            {
+                StartupLoggingUtility.Append("desktop transaction recovery", "An ambiguous transaction was preserved for manual review.");
+            }
+
             _ = OrcishTranslatorWarmupUtility.StartPreloading();
             _ = ElvenTranslatorWarmupUtility.StartPreloading();
             var startupBudget = ResourceBudgetPolicy.Load(Path.Combine(AppContext.BaseDirectory, "resource-budgets.json"));

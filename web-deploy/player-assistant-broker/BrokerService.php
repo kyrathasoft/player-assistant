@@ -11,6 +11,7 @@ require_once __DIR__ . '/BrokerSchemaContract.php';
 require_once __DIR__ . '/BrokerAlertService.php';
 require_once __DIR__ . '/RevisionService.php';
 require_once __DIR__ . '/IdempotencyLedger.php';
+require_once __DIR__ . '/PlayerAssistantClock.php';
 
 final class BrokerService
 {
@@ -31,13 +32,15 @@ final class BrokerService
     private ?MagicItemService $magicItems = null;
     private ?IdempotencyLedger $idempotency = null;
     private ?IdempotencyLedger $adminIdempotency = null;
+    private $clock;
 
     public function __construct(
         private readonly array $config,
         private readonly RpolClient $rpolClient,
         ?callable $xpMarkdownFetcher = null,
         callable|string|null $wordCountFetcher = null,
-        ?string $questDataPath = null)
+        ?string $questDataPath = null,
+        ?callable $clock = null)
     {
         if (is_string($wordCountFetcher) && $questDataPath === null) {
             $questDataPath = $wordCountFetcher;
@@ -60,6 +63,7 @@ final class BrokerService
         $this->xpMarkdownFetcher = $xpMarkdownFetcher;
         $this->wordCountFetcher = $wordCountFetcher;
         $this->questDataPath = $questDataPath;
+        $this->clock = $clock ?? static fn(): int => PlayerAssistantClock::nowUnix();
         $this->verifySchemaVersion();
         BrokerSchemaContract::assert($this->database);
     }
@@ -782,7 +786,7 @@ final class BrokerService
     }
     private function xpTracking(): XpTrackingService
     {
-        return $this->xpTracking ??= new XpTrackingService($this->database, is_array($this->config['xp'] ?? null) ? $this->config['xp'] : [], $this->xpMarkdownFetcher);
+        return $this->xpTracking ??= new XpTrackingService($this->database, is_array($this->config['xp'] ?? null) ? $this->config['xp'] : [], $this->xpMarkdownFetcher, null, $this->clock);
     }
     private function wordCounts(): WordCountService
     {
@@ -829,7 +833,11 @@ final class BrokerService
     {
         return $this->idempotency ??= new IdempotencyLedger(
             $this->database,
-            max(60, (int)($this->apiConfig['idempotency_retention_seconds'] ?? 604800)));
+            max(60, (int)($this->apiConfig['idempotency_retention_seconds'] ?? 604800)),
+            5000,
+            null,
+            'mutation_idempotency',
+            $this->clock);
     }
 
     private function adminIdempotency(): IdempotencyLedger
@@ -839,7 +847,8 @@ final class BrokerService
             max(60, (int)($this->apiConfig['idempotency_retention_seconds'] ?? 604800)),
             5000,
             null,
-            'admin_mutation_idempotency');
+            'admin_mutation_idempotency',
+            $this->clock);
     }
 
     private function mutation(

@@ -3,7 +3,8 @@ param(
     [int]$DiagnosticRetentionDays = 14,
     [int]$ScratchRetentionDays = 7,
     [int]$MaxDiagnosticZipCount = 10,
-    [switch]$PlanOnly
+    [switch]$PlanOnly,
+    [datetime]$NowUtc = [DateTime]::UtcNow
 )
 
 $ErrorActionPreference = 'Stop'
@@ -154,7 +155,7 @@ if (!(Test-Path -LiteralPath $resolvedScratchDir -PathType Container)) {
     return
 }
 
-$nowUtc = [DateTime]::UtcNow
+$nowUtc = $NowUtc.ToUniversalTime()
 $diagnosticCutoffUtc = $nowUtc.AddDays(-$DiagnosticRetentionDays)
 $scratchCutoffUtc = $nowUtc.AddDays(-$ScratchRetentionDays)
 $diagnosticsDir = Join-Path $resolvedScratchDir 'diagnostics'

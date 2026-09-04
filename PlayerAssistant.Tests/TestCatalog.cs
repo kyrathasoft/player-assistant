@@ -133,6 +133,7 @@ internal static class TestCatalog
     ("xp password store migrates encrypted sidecar", TestCases.XpPasswordStoreMigratesEncryptedSidecar),
     ("xp password store reports missing sidecar by name", TestCases.XpPasswordStoreReportsMissingSidecarByName),
     ("identity fixtures are distinct and synthetic", TestCases.IdentityFixturesAreDistinctAndSynthetic),
+    ("canonical authorization policy fixture covers desktop services", TestCases.CanonicalAuthorizationPolicyFixtureCoversDesktopServices),
     ("successful authentication returns canonical identity", TestCases.SuccessfulAuthenticationReturnsCanonicalIdentity),
     ("authenticated identity factory derives role and scope", TestCases.AuthenticatedIdentityFactoryDerivesRoleAndScope),
     ("authenticated identity factory rejects impossible canonical role", TestCases.AuthenticatedIdentityFactoryRejectsImpossibleCanonicalRole),
@@ -574,6 +575,8 @@ internal static class TestCatalog
     ("installer package verification rejects unsigned payload when signing required", TestCases.InstallerPackageVerificationRejectsUnsignedPayloadWhenSigningRequired),
     ("release update artifact verification accepts generated signed manifest", TestCases.ReleaseUpdateArtifactVerificationAcceptsGeneratedSignedManifest),
     ("release update artifact generation rolls back injected failures", TestCases.ReleaseUpdateArtifactGenerationRollsBackInjectedFailures),
+    ("desktop transaction recovery handles every promotion boundary", TestCases.DesktopTransactionRecoveryHandlesEveryPromotionBoundary),
+    ("desktop transaction recovery preserves ambiguous evidence", TestCases.DesktopTransactionRecoveryPreservesAmbiguousEvidence),
     ("release update artifact verification rejects manifest hash mismatch", TestCases.ReleaseUpdateArtifactVerificationRejectsManifestHashMismatch),
     ("hardening workflow builds and uploads signed release update artifacts", TestCases.HardeningWorkflowBuildsAndUploadsSignedReleaseUpdateArtifacts),
     ("published health verification accepts current output", TestCases.PublishedHealthVerificationAcceptsCurrentOutput),
@@ -586,6 +589,7 @@ internal static class TestCatalog
     ("diagnostic bundle redacts sensitive values", TestCases.DiagnosticBundleRedactsSensitiveValues),
     ("diagnostic bundle requires explicit initiation", TestCases.DiagnosticBundleRequiresExplicitInitiation),
     ("diagnostic bundle verify only rejects forbidden auth state", TestCases.DiagnosticBundleVerifyOnlyRejectsForbiddenAuthState),
-    ("diagnostic retention cleanup removes old diagnostics and preserves unrelated scratch files", TestCases.DiagnosticRetentionCleanupRemovesOldDiagnosticsAndPreservesUnrelatedScratchFiles)
+    ("diagnostic retention cleanup removes old diagnostics and preserves unrelated scratch files", TestCases.DiagnosticRetentionCleanupRemovesOldDiagnosticsAndPreservesUnrelatedScratchFiles),
+    ("clock boundary contract is deterministic", TestCases.ClockBoundaryContractIsDeterministic)
         };
 }

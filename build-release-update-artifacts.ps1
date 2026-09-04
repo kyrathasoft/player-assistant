@@ -245,19 +245,41 @@ $artifactNames = @(
 )
 $journalPath = Join-Path $finalOutputDir 'release-update-generation.journal.json'
 $backupRoot = Join-Path $finalOutputDir ('.rollback-{0}' -f ([Guid]::NewGuid().ToString('N')))
-$journal = [ordered]@{ schema_version = 1; state = 'promoting'; generation = $resolvedOutputDir; artifacts = $artifactNames }
 New-Item -ItemType Directory -Force -Path $finalOutputDir, $backupRoot | Out-Null
-[System.IO.File]::WriteAllText($journalPath, ($journal | ConvertTo-Json -Depth 4) + [Environment]::NewLine)
+$journalArtifacts = foreach ($name in $artifactNames) {
+    $target = Join-Path $finalOutputDir $name
+    $hadPrior = Test-Path -LiteralPath $target -PathType Leaf
+    [ordered]@{
+        name = $name
+        generation_sha256 = Get-Sha256Hash -Path (Join-Path $resolvedOutputDir $name)
+        prior_sha256 = if ($hadPrior) { Get-Sha256Hash -Path $target } else { $null }
+        had_prior = $hadPrior
+    }
+}
+$journal = [ordered]@{
+    schema_version = 2
+    state = 'promoting'
+    final_directory = $finalOutputDir
+    generation = $resolvedOutputDir
+    backup = $backupRoot
+    boundary = 0
+    artifacts = @($journalArtifacts)
+}
+function Write-TransactionJournal { [System.IO.File]::WriteAllText($journalPath, ($journal | ConvertTo-Json -Depth 6) + [Environment]::NewLine, [System.Text.UTF8Encoding]::new($false)) }
+Write-TransactionJournal
 try {
-    foreach ($name in $artifactNames) {
+    for ($index = 0; $index -lt $artifactNames.Count; $index++) {
+        $name = $artifactNames[$index]
         $target = Join-Path $finalOutputDir $name
         $backup = Join-Path $backupRoot $name
         if (Test-Path -LiteralPath $target -PathType Leaf) { Move-Item -LiteralPath $target -Destination $backup -Force }
         Move-Item -LiteralPath (Join-Path $resolvedOutputDir $name) -Destination $target -Force
+        $journal.boundary = $index + 1
+        Write-TransactionJournal
     }
     if ($FaultAfterStep -eq 'promotion') { throw 'Injected release generation failure during promotion.' }
     $journal.state = 'committed'
-    [System.IO.File]::WriteAllText($journalPath, ($journal | ConvertTo-Json -Depth 4) + [Environment]::NewLine)
+    Write-TransactionJournal
     Remove-Item -LiteralPath $backupRoot -Recurse -Force
     Remove-Item -LiteralPath $journalPath -Force
 }
@@ -269,7 +291,7 @@ catch {
         if (Test-Path -LiteralPath $backup -PathType Leaf) { Move-Item -LiteralPath $backup -Destination $target -Force }
     }
     $journal.state = 'rolled_back'
-    [System.IO.File]::WriteAllText($journalPath, ($journal | ConvertTo-Json -Depth 4) + [Environment]::NewLine)
+    Write-TransactionJournal
     Remove-Item -LiteralPath $backupRoot -Recurse -Force -ErrorAction SilentlyContinue
     throw
 }

@@ -10,6 +10,7 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
+$correlationId = [Guid]::NewGuid().ToString('N')
 $repoRoot = Split-Path -Parent $PSScriptRoot
 $pwaVerifier = Join-Path $repoRoot 'pwa\test-deployment.ps1'
 if (!(Test-Path -LiteralPath $pwaVerifier -PathType Leaf)) {
@@ -36,4 +37,4 @@ if ($RequireProtectedApi) {
 }
 
 & $pwaVerifier @params
-Write-Output "PWA synthetic monitor passed: $BaseUri"
+Write-Output "PWA synthetic monitor passed: $BaseUri (correlation_id=$correlationId)"

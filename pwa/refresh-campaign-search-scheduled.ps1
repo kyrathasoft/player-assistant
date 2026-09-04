@@ -1,13 +1,14 @@
 [CmdletBinding()]
 param(
     [switch]$Force,
-    [string]$OutputPath = (Join-Path $PSScriptRoot 'campaign-search.json')
+    [string]$OutputPath = (Join-Path $PSScriptRoot 'campaign-search.json'),
+    [datetime]$NowUtc = [DateTime]::UtcNow
 )
 
 $ErrorActionPreference = 'Stop'
 
 $centralTimeZone = [TimeZoneInfo]::FindSystemTimeZoneById('Central Standard Time')
-$centralNow = [TimeZoneInfo]::ConvertTimeFromUtc([DateTime]::UtcNow, $centralTimeZone)
+$centralNow = [TimeZoneInfo]::ConvertTimeFromUtc($NowUtc.ToUniversalTime(), $centralTimeZone)
 $isScheduledWindow = $centralNow.DayOfWeek -eq [DayOfWeek]::Friday -and $centralNow.Hour -eq 7
 
 if (!$Force -and !$isScheduledWindow) {
@@ -15,7 +16,7 @@ if (!$Force -and !$isScheduledWindow) {
     exit 0
 }
 
-& (Join-Path $PSScriptRoot 'refresh-campaign-search.ps1') -OutputPath $OutputPath
+& (Join-Path $PSScriptRoot 'refresh-campaign-search.ps1') -OutputPath $OutputPath -NowUtc $NowUtc
 
 $payload = Get-Content -Raw -LiteralPath $OutputPath | ConvertFrom-Json
 if ([int]$payload.schemaVersion -ne 2 -or
