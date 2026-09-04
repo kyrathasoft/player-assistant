@@ -121,6 +121,7 @@ export const initializeTranslator = ({ byId }) => {
                 worker.postMessage({
                     type: 'translate',
                     id,
+                    correlationId: globalThis.crypto?.randomUUID?.().replaceAll('-', '') || '',
                     language: getSelectedLanguage(),
                     reverse: reverseToggle?.checked === true,
                     text: source

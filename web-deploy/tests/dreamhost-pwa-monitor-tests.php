@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/../player-assistant-broker/PwaSyntheticMonitor.php';
+require_once __DIR__ . '/../player-assistant-broker/StructuredCorrelation.php';
 
 function monitorAssert(bool $condition, string $message): void
 {
@@ -94,6 +95,11 @@ try {
     $monitor = new PwaSyntheticMonitor($config, $responder, $mailer, static fn(): int => $now);
     $result = $monitor->run();
     monitorAssert($result['status'] === 'ok', 'The healthy monitor did not pass.');
+    monitorAssert(StructuredCorrelation::sanitizeId($result['correlation_id'] ?? null) !== null, 'The monitor did not return a sanitized correlation ID.');
+    foreach ($requests as $request) {
+        monitorAssert(($request['headers']['X-Correlation-Id'] ?? null) === $result['correlation_id'], 'The monitor did not propagate one correlation ID to every request.');
+        monitorAssert(($request['headers']['X-Request-Id'] ?? null) === $result['correlation_id'], 'The monitor did not align request and correlation IDs.');
+    }
     monitorAssert(count($alerts) === 0, 'The healthy initial run sent an alert.');
     monitorAssert(is_file($statusPath), 'The monitor did not persist status.');
     if (DIRECTORY_SEPARATOR === '/') {

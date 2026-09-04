@@ -10,7 +10,7 @@ namespace PlayerAssistant
         {
             return
                 $"""
-                [{DateTimeOffset.Now:O}] {SensitiveTextRedactionUtility.Redact(phase)}
+                [{DateTimeOffset.Now:O}] [correlation_id={StructuredCorrelationUtility.CreateCorrelationId()}] {SensitiveTextRedactionUtility.Redact(phase)}
                 {SensitiveTextRedactionUtility.Redact(ex.ToString())}
 
                 """;
@@ -20,7 +20,7 @@ namespace PlayerAssistant
         {
             return
                 $"""
-                [{DateTimeOffset.Now:O}] {SensitiveTextRedactionUtility.Redact(phase)}
+                [{DateTimeOffset.Now:O}] [correlation_id={StructuredCorrelationUtility.CreateCorrelationId()}] {SensitiveTextRedactionUtility.Redact(phase)}
                 {SensitiveTextRedactionUtility.Redact(message)}
 
                 """;

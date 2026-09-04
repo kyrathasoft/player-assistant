@@ -2,6 +2,8 @@
 
 declare(strict_types=1);
 
+require_once __DIR__ . '/StructuredCorrelation.php';
+
 final class BrokerAlertService
 {
     private array $config;
@@ -19,26 +21,30 @@ final class BrokerAlertService
             'health_failure_threshold' => 1,
             'alert_cooldown_seconds' => 3600,
         ], $config);
+        $columns = $this->database->query("PRAGMA table_info(broker_alert_events)")->fetchAll(PDO::FETCH_ASSOC);
+        if ($columns !== false && $columns !== [] && !array_filter($columns, static fn(array $column): bool => ($column['name'] ?? '') === 'correlation_id')) {
+            $this->database->exec('ALTER TABLE broker_alert_events ADD COLUMN correlation_id TEXT NULL');
+        }
     }
 
-    public function recordHealthFailure(string $errorCode, string $message): array
+    public function recordHealthFailure(string $errorCode, string $message, ?string $correlationId = null): array
     {
-        return $this->record('health_failure', $errorCode, $message, (int)$this->config['health_failure_threshold'], 900);
+        return $this->record('health_failure', $errorCode, $message, (int)$this->config['health_failure_threshold'], 900, $correlationId);
     }
 
-    public function recordRefreshFailure(string $errorCode, string $message): array
+    public function recordRefreshFailure(string $errorCode, string $message, ?string $correlationId = null): array
     {
-        return $this->record('word_count_refresh_failure', $errorCode, $message, (int)$this->config['refresh_failure_threshold'], 900);
+        return $this->record('word_count_refresh_failure', $errorCode, $message, (int)$this->config['refresh_failure_threshold'], 900, $correlationId);
     }
 
-    public function recordServerError(string $errorCode, string $message): array
+    public function recordServerError(string $errorCode, string $message, ?string $correlationId = null): array
     {
         return $this->record(
             'server_error',
             $errorCode,
             $message,
             (int)$this->config['server_error_threshold'],
-            (int)$this->config['server_error_window_seconds']);
+            (int)$this->config['server_error_window_seconds'], $correlationId);
     }
 
     private function record(
@@ -46,11 +52,13 @@ final class BrokerAlertService
         string $errorCode,
         string $message,
         int $threshold,
-        int $windowSeconds): array
+        int $windowSeconds,
+        ?string $correlationId = null): array
     {
         $now = time();
         $errorCode = $this->sanitize($errorCode, 100);
         $message = $this->sanitize($message, 500);
+        $correlationId = StructuredCorrelation::sanitizeId($correlationId);
         $threshold = max(1, $threshold);
         $windowSeconds = max(1, $windowSeconds);
         $emailSent = false;
@@ -59,9 +67,9 @@ final class BrokerAlertService
         $this->database->exec('BEGIN IMMEDIATE');
         try {
             $statement = $this->database->prepare(
-                'INSERT INTO broker_alert_events (alert_type, occurred_at, error_code, message)
-                 VALUES (?, ?, ?, ?)');
-            $statement->execute([$alertType, $now, $errorCode, $message]);
+                'INSERT INTO broker_alert_events (alert_type, occurred_at, error_code, message, correlation_id)
+                 VALUES (?, ?, ?, ?, ?)');
+            $statement->execute([$alertType, $now, $errorCode, $message, $correlationId]);
             $eventId = (int)$this->database->lastInsertId();
             $countStatement = $this->database->prepare(
                 'SELECT COUNT(*) FROM broker_alert_events WHERE alert_type = ? AND occurred_at >= ?');

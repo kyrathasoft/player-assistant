@@ -259,9 +259,9 @@ self.addEventListener('message', async (event) => {
             ? lexicon.reverseMaxPhraseWords
             : lexicon.forwardMaxPhraseWords;
         const translation = translateText(String(message.text || ''), dictionary, maxPhraseWords);
-        self.postMessage({ type: 'translation', id: message.id, translation });
+        self.postMessage({ type: 'translation', id: message.id, correlationId: message.correlationId || '', translation });
     } catch (error) {
         self.postMessage({ type: 'status', loading: false, state: 'unavailable', message: `${languageName(language)} lexicon unavailable: ${error.message || String(error)}` });
-        self.postMessage({ type: 'translation', id: message.id, error: error.message || String(error) });
+        self.postMessage({ type: 'translation', id: message.id, correlationId: message.correlationId || '', error: error.message || String(error) });
     }
 });

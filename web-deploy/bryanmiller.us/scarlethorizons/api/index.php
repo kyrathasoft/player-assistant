@@ -10,8 +10,14 @@ header("Content-Security-Policy: default-src 'none'; frame-ancestors 'none'; fra
 header('Permissions-Policy: camera=(), microphone=(), geolocation=()');
 header('Strict-Transport-Security: max-age=31536000');
 
-$requestId = bin2hex(random_bytes(8));
+$privateDirectory = dirname(__DIR__, 3) . '/player-assistant-broker';
+require_once $privateDirectory . '/StructuredCorrelation.php';
+$requestId = StructuredCorrelation::fromHeaders([
+    'x-correlation-id' => $_SERVER['HTTP_X_CORRELATION_ID'] ?? null,
+    'x-request-id' => $_SERVER['HTTP_X_REQUEST_ID'] ?? null,
+]);
 header('X-Request-Id: ' . $requestId);
+header('X-Correlation-Id: ' . $requestId);
 $config = null;
 
 $method = strtoupper($_SERVER['REQUEST_METHOD'] ?? 'GET');
@@ -33,7 +39,7 @@ if ($method === 'GET' && $healthRoute === '/v1/health') {
 try {
     requireHttps();
 
-    $privateDirectory = dirname(__DIR__, 3) . '/player-assistant-broker';
+
     require_once $privateDirectory . '/BrokerHttpException.php';
     require_once $privateDirectory . '/RpolClient.php';
     require_once $privateDirectory . '/CharacterAuthService.php';
@@ -130,12 +136,13 @@ try {
     if (isset($operations) && $operations instanceof BrokerOperations) {
         $operations->recordServerError($requestId, 'internal_error');
     }
-    error_log(sprintf(
-        '[player-assistant-broker:%s] %s in %s:%d',
-        $requestId,
-        $exception->getMessage(),
-        $exception->getFile(),
-        $exception->getLine()));
+    error_log(json_encode(StructuredCorrelation::context($requestId, [
+        'service' => 'player-assistant-broker',
+        'event' => 'internal_error',
+        'error' => $exception->getMessage(),
+        'file' => basename($exception->getFile()),
+        'line' => $exception->getLine(),
+    ]), JSON_UNESCAPED_SLASHES));
     if (is_array($config)) {
         recordBrokerServerError($config, $exception);
     }

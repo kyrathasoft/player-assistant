@@ -7,6 +7,7 @@ import { createAccountSessionController } from './modules/account-session.js?v=9
 import { createMessagesActivityController } from './modules/messages-activity.js?v=92';
 import { createPresenceController } from './modules/presence.js?v=92';
 import { createUpdateLifecycleController } from './modules/update-lifecycle.js?v=92';
+import { createCorrelationId } from './modules/correlation.js?v=92';
 
 (() => {
     'use strict';
@@ -2427,12 +2428,6 @@ import { createUpdateLifecycleController } from './modules/update-lifecycle.js?v
         }
     }
 
-    const createApiRequestId = () => {
-        if (globalThis.crypto?.randomUUID) return globalThis.crypto.randomUUID();
-        const bytes = new Uint8Array(16);
-        globalThis.crypto?.getRandomValues?.(bytes);
-        return [...bytes].map((value) => value.toString(16).padStart(2, '0')).join('');
-    };
 
     const cancelAuthenticationRequests = (except = null) => {
         for (const controller of activeAuthenticationControllers) {
@@ -2516,10 +2511,11 @@ import { createUpdateLifecycleController } from './modules/update-lifecycle.js?v
         const requestGeneration = authenticationGeneration;
         const requestId = typeof options.requestId === 'string' && options.requestId !== ''
             ? options.requestId
-            : createApiRequestId();
+            : createCorrelationId();
         const headers = new Headers({
             Accept: 'application/json',
-            'X-Request-Id': requestId
+            'X-Request-Id': requestId,
+            'X-Correlation-Id': requestId
         });
         if (options.body !== undefined) headers.set('Content-Type', 'application/json');
         if (options.csrf === true && authenticationCsrfToken) {
@@ -2532,7 +2528,7 @@ import { createUpdateLifecycleController } from './modules/update-lifecycle.js?v
                 'Idempotency-Key',
                 typeof options.idempotencyKey === 'string' && options.idempotencyKey !== ''
                     ? options.idempotencyKey
-                    : createApiRequestId());
+                    : createCorrelationId());
         }
         const controller = new AbortController();
         let timedOut = false;

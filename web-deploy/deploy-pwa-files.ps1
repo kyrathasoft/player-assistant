@@ -24,6 +24,7 @@ if (-not (Test-Path -LiteralPath $SshKeyPath -PathType Leaf)) {
     throw "DreamHost deployment private key is required: $SshKeyPath"
 }
 $releaseId = [Guid]::NewGuid().ToString('N')
+$correlationId = $releaseId
 $localStage = Join-Path ([IO.Path]::GetTempPath()) "player-assistant-pwa-$releaseId"
 $localArchive = "$localStage.tar"
 $remoteStage = "$RemoteDirectory/.release-$releaseId"
@@ -83,6 +84,7 @@ try {
 
     $manifest = @{
         directory = $RemoteDirectory; stage = $remoteStage; archive = $remoteArchive
+        correlation_id = $correlationId
         state = $remoteState; release_id = $releaseId; files = $Files; hashes = $hashes
     } | ConvertTo-Json -Compress
     $manifest64 = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($manifest))
@@ -92,7 +94,7 @@ $data = json_decode(base64_decode('__MANIFEST__'), true, 32, JSON_THROW_ON_ERROR
 $statePath = $data['state'];
 function write_state(array $data, string $state, array $installed, bool $rollbackForbidden = false, bool $cleanupComplete = false): void {
     global $statePath;
-    $payload = json_encode(['release_id'=>$data['release_id'], 'state'=>$state, 'installed'=>$installed, 'rollback_forbidden'=>$rollbackForbidden, 'cleanup_complete'=>$cleanupComplete], JSON_THROW_ON_ERROR);
+    $payload = json_encode(['release_id'=>$data['release_id'], 'correlation_id'=>$data['correlation_id'] ?? null, 'state'=>$state, 'installed'=>$installed, 'rollback_forbidden'=>$rollbackForbidden, 'cleanup_complete'=>$cleanupComplete], JSON_THROW_ON_ERROR);
     $tmp = $statePath . '.tmp';
     if (file_put_contents($tmp, $payload, LOCK_EX) === false || !rename($tmp, $statePath)) { throw new RuntimeException('Transaction state could not be persisted.'); }
 }
