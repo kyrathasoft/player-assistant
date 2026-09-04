@@ -1275,8 +1275,16 @@ internal static partial class TestCases
         {
             Directory.CreateDirectory(generation); Directory.CreateDirectory(backup);
             for (var i = 0; i < names.Length; i++) { File.WriteAllBytes(Path.Combine(backup, names[i]), oldBytes[i]); File.WriteAllBytes(Path.Combine(generation, names[i]), newBytes[i]); File.WriteAllBytes(Path.Combine(directory.Path, names[i]), boundary > i ? newBytes[i] : oldBytes[i]); }
-            var journal = new { schema_version = 2, state = "promoting", final_directory = directory.Path, generation, backup, boundary,
-                artifacts = names.Select((name, i) => new { name, generation_sha256 = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(newBytes[i])), prior_sha256 = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(oldBytes[i])), had_prior = true }) };
+            var journal = new
+            {
+                schema_version = 2,
+                state = "promoting",
+                final_directory = directory.Path,
+                generation,
+                backup,
+                boundary,
+                artifacts = names.Select((name, i) => new { name, generation_sha256 = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(newBytes[i])), prior_sha256 = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(oldBytes[i])), had_prior = true })
+            };
             File.WriteAllText(Path.Combine(directory.Path, DesktopTransactionRecoveryUtility.JournalFileName), System.Text.Json.JsonSerializer.Serialize(journal));
             AssertEqual(DesktopTransactionRecoveryUtility.RecoveryStatus.Recovered, DesktopTransactionRecoveryUtility.Recover(directory.Path), $"boundary {boundary} should recover");
             for (var i = 0; i < names.Length; i++) { var expected = boundary == names.Length ? newBytes[i] : oldBytes[i]; AssertTrue(File.ReadAllBytes(Path.Combine(directory.Path, names[i])).SequenceEqual(expected), $"boundary {boundary} must leave a complete state"); }
@@ -1289,8 +1297,16 @@ internal static partial class TestCases
         var generation = Directory.CreateDirectory(Path.Combine(directory.Path, ".generation-test")).FullName;
         var backup = Directory.CreateDirectory(Path.Combine(directory.Path, ".rollback-test")).FullName;
         File.WriteAllText(Path.Combine(directory.Path, "a.bin"), "tampered"); File.WriteAllText(Path.Combine(generation, "a.bin"), "new"); File.WriteAllText(Path.Combine(backup, "a.bin"), "old");
-        var journal = new { schema_version = 2, state = "promoting", final_directory = directory.Path, generation, backup, boundary = 0,
-            artifacts = new[] { new { name = "a.bin", generation_sha256 = new string('0', 64), prior_sha256 = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes("old"))), had_prior = true } } };
+        var journal = new
+        {
+            schema_version = 2,
+            state = "promoting",
+            final_directory = directory.Path,
+            generation,
+            backup,
+            boundary = 0,
+            artifacts = new[] { new { name = "a.bin", generation_sha256 = new string('0', 64), prior_sha256 = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes("old"))), had_prior = true } }
+        };
         var path = Path.Combine(directory.Path, DesktopTransactionRecoveryUtility.JournalFileName); File.WriteAllText(path, System.Text.Json.JsonSerializer.Serialize(journal));
         AssertEqual(DesktopTransactionRecoveryUtility.RecoveryStatus.Ambiguous, DesktopTransactionRecoveryUtility.Recover(directory.Path), "tampered transaction should be ambiguous");
         AssertTrue(Directory.EnumerateFiles(directory.Path, DesktopTransactionRecoveryUtility.JournalFileName + ".ambiguous-*").Any(), "ambiguous journal evidence should be preserved");
