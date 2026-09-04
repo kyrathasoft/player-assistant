@@ -560,9 +560,9 @@ Develop and implement these items only after the remaining incomplete items abov
 - [x] Make clock and timezone handling explicit at every date-sensitive boundary.
   - Use UTC for persistence and signed/deployed artifacts, Central time only for human-facing schedules, and inject a clock into retention, freshness, cron, and XP-award calculations.
   - Regression: DST transitions, leap days, clock rollback, ambiguous local times, and future timestamps produce deterministic results.
-- [ ] Add durable startup recovery for interrupted local desktop transactions.
-  - Discover incomplete journals before normal startup, validate their paths and hashes, resume or roll back only an unambiguous transaction, and preserve evidence for ambiguous states.
-  - Regression: interruption at every journal boundary leaves either the old complete state or a safely resumable state, never a mixed release.
+- [x] Add durable startup recovery for interrupted local desktop transactions.
+  - [x] Discover incomplete journals before normal startup, validate their paths and hashes, resume or roll back only an unambiguous transaction, and preserve evidence for ambiguous states.
+  - [x] Regression: interruption at every journal boundary leaves either the old complete state or a safely resumable state, never a mixed release.
 - [x] Add a read-only diagnostic bundle mode with strict data minimization.
   - [x] Collect version, feature, health, transaction, and verifier summaries while excluding credentials, tokens, cookie values, private notes, and protected response bodies; require explicit user initiation for export.
   - [x] Regression: bundle inspection and secret scanning prove sensitive values cannot enter the archive or its manifest.

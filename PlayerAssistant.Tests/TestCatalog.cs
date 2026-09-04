@@ -565,6 +565,8 @@ internal static class TestCatalog
     ("installer package verification rejects unsigned payload when signing required", TestCases.InstallerPackageVerificationRejectsUnsignedPayloadWhenSigningRequired),
     ("release update artifact verification accepts generated signed manifest", TestCases.ReleaseUpdateArtifactVerificationAcceptsGeneratedSignedManifest),
     ("release update artifact generation rolls back injected failures", TestCases.ReleaseUpdateArtifactGenerationRollsBackInjectedFailures),
+    ("desktop transaction recovery handles every promotion boundary", TestCases.DesktopTransactionRecoveryHandlesEveryPromotionBoundary),
+    ("desktop transaction recovery preserves ambiguous evidence", TestCases.DesktopTransactionRecoveryPreservesAmbiguousEvidence),
     ("release update artifact verification rejects manifest hash mismatch", TestCases.ReleaseUpdateArtifactVerificationRejectsManifestHashMismatch),
     ("hardening workflow builds and uploads signed release update artifacts", TestCases.HardeningWorkflowBuildsAndUploadsSignedReleaseUpdateArtifacts),
     ("published health verification accepts current output", TestCases.PublishedHealthVerificationAcceptsCurrentOutput),
