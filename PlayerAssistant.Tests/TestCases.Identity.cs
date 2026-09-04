@@ -766,4 +766,47 @@ internal static partial class TestCases
             throw new InvalidOperationException(message);
         }
     }
+    internal static void CanonicalAuthorizationPolicyFixtureCoversDesktopServices()
+    {
+        var fixturePath = Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "web-deploy", "tests", "authorization-policy-fixture.json");
+        Require(File.Exists(fixturePath), "the canonical authorization policy fixture is missing");
+        using var document = JsonDocument.Parse(File.ReadAllText(fixturePath));
+        var root = document.RootElement;
+        var cases = root.GetProperty("cases").EnumerateArray().Select(value => value.GetString()).ToArray();
+        Require(cases.SequenceEqual(["same_scope", "cross_account", "role_confusion", "alias", "anonymous"]), "the identity policy matrix is incomplete");
+        var identities = root.GetProperty("identities").EnumerateArray().ToArray();
+        Require(identities.Length == 3, "resource-owner identity fixture is incomplete");
+        Require(identities[0].GetProperty("scope").GetString() == "self" && identities[0].GetProperty("resource_owner").GetString() == "alpha", "same-scope owner fixture is invalid");
+        Require(identities[1].GetProperty("id").GetString() == "beta" && identities[1].GetProperty("resource_owner").GetString() == "beta", "cross-account owner fixture is invalid");
+        Require(identities[2].GetProperty("role").GetString() == "dm" && identities[2].GetProperty("scope").GetString() == "party", "role-confusion scope fixture is invalid");
+        var services = root.GetProperty("desktop_services").EnumerateArray().Select(value => value.GetString()).ToHashSet(StringComparer.Ordinal);
+        var sourceRoot = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", ".."));
+        foreach (var service in services)
+        {
+            var sourcePath = Path.Combine(sourceRoot, service + ".cs");
+            Require(File.Exists(sourcePath), $"desktop authorization service source is missing: {service}");
+            var source = File.ReadAllText(sourcePath);
+            var bindsCanonicalIdentity = service == "TaggedNoteCipherUtility"
+                ? source.Contains("CharacterAliases", StringComparison.Ordinal)
+                : source.Contains("CanonicalId", StringComparison.Ordinal);
+            Require(bindsCanonicalIdentity, $"{service} does not bind authorization to canonical identity");
+        }
+        Require(services.SetEquals(["XpTrackingUtility", "PartyHeroUtility", "MyHeroBriefingUtility", "TaggedNoteCipherUtility"]), "desktop service policy inventory changed without updating the fixture");
+        var owner = SyntheticIdentityFixtures[0];
+        var other = SyntheticIdentityFixtures[1];
+        var ownerIdentity = XpAuthenticatedIdentity.Create(new XpCanonicalIdentityRecord(owner.CanonicalId, owner.FullName, ["OwnerAlias"], XpIdentityRole.Player));
+        var otherIdentity = XpAuthenticatedIdentity.Create(new XpCanonicalIdentityRecord(other.CanonicalId, other.FullName, ["OtherAlias"], XpIdentityRole.Player));
+        var heroes = new[] { owner.PartySheet, other.PartySheet };
+        var totals = new[] { new PcXpTotal(owner.FullName, owner.XpTotal, owner.CanonicalId), new PcXpTotal(other.FullName, other.XpTotal, other.CanonicalId) };
+        var ownerView = PartyHeroUtility.WithVisibleXpTotals(heroes, totals, ownerIdentity);
+        var otherView = PartyHeroUtility.WithVisibleXpTotals(heroes, totals, otherIdentity);
+        Require(ownerView[0].XpTotal == owner.XpTotal && ownerView[1].XpTotal is null, "same-scope desktop owner access failed");
+        Require(otherView[1].XpTotal == other.XpTotal && otherView[0].XpTotal is null, "cross-account desktop access was not denied");
+        var roleConfusion = XpAuthenticatedIdentity.Create(new XpCanonicalIdentityRecord(owner.CanonicalId, owner.FullName, [], XpIdentityRole.DungeonMaster));
+        var dmView = PartyHeroUtility.WithVisibleXpTotals(heroes, totals, roleConfusion);
+        Require(dmView.All(hero => hero.XpTotal is not null), "DM party scope was not granted by the canonical role");
+        var aliasOnly = XpAuthenticatedIdentity.Create(new XpCanonicalIdentityRecord(owner.CanonicalId, owner.FullName, ["OwnerAlias"], XpIdentityRole.Player));
+        Require(PartyHeroUtility.WithVisibleXpTotals(heroes, totals, aliasOnly)[0].XpTotal == owner.XpTotal, "explicit alias lost its canonical owner");
+    }
+
 }

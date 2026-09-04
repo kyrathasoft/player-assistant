@@ -1,0 +1,214 @@
+{
+  "schema_version": 1,
+  "protected_routes": [
+    {
+      "method": "GET",
+      "route": "/v1/me",
+      "guard": "requireCurrentAccount",
+      "scope": "self"
+    },
+    {
+      "method": "GET",
+      "route": "/v1/xp",
+      "guard": "requireCurrentAccount",
+      "scope": "self"
+    },
+    {
+      "method": "POST",
+      "route": "/v1/xp-level-up-notifications/claim",
+      "guard": "requireMutationAccount",
+      "scope": "self"
+    },
+    {
+      "method": "POST",
+      "route": "/v1/xp-level-up-notifications/acknowledge",
+      "guard": "requireMutationAccount",
+      "scope": "self"
+    },
+    {
+      "method": "GET",
+      "route": "/v1/xp-awards",
+      "guard": "requireCurrentAccount",
+      "scope": "self"
+    },
+    {
+      "method": "GET",
+      "route": "/v1/word-counts",
+      "guard": "requireCurrentAccount",
+      "scope": "account"
+    },
+    {
+      "method": "GET",
+      "route": "/v1/presence",
+      "guard": "presence",
+      "scope": "self"
+    },
+    {
+      "method": "GET",
+      "route": "/v1/quests",
+      "guard": "requireCurrentAccount",
+      "scope": "account"
+    },
+    {
+      "method": "GET",
+      "route": "/v1/revisions",
+      "guard": "requireCurrentAccount",
+      "scope": "account"
+    },
+    {
+      "method": "GET",
+      "route": "/v1/magic-items",
+      "guard": "requireCurrentAccount",
+      "scope": "account"
+    },
+    {
+      "method": "POST",
+      "route": "/v1/quest-requests",
+      "guard": "requireMutationAccount",
+      "scope": "self"
+    },
+    {
+      "method": "POST",
+      "route": "/v1/messages",
+      "guard": "requireMutationAccount",
+      "scope": "self"
+    },
+    {
+      "method": "GET",
+      "route": "/v1/messages",
+      "guard": "requireCurrentAccount",
+      "scope": "account"
+    },
+    {
+      "method": "POST",
+      "route": "/v1/logout",
+      "guard": "logout",
+      "scope": "self"
+    },
+    {
+      "method": "GET",
+      "route": "/v1/snapshots/page",
+      "guard": "authenticateBearerToken",
+      "scope": "token"
+    },
+    {
+      "method": "GET",
+      "route": "/v1/rpol/page",
+      "guard": "authenticateBearerToken",
+      "scope": "token"
+    },
+    {
+      "method": "POST",
+      "route": "/v1/quest-requests/{id}/decision",
+      "source_fragment": "quest-requests/([a-f0-9]{32})/decision",
+      "guard": "requireMutationAccount",
+      "scope": "self"
+    },
+    {
+      "method": "POST",
+      "route": "/v1/quest-requests/{id}/acknowledge",
+      "source_fragment": "quest-requests/([a-f0-9]{32})/acknowledge",
+      "guard": "requireMutationAccount",
+      "scope": "self"
+    },
+    {
+      "method": "POST",
+      "route": "/v1/messages/{id}/read",
+      "source_fragment": "messages/([a-f0-9]{32})/read",
+      "guard": "requireMutationAccount",
+      "scope": "self"
+    },
+    {
+      "method": "GET",
+      "route": "/v1/admin/health",
+      "guard": "requireAdminSignature",
+      "scope": "admin"
+    },
+    {
+      "method": "POST",
+      "route": "/v1/admin/character-accounts/import",
+      "guard": "requireAdminSignature",
+      "scope": "admin"
+    },
+    {
+      "method": "PUT",
+      "route": "/v1/admin/word-counts",
+      "guard": "requireAdminSignature",
+      "scope": "admin"
+    },
+    {
+      "method": "GET",
+      "route": "/v1/admin/character-accounts",
+      "guard": "requireAdminSignature",
+      "scope": "admin"
+    },
+    {
+      "method": "POST",
+      "route": "/v1/admin/character-accounts",
+      "guard": "requireAdminSignature",
+      "scope": "admin"
+    },
+    {
+      "method": "PATCH",
+      "route": "/v1/admin/character-accounts/{id}",
+      "source_fragment": "admin/character-accounts/([a-f0-9]{32})",
+      "guard": "requireAdminSignature",
+      "scope": "admin"
+    },
+    {
+      "method": "POST",
+      "route": "/v1/tokens",
+      "guard": "requireAdminSignature",
+      "scope": "admin"
+    },
+    {
+      "method": "DELETE",
+      "route": "/v1/tokens/{id}",
+      "source_fragment": "tokens/([a-f0-9]{32})",
+      "guard": "requireAdminSignature",
+      "scope": "admin"
+    },
+    {
+      "method": "PUT",
+      "route": "/v1/snapshots/page",
+      "guard": "requireAdminSignature",
+      "scope": "admin"
+    }
+  ],
+  "identities": [
+    {
+      "id": "alpha",
+      "role": "player",
+      "scope": "self",
+      "resource_owner": "alpha",
+      "alias": "A"
+    },
+    {
+      "id": "beta",
+      "role": "player",
+      "scope": "self",
+      "resource_owner": "beta",
+      "alias": "B"
+    },
+    {
+      "id": "warden",
+      "role": "dm",
+      "scope": "party",
+      "resource_owner": "*",
+      "alias": "DM"
+    }
+  ],
+  "desktop_services": [
+    "XpTrackingUtility",
+    "PartyHeroUtility",
+    "MyHeroBriefingUtility",
+    "TaggedNoteCipherUtility"
+  ],
+  "cases": [
+    "same_scope",
+    "cross_account",
+    "role_confusion",
+    "alias",
+    "anonymous"
+  ]
+}

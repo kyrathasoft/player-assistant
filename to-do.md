@@ -570,9 +570,9 @@ Develop and implement these items only after the remaining incomplete items abov
 
 ### Authorization and protected-data boundaries
 
-- [ ] Add canonical authorization-policy tests for every protected route and desktop service.
-  - Generate a matrix of identity, role, account scope, resource owner, alias, and anonymous cases from one policy fixture rather than duplicating ad hoc assertions.
-  - Regression: every protected endpoint has positive same-scope coverage and negative cross-account, role-confusion, alias, and missing-identity coverage.
+- [x] Add canonical authorization-policy tests for every protected route and desktop service.
+  - [x] Generate a matrix of identity, role, account scope, resource owner, alias, and anonymous cases from one policy fixture rather than duplicating ad hoc assertions.
+  - [x] Regression: every protected endpoint has positive same-scope coverage and negative cross-account, role-confusion, alias, and missing-identity coverage.
 - [ ] Add explicit protected-resource freshness and replay protection.
   - Bind signed snapshots, cached protected responses, and mutation receipts to account identity, resource generation, schema version, and an expiration or revocation boundary.
   - Regression: stale, replayed, cross-account, downgraded, and post-revocation artifacts are rejected without rendering or mutating state.

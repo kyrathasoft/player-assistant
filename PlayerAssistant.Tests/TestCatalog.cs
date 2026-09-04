@@ -126,6 +126,7 @@ internal static class TestCatalog
     ("xp password store migrates encrypted sidecar", TestCases.XpPasswordStoreMigratesEncryptedSidecar),
     ("xp password store reports missing sidecar by name", TestCases.XpPasswordStoreReportsMissingSidecarByName),
     ("identity fixtures are distinct and synthetic", TestCases.IdentityFixturesAreDistinctAndSynthetic),
+    ("canonical authorization policy fixture covers desktop services", TestCases.CanonicalAuthorizationPolicyFixtureCoversDesktopServices),
     ("successful authentication returns canonical identity", TestCases.SuccessfulAuthenticationReturnsCanonicalIdentity),
     ("authenticated identity factory derives role and scope", TestCases.AuthenticatedIdentityFactoryDerivesRoleAndScope),
     ("authenticated identity factory rejects impossible canonical role", TestCases.AuthenticatedIdentityFactoryRejectsImpossibleCanonicalRole),
