@@ -2,6 +2,8 @@
 
 declare(strict_types=1);
 
+require_once __DIR__ . '/PlayerAssistantClock.php';
+
 final class XpTrackingService
 {
     private const CACHE_KEY = 'current';
@@ -10,12 +12,14 @@ final class XpTrackingService
     private array $xpConfig;
     private $markdownFetcher;
     private $awardFilePromoter;
+    private $clock;
 
     public function __construct(
         private readonly PDO $database,
         array $xpConfig,
         ?callable $markdownFetcher = null,
-        ?callable $awardFilePromoter = null)
+        ?callable $awardFilePromoter = null,
+        ?callable $clock = null)
     {
         $this->xpConfig = array_replace([
             'source_url' => '',
@@ -44,6 +48,7 @@ final class XpTrackingService
         }
         $this->markdownFetcher = $markdownFetcher;
         $this->awardFilePromoter = $awardFilePromoter;
+        $this->clock = $clock ?? static fn(): int => PlayerAssistantClock::nowUnix();
         $this->validateConfiguration();
     }
 
@@ -328,7 +333,7 @@ final class XpTrackingService
         try {
             foreach ($requested as $notification) {
                 $update->execute([
-                    ':notified_at' => time(),
+                    ':notified_at' => ($this->clock)(),
                     ':account_id' => $accountId,
                     ':progression_key' => $notification['character_key'],
                     ':target_level' => $notification['target_level'],
@@ -1248,7 +1253,7 @@ final class XpTrackingService
         }
 
         $cached = $this->loadCachedSnapshot();
-        $now = time();
+        $now = ($this->clock)();
         try {
             $parsed = $this->parseSnapshot($this->fetchMarkdown(
                 (string)$this->xpConfig['source_url']));

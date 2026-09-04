@@ -557,7 +557,7 @@ Develop and implement these items only after the remaining incomplete items abov
 - [x] Add structured correlation across desktop, broker, PWA, deployment, and scheduled-monitor operations.
   - Propagate a sanitized correlation ID through logs, HTTP request IDs, transaction journals, browser-worker messages, and alert records without logging credentials or protected payloads.
   - Regression: one synthetic operation can be traced end-to-end while redaction checks reject secrets, cookies, passwords, and protected response bodies.
-- [ ] Make clock and timezone handling explicit at every date-sensitive boundary.
+- [x] Make clock and timezone handling explicit at every date-sensitive boundary.
   - Use UTC for persistence and signed/deployed artifacts, Central time only for human-facing schedules, and inject a clock into retention, freshness, cron, and XP-award calculations.
   - Regression: DST transitions, leap days, clock rollback, ambiguous local times, and future timestamps produce deterministic results.
 - [ ] Add durable startup recovery for interrupted local desktop transactions.

@@ -2,7 +2,8 @@ param(
     [string]$SiteUrl = 'https://publish.obsidian.md/scarlethorizons',
     [string]$OutputPath = (Join-Path $PSScriptRoot 'campaign-search.json'),
     [ValidateRange(1, 64)][int]$Concurrency = 12,
-    [string[]]$ExcludedPageTitles = @('XP Tracking')
+    [string[]]$ExcludedPageTitles = @('XP Tracking'),
+    [datetime]$NowUtc = [DateTime]::UtcNow
 )
 
 $ErrorActionPreference = 'Stop'
@@ -150,7 +151,7 @@ try {
 
     $payload = [ordered]@{
         schemaVersion = 2
-        generatedAtUtc = [DateTimeOffset]::UtcNow.ToString('O')
+        generatedAtUtc = $NowUtc.ToUniversalTime().ToString('O')
         source = $SiteUrl.TrimEnd('/')
         pageCount = $pages.Count
         contentPageCount = $contentPageCount

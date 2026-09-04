@@ -576,6 +576,7 @@ internal static class TestCatalog
     ("release publish parity rejects mismatched sidecar", TestCases.ReleasePublishParityRejectsMismatchedSidecar),
     ("diagnostic bundle redacts sensitive values", TestCases.DiagnosticBundleRedactsSensitiveValues),
     ("diagnostic bundle verify only rejects forbidden auth state", TestCases.DiagnosticBundleVerifyOnlyRejectsForbiddenAuthState),
-    ("diagnostic retention cleanup removes old diagnostics and preserves unrelated scratch files", TestCases.DiagnosticRetentionCleanupRemovesOldDiagnosticsAndPreservesUnrelatedScratchFiles)
+    ("diagnostic retention cleanup removes old diagnostics and preserves unrelated scratch files", TestCases.DiagnosticRetentionCleanupRemovesOldDiagnosticsAndPreservesUnrelatedScratchFiles),
+    ("clock boundary contract is deterministic", TestCases.ClockBoundaryContractIsDeterministic)
         };
 }
