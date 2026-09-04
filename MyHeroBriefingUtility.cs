@@ -108,7 +108,7 @@ namespace PlayerAssistant
                 .DistinctBy(choice => choice.CanonicalId, StringComparer.Ordinal)
                 .OrderBy(choice => choice.DisplayName, StringComparer.OrdinalIgnoreCase)
                 .ToArray();
-            var isDungeonMaster = request.AuthenticatedIdentity?.IsDungeonMaster == true;
+            var isDungeonMaster = AuthorizationPolicy.CanReadDungeonMasterResource(request.AuthenticatedIdentity);
             var identity = ResolveHeroIdentity(request);
             var heroSummary = identity.Hero is null
                 ? null
@@ -148,7 +148,7 @@ namespace PlayerAssistant
 
         private static MyHeroBriefingResolvedHero ResolveHeroIdentity(MyHeroBriefingRequest request)
         {
-            if (request.AuthenticatedIdentity?.IsDungeonMaster != true)
+            if (!AuthorizationPolicy.CanReadDungeonMasterResource(request.AuthenticatedIdentity))
             {
                 var authenticatedCanonicalId = request.AuthenticatedIdentity?.CanonicalId;
                 var authenticatedHero = FindHeroByIdentity(
@@ -171,7 +171,7 @@ namespace PlayerAssistant
                 }
             }
 
-            if (request.AuthenticatedIdentity?.IsDungeonMaster != true)
+            if (!AuthorizationPolicy.CanReadDungeonMasterResource(request.AuthenticatedIdentity))
             {
                 return new MyHeroBriefingResolvedHero(null, MyHeroBriefingHeroIdentitySource.None, null, []);
             }

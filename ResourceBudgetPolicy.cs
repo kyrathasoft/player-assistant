@@ -4,6 +4,12 @@ namespace PlayerAssistant
 {
     internal sealed class ResourceBudgetPolicy
     {
+        private static readonly string[] RequiredNames =
+        [
+            "broker_query_latency_ms", "message_table_rows", "cache_retention_days",
+                "backup_retention_count", "startup_ms", "pwa_polling_seconds",
+                "optional_pack_bytes", "diagnostic_bytes"
+        ];
         private readonly IReadOnlyDictionary<string, long> _budgets;
         public long BrokerQueryLatencyMilliseconds => Get("broker_query_latency_ms");
         public long MessageTableRows => Get("message_table_rows");
@@ -27,6 +33,10 @@ namespace PlayerAssistant
                 var value = property.Value.GetInt64();
                 if (value <= 0) throw new InvalidOperationException($"Resource budget '{property.Name}' must be positive.");
                 values.Add(property.Name, value);
+            }
+            foreach (var name in RequiredNames)
+            {
+                if (!values.ContainsKey(name)) throw new InvalidOperationException($"Missing resource budget '{name}'.");
             }
             return new ResourceBudgetPolicy(values);
         }

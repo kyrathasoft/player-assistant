@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-require_once __DIR__ . '/StructuredCorrelation.php';
+require_once __DIR__ . '/CorrelationContext.php';
 
 final class PwaMonitorFailure extends RuntimeException
 {
@@ -19,10 +19,11 @@ final class PwaSyntheticMonitor
     private $mailer;
     private $clock;
     private string $cookie = '';
-    private string $correlationId = '';
+    private string $correlationId;
 
     public function __construct(array $config, ?callable $requester = null, ?callable $mailer = null, ?callable $clock = null)
     {
+        $this->correlationId = CorrelationContext::create();
         $this->config = array_replace([
             'base_url' => 'https://bryanmiller.us/scarlethorizons',
             'character_name' => '',
@@ -41,7 +42,6 @@ final class PwaSyntheticMonitor
 
     public function run(): array
     {
-        $this->correlationId = StructuredCorrelation::create();
         $previous = $this->readStatus();
         $now = ($this->clock)();
         try {
@@ -62,7 +62,7 @@ final class PwaSyntheticMonitor
                 $this->recordAlert($status, 'recovered', 'The authenticated production PWA monitor recovered.', $now);
             }
             $this->writeStatus($status);
-            return ['status' => 'ok', 'checked_at' => $status['last_run_at'], 'correlation_id' => $this->correlationId];
+            return ['status' => 'ok', 'checked_at' => $status['last_run_at']];
         } catch (Throwable $error) {
             if ($error instanceof PwaMonitorFailure && $error->errorCode === 'status_write_failed') {
                 throw $error;
@@ -234,8 +234,7 @@ final class PwaSyntheticMonitor
         if ($this->cookie !== '') {
             $headers['Cookie'] = $this->cookie;
         }
-        $headers['X-Correlation-Id'] = $this->correlationId;
-        $headers['X-Request-Id'] = $this->correlationId;
+        $headers['X-Correlation-ID'] = $this->correlationId;
         $response = ($this->requester)($method, $url, $headers, $body);
         if (!is_array($response) || !isset($response['status'], $response['headers'], $response['body'])) {
             throw new PwaMonitorFailure('transport_invalid', 'The monitor transport returned an invalid response.');
@@ -326,11 +325,10 @@ final class PwaSyntheticMonitor
 
     private function recordAlert(array &$status, string $event, string $message, int $now): void
     {
-        $sent = ($this->mailer)('[Player Assistant PWA monitor] ' . $event . ' [' . $this->correlationId . ']', $message);
+        $sent = ($this->mailer)('[Player Assistant PWA monitor] ' . $event, $message);
         $status['last_alert_at'] = gmdate(DATE_ATOM, $now);
         $status['last_alert_unix'] = $now;
         $status['last_alert_result'] = $sent ? 'sent' : 'not_sent';
-        $status['last_alert_correlation_id'] = $this->correlationId;
     }
 
     private function sendMail(string $subject, string $body): bool

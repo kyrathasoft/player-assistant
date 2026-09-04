@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+require_once dirname(__DIR__, 3) . '/player-assistant-broker/CorrelationContext.php';
 header('Content-Type: application/json; charset=utf-8');
 header('Cache-Control: no-store');
 header('X-Content-Type-Options: nosniff');
@@ -10,14 +11,10 @@ header("Content-Security-Policy: default-src 'none'; frame-ancestors 'none'; fra
 header('Permissions-Policy: camera=(), microphone=(), geolocation=()');
 header('Strict-Transport-Security: max-age=31536000');
 
-$privateDirectory = dirname(__DIR__, 3) . '/player-assistant-broker';
-require_once $privateDirectory . '/StructuredCorrelation.php';
-$requestId = StructuredCorrelation::fromHeaders([
-    'x-correlation-id' => $_SERVER['HTTP_X_CORRELATION_ID'] ?? null,
-    'x-request-id' => $_SERVER['HTTP_X_REQUEST_ID'] ?? null,
-]);
+$correlationId = CorrelationContext::create($_SERVER['HTTP_X_CORRELATION_ID'] ?? null);
+header('X-Correlation-ID: ' . $correlationId);
+$requestId = bin2hex(random_bytes(8));
 header('X-Request-Id: ' . $requestId);
-header('X-Correlation-Id: ' . $requestId);
 $config = null;
 
 $method = strtoupper($_SERVER['REQUEST_METHOD'] ?? 'GET');
@@ -39,8 +36,9 @@ if ($method === 'GET' && $healthRoute === '/v1/health') {
 try {
     requireHttps();
 
-
+    $privateDirectory = dirname(__DIR__, 3) . '/player-assistant-broker';
     require_once $privateDirectory . '/BrokerHttpException.php';
+    require_once $privateDirectory . '/AuthorizationPolicy.php';
     require_once $privateDirectory . '/RpolClient.php';
     require_once $privateDirectory . '/CharacterAuthService.php';
     require_once $privateDirectory . '/XpTrackingService.php';
@@ -51,6 +49,7 @@ try {
     require_once $privateDirectory . '/RevisionService.php';
     require_once $privateDirectory . '/MagicItemService.php';
     require_once $privateDirectory . '/BrokerService.php';
+    require_once $privateDirectory . '/ProtectedResourceContract.php';
     require_once $privateDirectory . '/BrokerAlertService.php';
     $configPathOverride = getenv('PLAYER_ASSISTANT_BROKER_CONFIG');
     $configPath = is_string($configPathOverride) && $configPathOverride !== ''
@@ -136,13 +135,12 @@ try {
     if (isset($operations) && $operations instanceof BrokerOperations) {
         $operations->recordServerError($requestId, 'internal_error');
     }
-    error_log(json_encode(StructuredCorrelation::context($requestId, [
-        'service' => 'player-assistant-broker',
-        'event' => 'internal_error',
-        'error' => $exception->getMessage(),
-        'file' => basename($exception->getFile()),
-        'line' => $exception->getLine(),
-    ]), JSON_UNESCAPED_SLASHES));
+    error_log(sprintf(
+        '[player-assistant-broker:%s] %s in %s:%d',
+        $requestId,
+        $exception->getMessage(),
+        $exception->getFile(),
+        $exception->getLine()));
     if (is_array($config)) {
         recordBrokerServerError($config, $exception);
     }
@@ -256,32 +254,7 @@ function getRequestHeadersForBroker(): array
 
 function isCharacterSessionRoute(string $route): bool
 {
-    return in_array(
-        $route,
-        [
-            '/v1/login',
-            '/v1/session',
-            '/v1/me',
-            '/v1/xp',
-            '/v1/xp-awards',
-            '/v1/xp-level-up-notifications/claim',
-            '/v1/xp-level-up-notifications/acknowledge',
-            '/v1/word-counts',
-            '/v1/presence',
-            '/v1/quests',
-            '/v1/revisions',
-            '/v1/magic-items',
-            '/v1/quest-requests',
-            '/v1/messages',
-            '/v1/logout',
-        ],
-        true)
-        || preg_match(
-            '#^/v1/quest-requests/[a-f0-9]{32}/(?:decision|acknowledge)$#',
-            $route) === 1
-        || preg_match(
-            '#^/v1/messages/[a-f0-9]{32}/read$#',
-            $route) === 1;
+    return AuthorizationPolicy::isCharacterSessionRoute($route);
 }
 
 function startCharacterSession(array $authConfig): void

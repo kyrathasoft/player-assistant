@@ -7,6 +7,7 @@ param(
     [switch]$NoPlanOutputs,
     [switch]$NoRetentionCleanup,
     [switch]$KeepStaging,
+    [switch]$ConfirmExport,
     [int]$ChildCommandTimeoutSeconds = 120
 )
 
@@ -704,6 +705,10 @@ if (![string]::IsNullOrWhiteSpace($VerifyOnly)) {
     return
 }
 
+if (!$ConfirmExport) {
+    throw 'Diagnostic export requires explicit -ConfirmExport user initiation.'
+}
+
 $resolvedReleaseDir = Resolve-FullPath $ReleaseDir
 $resolvedPublishDir = Resolve-FullPath $PublishDir
 Assert-PathInsideRepo -Path $resolvedReleaseDir -Description 'Release directory'
@@ -737,6 +742,17 @@ try {
         os = [Environment]::OSVersion.VersionString
     }
     Write-Utf8File -Path (Join-Path $stagingDirectory 'metadata.json') -Contents (($metadata | ConvertTo-Json -Depth 6) + "`r`n")
+
+    Write-StepLog 'Writing minimized bundle manifest'
+    $bundleManifest = [ordered]@{
+        schema_version = 1
+        export_mode = 'read-only-minimized'
+        user_initiated = [bool]$ConfirmExport
+        included_categories = @('version', 'feature-health', 'transaction-and-verifier-summaries', 'redacted-runtime-shapes')
+        excluded_categories = @('credentials', 'tokens', 'cookies', 'private-notes', 'protected-response-bodies', 'raw-user-data')
+        redaction_marker = '[REDACTED]'
+    }
+    Write-Utf8File -Path (Join-Path $stagingDirectory 'bundle-manifest.json') -Contents (($bundleManifest | ConvertTo-Json -Depth 8) + "`r`n")
 
     Write-StepLog 'Writing version-metadata.json'
     $versionSummary = @(

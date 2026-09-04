@@ -39,7 +39,7 @@ internal static partial class TestCases
     internal static void ResourceBudgetsAcceptRepresentativeFixtureAndSlowIo()
     {
         var budgets = ResourceBudgetPolicy.Load(Path.Combine(AppContext.BaseDirectory, "resource-budgets.json"));
-        var fixtureRows = Enumerable.Range(0, (int)Math.Min(budgets.MessageTableRows, 10000)).ToArray();
+        var fixtureRows = Enumerable.Range(0, checked((int)budgets.MessageTableRows)).ToArray();
         var slowIoMilliseconds = budgets.BrokerQueryLatencyMilliseconds;
         budgets.EnsureWithin("message_table_rows", fixtureRows.Length);
         budgets.EnsureWithin("broker_query_latency_ms", slowIoMilliseconds);
@@ -1610,6 +1610,7 @@ internal static partial class TestCases
             var entries = GetZipEntryNames(zipPath);
             var expectedEntries = new[]
             {
+                "bundle-manifest.json",
                 "metadata.json",
                 "version-metadata.json",
                 "runtime-sidecars.json",
@@ -1675,6 +1676,21 @@ internal static partial class TestCases
             var verifyOutput = RunDiagnosticsVerification(outputPath, zipPath);
             AssertEqual(0, verifyOutput.ExitCode, $"diagnostic verify-only should pass. Output: {verifyOutput.Output}");
             AssertContains(verifyOutput.Output, "Diagnostic bundle verification passed:");
+        });
+    }
+
+    internal static void DiagnosticBundleRequiresExplicitInitiation()
+    {
+        WithTemporaryDiagnosticsRuntime((rootPath, releasePath, publishPath, outputPath) =>
+        {
+            var output = RunDiagnosticsCollectionWithoutConfirmation(
+                releasePath,
+                publishPath,
+                outputPath,
+                "-NoPublishVerification",
+                "-NoPlanOutputs");
+            AssertFalse(output.ExitCode == 0, "diagnostic export should require explicit initiation");
+            AssertContains(output.Output, "-ConfirmExport");
         });
     }
 
@@ -1940,6 +1956,42 @@ internal static partial class TestCases
             || string.Equals(fileName, "powershell.exe", StringComparison.OrdinalIgnoreCase)
             || string.Equals(fileName, "powershell", StringComparison.OrdinalIgnoreCase)
             || string.Equals(fileName, "pwsh", StringComparison.OrdinalIgnoreCase);
+    }
+
+    internal static void InnoSetupIdentityAttestationContractIsPinned()
+    {
+        var root = GetRepositoryRoot();
+        var verifier = File.ReadAllText(Path.Combine(root, "verify-inno-setup.ps1"));
+        var builder = File.ReadAllText(Path.Combine(root, "build-installer.ps1"));
+        var workflow = File.ReadAllText(Path.Combine(root, ".github", "workflows", "hardening.yml"));
+
+        AssertContains(verifier, "7.1.0");
+        AssertContains(verifier, "0362A383ED217D4C4239B5933866DD96D3EB2102737DA92F80F6057A4B40DF2F");
+        AssertContains(verifier, "D06EBD38F38E3CEE60A3C50CC45BD449D77E0BC6A5CABC607EA9886808E4DE1A");
+        AssertContains(verifier, "CN=Pyrsys B.V., O=Pyrsys B.V., S=Noord-Holland, C=NL");
+        AssertContains(verifier, "E0AB19C8D38CBF9C44709925122A7A02F8C70CB7");
+        AssertContains(verifier, "Get-AuthenticodeSignature");
+        AssertContains(builder, "Get-InnoSetupAttestation");
+        AssertContains(builder, "Write-InnoSetupProvenance");
+        AssertContains(workflow, "innosetup-7.1.0-x64.exe");
+        AssertContains(workflow, "verify-inno-setup.ps1 -PackagePath");
+        AssertContains(workflow, "https://github.com/jrsoftware/issrc/releases/download/is-7_1_0/innosetup-7.1.0-x64.exe");
+
+        var fakeCompiler = Path.Combine(Path.GetTempPath(), "inno-attestation-fake.exe");
+        try
+        {
+            File.WriteAllBytes(fakeCompiler, [0x4D, 0x5A]);
+            var output = RunPowerShell([
+                "-NoProfile", "-ExecutionPolicy", "Bypass", "-File",
+                Path.Combine(root, "verify-inno-setup.ps1"), "-CompilerPath", fakeCompiler
+            ], TimeSpan.FromSeconds(30));
+            AssertFalse(output.ExitCode == 0, "unexpected compiler identity must be rejected");
+            AssertContains(output.Output, "SHA256");
+        }
+        finally
+        {
+            if (File.Exists(fakeCompiler)) File.Delete(fakeCompiler);
+        }
     }
 
     private static string GetRepositoryRoot()

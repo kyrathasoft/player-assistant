@@ -35,6 +35,7 @@ function Assert-WorkflowRunCommand {
 }
 
 $workflowPath = Join-Path $RepoRoot '.github\workflows\hardening.yml'
+$deployWorkflowPath = Join-Path $RepoRoot '.github\workflows\deploy-pwa.yml'
 $browserPackagePath = Join-Path $RepoRoot 'pwa\package.json'
 $browserTestPath = Join-Path $RepoRoot 'pwa\browser-smoke.mjs'
 $translatorWorkerTestPath = Join-Path $RepoRoot 'pwa\translator-worker-tests.mjs'
@@ -42,6 +43,8 @@ $serviceWorkerTestPath = Join-Path $RepoRoot 'pwa\service-worker-tests.mjs'
 $httpAuthTestPath = Join-Path $RepoRoot 'web-deploy\tests\run-http-auth-tests.ps1'
 $nativeFailFastVerifierPath = Join-Path $RepoRoot 'verify-native-test-fail-fast.ps1'
 $brokerOperationsPath = Join-Path $RepoRoot 'web-deploy\player-assistant-broker\BrokerOperations.php'
+$boundedRepairPath = Join-Path $RepoRoot 'web-deploy\player-assistant-broker\BoundedRepairService.php'
+$boundedRepairTestPath = Join-Path $RepoRoot 'web-deploy\tests\bounded-repair-tests.php'
 $operationsConfigExamplePath = Join-Path $RepoRoot 'web-deploy\player-assistant-broker\config.operations.example.php'
 $wordCountDeploymentPath = Join-Path $RepoRoot 'web-deploy\deploy-word-count-refresh.ps1'
 $directoryBuildPropsPath = Join-Path $RepoRoot 'Directory.Build.props'
@@ -52,8 +55,12 @@ $launcherProjectPath = Join-Path $RepoRoot 'PlayerAssistant.Launcher\PlayerAssis
 $dependencyReviewWorkflowPath = Join-Path $RepoRoot '.github\workflows\dependency-review.yml'
 $dependabotPath = Join-Path $RepoRoot '.github\dependabot.yml'
 $hygieneVerifierPath = Join-Path $RepoRoot 'verify-repository-hygiene.ps1'
+$secretLifecycleVerifierPath = Join-Path $RepoRoot 'verify-secret-lifecycle.ps1'
 $lexiconVerifierPath = Join-Path $RepoRoot 'verify-lexicon-artifacts.py'
 $versionVerifierPath = Join-Path $RepoRoot 'verify-version-metadata.py'
+$compatibilityVerifierPath = Join-Path $RepoRoot 'verify-downgrade-rollback-compatibility.ps1'
+$releaseReadinessAggregatorPath = Join-Path $RepoRoot 'release-readiness-aggregate.ps1'
+$releaseReadinessTestsPath = Join-Path $RepoRoot 'release-readiness-tests.ps1'
 $requiredLockFiles = @(
     'packages.lock.json',
     'ToOrcish\packages.lock.json',
@@ -64,6 +71,8 @@ $requiredLockFiles = @(
 Assert-Condition -Condition (Test-Path -LiteralPath $workflowPath -PathType Leaf) -Message 'The full-regression workflow is missing.'
 
 $workflow = Get-Content -Raw -LiteralPath $workflowPath
+$browserSmoke = Get-Content -Raw -LiteralPath $browserTestPath
+$deployWorkflow = Get-Content -Raw -LiteralPath $deployWorkflowPath
 $httpAuthTest = Get-Content -Raw -LiteralPath $httpAuthTestPath
 $nativeFailFastVerifier = Get-Content -Raw -LiteralPath $nativeFailFastVerifierPath
 $launcherProject = Get-Content -Raw -LiteralPath $launcherProjectPath
@@ -75,14 +84,31 @@ Assert-WorkflowRunCommand -WorkflowText $workflow -Command 'dotnet build .\Playe
 Assert-WorkflowRunCommand -WorkflowText $workflow -Command 'dotnet format .\player-assistant.slnx --verify-no-changes --no-restore' -Message 'The required job must reject unformatted .NET source without performing another restore.'
 Assert-WorkflowRunCommand -WorkflowText $workflow -Command '.\verify-repository-hygiene.ps1' -Message 'The required job must verify local corpus and Hermes scratch-file hygiene.'
 Assert-Condition -Condition (Test-Path -LiteralPath $hygieneVerifierPath -PathType Leaf) -Message 'The repository hygiene verifier is missing.'
+Assert-Condition -Condition (Test-Path -LiteralPath $secretLifecycleVerifierPath -PathType Leaf) -Message 'The secret lifecycle verifier is missing.'
+Assert-Condition -Condition ($workflow.Contains('.\verify-secret-lifecycle.ps1')) -Message 'The required job must verify secret lifecycle inventory and revocation.'
 Assert-Condition -Condition ($workflow.Contains('.\PlayerAssistant.Tests\bin\Release\net10.0-windows\PlayerAssistant.Tests.exe')) -Message 'The required job must run the complete desktop harness without a filter.'
 Assert-Condition -Condition (!$workflow.Contains('Verify hosted settings fetch and decrypt path') -and !$workflow.Contains('Verify hosted settings negative paths')) -Message 'Focused desktop filters must not substitute for the complete harness.'
 Assert-Condition -Condition ($workflow.Contains('.\pwa\verify-pwa.ps1')) -Message 'The required job must run the PWA verifier.'
+Assert-Condition -Condition ($workflow.Contains('migration-rehearsal-tests.php')) -Message 'The required CI paths must run deterministic broker migration rehearsal coverage.'
+Assert-Condition -Condition (Test-Path -LiteralPath $boundedRepairPath -PathType Leaf) -Message 'Bounded repair tooling is missing.'
+Assert-Condition -Condition (Test-Path -LiteralPath $boundedRepairTestPath -PathType Leaf) -Message 'Bounded repair deterministic coverage is missing.'
+Assert-Condition -Condition ($workflow.Contains('bounded-repair-tests.php')) -Message 'Canonical CI must run bounded repair coverage.'
+Assert-Condition -Condition ($deployWorkflow.Contains('pwa-release-transactions') -and $deployWorkflow.Contains('cancel-in-progress: false')) -Message 'Release workflow must retain serialized PWA release transactions.'
+Assert-Condition -Condition (Test-Path -LiteralPath (Join-Path $RepoRoot 'web-deploy\tests\migration-rehearsal-tests.php') -PathType Leaf) -Message 'The deterministic broker migration rehearsal suite is missing.'
 Assert-Condition -Condition ($workflow.Contains('python .\verify-lexicon-artifacts.py')) -Message 'The required job must verify canonical lexicon projections.'
 Assert-Condition -Condition (Test-Path -LiteralPath $lexiconVerifierPath -PathType Leaf) -Message 'The canonical lexicon verifier is missing.'
+Assert-Condition -Condition ($workflow.Contains('.\release-manifest-tests.ps1') -and $workflow.Contains('.\release-manifest.ps1 -Mode Generate') -and $workflow.Contains('.\release-manifest.ps1 -Mode Verify')) -Message 'The required job must run deterministic release-manifest tests and generate/verify the complete release inventory.'
+Assert-Condition -Condition (Test-Path -LiteralPath $releaseReadinessAggregatorPath -PathType Leaf) -Message 'The release-readiness evidence aggregator is missing.'
+Assert-Condition -Condition (Test-Path -LiteralPath $releaseReadinessTestsPath -PathType Leaf) -Message 'The release-readiness evidence fixtures are missing.'
+Assert-Condition -Condition ($workflow.Contains('release-readiness-tests.ps1')) -Message 'The required job must run deterministic release-readiness evidence fixtures.'
+Assert-Condition -Condition (Test-Path -LiteralPath (Join-Path $RepoRoot 'release-manifest.inventory.json') -PathType Leaf) -Message 'The canonical release-manifest inventory is missing.'
+Assert-Condition -Condition (Test-Path -LiteralPath (Join-Path $RepoRoot 'release-manifest.ps1') -PathType Leaf) -Message 'The canonical release-manifest generator/verifier is missing.'
+Assert-Condition -Condition (Test-Path -LiteralPath (Join-Path $RepoRoot 'release-manifest-tests.ps1') -PathType Leaf) -Message 'The deterministic release-manifest regression suite is missing.'
 Assert-Condition -Condition ($workflow.Contains('Load canonical version metadata') -and $workflow.Contains('.\version-metadata.ps1')) -Message 'The required job must load canonical version metadata for release artifact paths.'
 Assert-Condition -Condition ($workflow.Contains('python .\verify-version-metadata.py')) -Message 'The required job must verify canonical version projections.'
 Assert-Condition -Condition (Test-Path -LiteralPath $versionVerifierPath -PathType Leaf) -Message 'The canonical version verifier is missing.'
+Assert-Condition -Condition (Test-Path -LiteralPath $compatibilityVerifierPath -PathType Leaf) -Message 'The downgrade and rollback compatibility verifier is missing.'
+Assert-Condition -Condition ($workflow.Contains('.\verify-downgrade-rollback-compatibility.ps1') -and (Test-Path -LiteralPath (Join-Path $RepoRoot 'compatibility-boundaries.json') -PathType Leaf)) -Message 'The required job must run downgrade and rollback compatibility coverage.'
 Assert-Condition -Condition ($workflow.Contains("Get-ChildItem -LiteralPath .\web-deploy\tests -Filter '*-tests.php' -File") -and $workflow.Contains('ForEach-Object {')) -Message 'The required job must run all PHP broker test suites.'
 Assert-Condition -Condition ($workflow.Contains('throw "PHP suite ''$($suite.Name)'' failed with exit code $exitCode."')) -Message 'Each PHP suite must fail the workflow immediately and identify the failing suite.'
 Assert-Condition -Condition ($workflow.Contains('throw "Verification ''$Name'' failed with exit code $exitCode."')) -Message 'Sequential PowerShell/native verification commands must fail immediately and identify the failing suite.'
@@ -98,6 +124,7 @@ Assert-Condition -Condition ($brokerOperations.Contains('BACKUP_FTPS_PASSWORD') 
 Assert-Condition -Condition (!$wordCountDeployment.Contains("copy(`$configPath, `$configPath . '.bak-deploy-'") -and $wordCountDeployment.Contains("`$config['operations']['offsite'] = [")) -Message 'Deployment must scrub FTPS credentials and avoid retaining config.php copies that could contain them.'
 Assert-Condition -Condition ($wordCountDeployment.Contains("`$configBackupPatterns = [") -and $wordCountDeployment.Contains("'config.php.bak-deploy-*'") -and $wordCountDeployment.Contains("'config.php.bak-word-count-refresh-*'")) -Message 'Deployment must remove legacy config backups that may contain serialized FTPS credentials.'
 Assert-Condition -Condition ($workflow.Contains('npm ci --prefix .\pwa') -and $workflow.Contains('npm --prefix .\pwa test')) -Message 'The required job must install and run the browser-level PWA smoke tests.'
+Assert-Condition -Condition ($browserSmoke.Contains('const assertAuthenticatedAccessibility = async') -and $browserSmoke.Contains('protectedState: true') -and $browserSmoke.Contains('mobile: true') -and $browserSmoke.Contains('Failed-login error announcement contract failed')) -Message 'The browser smoke gate must enforce authenticated/error accessibility acceptance.'
 Assert-Condition -Condition ([regex]::IsMatch($workflow, "- name: Build ephemeral release update artifacts for untrusted events[\x0D\x0A]+\s+if: github[.]event_name != 'push'[\x0D\x0A]")) -Message 'Pull-request and manually dispatched builds must use an explicit ephemeral update-manifest signing key step.'
 Assert-Condition -Condition ([regex]::IsMatch($workflow, "- name: Build signed release update artifacts[\x0D\x0A]+\s+if: github[.]event_name == 'push'[\x0D\x0A]")) -Message 'The secret-bearing release signing step must run only for protected push events.'
 $workflowLines = @($workflow -split "`n")

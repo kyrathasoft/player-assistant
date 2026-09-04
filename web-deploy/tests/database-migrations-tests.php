@@ -73,7 +73,7 @@ try {
             && strtoupper((string)$receiptForeignKeys[0]['on_delete']) === 'CASCADE',
         'The receipt table is not bound to character-account lifecycle.');
     $backups = glob($backupDirectory . '/broker-migration-*.sqlite') ?: [];
-    migrationAssert(count($backups) === 6, 'The upgrade did not create one pre-migration backup per upgrade step.');
+    migrationAssert(count($backups) === 7, 'The upgrade did not create one pre-migration backup per upgrade step.');
     $backup = new PDO('sqlite:' . $backups[0], null, null, [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]);
     migrationAssert((int)$backup->query('PRAGMA user_version')->fetchColumn() === 1, 'The pre-migration backup was not from the old version.');
 

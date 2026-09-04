@@ -63,7 +63,7 @@ deployAtomicityAssert(preg_match($verifierPattern, $deploymentVerifier, $verifie
 $root = sys_get_temp_dir() . DIRECTORY_SEPARATOR . 'pa-deploy-payload-' . bin2hex(random_bytes(6));
 $stage = $root . DIRECTORY_SEPARATOR . '.word-count-deploy-fixture';
 mkdir($stage, 0700, true);
-$files = ['BrokerService.php', 'BrokerAlertService.php', 'BrokerOperations.php', 'DatabaseMigrationService.php', 'QuestService.php', 'WordCountService.php', 'refresh-word-counts.php', 'broker-maintenance.php'];
+$files = ['AuthorizationPolicy.php', 'BrokerService.php', 'BrokerAlertService.php', 'BrokerOperations.php', 'DatabaseMigrationService.php', 'QuestService.php', 'WordCountService.php', 'refresh-word-counts.php', 'broker-maintenance.php'];
 foreach ($files as $file) {
     file_put_contents($stage . DIRECTORY_SEPARATOR . $file, "<?php\n// candidate fixture\n");
 }
