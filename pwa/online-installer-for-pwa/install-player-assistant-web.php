@@ -417,7 +417,16 @@ PHP;
     $snapshotKey = base64_decode((string)($api['snapshot_signing_key'] ?? ''), true);
     if (!is_string($snapshotKey) || strlen($snapshotKey) !== 32) {
         reject('The snapshot signing key must encode exactly 32 bytes.');
-    }
+            }
+            $protectedResponse = is_array($api['protected_response'] ?? null) ? $api['protected_response'] : [];
+            $protectedSecret = base64_decode((string)($protectedResponse['signing_key'] ?? ''), true);
+            $protectedPublic = base64_decode((string)($protectedResponse['public_key'] ?? ''), true);
+            if (($protectedResponse['key_id'] ?? null) !== 'protected-prod-2026'
+                || !is_string($protectedSecret) || strlen($protectedSecret) !== SODIUM_CRYPTO_SIGN_SECRETKEYBYTES
+                || !is_string($protectedPublic) || strlen($protectedPublic) !== SODIUM_CRYPTO_SIGN_PUBLICKEYBYTES
+                || !hash_equals($protectedPublic, sodium_crypto_sign_publickey_from_secretkey($protectedSecret))) {
+                reject('The protected-response Ed25519 key pair is invalid or not the pinned key.');
+            }
     if (($auth['expected_origin'] ?? null) !== $origin
         || ($auth['cookie_path'] ?? null) !== '/scarlethorizons/api/') {
         reject('The authentication origin or cookie path does not match the target layout.');

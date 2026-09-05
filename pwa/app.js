@@ -2565,6 +2565,35 @@ import { createOfflineActionQueue, MUTATING_METHODS, QUEUE_STATES } from './modu
     };
     renderQueuedActionState();
 
+    const PROTECTED_RESPONSE_TRUST = Object.freeze({
+        algorithm: 'Ed25519',
+        keyId: 'protected-prod-2026',
+        publicKey: 'ZN3EvmPpN0r7dtWqybDnB6zhGWBrNCPFIuDi8J1BQLk='
+    });
+    const canonicalProtectedValue = (value) => {
+        if (Array.isArray(value)) return value.map(canonicalProtectedValue);
+        if (value && typeof value === 'object') {
+            return Object.fromEntries(Object.keys(value).sort().map((key) => [key, canonicalProtectedValue(value[key])]));
+        }
+        return value;
+    };
+    const digestProtectedBody = async (value) => {
+        const bytes = new TextEncoder().encode(JSON.stringify(canonicalProtectedValue(value)));
+        const digest = await crypto.subtle.digest('SHA-256', bytes);
+        return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, '0')).join('');
+    };
+    const verifyProtectedEnvelope = async (payload, meta, method, route) => {
+        if (meta?.algorithm !== PROTECTED_RESPONSE_TRUST.algorithm || meta.key_id !== PROTECTED_RESPONSE_TRUST.keyId
+            || meta.method !== method || meta.route !== route || meta.schema_version !== 2
+            || meta.body_digest !== await digestProtectedBody(Object.fromEntries(Object.entries(payload).filter(([key]) => key !== '_protected_resource')))) return false;
+        const signed = Object.fromEntries(Object.entries(meta).filter(([key]) => key !== 'signature'));
+        const keyBytes = Uint8Array.from(atob(PROTECTED_RESPONSE_TRUST.publicKey), (char) => char.charCodeAt(0));
+        const signature = Uint8Array.from(atob(meta.signature || ''), (char) => char.charCodeAt(0));
+        const key = await crypto.subtle.importKey('raw', keyBytes, { name: 'Ed25519' }, false, ['verify']);
+        return crypto.subtle.verify({ name: 'Ed25519' }, key, signature,
+            new TextEncoder().encode(JSON.stringify(canonicalProtectedValue(signed))));
+    };
+
     const requestAuthenticationApi = async (path, options = {}) => {
         const method = String(options.method || 'GET').toUpperCase();
         const requestGeneration = authenticationGeneration;
@@ -2696,12 +2725,11 @@ import { createOfflineActionQueue, MUTATING_METHODS, QUEUE_STATES } from './modu
                 const issuedAt = protectedResource && Date.parse(protectedResource.issued_at);
                 const nonce = protectedResource?.nonce;
                 if (!protectedResource
-                    || protectedResource.schema_version !== 1
+                    || !(await verifyProtectedEnvelope(payload, protectedResource, method, `/v1${path}`))
                     || protectedResource.account_id !== authenticatedAccount?.id
                     || protectedResource.generation !== authenticatedResourceGeneration
-                    || protectedResource.resource !== '/v1/protected'
                     || !/^[a-f0-9]{64}$/u.test(String(protectedResource.generation || ''))
-                    || !/^[a-f0-9]{64}$/u.test(String(protectedResource.resource_revision || ''))
+                    || !/^[a-f0-9]{64}$/u.test(String(protectedResource.body_digest || ''))
                     || !/^[a-f0-9]{32}$/u.test(String(nonce || ''))
                     || !Number.isFinite(issuedAt)
                     || !Number.isFinite(expiresAt)

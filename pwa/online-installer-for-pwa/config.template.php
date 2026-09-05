@@ -21,6 +21,11 @@ return [
         'snapshot_signing_key' => 'CHANGE_ME_BASE64_32_BYTE_SIGNING_KEY',
         'snapshot_max_age_seconds' => 86400,
         'snapshot_retention_seconds' => 2592000,
+        'protected_response' => [
+            'key_id' => 'protected-prod-2026',
+            'signing_key' => 'CHANGE_ME_BASE64_64_BYTE_ED25519_SECRET_KEY',
+            'public_key' => 'ZN3EvmPpN0r7dtWqybDnB6zhGWBrNCPFIuDi8J1BQLk=',
+        ],
     ],
     'auth' => [
         'expected_origin' => '__TARGET_ORIGIN__',

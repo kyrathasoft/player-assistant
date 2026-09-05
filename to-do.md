@@ -648,9 +648,9 @@ These additional items were derived from the current source, tests, deployment s
   - [x] Pass the resolved session identity explicitly to every protected success response while preserving the unauthenticated session exception.
   - [x] Regression: every protected GET and mutation has the expected envelope and missing-context requests fail closed.
   - [x] Broker dispatch now carries route-bound validated session context into the protected envelope contract; routing and envelope regressions pass.
-- [ ] Bind protected envelopes to the exact HTTP request and cryptographic key generation.
-  - Sign method, route, account, session generation, body digest, nonce, issue/expiry times, and schema with a pinned verifiable key; reject unknown algorithms and canonicalization changes.
-  - Regression: route, method, body, account, replay, downgrade, and key-rotation tampering never renders or mutates state.
+- [x] Bind protected envelopes to the exact HTTP request and cryptographic key generation.
+  - [x] Sign method, route, account, session generation, body digest, nonce, issue/expiry times, and schema with a pinned Ed25519 key; reject unknown algorithms and canonicalization changes.
+  - [x] Regression: route, method, body, account, replay, downgrade, and key-rotation tampering never renders or mutates state.
 - [ ] Separate response freshness from session issuance time.
   - Issue each response at creation time, cap lifetime at five minutes and absolute session expiry, and reject responses after session revocation.
   - Regression: immediate, 301-second, near-expiry, and revoked-session responses are classified deterministically.
