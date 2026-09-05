@@ -47,12 +47,12 @@ $ExcludedContentPathPatterns = @(
 
 $AllowedFixtureMatches = @(
     [pscustomobject]@{
-        PathPattern = '^verify-rc-self-tests\.ps1$'
+        PathPattern = '^(?:\./)?verify-rc-self-tests\.ps1$'
         LinePattern = 'OPENAI_API_KEY=sk-test-abcdefghijklmnopqrstuvwxyz123456'
     },
     [pscustomobject]@{
         PathPattern = '^verify-secret-scan\.ps1$'
-        LinePattern = 'OPENAI_API_KEY=sk-test-abcdefghijklmnopqrstuvwxyz123456'
+        LinePattern = 'OPENAI_API_KEY='
     },
     [pscustomobject]@{
         PathPattern = '^(PlayerAssistant[.]Tests/ProtectedDataNegativeSpaceTests[.]cs|web-deploy/tests/protected-data-negative-space-tests[.]php)$'
@@ -292,11 +292,23 @@ function Test-HistoryContent {
         '-p',
         '--'
     ) + $GitGrepContentPathspec)
-    $historyDiffOutput = Invoke-Git -Arguments $historyDiffArguments
+    $historyDiffStartInfo = [System.Diagnostics.ProcessStartInfo]::new()
+    $historyDiffStartInfo.FileName = 'git'
+    $historyDiffStartInfo.Arguments = ConvertTo-ProcessArguments -Arguments $historyDiffArguments
+    $historyDiffStartInfo.WorkingDirectory = $resolvedRepoRoot
+    $historyDiffStartInfo.RedirectStandardOutput = $true
+    $historyDiffStartInfo.RedirectStandardError = $true
+    $historyDiffStartInfo.StandardOutputEncoding = [System.Text.UTF8Encoding]::new($false)
+    $historyDiffStartInfo.StandardErrorEncoding = [System.Text.UTF8Encoding]::new($false)
+    $historyDiffStartInfo.UseShellExecute = $false
+    $historyDiffProcess = [System.Diagnostics.Process]::Start($historyDiffStartInfo)
+    if ($null -eq $historyDiffProcess) {
+        throw 'Unable to start git history diff command.'
+    }
     $currentCommit = ''
     $currentPath = ''
 
-    foreach ($diffLine in ($historyDiffOutput.Output -split "`r?`n")) {
+    while (($diffLine = $historyDiffProcess.StandardOutput.ReadLine()) -ne $null) {
         if ($diffLine.StartsWith('commit:', [System.StringComparison]::Ordinal)) {
             $currentCommit = $diffLine.Substring('commit:'.Length)
             continue
@@ -330,6 +342,12 @@ function Test-HistoryContent {
             }
         }
     }
+    $historyDiffError = $historyDiffProcess.StandardError.ReadToEnd()
+    $historyDiffProcess.WaitForExit()
+    if ($historyDiffProcess.ExitCode -ne 0) {
+        throw "git history diff failed with exit code $($historyDiffProcess.ExitCode): $historyDiffError"
+    }
+    $historyDiffProcess.Dispose()
 }
 
 $resolvedRepoRoot = Resolve-FullPath $RepoRoot

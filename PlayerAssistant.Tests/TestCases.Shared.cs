@@ -412,18 +412,7 @@ internal static partial class TestCases
         using var cancellation = new CancellationTokenSource();
         ScheduledTaskLaunchUtility.ProcessFactoryForTests = _ =>
         {
-            var executablePath = Environment.ProcessPath
-                ?? throw new InvalidOperationException("The test executable path is unavailable.");
-            var startInfo = new ProcessStartInfo
-            {
-                FileName = executablePath,
-                UseShellExecute = false,
-                RedirectStandardOutput = true,
-                RedirectStandardError = true,
-                CreateNoWindow = true
-            };
-            startInfo.ArgumentList.Add("--cancellation-child");
-            startInfo.ArgumentList.Add(pidPath);
+            var startInfo = CreateTestChildProcessStartInfo(["--cancellation-child", pidPath]);
             return new Process { StartInfo = startInfo };
         };
 
@@ -468,6 +457,29 @@ internal static partial class TestCases
         {
             return false;
         }
+    }
+
+    private static ProcessStartInfo CreateTestChildProcessStartInfo(IEnumerable<string> arguments)
+    {
+        var processPath = Environment.ProcessPath
+            ?? throw new InvalidOperationException("The test process path is unavailable.");
+        var startInfo = new ProcessStartInfo
+        {
+            FileName = processPath,
+            UseShellExecute = false,
+            CreateNoWindow = true,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true
+        };
+        if (string.Equals(Path.GetFileNameWithoutExtension(processPath), "dotnet", StringComparison.OrdinalIgnoreCase))
+        {
+            startInfo.ArgumentList.Add(typeof(TestCases).Assembly.Location);
+        }
+        foreach (var argument in arguments)
+        {
+            startInfo.ArgumentList.Add(argument);
+        }
+        return startInfo;
     }
 
     internal static void CountWordsAndTakeSnapshotsAttemptsBothTasksAfterOneFailure()

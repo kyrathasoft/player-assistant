@@ -155,16 +155,7 @@ internal static partial class TestCases
     {
         using var directory = TemporaryDirectory.Create();
         var proofPath = Path.Combine(directory.Path, "normal-active-proof.txt");
-        var startInfo = new ProcessStartInfo("dotnet")
-        {
-            UseShellExecute = false,
-            CreateNoWindow = true,
-            RedirectStandardOutput = true,
-            RedirectStandardError = true
-        };
-        startInfo.ArgumentList.Add(typeof(TestCases).Assembly.Location);
-        startInfo.ArgumentList.Add("--rpol-normal-active-loader-child");
-        startInfo.ArgumentList.Add(proofPath);
+        var startInfo = CreateTestChildProcessStartInfo(["--rpol-normal-active-loader-child", proofPath]);
         using var process = Process.Start(startInfo)
             ?? throw new InvalidOperationException("The normal active-loader proof process could not be started.");
         var error = process.StandardError.ReadToEnd();
@@ -615,14 +606,7 @@ internal static partial class TestCases
     {
         using var directory = TemporaryDirectory.Create();
         var pidPath = Path.Combine(directory.Path, "child.pid");
-        var startInfo = new System.Diagnostics.ProcessStartInfo("dotnet")
-        {
-            UseShellExecute = false,
-            CreateNoWindow = true
-        };
-        startInfo.ArgumentList.Add(typeof(TestCases).Assembly.Location);
-        startInfo.ArgumentList.Add("--cancellation-child");
-        startInfo.ArgumentList.Add(pidPath);
+        var startInfo = CreateTestChildProcessStartInfo(["--cancellation-child", pidPath]);
         var result = RpolProcessSupervisor.RunAsync(startInfo, TimeSpan.FromMilliseconds(500), CancellationToken.None).GetAwaiter().GetResult();
         AssertTrue(result.TimedOut, "the process supervisor should report a timeout");
         AssertTrue(result.ProcessTreeTerminated, "the process supervisor should terminate and wait for the process tree");
@@ -768,14 +752,14 @@ internal static partial class TestCases
         var targetFile = Path.Combine(target, "keep.txt");
         File.WriteAllText(targetFile, "must remain");
         var rootLink = Path.Combine(directory.Path, RpolExternalProfileCleanup.ProfilePrefix + "root-link");
-        Directory.CreateSymbolicLink(rootLink, target);
+        CreateDirectoryReparseLink(rootLink, target);
         AssertThrows<IOException>(() => RpolCleanupUtility.DeleteDirectoryBounded(rootLink, TimeSpan.FromSeconds(1), CancellationToken.None));
         AssertTrue(File.Exists(targetFile), "reparse-point profile roots must not traverse their targets");
         Directory.Delete(rootLink);
         var profile = Path.Combine(directory.Path, RpolExternalProfileCleanup.ProfilePrefix + "nested");
         Directory.CreateDirectory(profile);
-        Directory.CreateSymbolicLink(Path.Combine(profile, "nested-link"), target);
-        File.CreateSymbolicLink(Path.Combine(profile, "file-link"), targetFile);
+        CreateDirectoryReparseLink(Path.Combine(profile, "nested-link"), target);
+        CreateFileLink(Path.Combine(profile, "file-link"), targetFile);
         RpolCleanupUtility.DeleteDirectoryBounded(profile, TimeSpan.FromSeconds(1), CancellationToken.None);
         AssertTrue(File.Exists(targetFile), "nested reparse links must be deleted without traversing their targets");
         var stale = Path.Combine(directory.Path, RpolExternalProfileCleanup.ProfilePrefix + "ordinary");
@@ -783,6 +767,62 @@ internal static partial class TestCases
         File.WriteAllText(Path.Combine(stale, "stale.txt"), "remove");
         RpolCleanupUtility.DeleteDirectoryBounded(stale, TimeSpan.FromSeconds(1), CancellationToken.None);
         AssertFalse(Directory.Exists(stale), "ordinary stale profiles must still be removed");
+    }
+
+    private static void CreateDirectoryReparseLink(string linkPath, string targetPath)
+    {
+        try
+        {
+            Directory.CreateSymbolicLink(linkPath, targetPath);
+            return;
+        }
+        catch (UnauthorizedAccessException)
+        {
+        }
+        catch (IOException)
+        {
+        }
+
+        RunMklink("/J", linkPath, targetPath);
+    }
+
+    private static void CreateFileLink(string linkPath, string targetPath)
+    {
+        try
+        {
+            File.CreateSymbolicLink(linkPath, targetPath);
+            return;
+        }
+        catch (UnauthorizedAccessException)
+        {
+        }
+        catch (IOException)
+        {
+        }
+
+        RunMklink("/H", linkPath, targetPath);
+    }
+
+    private static void RunMklink(string linkType, string linkPath, string targetPath)
+    {
+        var startInfo = new ProcessStartInfo
+        {
+            FileName = "cmd.exe",
+            UseShellExecute = false,
+            CreateNoWindow = true
+        };
+        startInfo.ArgumentList.Add("/c");
+        startInfo.ArgumentList.Add("mklink");
+        startInfo.ArgumentList.Add(linkType);
+        startInfo.ArgumentList.Add(linkPath);
+        startInfo.ArgumentList.Add(targetPath);
+        using var process = Process.Start(startInfo)
+            ?? throw new InvalidOperationException("The Windows reparse fixture process could not be started.");
+        process.WaitForExit();
+        if (process.ExitCode != 0)
+        {
+            throw new InvalidOperationException($"The Windows reparse fixture could not create a {linkType} link.");
+        }
     }
 
     internal static void RpolExternalProfileScavengerSkipsActiveLockedProfiles()

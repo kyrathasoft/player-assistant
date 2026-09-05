@@ -4021,16 +4021,9 @@ internal static partial class TestCases
 
     private static Process StartHostedSettingsChild(params string[] arguments)
     {
-        var process = Process.Start(new ProcessStartInfo
-        {
-            FileName = Environment.ProcessPath ?? throw new InvalidOperationException("test process path is unavailable"),
-            Arguments = string.Join(" ", arguments.Select(argument => $"\"{argument.Replace("\"", "\\\"")}\"")),
-            UseShellExecute = false,
-            CreateNoWindow = true,
-            RedirectStandardOutput = true,
-            RedirectStandardError = true
-        });
-        return process ?? throw new InvalidOperationException("hosted-settings child process did not start");
+        var process = Process.Start(CreateTestChildProcessStartInfo(arguments))
+            ?? throw new InvalidOperationException("could not start hosted-settings child");
+        return process;
     }
 
     private static void WaitForFile(string path)

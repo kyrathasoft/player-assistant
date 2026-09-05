@@ -5,7 +5,7 @@ $ErrorActionPreference = 'Stop'
 function Assert-Condition([bool]$Condition,[string]$Message) { if (-not $Condition) { throw $Message } }
 $script = Get-Content -Raw (Join-Path $RepoRoot 'keep-alive-mouse.ps1')
 $vbs = Get-Content -Raw (Join-Path $RepoRoot 'keep-alive-mouse-hidden.vbs')
-Assert-Condition (-not $vbs.Contains('C:\repos\player-assistant')) 'hidden launcher contains a repository-specific path.'
+Assert-Condition (-not ($vbs -match '(?i)[A-Z]:\\repos\\player-assistant')) 'hidden launcher contains a repository-specific path.'
 Assert-Condition ($vbs.Contains('WScript.ScriptFullName') -and $vbs.Contains('GetAbsolutePathName')) 'hidden launcher must derive and validate its absolute installed script path.'
 Assert-Condition ($script.Contains('KeepDisplayAwake') -and $script.Contains('MoveMouse')) 'keep-alive operations are missing.'
 Assert-Condition ($script.Contains('throw') -and $script.Contains('SetLastError')) 'native failures must fail the task.'

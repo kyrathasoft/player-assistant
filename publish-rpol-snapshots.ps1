@@ -117,6 +117,9 @@ if ($InstallScheduledTask) {
     if ($timeZone.Id -ne 'Central Standard Time') {
         throw "This task must be installed on a computer using the 'Central Standard Time' Windows time zone. Current time zone: $($timeZone.Id)"
     }
+    if ([string]::IsNullOrWhiteSpace($env:USERNAME)) {
+        throw 'The RPOL snapshot publisher requires an interactive Windows user context.'
+    }
     $scriptPath = $MyInvocation.MyCommand.Path
     $action = New-ScheduledTaskAction -Execute 'powershell.exe' -Argument (
         "-NoProfile -NonInteractive -WindowStyle Hidden -ExecutionPolicy Bypass -File `"$scriptPath`"")
@@ -125,7 +128,11 @@ if ($InstallScheduledTask) {
         New-ScheduledTaskTrigger -Weekly -DaysOfWeek Wednesday -At '5:00 PM'
     )
     $settings = New-ScheduledTaskSettingsSet -StartWhenAvailable -ExecutionTimeLimit (New-TimeSpan -Hours 1)
-    Register-ScheduledTask -TaskName $TaskName -Action $action -Trigger $triggers -Settings $settings `
+    $principal = New-ScheduledTaskPrincipal `
+        -UserId "$env:USERDOMAIN\$env:USERNAME" `
+        -LogonType Interactive `
+        -RunLevel Limited
+    Register-ScheduledTask -TaskName $TaskName -Action $action -Trigger $triggers -Settings $settings -Principal $principal `
         -Description 'Publishes signed RPOL game 80170 snapshots for Player Assistant.' -Force | Out-Null
     Write-Output "Installed scheduled task '$TaskName'."
     return

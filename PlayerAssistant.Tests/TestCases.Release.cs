@@ -438,16 +438,10 @@ internal static partial class TestCases
     {
         using var directory = TemporaryDirectory.Create();
         var statePath = Path.Combine(directory.Path, "trusted-update-state.json");
-        var testProcess = Environment.ProcessPath ?? throw new InvalidOperationException("test process path unavailable");
         var children = new[] { "0.9.2", "0.9.7", "0.9.4" }.Select(version =>
         {
-            var process = Process.Start(new ProcessStartInfo
-            {
-                FileName = testProcess,
-                Arguments = $"--trusted-update-child \"{statePath}\" {version}",
-                UseShellExecute = false,
-                CreateNoWindow = true
-            }) ?? throw new InvalidOperationException("could not start trusted-version child");
+            var process = Process.Start(CreateTestChildProcessStartInfo(["--trusted-update-child", statePath, version]))
+                ?? throw new InvalidOperationException("could not start trusted-version child");
             return process;
         }).ToArray();
         foreach (var child in children)

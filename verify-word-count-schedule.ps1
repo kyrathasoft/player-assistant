@@ -27,6 +27,9 @@ Assert-Condition ($scheduledPublisher.Contains("New-ScheduledTaskTrigger -Daily 
     $scheduledPublisher.Contains("New-ScheduledTaskTrigger -Weekly -DaysOfWeek Wednesday -At '5:00 PM'")) 'The full recount must run daily at 4:00 AM and 8:30 PM, Sunday at 8:00 AM, and Wednesday at 5:00 PM local Central time.'
 Assert-Condition ($snapshotPublisher.Contains("New-ScheduledTaskTrigger -Daily -At '3:00 AM'") -and
     $snapshotPublisher.Contains("New-ScheduledTaskTrigger -Weekly -DaysOfWeek Wednesday -At '5:00 PM'")) 'The RPOL snapshot publisher must run daily at 3:00 AM and Wednesday at 5:00 PM local Central time.'
+Assert-Condition ($snapshotPublisher.Contains('New-ScheduledTaskPrincipal') -and
+    $snapshotPublisher.Contains('-LogonType Interactive') -and
+    $snapshotPublisher.Contains('-RunLevel Limited')) 'The RPOL snapshot publisher must run in the logged-on interactive user session so browser verification can be completed.'
 Assert-Condition ($scheduledPublisher.Contains("Get-Command 'pwsh.exe'") -and
     $scheduledPublisher.Contains("Join-Path `$env:ProgramFiles 'PowerShell\7\pwsh.exe'") -and
     $scheduledPublisher.Contains('PSVersion.Major -lt 7')) 'The full recount must use PowerShell 7 because the canonical crawler uses parallel execution.'
