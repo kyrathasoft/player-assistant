@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/ProtectedResourceContract.php';
 require_once __DIR__ . '/DataInvariantContract.php';
+require_once __DIR__ . '/AuthorizationPolicy.php';
 
 require_once __DIR__ . '/CapabilityPolicy.php';
 require_once __DIR__ . '/DatabaseMigrationService.php';
@@ -24,6 +25,7 @@ final class BrokerService
     private ?MessageService $messages = null;
     private ?RevisionService $revisions = null;
     private ?array $protectedContext = null;
+    private ?string $dispatchRoute = null;
     private ?BrokerAlertService $alerts = null;
     private ?BrokerOperations $operations = null;
     private $xpMarkdownFetcher;
@@ -80,6 +82,8 @@ final class BrokerService
         ?callable $destroySession = null,
         ?callable $releaseSession = null): array
     {
+        $this->protectedContext = null;
+        $this->dispatchRoute = $route;
         if ($method === 'GET' && $route === '/v1/health') {
             return $this->response(200, [
                 'service' => 'player-assistant-broker',
@@ -131,12 +135,14 @@ final class BrokerService
         }
 
         if ($method === 'GET' && $route === '/v1/me') {
-            return $this->response(200, $this->characterAuth()->requireCurrentAccount($session));
+            $current = $this->characterAuth()->requireCurrentAccount($session);
+            $this->protectedContext = [$current['account'], $this->characterAuth()->currentSessionContext($session)];
+            return $this->response(200, $current);
         }
 
         if ($method === 'GET' && $route === '/v1/xp') {
             $current = $this->characterAuth()->requireCurrentAccount($session);
-            $this->protectedContext = [$current['account'], $session];
+            $this->protectedContext = [$current['account'], $this->characterAuth()->currentSessionContext($session)];
             $this->releaseSession($releaseSession);
             return $this->response(
                 200,
@@ -145,21 +151,21 @@ final class BrokerService
 
         if ($method === 'POST' && $route === '/v1/xp-level-up-notifications/claim') {
             $current = $this->characterAuth()->requireMutationAccount($headers, $session);
-            $this->protectedContext = [$current['account'], $session];
+            $this->protectedContext = [$current['account'], $this->characterAuth()->currentSessionContext($session)];
             return $this->mutation($current, $method, $route, $body, $headers, fn(): array => $this->response(
                 200, $this->xpTracking()->claimLevelUpNotificationsForAccount($current['account'])));
         }
 
         if ($method === 'POST' && $route === '/v1/xp-level-up-notifications/acknowledge') {
             $current = $this->characterAuth()->requireMutationAccount($headers, $session);
-            $this->protectedContext = [$current['account'], $session];
+            $this->protectedContext = [$current['account'], $this->characterAuth()->currentSessionContext($session)];
             return $this->mutation($current, $method, $route, $body, $headers, fn(): array => $this->response(
                 200, $this->xpTracking()->acknowledgeLevelUpNotificationsForAccount($current['account'], $body)));
         }
 
         if ($method === 'GET' && $route === '/v1/xp-awards') {
             $current = $this->characterAuth()->requireCurrentAccount($session);
-            $this->protectedContext = [$current['account'], $session];
+            $this->protectedContext = [$current['account'], $this->characterAuth()->currentSessionContext($session)];
             $this->releaseSession($releaseSession);
             return $this->response(
                 200,
@@ -167,39 +173,42 @@ final class BrokerService
         }
 
         if ($method === 'GET' && $route === '/v1/word-counts') {
-            $this->characterAuth()->requireCurrentAccount($session);
+            $current = $this->characterAuth()->requireCurrentAccount($session);
+            $this->protectedContext = [$current['account'], $this->characterAuth()->currentSessionContext($session)];
             $this->releaseSession($releaseSession);
             return $this->response(200, $this->wordCounts()->latest());
         }
 
         if ($method === 'GET' && $route === '/v1/presence') {
+            $current = $this->characterAuth()->requireCurrentAccount($session);
+            $this->protectedContext = [$current['account'], $this->characterAuth()->currentSessionContext($session)];
             return $this->response(200, $this->characterAuth()->presence($session));
         }
 
         if ($method === 'GET' && $route === '/v1/quests') {
             $current = $this->characterAuth()->requireCurrentAccount($session);
-            $this->protectedContext = [$current['account'], $session];
+            $this->protectedContext = [$current['account'], $this->characterAuth()->currentSessionContext($session)];
             $this->releaseSession($releaseSession);
             return $this->response(200, $this->quests()->forAccount($current['account']));
         }
 
         if ($method === 'GET' && $route === '/v1/revisions') {
             $current = $this->characterAuth()->requireCurrentAccount($session);
-            $this->protectedContext = [$current['account'], $session];
+            $this->protectedContext = [$current['account'], $this->characterAuth()->currentSessionContext($session)];
             $this->releaseSession($releaseSession);
             return $this->response(200, $this->revisions()->forAccount($current['account']));
         }
 
         if ($method === 'GET' && $route === '/v1/magic-items') {
             $current = $this->characterAuth()->requireCurrentAccount($session);
-            $this->protectedContext = [$current['account'], $session];
+            $this->protectedContext = [$current['account'], $this->characterAuth()->currentSessionContext($session)];
             $this->releaseSession($releaseSession);
             return $this->response(200, $this->magicItems()->forAccount($current['account']));
         }
 
         if ($method === 'POST' && $route === '/v1/quest-requests') {
             $current = $this->characterAuth()->requireMutationAccount($headers, $session);
-            $this->protectedContext = [$current['account'], $session];
+            $this->protectedContext = [$current['account'], $this->characterAuth()->currentSessionContext($session)];
             return $this->mutation($current, $method, $route, $body, $headers, fn(): array => $this->response(
                 201, $this->quests()->requestInterest($current['account'], $body)));
         }
@@ -210,7 +219,7 @@ final class BrokerService
                 $route,
                 $matches) === 1) {
             $current = $this->characterAuth()->requireMutationAccount($headers, $session);
-            $this->protectedContext = [$current['account'], $session];
+            $this->protectedContext = [$current['account'], $this->characterAuth()->currentSessionContext($session)];
             return $this->mutation($current, $method, $route, $body, $headers, fn(): array => $this->response(
                 200, $this->quests()->decide($current['account'], $matches[1], $body)));
         }
@@ -221,21 +230,21 @@ final class BrokerService
                 $route,
                 $matches) === 1) {
             $current = $this->characterAuth()->requireMutationAccount($headers, $session);
-            $this->protectedContext = [$current['account'], $session];
+            $this->protectedContext = [$current['account'], $this->characterAuth()->currentSessionContext($session)];
             return $this->mutation($current, $method, $route, $body, $headers, fn(): array => $this->response(
                 200, $this->quests()->acknowledge($current['account'], $matches[1])));
         }
 
         if ($method === 'GET' && $route === '/v1/messages') {
             $current = $this->characterAuth()->requireCurrentAccount($session);
-            $this->protectedContext = [$current['account'], $session];
+            $this->protectedContext = [$current['account'], $this->characterAuth()->currentSessionContext($session)];
             $this->releaseSession($releaseSession);
             return $this->response(200, $this->messages()->forAccount($current['account'], $query));
         }
 
         if ($method === 'POST' && $route === '/v1/messages') {
             $current = $this->characterAuth()->requireMutationAccount($headers, $session);
-            $this->protectedContext = [$current['account'], $session];
+            $this->protectedContext = [$current['account'], $this->characterAuth()->currentSessionContext($session)];
             return $this->mutation($current, $method, $route, $body, $headers, fn(): array => $this->response(
                 201, $this->messages()->sendForAccount($current['account'], $body)));
         }
@@ -246,7 +255,7 @@ final class BrokerService
                 $route,
                 $matches) === 1) {
             $current = $this->characterAuth()->requireMutationAccount($headers, $session);
-            $this->protectedContext = [$current['account'], $session];
+            $this->protectedContext = [$current['account'], $this->characterAuth()->currentSessionContext($session)];
             return $this->mutation($current, $method, $route, $body, $headers, fn(): array => $this->response(
                 200, $this->messages()->markRead($current['account'], $matches[1])));
         }
@@ -873,10 +882,24 @@ final class BrokerService
 
     private function response(int $status, array $body): array
     {
-        if ($this->protectedContext !== null && $status >= 200 && $status < 300) {
-            [$account, $session] = $this->protectedContext;
-            if (ProtectedResourceContract::hasValidContext($account, $session)) {
-                $body = ProtectedResourceContract::decorate($body, $account, $session, '/v1/protected');
+        if ($status >= 200 && $status < 300 && $this->dispatchRoute !== null) {
+            $requiresContext = AuthorizationPolicy::isCharacterSessionRoute($this->dispatchRoute)
+                && !in_array($this->dispatchRoute, ['/v1/login', '/v1/session', '/v1/logout'], true);
+            if ($requiresContext && $this->protectedContext === null) {
+                throw new RuntimeException('Protected response context was not established at the dispatch boundary.');
+            }
+            if ($this->protectedContext !== null) {
+                [$account, $session] = $this->protectedContext;
+                $now = ($this->clock)();
+                if (!ProtectedResourceContract::hasValidContext($account, $session, $now)) {
+                    throw new RuntimeException('Protected response context is invalid at the dispatch boundary.');
+                }
+                $body = ProtectedResourceContract::decorate(
+                    $body,
+                    $account,
+                    $session,
+                    $this->dispatchRoute,
+                    $now);
             }
         }
         return ['status' => $status, 'body' => $body];
