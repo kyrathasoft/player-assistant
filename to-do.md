@@ -651,9 +651,9 @@ These additional items were derived from the current source, tests, deployment s
 - [x] Bind protected envelopes to the exact HTTP request and cryptographic key generation.
   - [x] Sign method, route, account, session generation, body digest, nonce, issue/expiry times, and schema with a pinned Ed25519 key; reject unknown algorithms and canonicalization changes.
   - [x] Regression: route, method, body, account, replay, downgrade, and key-rotation tampering never renders or mutates state.
-- [ ] Separate response freshness from session issuance time.
-  - Issue each response at creation time, cap lifetime at five minutes and absolute session expiry, and reject responses after session revocation.
-  - Regression: immediate, 301-second, near-expiry, and revoked-session responses are classified deterministically.
+- [x] Separate response freshness from session issuance time.
+  - [x] Issue each response at creation time, cap lifetime at five minutes and absolute session expiry, and reject responses after session revocation.
+  - [x] Regression: immediate, 301-second, near-expiry, future-issued, absolute-session-expiry, and revoked-session responses are classified deterministically.
 - [ ] Re-envelope idempotent mutation replays for each delivery.
   - Persist semantic result/effect identity separately from delivery nonce and freshness metadata, replaying without rerunning the mutation.
   - Regression: lost responses, expired envelopes, concurrent duplicates, account transitions, and body collisions remain safe.

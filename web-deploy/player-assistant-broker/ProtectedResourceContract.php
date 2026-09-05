@@ -51,7 +51,7 @@ final class ProtectedResourceContract
             'route' => $route,
             'resource' => $route,
             'account_id' => $accountId,
-            'generation' => hash('sha256', implode('|', [$accountId, $sessionVersion, (int)($session['issued_at'] ?? 0)])),
+            'generation' => self::generation($accountId, $session),
             'body_digest' => $bodyDigest,
             'nonce' => $nonce,
             'issued_at' => gmdate(DATE_ATOM, $issuedAt),
@@ -68,7 +68,8 @@ final class ProtectedResourceContract
         string $method,
         string $route,
         ?int $now = null,
-        ?array $trustConfig = null): bool
+        ?array $trustConfig = null,
+        ?array $session = null): bool
     {
         $now ??= time();
         $meta = $body['_protected_resource'] ?? null;
@@ -87,8 +88,10 @@ final class ProtectedResourceContract
         if (!hash_equals((string)$meta['body_digest'], self::digest($withoutMetadata))) return false;
         $issued = strtotime((string)($meta['issued_at'] ?? ''));
         $expires = strtotime((string)($meta['expires_at'] ?? ''));
-        if ($issued === false || $expires === false || $issued > $now + 5 || $expires <= $now
-            || $expires - $issued > self::MAX_LIFETIME_SECONDS) return false;
+        if ($issued === false || $expires === false || $issued > $now || $expires <= $now
+            || $expires - $issued > self::MAX_LIFETIME_SECONDS
+            || ($session !== null && ($expires > (int)($session['absolute_expires_at'] ?? 0)
+                || !hash_equals((string)($meta['generation'] ?? ''), self::generation($accountId, $session))))) return false;
         $trustConfig ??= [];
         if (($trustConfig['key_id'] ?? null) !== ($meta['key_id'] ?? null)
             || ($meta['algorithm'] ?? null) !== self::ALGORITHM) return false;
@@ -98,6 +101,15 @@ final class ProtectedResourceContract
         $signed = $meta;
         unset($signed['signature']);
         return sodium_crypto_sign_verify_detached($signature, self::canonical($signed), $public);
+    }
+
+    public static function generation(string $accountId, array $session): string
+    {
+        return hash('sha256', implode('|', [
+            $accountId,
+            (int)($session['session_version'] ?? 0),
+            (int)($session['issued_at'] ?? 0),
+        ]));
     }
 
     public static function digest(array $value): string
