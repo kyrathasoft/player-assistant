@@ -10,7 +10,19 @@ $signing = $trust + ['signing_key' => base64_encode($secret)];
 $account = ['id' => str_repeat('a', 32)];
 $session = ['session_version' => 3, 'issued_at' => 1720000000, 'absolute_expires_at' => 1720003600];
 $body = ProtectedResourceContract::decorate(['schema_version' => 1, 'value' => 'fixture'], $account, $session, 'GET', '/v1/protected', 1720000100, $signing);
-protectedAssert(ProtectedResourceContract::validate($body, $account['id'], 'GET', '/v1/protected', 1720000100, $trust), 'valid protected envelope rejected');
+protectedAssert(ProtectedResourceContract::validate($body, $account['id'], 'GET', '/v1/protected', 1720000100, $trust, $session), 'valid protected envelope rejected');
+protectedAssert($body['_protected_resource']['issued_at'] === gmdate(DATE_ATOM, 1720000100), 'response freshness was confused with session issuance time');
+protectedAssert(!ProtectedResourceContract::validate($body, $account['id'], 'GET', '/v1/protected', 1720000401, $trust, $session), '301-second response was accepted');
+$nearExpirySession = $session;
+$nearExpirySession['absolute_expires_at'] = 1720000400;
+$nearExpiry = ProtectedResourceContract::decorate(['schema_version' => 1, 'value' => 'near expiry'], $account, $nearExpirySession, 'GET', '/v1/protected', 1720000399, $signing);
+protectedAssert(ProtectedResourceContract::validate($nearExpiry, $account['id'], 'GET', '/v1/protected', 1720000399, $trust, $nearExpirySession), 'near-expiry response was rejected');
+protectedAssert(!ProtectedResourceContract::validate($nearExpiry, $account['id'], 'GET', '/v1/protected', 1720000400, $trust, $nearExpirySession), 'absolute-session-expiry response was accepted');
+$future = ProtectedResourceContract::decorate(['schema_version' => 1, 'value' => 'future'], $account, $session, 'GET', '/v1/protected', 1720000106, $signing);
+protectedAssert(!ProtectedResourceContract::validate($future, $account['id'], 'GET', '/v1/protected', 1720000100, $trust, $session), 'future-issued response was accepted');
+$revokedSession = $session;
+$revokedSession['session_version']++;
+protectedAssert(!ProtectedResourceContract::validate($body, $account['id'], 'GET', '/v1/protected', 1720000100, $trust, $revokedSession), 'revoked-session response was accepted');
 foreach ([
     ['account', fn() => ProtectedResourceContract::validate($body, str_repeat('b', 32), 'GET', '/v1/protected', 1720000100, $trust)],
     ['route', fn() => ProtectedResourceContract::validate($body, $account['id'], 'GET', '/v1/other', 1720000100, $trust)],

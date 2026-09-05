@@ -113,6 +113,7 @@ import { createOfflineActionQueue, MUTATING_METHODS, QUEUE_STATES } from './modu
     let authenticationGeneration = 0;
     const seenProtectedResponseNonces = new Set();
     let authenticatedResourceGeneration = '';
+    let authenticatedAbsoluteExpiresAt = 0;
     const activeAuthenticationControllers = new Set();
     const AUTH_REQUEST_TIMEOUT_MS = 15000;
     let magicItemSnapshot = null;
@@ -2492,6 +2493,7 @@ import { createOfflineActionQueue, MUTATING_METHODS, QUEUE_STATES } from './modu
         authenticationGeneration++;
         seenProtectedResponseNonces.clear();
         authenticatedResourceGeneration = '';
+        authenticatedAbsoluteExpiresAt = 0;
         accountSessionController.beginTransition();
         cancelAuthenticationRequests(except);
     };
@@ -2724,6 +2726,7 @@ import { createOfflineActionQueue, MUTATING_METHODS, QUEUE_STATES } from './modu
                 const expiresAt = protectedResource && Date.parse(protectedResource.expires_at);
                 const issuedAt = protectedResource && Date.parse(protectedResource.issued_at);
                 const nonce = protectedResource?.nonce;
+                const now = Date.now();
                 if (!protectedResource
                     || !(await verifyProtectedEnvelope(payload, protectedResource, method, `/v1${path}`))
                     || protectedResource.account_id !== authenticatedAccount?.id
@@ -2733,9 +2736,11 @@ import { createOfflineActionQueue, MUTATING_METHODS, QUEUE_STATES } from './modu
                     || !/^[a-f0-9]{32}$/u.test(String(nonce || ''))
                     || !Number.isFinite(issuedAt)
                     || !Number.isFinite(expiresAt)
-                    || issuedAt > Date.now() + 5000
-                    || expiresAt <= Date.now()
-                    || expiresAt - issuedAt > 305000
+                    || issuedAt > now
+                    || expiresAt <= now
+                    || expiresAt - issuedAt > 300000
+                    || (Number.isFinite(authenticatedAbsoluteExpiresAt)
+                        && expiresAt > authenticatedAbsoluteExpiresAt)
                     || seenProtectedResponseNonces.has(nonce)) {
                     throw new AuthenticationApiError(
                         'The protected response was stale, replayed, or bound to another account.',
@@ -2943,6 +2948,8 @@ import { createOfflineActionQueue, MUTATING_METHODS, QUEUE_STATES } from './modu
             authenticatedResourceGeneration = session.authenticated
                 && typeof session.resource_generation === 'string'
                 ? session.resource_generation : '';
+            authenticatedAbsoluteExpiresAt = session.authenticated
+                ? Date.parse(String(session.absolute_expires_at || '')) : 0;
             authenticationCsrfToken = session.authenticated ? String(session.csrf_token || '') : '';
         } catch {
             if (restoreGeneration !== authenticationGeneration) return;
@@ -3077,6 +3084,7 @@ import { createOfflineActionQueue, MUTATING_METHODS, QUEUE_STATES } from './modu
             accountSessionController.setAccount(session.account);
             authenticatedResourceGeneration = typeof session.resource_generation === 'string'
                 ? session.resource_generation : '';
+            authenticatedAbsoluteExpiresAt = Date.parse(String(session.absolute_expires_at || ''));
             authenticationCsrfToken = String(session.csrf_token || '');
             clearProtectedFreshness();
             resetMagicItemState();
