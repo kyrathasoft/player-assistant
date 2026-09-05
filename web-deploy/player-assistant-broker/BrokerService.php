@@ -26,6 +26,8 @@ final class BrokerService
     private ?RevisionService $revisions = null;
     private ?array $protectedContext = null;
     private ?string $dispatchRoute = null;
+    private ?string $dispatchMethod = null;
+    private ?array $dispatchBody = null;
     private ?BrokerAlertService $alerts = null;
     private ?BrokerOperations $operations = null;
     private $xpMarkdownFetcher;
@@ -84,6 +86,8 @@ final class BrokerService
     {
         $this->protectedContext = null;
         $this->dispatchRoute = $route;
+        $this->dispatchMethod = strtoupper($method);
+        $this->dispatchBody = $body;
         if ($method === 'GET' && $route === '/v1/health') {
             return $this->response(200, [
                 'service' => 'player-assistant-broker',
@@ -898,8 +902,11 @@ final class BrokerService
                     $body,
                     $account,
                     $session,
+                    $this->dispatchMethod ?? 'GET',
                     $this->dispatchRoute,
-                    $now);
+                    $now,
+                    is_array($this->apiConfig['protected_response'] ?? null)
+                        ? $this->apiConfig['protected_response'] : []);
             }
         }
         return ['status' => $status, 'body' => $body];

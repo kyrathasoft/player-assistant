@@ -58,6 +58,9 @@ $wordCountStatusPath = tempnam(sys_get_temp_dir(), 'pa-word-count-status-');
 $wordCountSigningKeypair = sodium_crypto_sign_keypair();
 $wordCountSigningSecretKey = sodium_crypto_sign_secretkey($wordCountSigningKeypair);
 $wordCountSigningPublicKey = sodium_crypto_sign_publickey($wordCountSigningKeypair);
+$protectedSigningKeypair = sodium_crypto_sign_keypair();
+$protectedSigningSecretKey = sodium_crypto_sign_secretkey($protectedSigningKeypair);
+$protectedSigningPublicKey = sodium_crypto_sign_publickey($protectedSigningKeypair);
 $xpAwardsDirectory = sys_get_temp_dir() . '/pa-xp-awards-' . bin2hex(random_bytes(6));
 $magicItemsPath = tempnam(sys_get_temp_dir(), 'pa-magic-items-');
 if ($databasePath === false || $magicItemsPath === false) {
@@ -128,6 +131,11 @@ try {
             'snapshot_signing_key' => base64_encode($snapshotSigningKey),
             'snapshot_max_age_seconds' => 30,
             'snapshot_retention_seconds' => 60,
+            'protected_response' => [
+                'key_id' => 'protected-test-2026',
+                'signing_key' => base64_encode($protectedSigningSecretKey),
+                'public_key' => base64_encode($protectedSigningPublicKey),
+            ],
         ],
         'auth' => [
             'expected_origin' => 'https://example.test',
