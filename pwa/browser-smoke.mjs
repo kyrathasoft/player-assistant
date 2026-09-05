@@ -1,4 +1,5 @@
 import { chromium } from 'playwright';
+import { createHash, generateKeyPairSync, sign } from 'node:crypto';
 import { createServer } from 'node:http';
 import { readFile, stat } from 'node:fs/promises';
 import { dirname, extname, join, normalize, relative } from 'node:path';
@@ -41,22 +42,44 @@ const contentTypes = new Map([
     ['.webp', 'image/webp']
 ]);
 
-const jsonResponse = (response, status, payload, headers = {}) => {
+const browserSmokeKeyPair = generateKeyPairSync('ed25519');
+const browserSmokePublicKey = browserSmokeKeyPair.publicKey.export({ format: 'der', type: 'spki' }).subarray(-32);
+const browserSmokeKeyId = 'protected-browser-smoke-2026';
+const apiResponseContext = new WeakMap();
+const canonicalProtectedValue = (value) => Array.isArray(value)
+    ? value.map(canonicalProtectedValue)
+    : value && typeof value === 'object'
+        ? Object.fromEntries(Object.keys(value).sort().map((key) => [key, canonicalProtectedValue(value[key])]))
+        : value;
+const canonicalProtectedJson = (value) => JSON.stringify(canonicalProtectedValue(value));
+const protectedBodyDigest = (value) => createHash('sha256').update(canonicalProtectedJson(value)).digest('hex');
+
+const jsonResponse = (response, status, payload, headers = {}, method, route) => {
+    const context = apiResponseContext.get(response);
+    method ||= context?.method || 'GET';
+    route ||= context?.route || '';
     if (activeProtectedAccount !== null && status >= 200 && status < 300) {
         const issuedAt = new Date();
         const expiresAt = new Date(issuedAt.getTime() + 120000);
+        const protectedPayload = { ...payload };
+        const metadata = {
+            schema_version: 2,
+            algorithm: 'Ed25519',
+            key_id: browserSmokeKeyId,
+            method,
+            route: `/v1${route}`,
+            resource: `/v1${route}`,
+            account_id: activeProtectedAccount.id,
+            generation: '1'.repeat(64),
+            body_digest: protectedBodyDigest(protectedPayload),
+            nonce: `${activeProtectedAccount.id.slice(0, 16)}${String(++activeProtectedNonceCounter).padStart(16, '0')}`,
+            issued_at: issuedAt.toISOString(),
+            expires_at: expiresAt.toISOString()
+        };
+        metadata.signature = sign(null, Buffer.from(canonicalProtectedJson(metadata)), browserSmokeKeyPair.privateKey).toString('base64');
         payload = {
             ...payload,
-            _protected_resource: {
-                schema_version: 1,
-                account_id: activeProtectedAccount.id,
-                resource: '/v1/protected',
-                generation: '1'.repeat(64),
-                issued_at: issuedAt.toISOString(),
-                expires_at: expiresAt.toISOString(),
-                resource_revision: '1'.repeat(64),
-                nonce: `${activeProtectedAccount.id.slice(0, 16)}${String(++activeProtectedNonceCounter).padStart(16, '0')}`
-            }
+            _protected_resource: metadata
         };
     }
     response.writeHead(status, {
@@ -578,12 +601,17 @@ const serveStatic = async (request, response, pathname) => {
         const metadata = await stat(filePath);
         if (!metadata.isFile()) throw new Error('not a file');
         const content = await readFile(filePath);
+        const responseContent = relativePath === 'app.js'
+            ? Buffer.from(content.toString('utf8')
+                .replace("keyId: 'protected-prod-2026'", `keyId: '${browserSmokeKeyId}'`)
+                .replace("publicKey: 'ZN3EvmPpN0r7dtWqybDnB6zhGWBrNCPFIuDi8J1BQLk='", `publicKey: '${browserSmokePublicKey.toString('base64')}'`))
+            : content;
         response.writeHead(200, {
             'Cache-Control': 'no-cache',
-            'Content-Length': String(content.byteLength),
+            'Content-Length': String(responseContent.byteLength),
             'Content-Type': contentTypes.get(extname(filePath).toLowerCase()) || 'application/octet-stream'
         });
-        response.end(content);
+        response.end(responseContent);
     } catch {
         response.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8', ...expectedErrorResponse });
         response.end('Not found');
@@ -594,6 +622,10 @@ const server = createServer(async (request, response) => {
     try {
         const url = new URL(request.url || '/', 'http://127.0.0.1');
         if (url.pathname.startsWith(apiPrefix)) {
+            apiResponseContext.set(response, {
+                method: request.method || 'GET',
+                route: `${url.pathname.slice(apiPrefix.length) || '/'}${url.search}`
+            });
             await serveApi(request, response, url.pathname);
             return;
         }

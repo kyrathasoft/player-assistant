@@ -149,6 +149,7 @@ $migrationOutput = & $resolvedPhpPath `
     '-n' `
     '-d' "extension_dir=$(Join-Path $phpRoot 'ext')" `
     '-d' 'extension=pdo_sqlite' `
+    '-d' 'extension=sodium' `
     $migrationPath 2>&1
 if ($LASTEXITCODE -ne 0) {
     throw "The HTTP test broker migration failed: $migrationOutput"
@@ -163,6 +164,7 @@ try {
             '-d', "extension_dir=$(Join-Path $phpRoot 'ext')",
             '-d', 'extension=pdo_sqlite',
             '-d', 'extension=curl',
+            '-d', 'extension=sodium',
             '-S', "127.0.0.1:$port",
             '-t', $documentRoot,
             $routerPath
