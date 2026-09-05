@@ -9,4 +9,7 @@ assert.match(source, /expiresAt - issuedAt > 300000/);
 assert.match(source, /authenticatedAbsoluteExpiresAt/);
 assert.match(source, /seenProtectedResponseNonces\.has\(nonce\)/);
 assert.match(source, /seenProtectedResponseNonces\.clear\(\)/);
+assert.match(source, /Idempotency-Key/);
+assert.match(source, /idempotencyKey: item\.idempotencyKey/);
+assert.match(source, /requestGeneration !== authenticationGeneration/);
 console.log('Protected resource PWA contract tests passed.');
