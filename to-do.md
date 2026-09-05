@@ -644,9 +644,10 @@ These additional items were derived from the current source, tests, deployment s
 
 ### Phase 1 — Complete protected request contracts
 
-- [ ] Complete protected-response decoration at the real broker dispatch boundary.
-  - Pass the resolved session identity explicitly to every protected success response while preserving the unauthenticated session exception.
-  - Regression: every protected GET and mutation has the expected envelope and missing-context requests fail closed.
+- [x] Complete protected-response decoration at the real broker dispatch boundary.
+  - [x] Pass the resolved session identity explicitly to every protected success response while preserving the unauthenticated session exception.
+  - [x] Regression: every protected GET and mutation has the expected envelope and missing-context requests fail closed.
+  - [x] Broker dispatch now carries route-bound validated session context into the protected envelope contract; routing and envelope regressions pass.
 - [ ] Bind protected envelopes to the exact HTTP request and cryptographic key generation.
   - Sign method, route, account, session generation, body digest, nonce, issue/expiry times, and schema with a pinned verifiable key; reject unknown algorithms and canonicalization changes.
   - Regression: route, method, body, account, replay, downgrade, and key-rotation tampering never renders or mutates state.

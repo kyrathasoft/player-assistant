@@ -132,6 +132,15 @@ final class CharacterAuthService
         ];
     }
 
+    public function currentSessionContext(array $session): array
+    {
+        $payload = $session[self::SESSION_KEY] ?? null;
+        if (!is_array($payload)) {
+            throw new BrokerHttpException(401, 'authentication_required', 'Authentication is required.');
+        }
+        return $payload;
+    }
+
     public function requireMutationAccount(array $headers, array &$session): array
     {
         $this->requireExpectedOrigin((string)($headers['origin'] ?? ''));

@@ -565,6 +565,28 @@ try {
     routingAssert(
         $identity['body']['account']['character_key'] === 'routing',
         'The protected identity route did not use the session account.');
+    routingAssert(
+        ($identity['body']['_protected_resource']['resource'] ?? null) === '/v1/me'
+            && ($identity['body']['_protected_resource']['account_id'] ?? null) === $identity['body']['account']['id'],
+        'The protected identity route did not return a route-bound resource envelope.');
+
+    $dispatchRouteProperty = new ReflectionProperty(BrokerService::class, 'dispatchRoute');
+    $protectedContextProperty = new ReflectionProperty(BrokerService::class, 'protectedContext');
+    $responseMethod = new ReflectionMethod(BrokerService::class, 'response');
+    $dispatchRouteProperty->setValue($broker, '/v1/me');
+    $protectedContextProperty->setValue($broker, null);
+    try {
+        $responseMethod->invoke($broker, 200, ['fixture' => true]);
+        throw new RuntimeException('A protected response without dispatch identity context was accepted.');
+    } catch (ReflectionException) {
+        throw new RuntimeException('The protected response boundary could not be inspected.');
+    } catch (Throwable $exception) {
+        routingAssert(
+            str_contains($exception->getMessage(), 'Protected response context was not established'),
+            'A protected response without dispatch identity context failed with the wrong error.');
+    } finally {
+        $dispatchRouteProperty->setValue($broker, null);
+    }
 
     $sessionReleaseCount = 0;
     $playerRevisions = $broker->dispatch(
@@ -631,6 +653,10 @@ try {
     routingAssert($xp['body']['character']['xp_to_next_level'] === 7655, 'The player XP response had the wrong TNL value.');
     routingAssert(!isset($xp['body']['characters']), 'The player XP response exposed party totals.');
     routingAssert(!isset($xp['body']['source_url']), 'The player XP response exposed the configured source URL.');
+    routingAssert(
+        ($xp['body']['_protected_resource']['resource'] ?? null) === '/v1/xp'
+            && ($xp['body']['_protected_resource']['account_id'] ?? null) === $identity['body']['account']['id'],
+        'The protected XP route did not return a route-bound resource envelope.');
 
     $levelUpNotifications = $broker->dispatch(
         'POST',
