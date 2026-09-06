@@ -2,53 +2,55 @@
 
 declare(strict_types=1);
 
-require_once __DIR__ . '/../player-assistant-broker/BrokerHttpException.php';
-require_once __DIR__ . '/../player-assistant-broker/DatabaseMigrationService.php';
-require_once __DIR__ . '/../player-assistant-broker/CharacterAuthService.php';
+require_once __DIR__ . '/../player-assistant-broker/AuthorizationPolicy.php';
 
-function authorizationPolicyAssert(bool $condition, string $message): void { if (!$condition) throw new RuntimeException($message); }
-function authorizationPolicyError(callable $action, int $status, string $name): void {
-    try { $action(); } catch (BrokerHttpException $exception) {
-        authorizationPolicyAssert($exception->status === $status, "Expected $status, received {$exception->status}.");
-        authorizationPolicyAssert($exception->errorName === $name, "Expected $name, received {$exception->errorName}."); return;
+function authorizationPolicyAssert(bool $condition, string $message): void
+{
+    if (!$condition) {
+        throw new RuntimeException($message);
     }
-    throw new RuntimeException("Expected $name.");
 }
 
-$policy = json_decode((string)file_get_contents(__DIR__ . '/authorization-policy-fixture.json'), true, 16, JSON_THROW_ON_ERROR);
-$routes = $policy['protected_routes'] ?? [];
-$cases = $policy['cases'] ?? [];
-authorizationPolicyAssert(count($routes) > 0 && $cases === ['same_scope', 'cross_account', 'role_confusion', 'alias', 'anonymous'], 'The canonical authorization policy fixture is incomplete.');
-$brokerSource = (string)file_get_contents(__DIR__ . '/../player-assistant-broker/BrokerService.php');
-foreach ($routes as $entry) {
-    $route = (string)$entry['route']; $guard = (string)$entry['guard'];
-    $sourceFragment = (string)($entry['source_fragment'] ?? "'" . $route . "'");
-    authorizationPolicyAssert(str_contains($brokerSource, $sourceFragment), "Protected route missing from BrokerService: $route");
-    authorizationPolicyAssert(str_contains($brokerSource, $guard), "Protected route has no canonical guard: $route");
+$protectedRoutes = [
+    'GET /v1/session', 'GET /v1/me', 'GET /v1/xp', 'GET /v1/xp-awards',
+    'GET /v1/word-counts', 'GET /v1/presence', 'GET /v1/quests',
+    'GET /v1/revisions', 'GET /v1/magic-items', 'GET /v1/messages',
+    'POST /v1/login', 'POST /v1/logout', 'POST /v1/messages',
+    'POST /v1/quest-requests', 'POST /v1/xp-level-up-notifications/claim',
+    'POST /v1/xp-level-up-notifications/acknowledge',
+    'POST /v1/quest-requests/' . str_repeat('a', 32) . '/decision',
+    'POST /v1/quest-requests/' . str_repeat('a', 32) . '/acknowledge',
+    'POST /v1/messages/' . str_repeat('a', 32) . '/read',
+];
+foreach ($protectedRoutes as $operation) {
+    [$method, $route] = explode(' ', $operation, 2);
+    authorizationPolicyAssert(
+        AuthorizationPolicy::isCharacterSessionRoute($route),
+        "$operation is missing from the canonical character-session policy");
 }
 
-$databasePath = tempnam(sys_get_temp_dir(), 'pa-auth-policy-');
-if ($databasePath === false) throw new RuntimeException('Unable to create the authorization policy database.');
-try {
-    $database = new PDO('sqlite:' . $databasePath, null, null, [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION, PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC]);
-    $database->exec('PRAGMA foreign_keys = ON');
-    (new DatabaseMigrationService($database, sys_get_temp_dir() . '/pa-policy-migrations-' . bin2hex(random_bytes(4))))->migrate();
-    $service = new CharacterAuthService($database, ['expected_origin' => 'https://example.test', 'idle_timeout_seconds' => 60, 'absolute_timeout_seconds' => 600, 'login_window_seconds' => 300, 'login_max_failures' => 3, 'login_lockout_seconds' => 300, 'audit_retention_seconds' => 3600, 'audit_address_mode' => 'hash', 'audit_address_hash_key' => 'fixture-only']);
-    $accounts = [];
-    foreach ([['alpha','player',['A']], ['beta','player',['B']], ['warden','dm',['DM']]] as [$key, $role, $aliases]) $accounts[$key] = $service->createAccount(['character_name' => ucfirst($key), 'password' => "$key synthetic password", 'character_key' => $key, 'role' => $role, 'aliases' => $aliases]);
-    $sessions = [];
-    foreach (['alpha','beta','warden'] as $key) { $sessions[$key] = []; $service->login(['character_name' => $key, 'password' => "$key synthetic password"], '192.0.2.10', 'https://example.test', $sessions[$key]); }
-    $same = $service->requireCurrentAccount($sessions['alpha']);
-    authorizationPolicyAssert($same['account']['id'] === $accounts['alpha']['id'] && $same['account']['role'] === 'player', 'same_scope did not preserve canonical identity and role.');
-    $crossAccountSession = ['account_id' => $accounts['alpha']['id'], 'session_version' => 1];
-    authorizationPolicyError(fn() => $service->requireCurrentAccount($crossAccountSession), 401, 'authentication_required');
-    $roleConfusionSession = ['account_id' => $accounts['alpha']['id'], 'role' => 'dm'];
-    authorizationPolicyError(fn() => $service->requireCurrentAccount($roleConfusionSession), 401, 'authentication_required');
-    $aliasSession = []; $aliasLogin = $service->login(['character_name' => 'A', 'password' => 'alpha synthetic password'], '192.0.2.10', 'https://example.test', $aliasSession);
-    authorizationPolicyAssert($aliasLogin['account']['id'] === $accounts['alpha']['id'], 'alias did not resolve to the canonical account.');
-    $anonymousSession = [];
-    authorizationPolicyError(fn() => $service->requireCurrentAccount($anonymousSession), 401, 'authentication_required');
-    authorizationPolicyError(fn() => $service->requireMutationAccount(['origin' => 'https://example.test', 'csrf-token' => 'wrong'], $sessions['alpha']), 403, 'csrf_rejected');
-} finally { @unlink($databasePath); }
+foreach (['GET /v1/snapshots/page', 'GET /v1/rpol/page'] as $operation) {
+    [$method, $route] = explode(' ', $operation, 2);
+    authorizationPolicyAssert(AuthorizationPolicy::isBearerRoute($method, $route), "$operation is not bearer protected");
+}
+foreach (['GET /v1/admin/health', 'GET /v1/admin/character-accounts', 'POST /v1/tokens', 'PUT /v1/snapshots/page'] as $operation) {
+    [$method, $route] = explode(' ', $operation, 2);
+    authorizationPolicyAssert(AuthorizationPolicy::isAdminRoute($method, $route), "$operation is not admin protected");
+}
 
-fwrite(STDOUT, "Canonical authorization policy tests passed (" . count($routes) . " protected routes, " . count($cases) . " identity cases).\n");
+$matrix = [
+    'anonymous' => [null, false],
+    'same-scope' => ['account-a', true],
+    'cross-account' => ['account-b', false],
+    'alias-only' => ['Ari', false],
+];
+foreach ($matrix as $name => [$identity, $expected]) {
+    authorizationPolicyAssert(
+        AuthorizationPolicy::canReadAccount($identity, 'account-a') === $expected,
+        "account policy mismatch for $name");
+    authorizationPolicyAssert(
+        AuthorizationPolicy::canUseAdminCapability($identity, 'admin-key') === false,
+        "admin capability was granted to $name");
+}
+
+echo "Authorization policy matrix passed.\n";

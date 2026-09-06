@@ -13,8 +13,10 @@ $root = dirname(__DIR__);
 $brokerPath = $root . '/player-assistant-broker/BrokerService.php';
 $indexPath = $root . '/bryanmiller.us/scarlethorizons/api/index.php';
 $migrationPath = $root . '/player-assistant-broker/migrate-broker.php';
+$authorizationPolicyPath = $root . '/player-assistant-broker/AuthorizationPolicy.php';
 $broker = (string)file_get_contents($brokerPath);
 $index = (string)file_get_contents($indexPath);
+$authorizationPolicy = (string)file_get_contents($authorizationPolicyPath);
 
 startupAssert(is_file($migrationPath), 'The deployment migration entry point is missing.');
 startupAssert(!str_contains($broker, '->migrate()'), 'Request startup still runs database migrations.');
@@ -31,13 +33,13 @@ $configPosition = strpos($index, '$config = require $configPath;');
 startupAssert($healthPosition !== false && $servicePosition !== false && $healthPosition < $servicePosition, 'The public health route still constructs BrokerService first.');
 startupAssert($healthPosition !== false && $httpsPosition !== false && $healthPosition < $httpsPosition, 'The public health route still performs HTTPS/private-subsystem startup first.');
 startupAssert($healthPosition !== false && $configPosition !== false && $healthPosition < $configPosition, 'The public health route still loads private configuration first.');
-startupAssert(str_contains($index, "sendJson(200, [
-            'service' => 'player-assistant-broker'"), 'The public health route is not handled without BrokerService.');
+startupAssert(preg_match("/sendJson\\(200, \\[\\s+'service' => 'player-assistant-broker'/", $index) === 1, 'The public health route is not handled without BrokerService.');
 $sessionRouteList = substr($index, strpos($index, 'function isCharacterSessionRoute'));
-startupAssert(str_contains($sessionRouteList, "'/v1/magic-items'"), 'The magic-item route does not start the character session before authorization.');
-startupAssert(str_contains($sessionRouteList, "'/v1/revisions'"), 'The revision route does not start the character session before authorization.');
-startupAssert(str_contains($sessionRouteList, "'/v1/xp-level-up-notifications/claim'"), 'The level-up claim route does not start the character session before authorization.');
-startupAssert(str_contains($sessionRouteList, "'/v1/xp-level-up-notifications/acknowledge'"), 'The level-up acknowledgement route does not start the character session before authorization.');
+startupAssert(str_contains($sessionRouteList, 'AuthorizationPolicy::isCharacterSessionRoute'), 'The HTTP boundary does not use the canonical session policy.');
+startupAssert(str_contains($authorizationPolicy, "'/v1/magic-items'"), 'The canonical policy omits the magic-item route.');
+startupAssert(str_contains($authorizationPolicy, "'/v1/revisions'"), 'The canonical policy omits the revision route.');
+startupAssert(str_contains($authorizationPolicy, "'/v1/xp-level-up-notifications/claim'"), 'The canonical policy omits the level-up claim route.');
+startupAssert(str_contains($authorizationPolicy, "'/v1/xp-level-up-notifications/acknowledge'"), 'The canonical policy omits the level-up acknowledgement route.');
 startupAssert(!str_contains(substr($index, 0, $healthPosition), 'new BrokerOperations'), 'The public health route still initializes broker operations first.');
 
 foreach (['CharacterAuthService.php', 'MessageService.php', 'QuestService.php', 'XpTrackingService.php', 'WordCountService.php'] as $file) {

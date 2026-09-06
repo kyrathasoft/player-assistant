@@ -13,6 +13,23 @@ Configure `migrations.backup_directory` in the private configuration. Keep this
 outside the website document root and retain it separately from routine broker
 recovery backups.
 
+## Schema drift contract
+
+`schema-contract.json` is the reviewed, row-free contract generated from the ordered
+`DatabaseMigrationService` migrations. It records the supported migration version,
+broker API schema version, table columns, indexes, and trigger definitions. The
+`BrokerSchemaContract` verifier compares this contract with a local migration fixture,
+a release package, or sanitized metadata collected from the authenticated
+`GET /v1/admin/schema` endpoint. It never reads or emits broker rows, credentials, or
+protected payloads. Missing, extra, reordered, weakened, or version-incompatible
+objects fail closed; only explicitly listed compatibility exceptions are accepted.
+
+The endpoint returns metadata only and requires the normal administrator signature.
+Capture its JSON response through the existing protected operations tooling, then run
+`php verify-schema-drift.php <sanitized-metadata.json>` before promotion. The same
+contract is included in `package-layout.json` and checked by the PHP suites in PR and
+release hardening gates.
+
 ## Alerts
 
 `BrokerAlertService.php` persists alert events in `broker_alert_events` and

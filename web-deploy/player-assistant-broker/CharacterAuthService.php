@@ -132,6 +132,15 @@ final class CharacterAuthService
         ];
     }
 
+    public function currentSessionContext(array $session): array
+    {
+        $payload = $session[self::SESSION_KEY] ?? null;
+        if (!is_array($payload)) {
+            throw new BrokerHttpException(401, 'authentication_required', 'Authentication is required.');
+        }
+        return $payload;
+    }
+
     public function requireMutationAccount(array $headers, array &$session): array
     {
         $this->requireExpectedOrigin((string)($headers['origin'] ?? ''));
@@ -615,6 +624,11 @@ final class CharacterAuthService
             'authenticated' => true,
             'account' => $this->publicAccount($account),
             'csrf_token' => (string)$session['csrf_token'],
+            'resource_generation' => hash('sha256', implode('|', [
+                (string)$account['id'],
+                (int)$session['session_version'],
+                (int)$session['issued_at'],
+            ])),
             'idle_expires_at' => gmdate(
                 DATE_ATOM,
                 (int)$session['last_seen_at'] + (int)$this->authConfig['idle_timeout_seconds']),

@@ -48,7 +48,7 @@ correlationAssert($stored === $correlationId, 'The alert record did not retain t
 $api = file_get_contents(__DIR__ . '/../bryanmiller.us/scarlethorizons/api/index.php');
 $app = file_get_contents(__DIR__ . '/../../pwa/app.js');
 $worker = file_get_contents(__DIR__ . '/../../pwa/translator-worker.js');
-foreach ([[$api, "header('X-Correlation-Id: ' . \$requestId);"] , [$api, 'StructuredCorrelation::context'], [$app, "'X-Correlation-Id': requestId"], [$worker, 'correlationId: message.correlationId']] as [$source, $marker]) {
+foreach ([[$api, "header('X-Correlation-ID: ' . \$correlationId);"] , [$api, 'CorrelationContext::create'], [$app, 'correlationHeaders(CORRELATION_CONTEXT)'], [$worker, 'correlationId: message.correlationId']] as [$source, $marker]) {
     correlationAssert(is_string($source) && str_contains($source, $marker), "Missing correlation boundary marker: $marker");
 }
 

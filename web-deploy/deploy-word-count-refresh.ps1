@@ -110,7 +110,7 @@ if ([string]::IsNullOrWhiteSpace([string]$metadata.key_id) -or [string]::IsNullO
 }
 
 $deployId = [DateTime]::UtcNow.ToString('yyyyMMddTHHmmssfffZ')
-$deployFiles = @('BrokerService.php', 'BrokerAlertService.php', 'BrokerOperations.php', 'DatabaseMigrationService.php', 'QuestService.php', 'WordCountService.php', 'refresh-word-counts.php', 'broker-maintenance.php')
+$deployFiles = @('AuthorizationPolicy.php', 'BrokerService.php', 'BrokerAlertService.php', 'BrokerOperations.php', 'DatabaseMigrationService.php', 'QuestService.php', 'WordCountService.php', 'refresh-word-counts.php', 'broker-maintenance.php')
 $remoteStage = "$PrivateDirectory/.word-count-deploy-$deployId"
 $remoteArchive = "$PrivateDirectory/.word-count-deploy-$deployId.tar"
 $localArchive = Join-Path ([IO.Path]::GetTempPath()) "player-assistant-word-count-$deployId.tar"

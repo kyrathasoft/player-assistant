@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "policy": {
+    "desktop": { "current_version": "0.9.5", "downgrade_floor": "0.9.0", "protocol": 1 },
+    "installer": { "current_version": "0.9.5", "package_schema": 1, "transaction_schema": 1 },
+    "updater": { "manifest_schema": 1, "signature": "RSA-SHA256", "downgrade_floor": "highest-trusted-version" },
+    "broker": { "current_schema": 8, "supported_upgrade_from": [0, 1, 2, 3, 4, 5, 6, 7], "rollback": "pre-mutation-only" },
+    "pwa": { "current_version": "0.9.8", "cache_revision": 115, "app_revision": 100, "cache_key": "pwa-version-cache-app-revision" }
+  },
+  "allowed_transitions": ["prepared->staged", "staged->verified", "verified->promoted", "promoted->finalized", "prepared->rolled-back", "staged->rolled-back", "verified->rolled-back", "promoted->rolled-back"],
+  "required_scenarios": [
+    "compatible-rollback", "unsafe-downgrade", "mixed-generation", "stale-signature", "schema-incompatibility",
+    "partial-promotion", "interrupted-recovery", "cache-version-drift", "exact-pre-existing-state-restoration"
+  ]
+}

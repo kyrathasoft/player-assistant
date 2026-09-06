@@ -53,6 +53,36 @@ jobs:
           Get-ChildItem -LiteralPath .\web-deploy -Recurse -Filter '*.php' -File |
             ForEach-Object { php -l $_.FullName }
 
+      - name: Verify broker schema drift contract
+        shell: pwsh
+        run: php .\web-deploy\tests\schema-drift-tests.php
+
+      - name: Rehearse broker migrations and rollback boundaries
+        shell: pwsh
+        run: php .\web-deploy\tests\migration-rehearsal-tests.php
+
+      - name: Verify broker restore-point selection and expiration
+        shell: pwsh
+        run: php .\web-deploy\tests\broker-restore-point-selection-tests.php
+
+      - name: Run data invariant contract fixtures
+        shell: pwsh
+        run: |
+          php .\web-deploy\tests\data-invariant-contract-tests.php
+          php .\web-deploy\tests\bounded-repair-tests.php
+
+      - name: Run deterministic release manifest tests
+        shell: pwsh
+        run: .\release-manifest-tests.ps1
+
+      - name: Run release readiness evidence fixtures
+        shell: pwsh
+        run: .\release-readiness-tests.ps1
+
+      - name: Verify downgrade and rollback compatibility boundaries
+        shell: pwsh
+        run: .\verify-downgrade-rollback-compatibility.ps1
+
       - name: Check browser smoke script syntax
         shell: pwsh
         run: node --check .\pwa\browser-smoke.mjs
@@ -68,6 +98,10 @@ jobs:
       - name: Run web translator HTTP boundary tests
         shell: pwsh
         run: ./web-deploy/tests/run-web-translator-boundary.ps1 -PhpPath (Get-Command php).Source
+
+      - name: Protected-data negative-space verification
+        shell: pwsh
+        run: .\verify-protected-data-negative-space.ps1 -RepoRoot $env:GITHUB_WORKSPACE
 
       - name: Run PWA browser smoke tests
         shell: pwsh

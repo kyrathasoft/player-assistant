@@ -19,6 +19,11 @@ return [
         'requests_per_minute' => 10,
         'snapshot_directory' => $snapshotDirectory,
         'snapshot_signing_key' => base64_encode(str_repeat('s', 32)),
+        'protected_response' => [
+            'key_id' => 'protected-http-test-2026',
+            'signing_key' => base64_encode(str_repeat('p', 64)),
+            'public_key' => 'cHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHA=',
+        ],
     ],
     'auth' => [
         'expected_origin' => 'https://example.test',

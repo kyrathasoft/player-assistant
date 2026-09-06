@@ -300,10 +300,26 @@ internal static partial class TestCases
     {
         using var directory = TemporaryDirectory.Create();
         var statePath = Path.Combine(directory.Path, "trusted-hosted-settings-state.json");
+        HostedSettingsTrustUtility.ApplyTrustedHostedSettingsVersionPolicy(new Version(5, 0), statePath);
+
+        Exception? lowerWriterFailure = null;
         Parallel.Invoke(
-            () => HostedSettingsTrustUtility.ApplyTrustedHostedSettingsVersionPolicy(new Version(2, 0), statePath),
+            () =>
+            {
+                try
+                {
+                    HostedSettingsTrustUtility.ApplyTrustedHostedSettingsVersionPolicy(new Version(2, 0), statePath);
+                }
+                catch (Exception exception)
+                {
+                    lowerWriterFailure = exception;
+                }
+            },
             () => HostedSettingsTrustUtility.ApplyTrustedHostedSettingsVersionPolicy(new Version(5, 0), statePath));
 
+        AssertTrue(lowerWriterFailure is InvalidOperationException
+            && lowerWriterFailure.Message.Contains("downgrade detected", StringComparison.Ordinal),
+            "a concurrent lower hosted-settings writer must be rejected fail closed");
         var highest = HostedSettingsTrustUtility.TryReadTrustedHostedSettingsVersion(statePath);
         AssertTrue(highest is not null && highest == new Version(5, 0),
             "concurrent hosted-settings writers must preserve the maximum trusted version");

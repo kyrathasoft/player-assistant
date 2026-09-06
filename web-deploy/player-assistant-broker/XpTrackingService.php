@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-require_once __DIR__ . '/PlayerAssistantClock.php';
+require_once __DIR__ . '/DataInvariantContract.php';
 
 final class XpTrackingService
 {
@@ -12,14 +12,12 @@ final class XpTrackingService
     private array $xpConfig;
     private $markdownFetcher;
     private $awardFilePromoter;
-    private $clock;
 
     public function __construct(
         private readonly PDO $database,
         array $xpConfig,
         ?callable $markdownFetcher = null,
-        ?callable $awardFilePromoter = null,
-        ?callable $clock = null)
+        ?callable $awardFilePromoter = null)
     {
         $this->xpConfig = array_replace([
             'source_url' => '',
@@ -48,7 +46,6 @@ final class XpTrackingService
         }
         $this->markdownFetcher = $markdownFetcher;
         $this->awardFilePromoter = $awardFilePromoter;
-        $this->clock = $clock ?? static fn(): int => PlayerAssistantClock::nowUnix();
         $this->validateConfiguration();
     }
 
@@ -333,7 +330,7 @@ final class XpTrackingService
         try {
             foreach ($requested as $notification) {
                 $update->execute([
-                    ':notified_at' => ($this->clock)(),
+                    ':notified_at' => time(),
                     ':account_id' => $accountId,
                     ':progression_key' => $notification['character_key'],
                     ':target_level' => $notification['target_level'],
@@ -671,6 +668,7 @@ final class XpTrackingService
                 'xp_awards_unavailable',
                 'An XP award progression does not match its configured character.');
         }
+        DataInvariantContract::assertAwards($entries, $progressionKey);
         return $entries;
     }
 
@@ -1253,7 +1251,7 @@ final class XpTrackingService
         }
 
         $cached = $this->loadCachedSnapshot();
-        $now = ($this->clock)();
+        $now = time();
         try {
             $parsed = $this->parseSnapshot($this->fetchMarkdown(
                 (string)$this->xpConfig['source_url']));
@@ -1344,6 +1342,7 @@ final class XpTrackingService
                 'characters' => $parsed['characters'],
                 'fetched_at' => $now,
             ];
+            DataInvariantContract::assertXpSnapshot($snapshot['characters']);
             $this->storeCachedSnapshot($snapshot);
             return $snapshot + ['stale' => false];
         } catch (Throwable $exception) {

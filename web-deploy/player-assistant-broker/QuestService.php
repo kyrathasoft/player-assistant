@@ -2,6 +2,8 @@
 
 declare(strict_types=1);
 
+require_once __DIR__ . '/DataInvariantContract.php';
+
 final class QuestService
 {
     private const VISIBILITY_VALUES = [
@@ -476,6 +478,7 @@ final class QuestService
                 }
             }
         }
+        DataInvariantContract::assertQuests($quests);
         return $quests;
     }
 

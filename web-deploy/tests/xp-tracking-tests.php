@@ -407,7 +407,9 @@ try {
     file_put_contents(
         $awardPath,
         json_encode(
-            array_fill(0, $serverProgressionEntryLimit, $awardEntry),
+            array_map(
+                static fn(int $index): array => array_replace($awardEntry, ['xp_award' => $index + 1]),
+                range(0, $serverProgressionEntryLimit - 1)),
             JSON_THROW_ON_ERROR));
     $awardService = new XpTrackingService(
         xpDatabase(':memory:'),

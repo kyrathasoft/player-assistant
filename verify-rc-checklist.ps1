@@ -1520,6 +1520,14 @@ Invoke-RcChecklistStep `
     -Action { Invoke-RcSelfTests }
 
 Invoke-RcChecklistStep `
+    -Name 'release readiness evidence aggregation' `
+    -Command 'powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File release-readiness-tests.ps1' `
+    -Artifacts @((Join-Path $PSScriptRoot 'release-readiness-aggregate.ps1'), (Join-Path $PSScriptRoot 'release-readiness-tests.ps1')) `
+    -Action {
+        [void](Invoke-ExternalCommand -FileName 'powershell.exe' -Arguments @('-NoProfile','-NonInteractive','-ExecutionPolicy','Bypass','-File',(Join-Path $PSScriptRoot 'release-readiness-tests.ps1')))
+    }
+
+Invoke-RcChecklistStep `
     -Name 'dependency freshness and vulnerability checks' `
     -Command 'dotnet --version; dotnet --list-runtimes; dotnet list package; dotnet list package --vulnerable --include-transitive; compare NuGet/Playwright versions with latest metadata; inspect Playwright runtime' `
     -Artifacts @(

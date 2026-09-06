@@ -64,16 +64,14 @@ namespace PlayerAssistant
             return heroes
                 .Select(hero =>
                 {
-                    var isUniqueAuthenticatedHero = !string.IsNullOrWhiteSpace(hero.CanonicalId)
-                        && string.Equals(
-                            hero.CanonicalId,
-                            authenticatedIdentity.CanonicalId,
-                            StringComparison.Ordinal)
+                    var isUniqueAuthenticatedHero = AuthorizationPolicy.CanReadOwnedResource(
+                            authenticatedIdentity,
+                            hero.CanonicalId)
                         && heroes.Count(candidate => string.Equals(
                             candidate.CanonicalId,
                             authenticatedIdentity.CanonicalId,
                             StringComparison.Ordinal)) == 1;
-                    var xpTotal = authenticatedIdentity.IsDungeonMaster
+                    var xpTotal = AuthorizationPolicy.CanReadDungeonMasterResource(authenticatedIdentity)
                         ? FindXpTotalForCharacter(xpTotals, hero)
                         : isUniqueAuthenticatedHero
                             ? FindXpTotalForCharacter(xpTotals, hero)

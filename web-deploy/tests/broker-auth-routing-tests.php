@@ -58,6 +58,9 @@ $wordCountStatusPath = tempnam(sys_get_temp_dir(), 'pa-word-count-status-');
 $wordCountSigningKeypair = sodium_crypto_sign_keypair();
 $wordCountSigningSecretKey = sodium_crypto_sign_secretkey($wordCountSigningKeypair);
 $wordCountSigningPublicKey = sodium_crypto_sign_publickey($wordCountSigningKeypair);
+$protectedSigningKeypair = sodium_crypto_sign_keypair();
+$protectedSigningSecretKey = sodium_crypto_sign_secretkey($protectedSigningKeypair);
+$protectedSigningPublicKey = sodium_crypto_sign_publickey($protectedSigningKeypair);
 $xpAwardsDirectory = sys_get_temp_dir() . '/pa-xp-awards-' . bin2hex(random_bytes(6));
 $magicItemsPath = tempnam(sys_get_temp_dir(), 'pa-magic-items-');
 if ($databasePath === false || $magicItemsPath === false) {
@@ -128,6 +131,11 @@ try {
             'snapshot_signing_key' => base64_encode($snapshotSigningKey),
             'snapshot_max_age_seconds' => 30,
             'snapshot_retention_seconds' => 60,
+            'protected_response' => [
+                'key_id' => 'protected-test-2026',
+                'signing_key' => base64_encode($protectedSigningSecretKey),
+                'public_key' => base64_encode($protectedSigningPublicKey),
+            ],
         ],
         'auth' => [
             'expected_origin' => 'https://example.test',
@@ -298,11 +306,11 @@ try {
         'POST',
         '/v1/tokens',
         [],
-        ['label' => 'snapshot route validation'],
+        ['label' => 'snapshot route validation', 'capabilities' => [['name' => 'snapshots.read', 'resource' => 'https://rpol.net/display.cgi?gi=80170&ti=3&unsupported=1']]],
         routingAdminHeaders(
             'POST',
             '/v1/tokens',
-            ['label' => 'snapshot route validation'],
+            ['label' => 'snapshot route validation', 'capabilities' => [['name' => 'snapshots.read', 'resource' => 'https://rpol.net/display.cgi?gi=80170&ti=3&unsupported=1']]],
             $config['api']['admin_key']),
         '192.0.2.30',
         $session);
@@ -565,6 +573,28 @@ try {
     routingAssert(
         $identity['body']['account']['character_key'] === 'routing',
         'The protected identity route did not use the session account.');
+    routingAssert(
+        ($identity['body']['_protected_resource']['resource'] ?? null) === '/v1/me'
+            && ($identity['body']['_protected_resource']['account_id'] ?? null) === $identity['body']['account']['id'],
+        'The protected identity route did not return a route-bound resource envelope.');
+
+    $dispatchRouteProperty = new ReflectionProperty(BrokerService::class, 'dispatchRoute');
+    $protectedContextProperty = new ReflectionProperty(BrokerService::class, 'protectedContext');
+    $responseMethod = new ReflectionMethod(BrokerService::class, 'response');
+    $dispatchRouteProperty->setValue($broker, '/v1/me');
+    $protectedContextProperty->setValue($broker, null);
+    try {
+        $responseMethod->invoke($broker, 200, ['fixture' => true]);
+        throw new RuntimeException('A protected response without dispatch identity context was accepted.');
+    } catch (ReflectionException) {
+        throw new RuntimeException('The protected response boundary could not be inspected.');
+    } catch (Throwable $exception) {
+        routingAssert(
+            str_contains($exception->getMessage(), 'Protected response context was not established'),
+            'A protected response without dispatch identity context failed with the wrong error.');
+    } finally {
+        $dispatchRouteProperty->setValue($broker, null);
+    }
 
     $sessionReleaseCount = 0;
     $playerRevisions = $broker->dispatch(
@@ -631,6 +661,10 @@ try {
     routingAssert($xp['body']['character']['xp_to_next_level'] === 7655, 'The player XP response had the wrong TNL value.');
     routingAssert(!isset($xp['body']['characters']), 'The player XP response exposed party totals.');
     routingAssert(!isset($xp['body']['source_url']), 'The player XP response exposed the configured source URL.');
+    routingAssert(
+        ($xp['body']['_protected_resource']['resource'] ?? null) === '/v1/xp'
+            && ($xp['body']['_protected_resource']['account_id'] ?? null) === $identity['body']['account']['id'],
+        'The protected XP route did not return a route-bound resource envelope.');
 
     $levelUpNotifications = $broker->dispatch(
         'POST',

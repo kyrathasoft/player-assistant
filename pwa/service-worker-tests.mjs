@@ -3,6 +3,12 @@ import { readFile } from 'node:fs/promises';
 import vm from 'node:vm';
 
 const source = await readFile(new URL('./service-worker.js', import.meta.url), 'utf8');
+const appSource = await readFile(new URL('./app.js', import.meta.url), 'utf8');
+const versionSource = await readFile(new URL('./version.js', import.meta.url), 'utf8');
+const versionContext = vm.createContext({ globalThis: null });
+versionContext.globalThis = versionContext;
+vm.runInContext(versionSource, versionContext, { filename: 'version.js' });
+const VERSION_METADATA = versionContext.PLAYER_ASSISTANT_VERSION_METADATA;
 const scopeUrl = 'https://example.test/scarlethorizons/pwa/service-worker.js';
 
 const requestKey = (request) => new URL(
@@ -82,13 +88,7 @@ const createHarness = ({ cacheEntries = {}, fetchImpl } = {}) => {
         fetch: fetchImpl || (async () => { throw new Error('Unexpected fetch.'); }),
         globalThis: null,
         importScripts() {
-            context.PLAYER_ASSISTANT_VERSION_METADATA = Object.freeze({
-                pwaVersion: '0.9.8',
-                metadataRevision: 1,
-                stylesRevision: 43,
-                appRevision: 61,
-                cacheRevision: 114
-            });
+            context.PLAYER_ASSISTANT_VERSION_METADATA = VERSION_METADATA;
         },
         self
     });
@@ -105,8 +105,9 @@ const createHarness = ({ cacheEntries = {}, fetchImpl } = {}) => {
     };
 };
 
-const currentDataCache = 'player-assistant-pwa-0.9.8-v114-data';
-const currentShellCache = 'player-assistant-pwa-0.9.8-v114-shell';
+const currentCachePrefix = `player-assistant-pwa-${VERSION_METADATA.pwaVersion}-v${VERSION_METADATA.cacheRevision}-app${VERSION_METADATA.appRevision}`;
+const currentDataCache = `${currentCachePrefix}-data`;
+const currentShellCache = `${currentCachePrefix}-shell`;
 const translatorPayload = Object.freeze({
     schemaVersion: 1,
     language: 'Orcish',
@@ -116,7 +117,7 @@ const translatorPayload = Object.freeze({
 });
 
 const testWrongMimeCachedShellAssetIsDeletedAndRefetched = async () => {
-    const request = new Request('https://example.test/scarlethorizons/pwa/styles.css?v=43');
+    const request = new Request(`https://example.test/scarlethorizons/pwa/styles.css?v=${VERSION_METADATA.stylesRevision}`);
     const corrupt = new Response('<html>not css</html>', {
         status: 200,
         headers: { 'Content-Type': 'text/html' }
@@ -143,7 +144,7 @@ const testWrongMimeCachedShellAssetIsDeletedAndRefetched = async () => {
 };
 
 const testEmptyCachedShellAssetIsDeletedAndRefetched = async () => {
-    const request = new Request('https://example.test/scarlethorizons/pwa/styles.css?v=43');
+    const request = new Request(`https://example.test/scarlethorizons/pwa/styles.css?v=${VERSION_METADATA.stylesRevision}`);
     const empty = new Response('', {
         status: 200,
         headers: { 'Content-Type': 'text/css' }
@@ -241,7 +242,7 @@ const testPartialInstallDeletesVersionedCaches = async () => {
 };
 
 const testQuotaFailureReturnsNetworkResponse = async () => {
-    const request = new Request('https://example.test/scarlethorizons/pwa/app.js?v=61');
+    const request = new Request(`https://example.test/scarlethorizons/pwa/app.js?v=${VERSION_METADATA.appRevision}`);
     const fresh = new Response("console.log('ready');", {
         status: 200,
         headers: { 'Content-Type': 'text/javascript' }
@@ -266,8 +267,9 @@ const testQuotaFailureReturnsNetworkResponse = async () => {
 };
 
 const testObsoleteWorkerCannotDeleteNewerCaches = async () => {
-    const newerShell = 'player-assistant-pwa-0.9.8-v115-shell';
-    const newerData = 'player-assistant-pwa-0.9.8-v115-data';
+    const newerCachePrefix = `player-assistant-pwa-${VERSION_METADATA.pwaVersion}-v${VERSION_METADATA.cacheRevision + 1}-app${VERSION_METADATA.appRevision}`;
+    const newerShell = `${newerCachePrefix}-shell`;
+    const newerData = `${newerCachePrefix}-data`;
     const harness = createHarness({
         cacheEntries: {
             [newerShell]: [],
@@ -287,7 +289,7 @@ const testObsoleteWorkerCannotDeleteNewerCaches = async () => {
 };
 
 const testHttpErrorPrefersValidCachedShell = async () => {
-    const request = new Request('https://example.test/scarlethorizons/pwa/styles.css?v=43');
+    const request = new Request(`https://example.test/scarlethorizons/pwa/styles.css?v=${VERSION_METADATA.stylesRevision}`);
     const cached = new Response('body { color: blue; }', {
         status: 200,
         headers: { 'Content-Type': 'text/css' }
@@ -403,7 +405,19 @@ const testNonCanonicalNavigationDoesNotPromoteShell = async () => {
     assert.equal(cache.entries.has('https://example.test/scarlethorizons/pwa/offline.html'), false, 'non-canonical page must not become shell');
 };
 
+const testAppImportGraphIsInShell = () => {
+    const importedPaths = [...appSource.matchAll(/from '(.+?\.js)\?v=\d+'/gu)].map((match) => match[1]);
+    assert.ok(importedPaths.length > 0, 'App must have a module import graph.');
+    for (const importedPath of importedPaths) {
+        const shellPath = importedPath;
+        assert.ok(source.includes(`'${shellPath}?v=${VERSION_METADATA.appRevision}'`)
+            || source.includes(`\`${shellPath}?v=\${VERSION_METADATA.appRevision}\``),
+            `Offline shell must precache app import ${importedPath}.`);
+    }
+};
+
 const tests = [
+    testAppImportGraphIsInShell,
     testNonCanonicalNavigationDoesNotPromoteShell,
     testHttpErrorPrefersValidCachedShell,
     testMalformedJsonNetworkPrefersValidCachedData,
