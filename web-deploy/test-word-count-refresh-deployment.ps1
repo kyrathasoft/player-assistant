@@ -13,8 +13,8 @@ param(
 $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'word-count-publishing.ps1')
 
-if ($DreamHostTarget -notmatch '^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$') {
-    throw 'The DreamHost target must be a simple SSH host alias or hostname.'
+if ($DreamHostTarget -notmatch '^(?:[A-Za-z0-9][A-Za-z0-9._-]{0,127}|[A-Za-z0-9._-]+@[A-Za-z0-9][A-Za-z0-9.-]{0,126})$') {
+    throw 'The DreamHost target must be a simple SSH host alias/hostname or user@hostname.'
 }
 if ($PrivateDirectory -notmatch '^/home/[A-Za-z0-9._-]+(?:/[A-Za-z0-9._-]+)+$') {
     throw 'The private directory must be an absolute path containing only safe path characters.'
@@ -102,7 +102,7 @@ $metadata = Get-Content -Raw -LiteralPath $SigningMetadataPath | ConvertFrom-Jso
 if (-not (Test-Path -LiteralPath $PhpPath -PathType Leaf)) {
     throw "PHP signing runtime not found: $PhpPath"
 }
-$deployFiles = @('AuthorizationPolicy.php', 'BrokerService.php', 'BrokerAlertService.php', 'BrokerOperations.php', 'DatabaseMigrationService.php', 'QuestService.php', 'WordCountService.php', 'refresh-word-counts.php', 'broker-maintenance.php')
+$deployFiles = @('BrokerService.php', 'BrokerAlertService.php', 'StructuredCorrelation.php', 'BrokerOperations.php', 'DatabaseMigrationService.php', 'IdempotencyLedger.php', 'QuestService.php', 'WordCountService.php', 'refresh-word-counts.php', 'broker-maintenance.php')
 $localHashes = @{}
 foreach ($file in $deployFiles) {
     $localHashes[$file] = (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $PSScriptRoot "player-assistant-broker\$file")).Hash.ToLowerInvariant()
@@ -110,7 +110,7 @@ foreach ($file in $deployFiles) {
 
 $remoteCode = @'
 $directory = '__PRIVATE_DIRECTORY__';
-$files = ['AuthorizationPolicy.php', 'BrokerService.php', 'BrokerAlertService.php', 'BrokerOperations.php', 'DatabaseMigrationService.php', 'QuestService.php', 'WordCountService.php', 'refresh-word-counts.php', 'broker-maintenance.php'];
+$files = ['BrokerService.php', 'BrokerAlertService.php', 'StructuredCorrelation.php', 'BrokerOperations.php', 'DatabaseMigrationService.php', 'IdempotencyLedger.php', 'QuestService.php', 'WordCountService.php', 'refresh-word-counts.php', 'broker-maintenance.php'];
 $result = ['files' => [], 'config' => [], 'backups' => [], 'cron' => ''];
 foreach ($files as $file) {
     $path = $directory . '/' . $file;
