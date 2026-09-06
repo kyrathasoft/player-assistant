@@ -52,7 +52,7 @@ if ($InstallScheduledTask) {
         -ExecutionTimeLimit (New-TimeSpan -Hours 2) `
         -MultipleInstances IgnoreNew
     Register-ScheduledTask -TaskName $TaskName -Action $action -Trigger $triggers -Settings $settings `
-        -Description 'Runs a complete Obsidian wiki and local IC/OOC recount, then publishes and verifies the signed broker snapshot.' `
+        -Description 'Runs a complete Obsidian wiki and local IC/OOC HTML/Markdown recount, then publishes and verifies the signed broker snapshot.' `
         -Force | Out-Null
     Write-Output "Installed scheduled task '$TaskName'."
     return
@@ -80,7 +80,7 @@ if ([int]$localPreflight.IcFiles -lt 1 -or
     [long]$localPreflight.IcWords -lt 1 -or
     [int]$localPreflight.OocFiles -lt 1 -or
     [long]$localPreflight.OocWords -lt 1) {
-    throw 'The local IC/OOC corpus is incomplete; the wiki crawl and publication were blocked.'
+    throw 'The local IC/OOC HTML/Markdown corpus is incomplete; the wiki crawl and publication were blocked.'
 }
 
 $summaryJson = @(& $countScript `

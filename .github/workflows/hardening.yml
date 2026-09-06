@@ -171,6 +171,7 @@ jobs:
           & (Get-Command php).Source './web-deploy/tests/capability-policy-tests.php'
           if (-not $?) { throw "Verification 'capability policy' failed with exit code $LASTEXITCODE." }
           Invoke-CheckedVerification 'HTTP authentication' './web-deploy/tests/run-http-auth-tests.ps1' -Parameters @{ PhpPath = (Get-Command php).Source }
+          Invoke-CheckedVerification 'web translator HTTP boundary' './web-deploy/tests/run-web-translator-boundary.ps1' -Parameters @{ PhpPath = (Get-Command php).Source }
 
   # Keep this job name aligned with the required GitHub Actions check on master.
   full-regression:

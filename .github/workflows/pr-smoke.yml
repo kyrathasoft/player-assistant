@@ -95,6 +95,10 @@ jobs:
         shell: pwsh
         run: .\web-deploy\tests\pwa-monitor-contract-tests.ps1
 
+      - name: Run web translator HTTP boundary tests
+        shell: pwsh
+        run: ./web-deploy/tests/run-web-translator-boundary.ps1 -PhpPath (Get-Command php).Source
+
       - name: Protected-data negative-space verification
         shell: pwsh
         run: .\verify-protected-data-negative-space.ps1 -RepoRoot $env:GITHUB_WORKSPACE

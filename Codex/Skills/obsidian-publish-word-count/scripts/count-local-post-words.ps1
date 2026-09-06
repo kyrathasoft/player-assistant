@@ -5,6 +5,11 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
+$markdownHelpersPath = Join-Path $PSScriptRoot 'word-count-markdown-helpers.ps1'
+if (-not [System.IO.File]::Exists($markdownHelpersPath)) {
+    throw "The Markdown counting helpers are missing: $markdownHelpersPath"
+}
+. $markdownHelpersPath
 
 function Get-VisibleWordCount {
     param(
@@ -105,6 +110,55 @@ function Get-VisibleWordCount {
     ).Count
 }
 
+function Get-MarkdownVisibleWordCount {
+    param(
+        [Parameter(Mandatory = $true)][string]$Markdown,
+        [Parameter(Mandatory = $true)][string]$SourcePath
+    )
+
+    $text = Remove-MarkdownFencedBlocks $Markdown
+    if ($text.StartsWith("---`n", [System.StringComparison]::Ordinal)) {
+        $text = [regex]::Replace(
+            $text,
+            '\A---\n.*?\n---\s*(?:\n|$)',
+            '',
+            [System.Text.RegularExpressions.RegexOptions]::Singleline)
+    }
+
+    $contentLines = [System.Collections.Generic.List[string]]::new()
+    $skipMessageMetadata = $false
+    foreach ($line in ($text.Replace("`r", '') -split "`n")) {
+        if ($line -match '^\s*Message\s+#\d+\s*$') {
+            $skipMessageMetadata = $true
+            continue
+        }
+        if ($skipMessageMetadata) {
+            if ([string]::IsNullOrWhiteSpace($line)) { continue }
+            $skipMessageMetadata = $false
+            continue
+        }
+        if ($line -match '^\s*This message was last (edited|updated)\b') { continue }
+        $contentLines.Add($line)
+    }
+
+    $content = $contentLines -join "`n"
+    $singleline = [System.Text.RegularExpressions.RegexOptions]::Singleline
+    $content = [regex]::Replace($content, '<!--.*?-->', ' ', $singleline)
+    $content = [regex]::Replace($content, '!\[[^\]]*\]\([^\)]*\)', ' ')
+    $content = [regex]::Replace($content, '\[\[([^\]|#]+)(?:#[^\]|]+)?\|([^\]]+)\]\]', '$2')
+    $content = [regex]::Replace($content, '\[\[([^\]#]+)(?:#[^\]]+)?\]\]', '$1')
+    $content = [regex]::Replace($content, '\[([^\]]+)\]\([^\)]*\)', '$1')
+    $content = [regex]::Replace($content, 'https?://\S+', ' ')
+    $content = [regex]::Replace($content, '<[^>]+>', ' ')
+    $content = [regex]::Replace($content, '(?m)^\s{0,3}#{1,6}\s+', ' ')
+    $content = [System.Net.WebUtility]::HtmlDecode($content)
+
+    return [regex]::Matches(
+        $content,
+        "[\p{L}\p{N}]+(?:['’\-][\p{L}\p{N}]+)*"
+    ).Count
+}
+
 $resolvedPostsRoot = [System.IO.Path]::GetFullPath($PostsRoot)
 $totals = [ordered]@{}
 
@@ -115,18 +169,23 @@ foreach ($kind in @('IC', 'OOC')) {
     }
 
     $files = @(
-        Get-ChildItem -LiteralPath $directory -File -Recurse -Filter '*.html' |
-            Where-Object Name -NotMatch '\.bak-'
+        Get-ChildItem -LiteralPath $directory -File -Recurse |
+            Where-Object { $_.Extension -in @('.html', '.md') -and $_.Name -notmatch '\.bak-' }
     )
     if ($files.Count -eq 0) {
-        throw "No current HTML post files were found in $directory"
+        throw "No current HTML or Markdown post files were found in $directory"
     }
     Write-Verbose "$kind files ($($files.Count)): $($files.Name -join ', ')"
 
     [long]$wordTotal = 0
     foreach ($file in $files) {
-        $html = [System.IO.File]::ReadAllText($file.FullName)
-        $fileWordCount = Get-VisibleWordCount -Html $html -Kind $kind -SourcePath $file.FullName
+        $content = [System.IO.File]::ReadAllText($file.FullName)
+        if ($file.Extension -ieq '.md') {
+            $fileWordCount = Get-MarkdownVisibleWordCount -Markdown $content -SourcePath $file.FullName
+        }
+        else {
+            $fileWordCount = Get-VisibleWordCount -Html $content -Kind $kind -SourcePath $file.FullName
+        }
         $wordTotal += $fileWordCount
         Write-Verbose "$kind words ($fileWordCount): $($file.FullName)"
     }
