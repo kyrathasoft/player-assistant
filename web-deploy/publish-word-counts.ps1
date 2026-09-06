@@ -81,6 +81,7 @@ function New-BrokerAdminHeaders {
     )
     $timestamp = [DateTimeOffset]::UtcNow.ToUnixTimeSeconds().ToString()
     $nonce = [Guid]::NewGuid().ToString('N')
+    $operationId = [Guid]::NewGuid().ToString('N')
     $sha = [Security.Cryptography.SHA256]::Create()
     try {
         $bodyHashBytes = $sha.ComputeHash([Text.Encoding]::UTF8.GetBytes($BodyJson))
@@ -89,7 +90,7 @@ function New-BrokerAdminHeaders {
         $sha.Dispose()
     }
     $bodyHash = [BitConverter]::ToString($bodyHashBytes).Replace('-', '').ToLowerInvariant()
-    $canonical = "$timestamp`n$nonce`n$($Method.ToUpperInvariant())`n$Route`n$bodyHash"
+    $canonical = "$timestamp`n$nonce`n$($Method.ToUpperInvariant())`n$Route`n$bodyHash`n$operationId"
     $hmac = [Security.Cryptography.HMACSHA256]::new([Text.Encoding]::UTF8.GetBytes($Key))
     try {
         $signature = [BitConverter]::ToString(
@@ -101,6 +102,7 @@ function New-BrokerAdminHeaders {
     return @{
         'X-Broker-Admin-Timestamp' = $timestamp
         'X-Broker-Admin-Nonce' = $nonce
+        'X-Broker-Admin-Operation-Id' = $operationId
         'X-Broker-Admin-Signature' = $signature
     }
 }

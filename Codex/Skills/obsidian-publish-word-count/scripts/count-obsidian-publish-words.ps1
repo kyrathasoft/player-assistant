@@ -7,9 +7,9 @@ param(
     [Parameter(Mandatory = $true)]
     [string]$OutputCsv,
 
-    [string]$HistoryFile = 'C:\repos\player-assistant\obsidian-wiki-word-count.md',
+    [string]$HistoryFile = 'C:\Users\Bryan\Documents\do-not-delete-repositories\player-assistant\obsidian-wiki-word-count.md',
 
-    [string]$LocalPostsRoot = 'C:\repos\player-assistant\Release\Posts',
+    [string]$LocalPostsRoot = 'C:\Users\Bryan\Documents\do-not-delete-repositories\player-assistant\Release\Posts',
 
     [ValidateRange(1, 32)]
     [int]$ThrottleLimit = 8,

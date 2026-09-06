@@ -26,9 +26,28 @@ try {
     [IO.File]::WriteAllText((Join-Path $fixtureRoot 'IC\complete.html'), $icHtml)
     [IO.File]::WriteAllText((Join-Path $fixtureRoot 'OOC\complete.html'), $oocHtml)
 
+    $icMarkdown = @'
+---
+title: Fixture
+---
+Message #99
+Chapter metadata by 123456
+
+Markdown three words.
+This message was last edited by the player at 12:00, Today.
+'@
+    $oocMarkdown = @'
+Message #100
+OOC metadata by 123456
+
+Markdown two words.
+'@
+    [IO.File]::WriteAllText((Join-Path $fixtureRoot 'IC\complete.md'), $icMarkdown)
+    [IO.File]::WriteAllText((Join-Path $fixtureRoot 'OOC\complete.md'), $oocMarkdown)
+
     $counterPath = Join-Path $PSScriptRoot 'count-local-post-words.ps1'
     $result = (& $counterPath -PostsRoot $fixtureRoot) | ConvertFrom-Json
-    if ($result.IcWords -ne 3 -or $result.OocWords -ne 2) {
+    if ($result.IcWords -ne 6 -or $result.OocWords -ne 5) {
         throw "Edit-notice fixture returned unexpected totals: $($result | ConvertTo-Json -Compress)"
     }
 
