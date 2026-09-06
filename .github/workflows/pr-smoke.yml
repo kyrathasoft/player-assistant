@@ -65,6 +65,10 @@ jobs:
         shell: pwsh
         run: .\web-deploy\tests\pwa-monitor-contract-tests.ps1
 
+      - name: Run web translator HTTP boundary tests
+        shell: pwsh
+        run: ./web-deploy/tests/run-web-translator-boundary.ps1 -PhpPath (Get-Command php).Source
+
       - name: Run PWA browser smoke tests
         shell: pwsh
         run: npm --prefix .\pwa test
