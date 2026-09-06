@@ -28,7 +28,8 @@ final class IdempotencyLedger
         string $route,
         string $key,
         array $body,
-        callable $mutation): array
+        callable $mutation,
+        ?callable $deliver = null): array
     {
         $this->validateKey($key);
         $hash = hash('sha256', json_encode($body, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_PRESERVE_ZERO_FRACTION | JSON_THROW_ON_ERROR));
@@ -54,7 +55,10 @@ final class IdempotencyLedger
                         if (!is_array($decoded)) {
                             throw new RuntimeException('The idempotency response ledger entry is invalid.');
                         }
-                        return ['status' => (int)$existing['status'], 'body' => $decoded];
+                        unset($decoded['_protected_resource']);
+                        return $this->deliver(
+                            ['status' => (int)$existing['status'], 'body' => $decoded],
+                            $deliver);
                     }
                     $this->database->exec('ROLLBACK');
                     if ((microtime(true) - $started) * 1000 >= $this->waitMilliseconds) {
@@ -85,7 +89,9 @@ final class IdempotencyLedger
             if (!is_array($response) || !isset($response['status'], $response['body']) || !is_array($response['body'])) {
                 throw new RuntimeException('A mutation returned an invalid broker response.');
             }
-            $responseJson = json_encode($response['body'], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_PRESERVE_ZERO_FRACTION | JSON_THROW_ON_ERROR);
+            $semanticBody = $response['body'];
+            unset($semanticBody['_protected_resource']);
+            $responseJson = json_encode($semanticBody, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_PRESERVE_ZERO_FRACTION | JSON_THROW_ON_ERROR);
             $mutationCompleted = true;
             try {
                 $this->database->beginTransaction();
@@ -98,7 +104,9 @@ final class IdempotencyLedger
                 }
                 $this->database->exec('COMMIT');
                 $transactionStarted = false;
-                return $response;
+                return $this->deliver(
+                    ['status' => (int)$response['status'], 'body' => $semanticBody],
+                    $deliver);
             } catch (Throwable $exception) {
                 if ($transactionStarted) $this->database->exec('ROLLBACK');
                 // Never delete a reservation after the mutation may have committed.
@@ -114,6 +122,18 @@ final class IdempotencyLedger
             }
             throw $exception;
         }
+    }
+
+    private function deliver(array $response, ?callable $deliver): array
+    {
+        if ($deliver === null) {
+            return $response;
+        }
+        $delivered = $deliver($response);
+        if (!is_array($delivered) || !isset($delivered['status'], $delivered['body']) || !is_array($delivered['body'])) {
+            throw new RuntimeException('A mutation delivery returned an invalid broker response.');
+        }
+        return $delivered;
     }
 
     private function validateKey(string $key): void

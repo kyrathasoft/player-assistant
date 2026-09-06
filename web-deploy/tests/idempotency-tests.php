@@ -21,16 +21,25 @@ $database->exec('CREATE TABLE mutation_idempotency (
 )');
 $ledger = new IdempotencyLedger($database, 3600);
 $count = 0;
+$deliveryNonces = [];
+$deliver = static function (array $response) use (&$deliveryNonces): array {
+    $nonce = bin2hex(random_bytes(16));
+    $deliveryNonces[] = $nonce;
+    $response['body']['_protected_resource'] = ['nonce' => $nonce, 'issued_at' => gmdate(DATE_ATOM)];
+    return $response;
+};
 $first = $ledger->execute('account-1', 'POST', '/v1/messages', 'message-key', ['message' => 'hello'], function () use (&$count): array {
     $count++;
     return ['status' => 201, 'body' => ['id' => 'fixed', 'ok' => true]];
-});
+}, $deliver);
 $second = $ledger->execute('account-1', 'POST', '/v1/messages', 'message-key', ['message' => 'hello'], function () use (&$count): array {
     $count++;
     return ['status' => 500, 'body' => ['unexpected' => true]];
-});
+}, $deliver);
 idempotencyAssert($count === 1, 'A duplicate mutation must not execute twice.');
-idempotencyAssert($second === $first, 'A duplicate mutation must replay the original response.');
+idempotencyAssert($second['body']['id'] === 'fixed' && $second['body']['_protected_resource']['nonce'] !== $first['body']['_protected_resource']['nonce'], 'Each delivery must replay the semantic result with a fresh envelope.');
+$stored = json_decode((string)$database->query("SELECT response_json FROM mutation_idempotency WHERE idempotency_key = 'message-key'")->fetchColumn(), true, 32, JSON_THROW_ON_ERROR);
+idempotencyAssert(!isset($stored['_protected_resource']) && $stored['id'] === 'fixed', 'The ledger must persist the semantic result without delivery metadata.');
 try {
     $ledger->execute('account-1', 'POST', '/v1/messages', 'message-key', ['message' => 'different'], static fn(): array => ['status' => 201, 'body' => []]);
     throw new RuntimeException('A changed request body was accepted.');
