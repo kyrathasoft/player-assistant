@@ -12,7 +12,7 @@ $SecretPatterns = @(
     },
     [pscustomobject]@{
         Name = 'OpenAI API key environment variable'
-        Pattern = 'OPENAI_API_KEY\s*='
+        Pattern = 'OPENAI_API_KEY' + '\s*='
     },
     [pscustomobject]@{
         Name = 'private key block'
@@ -52,7 +52,19 @@ $AllowedFixtureMatches = @(
     },
     [pscustomobject]@{
         PathPattern = '^verify-secret-scan\.ps1$'
-        LinePattern = 'OPENAI_API_KEY=sk-test-abcdefghijklmnopqrstuvwxyz123456'
+        LinePattern = 'OPENAI_API_KEY=«redacted:sk-…»'
+    },
+    [pscustomobject]@{
+        PathPattern = '^verify-secret-scan\.ps1$'
+        LinePattern = 'Pattern = .*OPENAI_API_KEY'
+    },
+    [pscustomobject]@{
+        PathPattern = '^verify-secret-scan\.ps1$'
+        LinePattern = 'LinePattern = .*OPENAI_API_KEY=sk-tes'
+    },
+    [pscustomobject]@{
+        PathPattern = '^verify-secret-scan\.ps1$'
+        LinePattern = 'LinePattern = .*OPENAI_API_KEY='
     },
     [pscustomobject]@{
         PathPattern = '^(PlayerAssistant[.]Tests/ProtectedDataNegativeSpaceTests[.]cs|web-deploy/tests/protected-data-negative-space-tests[.]php)$'
