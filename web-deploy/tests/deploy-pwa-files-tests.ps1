@@ -5,6 +5,7 @@ $deployWorkflow = Get-Content -Raw -LiteralPath (Join-Path $PSScriptRoot '..\..\
 $campaignDeployWorkflow = Get-Content -Raw -LiteralPath (Join-Path $PSScriptRoot '..\..\.github\workflows\pwa-campaign-word-count-deploy.yml')
 if ($scriptText -match 'cygpath') { throw 'PWA deployment must not pass MSYS paths to native Windows tar.' }
 if ($scriptText -notmatch "System32\\tar\.exe") { throw 'PWA deployment must use the native Windows tar executable.' }
+if ($scriptText -match '\$remoteArchive = "\$remoteStage\.tar"') { throw 'PWA release archives must not be uploaded inside the public PWA directory.' }
 if ($deployWorkflow -notmatch '(?m)^concurrency:\s*$' -or $deployWorkflow -notmatch 'group:\s*pwa-release-transactions' -or $deployWorkflow -notmatch 'cancel-in-progress:\s*false') { throw 'Full PWA deployment is missing the shared non-cancelling concurrency group.' }
 if ($campaignDeployWorkflow -notmatch '(?m)^concurrency:\s*$' -or $campaignDeployWorkflow -notmatch 'group:\s*pwa-release-transactions' -or $campaignDeployWorkflow -notmatch 'cancel-in-progress:\s*false') { throw 'Campaign deployment is missing the shared non-cancelling concurrency group.' }
 if ($scriptText -notmatch '\$remoteLock = "\$RemoteDirectory/\.pwa-release-lock"') { throw 'Host-side PWA release lock is missing.' }
