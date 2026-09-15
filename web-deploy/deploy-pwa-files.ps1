@@ -172,9 +172,11 @@ elseif ($action === 'rollback') {
 else { throw new RuntimeException('Unknown release action: '.$action); }
 '@.Replace('__MANIFEST__', $manifest64)
     [IO.File]::WriteAllText((Join-Path $localStage 'install.php'), $controller, [Text.UTF8Encoding]::new($false))
-    $tarStage = (& cygpath -u $localStage).Trim()
-    $tarArchive = (& cygpath -u $localArchive).Trim()
-    & tar -cf $tarArchive -C $tarStage -- @Files 'install.php'
+    $tarExecutable = Join-Path $env:WINDIR 'System32\tar.exe'
+    if (-not (Test-Path -LiteralPath $tarExecutable -PathType Leaf)) {
+        throw "Native Windows tar executable not found: $tarExecutable"
+    }
+    & $tarExecutable -cf $localArchive -C $localStage -- @Files 'install.php'
     if ($LASTEXITCODE -ne 0) { throw 'Unable to create the PWA release archive.' }
 
     $uploaded = $false
