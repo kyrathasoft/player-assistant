@@ -344,9 +344,9 @@ namespace PlayerAssistant
                 async cancellationToken =>
                 {
                     if (await RunGameForumStartupAsync(
-                        CheckForPossiblyStaleSnapshotsAsync,
-                        LoadGameForumChapterPrefixesAsync,
-                        cancellationToken))
+                        snapshotCheck: null,
+                        postDownloads: LoadGameForumChapterPrefixesAsync,
+                        cancellationToken: cancellationToken))
                     {
                         StartKeywordIndexCrawler();
                     }
@@ -354,13 +354,15 @@ namespace PlayerAssistant
         }
 
         internal static async Task<bool> RunGameForumStartupAsync(
-            Func<CancellationToken, Task> snapshotCheck,
+            Func<CancellationToken, Task>? snapshotCheck,
             Func<CancellationToken, Task<bool>> postDownloads,
             CancellationToken cancellationToken)
         {
-            ArgumentNullException.ThrowIfNull(snapshotCheck);
             ArgumentNullException.ThrowIfNull(postDownloads);
-            await snapshotCheck(cancellationToken);
+            if (snapshotCheck is not null)
+            {
+                await snapshotCheck(cancellationToken);
+            }
             return await postDownloads(cancellationToken);
         }
 

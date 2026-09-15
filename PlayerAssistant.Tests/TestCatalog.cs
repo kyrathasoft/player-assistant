@@ -344,6 +344,7 @@ internal static class TestCatalog
     ("snapshot discovery allows embedded login form on campaign root", TestCases.SnapshotDiscoveryAllowsEmbeddedLoginFormOnCampaignRoot),
     ("snapshot broker unavailable falls back to direct rpol", TestCases.SnapshotBrokerUnavailableFallsBackToDirectRpol),
     ("game forum startup checks snapshots before downloads", TestCases.GameForumStartupChecksSnapshotsBeforeDownloads),
+    ("game forum startup skips snapshots when not requested", TestCases.GameForumStartupSkipsSnapshotCheckWhenNotRequested),
     ("rpol snapshot rejects another game", TestCases.RpolSnapshotRejectsAnotherGame),
     ("rpol snapshot sanitizes credentials and login form", TestCases.RpolSnapshotSanitizesCredentialsAndLoginForm),
     ("rpol snapshot accepts sanitized campaign content", TestCases.RpolSnapshotAcceptsSanitizedCampaignContent),
