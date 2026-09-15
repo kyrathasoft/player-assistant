@@ -4585,6 +4585,24 @@ internal static partial class TestCases
         AssertTrue(shouldStartCrawler, "successful post downloads should still start keyword indexing");
     }
 
+    internal static void GameForumStartupSkipsSnapshotCheckWhenNotRequested()
+    {
+        var snapshotChecks = 0;
+        var downloads = 0;
+        var shouldStartCrawler = Form1.RunGameForumStartupAsync(
+            null,
+            _ =>
+            {
+                downloads++;
+                return Task.FromResult(true);
+            },
+            CancellationToken.None).GetAwaiter().GetResult();
+
+        AssertEqual(0, snapshotChecks, "normal startup must not initiate RPOL snapshot freshness work");
+        AssertEqual(1, downloads, "normal startup should still load local game-forum posts");
+        AssertTrue(shouldStartCrawler, "successful post downloads should still start keyword indexing");
+    }
+
     internal static void SnapshotDiscoveryApprovesGameLinksAndDiceRoller()
     {
         var gameLinksApproved = (bool)(InvokeStaticMethod(
