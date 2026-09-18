@@ -1223,6 +1223,12 @@ try {
     if (dungeonMasterPresenceStatus !== 200) {
         throw new Error(`Dungeon Master presence API returned ${dungeonMasterPresenceStatus}.`);
     }
+    await page.locator('#xp-party-summary').waitFor({ state: 'visible' });
+    const dungeonMasterCurrentXpNames = await page.locator('#xp-party-rows th[scope="row"]').allTextContents();
+    if (!dungeonMasterCurrentXpNames.includes('CI Hero (Fighter, Level 4)')
+        || !dungeonMasterCurrentXpNames.includes('Maximilian (Fighter, Level 1)')) {
+        throw new Error(`Dungeon Master Current XP names did not include class and level: ${JSON.stringify(dungeonMasterCurrentXpNames)}`);
+    }
     await page.locator('#auth-dialog-close').click();
     await page.locator('[data-view="xp-awards"]').click();
     await page.locator('#xp-awards-list').waitFor({ state: 'visible' });

@@ -1,13 +1,13 @@
-import { initializeTranslator } from './modules/translator.js?v=92';
-import { initializeCampaignSearch } from './modules/search.js?v=92';
-import { initializeDice } from './modules/dice.js?v=92';
-import { createControllerChangeHandler } from './service-worker-controller.js?v=92';
-import { mergeInboxSnapshot, createMessageDraftStore } from './modules/inbox-state.js?v=92';
-import { createAccountSessionController } from './modules/account-session.js?v=92';
-import { createMessagesActivityController } from './modules/messages-activity.js?v=92';
-import { createPresenceController } from './modules/presence.js?v=92';
-import { createUpdateLifecycleController } from './modules/update-lifecycle.js?v=92';
-import { createCorrelationId } from './modules/correlation.js?v=92';
+import { initializeTranslator } from './modules/translator.js?v=93';
+import { initializeCampaignSearch } from './modules/search.js?v=93';
+import { initializeDice } from './modules/dice.js?v=93';
+import { createControllerChangeHandler } from './service-worker-controller.js?v=93';
+import { mergeInboxSnapshot, createMessageDraftStore } from './modules/inbox-state.js?v=93';
+import { createAccountSessionController } from './modules/account-session.js?v=93';
+import { createMessagesActivityController } from './modules/messages-activity.js?v=93';
+import { createPresenceController } from './modules/presence.js?v=93';
+import { createUpdateLifecycleController } from './modules/update-lifecycle.js?v=93';
+import { createCorrelationId } from './modules/correlation.js?v=93';
 
 (() => {
     'use strict';
@@ -348,7 +348,7 @@ import { createCorrelationId } from './modules/correlation.js?v=92';
                 const nameCell = document.createElement('th');
                 const totalCell = document.createElement('td');
                 nameCell.scope = 'row';
-                nameCell.textContent = character.character_name;
+                nameCell.textContent = `${character.character_name} (${character.character_class}, Level ${character.level})`;
                 const tnlLabel = character.xp_to_next_level === null
                     ? 'Max level'
                     : Number(character.xp_to_next_level).toLocaleString('en-US');
