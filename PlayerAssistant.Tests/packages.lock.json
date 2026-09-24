@@ -9,8 +9,8 @@
       },
       "Microsoft.Playwright": {
         "type": "Transitive",
-        "resolved": "1.62.0",
-        "contentHash": "cos6dmHPcMpS6bXw2WEgoXb8KXwMhs3c5L0P/cUf2rdUpjVA3g3u+KiSpVp2VCzsXymRpy2tFHqm+Wnz7s5VhQ==",
+        "resolved": "1.63.0",
+        "contentHash": "O9F45Tt5vjauIo7mTTgQtahigL7cfRLvBMpErLJfdvgCnQ14yue5BmRASNnfNBWRBni4Mqp2YiD1eFGIO4nUUw==",
         "dependencies": {
           "Microsoft.Bcl.AsyncInterfaces": "6.0.0",
           "System.ComponentModel.Annotations": "5.0.0"
@@ -48,7 +48,7 @@
       "player-assistant": {
         "type": "Project",
         "dependencies": {
-          "Microsoft.Playwright": "[1.62.0, )",
+          "Microsoft.Playwright": "[1.63.0, )",
           "Microsoft.Web.WebView2": "[1.0.4022.49, )",
           "SkiaSharp": "[4.152.0, )"
         }
