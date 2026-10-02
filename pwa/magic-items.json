@@ -11,6 +11,86 @@
       "provenance": "Created by Samuel Armstrong during a 36-day imbuing process begun March 2, 406 PR.",
       "whereabouts": "Kelpie Lawfuller",
       "viewable-by": "all"
+    },
+    {
+      "name": "Wand of Scorching Ray",
+      "description": "Deals 3d6 damage; a successful saving throw halves the damage. The wand has 2 charges remaining.",
+      "date-acquired": "Not recorded",
+      "meta-date-acquired": "10/01/2026",
+      "longevity": "limited-use",
+      "provenance": "Added from the player-provided inventory update.",
+      "whereabouts": "Party inventory",
+      "viewable-by": "all"
+    },
+    {
+      "name": "Leather Armor +1",
+      "description": "Leather armor with a +1 magical bonus.",
+      "date-acquired": "Not recorded",
+      "meta-date-acquired": "10/01/2026",
+      "longevity": "permanent",
+      "provenance": "Added from the player-provided inventory update.",
+      "whereabouts": "Party inventory",
+      "viewable-by": "all"
+    },
+    {
+      "name": "+1 Short Sword of Alertness",
+      "description": "A +1 short sword that grants +1 to hit and +1 damage. It reduces the wielder's chance of surprise to 1 in 6 instead of 1-2 in 6.",
+      "date-acquired": "Not recorded",
+      "meta-date-acquired": "10/01/2026",
+      "longevity": "permanent",
+      "provenance": "Added from the player-provided inventory update.",
+      "whereabouts": "Party inventory",
+      "viewable-by": "all"
+    },
+    {
+      "name": "Ring of Protection +1",
+      "description": "A ring that grants a +1 protection bonus.",
+      "date-acquired": "Not recorded",
+      "meta-date-acquired": "10/01/2026",
+      "longevity": "permanent",
+      "provenance": "Added from the player-provided inventory update.",
+      "whereabouts": "Party inventory",
+      "viewable-by": "all"
+    },
+    {
+      "name": "+1 Crossbow",
+      "description": "A +1 crossbow accompanied by half a dozen bolts.",
+      "date-acquired": "Not recorded",
+      "meta-date-acquired": "10/01/2026",
+      "longevity": "permanent",
+      "provenance": "Added from the player-provided inventory update.",
+      "whereabouts": "Party inventory",
+      "viewable-by": "all"
+    },
+    {
+      "name": "Ring of Fire Resistance",
+      "description": "A ring that grants resistance to fire.",
+      "date-acquired": "Not recorded",
+      "meta-date-acquired": "10/01/2026",
+      "longevity": "permanent",
+      "provenance": "Added from the player-provided inventory update.",
+      "whereabouts": "Party inventory",
+      "viewable-by": "all"
+    },
+    {
+      "name": "Dagger of Luck",
+      "description": "A +1 dagger. Once per day, the wielder may reroll one attack and one saving throw.",
+      "date-acquired": "Not recorded",
+      "meta-date-acquired": "10/01/2026",
+      "longevity": "limited-use",
+      "provenance": "Added from the player-provided inventory update.",
+      "whereabouts": "Party inventory",
+      "viewable-by": "all"
+    },
+    {
+      "name": "Urlig's Bracers",
+      "description": "Unique bracers that confer +2 to hit, but not to damage, when the wearer wields a short sword.",
+      "date-acquired": "Not recorded",
+      "meta-date-acquired": "10/01/2026",
+      "longevity": "permanent",
+      "provenance": "Added from the player-provided inventory update.",
+      "whereabouts": "Party inventory",
+      "viewable-by": "all"
     }
   ]
 }
