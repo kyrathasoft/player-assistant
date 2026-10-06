@@ -29,6 +29,11 @@ jobs:
           }
           $keyPath = Join-Path $env:RUNNER_TEMP 'player-assistant-dreamhost-deploy.key'
           [System.IO.File]::WriteAllText($keyPath, $env:DREAMHOST_SSH_PRIVATE_KEY, [System.Text.ASCIIEncoding]::new())
+          $keyIdentity = "$env:USERDOMAIN\$env:USERNAME"
+          & icacls.exe $keyPath /inheritance:r /grant:r ("{0}:(R)" -f $keyIdentity) | Out-Host
+          if ($LASTEXITCODE -ne 0) {
+            throw 'Could not restrict the DreamHost deployment key to the GitHub Actions runner account.'
+          }
           try {
             $files = @(
               '.htaccess', 'index.html', 'styles.css', 'version.js', 'app.js', 'service-worker.js',
