@@ -34,12 +34,51 @@ $remoteLock = "$RemoteDirectory/.pwa-release-lock"
 $remoteLockAcquired = $false
 $pwaDirectory = Join-Path $PSScriptRoot '..\pwa'
 $sshExecutable = Join-Path $env:WINDIR 'System32\OpenSSH\ssh.exe'
-$scpExecutable = Join-Path $env:WINDIR 'System32\OpenSSH\scp.exe'
+
 $sshOptions = @('-i', $SshKeyPath, '-o', 'BatchMode=yes', '-o', 'IdentitiesOnly=yes', '-o', 'StrictHostKeyChecking=yes', '-o', "UserKnownHostsFile=$KnownHostsPath", '-o', 'ConnectTimeout=15', '-o', 'ConnectionAttempts=1', '-o', 'ServerAliveInterval=5', '-o', 'ServerAliveCountMax=3')
 
 function Invoke-RemoteSsh([string]$Command) {
     & $sshExecutable @sshOptions $DreamHostTarget $Command
     return $LASTEXITCODE
+}
+
+function Send-RemoteArchive {
+    param(
+        [Parameter(Mandatory = $true)][string]$LocalArchive,
+        [Parameter(Mandatory = $true)][string]$RemoteArchive
+    )
+    $startInfo = [Diagnostics.ProcessStartInfo]::new()
+    $startInfo.FileName = $sshExecutable
+    foreach ($option in $sshOptions) {
+        [void]$startInfo.ArgumentList.Add($option)
+    }
+    [void]$startInfo.ArgumentList.Add($DreamHostTarget)
+    [void]$startInfo.ArgumentList.Add("cat > '$RemoteArchive'")
+    $startInfo.UseShellExecute = $false
+    $startInfo.RedirectStandardInput = $true
+    $process = [Diagnostics.Process]::new()
+    $process.StartInfo = $startInfo
+    if (-not $process.Start()) {
+        throw 'Unable to start the SSH archive upload process.'
+    }
+    try {
+        $inputStream = $process.StandardInput.BaseStream
+        $fileStream = [IO.File]::OpenRead($LocalArchive)
+        try {
+            $fileStream.CopyTo($inputStream)
+        }
+        finally {
+            $fileStream.Dispose()
+            $inputStream.Dispose()
+        }
+        $process.WaitForExit()
+        if ($process.ExitCode -ne 0) {
+            throw "SSH archive upload failed with exit code $($process.ExitCode)."
+        }
+    }
+    finally {
+        $process.Dispose()
+    }
 }
 
 function Get-RemoteStatus {
@@ -181,9 +220,14 @@ else { throw new RuntimeException('Unknown release action: '.$action); }
 
     $uploaded = $false
     for ($attempt = 1; $attempt -le 3 -and -not $uploaded; $attempt++) {
-        & $scpExecutable -q @sshOptions -- $localArchive "${DreamHostTarget}:$remoteArchive"
-        $uploaded = $LASTEXITCODE -eq 0
-        if (-not $uploaded) { Start-Sleep -Seconds (2 * $attempt) }
+        try {
+            Send-RemoteArchive -LocalArchive $localArchive -RemoteArchive $remoteArchive
+            $uploaded = $true
+        }
+        catch {
+            if ($attempt -eq 3) { throw }
+            Start-Sleep -Seconds (2 * $attempt)
+        }
     }
     if (-not $uploaded) { throw 'Unable to upload the PWA release archive.' }
 

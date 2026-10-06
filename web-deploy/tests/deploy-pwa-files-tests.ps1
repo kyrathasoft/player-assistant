@@ -5,6 +5,8 @@ $deployWorkflow = Get-Content -Raw -LiteralPath (Join-Path $PSScriptRoot '..\..\
 $campaignDeployWorkflow = Get-Content -Raw -LiteralPath (Join-Path $PSScriptRoot '..\..\.github\workflows\pwa-campaign-word-count-deploy.yml')
 if ($scriptText -match 'cygpath') { throw 'PWA deployment must not pass MSYS paths to native Windows tar.' }
 if ($scriptText -notmatch "System32\\tar\.exe") { throw 'PWA deployment must use the native Windows tar executable.' }
+if ($scriptText -match '\$scpExecutable') { throw 'PWA deployment must stream the archive over the validated SSH session.' }
+if ($scriptText -notmatch 'function Send-RemoteArchive') { throw 'PWA deployment is missing the SSH archive upload function.' }
 if ($scriptText -match '\$remoteArchive = "\$remoteStage\.tar"') { throw 'PWA release archives must not be uploaded inside the public PWA directory.' }
 if ($scriptText -notmatch '\$remoteArchive = \"\.player-assistant-pwa-\$releaseId\.tar\"') { throw 'PWA release archives must use a home-relative hidden path outside the public directory.' }
 if ($deployWorkflow -notmatch '(?m)^concurrency:\s*$' -or $deployWorkflow -notmatch 'group:\s*pwa-release-transactions' -or $deployWorkflow -notmatch 'cancel-in-progress:\s*false') { throw 'Full PWA deployment is missing the shared non-cancelling concurrency group.' }
