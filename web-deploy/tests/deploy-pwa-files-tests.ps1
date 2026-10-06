@@ -8,6 +8,7 @@ if ($scriptText -notmatch "System32\\tar\.exe") { throw 'PWA deployment must use
 if ($scriptText -match '\$scpExecutable') { throw 'PWA deployment must stream the archive over the validated SSH session.' }
 if ($scriptText -notmatch 'function Send-RemoteArchive') { throw 'PWA deployment is missing the SSH archive upload function.' }
 if ($scriptText -match '\$remoteArchive = "\$remoteStage\.tar"') { throw 'PWA release archives must not be uploaded inside the public PWA directory.' }
+if ($scriptText -notmatch '\$remoteArchive = \"\.player-assistant-pwa-\$releaseId\.tar\"') { throw 'PWA release archives must use a home-relative hidden path outside the public directory.' }
 if ($deployWorkflow -notmatch '(?m)^concurrency:\s*$' -or $deployWorkflow -notmatch 'group:\s*pwa-release-transactions' -or $deployWorkflow -notmatch 'cancel-in-progress:\s*false') { throw 'Full PWA deployment is missing the shared non-cancelling concurrency group.' }
 if ($campaignDeployWorkflow -notmatch '(?m)^concurrency:\s*$' -or $campaignDeployWorkflow -notmatch 'group:\s*pwa-release-transactions' -or $campaignDeployWorkflow -notmatch 'cancel-in-progress:\s*false') { throw 'Campaign deployment is missing the shared non-cancelling concurrency group.' }
 if ($scriptText -notmatch '\$remoteLock = "\$RemoteDirectory/\.pwa-release-lock"') { throw 'Host-side PWA release lock is missing.' }
