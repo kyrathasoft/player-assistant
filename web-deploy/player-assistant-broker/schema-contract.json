@@ -400,9 +400,15 @@
           "type": "INTEGER",
           "notnull": 0,
           "pk": 0
+        },
+        {
+          "name": "correlation_id",
+          "type": "TEXT",
+          "notnull": 0,
+          "pk": 0
         }
       ],
-      "definition": "CREATE TABLE broker_alert_events ( id INTEGER PRIMARY KEY AUTOINCREMENT, alert_type TEXT NOT NULL, occurred_at INTEGER NOT NULL, error_code TEXT NOT NULL, message TEXT NOT NULL, alert_sent_at INTEGER NULL )"
+      "definition": "CREATE TABLE broker_alert_events ( id INTEGER PRIMARY KEY AUTOINCREMENT, alert_type TEXT NOT NULL, occurred_at INTEGER NOT NULL, error_code TEXT NOT NULL, message TEXT NOT NULL, alert_sent_at INTEGER NULL , correlation_id TEXT NULL)"
     },
     {
       "type": "table",
