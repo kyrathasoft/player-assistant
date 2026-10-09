@@ -2570,7 +2570,7 @@ import { createOfflineActionQueue, MUTATING_METHODS, QUEUE_STATES } from './modu
     const PROTECTED_RESPONSE_TRUST = Object.freeze({
         algorithm: 'Ed25519',
         keyId: 'protected-prod-2026',
-        publicKey: 'ZN3EvmPpN0r7dtWqybDnB6zhGWBrNCPFIuDi8J1BQLk='
+        publicKey: 'Kyie8vDLtiiyfcM+IZM8JW7K5wtkYlUxLhjESGqwh7I='
     });
     const canonicalProtectedValue = (value) => {
         if (Array.isArray(value)) return value.map(canonicalProtectedValue);
