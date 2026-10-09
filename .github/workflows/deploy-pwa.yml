@@ -22,13 +22,19 @@ jobs:
       - name: Upload and verify PWA
         shell: pwsh
         env:
-          DREAMHOST_SSH_PRIVATE_KEY: ${{ secrets.DREAMHOST_SSH_PRIVATE_KEY }}
+          DREAMHOST_SSH_PRIVATE_KEY_B64: ${{ secrets.DREAMHOST_SSH_PRIVATE_KEY_B64 }}
         run: |
-          if ([string]::IsNullOrWhiteSpace($env:DREAMHOST_SSH_PRIVATE_KEY)) {
-            throw 'The DREAMHOST_SSH_PRIVATE_KEY repository secret is required for PWA deployment.'
+          if ([string]::IsNullOrWhiteSpace($env:DREAMHOST_SSH_PRIVATE_KEY_B64)) {
+            throw 'The DREAMHOST_SSH_PRIVATE_KEY_B64 repository secret is required for PWA deployment.'
           }
           $keyPath = Join-Path $env:RUNNER_TEMP 'player-assistant-dreamhost-deploy.key'
-          [System.IO.File]::WriteAllText($keyPath, $env:DREAMHOST_SSH_PRIVATE_KEY, [System.Text.ASCIIEncoding]::new())
+          try {
+            $keyBytes = [System.Convert]::FromBase64String($env:DREAMHOST_SSH_PRIVATE_KEY_B64)
+          }
+          catch {
+            throw 'The DREAMHOST_SSH_PRIVATE_KEY_B64 repository secret is not valid base64.'
+          }
+          [System.IO.File]::WriteAllBytes($keyPath, $keyBytes)
           $keyIdentity = "$env:USERDOMAIN\$env:USERNAME"
           & icacls.exe $keyPath /inheritance:r /grant:r ("{0}:(R)" -f $keyIdentity) | Out-Host
           if ($LASTEXITCODE -ne 0) {
@@ -37,11 +43,14 @@ jobs:
           try {
             $files = @(
               '.htaccess', 'index.html', 'styles.css', 'version.js', 'app.js', 'service-worker.js',
-              'translator-worker.js', 'campaign-search-worker.js', 'optional-pack-loader.js', 'optional-packs.json', 'offline.html',
+              'service-worker-controller.js', 'modules/translator.js', 'modules/search.js', 'modules/dice.js',
+              'modules/inbox-state.js', 'modules/account-session.js', 'modules/messages-activity.js',
+              'modules/presence.js', 'modules/update-lifecycle.js', 'translator-worker.js',
+              'campaign-search-worker.js', 'optional-pack-loader.js', 'optional-packs.json', 'offline.html',
               'manifest.webmanifest', 'icons/icon-192.png', 'icons/icon-512.png',
               'icons/dragon-mark.png', 'data/orcish.json', 'data/elvish.json',
               'data/ghukliak.json', 'data/heroes.json', 'level-progression.json',
-              'magic-items.json', 'data/party-funds.json', 'quests.json', 'campaign-search.json'
+              'magic-items.json', 'party-funds.json', 'data/party-funds.json', 'quests.json', 'campaign-search.json'
             )
             & .\web-deploy\deploy-pwa-files.ps1 `
               -DreamHostTarget 'dh_4gg2za@pdx1-shared-a1-13.dreamhost.com' `

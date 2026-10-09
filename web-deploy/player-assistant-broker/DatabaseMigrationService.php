@@ -416,6 +416,11 @@ final class DatabaseMigrationService
         if (!in_array('account_scope', $names, true)) {
             $this->database->exec('ALTER TABLE api_tokens ADD COLUMN account_scope TEXT NULL');
         }
+        $alertColumns = $this->database->query('PRAGMA table_info(broker_alert_events)')->fetchAll();
+        $alertNames = array_map(static fn(array $column): string => (string)$column['name'], $alertColumns);
+        if (!in_array('correlation_id', $alertNames, true)) {
+            $this->database->exec('ALTER TABLE broker_alert_events ADD COLUMN correlation_id TEXT NULL');
+        }
     }
 
 }

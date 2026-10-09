@@ -27,13 +27,19 @@ jobs:
       - name: Upload and verify campaign-search.json
         shell: pwsh
         env:
-          DREAMHOST_SSH_PRIVATE_KEY: ${{ secrets.DREAMHOST_SSH_PRIVATE_KEY }}
+          DREAMHOST_SSH_PRIVATE_KEY_B64: ${{ secrets.DREAMHOST_SSH_PRIVATE_KEY_B64 }}
         run: |
-          if ([string]::IsNullOrWhiteSpace($env:DREAMHOST_SSH_PRIVATE_KEY)) {
-            throw 'The DREAMHOST_SSH_PRIVATE_KEY repository secret is required for PWA deployment.'
+          if ([string]::IsNullOrWhiteSpace($env:DREAMHOST_SSH_PRIVATE_KEY_B64)) {
+            throw 'The DREAMHOST_SSH_PRIVATE_KEY_B64 repository secret is required for PWA deployment.'
           }
           $keyPath = Join-Path $env:RUNNER_TEMP 'player-assistant-dreamhost-deploy.key'
-          [System.IO.File]::WriteAllText($keyPath, $env:DREAMHOST_SSH_PRIVATE_KEY, [System.Text.ASCIIEncoding]::new())
+          try {
+            $keyBytes = [System.Convert]::FromBase64String($env:DREAMHOST_SSH_PRIVATE_KEY_B64)
+          }
+          catch {
+            throw 'The DREAMHOST_SSH_PRIVATE_KEY_B64 repository secret is not valid base64.'
+          }
+          [System.IO.File]::WriteAllBytes($keyPath, $keyBytes)
           try {
             & .\web-deploy\deploy-pwa-files.ps1 `
               -DreamHostTarget 'dh_4gg2za@pdx1-shared-a1-13.dreamhost.com' `

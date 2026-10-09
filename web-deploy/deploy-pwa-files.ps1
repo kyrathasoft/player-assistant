@@ -38,7 +38,7 @@ $sshExecutable = Join-Path $env:WINDIR 'System32\OpenSSH\ssh.exe'
 $sshOptions = @('-i', $SshKeyPath, '-o', 'BatchMode=yes', '-o', 'IdentitiesOnly=yes', '-o', 'StrictHostKeyChecking=yes', '-o', "UserKnownHostsFile=$KnownHostsPath", '-o', 'ConnectTimeout=15', '-o', 'ConnectionAttempts=1', '-o', 'ServerAliveInterval=5', '-o', 'ServerAliveCountMax=3')
 
 function Invoke-RemoteSsh([string]$Command) {
-    & $sshExecutable @sshOptions $DreamHostTarget $Command
+    & $sshExecutable @sshOptions $DreamHostTarget $Command | Out-Host
     return $LASTEXITCODE
 }
 
