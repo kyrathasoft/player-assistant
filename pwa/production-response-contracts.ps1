@@ -174,7 +174,7 @@ function Assert-ProductionProtectedResourceEnvelope {
     Assert-ProductionResponseCondition -Condition ($meta.account_id -is [string] -and $meta.account_id -ceq $ExpectedAccountId) -Message 'The protected response is bound to the wrong account.'
     Assert-ProductionResponseCondition -Condition ($meta.resource -ceq $ExpectedResource) -Message 'The protected response resource binding is invalid.'
     Assert-ProductionResponseCondition -Condition ($meta.generation -is [string] -and $meta.generation -cmatch '^[a-f0-9]{64}$') -Message 'The protected response generation binding is invalid.'
-    Assert-ProductionResponseCondition -Condition ($meta.resource_revision -is [string] -and $meta.resource_revision -cmatch '^[a-f0-9]{64}$') -Message 'The protected response revision is invalid.'
+    Assert-ProductionResponseCondition -Condition ($meta.body_digest -is [string] -and $meta.body_digest -cmatch '^[a-f0-9]{64}$') -Message 'The protected response body digest is invalid.'
     Assert-ProductionResponseCondition -Condition ($meta.nonce -is [string] -and $meta.nonce -cmatch '^[a-f0-9]{32}$') -Message 'The protected response replay nonce is invalid.'
     $issuedAt = Get-ProductionResponseTimestamp -Payload $meta -PropertyName 'issued_at' -Label 'The protected response issue timestamp'
     $expiresAt = Get-ProductionResponseTimestamp -Payload $meta -PropertyName 'expires_at' -Label 'The protected response expiry timestamp'
