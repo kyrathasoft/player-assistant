@@ -40,8 +40,8 @@
       "kind": "campaign-search",
       "url": "campaign-search.json",
       "schemaVersion": 2,
-      "contentHash": "21a4c3bf10bfc2544bcf61acd3d3d478090bdd8e787dbfd858ee931f250dd01c",
-      "byteSize": 2005453,
+      "contentHash": "de49d3c369f6c2c7a853e32c859e2547e3f7019c406214a2f877eababa5c4cfd",
+      "byteSize": 2939730,
       "recordCount": 1072,
       "validation": { "pageCount": 1072, "termIndexVersion": 1 }
     }
