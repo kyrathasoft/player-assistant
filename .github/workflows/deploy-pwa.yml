@@ -36,12 +36,18 @@ jobs:
           }
           try {
             $files = @(
-              '.htaccess', 'index.html', 'styles.css', 'version.js', 'app.js', 'service-worker.js',
+              '.htaccess', 'index.html', 'styles.css', 'version.js', 'app.js', 'data-invariants.js', 'correlation.js', 'service-worker-controller.js',
+              'modules/translator.js', 'modules/search.js', 'modules/dice.js', 'modules/inbox-state.js',
+              'modules/account-session.js', 'modules/messages-activity.js', 'modules/presence.js',
+              'modules/update-lifecycle.js', 'modules/offline-action-queue.js', 'service-worker.js',
               'translator-worker.js', 'campaign-search-worker.js', 'optional-pack-loader.js', 'optional-packs.json', 'offline.html',
               'manifest.webmanifest', 'icons/icon-192.png', 'icons/icon-512.png',
               'icons/dragon-mark.png', 'data/orcish.json', 'data/elvish.json',
-              'data/ghukliak.json', 'data/heroes.json', 'level-progression.json',
-              'magic-items.json', 'data/party-funds.json', 'quests.json', 'campaign-search.json'
+              'data/ghukliak.json', 'data/heroes.json', 'data/hero-tokens/kelpie-token.webp',
+              'data/hero-tokens/jelb-token.webp', 'data/hero-tokens/maximilian-token.webp',
+              'data/hero-tokens/geoffroy-token.webp', 'data/hero-tokens/shade.webp',
+              'data/hero-tokens/neria-token.webp', 'data/hero-tokens/dungeon-master.webp',
+              'level-progression.json', 'magic-items.json', 'data/party-funds.json', 'quests.json', 'campaign-search.json'
             )
             & .\web-deploy\deploy-pwa-files.ps1 `
               -DreamHostTarget 'dh_4gg2za@pdx1-shared-a1-13.dreamhost.com' `
