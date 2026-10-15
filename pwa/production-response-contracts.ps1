@@ -170,7 +170,7 @@ function Assert-ProductionProtectedResourceEnvelope {
     param([Parameter(Mandatory = $true)]$Payload, [Parameter(Mandatory = $true)][string]$ExpectedAccountId)
     $meta = $Payload._protected_resource
     Assert-ProductionResponseCondition -Condition ($null -ne $meta) -Message 'The protected response is missing its freshness envelope.'
-    Assert-ProductionResponseCondition -Condition ((Test-ProductionInteger $meta.schema_version) -and [decimal]$meta.schema_version -eq 1) -Message 'The protected response envelope schema is invalid.'
+    Assert-ProductionResponseCondition -Condition ((Test-ProductionInteger $meta.schema_version) -and [decimal]$meta.schema_version -eq 2) -Message 'The protected response envelope schema is invalid.'
     Assert-ProductionResponseCondition -Condition ($meta.account_id -is [string] -and $meta.account_id -ceq $ExpectedAccountId) -Message 'The protected response is bound to the wrong account.'
     Assert-ProductionResponseCondition -Condition ($meta.resource -ceq '/v1/protected') -Message 'The protected response resource binding is invalid.'
     Assert-ProductionResponseCondition -Condition ($meta.generation -is [string] -and $meta.generation -cmatch '^[a-f0-9]{64}$') -Message 'The protected response generation binding is invalid.'
