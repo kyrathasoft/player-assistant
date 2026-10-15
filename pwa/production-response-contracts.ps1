@@ -167,12 +167,12 @@ function Assert-ProductionCharacterShape {
 }
 
 function Assert-ProductionProtectedResourceEnvelope {
-    param([Parameter(Mandatory = $true)]$Payload, [Parameter(Mandatory = $true)][string]$ExpectedAccountId)
+    param([Parameter(Mandatory = $true)]$Payload, [Parameter(Mandatory = $true)][string]$ExpectedAccountId, [string]$ExpectedResource = '/v1/protected')
     $meta = $Payload._protected_resource
     Assert-ProductionResponseCondition -Condition ($null -ne $meta) -Message 'The protected response is missing its freshness envelope.'
     Assert-ProductionResponseCondition -Condition ((Test-ProductionInteger $meta.schema_version) -and [decimal]$meta.schema_version -eq 2) -Message 'The protected response envelope schema is invalid.'
     Assert-ProductionResponseCondition -Condition ($meta.account_id -is [string] -and $meta.account_id -ceq $ExpectedAccountId) -Message 'The protected response is bound to the wrong account.'
-    Assert-ProductionResponseCondition -Condition ($meta.resource -ceq '/v1/protected') -Message 'The protected response resource binding is invalid.'
+    Assert-ProductionResponseCondition -Condition ($meta.resource -ceq $ExpectedResource) -Message 'The protected response resource binding is invalid.'
     Assert-ProductionResponseCondition -Condition ($meta.generation -is [string] -and $meta.generation -cmatch '^[a-f0-9]{64}$') -Message 'The protected response generation binding is invalid.'
     Assert-ProductionResponseCondition -Condition ($meta.resource_revision -is [string] -and $meta.resource_revision -cmatch '^[a-f0-9]{64}$') -Message 'The protected response revision is invalid.'
     Assert-ProductionResponseCondition -Condition ($meta.nonce -is [string] -and $meta.nonce -cmatch '^[a-f0-9]{32}$') -Message 'The protected response replay nonce is invalid.'
@@ -207,7 +207,7 @@ function Assert-ProductionXpResponse {
     )
 
     Assert-ProductionDataInvariant -Payload $Payload -Kind 'xp'
-    if ($ExpectedAccountId -ne '') { Assert-ProductionProtectedResourceEnvelope -Payload $Payload -ExpectedAccountId $ExpectedAccountId }
+    if ($ExpectedAccountId -ne '') { Assert-ProductionProtectedResourceEnvelope -Payload $Payload -ExpectedAccountId $ExpectedAccountId -ExpectedResource '/v1/xp' }
     Assert-ProductionResponseCondition -Condition ((Test-ProductionInteger $Payload.schema_version) -and [decimal]$Payload.schema_version -eq 1) -Message 'The authorized XP response schema is not version 1.'
     Assert-ProductionResponseCondition -Condition ($Payload.stale -is [bool] -and [bool]$Payload.stale -eq $false) -Message 'XP source snapshot is stale.'
     Assert-ProductionResponseCondition -Condition ($Payload.date_label -is [string] -and $Payload.date_label.Length -gt 0 -and $Payload.date_label.Length -le 80) -Message 'The authorized XP response has an invalid date label.'
@@ -237,7 +237,7 @@ function Assert-ProductionWordCountResponse {
         [string]$ExpectedAccountId = ''
     )
 
-    if ($ExpectedAccountId -ne '') { Assert-ProductionProtectedResourceEnvelope -Payload $Payload -ExpectedAccountId $ExpectedAccountId }
+    if ($ExpectedAccountId -ne '') { Assert-ProductionProtectedResourceEnvelope -Payload $Payload -ExpectedAccountId $ExpectedAccountId -ExpectedResource '/v1/word-counts' }
     Assert-ProductionResponseCondition -Condition ((Test-ProductionInteger $Payload.schema_version) -and [decimal]$Payload.schema_version -eq 1) -Message 'The authorized word-count response schema is not version 1.'
     Assert-ProductionResponseCondition -Condition ($Payload.counting_rule_version -is [string] -and $Payload.counting_rule_version.Length -gt 0 -and $Payload.counting_rule_version.Length -le 100 -and $Payload.counting_rule_version.Trim() -ceq $Payload.counting_rule_version) -Message 'The authorized word-count response has an invalid counting rule.'
     $observedAt = Get-ProductionResponseTimestamp -Payload $Payload -PropertyName 'observed_at' -Label 'The word-count observation timestamp'

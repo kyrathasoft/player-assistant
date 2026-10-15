@@ -73,6 +73,9 @@ $validEnvelope = [pscustomobject]@{
     }
 }
 Assert-ProductionProtectedResourceEnvelope -Payload $validEnvelope -ExpectedAccountId $accountId
+$xpEnvelope = [pscustomobject]@{ _protected_resource = $validEnvelope._protected_resource.PSObject.Copy() }
+$xpEnvelope._protected_resource.resource = '/v1/xp'
+Assert-ProductionProtectedResourceEnvelope -Payload $xpEnvelope -ExpectedAccountId $accountId -ExpectedResource '/v1/xp'
 
 $validLogin = (@{
     authenticated = $true
