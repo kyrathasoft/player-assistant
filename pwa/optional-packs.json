@@ -40,10 +40,10 @@
       "kind": "campaign-search",
       "url": "campaign-search.json",
       "schemaVersion": 2,
-      "contentHash": "f09cfc712807dfcf61012e788ad1d7695d61d8e7ade0c4f7250548bb497490fc",
-      "byteSize": 2787772,
-      "recordCount": 1055,
-      "validation": { "pageCount": 1055, "termIndexVersion": 1 }
+      "contentHash": "de49d3c369f6c2c7a853e32c859e2547e3f7019c406214a2f877eababa5c4cfd",
+      "byteSize": 2939730,
+      "recordCount": 1072,
+      "validation": { "pageCount": 1072, "termIndexVersion": 1 }
     }
   ]
 }
