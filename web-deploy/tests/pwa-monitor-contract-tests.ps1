@@ -60,6 +60,20 @@ if ($unauthenticatedCleanupState.called) {
 }
 
 $accountId = '0123456789abcdef0123456789abcdef'
+$validEnvelope = [pscustomobject]@{
+    _protected_resource = [pscustomobject]@{
+        schema_version = 2
+        account_id = $accountId
+        resource = '/v1/protected'
+        generation = ('a' * 64)
+        resource_revision = ('b' * 64)
+        nonce = ('c' * 32)
+        issued_at = [DateTimeOffset]::UtcNow.AddSeconds(-10).ToString('o')
+        expires_at = [DateTimeOffset]::UtcNow.AddSeconds(100).ToString('o')
+    }
+}
+Assert-ProductionProtectedResourceEnvelope -Payload $validEnvelope -ExpectedAccountId $accountId
+
 $validLogin = (@{
     authenticated = $true
     account = @{
