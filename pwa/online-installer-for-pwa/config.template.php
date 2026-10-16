@@ -24,7 +24,7 @@ return [
         'protected_response' => [
             'key_id' => 'protected-prod-2026',
             'signing_key' => 'CHANGE_ME_BASE64_64_BYTE_ED25519_SECRET_KEY',
-            'public_key' => 'ZN3EvmPpN0r7dtWqybDnB6zhGWBrNCPFIuDi8J1BQLk=',
+            'public_key' => 'Kyie8vDLtiiyfcM+IZM8JW7K5wtkYlUxLhjESGqwh7I=',
         ],
     ],
     'auth' => [

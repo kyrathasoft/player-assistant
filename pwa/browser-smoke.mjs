@@ -604,7 +604,7 @@ const serveStatic = async (request, response, pathname) => {
         const responseContent = relativePath === 'app.js'
             ? Buffer.from(content.toString('utf8')
                 .replace("keyId: 'protected-prod-2026'", `keyId: '${browserSmokeKeyId}'`)
-                .replace("publicKey: 'ZN3EvmPpN0r7dtWqybDnB6zhGWBrNCPFIuDi8J1BQLk='", `publicKey: '${browserSmokePublicKey.toString('base64')}'`))
+                .replace("publicKey: 'Kyie8vDLtiiyfcM+IZM8JW7K5wtkYlUxLhjESGqwh7I='", `publicKey: '${browserSmokePublicKey.toString('base64')}'`))
             : content;
         response.writeHead(200, {
             'Cache-Control': 'no-cache',
